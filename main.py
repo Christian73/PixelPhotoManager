@@ -213,13 +213,26 @@ def main() -> None:
             background: #333;
         }
         QScrollBar:vertical {
-            background: #252525;
-            width: 8px;
+            background: #1e1e1e;
+            width: 14px;
+            margin: 0;
         }
         QScrollBar::handle:vertical {
-            background: #555;
-            border-radius: 4px;
-            min-height: 20px;
+            background: #666;
+            border-radius: 6px;
+            min-height: 30px;
+            margin: 2px 2px;
+        }
+        QScrollBar::handle:vertical:hover {
+            background: #888;
+        }
+        QScrollBar::add-line:vertical,
+        QScrollBar::sub-line:vertical {
+            height: 0;
+        }
+        QScrollBar::add-page:vertical,
+        QScrollBar::sub-page:vertical {
+            background: none;
         }
     """)
 
