@@ -450,6 +450,10 @@ class EditPanel(QWidget):
             row_rot.addWidget(btn)
         grp_geo.layout().addLayout(row_rot)
 
+        # Redresser + Recadrer côte à côte
+        row_sr = QHBoxLayout()
+        row_sr.setSpacing(4)
+
         btn_straighten = QToolButton()
         btn_straighten.setText("Redresser")
         btn_straighten.setIcon(QIcon(_icon_straighten()))
@@ -461,7 +465,20 @@ class EditPanel(QWidget):
         btn_straighten.clicked.connect(
             lambda: self._open_treatment("Redresser", [("Angle (°)", "straighten", -45.0, 45.0, 1)])
         )
-        grp_geo.layout().addWidget(btn_straighten)
+        row_sr.addWidget(btn_straighten)
+
+        self._btn_crop = QToolButton()
+        self._btn_crop.setText("Recadrer")
+        self._btn_crop.setIcon(QIcon(_icon_crop()))
+        self._btn_crop.setIconSize(QSize(_ICON_SIZE, _ICON_SIZE))
+        self._btn_crop.setToolButtonStyle(Qt.ToolButtonTextUnderIcon)
+        self._btn_crop.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self._btn_crop.setFixedHeight(_ICON_SIZE + 28)
+        self._btn_crop.setToolTip("Définir interactivement la zone de recadrage")
+        self._btn_crop.clicked.connect(self.crop_mode_requested.emit)
+        row_sr.addWidget(self._btn_crop)
+
+        grp_geo.layout().addLayout(row_sr)
 
         row_flip = QHBoxLayout()
         for icon_fn, tip, slot in [
@@ -477,18 +494,6 @@ class EditPanel(QWidget):
             row_flip.addWidget(btn)
         row_flip.addStretch()
         grp_geo.layout().addLayout(row_flip)
-
-        # Recadrage
-        self._btn_crop = QToolButton()
-        self._btn_crop.setText("Recadrer")
-        self._btn_crop.setIcon(QIcon(_icon_crop()))
-        self._btn_crop.setIconSize(QSize(_ICON_SIZE, _ICON_SIZE))
-        self._btn_crop.setToolButtonStyle(Qt.ToolButtonTextUnderIcon)
-        self._btn_crop.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        self._btn_crop.setFixedHeight(_ICON_SIZE + 28)
-        self._btn_crop.setToolTip("Définir interactivement la zone de recadrage")
-        self._btn_crop.clicked.connect(self.crop_mode_requested.emit)
-        grp_geo.layout().addWidget(self._btn_crop)
 
         inner_layout.addWidget(grp_geo)
         inner_layout.addStretch()
