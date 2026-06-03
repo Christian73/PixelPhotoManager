@@ -149,6 +149,23 @@ class ThumbnailCache:
             finally:
                 conn.close()
 
+    def invalidate_many(self, photo_paths: list[str]) -> None:
+        """Supprime en une transaction les vignettes d'une liste de chemins."""
+        keys = [self._key(p) for p in photo_paths]
+        for key in keys:
+            self._ram.pop(key, None)
+            if key in self._ram_order:
+                self._ram_order.remove(key)
+        with self._lock:
+            conn = self._conn()
+            try:
+                conn.executemany(
+                    "DELETE FROM thumbnails WHERE photo_hash=?", [(k,) for k in keys]
+                )
+                conn.commit()
+            finally:
+                conn.close()
+
     def _store_ram(self, key: str, pixmap: QPixmap) -> None:
         if len(self._ram_order) >= self.RAM_MAX:
             oldest = self._ram_order.pop(0)
