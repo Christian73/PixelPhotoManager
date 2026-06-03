@@ -302,7 +302,7 @@ class _Canvas(QWidget):
         if ir.width() < 1 or ir.height() < 1:
             return
         # Lignes fines : 10 divisions régulières
-        p.setPen(QPen(QColor(255, 255, 255, 40), 1))
+        p.setPen(QPen(QColor(255, 255, 255, 70), 1.5))
         for i in range(1, 10):
             t = i / 10
             p.drawLine(QPointF(ir.left() + t * ir.width(), ir.top()),
@@ -310,7 +310,7 @@ class _Canvas(QWidget):
             p.drawLine(QPointF(ir.left(),  ir.top() + t * ir.height()),
                        QPointF(ir.right(), ir.top() + t * ir.height()))
         # Lignes de tiers plus visibles (repères d'alignement clés)
-        p.setPen(QPen(QColor(255, 255, 255, 110), 1))
+        p.setPen(QPen(QColor(255, 255, 255, 180), 2.0))
         for t in (1 / 3, 2 / 3):
             p.drawLine(QPointF(ir.left() + t * ir.width(), ir.top()),
                        QPointF(ir.left() + t * ir.width(), ir.bottom()))
