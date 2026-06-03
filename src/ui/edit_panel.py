@@ -529,9 +529,9 @@ class EditPanel(QWidget):
             navbar = viewer._navbar
             vtb   = viewer._toolbar
 
-            # Bas utilisable  = sommet de la barre prev/suivante
+            # Bas utilisable  = sommet de la barre prev/suivante, moins sa propre hauteur
             nav_tl    = navbar.mapToGlobal(QPoint(0, 0))
-            bottom_y  = nav_tl.y() - margin
+            bottom_y  = nav_tl.y() - navbar.height() - margin
 
             # Haut utilisable = bas de la toolbar du viewer
             top_y = vtb.mapToGlobal(QPoint(0, vtb.height())).y() + margin
