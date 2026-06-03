@@ -233,6 +233,16 @@ class Catalog:
                 conn.close()
         return _photo_from_row(row) if row else None
 
+    def delete_photo(self, path: str) -> None:
+        """Supprime la photo du catalogue (ne touche pas au fichier disque)."""
+        with self._lock:
+            conn = self._conn()
+            try:
+                conn.execute("DELETE FROM photos WHERE path=?", (path,))
+                conn.commit()
+            finally:
+                conn.close()
+
     def set_favorite(self, photo_id: int, is_favorite: bool) -> None:
         with self._lock:
             conn = self._conn()

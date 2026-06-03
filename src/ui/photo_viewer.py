@@ -2,14 +2,14 @@ import io
 import logging
 import math
 
-from PySide6.QtCore import Qt, Signal, QPoint, QRectF, QPointF
+from PySide6.QtCore import Qt, Signal, QPoint, QRectF, QPointF, QSize
 from PySide6.QtGui import (
     QPixmap, QPainter, QKeyEvent, QWheelEvent,
-    QMouseEvent, QPen, QColor, QPainterPath, QPolygonF,
+    QMouseEvent, QPen, QColor, QPainterPath, QPolygonF, QIcon,
 )
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
-    QLabel, QSizePolicy,
+    QLabel, QSizePolicy, QToolButton, QButtonGroup,
 )
 
 from src.core.models import PhotoInfo, EditInfo
@@ -51,6 +51,70 @@ def _build_pixmap(photo: PhotoInfo, edit: EditInfo | None) -> QPixmap | None:
         return None
 
 
+def _make_rect_quad(x0: float, y0: float, x1: float, y1: float) -> list:
+    """Retourne [TL, TR, BR, BL] pour un rectangle axis-aligned."""
+    return [QPointF(x0, y0), QPointF(x1, y0), QPointF(x1, y1), QPointF(x0, y1)]
+
+# Formats de recadrage : (libellé, tooltip, ratio w/h ou None)
+# L'icône de chaque bouton montre visuellement l'orientation paysage/portrait.
+_CROP_FORMAT_DATA: list[tuple[str, str, float | None]] = [
+    ("Libre",  "Format libre — quadrilatère quelconque",  None),
+    ("10×15",  "10×15 horizontal  (ratio 3:2)",           3 / 2),
+    ("10×15",  "10×15 vertical  (ratio 2:3)",             2 / 3),
+    ("13×18",  "13×18 horizontal  (ratio 18:13)",         18 / 13),
+    ("13×18",  "13×18 vertical  (ratio 13:18)",           13 / 18),
+]
+
+_BTN_CROP_STYLE = """
+QToolButton {
+    background: rgba(50,50,50,180);
+    border: 1px solid rgba(255,255,255,35);
+    border-radius: 3px;
+    padding: 1px 4px;
+    color: #999;
+    font-size: 9px;
+}
+QToolButton:checked {
+    background: rgba(50,110,170,230);
+    border: 1px solid rgba(110,170,230,200);
+    color: white;
+}
+QToolButton:hover:!checked {
+    background: rgba(70,70,70,200);
+    border: 1px solid rgba(255,255,255,60);
+    color: #ccc;
+}
+"""
+
+
+def _fmt_icon(ratio: float | None, iw: int = 24, ih: int = 18) -> QPixmap:
+    """Icône représentant le ratio w/h par un rectangle aux bonnes proportions."""
+    px = QPixmap(iw, ih)
+    px.fill(Qt.transparent)
+    p = QPainter(px)
+    p.setRenderHint(QPainter.Antialiasing)
+    mg = 2
+    mw, mh = iw - 2 * mg, ih - 2 * mg
+    if ratio is None:
+        rw, rh = mw, mh
+        p.setPen(QPen(QColor(170, 170, 170), 1.2, Qt.DashLine))
+        p.setBrush(Qt.NoBrush)
+    elif ratio >= 1:
+        rw = mw
+        rh = max(4, round(mw / ratio))
+        p.setPen(QPen(QColor(190, 190, 190), 1.2))
+        p.setBrush(QColor(130, 130, 130, 55))
+    else:
+        rh = mh
+        rw = max(4, round(mh * ratio))
+        p.setPen(QPen(QColor(190, 190, 190), 1.2))
+        p.setBrush(QColor(130, 130, 130, 55))
+    rx = (iw - rw) // 2
+    ry = (ih - rh) // 2
+    p.drawRect(rx, ry, rw - 1, rh - 1)
+    p.end()
+    return px
+
 # 4 poignées de coin : TL(0), TR(1), BR(2), BL(3)
 _CORNER_CURSORS = [
     Qt.SizeFDiagCursor,  # 0: TL
@@ -81,6 +145,8 @@ class _Canvas(QWidget):
         self._crop_quad:  list[QPointF] | None = None   # [TL, TR, BR, BL] coords écran
         self._crop_action: str | None   = None          # None | 'DRAWING' | 'MOVING' | 'RESIZING' | 'PANNING'
         self._crop_handle: int | None   = None          # index coin actif (0-3)
+        self._aspect_ratio: float | None = None         # ratio largeur/hauteur verrouillé (None = libre)
+        self._drag_ratio:   float | None = None         # ratio effectif pour le drag en cours
         self._crop_mouse_start:  QPointF | None = None
         self._crop_quad_start:   list[QPointF] | None = None
         self._crop_draw_start:   QPointF | None = None
@@ -199,13 +265,47 @@ class _Canvas(QWidget):
         else:
             self.setCursor(Qt.CrossCursor)
 
+    def _constrained_rect(self, s: QPointF, dx: float, dy: float,
+                          r: float, ir: QRectF) -> list:
+        """Rectangle à partir du point de départ s, delta (dx,dy) et ratio r=w/h."""
+        sx = 1 if dx >= 0 else -1
+        sy = 1 if dy >= 0 else -1
+        if abs(dy) < 1 or abs(dx) / (abs(dy) + 1e-9) >= r:
+            w = abs(dx)
+            h = w / r
+        else:
+            h = abs(dy)
+            w = h * r
+        max_w = (ir.right() - s.x()) * sx if sx > 0 else (s.x() - ir.left())
+        max_h = (ir.bottom() - s.y()) * sy if sy > 0 else (s.y() - ir.top())
+        w = min(w, max_w)
+        h = min(h, max_h)
+        if w / r > h:
+            w = h * r
+        else:
+            h = w / r
+        x0, x1 = (s.x(), s.x() + w) if sx > 0 else (s.x() - w, s.x())
+        y0, y1 = (s.y(), s.y() + h) if sy > 0 else (s.y() - h, s.y())
+        return _make_rect_quad(x0, y0, x1, y1)
+
     def _apply_drag_corner(self, pos: QPointF) -> None:
         if self._crop_quad is None or self._crop_handle is None:
             return
         ir = self._img_rect()
         px = max(ir.left(), min(ir.right(),  pos.x()))
         py = max(ir.top(),  min(ir.bottom(), pos.y()))
-        self._crop_quad[self._crop_handle] = QPointF(px, py)
+        if self._drag_ratio is None:
+            self._crop_quad[self._crop_handle] = QPointF(px, py)
+            return
+        # Format verrouillé : le coin opposé est l'ancre, on recrée le rectangle
+        r   = self._drag_ratio
+        opp = (self._crop_handle + 2) % 4
+        fx  = self._crop_quad[opp].x()
+        fy  = self._crop_quad[opp].y()
+        dx, dy = px - fx, py - fy
+        if abs(dx) < 1 and abs(dy) < 1:
+            return
+        self._crop_quad = self._constrained_rect(QPointF(fx, fy), dx, dy, r, ir)
 
     def _apply_drag_edge(self, pos: QPointF) -> None:
         """Déplace l'arête en conservant l'orientation des côtés adjacents.
@@ -214,9 +314,52 @@ class _Canvas(QWidget):
             return
         if not self._crop_quad_start or not self._crop_mouse_start:
             return
-        ir = self._img_rect()
-        dx = pos.x() - self._crop_mouse_start.x()
-        dy = pos.y() - self._crop_mouse_start.y()
+        ir  = self._img_rect()
+        dx  = pos.x() - self._crop_mouse_start.x()
+        dy  = pos.y() - self._crop_mouse_start.y()
+        eid = self._crop_handle
+
+        if self._drag_ratio is not None:
+            # Format verrouillé : rectangle, bord opposé ancré, ratio maintenu
+            r = self._drag_ratio
+            xs = [pt.x() for pt in self._crop_quad_start]
+            ys = [pt.y() for pt in self._crop_quad_start]
+            x0, x1 = min(xs), max(xs)
+            y0, y1 = min(ys), max(ys)
+            cx, cy = (x0 + x1) / 2, (y0 + y1) / 2
+            if eid == 0:            # bord haut : y0 change
+                ny0 = max(ir.top(),    min(y1 - 1, y0 + dy))
+                h   = y1 - ny0
+                w   = min(h * r, ir.width())
+                h   = w / r
+                hx  = w / 2
+                cx2 = max(ir.left() + hx, min(ir.right() - hx, cx))
+                self._crop_quad = _make_rect_quad(cx2-hx, y1-h, cx2+hx, y1)
+            elif eid == 2:          # bord bas : y1 change
+                ny1 = max(y0 + 1,   min(ir.bottom(), y1 + dy))
+                h   = ny1 - y0
+                w   = min(h * r, ir.width())
+                h   = w / r
+                hx  = w / 2
+                cx2 = max(ir.left() + hx, min(ir.right() - hx, cx))
+                self._crop_quad = _make_rect_quad(cx2-hx, y0, cx2+hx, y0+h)
+            elif eid == 1:          # bord droit : x1 change
+                nx1 = max(x0 + 1,   min(ir.right(), x1 + dx))
+                w   = nx1 - x0
+                h   = min(w / r, ir.height())
+                w   = h * r
+                hy  = h / 2
+                cy2 = max(ir.top() + hy, min(ir.bottom() - hy, cy))
+                self._crop_quad = _make_rect_quad(x0, cy2-hy, x0+w, cy2+hy)
+            elif eid == 3:          # bord gauche : x0 change
+                nx0 = max(ir.left(), min(x1 - 1, x0 + dx))
+                w   = x1 - nx0
+                h   = min(w / r, ir.height())
+                w   = h * r
+                hy  = h / 2
+                cy2 = max(ir.top() + hy, min(ir.bottom() - hy, cy))
+                self._crop_quad = _make_rect_quad(x1-w, cy2-hy, x1, cy2+hy)
+            return
 
         i, j = _EDGE_INDICES[self._crop_handle]
         # Coin adjacent fixe pour chaque extrémité de l'arête
@@ -345,6 +488,45 @@ class _Canvas(QWidget):
         self._crop_handle = None
         self.setCursor(Qt.ArrowCursor)
         self.update()
+
+    def set_aspect_ratio(self, ratio: float | None) -> None:
+        self._aspect_ratio = ratio
+        if ratio is not None and self._crop_quad:
+            self._fit_rect_to_ratio(ratio)
+        self.update()
+
+    def _locked_ratio_from_quad(self) -> float | None:
+        """Ratio verrouillé pour le drag en cours — utilise _aspect_ratio tel quel."""
+        return self._aspect_ratio
+
+    def _fit_rect_to_ratio(self, ratio: float) -> None:
+        """Recadre le quad au ratio donné en conservant l'aire (rotation 90° si changement
+        d'orientation, redimensionnement isométrique sinon)."""
+        if not self._crop_quad:
+            return
+        ir = self._img_rect()
+        xs = [pt.x() for pt in self._crop_quad]
+        ys = [pt.y() for pt in self._crop_quad]
+        cx = (min(xs) + max(xs)) / 2
+        cy = (min(ys) + max(ys)) / 2
+        w  = max(xs) - min(xs)
+        h  = max(ys) - min(ys)
+        # Nouvelles dimensions qui conservent l'aire : w_new*h_new = w*h et w_new/h_new = ratio
+        area = w * h
+        if area > 0:
+            w = math.sqrt(area * ratio)
+            h = math.sqrt(area / ratio)
+        # Clamper à l'image en re-enforçant le ratio
+        w = min(w, ir.width())
+        h = min(h, ir.height())
+        if w / ratio > h:
+            w = h * ratio
+        else:
+            h = w / ratio
+        hx, hy = w / 2, h / 2
+        cx = max(ir.left() + hx, min(ir.right()  - hx, cx))
+        cy = max(ir.top()  + hy, min(ir.bottom() - hy, cy))
+        self._crop_quad = _make_rect_quad(cx - hx, cy - hy, cx + hx, cy + hy)
 
     def confirm_crop(self) -> None:
         if not self._crop_mode or not self._crop_quad:
@@ -514,27 +696,32 @@ class _Canvas(QWidget):
                 self._crop_handle      = hid
                 self._crop_mouse_start = pos
                 self._crop_quad_start  = [QPointF(pt) for pt in self._crop_quad] if self._crop_quad else None
+                self._drag_ratio       = self._locked_ratio_from_quad()
             elif eid is not None:
                 self._crop_action      = 'RESIZING_EDGE'
                 self._crop_handle      = eid
                 self._crop_mouse_start = pos
                 self._crop_quad_start  = [QPointF(pt) for pt in self._crop_quad] if self._crop_quad else None
+                self._drag_ratio       = self._locked_ratio_from_quad()
             elif self._hit_center(pos):
                 self._crop_action      = 'MOVING'
                 self._crop_mouse_start = pos
                 self._crop_quad_start  = [QPointF(pt) for pt in self._crop_quad] if self._crop_quad else None
+                self._drag_ratio       = None
             elif ir.contains(pos):
                 if self._crop_quad is not None:
                     # Zone déjà définie → pan
                     self._crop_action       = 'PANNING'
                     self._drag_start        = pos.toPoint()
                     self._drag_offset_start = QPointF(self._offset)
+                    self._drag_ratio        = None
                     self.setCursor(Qt.ClosedHandCursor)
                 else:
                     # Première définition de la zone
                     self._crop_action     = 'DRAWING'
                     self._crop_draw_start = QPointF(pos)
                     self._crop_quad       = [QPointF(pos) for _ in range(4)]
+                    self._drag_ratio      = None  # déterminé au premier mouvement
                 self.update()
         else:
             if event.button() == Qt.LeftButton:
@@ -546,17 +733,24 @@ class _Canvas(QWidget):
         if self._crop_mode:
             if self._crop_action == 'DRAWING':
                 ir = self._img_rect()
-                clamped = QPointF(
-                    max(ir.left(), min(ir.right(),  pos.x())),
-                    max(ir.top(),  min(ir.bottom(), pos.y())),
+                s  = self._crop_draw_start
+                raw_x = max(ir.left(), min(ir.right(),  pos.x()))
+                raw_y = max(ir.top(),  min(ir.bottom(), pos.y()))
+                dx, dy = raw_x - s.x(), raw_y - s.y()
+                if self._aspect_ratio is not None:
+                    # Verrouiller le ratio dès le premier mouvement significatif,
+                    # en respectant l'orientation explicitement choisie (H ou V).
+                    if self._drag_ratio is None and (abs(dx) > 4 or abs(dy) > 4):
+                        self._drag_ratio = self._aspect_ratio
+                    if self._drag_ratio is not None:
+                        self._crop_quad = self._constrained_rect(s, dx, dy,
+                                                                  self._drag_ratio, ir)
+                        self.update()
+                        return
+                self._crop_quad = _make_rect_quad(
+                    min(s.x(), raw_x), min(s.y(), raw_y),
+                    max(s.x(), raw_x), max(s.y(), raw_y),
                 )
-                s = self._crop_draw_start
-                self._crop_quad = [
-                    QPointF(min(s.x(), clamped.x()), min(s.y(), clamped.y())),  # TL
-                    QPointF(max(s.x(), clamped.x()), min(s.y(), clamped.y())),  # TR
-                    QPointF(max(s.x(), clamped.x()), max(s.y(), clamped.y())),  # BR
-                    QPointF(min(s.x(), clamped.x()), max(s.y(), clamped.y())),  # BL
-                ]
                 self.update()
             elif self._crop_action == 'RESIZING':
                 self._apply_drag_corner(pos)
@@ -592,6 +786,7 @@ class _Canvas(QWidget):
                 self._crop_mouse_start = None
                 self._crop_quad_start  = None
                 self._crop_draw_start  = None
+                self._drag_ratio       = None
                 self._update_cursor_for_pos(event.position())
         elif event.button() == Qt.LeftButton:
             self._drag_start = None
@@ -689,6 +884,33 @@ class PhotoViewer(QWidget):
 
         nav_layout.addStretch()
 
+        # Boutons de format de recadrage (masqués hors mode crop)
+        self._crop_format_widget = QWidget()
+        self._crop_format_widget.setStyleSheet("background: transparent;")
+        fmt_layout = QHBoxLayout(self._crop_format_widget)
+        fmt_layout.setContentsMargins(0, 0, 8, 0)
+        fmt_layout.setSpacing(4)
+        self._crop_format_group = QButtonGroup(self)
+        self._crop_format_group.setExclusive(True)
+        self._crop_format_btns: list[QToolButton] = []
+        for i, (label, tip, ratio) in enumerate(_CROP_FORMAT_DATA):
+            btn = QToolButton()
+            btn.setToolButtonStyle(Qt.ToolButtonTextUnderIcon)
+            btn.setIcon(QIcon(_fmt_icon(ratio)))
+            btn.setIconSize(QSize(24, 18))
+            btn.setText(label)
+            btn.setToolTip(tip)
+            btn.setCheckable(True)
+            btn.setFixedSize(54, 40)
+            btn.setStyleSheet(_BTN_CROP_STYLE)
+            fmt_layout.addWidget(btn)
+            self._crop_format_group.addButton(btn, i)
+            self._crop_format_btns.append(btn)
+        self._crop_format_btns[0].setChecked(True)  # "Libre" par défaut
+        self._crop_format_group.idClicked.connect(self._on_crop_format_changed)
+        self._crop_format_widget.hide()
+        nav_layout.addWidget(self._crop_format_widget)
+
         self._btn_crop_confirm = QPushButton("✓  Confirmer le recadrage")
         self._btn_crop_confirm.setToolTip("Valider le recadrage  (Entrée)")
         self._btn_crop_confirm.setFixedHeight(36)
@@ -756,22 +978,30 @@ class PhotoViewer(QWidget):
     def enter_crop_mode(self) -> None:
         existing = self._edit.crop if self._edit else None
         self._canvas.enter_crop(existing)
+        idx = self._crop_format_group.checkedId()
+        self._canvas.set_aspect_ratio(_CROP_FORMAT_DATA[idx][2] if idx >= 0 else None)
         self._btn_prev.hide()
         self._btn_next.hide()
+        self._crop_format_widget.show()
         self._btn_crop_confirm.show()
         self._btn_crop_cancel.show()
+
+    def _on_crop_format_changed(self, idx: int) -> None:
+        self._canvas.set_aspect_ratio(_CROP_FORMAT_DATA[idx][2])
 
     def confirm_crop(self) -> None:
         self._canvas.confirm_crop()    # émet crop_confirmed → _on_crop_confirmed
 
     def cancel_crop(self) -> None:
         self._canvas.cancel_crop()
+        self._crop_format_widget.hide()
         self._btn_crop_confirm.hide()
         self._btn_crop_cancel.hide()
         self._btn_prev.show()
         self._btn_next.show()
 
     def _on_crop_confirmed(self, quad: tuple) -> None:
+        self._crop_format_widget.hide()
         self._btn_crop_confirm.hide()
         self._btn_crop_cancel.hide()
         self._btn_prev.show()
