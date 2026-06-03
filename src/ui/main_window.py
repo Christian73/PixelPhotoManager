@@ -40,12 +40,12 @@ def _fmt_size(size_bytes: int) -> str:
     return f"{size_bytes / (1024 * 1024):.1f} Mo"
 
 
-# (label, max_total_pixels | None, jpeg_quality)
+# (label, max_total_pixels | None, jpeg_quality, size_hint)
 _EXPORT_SIZES = [
-    ("Taille maximale — résolution originale", None,      95),
-    ("Grande  (~1 Mpx)",                       1_000_000, 85),
-    ("Moyenne (~500 kpx)",                     500_000,   80),
-    ("Petite  (~100 kpx)",                     100_000,   70),
+    ("Taille maximale — résolution originale", None,      95, ""),
+    ("Grande  (~4 Mpx)",                       4_000_000, 98, "600–1 600 Ko"),
+    ("Moyenne (~2 Mpx)",                       2_000_000, 94, "320–800 Ko"),
+    ("Petite  (~500 kpx)",                     500_000,   90, "75–300 Ko"),
 ]
 
 
@@ -78,11 +78,25 @@ class _ExportDialog(QDialog):
         # Options de taille
         grp_size = QGroupBox("Taille d'export")
         size_layout = QVBoxLayout(grp_size)
+        size_layout.setSpacing(2)
         self._size_radios: list[tuple[QRadioButton, int | None, int]] = []
-        for i, (label, max_px, quality) in enumerate(_EXPORT_SIZES):
+        for i, (label, max_px, quality, size_hint) in enumerate(_EXPORT_SIZES):
+            row = QWidget()
+            row_layout = QHBoxLayout(row)
+            row_layout.setContentsMargins(0, 0, 0, 0)
+            row_layout.setSpacing(8)
+
             rb = QRadioButton(label)
             rb.setChecked(i == 0)
-            size_layout.addWidget(rb)
+            row_layout.addWidget(rb)
+
+            if size_hint:
+                lbl_info = QLabel(f"qualité {quality}  •  ≈ {size_hint}")
+                lbl_info.setStyleSheet("color: #777; font-size: 10px;")
+                row_layout.addWidget(lbl_info)
+
+            row_layout.addStretch()
+            size_layout.addWidget(row)
             self._size_radios.append((rb, max_px, quality))
         layout.addWidget(grp_size)
 
@@ -111,7 +125,7 @@ class _ExportDialog(QDialog):
         for rb, max_px, quality in self._size_radios:
             if rb.isChecked():
                 return (max_px, quality)
-        return (None, 95)
+        return (None, 95)  # fallback : taille maximale
 
 
 class _SaveOptionsDialog(QDialog):
