@@ -494,6 +494,8 @@ class MainWindow(QMainWindow):
                 p.filename = new_p.name
                 break
 
+        self._update_status()
+
     def closeEvent(self, event) -> None:
         self._config.set("ui.window_width", self.width())
         self._config.set("ui.window_height", self.height())
