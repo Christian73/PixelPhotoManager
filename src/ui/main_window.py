@@ -8,7 +8,7 @@ from pathlib import Path
 from PySide6.QtCore import Qt, QTimer, Slot
 from PySide6.QtGui import QAction, QKeySequence
 from PySide6.QtWidgets import (
-    QApplication, QCheckBox, QDialog, QDialogButtonBox, QGroupBox,
+    QApplication, QButtonGroup, QCheckBox, QDialog, QDialogButtonBox, QGroupBox,
     QMainWindow, QWidget, QHBoxLayout, QVBoxLayout,
     QRadioButton, QSplitter, QStackedWidget, QStatusBar, QToolBar,
     QLineEdit, QSlider, QLabel, QPushButton,
@@ -95,6 +95,8 @@ class _ExportDialog(QDialog):
         size_layout = QVBoxLayout(grp_size)
         size_layout.setSpacing(6)
         self._size_radios: list[tuple[QRadioButton, int | None, int]] = []
+        btn_group = QButtonGroup(self)   # groupe exclusif : un seul actif à la fois
+        btn_group.setExclusive(True)
         for i, (label, max_px, quality, size_hint) in enumerate(_EXPORT_SIZES):
             row = QWidget()
             row_layout = QHBoxLayout(row)
@@ -103,6 +105,7 @@ class _ExportDialog(QDialog):
 
             rb = QRadioButton(label)
             rb.setChecked(i == 0)
+            btn_group.addButton(rb)
             row_layout.addWidget(rb)
 
             if size_hint:
