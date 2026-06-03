@@ -289,6 +289,27 @@ class EditSlider(QWidget):
         self._val_lbl.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
         layout.addWidget(self._val_lbl)
 
+        # Flèches d'ajustement fin (pas = 1 unité au niveau de la dernière décimale)
+        self._step_size = 10 ** (-self._decimals)
+        arrows = QVBoxLayout()
+        arrows.setContentsMargins(0, 0, 0, 0)
+        arrows.setSpacing(1)
+        _arrow_style = (
+            "QPushButton { padding:0; font-size:8px; min-width:16px; max-width:16px;"
+            " min-height:12px; max-height:12px; }"
+        )
+        btn_up = QPushButton("▲")
+        btn_up.setStyleSheet(_arrow_style)
+        btn_up.setToolTip("Augmenter d'un pas")
+        btn_up.clicked.connect(lambda: self._nudge(self._step_size))
+        arrows.addWidget(btn_up)
+        btn_dn = QPushButton("▼")
+        btn_dn.setStyleSheet(_arrow_style)
+        btn_dn.setToolTip("Diminuer d'un pas")
+        btn_dn.clicked.connect(lambda: self._nudge(-self._step_size))
+        arrows.addWidget(btn_dn)
+        layout.addLayout(arrows)
+
         self._slider.mouseDoubleClickEvent = lambda _e: (
             self.set_value(self._default),
             self.value_changed.emit(self._default),
@@ -310,6 +331,11 @@ class EditSlider(QWidget):
         self._slider.setValue(int(v * self._scale))
         self._val_lbl.setText(self._fmt(v))
         self._slider.blockSignals(False)
+
+    def _nudge(self, delta: float) -> None:
+        new_val = max(self._min, min(self._max, self.get_value() + delta))
+        self.set_value(new_val)
+        self.value_changed.emit(new_val)
 
 
 # ------------------------------------------------------------------ dialogue de traitement
