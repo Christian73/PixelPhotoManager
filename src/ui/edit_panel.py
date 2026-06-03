@@ -11,6 +11,7 @@ from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QSlider,
     QPushButton, QScrollArea, QGroupBox, QDialog,
     QDialogButtonBox, QToolButton, QGridLayout, QSizePolicy,
+    QSplitter,
 )
 
 from src.core.models import PhotoInfo, EditInfo
@@ -503,17 +504,32 @@ class EditPanel(QWidget):
         dlg = TreatmentDialog(title, sliders_def, self._edit, parent=self)
         dlg.preview.connect(self._on_preview)
 
-        # Positionner dans la zone image, hors toolbar et status bar
-        dlg.adjustSize()                 # force la taille réelle avant affichage
+        # Remonter jusqu'au QSplitter pour obtenir le widget image exact
+        # self → _left_stack (QStackedWidget) → _splitter (QSplitter)
+        splitter = self.parentWidget().parentWidget() if self.parentWidget() else None
+        image_zone = (
+            splitter.widget(1)
+            if isinstance(splitter, QSplitter) and splitter.count() >= 2
+            else None
+        )
+
+        dlg.adjustSize()
         dw, dh = dlg.width(), dlg.height()
-        central = self.window().centralWidget()
-        origin = central.mapToGlobal(QPoint(0, 0))
         margin = 16
-        x = origin.x() + self.width() + margin
-        y = origin.y() + central.height() - dh - margin
-        # Garde-fous : rester entièrement dans la zone centrale
-        x = min(x, origin.x() + central.width()  - dw - margin)
-        y = max(y, origin.y() + margin)
+
+        if image_zone:
+            tl = image_zone.mapToGlobal(QPoint(0, 0))
+            iw, ih = image_zone.width(), image_zone.height()
+        else:
+            # Fallback : coin bas-droit du panneau gauche
+            tl = self.mapToGlobal(QPoint(self.width(), 0))
+            iw = self.window().width() - self.width()
+            ih = self.height()
+
+        x = tl.x() + margin
+        y = tl.y() + ih - dh - margin
+        x = min(x, tl.x() + iw - dw - margin)
+        y = max(y, tl.y() + margin)
         dlg.move(x, y)
 
         if dlg.exec() == QDialog.Accepted:
