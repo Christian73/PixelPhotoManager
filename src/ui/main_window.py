@@ -163,6 +163,7 @@ class MainWindow(QMainWindow):
         self._viewer.zoom_changed.connect(self._on_viewer_zoom_changed)
         self._edit_panel.edits_changed.connect(self._viewer.update_edit)
         self._edit_panel.crop_mode_requested.connect(self._viewer.enter_crop_mode)
+        self._edit_panel.grid_visibility_changed.connect(self._viewer.set_grid_visible)
         self._viewer.crop_ready.connect(self._edit_panel.apply_crop)
         self._stack.addWidget(self._viewer)
 
