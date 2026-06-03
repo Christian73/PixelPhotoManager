@@ -456,6 +456,7 @@ class MainWindow(QMainWindow):
     def _start_scan(self, folders: list[str]) -> None:
         thread = self._scanner.scan(folders)
         thread.photo_discovered.connect(self._on_photo_discovered)
+        thread.photos_removed.connect(self._on_photos_removed)
         thread.finished.connect(self._on_scan_finished)
         thread.progress.connect(self._on_scan_progress)
 
@@ -474,6 +475,17 @@ class MainWindow(QMainWindow):
                 self._current_photos.append(photo)
                 self._update_status()
         bus.emit("library.photo_discovered", photo=photo)
+
+    @Slot(list)
+    def _on_photos_removed(self, paths: list[str]) -> None:
+        """Retire de l'UI les photos dont le fichier a disparu du disque."""
+        removed_set = set(paths)
+        self._current_photos = [p for p in self._current_photos
+                                 if p.path not in removed_set]
+        self._grid.remove_photos(paths)
+        self._update_status()
+        n = len(paths)
+        logger.info("%d photo(s) retirée(s) du catalogue (fichiers absents)", n)
 
     @Slot(int)
     def _on_scan_finished(self, total: int) -> None:

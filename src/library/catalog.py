@@ -417,14 +417,52 @@ class Catalog:
                 conn.close()
 
     def get_known_mtimes(self, folder: str) -> dict[str, float]:
-        """Returns {path: mtime} for all photos in a folder — used by scanner to skip unchanged files."""
+        """Returns {path: mtime} for all photos at or below folder (recursive).
+
+        Used by the scanner to skip files whose mtime hasn't changed.
+        """
         folder = os.path.normpath(folder)
+        like_pattern = folder + os.sep + "%"
         with self._lock:
             conn = self._conn()
             try:
                 rows = conn.execute(
-                    "SELECT path, file_mtime FROM photos WHERE directory=?", (folder,)
+                    "SELECT path, file_mtime FROM photos "
+                    "WHERE directory=? OR directory LIKE ?",
+                    (folder, like_pattern),
                 ).fetchall()
             finally:
                 conn.close()
         return {r[0]: r[1] for r in rows}
+
+    def get_all_paths_under(self, folder: str) -> set[str]:
+        """Returns the set of all indexed paths at or below folder (recursive).
+
+        Used by the scanner to detect entries whose files no longer exist.
+        """
+        folder = os.path.normpath(folder)
+        like_pattern = folder + os.sep + "%"
+        with self._lock:
+            conn = self._conn()
+            try:
+                rows = conn.execute(
+                    "SELECT path FROM photos WHERE directory=? OR directory LIKE ?",
+                    (folder, like_pattern),
+                ).fetchall()
+            finally:
+                conn.close()
+        return {r[0] for r in rows}
+
+    def delete_photos(self, paths: list[str]) -> None:
+        """Supprime en une seule transaction les entrées dont les fichiers ont disparu."""
+        if not paths:
+            return
+        with self._lock:
+            conn = self._conn()
+            try:
+                conn.executemany(
+                    "DELETE FROM photos WHERE path=?", [(p,) for p in paths]
+                )
+                conn.commit()
+            finally:
+                conn.close()

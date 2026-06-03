@@ -16,6 +16,7 @@ SUPPORTED_EXT = ExifReader.SUPPORTED
 
 class ScanThread(QThread):
     photo_discovered = Signal(object)
+    photos_removed   = Signal(list)   # list[str] — chemins supprimés du catalogue
     progress = Signal(int, str)
     finished = Signal(int)
 
@@ -95,6 +96,22 @@ class ScanThread(QThread):
             if processed % 50 == 0:
                 pct = int(processed * 100 / grand_total) if grand_total else 100
                 self.progress.emit(pct, filepath)
+
+        # Nettoyage des entrées fantômes (fichiers déplacés ou supprimés hors de l'app)
+        # Seulement si le scan n'a pas été interrompu (stop_flag) pour éviter les
+        # faux positifs : un scan partiel ne doit pas supprimer des entrées valides.
+        if not self._stop_flag:
+            all_files_set = set(all_files)
+            removed: list[str] = []
+            for folder in self._folders:
+                stale = self._catalog.get_all_paths_under(folder) - all_files_set
+                for path in stale:
+                    logger.info("Entrée catalogue supprimée (fichier absent) : %s", path)
+                removed.extend(stale)
+            if removed:
+                self._catalog.delete_photos(removed)
+                self._thumb_cache.invalidate_many(removed)
+                self.photos_removed.emit(removed)
 
         self.finished.emit(total)
 
