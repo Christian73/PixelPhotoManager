@@ -327,6 +327,20 @@ class Catalog:
                 conn.close()
         return {"total_photos": total, "total_size": total_size, "folders": folders}
 
+    def rename_photo(self, old_path: str, new_path: str) -> bool:
+        new_p = Path(new_path)
+        with self._lock:
+            conn = self._conn()
+            try:
+                conn.execute(
+                    "UPDATE photos SET path=?, filename=?, directory=? WHERE path=?",
+                    (new_path, new_p.name, str(new_p.parent), old_path),
+                )
+                conn.commit()
+                return conn.execute("SELECT changes()").fetchone()[0] > 0
+            finally:
+                conn.close()
+
     def get_known_mtimes(self, folder: str) -> dict[str, float]:
         """Returns {path: mtime} for all photos in a folder — used by scanner to skip unchanged files."""
         folder = folder.rstrip("/\\")
