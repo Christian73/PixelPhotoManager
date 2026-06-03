@@ -443,21 +443,6 @@ class EditPanel(QWidget):
         scroll.setWidget(inner)
         root.addWidget(scroll, stretch=1)
 
-        # Boutons bas
-        btn_bar = QHBoxLayout()
-        btn_reset = QPushButton("Réinitialiser")
-        btn_reset.setToolTip("Annuler toutes les retouches")
-        btn_reset.clicked.connect(self.reset_all)
-        btn_bar.addWidget(btn_reset)
-
-        btn_apply = QPushButton("Appliquer")
-        btn_apply.setToolTip("Enregistrer les retouches  (Ctrl+S)")
-        btn_apply.setDefault(True)
-        btn_apply.clicked.connect(self._apply)
-        btn_bar.addWidget(btn_apply)
-
-        root.addLayout(btn_bar)
-
     def _make_treatment_button(self, name: str, icon_px: QPixmap,
                                 sliders_def: list) -> QToolButton:
         btn = QToolButton()
@@ -483,6 +468,7 @@ class EditPanel(QWidget):
             for _, attr, *_ in sliders_def:
                 setattr(self._edit, attr, getattr(new_edit, attr))
             self.edits_changed.emit(copy.copy(self._edit))
+            self._save(title)
         else:
             self._edit = original
             self.edits_changed.emit(copy.copy(self._edit))
@@ -502,17 +488,13 @@ class EditPanel(QWidget):
     def get_edit(self) -> EditInfo:
         return copy.copy(self._edit)
 
-    def reset_all(self) -> None:
-        self._push_undo()
-        self._edit = EditInfo()
-        self.edits_changed.emit(copy.copy(self._edit))
-
     def undo(self) -> None:
         if not self._undo_stack:
             return
         self._redo_stack.append(copy.copy(self._edit))
         self._edit = self._undo_stack.pop()
         self.edits_changed.emit(copy.copy(self._edit))
+        self._save("undo")
 
     def redo(self) -> None:
         if not self._redo_stack:
@@ -520,8 +502,13 @@ class EditPanel(QWidget):
         self._undo_stack.append(copy.copy(self._edit))
         self._edit = self._redo_stack.pop()
         self.edits_changed.emit(copy.copy(self._edit))
+        self._save("redo")
 
     # ------------------------------------------------------------------ private
+
+    def _save(self, operation: str) -> None:
+        if self._photo:
+            self._db.save(self._photo.path, self._edit, operation=operation)
 
     def _push_undo(self) -> None:
         self._undo_stack.append(copy.copy(self._edit))
@@ -533,27 +520,28 @@ class EditPanel(QWidget):
         self._push_undo()
         self._edit.rotation = (self._edit.rotation + 90) % 360
         self.edits_changed.emit(copy.copy(self._edit))
+        self._save("rotation")
 
     def _rotate_ccw(self) -> None:
         self._push_undo()
         self._edit.rotation = (self._edit.rotation - 90) % 360
         self.edits_changed.emit(copy.copy(self._edit))
+        self._save("rotation")
 
     def _flip_h(self) -> None:
         self._push_undo()
         self._edit.flip_h = not self._edit.flip_h
         self.edits_changed.emit(copy.copy(self._edit))
+        self._save("flip_h")
 
     def _flip_v(self) -> None:
         self._push_undo()
         self._edit.flip_v = not self._edit.flip_v
         self.edits_changed.emit(copy.copy(self._edit))
+        self._save("flip_v")
 
     def apply_crop(self, quad: tuple) -> None:
         self._push_undo()
         self._edit.crop = quad
         self.edits_changed.emit(copy.copy(self._edit))
-
-    def _apply(self) -> None:
-        if self._photo:
-            self._db.save(self._photo.path, self._edit, operation="apply")
+        self._save("crop")
