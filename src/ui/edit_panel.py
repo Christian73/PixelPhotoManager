@@ -376,8 +376,9 @@ _TREATMENTS: list[tuple] = [
 
 
 class EditPanel(QWidget):
-    edits_changed       = Signal(object)  # EditInfo
-    crop_mode_requested = Signal()
+    edits_changed          = Signal(object)  # EditInfo
+    crop_mode_requested    = Signal()
+    grid_visibility_changed = Signal(bool)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -567,6 +568,10 @@ class EditPanel(QWidget):
         dlg.preview.connect(self._on_preview)
         dlg._panel = self
 
+        is_straighten = (title == "Redresser")
+        if is_straighten:
+            self.grid_visibility_changed.emit(True)
+
         if dlg.exec() == QDialog.Accepted:
             self._push_undo()
             new_edit = dlg.get_edit()
@@ -577,6 +582,9 @@ class EditPanel(QWidget):
         else:
             self._edit = original
             self.edits_changed.emit(copy.copy(self._edit))
+
+        if is_straighten:
+            self.grid_visibility_changed.emit(False)
 
     def _on_preview(self, edit: EditInfo) -> None:
         self.edits_changed.emit(edit)

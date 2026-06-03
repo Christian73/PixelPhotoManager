@@ -71,6 +71,7 @@ class _Canvas(QWidget):
         self._crop_mouse_start:  QPointF | None = None
         self._crop_quad_start:   list[QPointF] | None = None
         self._crop_draw_start:   QPointF | None = None
+        self._grid_visible = False
         self.setMouseTracking(True)
         self.setFocusPolicy(Qt.NoFocus)
 
@@ -292,6 +293,30 @@ class _Canvas(QWidget):
 
     # ------------------------------------------------------------------ paint
 
+    def set_grid_visible(self, visible: bool) -> None:
+        self._grid_visible = visible
+        self.update()
+
+    def _draw_grid(self, p: QPainter) -> None:
+        ir = self._img_rect()
+        if ir.width() < 1 or ir.height() < 1:
+            return
+        # Lignes fines : 10 divisions régulières
+        p.setPen(QPen(QColor(255, 255, 255, 40), 1))
+        for i in range(1, 10):
+            t = i / 10
+            p.drawLine(QPointF(ir.left() + t * ir.width(), ir.top()),
+                       QPointF(ir.left() + t * ir.width(), ir.bottom()))
+            p.drawLine(QPointF(ir.left(),  ir.top() + t * ir.height()),
+                       QPointF(ir.right(), ir.top() + t * ir.height()))
+        # Lignes de tiers plus visibles (repères d'alignement clés)
+        p.setPen(QPen(QColor(255, 255, 255, 110), 1))
+        for t in (1 / 3, 2 / 3):
+            p.drawLine(QPointF(ir.left() + t * ir.width(), ir.top()),
+                       QPointF(ir.left() + t * ir.width(), ir.bottom()))
+            p.drawLine(QPointF(ir.left(),  ir.top() + t * ir.height()),
+                       QPointF(ir.right(), ir.top() + t * ir.height()))
+
     def paintEvent(self, _event) -> None:
         p = QPainter(self)
         p.setRenderHint(QPainter.SmoothPixmapTransform)
@@ -300,6 +325,8 @@ class _Canvas(QWidget):
             pw = int(self._pixmap.width() * self._zoom)
             ph = int(self._pixmap.height() * self._zoom)
             p.drawPixmap(int(self._offset.x()), int(self._offset.y()), pw, ph, self._pixmap)
+            if self._grid_visible:
+                self._draw_grid(p)
             if self._crop_mode:
                 self._draw_crop_overlay(p)
 
@@ -637,6 +664,9 @@ class PhotoViewer(QWidget):
     def update_edit(self, edit: EditInfo) -> None:
         self._edit = edit
         self._reload_pixmap()
+
+    def set_grid_visible(self, visible: bool) -> None:
+        self._canvas.set_grid_visible(visible)
 
     # ------------------------------------------------------------------ zoom
 
