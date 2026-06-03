@@ -322,7 +322,7 @@ class TreatmentDialog(QDialog):
         """
         super().__init__(parent)
         self.setWindowTitle(title)
-        self.setMinimumWidth(360)
+        self.setMinimumWidth(720)
         self._edit = copy.copy(edit)
         self._sliders: dict[str, EditSlider] = {}
 
@@ -502,6 +502,14 @@ class EditPanel(QWidget):
         original = copy.copy(self._edit)
         dlg = TreatmentDialog(title, sliders_def, self._edit, parent=self)
         dlg.preview.connect(self._on_preview)
+
+        # Positionner en bas à gauche de la fenêtre pour ne pas couvrir la photo
+        win_geo = self.window().geometry()
+        hint = dlg.sizeHint()
+        dlg.move(
+            win_geo.left() + 24,
+            win_geo.bottom() - hint.height() - 48,
+        )
 
         if dlg.exec() == QDialog.Accepted:
             self._push_undo()
