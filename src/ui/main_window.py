@@ -8,7 +8,7 @@ from pathlib import Path
 from PySide6.QtCore import Qt, QTimer, Slot
 from PySide6.QtGui import QAction, QKeySequence
 from PySide6.QtWidgets import (
-    QApplication, QCheckBox, QDialog, QDialogButtonBox,
+    QApplication, QCheckBox, QDialog, QDialogButtonBox, QGroupBox,
     QMainWindow, QWidget, QHBoxLayout, QVBoxLayout,
     QRadioButton, QSplitter, QStackedWidget, QStatusBar, QToolBar,
     QLineEdit, QSlider, QLabel, QPushButton,
@@ -38,6 +38,80 @@ def _fmt_size(size_bytes: int) -> str:
     if size_bytes < 1024 * 1024:
         return f"{size_bytes / 1024:.0f} Ko"
     return f"{size_bytes / (1024 * 1024):.1f} Mo"
+
+
+# (label, max_total_pixels | None, jpeg_quality)
+_EXPORT_SIZES = [
+    ("Taille maximale — résolution originale", None,      95),
+    ("Grande  (~1 Mpx)",                       1_000_000, 85),
+    ("Moyenne (~500 kpx)",                     500_000,   80),
+    ("Petite  (~100 kpx)",                     100_000,   70),
+]
+
+
+class _ExportDialog(QDialog):
+    _DEFAULT_DIR = Path.home() / "Pictures" / "PixelPhotoManager" / "Export"
+
+    def __init__(self, photo_count: int, parent=None):
+        super().__init__(parent)
+        n = photo_count
+        self.setWindowTitle(f"Exporter {n} photo{'s' if n > 1 else ''}")
+        self.setMinimumWidth(500)
+        self._setup_ui()
+
+    def _setup_ui(self) -> None:
+        layout = QVBoxLayout(self)
+        layout.setSpacing(12)
+        layout.setContentsMargins(18, 18, 18, 18)
+
+        # Dossier de destination
+        grp_dir = QGroupBox("Dossier de destination")
+        dir_layout = QHBoxLayout(grp_dir)
+        self._dir_edit = QLineEdit(str(self._DEFAULT_DIR))
+        dir_layout.addWidget(self._dir_edit)
+        btn_browse = QPushButton("Parcourir…")
+        btn_browse.setFixedWidth(90)
+        btn_browse.clicked.connect(self._browse)
+        dir_layout.addWidget(btn_browse)
+        layout.addWidget(grp_dir)
+
+        # Options de taille
+        grp_size = QGroupBox("Taille d'export")
+        size_layout = QVBoxLayout(grp_size)
+        self._size_radios: list[tuple[QRadioButton, int | None, int]] = []
+        for i, (label, max_px, quality) in enumerate(_EXPORT_SIZES):
+            rb = QRadioButton(label)
+            rb.setChecked(i == 0)
+            size_layout.addWidget(rb)
+            self._size_radios.append((rb, max_px, quality))
+        layout.addWidget(grp_size)
+
+        # Boutons
+        btn_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        btn_box.button(QDialogButtonBox.Ok).setText("Exporter")
+        btn_box.button(QDialogButtonBox.Cancel).setText("Annuler")
+        btn_box.accepted.connect(self.accept)
+        btn_box.rejected.connect(self.reject)
+        layout.addWidget(btn_box)
+
+    def _browse(self) -> None:
+        folder = QFileDialog.getExistingDirectory(
+            self, "Choisir le dossier d'export", self._dir_edit.text()
+        )
+        if folder:
+            self._dir_edit.setText(folder)
+
+    @property
+    def export_dir(self) -> Path:
+        return Path(self._dir_edit.text().strip())
+
+    @property
+    def size_preset(self) -> tuple:
+        """Retourne (max_total_pixels | None, jpeg_quality)."""
+        for rb, max_px, quality in self._size_radios:
+            if rb.isChecked():
+                return (max_px, quality)
+        return (None, 95)
 
 
 class _SaveOptionsDialog(QDialog):
@@ -213,13 +287,32 @@ class MainWindow(QMainWindow):
 
         self._search_box = QLineEdit()
         self._search_box.setPlaceholderText("Rechercher… (Ctrl+F)")
-        self._search_box.setMinimumWidth(260)
+        self._search_box.setMinimumWidth(130)
+        self._search_box.setMaximumWidth(260)
         self._search_box.textChanged.connect(self._on_search_text_changed)
         tb.addWidget(self._search_box)
 
         act_clear = QAction("✕", self)
         act_clear.triggered.connect(lambda: self._search_box.clear())
         tb.addAction(act_clear)
+
+        # Espaceur flexible pour pousser le bouton Export à droite
+        spacer = QWidget()
+        spacer.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        tb.addWidget(spacer)
+
+        self._btn_export = QPushButton("⬆  Exporter")
+        self._btn_export.setToolTip(
+            "Exporter la photo en cours (visionneuse) ou les photos sélectionnées (grille)"
+        )
+        self._btn_export.setStyleSheet(
+            "QPushButton { background:#2a5a8a; color:white; border:none;"
+            " border-radius:3px; padding:4px 14px; font-weight:bold; }"
+            "QPushButton:hover { background:#3a6a9a; }"
+            "QPushButton:pressed { background:#1a4a7a; }"
+        )
+        self._btn_export.clicked.connect(self._on_export_clicked)
+        tb.addWidget(self._btn_export)
 
     def _setup_central(self) -> None:
         central = QWidget()
@@ -823,6 +916,103 @@ class MainWindow(QMainWindow):
                                  f"Impossible de sauver l'image :\n{e}")
         finally:
             QApplication.restoreOverrideCursor()
+
+    @Slot()
+    def _on_export_clicked(self) -> None:
+        if self._stack.currentIndex() == 1:   # mode visionneuse
+            if not self._viewer._photo:
+                return
+            photos = [self._viewer._photo]
+        else:                                  # mode grille
+            photos = self._grid.get_selected()
+            if not photos:
+                QMessageBox.information(
+                    self, "Exporter",
+                    "Sélectionnez au moins une photo dans la grille avant d'exporter.",
+                )
+                return
+
+        dlg = _ExportDialog(len(photos), self)
+        if dlg.exec() != QDialog.Accepted:
+            return
+
+        self._run_export(photos, dlg.export_dir, *dlg.size_preset)
+
+    def _run_export(
+        self,
+        photos: list,
+        export_dir: Path,
+        max_pixels: int | None,
+        quality: int,
+    ) -> None:
+        """Exporte photos vers export_dir avec redimensionnement et qualité donnés."""
+        from PIL import Image, ImageOps
+        from src.processing.adjustments import ImageAdjuster
+
+        try:
+            export_dir.mkdir(parents=True, exist_ok=True)
+        except Exception as e:
+            QMessageBox.critical(self, "Erreur", f"Impossible de créer le dossier :\n{e}")
+            return
+
+        QApplication.setOverrideCursor(Qt.WaitCursor)
+        errors: list[str] = []
+        try:
+            for i, photo in enumerate(photos):
+                self._lbl_action.setText(
+                    f"Export {i + 1}/{len(photos)}  —  {photo.filename}"
+                )
+                QApplication.processEvents()
+                try:
+                    edit = self._edit_db.load(photo.path)
+                    with Image.open(photo.path) as img:
+                        img = ImageOps.exif_transpose(img)
+                        if edit.is_modified():
+                            img = ImageAdjuster.apply_all(img, edit)
+                        # Redimensionnement si nécessaire
+                        if max_pixels is not None:
+                            w, h = img.size
+                            if w * h > max_pixels:
+                                scale = (max_pixels / (w * h)) ** 0.5
+                                img = img.resize(
+                                    (max(1, round(w * scale)), max(1, round(h * scale))),
+                                    Image.LANCZOS,
+                                )
+                        if img.mode not in ("RGB", "RGBA"):
+                            img = img.convert("RGB")
+                        # Résolution du nom de fichier de destination
+                        dest = export_dir / Path(photo.path).name
+                        if dest.exists():
+                            stem, suffix = dest.stem, dest.suffix
+                            n = 1
+                            while dest.exists():
+                                dest = export_dir / f"{stem}_{n}{suffix}"
+                                n += 1
+                        if dest.suffix.lower() == ".png":
+                            img.save(str(dest), format="PNG")
+                        else:
+                            if img.mode == "RGBA":
+                                img = img.convert("RGB")
+                            img.save(str(dest), format="JPEG",
+                                     quality=quality, subsampling=0)
+                except Exception as e:
+                    errors.append(f"{photo.filename} : {e}")
+                    logger.error("Export %s : %s", photo.path, e, exc_info=True)
+        finally:
+            QApplication.restoreOverrideCursor()
+
+        self._lbl_action.setText("")
+        if errors:
+            QMessageBox.warning(
+                self, "Erreurs d'export",
+                f"{len(errors)} fichier(s) non exporté(s) :\n" + "\n".join(errors),
+            )
+        else:
+            n = len(photos)
+            msg = (f"{n} photo{'s' if n > 1 else ''} "
+                   f"exportée{'s' if n > 1 else ''}  →  {export_dir}")
+            self._lbl_action.setText(msg)
+            QTimer.singleShot(5000, lambda: self._lbl_action.setText(""))
 
     def closeEvent(self, event) -> None:
         self._config.set("ui.window_width", self.width())
