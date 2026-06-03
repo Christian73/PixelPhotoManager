@@ -61,7 +61,7 @@ class MainWindow(QMainWindow):
     # ------------------------------------------------------------------ setup
 
     def _setup_window(self) -> None:
-        self.setWindowTitle("PhotoManager")
+        self.setWindowTitle("PixelPhotoManager")
         self.setMinimumSize(900, 600)
         w = self._config.get("ui.window_width", 1200)
         h = self._config.get("ui.window_height", 800)
@@ -412,8 +412,8 @@ class MainWindow(QMainWindow):
     def _show_about(self) -> None:
         QMessageBox.about(
             self,
-            "À propos de PhotoManager",
-            "PhotoManager v1.0\n\nGestionnaire de photos non destructif.\nPySide6 · Pillow · SQLite",
+            "À propos de PixelPhotoManager",
+            "PixelPhotoManager v1.0\n\nGestionnaire de photos non destructif.\nPySide6 · Pillow · SQLite",
         )
 
     def _update_viewer_status(self, photo: PhotoInfo) -> None:

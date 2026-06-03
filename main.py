@@ -4,7 +4,7 @@ import sys
 import traceback
 from pathlib import Path
 
-_LOG_PATH = Path(__file__).parent / "logs" / "photomanager.log"
+_LOG_PATH = Path(__file__).parent / "logs" / "pixelphotomanager.log"
 _LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
 
 logging.basicConfig(
@@ -49,14 +49,14 @@ from PySide6.QtGui import QFont
 
 def _build_onboarding(config) -> QDialog:
     dlg = QDialog()
-    dlg.setWindowTitle("Bienvenue dans PhotoManager")
+    dlg.setWindowTitle("Bienvenue dans PixelPhotoManager")
     dlg.setMinimumWidth(480)
 
     layout = QVBoxLayout(dlg)
     layout.setSpacing(12)
     layout.setContentsMargins(24, 24, 24, 24)
 
-    title = QLabel("Bienvenue dans PhotoManager !")
+    title = QLabel("Bienvenue dans PixelPhotoManager !")
     font = QFont()
     font.setPointSize(14)
     font.setBold(True)
@@ -103,8 +103,8 @@ def _build_onboarding(config) -> QDialog:
 def main() -> None:
     logger.debug("Création QApplication")
     app = QApplication(sys.argv)
-    app.setApplicationName("PhotoManager")
-    app.setOrganizationName("PhotoManager")
+    app.setApplicationName("PixelPhotoManager")
+    app.setOrganizationName("PixelPhotoManager")
 
     app.setStyleSheet("""
         QToolTip {
@@ -247,7 +247,7 @@ def main() -> None:
 
 if __name__ == "__main__":
     try:
-        logger.info("Démarrage de PhotoManager")
+        logger.info("Démarrage de PixelPhotoManager")
         main()
     except SystemExit:
         pass  # sortie normale de app.exec()

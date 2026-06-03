@@ -9,7 +9,7 @@ from src.core.models import PhotoInfo, AlbumInfo
 
 logger = logging.getLogger(__name__)
 
-_DB_PATH = Path.home() / ".photomanager" / "catalog.db"
+_DB_PATH = Path.home() / ".pixelphotomanager" / "catalog.db"
 
 _CREATE_PHOTOS = """
 CREATE TABLE IF NOT EXISTS photos (

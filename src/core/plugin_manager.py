@@ -14,7 +14,7 @@ class PluginManager:
     PLUGIN_DIRS = [
         Path("plugins"),
         Path("src/plugins"),
-        Path.home() / ".photomanager" / "plugins",
+        Path.home() / ".pixelphotomanager" / "plugins",
     ]
 
     def __init__(self, config):
