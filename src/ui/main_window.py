@@ -162,6 +162,7 @@ class MainWindow(QMainWindow):
         self._grid.photo_activated.connect(self._on_photo_activated)
         self._grid.selection_changed.connect(self._on_selection_changed)
         self._grid.rename_requested.connect(self._on_rename_requested)
+        self._grid.delete_requested.connect(self._on_delete_requested)
         self._stack.addWidget(self._grid)
 
         # Index 1 — Visionneuse seule (traitements dans le panneau gauche)
@@ -172,6 +173,7 @@ class MainWindow(QMainWindow):
         self._edit_panel.edits_changed.connect(self._viewer.update_edit)
         self._edit_panel.crop_mode_requested.connect(self._viewer.enter_crop_mode)
         self._edit_panel.grid_visibility_changed.connect(self._viewer.set_grid_visible)
+        self._edit_panel.photo_saved.connect(self._on_photo_saved)
         self._viewer.crop_ready.connect(self._edit_panel.apply_crop)
         self._stack.addWidget(self._viewer)
 
@@ -438,6 +440,45 @@ class MainWindow(QMainWindow):
             "À propos de PixelPhotoManager",
             "PixelPhotoManager v1.0\n\nGestionnaire de photos non destructif.\nPySide6 · Pillow · SQLite",
         )
+
+    @Slot(str, object)
+    def _on_photo_saved(self, photo_path: str, edit) -> None:
+        self._grid.refresh_photo(photo_path, edit)
+
+    @Slot(list)
+    def _on_delete_requested(self, photos: list) -> None:
+        if not photos:
+            return
+        n = len(photos)
+        if n == 1:
+            msg = f"Supprimer définitivement « {photos[0].filename} » ?\n\nCette action est irréversible."
+        else:
+            msg = f"Supprimer définitivement {n} fichiers sélectionnés ?\n\nCette action est irréversible."
+        reply = QMessageBox.warning(
+            self, "Confirmer la suppression", msg,
+            QMessageBox.Yes | QMessageBox.Cancel,
+            QMessageBox.Cancel,
+        )
+        if reply != QMessageBox.Yes:
+            return
+        deleted: list[str] = []
+        errors: list[str] = []
+        for photo in photos:
+            try:
+                Path(photo.path).unlink(missing_ok=True)
+                self._catalog.delete_photo(photo.path)
+                self._thumb_cache.invalidate(photo.path)
+                deleted.append(photo.path)
+            except Exception as e:
+                errors.append(f"{photo.filename}: {e}")
+        if deleted:
+            self._grid.remove_photos(deleted)
+            self._current_photos = [p for p in self._current_photos
+                                    if p.path not in set(deleted)]
+            self._update_status()
+        if errors:
+            QMessageBox.warning(self, "Erreurs de suppression",
+                                "Impossible de supprimer :\n" + "\n".join(errors))
 
     def _update_viewer_status(self, photo: PhotoInfo) -> None:
         size_str = _fmt_size(photo.file_size)

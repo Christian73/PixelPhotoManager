@@ -20,16 +20,18 @@ class _ThumbSignals(QObject):
 
 
 class _ThumbWorker(QRunnable):
-    def __init__(self, photo_path: str, cache: ThumbnailCache, signals: _ThumbSignals):
+    def __init__(self, photo_path: str, cache: ThumbnailCache, signals: _ThumbSignals,
+                 edit=None):
         super().__init__()
         self._path = photo_path
         self._cache = cache
-        self._signals_ref = weakref.ref(signals)  # évite de garder la cellule en vie
+        self._edit = edit
+        self._signals_ref = weakref.ref(signals)
         self.setAutoDelete(True)
 
     def run(self) -> None:
         try:
-            pixmap = self._cache.generate(self._path)
+            pixmap = self._cache.generate(self._path, self._edit)
             if pixmap:
                 signals = self._signals_ref()
                 if signals is not None:
@@ -88,6 +90,12 @@ class ThumbnailCell(QWidget):
         else:
             worker = _ThumbWorker(self._photo.path, self._cache, self._signals)
             QThreadPool.globalInstance().start(worker)
+
+    def reload_with_edit(self, edit) -> None:
+        """Invalide le cache et régénère la vignette en appliquant les retouches."""
+        self._cache.invalidate(self._photo.path)
+        worker = _ThumbWorker(self._photo.path, self._cache, self._signals, edit)
+        QThreadPool.globalInstance().start(worker)
 
     @Slot(str, QPixmap)
     def _on_thumb_ready(self, path: str, pixmap: QPixmap) -> None:
@@ -196,6 +204,7 @@ class ThumbnailGrid(QScrollArea):
     photo_activated   = Signal(object)  # PhotoInfo
     selection_changed = Signal(list)    # list[PhotoInfo]
     rename_requested  = Signal(object)  # PhotoInfo
+    delete_requested  = Signal(list)    # list[PhotoInfo]
 
     def __init__(self, cache: ThumbnailCache, parent=None):
         super().__init__(parent)
@@ -203,6 +212,7 @@ class ThumbnailGrid(QScrollArea):
         self._thumb_size = 180
         self._cells: list[ThumbnailCell] = []
         self._selected: set[str] = set()
+        self.setFocusPolicy(Qt.StrongFocus)
 
         self._container = _GridContainer()
         self._container.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
@@ -290,7 +300,34 @@ class ThumbnailGrid(QScrollArea):
         menu.addAction("Révéler dans l'Explorateur",
                        lambda: __import__('os').startfile(
                            __import__('os.path').path.dirname(photo.path)))
+        menu.addSeparator()
+        menu.addAction("Effacer le fichier…",
+                       lambda: self.delete_requested.emit([photo]))
         menu.exec(pos)
+
+    def keyPressEvent(self, event) -> None:
+        if event.key() == Qt.Key_Delete:
+            selected = self.get_selected()
+            if selected:
+                self.delete_requested.emit(selected)
+        else:
+            super().keyPressEvent(event)
+
+    def remove_photos(self, paths: list[str]) -> None:
+        """Retire les cellules correspondant aux chemins donnés de la grille."""
+        paths_set = set(paths)
+        remaining = [c for c in self._cells if c.photo.path not in paths_set]
+        self._cells = remaining
+        self._selected -= paths_set
+        self._container.set_cells(remaining)
+        self.selection_changed.emit(self.get_selected())
+
+    def refresh_photo(self, photo_path: str, edit) -> None:
+        """Régénère la vignette d'une photo après modification de ses retouches."""
+        for cell in self._cells:
+            if cell.photo.path == photo_path:
+                cell.reload_with_edit(edit)
+                return
 
     def set_thumbnail_size(self, size: int) -> None:
         self._thumb_size = size

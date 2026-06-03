@@ -402,9 +402,10 @@ _TREATMENTS: list[tuple] = [
 
 
 class EditPanel(QWidget):
-    edits_changed          = Signal(object)  # EditInfo
+    edits_changed          = Signal(object)       # EditInfo
     crop_mode_requested    = Signal()
     grid_visibility_changed = Signal(bool)
+    photo_saved            = Signal(str, object)  # (photo_path, EditInfo) — uniquement lors d'un enregistrement réel
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -648,6 +649,7 @@ class EditPanel(QWidget):
     def _save(self, operation: str) -> None:
         if self._photo:
             self._db.save(self._photo.path, self._edit, operation=operation)
+            self.photo_saved.emit(self._photo.path, copy.copy(self._edit))
 
     def _push_undo(self) -> None:
         self._undo_stack.append(copy.copy(self._edit))

@@ -59,12 +59,22 @@ class ThumbnailCache:
             return self._ram[key]
         return self._get_from_db(photo_path, key)
 
-    def generate(self, photo_path: str) -> QPixmap | None:
+    def generate(self, photo_path: str, edit=None) -> QPixmap | None:
+        """Génère (et met en cache) la vignette de photo_path.
+        Si edit (EditInfo) est fourni, les retouches sont appliquées avant le redimensionnement."""
         try:
             from PIL import Image, ImageOps
 
             with Image.open(photo_path) as img:
                 img = ImageOps.exif_transpose(img)
+                if edit is not None and edit.is_modified():
+                    # Downscale intermédiaire pour accélérer le traitement
+                    w, h = img.size
+                    if max(w, h) > 1024:
+                        s = 1024 / max(w, h)
+                        img = img.resize((round(w * s), round(h * s)), Image.LANCZOS)
+                    from src.processing.adjustments import ImageAdjuster
+                    img = ImageAdjuster.apply_all(img, edit)
                 img.thumbnail(self.THUMB_SIZE, Image.LANCZOS)
                 if img.mode not in ("RGB", "RGBA"):
                     img = img.convert("RGB")
