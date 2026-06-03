@@ -503,12 +503,12 @@ class EditPanel(QWidget):
         dlg = TreatmentDialog(title, sliders_def, self._edit, parent=self)
         dlg.preview.connect(self._on_preview)
 
-        # Positionner en bas à gauche de la fenêtre pour ne pas couvrir la photo
-        win_geo = self.window().geometry()
+        # Positionner dans la zone image, en bas à gauche, hors toolbar et status bar
         hint = dlg.sizeHint()
+        panel_br = self.mapToGlobal(QPoint(self.width(), self.height()))
         dlg.move(
-            win_geo.left() + 24,
-            win_geo.bottom() - hint.height() - 48,
+            panel_br.x() + 16,
+            panel_br.y() - hint.height() - 16,
         )
 
         if dlg.exec() == QDialog.Accepted:
