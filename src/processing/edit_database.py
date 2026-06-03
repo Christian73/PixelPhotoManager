@@ -1,5 +1,6 @@
 import json
 import logging
+import os
 import sqlite3
 import threading
 from pathlib import Path
@@ -76,12 +77,26 @@ class EditDatabase:
             conn.execute(_CREATE_EDITS)
             conn.execute(_CREATE_HISTORY)
             conn.execute(_CREATE_INDEX)
-            # Migration : colonne ajoutée après la création initiale de la table
             try:
                 conn.execute(_MIGRATE_STRAIGHTEN)
             except sqlite3.OperationalError:
                 pass  # colonne déjà présente
+            self._migrate_normalize_paths(conn)
             conn.commit()
+
+    def _migrate_normalize_paths(self, conn) -> None:
+        """Normalise les séparateurs de chemin dans les données existantes."""
+        for table, col in [("photo_edits", "photo_path"), ("edit_history", "photo_path")]:
+            rows = conn.execute(f"SELECT rowid, {col} FROM {table}").fetchall()
+            updates = [
+                (os.path.normpath(p), rid)
+                for rid, p in rows
+                if p and os.path.normpath(p) != p
+            ]
+            if updates:
+                conn.executemany(
+                    f"UPDATE {table} SET {col}=? WHERE rowid=?", updates
+                )
 
     def _connect(self) -> sqlite3.Connection:
         conn = sqlite3.connect(self._db_path)
@@ -92,6 +107,7 @@ class EditDatabase:
 
     def load(self, photo_path: str) -> EditInfo:
         """Charge l'état courant des retouches. Retourne EditInfo() vierge si absent."""
+        photo_path = os.path.normpath(photo_path)
         with self._lock:
             try:
                 with self._connect() as conn:
@@ -124,6 +140,7 @@ class EditDatabase:
 
     def save(self, photo_path: str, edit: EditInfo, operation: str = "edit") -> None:
         """Sauvegarde l'état courant et l'enregistre dans l'historique."""
+        photo_path = os.path.normpath(photo_path)
         with self._lock:
             try:
                 with self._connect() as conn:
@@ -191,6 +208,7 @@ class EditDatabase:
 
     def delete(self, photo_path: str) -> None:
         """Supprime l'état courant et tout l'historique pour cette photo."""
+        photo_path = os.path.normpath(photo_path)
         with self._lock:
             try:
                 with self._connect() as conn:
@@ -206,6 +224,8 @@ class EditDatabase:
 
     def rename_photo(self, old_path: str, new_path: str) -> None:
         """Propage un renommage de fichier dans les deux tables."""
+        old_path = os.path.normpath(old_path)
+        new_path = os.path.normpath(new_path)
         with self._lock:
             try:
                 with self._connect() as conn:
@@ -223,6 +243,7 @@ class EditDatabase:
 
     def get_history(self, photo_path: str, limit: int = 20) -> list[EditInfo]:
         """Retourne les états précédents du plus ancien au plus récent (pour undo persistant)."""
+        photo_path = os.path.normpath(photo_path)
         with self._lock:
             try:
                 with self._connect() as conn:

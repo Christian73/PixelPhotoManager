@@ -42,7 +42,7 @@ class ScanThread(QThread):
                     break
                 for fname in files:
                     if Path(fname).suffix.lower() in SUPPORTED_EXT:
-                        all_files.append(os.path.join(root, fname))
+                        all_files.append(os.path.normpath(os.path.join(root, fname)))
 
         grand_total = len(all_files)
 

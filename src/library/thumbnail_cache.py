@@ -108,6 +108,34 @@ class ThumbnailCache:
             logger.debug(f"Erreur génération vignette {photo_path}: {e}")
             return None
 
+    def move_photo(self, old_path: str, new_path: str) -> None:
+        """Transfère l'entrée de vignette vers new_path sans la régénérer."""
+        old_key = self._key(old_path)
+        new_key = self._key(new_path)
+        # RAM : transférer le pixmap
+        pixmap = self._ram.pop(old_key, None)
+        if old_key in self._ram_order:
+            self._ram_order.remove(old_key)
+        if pixmap is not None:
+            self._store_ram(new_key, pixmap)
+        # DB : copier la ligne sous la nouvelle clé puis supprimer l'ancienne
+        with self._lock:
+            conn = self._conn()
+            try:
+                conn.execute(
+                    """
+                    INSERT OR REPLACE INTO thumbnails
+                        (photo_hash, photo_path, file_mtime, thumbnail_data)
+                    SELECT ?, ?, file_mtime, thumbnail_data
+                    FROM thumbnails WHERE photo_hash = ?
+                    """,
+                    (new_key, new_path, old_key),
+                )
+                conn.execute("DELETE FROM thumbnails WHERE photo_hash = ?", (old_key,))
+                conn.commit()
+            finally:
+                conn.close()
+
     def invalidate(self, photo_path: str) -> None:
         key = self._key(photo_path)
         self._ram.pop(key, None)
