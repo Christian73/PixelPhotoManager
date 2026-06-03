@@ -178,8 +178,9 @@ class MainWindow(QMainWindow):
         sb = self.statusBar()
 
         self._status_label = QLabel("")
-        self._status_label.setMinimumWidth(500)
-        sb.addWidget(self._status_label)
+        self._status_label.setAlignment(Qt.AlignCenter)
+        self._status_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        sb.addWidget(self._status_label, 1)
 
         # --- Contrôles mode grille ---
         self._lbl_thumb_size = QLabel("Taille :")
