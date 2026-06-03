@@ -2,7 +2,7 @@ import copy
 import logging
 import math
 
-from PySide6.QtCore import Qt, Signal, QSize, QPoint
+from PySide6.QtCore import Qt, Signal, QSize, QPoint, QTimer
 from PySide6.QtGui import (
     QPixmap, QPainter, QColor, QFont, QPen, QIcon,
     QPolygon, QBrush, QLinearGradient,
@@ -347,10 +347,12 @@ class TreatmentDialog(QDialog):
 
     def showEvent(self, event) -> None:
         super().showEvent(event)
-        # Après super(), self.width()/height() sont les dimensions réelles rendues.
-        # C'est ici qu'on peut positionner sans que Qt écrase via adjustPosition().
         if self._panel is not None:
-            self.move(self._panel._compute_dialog_pos(self.width(), self.height()))
+            # Dimensions réelles disponibles ici.
+            # QTimer.singleShot(0) diffère le move() APRÈS que Windows ait fini
+            # tout repositionnement asynchrone (adjustPosition, WM_WINDOWPOSCHANGED…).
+            pos = self._panel._compute_dialog_pos(self.width(), self.height())
+            QTimer.singleShot(0, lambda: self.move(pos))
 
     def _on_changed(self, attr: str, value: float) -> None:
         setattr(self._edit, attr, value)
@@ -510,28 +512,45 @@ class EditPanel(QWidget):
     def _compute_dialog_pos(self, dw: int, dh: int) -> QPoint:
         """Positionne le dialogue en bas-gauche de la zone image.
         Appelé depuis TreatmentDialog.showEvent — dw/dh sont les dimensions réelles.
-        Ancres : mapToGlobal() sur la toolbar et la statusbar, qui sont fiables."""
+        Ancres : _navbar et _toolbar du PhotoViewer (coordonnées exactes, évite
+        de couvrir les boutons Précédente/Suivante)."""
+        from PySide6.QtWidgets import QSplitter
         margin = 16
-        win = self.window()
-        left_w = self.parentWidget().width() if self.parentWidget() else self.width()
 
-        # Bas de la zone image = sommet de la status bar
-        sb = win.statusBar()
-        sb_tl = sb.mapToGlobal(QPoint(0, 0))
+        # Naviguer vers PhotoViewer : self → _left_stack → _splitter → _stack → viewer
+        splitter = self.parentWidget().parentWidget() if self.parentWidget() else None
+        viewer = None
+        if isinstance(splitter, QSplitter) and splitter.count() >= 2:
+            stack = splitter.widget(1)
+            if stack.count() >= 2:
+                viewer = stack.widget(1)
 
-        # Haut de la zone image = bas de la toolbar
-        tb = next((t for t in win.findChildren(QToolBar) if t.isVisible()), None)
-        img_top_y = (tb.mapToGlobal(QPoint(0, tb.height())).y() if tb
-                     else sb_tl.y() - win.centralWidget().height())
+        if viewer and hasattr(viewer, '_navbar') and hasattr(viewer, '_toolbar'):
+            navbar = viewer._navbar
+            vtb   = viewer._toolbar
 
-        # x : s'aligne sur le bord gauche de la status bar + largeur panneau gauche
-        x = sb_tl.x() + left_w + margin
-        y = sb_tl.y() - dh - margin
+            # Bas utilisable  = sommet de la barre prev/suivante
+            nav_tl    = navbar.mapToGlobal(QPoint(0, 0))
+            bottom_y  = nav_tl.y() - margin
 
-        # Garde-fous
-        x = min(x, sb_tl.x() + sb.width() - dw - margin)
-        y = max(y, img_top_y + margin)
+            # Haut utilisable = bas de la toolbar du viewer
+            top_y = vtb.mapToGlobal(QPoint(0, vtb.height())).y() + margin
 
+            # Gauche/droite depuis la navbar (même largeur que le viewer)
+            img_left  = nav_tl.x() + margin
+            img_right = nav_tl.x() + navbar.width() - margin
+        else:
+            # Repli : coin supérieur-droit du panneau gauche
+            tr       = self.mapToGlobal(QPoint(self.width(), 0))
+            img_left  = tr.x() + margin
+            img_right = tr.x() + self.window().width() - self.width() - margin
+            bottom_y  = tr.y() + self.height() - margin
+            top_y     = tr.y() + margin
+
+        x = img_left
+        y = bottom_y - dh
+        x = min(x, img_right - dw)
+        y = max(y, top_y)
         return QPoint(x, y)
 
     def _open_treatment(self, title: str, sliders_def: list) -> None:
