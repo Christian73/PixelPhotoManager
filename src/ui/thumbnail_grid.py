@@ -2,8 +2,8 @@ import logging
 import weakref
 from pathlib import Path
 
-from PySide6.QtCore import Qt, Signal, QRunnable, QThreadPool, QObject, Slot, QSize
-from PySide6.QtGui import QPixmap, QColor, QPainter, QFont
+from PySide6.QtCore import Qt, Signal, QRunnable, QThreadPool, QObject, Slot, QSize, QPoint, QUrl, QMimeData
+from PySide6.QtGui import QPixmap, QColor, QPainter, QFont, QDrag
 from PySide6.QtWidgets import (
     QScrollArea, QWidget, QLabel, QVBoxLayout, QSizePolicy,
     QMenu, QApplication,
@@ -56,6 +56,7 @@ class ThumbnailCell(QWidget):
     double_clicked = Signal(object)                # PhotoInfo
     right_clicked  = Signal(object, object)        # PhotoInfo, QPoint
     clicked        = Signal(object, Qt.KeyboardModifier)  # PhotoInfo, modifiers
+    drag_started   = Signal(object)                # PhotoInfo
 
     def __init__(self, photo: PhotoInfo, cache: ThumbnailCache, size: int, parent=None):
         super().__init__(parent)
@@ -66,6 +67,7 @@ class ThumbnailCell(QWidget):
         self._pixmap: QPixmap | None = None
         self._signals = _ThumbSignals()
         self._signals.ready.connect(self._on_thumb_ready)
+        self._drag_start_pos: QPoint | None = None
         self._setup_ui()
         self._load_thumb()
 
@@ -137,8 +139,23 @@ class ThumbnailCell(QWidget):
         if event.button() == Qt.RightButton:
             self.right_clicked.emit(self._photo, event.globalPosition().toPoint())
         elif event.button() == Qt.LeftButton:
+            self._drag_start_pos = event.position().toPoint()
             self.clicked.emit(self._photo, QApplication.keyboardModifiers())
         super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event) -> None:
+        if (self._drag_start_pos is not None
+                and event.buttons() & Qt.LeftButton
+                and (event.position().toPoint() - self._drag_start_pos).manhattanLength()
+                    >= QApplication.startDragDistance()):
+            self._drag_start_pos = None
+            self.drag_started.emit(self._photo)
+        super().mouseMoveEvent(event)
+
+    def mouseReleaseEvent(self, event) -> None:
+        if event.button() == Qt.LeftButton:
+            self._drag_start_pos = None
+        super().mouseReleaseEvent(event)
 
     def contextMenuEvent(self, event) -> None:
         self.right_clicked.emit(self._photo, event.globalPos())
@@ -236,7 +253,35 @@ class ThumbnailGrid(QScrollArea):
         cell.double_clicked.connect(self.photo_activated.emit)
         cell.right_clicked.connect(self._on_right_click)
         cell.clicked.connect(self._on_cell_clicked)
+        cell.drag_started.connect(self._on_cell_drag_started)
         return cell
+
+    @Slot(object)
+    def _on_cell_drag_started(self, photo: PhotoInfo) -> None:
+        """Lance un drag interne avec un type MIME applicatif (évite l'interception OS)."""
+        if photo.path in self._selected:
+            photos = [c.photo for c in self._cells if c.photo.path in self._selected]
+        else:
+            photos = [photo]
+
+        # Type MIME interne : l'OS ne l'intercepte pas, pas de copie parasite
+        paths_bytes = '\n'.join(p.path for p in photos).encode('utf-8')
+        mime = QMimeData()
+        mime.setData('application/x-pixelphoto-paths', paths_bytes)
+
+        drag = QDrag(self)
+        drag.setMimeData(mime)
+
+        # Vignette de prévisualisation
+        for cell in self._cells:
+            if cell.photo.path == photos[0].path and cell._pixmap:
+                px = cell._pixmap.scaled(72, 72, Qt.KeepAspectRatio,
+                                         Qt.SmoothTransformation)
+                drag.setPixmap(px)
+                drag.setHotSpot(px.rect().center())
+                break
+
+        drag.exec(Qt.MoveAction)
 
     @Slot(object, object)
     def _on_cell_clicked(self, photo: PhotoInfo, modifiers) -> None:

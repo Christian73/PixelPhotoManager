@@ -1,3 +1,4 @@
+import os
 import sqlite3
 import threading
 import logging
@@ -123,9 +124,37 @@ class Catalog:
                 conn.execute(_CREATE_ALBUMS)
                 conn.execute(_CREATE_ALBUM_PHOTOS)
                 conn.execute(_CREATE_PERSONS)
+                self._migrate_normalize_paths(conn)
                 conn.commit()
             finally:
                 conn.close()
+
+    def _migrate_normalize_paths(self, conn) -> None:
+        """Normalise les séparateurs de chemin dans les données existantes.
+        Supprime les doublons qui apparaissent après normalisation (garde le premier vu)."""
+        rows = conn.execute("SELECT id, path, directory FROM photos").fetchall()
+        if not rows:
+            return
+        seen: dict[str, int] = {}   # norm_path → id conservé
+        to_delete: list[int] = []
+        to_update: list[tuple] = []
+        for rid, path, directory in rows:
+            if not path:
+                continue
+            norm_path = os.path.normpath(path)
+            norm_dir  = os.path.normpath(directory) if directory else ""
+            if norm_path in seen:
+                to_delete.append(rid)
+            else:
+                seen[norm_path] = rid
+                if norm_path != path or norm_dir != (directory or ""):
+                    to_update.append((norm_path, norm_dir, rid))
+        for rid in to_delete:
+            conn.execute("DELETE FROM photos WHERE id=?", (rid,))
+        if to_update:
+            conn.executemany(
+                "UPDATE photos SET path=?, directory=? WHERE id=?", to_update
+            )
 
     def add_or_update_photo(self, photo: PhotoInfo) -> PhotoInfo:
         dt_str = photo.date_taken.isoformat() if photo.date_taken else None
@@ -182,7 +211,7 @@ class Catalog:
         return photo
 
     def get_photos_in_folder(self, folder: str) -> list[PhotoInfo]:
-        folder = folder.rstrip("/\\")
+        folder = os.path.normpath(folder)
         with self._lock:
             conn = self._conn()
             try:
@@ -232,6 +261,42 @@ class Catalog:
             finally:
                 conn.close()
         return _photo_from_row(row) if row else None
+
+    def update_paths_prefix(self, old_prefix: str, new_prefix: str) -> None:
+        """Met à jour tous les chemins dont le début correspond à old_prefix."""
+        n = len(old_prefix)
+        like_pattern = old_prefix + os.sep + "%"
+        with self._lock:
+            conn = self._conn()
+            try:
+                conn.execute(
+                    """
+                    UPDATE photos
+                    SET path      = ? || substr(path,      ?),
+                        directory = ? || substr(directory, ?)
+                    WHERE path = ? OR path LIKE ?
+                    """,
+                    (new_prefix, n + 1, new_prefix, n + 1, old_prefix, like_pattern),
+                )
+                conn.commit()
+            finally:
+                conn.close()
+
+    def move_photo(self, old_path: str, new_path: str) -> None:
+        """Met à jour le chemin d'un fichier photo dans le catalogue."""
+        old_path = os.path.normpath(old_path)
+        new_path = os.path.normpath(new_path)
+        new_dir = str(Path(new_path).parent)
+        with self._lock:
+            conn = self._conn()
+            try:
+                conn.execute(
+                    "UPDATE photos SET path=?, directory=?, filename=? WHERE path=?",
+                    (new_path, new_dir, os.path.basename(new_path), old_path),
+                )
+                conn.commit()
+            finally:
+                conn.close()
 
     def delete_photo(self, path: str) -> None:
         """Supprime la photo du catalogue (ne touche pas au fichier disque)."""
@@ -353,7 +418,7 @@ class Catalog:
 
     def get_known_mtimes(self, folder: str) -> dict[str, float]:
         """Returns {path: mtime} for all photos in a folder — used by scanner to skip unchanged files."""
-        folder = folder.rstrip("/\\")
+        folder = os.path.normpath(folder)
         with self._lock:
             conn = self._conn()
             try:

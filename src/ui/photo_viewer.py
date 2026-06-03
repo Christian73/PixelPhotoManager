@@ -977,6 +977,13 @@ class PhotoViewer(QWidget):
 
     def enter_crop_mode(self) -> None:
         existing = self._edit.crop if self._edit else None
+        # Si un crop est déjà appliqué, afficher l'image sans ce crop pour que
+        # l'utilisateur puisse repositionner la zone sur l'image complète.
+        if existing and self._photo and self._edit:
+            edit_no_crop = EditInfo.from_dict({**self._edit.to_dict(), 'crop': None})
+            pixmap = _build_pixmap(self._photo, edit_no_crop)
+            if pixmap:
+                self._canvas.set_pixmap(pixmap)
         self._canvas.enter_crop(existing)
         idx = self._crop_format_group.checkedId()
         self._canvas.set_aspect_ratio(_CROP_FORMAT_DATA[idx][2] if idx >= 0 else None)
@@ -999,6 +1006,8 @@ class PhotoViewer(QWidget):
         self._btn_crop_cancel.hide()
         self._btn_prev.show()
         self._btn_next.show()
+        # Restaurer l'image avec le crop appliqué (on avait affiché l'image sans crop)
+        self._reload_pixmap()
 
     def _on_crop_confirmed(self, quad: tuple) -> None:
         self._crop_format_widget.hide()

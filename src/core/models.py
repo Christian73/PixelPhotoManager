@@ -30,6 +30,8 @@ class PhotoInfo:
     id: Optional[int] = None
 
     def __post_init__(self):
+        if self.path:
+            self.path = os.path.normpath(self.path)
         if not self.filename:
             self.filename = os.path.basename(self.path)
         if not self.directory:

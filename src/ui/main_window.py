@@ -1,5 +1,6 @@
 import logging
 import os
+import shutil
 from pathlib import Path
 
 from PySide6.QtCore import Qt, QTimer, Slot
@@ -182,6 +183,9 @@ class MainWindow(QMainWindow):
         self._sidebar.album_selected.connect(self._on_album_selected)
         self._sidebar.scan_requested.connect(self._on_scan_requested)
         self._sidebar.folder_removed.connect(self._on_folder_removed)
+        self._sidebar.folder_created.connect(self._on_folder_created)
+        self._sidebar.folder_moved.connect(self._on_folder_moved)
+        self._sidebar.photos_dropped.connect(self._on_photos_dropped)
 
         bus.on("album.create_requested", self._on_album_create)
 
@@ -273,9 +277,16 @@ class MainWindow(QMainWindow):
 
     @Slot(object)
     def _on_photo_discovered(self, photo: PhotoInfo) -> None:
-        self._grid.add_photo(photo)
-        self._current_photos.append(photo)
-        self._update_status()
+        visible = (
+            self._current_context == "Toutes les photos"
+            or os.path.normcase(photo.directory) == os.path.normcase(self._current_context)
+        )
+        if visible:
+            already_shown = any(p.path == photo.path for p in self._current_photos)
+            if not already_shown:
+                self._grid.add_photo(photo)
+                self._current_photos.append(photo)
+                self._update_status()
         bus.emit("library.photo_discovered", photo=photo)
 
     @Slot(int)
@@ -356,6 +367,78 @@ class MainWindow(QMainWindow):
     def _on_folder_removed(self, folder: str) -> None:
         self._config.remove_scan_folder(folder)
         self._sidebar.refresh_folders(self._config.get_scan_folders())
+
+    @Slot(list, str)
+    def _on_photos_dropped(self, file_paths: list, dest_folder: str) -> None:
+        """Déplace les fichiers glissés vers dest_folder et met à jour toutes les références."""
+        moved_old: list[str] = []
+        errors:    list[str] = []
+        for src in file_paths:
+            filename = os.path.basename(src)
+            dst = os.path.normpath(os.path.join(dest_folder, filename))
+            if os.path.normcase(dst) == os.path.normcase(src):
+                continue
+            if os.path.exists(dst):
+                errors.append(f"{filename} : existe déjà dans la destination")
+                continue
+            try:
+                shutil.move(src, dst)
+            except Exception as e:
+                errors.append(f"{filename} : {e}")
+                continue
+            try:
+                self._catalog.move_photo(src, dst)
+                self._edit_db.rename_photo(src, dst)
+                self._thumb_cache.move_photo(src, dst)
+            except Exception as e:
+                logger.error("Erreur mise à jour références %s → %s : %s", src, dst, e)
+            moved_old.append(src)
+
+        if moved_old:
+            # Naviguer vers le dossier destination pour montrer les photos déplacées
+            photos = self._catalog.get_photos_in_folder(dest_folder)
+            self._current_photos = photos
+            self._current_context = dest_folder
+            self._grid.set_photos(photos)
+            self._update_status()
+
+        if errors:
+            QMessageBox.warning(self, "Erreurs lors du déplacement",
+                                "\n".join(errors))
+
+    @Slot(str)
+    def _on_folder_created(self, path: str) -> None:
+        """Nouveau sous-dossier créé sur disque : rafraîchir l'arbre et scanner."""
+        self._sidebar.refresh_folders(self._config.get_scan_folders())
+        self._start_scan([path])
+
+    @Slot(str, str)
+    def _on_folder_moved(self, old_path: str, new_path: str) -> None:
+        """Dossier renommé ou déplacé : mettre à jour catalogue, config et UI."""
+        # Catalogue
+        self._catalog.update_paths_prefix(old_path, new_path)
+        # Config : remplacer les dossiers surveillés concernés
+        for folder in list(self._config.get_scan_folders()):
+            if folder == old_path or folder.startswith(old_path + os.sep):
+                updated = new_path + folder[len(old_path):]
+                self._config.remove_scan_folder(folder)
+                self._config.add_scan_folder(updated)
+        # Photos en mémoire
+        n = len(old_path)
+        for photo in self._current_photos:
+            if photo.path == old_path or photo.path.startswith(old_path + os.sep):
+                photo.path      = new_path + photo.path[n:]
+                photo.directory = new_path + photo.directory[n:]
+        # Contexte actif
+        if self._current_context and (
+            self._current_context == old_path
+            or self._current_context.startswith(old_path + os.sep)
+        ):
+            self._current_context = new_path + self._current_context[n:]
+        # Rafraîchir sidebar et grille
+        self._sidebar.refresh_folders(self._config.get_scan_folders())
+        self._grid.set_photos(self._current_photos)
+        self._update_status()
 
     def _on_album_create(self, name: str) -> None:
         album = self._catalog.create_album(name)

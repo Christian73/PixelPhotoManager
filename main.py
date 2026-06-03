@@ -4,7 +4,15 @@ import sys
 import traceback
 from pathlib import Path
 
-_LOG_PATH = Path(__file__).parent / "logs" / "pixelphotomanager.log"
+# En mode EXE (PyInstaller), stocker les logs dans %LOCALAPPDATA% plutôt que
+# dans le répertoire de l'exécutable (qui peut être en lecture seule).
+if getattr(sys, "frozen", False):
+    _LOG_PATH = (
+        Path(os.environ.get("LOCALAPPDATA", Path.home()))
+        / "PixelPhotoManager" / "logs" / "pixelphotomanager.log"
+    )
+else:
+    _LOG_PATH = Path(__file__).parent / "logs" / "pixelphotomanager.log"
 _LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
 
 logging.basicConfig(

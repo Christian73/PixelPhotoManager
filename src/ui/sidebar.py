@@ -1,12 +1,13 @@
 import os
 import logging
+import shutil
 import subprocess
 
-from PySide6.QtCore import Signal, Qt
+from PySide6.QtCore import Signal, Qt, QUrl
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QSplitter,
     QTreeWidget, QTreeWidgetItem, QListWidget, QListWidgetItem,
-    QPushButton, QLabel, QMenu, QInputDialog,
+    QPushButton, QLabel, QMenu, QInputDialog, QMessageBox, QFileDialog,
 )
 
 from src.core.event_bus import bus
@@ -18,11 +19,60 @@ _SPECIAL_ALL = "__all__"
 _SPECIAL_FAV = "__favorites__"
 
 
+_MIME_PHOTOS = 'application/x-pixelphoto-paths'
+
+
+class _FolderTree(QTreeWidget):
+    """QTreeWidget qui accepte les drops internes de photos depuis la grille."""
+    files_dropped = Signal(list, str)   # (file_paths, dest_folder_path)
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setAcceptDrops(True)
+
+    def dragEnterEvent(self, event) -> None:
+        if event.mimeData().hasFormat(_MIME_PHOTOS):
+            event.acceptProposedAction()
+        else:
+            event.ignore()
+
+    def dragMoveEvent(self, event) -> None:
+        if event.mimeData().hasFormat(_MIME_PHOTOS):
+            item = self.itemAt(event.position().toPoint())
+            if item:
+                self.setCurrentItem(item)
+                event.acceptProposedAction()
+            else:
+                event.ignore()
+        else:
+            event.ignore()
+
+    def dropEvent(self, event) -> None:
+        if not event.mimeData().hasFormat(_MIME_PHOTOS):
+            event.ignore()
+            return
+        item = self.itemAt(event.position().toPoint())
+        if not item:
+            event.ignore()
+            return
+        folder_path = item.data(0, Qt.UserRole)
+        raw = event.mimeData().data(_MIME_PHOTOS)
+        file_paths = [p for p in raw.data().decode('utf-8').split('\n') if p]
+        if file_paths and folder_path:
+            self.files_dropped.emit(file_paths, folder_path)
+            event.acceptProposedAction()
+        else:
+            event.ignore()
+
+
 class Sidebar(QWidget):
     folder_selected = Signal(str)
-    album_selected = Signal(object)  # AlbumInfo | str (special key)
-    scan_requested = Signal(str)
-    folder_removed = Signal(str)
+    album_selected  = Signal(object)   # AlbumInfo | str (special key)
+    scan_requested  = Signal(str)
+    folder_removed  = Signal(str)
+    folder_created  = Signal(str)      # chemin du nouveau sous-dossier créé
+    folder_moved    = Signal(str, str) # (ancien_chemin, nouveau_chemin)
+    photos_dropped  = Signal(list, str) # (file_paths, dest_folder_path)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -47,11 +97,13 @@ class Sidebar(QWidget):
         )
         fw_layout.addWidget(folder_header)
 
-        self._folder_tree = QTreeWidget()
+        self._folder_tree = _FolderTree()
         self._folder_tree.setHeaderHidden(True)
         self._folder_tree.setContextMenuPolicy(Qt.CustomContextMenu)
         self._folder_tree.customContextMenuRequested.connect(self._folder_context_menu)
         self._folder_tree.itemClicked.connect(self._on_folder_clicked)
+        self._folder_tree.itemExpanded.connect(self._on_folder_expanded)
+        self._folder_tree.files_dropped.connect(self.photos_dropped)
         fw_layout.addWidget(self._folder_tree)
 
         splitter.addWidget(folder_widget)
@@ -111,9 +163,22 @@ class Sidebar(QWidget):
             root_item.setToolTip(0, folder)
             self._folder_tree.addTopLevelItem(root_item)
             self._populate_subfolders(root_item, folder)
-        self._folder_tree.expandAll()
+            root_item.setExpanded(True)
+
+    def _has_subdirs(self, folder_path: str) -> bool:
+        """Retourne True si folder_path contient au moins un sous-dossier visible."""
+        try:
+            for entry in os.scandir(folder_path):
+                if entry.is_dir() and not entry.name.startswith("."):
+                    return True
+        except PermissionError:
+            pass
+        return False
 
     def _populate_subfolders(self, parent_item: QTreeWidgetItem, folder_path: str) -> None:
+        """Ajoute les sous-dossiers immédiats de folder_path sous parent_item.
+        Chaque enfant reçoit un placeholder s'il a lui-même des sous-dossiers,
+        permettant le lazy loading à l'expansion."""
         try:
             entries = sorted(os.scandir(folder_path), key=lambda e: e.name.lower())
             for entry in entries:
@@ -122,8 +187,24 @@ class Sidebar(QWidget):
                     child.setData(0, Qt.UserRole, entry.path)
                     child.setToolTip(0, entry.path)
                     parent_item.addChild(child)
+                    if self._has_subdirs(entry.path):
+                        # Placeholder → rend le nœud dépliable
+                        child.addChild(QTreeWidgetItem([""]))
         except PermissionError:
             pass
+
+    def _on_folder_expanded(self, item: QTreeWidgetItem) -> None:
+        """Lazy loading : remplace le placeholder par les vrais sous-dossiers."""
+        if item.childCount() != 1:
+            return
+        placeholder = item.child(0)
+        if placeholder.data(0, Qt.UserRole) is not None:
+            return  # déjà chargé
+        folder_path = item.data(0, Qt.UserRole)
+        if not folder_path:
+            return
+        item.removeChild(placeholder)
+        self._populate_subfolders(item, folder_path)
 
     def refresh_albums(self, albums: list[AlbumInfo]) -> None:
         self._albums = albums
@@ -152,16 +233,78 @@ class Sidebar(QWidget):
         path = item.data(0, Qt.UserRole)
         menu = QMenu(self)
         menu.addAction("Scanner maintenant", lambda: self.scan_requested.emit(path))
-        menu.addAction(
-            "Supprimer des dossiers surveillés",
-            lambda: self.folder_removed.emit(path),
-        )
+        menu.addAction("Supprimer des dossiers surveillés",
+                       lambda: self.folder_removed.emit(path))
         menu.addSeparator()
-        menu.addAction(
-            "Ouvrir dans l'Explorateur",
-            lambda: subprocess.Popen(f'explorer "{path}"'),
-        )
+        menu.addAction("Créer un sous-dossier…",
+                       lambda: self._create_subfolder(path))
+        menu.addAction("Renommer…",
+                       lambda: self._rename_folder(path))
+        menu.addAction("Déplacer vers…",
+                       lambda: self._move_folder(path))
+        menu.addSeparator()
+        menu.addAction("Ouvrir dans l'Explorateur",
+                       lambda: subprocess.Popen(f'explorer "{path}"'))
         menu.exec(self._folder_tree.mapToGlobal(pos))
+
+    def _create_subfolder(self, parent_path: str) -> None:
+        name, ok = QInputDialog.getText(
+            self, "Nouveau sous-dossier",
+            f"Nom du sous-dossier dans « {os.path.basename(parent_path)} » :",
+        )
+        if not ok or not name.strip():
+            return
+        new_path = os.path.join(parent_path, name.strip())
+        try:
+            os.makedirs(new_path, exist_ok=False)
+        except FileExistsError:
+            QMessageBox.warning(self, "Dossier existant",
+                                f"« {name.strip()} » existe déjà dans ce dossier.")
+            return
+        except Exception as e:
+            QMessageBox.critical(self, "Erreur",
+                                 f"Impossible de créer le dossier :\n{e}")
+            return
+        self.folder_created.emit(new_path)
+
+    def _rename_folder(self, path: str) -> None:
+        current_name = os.path.basename(path)
+        new_name, ok = QInputDialog.getText(
+            self, "Renommer le dossier", "Nouveau nom :", text=current_name,
+        )
+        if not ok or not new_name.strip() or new_name.strip() == current_name:
+            return
+        new_path = os.path.join(os.path.dirname(path), new_name.strip())
+        try:
+            os.rename(path, new_path)
+        except Exception as e:
+            QMessageBox.critical(self, "Erreur",
+                                 f"Impossible de renommer le dossier :\n{e}")
+            return
+        self.folder_moved.emit(path, new_path)
+
+    def _move_folder(self, path: str) -> None:
+        folder_name = os.path.basename(path)
+        dst = QFileDialog.getExistingDirectory(
+            self, f"Déplacer « {folder_name} » — choisir le dossier de destination",
+            os.path.dirname(path),
+        )
+        if not dst:
+            return
+        new_path = os.path.join(dst, folder_name)
+        if os.path.normcase(new_path) == os.path.normcase(path):
+            return  # même emplacement, rien à faire
+        if os.path.exists(new_path):
+            QMessageBox.warning(self, "Dossier existant",
+                                f"« {new_path} » existe déjà.")
+            return
+        try:
+            shutil.move(path, dst)
+        except Exception as e:
+            QMessageBox.critical(self, "Erreur",
+                                 f"Impossible de déplacer le dossier :\n{e}")
+            return
+        self.folder_moved.emit(path, new_path)
 
     def _create_album(self) -> None:
         name, ok = QInputDialog.getText(self, "Nouvel album", "Nom de l'album :")
