@@ -1,5 +1,6 @@
 import logging
 import os
+from pathlib import Path
 
 from PySide6.QtCore import Qt, QTimer, Slot
 from PySide6.QtGui import QAction, QKeySequence
@@ -7,7 +8,7 @@ from PySide6.QtWidgets import (
     QMainWindow, QWidget, QHBoxLayout, QVBoxLayout,
     QSplitter, QStackedWidget, QStatusBar, QToolBar,
     QLineEdit, QSlider, QLabel, QPushButton,
-    QFileDialog, QMessageBox, QSizePolicy,
+    QFileDialog, QInputDialog, QMessageBox, QSizePolicy,
 )
 
 from src.core.config import Config
@@ -16,6 +17,7 @@ from src.core.models import PhotoInfo, AlbumInfo
 from src.library.catalog import Catalog
 from src.library.thumbnail_cache import ThumbnailCache
 from src.library.scanner import LibraryScanner
+from src.processing.edit_database import EditDatabase
 from src.ui.sidebar import Sidebar, _SPECIAL_ALL, _SPECIAL_FAV
 from src.ui.thumbnail_grid import ThumbnailGrid
 from src.ui.photo_viewer import PhotoViewer
@@ -39,6 +41,7 @@ class MainWindow(QMainWindow):
         self._catalog = catalog
         self._thumb_cache = thumb_cache
         self._scanner = scanner
+        self._edit_db = EditDatabase()
 
         self._current_photos: list[PhotoInfo] = []
         self._current_photo_index: int = 0
@@ -150,6 +153,7 @@ class MainWindow(QMainWindow):
         self._grid = ThumbnailGrid(self._thumb_cache)
         self._grid.photo_activated.connect(self._on_photo_activated)
         self._grid.selection_changed.connect(self._on_selection_changed)
+        self._grid.rename_requested.connect(self._on_rename_requested)
         self._stack.addWidget(self._grid)
 
         # Index 1 — Visionneuse seule (traitements dans le panneau gauche)
@@ -438,6 +442,56 @@ class MainWindow(QMainWindow):
                 self._status_label.setText(f"{self._current_context}  —  {count_str}")
             else:
                 self._status_label.setText(count_str)
+
+    @Slot(object)
+    def _on_rename_requested(self, photo: PhotoInfo) -> None:
+        old_p = Path(photo.path)
+        new_stem, ok = QInputDialog.getText(
+            self,
+            "Renommer l'image",
+            "Nouveau nom :",
+            text=old_p.stem,
+        )
+        if not ok:
+            return
+        new_stem = new_stem.strip()
+        if not new_stem:
+            return
+
+        forbidden = set('\\/:*?"<>|')
+        if any(c in forbidden for c in new_stem):
+            QMessageBox.warning(
+                self, "Nom invalide",
+                "Le nom ne peut pas contenir les caractères : \\ / : * ? \" < > |",
+            )
+            return
+
+        new_p = old_p.parent / (new_stem + old_p.suffix)
+        if new_p == old_p:
+            return
+        if new_p.exists():
+            QMessageBox.warning(
+                self, "Fichier existant",
+                f"Un fichier nommé « {new_p.name} » existe déjà dans ce dossier.",
+            )
+            return
+
+        try:
+            old_p.rename(new_p)
+        except OSError as e:
+            QMessageBox.critical(self, "Erreur", f"Impossible de renommer le fichier :\n{e}")
+            return
+
+        new_path_str = str(new_p)
+        self._catalog.rename_photo(photo.path, new_path_str)
+        self._edit_db.rename_photo(photo.path, new_path_str)
+        self._grid.update_photo_path(photo.path, new_path_str)
+
+        for p in self._current_photos:
+            if p.path == photo.path:
+                p.path = new_path_str
+                p.filename = new_p.name
+                break
 
     def closeEvent(self, event) -> None:
         self._config.set("ui.window_width", self.width())

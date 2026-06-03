@@ -192,6 +192,23 @@ class EditDatabase:
             except Exception as e:
                 logger.error(f"Erreur suppression retouches {photo_path}: {e}")
 
+    def rename_photo(self, old_path: str, new_path: str) -> None:
+        """Propage un renommage de fichier dans les deux tables."""
+        with self._lock:
+            try:
+                with self._connect() as conn:
+                    conn.execute(
+                        "UPDATE photo_edits  SET photo_path=? WHERE photo_path=?",
+                        (new_path, old_path),
+                    )
+                    conn.execute(
+                        "UPDATE edit_history SET photo_path=? WHERE photo_path=?",
+                        (new_path, old_path),
+                    )
+                    conn.commit()
+            except Exception as e:
+                logger.error(f"Erreur renommage retouches {old_path} → {new_path}: {e}")
+
     def get_history(self, photo_path: str, limit: int = 20) -> list[EditInfo]:
         """Retourne les états précédents du plus ancien au plus récent (pour undo persistant)."""
         with self._lock:

@@ -1,5 +1,6 @@
 import logging
 import weakref
+from pathlib import Path
 
 from PySide6.QtCore import Qt, Signal, QRunnable, QThreadPool, QObject, Slot, QSize
 from PySide6.QtGui import QPixmap, QColor, QPainter, QFont
@@ -192,8 +193,9 @@ class _GridContainer(QWidget):
 
 
 class ThumbnailGrid(QScrollArea):
-    photo_activated  = Signal(object)  # PhotoInfo
-    selection_changed = Signal(list)   # list[PhotoInfo]
+    photo_activated   = Signal(object)  # PhotoInfo
+    selection_changed = Signal(list)    # list[PhotoInfo]
+    rename_requested  = Signal(object)  # PhotoInfo
 
     def __init__(self, cache: ThumbnailCache, parent=None):
         super().__init__(parent)
@@ -283,7 +285,7 @@ class ThumbnailGrid(QScrollArea):
         fav_label = "Retirer des favoris" if photo.is_favorite else "Marquer comme favori"
         menu.addAction(fav_label)
         menu.addAction("Informations EXIF")
-        menu.addAction("Retoucher")
+        menu.addAction("Renommer l'image", lambda: self.rename_requested.emit(photo))
         menu.addSeparator()
         menu.addAction("Révéler dans l'Explorateur",
                        lambda: __import__('os').startfile(
@@ -303,6 +305,19 @@ class ThumbnailGrid(QScrollArea):
         self._selected.clear()
         self._cells.clear()
         self._container.set_cells([])
+
+    def update_photo_path(self, old_path: str, new_path: str) -> None:
+        """Met à jour le PhotoInfo d'une cellule après renommage."""
+        new_p = Path(new_path)
+        for cell in self._cells:
+            if cell.photo.path == old_path:
+                cell.photo.path = new_path
+                cell.photo.filename = new_p.name
+                cell.photo.directory = str(new_p.parent)
+                break
+        if old_path in self._selected:
+            self._selected.discard(old_path)
+            self._selected.add(new_path)
 
     def select_all(self) -> None:
         for cell in self._cells:
