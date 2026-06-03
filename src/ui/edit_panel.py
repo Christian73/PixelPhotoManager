@@ -503,13 +503,18 @@ class EditPanel(QWidget):
         dlg = TreatmentDialog(title, sliders_def, self._edit, parent=self)
         dlg.preview.connect(self._on_preview)
 
-        # Positionner dans la zone image, en bas à gauche, hors toolbar et status bar
-        hint = dlg.sizeHint()
-        panel_br = self.mapToGlobal(QPoint(self.width(), self.height()))
-        dlg.move(
-            panel_br.x() + 16,
-            panel_br.y() - hint.height() - 16,
-        )
+        # Positionner dans la zone image, hors toolbar et status bar
+        dlg.adjustSize()                 # force la taille réelle avant affichage
+        dw, dh = dlg.width(), dlg.height()
+        central = self.window().centralWidget()
+        origin = central.mapToGlobal(QPoint(0, 0))
+        margin = 16
+        x = origin.x() + self.width() + margin
+        y = origin.y() + central.height() - dh - margin
+        # Garde-fous : rester entièrement dans la zone centrale
+        x = min(x, origin.x() + central.width()  - dw - margin)
+        y = max(y, origin.y() + margin)
+        dlg.move(x, y)
 
         if dlg.exec() == QDialog.Accepted:
             self._push_undo()
