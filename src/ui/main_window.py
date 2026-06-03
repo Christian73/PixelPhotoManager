@@ -1,13 +1,16 @@
+import ctypes
 import logging
 import os
 import shutil
+from datetime import datetime
 from pathlib import Path
 
 from PySide6.QtCore import Qt, QTimer, Slot
 from PySide6.QtGui import QAction, QKeySequence
 from PySide6.QtWidgets import (
-    QApplication, QMainWindow, QWidget, QHBoxLayout, QVBoxLayout,
-    QSplitter, QStackedWidget, QStatusBar, QToolBar,
+    QApplication, QCheckBox, QDialog, QDialogButtonBox,
+    QMainWindow, QWidget, QHBoxLayout, QVBoxLayout,
+    QRadioButton, QSplitter, QStackedWidget, QStatusBar, QToolBar,
     QLineEdit, QSlider, QLabel, QPushButton,
     QFileDialog, QInputDialog, QMessageBox, QSizePolicy,
 )
@@ -35,6 +38,94 @@ def _fmt_size(size_bytes: int) -> str:
     if size_bytes < 1024 * 1024:
         return f"{size_bytes / 1024:.0f} Ko"
     return f"{size_bytes / (1024 * 1024):.1f} Mo"
+
+
+class _SaveOptionsDialog(QDialog):
+    """Dialogue de sauvegarde de l'image traitée.
+
+    Propose trois actions :
+    - Écraser le fichier original (avec option de sauvegarde dans .tmp_originals)
+    - Enregistrer à un autre emplacement via l'explorateur
+    """
+
+    def __init__(self, photo_path: str, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Sauver l'image traitée")
+        self.setMinimumWidth(480)
+        self._photo_path = photo_path
+        self._setup_ui()
+
+    def _setup_ui(self) -> None:
+        layout = QVBoxLayout(self)
+        layout.setSpacing(10)
+        layout.setContentsMargins(18, 18, 18, 18)
+
+        # En-tête
+        lbl_name = QLabel(f"<b>{Path(self._photo_path).name}</b>")
+        lbl_name.setStyleSheet("font-size: 11px;")
+        layout.addWidget(lbl_name)
+
+        sep = QWidget()
+        sep.setFixedHeight(1)
+        sep.setStyleSheet("background: #444;")
+        layout.addWidget(sep)
+        layout.addSpacing(4)
+
+        # --- Option 1 : écraser ---
+        self._rb_overwrite = QRadioButton("Écraser le fichier original")
+        self._rb_overwrite.setChecked(True)
+        layout.addWidget(self._rb_overwrite)
+
+        self._overwrite_details = QWidget()
+        od_layout = QVBoxLayout(self._overwrite_details)
+        od_layout.setContentsMargins(24, 2, 0, 4)
+        od_layout.setSpacing(6)
+
+        lbl_warn = QLabel(
+            "⚠  Cette action est irréversible : le fichier original sera définitivement\n"
+            "    remplacé par la version traitée."
+        )
+        lbl_warn.setStyleSheet("color: #e8a040; font-size: 10px;")
+        od_layout.addWidget(lbl_warn)
+
+        self._cb_backup = QCheckBox(
+            "Copier l'original dans .tmp_originals avant l'écrasement"
+        )
+        self._cb_backup.setChecked(True)
+        self._cb_backup.setToolTip(
+            f"L'original sera copié dans :\n"
+            f"{Path(self._photo_path).parent / '.tmp_originals'}"
+        )
+        od_layout.addWidget(self._cb_backup)
+
+        layout.addWidget(self._overwrite_details)
+
+        # --- Option 2 : enregistrer ailleurs ---
+        self._rb_elsewhere = QRadioButton("Enregistrer à un autre emplacement…")
+        layout.addWidget(self._rb_elsewhere)
+
+        layout.addSpacing(8)
+
+        # Activer/désactiver le bloc d'avertissement selon la radio sélectionnée
+        self._rb_overwrite.toggled.connect(self._overwrite_details.setEnabled)
+
+        # Boutons
+        btn_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        btn_box.button(QDialogButtonBox.Ok).setText("Enregistrer")
+        btn_box.button(QDialogButtonBox.Cancel).setText("Annuler")
+        btn_box.accepted.connect(self.accept)
+        btn_box.rejected.connect(self.reject)
+        layout.addWidget(btn_box)
+
+    # --- Résultats ---
+
+    @property
+    def overwrite(self) -> bool:
+        return self._rb_overwrite.isChecked()
+
+    @property
+    def backup_before_overwrite(self) -> bool:
+        return self._cb_backup.isChecked()
 
 
 class MainWindow(QMainWindow):
@@ -651,17 +742,61 @@ class MainWindow(QMainWindow):
 
     @Slot(object)
     def _on_save_requested(self, photo: PhotoInfo) -> None:
-        original = Path(photo.path)
-        suggested = original.parent / (original.stem + "_retouché" + original.suffix)
-        dest, _ = QFileDialog.getSaveFileName(
-            self,
-            "Sauver l'image traitée",
-            str(suggested),
-            "JPEG (*.jpg *.jpeg);;PNG (*.png);;Tous les fichiers (*)",
-        )
-        if not dest:
+        dlg = _SaveOptionsDialog(photo.path, self)
+        if dlg.exec() != QDialog.Accepted:
             return
 
+        if dlg.overwrite:
+            # Sauvegarde optionnelle de l'original avant écrasement
+            if dlg.backup_before_overwrite:
+                try:
+                    self._backup_original(photo.path)
+                except Exception as e:
+                    logger.error("Échec sauvegarde original %s : %s",
+                                 photo.path, e, exc_info=True)
+                    answer = QMessageBox.warning(
+                        self, "Échec de la sauvegarde",
+                        f"Impossible de copier l'original dans .tmp_originals :\n{e}\n\n"
+                        "Voulez-vous quand même écraser le fichier original ?",
+                        QMessageBox.Yes | QMessageBox.Cancel,
+                        QMessageBox.Cancel,
+                    )
+                    if answer != QMessageBox.Yes:
+                        return
+            dest = photo.path
+        else:
+            original = Path(photo.path)
+            suggested = original.parent / (original.stem + "_retouché" + original.suffix)
+            dest, _ = QFileDialog.getSaveFileName(
+                self,
+                "Enregistrer l'image traitée",
+                str(suggested),
+                "JPEG (*.jpg *.jpeg);;PNG (*.png);;Tous les fichiers (*)",
+            )
+            if not dest:
+                return
+
+        self._export_image(photo, dest)
+
+    def _backup_original(self, photo_path: str) -> None:
+        """Copie le fichier original dans .tmp_originals (dossier caché) avec horodatage."""
+        original = Path(photo_path)
+        backup_dir = original.parent / ".tmp_originals"
+        backup_dir.mkdir(exist_ok=True)
+
+        # Rendre le dossier caché sur Windows
+        try:
+            ctypes.windll.kernel32.SetFileAttributesW(str(backup_dir), 0x02)
+        except Exception:
+            pass  # non bloquant sur les systèmes non-Windows
+
+        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+        backup_name = f"{original.stem}_{ts}{original.suffix}"
+        shutil.copy2(photo_path, backup_dir / backup_name)
+        logger.info("Original sauvegardé : %s", backup_dir / backup_name)
+
+    def _export_image(self, photo: PhotoInfo, dest: str) -> None:
+        """Exporte l'image traitée pleine résolution vers dest."""
         QApplication.setOverrideCursor(Qt.WaitCursor)
         try:
             from PIL import Image, ImageOps
@@ -674,8 +809,7 @@ class MainWindow(QMainWindow):
                     img = ImageAdjuster.apply_all(img, edit)
                 if img.mode not in ("RGB", "RGBA"):
                     img = img.convert("RGB")
-                ext = Path(dest).suffix.lower()
-                if ext == ".png":
+                if Path(dest).suffix.lower() == ".png":
                     img.save(dest, format="PNG")
                 else:
                     if img.mode == "RGBA":
