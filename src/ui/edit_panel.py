@@ -14,7 +14,7 @@ from PySide6.QtWidgets import (
 )
 
 from src.core.models import PhotoInfo, EditInfo
-from src.processing.edit_storage import EditStorage
+from src.processing.edit_database import EditDatabase
 
 logger = logging.getLogger(__name__)
 
@@ -346,6 +346,7 @@ class EditPanel(QWidget):
         self._edit = EditInfo()
         self._undo_stack: list[EditInfo] = []
         self._redo_stack: list[EditInfo] = []
+        self._db = EditDatabase()
         self._setup_ui()
 
     def _setup_ui(self) -> None:
@@ -493,8 +494,8 @@ class EditPanel(QWidget):
 
     def set_photo(self, photo: PhotoInfo) -> None:
         self._photo = photo
-        self._edit = EditStorage.load(photo.path)
-        self._undo_stack.clear()
+        self._edit = self._db.load(photo.path)
+        self._undo_stack = self._db.get_history(photo.path, limit=_UNDO_MAX)
         self._redo_stack.clear()
         self._title_label.setText(f"Retouche — {photo.filename}")
 
@@ -555,4 +556,4 @@ class EditPanel(QWidget):
 
     def _apply(self) -> None:
         if self._photo:
-            EditStorage.save(self._photo.path, self._edit)
+            self._db.save(self._photo.path, self._edit, operation="apply")
