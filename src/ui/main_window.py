@@ -6,7 +6,7 @@ from pathlib import Path
 from PySide6.QtCore import Qt, QTimer, Slot
 from PySide6.QtGui import QAction, QKeySequence
 from PySide6.QtWidgets import (
-    QMainWindow, QWidget, QHBoxLayout, QVBoxLayout,
+    QApplication, QMainWindow, QWidget, QHBoxLayout, QVBoxLayout,
     QSplitter, QStackedWidget, QStatusBar, QToolBar,
     QLineEdit, QSlider, QLabel, QPushButton,
     QFileDialog, QInputDialog, QMessageBox, QSizePolicy,
@@ -164,6 +164,7 @@ class MainWindow(QMainWindow):
         self._grid.selection_changed.connect(self._on_selection_changed)
         self._grid.rename_requested.connect(self._on_rename_requested)
         self._grid.delete_requested.connect(self._on_delete_requested)
+        self._grid.save_requested.connect(self._on_save_requested)
         self._stack.addWidget(self._grid)
 
         # Index 1 — Visionneuse seule (traitements dans le panneau gauche)
@@ -646,6 +647,47 @@ class MainWindow(QMainWindow):
                 break
 
         self._update_status()
+
+    @Slot(object)
+    def _on_save_requested(self, photo: PhotoInfo) -> None:
+        original = Path(photo.path)
+        suggested = original.parent / (original.stem + "_retouché" + original.suffix)
+        dest, _ = QFileDialog.getSaveFileName(
+            self,
+            "Sauver l'image traitée",
+            str(suggested),
+            "JPEG (*.jpg *.jpeg);;PNG (*.png);;Tous les fichiers (*)",
+        )
+        if not dest:
+            return
+
+        QApplication.setOverrideCursor(Qt.WaitCursor)
+        try:
+            from PIL import Image, ImageOps
+            from src.processing.adjustments import ImageAdjuster
+
+            edit = self._edit_db.load(photo.path)
+            with Image.open(photo.path) as img:
+                img = ImageOps.exif_transpose(img)
+                if edit.is_modified():
+                    img = ImageAdjuster.apply_all(img, edit)
+                if img.mode not in ("RGB", "RGBA"):
+                    img = img.convert("RGB")
+                ext = Path(dest).suffix.lower()
+                if ext == ".png":
+                    img.save(dest, format="PNG")
+                else:
+                    if img.mode == "RGBA":
+                        img = img.convert("RGB")
+                    img.save(dest, format="JPEG", quality=95, subsampling=0)
+            self._lbl_action.setText(f"Image sauvée : {Path(dest).name}")
+            QTimer.singleShot(4000, lambda: self._lbl_action.setText(""))
+        except Exception as e:
+            logger.error("Erreur export image %s : %s", photo.path, e, exc_info=True)
+            QMessageBox.critical(self, "Erreur d'export",
+                                 f"Impossible de sauver l'image :\n{e}")
+        finally:
+            QApplication.restoreOverrideCursor()
 
     def closeEvent(self, event) -> None:
         self._config.set("ui.window_width", self.width())
