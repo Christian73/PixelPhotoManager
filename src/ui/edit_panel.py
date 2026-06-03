@@ -11,7 +11,6 @@ from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QSlider,
     QPushButton, QScrollArea, QGroupBox, QDialog,
     QDialogButtonBox, QToolButton, QGridLayout, QSizePolicy,
-    QSplitter,
 )
 
 from src.core.models import PhotoInfo, EditInfo
@@ -326,7 +325,7 @@ class TreatmentDialog(QDialog):
         self.setMinimumWidth(720)
         self._edit = copy.copy(edit)
         self._sliders: dict[str, EditSlider] = {}
-        self._target_pos = None   # position appliquée dans showEvent
+        self._panel = None   # référence vers EditPanel, positionné dans showEvent
 
         layout = QVBoxLayout(self)
         layout.setSpacing(8)
@@ -346,10 +345,11 @@ class TreatmentDialog(QDialog):
         layout.addWidget(btn_box)
 
     def showEvent(self, event) -> None:
-        # Appliqué ici car Qt écrase move() via adjustPosition() pendant exec()
         super().showEvent(event)
-        if self._target_pos is not None:
-            self.move(self._target_pos)
+        # Après super(), self.width()/height() sont les dimensions réelles rendues.
+        # C'est ici qu'on peut positionner sans que Qt écrase via adjustPosition().
+        if self._panel is not None:
+            self.move(self._panel._compute_dialog_pos(self.width(), self.height()))
 
     def _on_changed(self, attr: str, value: float) -> None:
         setattr(self._edit, attr, value)
@@ -506,40 +506,32 @@ class EditPanel(QWidget):
 
     # ------------------------------------------------------------------ dialogues
 
-    def _compute_dialog_pos(self, dlg: QDialog) -> QPoint:
-        """Calcule la position bas-gauche dans la zone image (hors toolbar/statusbar)."""
-        # self → _left_stack (QStackedWidget) → _splitter (QSplitter)
-        splitter = self.parentWidget().parentWidget() if self.parentWidget() else None
-        image_zone = (
-            splitter.widget(1)
-            if isinstance(splitter, QSplitter) and splitter.count() >= 2
-            else None
-        )
-        sh = dlg.sizeHint()
-        dw = max(sh.width(), 720)
-        dh = sh.height()
+    def _compute_dialog_pos(self, dw: int, dh: int) -> QPoint:
+        """Positionne le dialogue en bas-gauche de la zone image.
+        Appelé depuis TreatmentDialog.showEvent — dw/dh sont les dimensions réelles."""
         margin = 16
+        win = self.window()
+        central = win.centralWidget()
 
-        if image_zone:
-            tl = image_zone.mapToGlobal(QPoint(0, 0))
-            iw, ih = image_zone.width(), image_zone.height()
-        else:
-            central = self.window().centralWidget()
-            tl = central.mapToGlobal(QPoint(self.width(), 0))
-            iw = central.width() - self.width()
-            ih = central.height()
+        # Origine globale du widget central (sous toolbar+menubar, au-dessus statusbar)
+        c_tl = central.mapToGlobal(QPoint(0, 0))
+        c_w   = central.width()
+        c_h   = central.height()
 
-        x = tl.x() + margin
-        y = tl.y() + ih - dh - margin
-        x = min(x, tl.x() + iw - dw - margin)
-        y = max(y, tl.y() + margin)
+        # Largeur du panneau gauche (parent direct de self = _left_stack)
+        left_w = self.parentWidget().width() if self.parentWidget() else self.width()
+
+        x = c_tl.x() + left_w + margin
+        y = c_tl.y() + c_h  - dh - margin
+        x = min(x, c_tl.x() + c_w - dw - margin)
+        y = max(y, c_tl.y() + margin)
         return QPoint(x, y)
 
     def _open_treatment(self, title: str, sliders_def: list) -> None:
         original = copy.copy(self._edit)
         dlg = TreatmentDialog(title, sliders_def, self._edit, parent=self)
         dlg.preview.connect(self._on_preview)
-        dlg._target_pos = self._compute_dialog_pos(dlg)
+        dlg._panel = self
 
         if dlg.exec() == QDialog.Accepted:
             self._push_undo()
