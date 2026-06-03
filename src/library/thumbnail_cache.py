@@ -10,7 +10,7 @@ from PySide6.QtCore import QByteArray
 
 logger = logging.getLogger(__name__)
 
-_DB_PATH = Path.home() / ".photomanager" / "thumbnails.db"
+_DB_PATH = Path.home() / ".pixelphotomanager" / "thumbnails.db"
 
 _CREATE_TABLE = """
 CREATE TABLE IF NOT EXISTS thumbnails (

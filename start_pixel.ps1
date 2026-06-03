@@ -4,7 +4,7 @@ Set-Location $ScriptDir
 & "$ScriptDir\.venv\Scripts\python.exe" "$ScriptDir\main.py"
 
 if ($LASTEXITCODE -ne 0) {
-    $LogPath = "$ScriptDir\logs\photomanager.log"
+    $LogPath = "$ScriptDir\logs\pixelphotomanager.log"
     Write-Host ""
     Write-Host "L'application s'est terminee avec le code $LASTEXITCODE." -ForegroundColor Red
     if (Test-Path $LogPath) {

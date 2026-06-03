@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Projet
 
-**PhotoManager** — Gestionnaire de photos desktop Windows. Python 3.11, PySide6. Voir `DocumentDeConception.md` pour la spécification complète.
+**PixelPhotoManager** — Gestionnaire de photos desktop Windows. Python 3.11, PySide6. Voir `DocumentDeConception.md` pour la spécification complète.
 
 ---
 
@@ -29,7 +29,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 .venv\Scripts\python.exe -m pytest tests/test_thumbnail_cache.py::TestThumbnailCache::test_lru_eviction -v
 
 # Packaging Windows (exécutable autonome)
-.venv\Scripts\pyinstaller.exe photomanager.spec
+.venv\Scripts\pyinstaller.exe pixelphotomanager.spec
 ```
 
 ---
@@ -88,7 +88,7 @@ Le `PluginManager` charge les plugins dynamiquement via `importlib`. Les plugins
 
 ## Base de données
 
-SQLite embarqué, zéro configuration. Le catalogue est dans `~/.photomanager/catalog.db`. Les vignettes ont leur propre base `thumbnails.db`. Utiliser `sqlite3` standard, pas d'ORM.
+SQLite embarqué, zéro configuration. Le catalogue est dans `~/.pixelphotomanager/catalog.db`. Les vignettes ont leur propre base `thumbnails.db`. Utiliser `sqlite3` standard, pas d'ORM.
 
 ---
 

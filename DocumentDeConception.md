@@ -1,4 +1,4 @@
-# PhotoManager — Document de Conception
+# PixelPhotoManager — Document de Conception
 
 **Version** : 1.1  
 **Date** : 2026  
@@ -10,11 +10,11 @@
 
 ## 1. Vision du projet
 
-PhotoManager est un gestionnaire de photos desktop Windows conçu pour être **rapide, intuitif et extensible**. Son objectif est de redonner aux utilisateurs le plaisir de gérer leurs photos en local, sans cloud obligatoire, avec une interface fluide et des fonctionnalités intelligentes.
+PixelPhotoManager est un gestionnaire de photos desktop Windows conçu pour être **rapide, intuitif et extensible**. Son objectif est de redonner aux utilisateurs le plaisir de gérer leurs photos en local, sans cloud obligatoire, avec une interface fluide et des fonctionnalités intelligentes.
 
 La philosophie centrale est **zéro friction**. L'application scanne vos dossiers, organise vos photos, reconnaît vos proches, et vous permet de les retoucher en quelques clics — sans formation préalable.
 
-Ce qui distingue PhotoManager des alternatives existantes est son architecture modulaire ouverte permettant à n'importe qui d'ajouter des fonctionnalités via des plugins Python simples, et l'intégration native des modèles d'IA modernes pour la reconnaissance faciale et la restauration de photos.
+Ce qui distingue PixelPhotoManager des alternatives existantes est son architecture modulaire ouverte permettant à n'importe qui d'ajouter des fonctionnalités via des plugins Python simples, et l'intégration native des modèles d'IA modernes pour la reconnaissance faciale et la restauration de photos.
 
 ---
 
@@ -37,17 +37,17 @@ Toute opération dépassant 100 ms s'exécute dans un thread secondaire. L'inter
 
 ### 2.2 La découverte automatique — pas d'import destructif
 
-PhotoManager ne déplace pas les photos — il les découvre. Il scanne les dossiers configurés et les affiche tels quels, sans copier ni renommer quoi que ce soit. L'utilisateur retrouve ses photos exactement là où il les a rangées. C'est une différence fondamentale avec la plupart des gestionnaires modernes qui imposent un import.
+PixelPhotoManager ne déplace pas les photos — il les découvre. Il scanne les dossiers configurés et les affiche tels quels, sans copier ni renommer quoi que ce soit. L'utilisateur retrouve ses photos exactement là où il les a rangées. C'est une différence fondamentale avec la plupart des gestionnaires modernes qui imposent un import.
 
-**Principe :** les fichiers originaux sont intouchables. PhotoManager est un outil de consultation et d'organisation, jamais de modification du système de fichiers (sauf en cas d'action explicite de l'utilisateur).
+**Principe :** les fichiers originaux sont intouchables. PixelPhotoManager est un outil de consultation et d'organisation, jamais de modification du système de fichiers (sauf en cas d'action explicite de l'utilisateur).
 
 ### 2.3 La reconnaissance faciale accessible
 
-La reconnaissance faciale est accessible au grand public. Elle propose des groupes de visages similaires et demande simplement « qui est cette personne ? ». En quelques sessions de validation, PhotoManager reconnaît tous les membres de la famille sur des milliers de photos.
+La reconnaissance faciale est accessible au grand public. Elle propose des groupes de visages similaires et demande simplement « qui est cette personne ? ». En quelques sessions de validation, PixelPhotoManager reconnaît tous les membres de la famille sur des milliers de photos.
 
 ### 2.4 Les retouches non destructives
 
-PhotoManager ne modifie jamais les photos originales. Tous les ajustements sont stockés dans la base de données et appliqués à la volée lors de l'affichage ou de l'export. L'original est toujours préservé et récupérable en un clic. L'information de modification est enregistrée dans un fichier caché dans le même dossier que la photo pour que si l'utilisateur modifie le nom ou l'organisation de ces répertoires, les modifications enregistrées restent valides.
+PixelPhotoManager ne modifie jamais les photos originales. Tous les ajustements sont stockés dans la base de données et appliqués à la volée lors de l'affichage ou de l'export. L'original est toujours préservé et récupérable en un clic. L'information de modification est enregistrée dans un fichier caché dans le même dossier que la photo pour que si l'utilisateur modifie le nom ou l'organisation de ces répertoires, les modifications enregistrées restent valides.
 
 ### 2.5 L'interface épurée — la règle des 90/10
 
@@ -285,7 +285,7 @@ Au premier démarrage, une fenêtre d'accueil guide l'utilisateur en 3 étapes :
 
 **Étape 1 — Choisir les dossiers à surveiller**
 ```
-Bienvenue dans PhotoManager !
+Bienvenue dans PixelPhotoManager !
 
 Où sont vos photos ?
 
@@ -298,7 +298,7 @@ Où sont vos photos ?
 
 **Étape 2 — Scan en cours (non bloquant)**
 ```
-PhotoManager découvre vos photos...
+PixelPhotoManager découvre vos photos...
 
 ████████████░░░░  3 241 / ~5 000 photos trouvées
 
@@ -313,7 +313,7 @@ L'utilisateur peut cliquer sur "Continuer en arrière-plan" pour commencer à na
 ```
 Voulez-vous activer la reconnaissance des personnes ?
 
-○ Oui — PhotoManager regroupera automatiquement les photos
+○ Oui — PixelPhotoManager regroupera automatiquement les photos
         par personne (traitement en arrière-plan)
 ● Non  — Je l'activerai plus tard dans les paramètres
 
@@ -361,7 +361,7 @@ La barre de recherche (`Ctrl+F`) est unifiée et accepte plusieurs syntaxes :
 
 ### 4.1 Gestion de la bibliothèque
 
-**Découverte automatique** — PhotoManager scanne les dossiers configurés au démarrage et en arrière-plan. Aucun import manuel requis. Les photos restent à leur emplacement d'origine.
+**Découverte automatique** — PixelPhotoManager scanne les dossiers configurés au démarrage et en arrière-plan. Aucun import manuel requis. Les photos restent à leur emplacement d'origine.
 
 **Navigation par dossiers** — Arborescence fidèle à la structure du disque. L'utilisateur retrouve ses photos exactement comme dans l'explorateur Windows.
 
@@ -422,7 +422,7 @@ Export vers JPEG, PNG, TIFF avec contrôle de la qualité et de la résolution. 
 ### 5.1 Vue d'ensemble
 
 ```
-PhotoManager/
+PixelPhotoManager/
 │
 ├── src/
 │   ├── core/                    ← Noyau de l'application
@@ -491,7 +491,7 @@ logger = logging.getLogger(__name__)
 
 class EventBus:
     """
-    Bus d'événements central de PhotoManager.
+    Bus d'événements central de PixelPhotoManager.
     
     Permet la communication découplée entre tous les composants.
     Les plugins utilisent ce bus pour réagir aux événements
@@ -579,7 +579,7 @@ bus = EventBus()
 
 ### 5.3 La performance — Stratégie de cache en couches
 
-La rapidité de l'application repose sur un cache intelligent des vignettes. PhotoManager utilise une stratégie à trois niveaux.
+La rapidité de l'application repose sur un cache intelligent des vignettes. PixelPhotoManager utilise une stratégie à trois niveaux.
 
 ```python
 # src/library/thumbnail_cache.py
@@ -735,7 +735,7 @@ C'est la pièce la plus importante de l'architecture. L'interface plugin est con
 
 ### 6.1 Anatomie d'un plugin
 
-Un plugin PhotoManager est un dossier Python contenant exactement deux fichiers obligatoires et des fichiers optionnels.
+Un plugin PixelPhotoManager est un dossier Python contenant exactement deux fichiers obligatoires et des fichiers optionnels.
 
 ```
 plugins/mon-plugin/
@@ -758,7 +758,7 @@ plugins/mon-plugin/
     "author": "Votre Nom",
     "email": "votre@email.com",
     "url": "https://github.com/vous/mon-plugin",
-    "min_photomanager_version": "1.0.0",
+    "min_pixelphotomanager_version": "1.0.0",
     "type": "processor",
     "tags": ["retouche", "filtre"],
     "icon": "assets/icon.png",
@@ -796,7 +796,7 @@ if TYPE_CHECKING:
 
 class BasePlugin(ABC):
     """
-    Classe de base pour tous les plugins PhotoManager.
+    Classe de base pour tous les plugins PixelPhotoManager.
     
     Pour créer un plugin, héritez de cette classe et
     implémentez les méthodes marquées @abstractmethod.
@@ -951,7 +951,7 @@ class ProcessorPlugin(BasePlugin):
     À utiliser pour les plugins qui transforment des photos :
     filtres, effets, restauration IA, colorisation, etc.
     
-    PhotoManager gère automatiquement :
+    PixelPhotoManager gère automatiquement :
     - L'affichage dans le panneau de retouche
     - La prévisualisation en temps réel
     - L'historique (undo/redo)
@@ -1140,7 +1140,7 @@ class PluginManager:
     PLUGIN_DIRS = [
         Path('plugins'),                          # Plugins utilisateur
         Path('src/plugins'),                      # Plugins intégrés
-        Path.home() / '.photomanager' / 'plugins' # Plugins globaux
+        Path.home() / '.pixelphotomanager' / 'plugins' # Plugins globaux
     ]
 
     def __init__(self, config):
@@ -1356,7 +1356,7 @@ class WatermarkPlugin(ProcessorPlugin):
         Returns:
             Photo avec filigrane
         """
-        texte = params.get('texte', '© PhotoManager')
+        texte = params.get('texte', '© PixelPhotoManager')
         opacite = params.get('opacite', 0.5)
         position = params.get('position', 'bas-droite')
 
