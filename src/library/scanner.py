@@ -37,9 +37,11 @@ class ScanThread(QThread):
 
         all_files: list[str] = []
         for folder in self._folders:
-            for root, _dirs, files in os.walk(folder):
+            for root, dirs, files in os.walk(folder):
                 if self._stop_flag:
                     break
+                # Exclure les dossiers de sauvegarde temporaires et les dossiers cachés
+                dirs[:] = [d for d in dirs if not d.startswith(".tmp_")]
                 for fname in files:
                     if Path(fname).suffix.lower() in SUPPORTED_EXT:
                         all_files.append(os.path.normpath(os.path.join(root, fname)))
