@@ -481,18 +481,21 @@ class EditPanel(QWidget):
         grp_geo.layout().addLayout(row_sr)
 
         row_flip = QHBoxLayout()
-        for icon_fn, tip, slot in [
-            (_icon_flip_h, "Miroir horizontal", self._flip_h),
-            (_icon_flip_v, "Miroir vertical",   self._flip_v),
+        row_flip.setSpacing(4)
+        for icon_fn, label, tip, slot in [
+            (_icon_flip_h, "Miroir H", "Miroir horizontal", self._flip_h),
+            (_icon_flip_v, "Miroir V", "Miroir vertical",   self._flip_v),
         ]:
             btn = QToolButton()
+            btn.setText(label)
             btn.setIcon(QIcon(icon_fn()))
             btn.setIconSize(QSize(_ICON_SIZE, _ICON_SIZE))
+            btn.setToolButtonStyle(Qt.ToolButtonTextUnderIcon)
+            btn.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+            btn.setFixedHeight(_ICON_SIZE + 28)
             btn.setToolTip(tip)
-            btn.setFixedSize(_ICON_SIZE + 16, _ICON_SIZE + 12)
             btn.clicked.connect(slot)
             row_flip.addWidget(btn)
-        row_flip.addStretch()
         grp_geo.layout().addLayout(row_flip)
 
         inner_layout.addWidget(grp_geo)
