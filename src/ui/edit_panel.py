@@ -11,6 +11,7 @@ from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QSlider,
     QPushButton, QScrollArea, QGroupBox, QDialog,
     QDialogButtonBox, QToolButton, QGridLayout, QSizePolicy,
+    QToolBar,
 )
 
 from src.core.models import PhotoInfo, EditInfo
@@ -508,23 +509,27 @@ class EditPanel(QWidget):
 
     def _compute_dialog_pos(self, dw: int, dh: int) -> QPoint:
         """Positionne le dialogue en bas-gauche de la zone image.
-        Appelé depuis TreatmentDialog.showEvent — dw/dh sont les dimensions réelles."""
+        Appelé depuis TreatmentDialog.showEvent — dw/dh sont les dimensions réelles.
+        Utilise win.geometry() (zone client, sans cadre OS) comme référence stable."""
         margin = 16
         win = self.window()
-        central = win.centralWidget()
+        wg = win.geometry()   # rect client de la fenêtre en coordonnées écran
 
-        # Origine globale du widget central (sous toolbar+menubar, au-dessus statusbar)
-        c_tl = central.mapToGlobal(QPoint(0, 0))
-        c_w   = central.width()
-        c_h   = central.height()
-
-        # Largeur du panneau gauche (parent direct de self = _left_stack)
+        mb_h = win.menuBar().height() if win.menuBar() and win.menuBar().isVisible() else 0
+        tb_h = next((tb.height() for tb in win.findChildren(QToolBar) if tb.isVisible()), 0)
+        sb_h = win.statusBar().height() if win.statusBar() and win.statusBar().isVisible() else 0
         left_w = self.parentWidget().width() if self.parentWidget() else self.width()
 
-        x = c_tl.x() + left_w + margin
-        y = c_tl.y() + c_h  - dh - margin
-        x = min(x, c_tl.x() + c_w - dw - margin)
-        y = max(y, c_tl.y() + margin)
+        # Limites de la zone image dans l'espace écran
+        img_left   = wg.left()   + left_w
+        img_top    = wg.top()    + mb_h + tb_h
+        img_right  = wg.right()
+        img_bottom = wg.bottom() - sb_h
+
+        x = img_left + margin
+        y = img_bottom - dh - margin
+        x = min(x, img_right  - dw - margin)
+        y = max(y, img_top    + margin)
         return QPoint(x, y)
 
     def _open_treatment(self, title: str, sliders_def: list) -> None:
