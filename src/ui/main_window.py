@@ -77,8 +77,23 @@ class _ExportDialog(QDialog):
 
         # Options de taille
         grp_size = QGroupBox("Taille d'export")
+        grp_size.setStyleSheet("""
+            QRadioButton::indicator {
+                width: 13px; height: 13px;
+                border-radius: 7px;
+                border: 2px solid #888;
+                background: transparent;
+            }
+            QRadioButton::indicator:checked {
+                background: #7aabdb;
+                border: 2px solid #7aabdb;
+            }
+            QRadioButton::indicator:unchecked:hover {
+                border-color: #bbb;
+            }
+        """)
         size_layout = QVBoxLayout(grp_size)
-        size_layout.setSpacing(2)
+        size_layout.setSpacing(6)
         self._size_radios: list[tuple[QRadioButton, int | None, int]] = []
         for i, (label, max_px, quality, size_hint) in enumerate(_EXPORT_SIZES):
             row = QWidget()
