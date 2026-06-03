@@ -88,7 +88,7 @@ Le `PluginManager` charge les plugins dynamiquement via `importlib`. Les plugins
 
 ## Base de données
 
-SQLite embarqué, zéro configuration. Le catalogue est dans `~/.pixelphotomanager/catalog.db`. Les vignettes ont leur propre base `thumbnails.db`. Utiliser `sqlite3` standard, pas d'ORM.
+SQLite embarqué, zéro configuration. Le catalogue est dans `%LOCALAPPDATA%\PixelPhotoManager\catalog.db`. Les vignettes ont leur propre base `thumbnails.db`. La configuration est dans `config.json` dans le même dossier. Le chemin de base est défini dans `src/core/app_dirs.py` (`APP_DATA_DIR`). Utiliser `sqlite3` standard, pas d'ORM.
 
 ---
 

@@ -6,10 +6,11 @@ from pathlib import Path
 from typing import Optional
 
 from src.core.models import PhotoInfo, AlbumInfo
+from src.core.app_dirs import APP_DATA_DIR
 
 logger = logging.getLogger(__name__)
 
-_DB_PATH = Path.home() / ".pixelphotomanager" / "catalog.db"
+_DB_PATH = APP_DATA_DIR / "catalog.db"
 
 _CREATE_PHOTOS = """
 CREATE TABLE IF NOT EXISTS photos (

@@ -4,6 +4,7 @@ import logging
 from pathlib import Path
 from typing import Type
 
+from .app_dirs import APP_DATA_DIR
 from .base_plugin import BasePlugin
 from .event_bus import bus
 
@@ -14,7 +15,7 @@ class PluginManager:
     PLUGIN_DIRS = [
         Path("plugins"),
         Path("src/plugins"),
-        Path.home() / ".pixelphotomanager" / "plugins",
+        APP_DATA_DIR / "plugins",
     ]
 
     def __init__(self, config):
