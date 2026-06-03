@@ -6,7 +6,7 @@ from src.processing.geometry import GeometryProcessor
 class ImageAdjuster:
     @staticmethod
     def apply_all(image: Image.Image, edit: EditInfo) -> Image.Image:
-        image = GeometryProcessor.apply_rotation(image, edit.rotation)
+        image = GeometryProcessor.apply_rotation(image, edit.rotation + edit.straighten)
         image = GeometryProcessor.apply_flip(image, edit.flip_h, edit.flip_v)
         if edit.crop:
             image = GeometryProcessor.apply_crop(image, edit.crop)
