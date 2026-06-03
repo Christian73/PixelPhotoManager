@@ -13,7 +13,7 @@ from PySide6.QtWidgets import (
 )
 
 from src.core.models import PhotoInfo, EditInfo
-from src.processing.edit_storage import EditStorage
+from src.processing.edit_database import EditDatabase
 from src.processing.adjustments import ImageAdjuster
 
 logger = logging.getLogger(__name__)
@@ -520,6 +520,7 @@ class PhotoViewer(QWidget):
         super().__init__(parent)
         self._photo: PhotoInfo | None = None
         self._edit: EditInfo | None = None
+        self._db = EditDatabase()
         self._setup_ui()
         self.setFocusPolicy(Qt.StrongFocus)
 
@@ -622,7 +623,7 @@ class PhotoViewer(QWidget):
 
     def set_photo(self, photo: PhotoInfo, edit: EditInfo | None = None) -> None:
         self._photo = photo
-        self._edit = edit or EditStorage.load(photo.path)
+        self._edit = edit or self._db.load(photo.path)
         self._lbl_name.setText(photo.path)
         self._btn_fav.setChecked(photo.is_favorite)
         self._reload_pixmap()

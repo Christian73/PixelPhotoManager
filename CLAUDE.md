@@ -61,7 +61,11 @@ bus.emit('library.photo_selected', photo=photo_info)
 
 ### Retouches non destructives
 
-Les retouches ne modifient jamais les fichiers originaux. Les ajustements sont stockés en base SQLite et appliqués à la volée (affichage, export). L'original est toujours récupérable.
+Les retouches ne modifient jamais les fichiers originaux. Les ajustements sont stockés dans `%LOCALAPPDATA%\PixelPhotoManager\edits.db` (SQLite) et appliqués à la volée (affichage, export). L'original est toujours récupérable.
+
+- `src/processing/edit_database.py` — `EditDatabase` : table `photo_edits` (état courant) + table `edit_history` (historique persistant, 50 entrées max par photo)
+- L'historique est rechargé depuis la DB à l'ouverture d'une photo → undo/redo persistant entre sessions
+- Le bouton **Appliquer** dans `EditPanel` déclenche `EditDatabase.save()`
 
 ### Cache vignettes à trois niveaux
 
