@@ -11,6 +11,27 @@ class GeometryProcessor:
         return image.rotate(-degrees, expand=True)
 
     @staticmethod
+    def apply_straighten_with_crop(image: Image.Image, degrees: float) -> Image.Image:
+        """Rotation fine + recadrage automatique au plus grand rectangle inscrit
+        de même format que l'original (pas de coins noirs)."""
+        if degrees == 0.0:
+            return image
+        W, H = image.size
+        theta = math.radians(abs(degrees))
+        cos_t = math.cos(theta)
+        sin_t = math.sin(theta)
+        # s = rapport de la diagonale inscrite au rectangle d'origine
+        s = min(W / (W * cos_t + H * sin_t),
+                H / (W * sin_t + H * cos_t))
+        W_crop = max(1, round(W * s))
+        H_crop = max(1, round(H * s))
+        rotated = image.rotate(-degrees, expand=True, resample=Image.BICUBIC)
+        rW, rH = rotated.size
+        left = (rW - W_crop) // 2
+        top  = (rH - H_crop) // 2
+        return rotated.crop((left, top, left + W_crop, top + H_crop))
+
+    @staticmethod
     def apply_flip(image: Image.Image, flip_h: bool, flip_v: bool) -> Image.Image:
         if flip_h:
             image = ImageOps.mirror(image)

@@ -28,6 +28,14 @@ logger = logging.getLogger(__name__)
 _THUMB_SIZES = [110, 180, 250, 350]
 
 
+def _fmt_size(size_bytes: int) -> str:
+    if size_bytes <= 0:
+        return ""
+    if size_bytes < 1024 * 1024:
+        return f"{size_bytes / 1024:.0f} Ko"
+    return f"{size_bytes / (1024 * 1024):.1f} Mo"
+
+
 class MainWindow(QMainWindow):
     def __init__(
         self,
@@ -178,10 +186,17 @@ class MainWindow(QMainWindow):
     def _setup_statusbar(self) -> None:
         sb = self.statusBar()
 
-        self._status_label = QLabel("")
-        self._status_label.setAlignment(Qt.AlignCenter)
-        self._status_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
-        sb.addWidget(self._status_label, 1)
+        # Tiers gauche — actions en cours (scan, chargement…)
+        self._lbl_action = QLabel("")
+        self._lbl_action.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+        self._lbl_action.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        sb.addWidget(self._lbl_action, 1)
+
+        # Tiers centre — nom du fichier sélectionné et sa taille
+        self._lbl_fileinfo = QLabel("")
+        self._lbl_fileinfo.setAlignment(Qt.AlignCenter)
+        self._lbl_fileinfo.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        sb.addWidget(self._lbl_fileinfo, 1)
 
         # --- Contrôles mode grille ---
         self._lbl_thumb_size = QLabel("Taille :")
@@ -263,13 +278,14 @@ class MainWindow(QMainWindow):
 
     @Slot(int)
     def _on_scan_finished(self, total: int) -> None:
+        self._lbl_action.setText("")
         self._update_status()
         albums = self._catalog.get_albums()
         self._sidebar.refresh_albums(albums)
 
     @Slot(int, str)
     def _on_scan_progress(self, percent: int, path: str) -> None:
-        self.statusBar().showMessage(f"Scan… {percent}%  {os.path.basename(path)}", 2000)
+        self._lbl_action.setText(f"Scan… {percent}%  —  {os.path.basename(path)}")
 
     @Slot(object)
     def _on_photo_activated(self, photo: PhotoInfo) -> None:
@@ -290,6 +306,7 @@ class MainWindow(QMainWindow):
         photo = self._current_photos[self._current_photo_index]
         self._viewer.set_photo(photo)
         self._edit_panel.set_photo(photo)
+        self._update_viewer_status(photo)
 
     @Slot(float)
     def _on_viewer_zoom_changed(self, zoom: float) -> None:
@@ -378,7 +395,7 @@ class MainWindow(QMainWindow):
         self._zoom_slider.hide()
         self._zoom_pct_label.hide()
         self._btn_grid_status.show()
-        self._status_label.setText("")
+        self._lbl_fileinfo.setText("")
         self._update_status()
 
     def show_viewer(self, photo: PhotoInfo) -> None:
@@ -393,7 +410,7 @@ class MainWindow(QMainWindow):
         self._zoom_slider.show()
         self._zoom_pct_label.show()
         self._btn_grid_status.hide()
-        self._status_label.setText("")
+        self._update_viewer_status(photo)
 
     def toggle_sidebar(self) -> None:
         self._left_stack.setVisible(not self._left_stack.isVisible())
@@ -423,7 +440,11 @@ class MainWindow(QMainWindow):
         )
 
     def _update_viewer_status(self, photo: PhotoInfo) -> None:
-        self._status_label.setText(f"{photo.filename}   —   {photo.path}")
+        size_str = _fmt_size(photo.file_size)
+        text = photo.filename
+        if size_str:
+            text += f"   —   {size_str}"
+        self._lbl_fileinfo.setText(text)
 
     def _update_status(self, selection: list[PhotoInfo] | None = None) -> None:
         if selection is None:
@@ -433,17 +454,22 @@ class MainWindow(QMainWindow):
         n_total = len(self._current_photos)
 
         if n_sel == 1:
-            self._status_label.setText(selection[0].filename)
+            photo = selection[0]
+            size_str = _fmt_size(photo.file_size)
+            text = photo.filename
+            if size_str:
+                text += f"   —   {size_str}"
+            self._lbl_fileinfo.setText(text)
         elif n_sel > 1:
-            self._status_label.setText(
+            self._lbl_fileinfo.setText(
                 f"{n_sel} photos sélectionnées  —  {n_total} au total"
             )
         else:
             count_str = f"{n_total} photo{'s' if n_total != 1 else ''}"
             if self._current_context:
-                self._status_label.setText(f"{self._current_context}  —  {count_str}")
+                self._lbl_fileinfo.setText(f"{self._current_context}  —  {count_str}")
             else:
-                self._status_label.setText(count_str)
+                self._lbl_fileinfo.setText(count_str)
 
     @Slot(object)
     def _on_rename_requested(self, photo: PhotoInfo) -> None:
