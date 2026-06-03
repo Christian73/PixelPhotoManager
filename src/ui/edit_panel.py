@@ -326,6 +326,7 @@ class TreatmentDialog(QDialog):
         self.setMinimumWidth(720)
         self._edit = copy.copy(edit)
         self._sliders: dict[str, EditSlider] = {}
+        self._target_pos = None   # position appliquée dans showEvent
 
         layout = QVBoxLayout(self)
         layout.setSpacing(8)
@@ -343,6 +344,12 @@ class TreatmentDialog(QDialog):
         btn_box.accepted.connect(self.accept)
         btn_box.rejected.connect(self.reject)
         layout.addWidget(btn_box)
+
+    def showEvent(self, event) -> None:
+        # Appliqué ici car Qt écrase move() via adjustPosition() pendant exec()
+        super().showEvent(event)
+        if self._target_pos is not None:
+            self.move(self._target_pos)
 
     def _on_changed(self, attr: str, value: float) -> None:
         setattr(self._edit, attr, value)
@@ -499,12 +506,8 @@ class EditPanel(QWidget):
 
     # ------------------------------------------------------------------ dialogues
 
-    def _open_treatment(self, title: str, sliders_def: list) -> None:
-        original = copy.copy(self._edit)
-        dlg = TreatmentDialog(title, sliders_def, self._edit, parent=self)
-        dlg.preview.connect(self._on_preview)
-
-        # Remonter jusqu'au QSplitter pour obtenir le widget image exact
+    def _compute_dialog_pos(self, dlg: QDialog) -> QPoint:
+        """Calcule la position bas-gauche dans la zone image (hors toolbar/statusbar)."""
         # self → _left_stack (QStackedWidget) → _splitter (QSplitter)
         splitter = self.parentWidget().parentWidget() if self.parentWidget() else None
         image_zone = (
@@ -512,25 +515,31 @@ class EditPanel(QWidget):
             if isinstance(splitter, QSplitter) and splitter.count() >= 2
             else None
         )
-
-        dlg.adjustSize()
-        dw, dh = dlg.width(), dlg.height()
+        sh = dlg.sizeHint()
+        dw = max(sh.width(), 720)
+        dh = sh.height()
         margin = 16
 
         if image_zone:
             tl = image_zone.mapToGlobal(QPoint(0, 0))
             iw, ih = image_zone.width(), image_zone.height()
         else:
-            # Fallback : coin bas-droit du panneau gauche
-            tl = self.mapToGlobal(QPoint(self.width(), 0))
-            iw = self.window().width() - self.width()
-            ih = self.height()
+            central = self.window().centralWidget()
+            tl = central.mapToGlobal(QPoint(self.width(), 0))
+            iw = central.width() - self.width()
+            ih = central.height()
 
         x = tl.x() + margin
         y = tl.y() + ih - dh - margin
         x = min(x, tl.x() + iw - dw - margin)
         y = max(y, tl.y() + margin)
-        dlg.move(x, y)
+        return QPoint(x, y)
+
+    def _open_treatment(self, title: str, sliders_def: list) -> None:
+        original = copy.copy(self._edit)
+        dlg = TreatmentDialog(title, sliders_def, self._edit, parent=self)
+        dlg.preview.connect(self._on_preview)
+        dlg._target_pos = self._compute_dialog_pos(dlg)
 
         if dlg.exec() == QDialog.Accepted:
             self._push_undo()
