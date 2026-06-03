@@ -510,26 +510,28 @@ class EditPanel(QWidget):
     def _compute_dialog_pos(self, dw: int, dh: int) -> QPoint:
         """Positionne le dialogue en bas-gauche de la zone image.
         Appelé depuis TreatmentDialog.showEvent — dw/dh sont les dimensions réelles.
-        Utilise win.geometry() (zone client, sans cadre OS) comme référence stable."""
+        Ancres : mapToGlobal() sur la toolbar et la statusbar, qui sont fiables."""
         margin = 16
         win = self.window()
-        wg = win.geometry()   # rect client de la fenêtre en coordonnées écran
-
-        mb_h = win.menuBar().height() if win.menuBar() and win.menuBar().isVisible() else 0
-        tb_h = next((tb.height() for tb in win.findChildren(QToolBar) if tb.isVisible()), 0)
-        sb_h = win.statusBar().height() if win.statusBar() and win.statusBar().isVisible() else 0
         left_w = self.parentWidget().width() if self.parentWidget() else self.width()
 
-        # Limites de la zone image dans l'espace écran
-        img_left   = wg.left()   + left_w
-        img_top    = wg.top()    + mb_h + tb_h
-        img_right  = wg.right()
-        img_bottom = wg.bottom() - sb_h
+        # Bas de la zone image = sommet de la status bar
+        sb = win.statusBar()
+        sb_tl = sb.mapToGlobal(QPoint(0, 0))
 
-        x = img_left + margin
-        y = img_bottom - dh - margin
-        x = min(x, img_right  - dw - margin)
-        y = max(y, img_top    + margin)
+        # Haut de la zone image = bas de la toolbar
+        tb = next((t for t in win.findChildren(QToolBar) if t.isVisible()), None)
+        img_top_y = (tb.mapToGlobal(QPoint(0, tb.height())).y() if tb
+                     else sb_tl.y() - win.centralWidget().height())
+
+        # x : s'aligne sur le bord gauche de la status bar + largeur panneau gauche
+        x = sb_tl.x() + left_w + margin
+        y = sb_tl.y() - dh - margin
+
+        # Garde-fous
+        x = min(x, sb_tl.x() + sb.width() - dw - margin)
+        y = max(y, img_top_y + margin)
+
         return QPoint(x, y)
 
     def _open_treatment(self, title: str, sliders_def: list) -> None:
