@@ -149,6 +149,34 @@ def _icon_noise(size: int = _ICON_SIZE) -> QPixmap:
     return px
 
 
+def _icon_straighten(size: int = _ICON_SIZE) -> QPixmap:
+    """Cadre légèrement incliné + ligne d'horizon horizontale."""
+    px, p = _base_pixmap(size)
+    c = size // 2
+    pad = size // 7
+    # Ligne d'horizon de référence (pointillés)
+    p.setPen(QPen(QColor(100, 180, 255), 1, Qt.DashLine))
+    p.drawLine(pad, c, size - pad, c)
+    # Cadre incliné représentant l'image à redresser
+    angle = math.radians(12)
+    cos_a, sin_a = math.cos(angle), math.sin(angle)
+    hw, hh = size // 2 - pad - 2, size // 3 - 2
+    corners = [(-hw, -hh), (hw, -hh), (hw, hh), (-hw, hh)]
+    rotated = [
+        QPoint(int(c + x * cos_a - y * sin_a), int(c + x * sin_a + y * cos_a))
+        for x, y in corners
+    ]
+    p.setPen(QPen(QColor(210, 210, 210), 2))
+    p.setBrush(Qt.NoBrush)
+    for i in range(4):
+        p.drawLine(rotated[i], rotated[(i + 1) % 4])
+    # Petite flèche de correction (arc)
+    p.setPen(QPen(QColor(100, 200, 100), 2))
+    p.drawArc(c - 8, c + pad // 2, 16, 10, 0, 100 * 16)
+    p.end()
+    return px
+
+
 def _icon_flip_h(size: int = _ICON_SIZE) -> QPixmap:
     """Deux triangles pointant vers l'axe vertical central."""
     px, p = _base_pixmap(size)
@@ -410,6 +438,19 @@ class EditPanel(QWidget):
             btn.clicked.connect(slot)
             row_rot.addWidget(btn)
         grp_geo.layout().addLayout(row_rot)
+
+        btn_straighten = QToolButton()
+        btn_straighten.setText("Redresser")
+        btn_straighten.setIcon(QIcon(_icon_straighten()))
+        btn_straighten.setIconSize(QSize(_ICON_SIZE, _ICON_SIZE))
+        btn_straighten.setToolButtonStyle(Qt.ToolButtonTextUnderIcon)
+        btn_straighten.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        btn_straighten.setFixedHeight(_ICON_SIZE + 28)
+        btn_straighten.setToolTip("Corriger l'inclinaison de l'horizon (-45° à +45°)")
+        btn_straighten.clicked.connect(
+            lambda: self._open_treatment("Redresser", [("Angle (°)", "straighten", -45.0, 45.0, 1)])
+        )
+        grp_geo.layout().addWidget(btn_straighten)
 
         row_flip = QHBoxLayout()
         for icon_fn, tip, slot in [

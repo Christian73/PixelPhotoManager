@@ -45,6 +45,7 @@ class EditInfo:
     sharpness: float = 0.0
     noise_reduction: float = 0.0
     rotation: float = 0.0
+    straighten: float = 0.0
     flip_h: bool = False
     flip_v: bool = False
     crop: Optional[tuple] = None
@@ -62,6 +63,7 @@ class EditInfo:
             or self.sharpness != 0.0
             or self.noise_reduction != 0.0
             or self.rotation != 0.0
+            or self.straighten != 0.0
             or self.flip_h
             or self.flip_v
             or self.crop is not None
@@ -77,6 +79,7 @@ class EditInfo:
             "sharpness": self.sharpness,
             "noise_reduction": self.noise_reduction,
             "rotation": self.rotation,
+            "straighten": self.straighten,
             "flip_h": self.flip_h,
             "flip_v": self.flip_v,
             "crop": list(self.crop) if self.crop else None,
@@ -97,6 +100,7 @@ class EditInfo:
             sharpness=float(data.get("sharpness", 0.0)),
             noise_reduction=float(data.get("noise_reduction", 0.0)),
             rotation=float(data.get("rotation", 0.0)),
+            straighten=float(data.get("straighten", 0.0)),
             flip_h=bool(data.get("flip_h", False)),
             flip_v=bool(data.get("flip_v", False)),
             crop=tuple(crop) if crop else None,

@@ -23,6 +23,7 @@ CREATE TABLE IF NOT EXISTS photo_edits (
     sharpness      REAL    DEFAULT 0.0,
     noise_reduction REAL   DEFAULT 0.0,
     rotation       REAL    DEFAULT 0.0,
+    straighten     REAL    DEFAULT 0.0,
     flip_h         INTEGER DEFAULT 0,
     flip_v         INTEGER DEFAULT 0,
     crop           TEXT    DEFAULT NULL,
@@ -33,6 +34,10 @@ CREATE TABLE IF NOT EXISTS photo_edits (
     modified_at    TEXT    DEFAULT CURRENT_TIMESTAMP
 )
 """
+
+_MIGRATE_STRAIGHTEN = (
+    "ALTER TABLE photo_edits ADD COLUMN straighten REAL DEFAULT 0.0"
+)
 
 _CREATE_HISTORY = """
 CREATE TABLE IF NOT EXISTS edit_history (
@@ -71,6 +76,11 @@ class EditDatabase:
             conn.execute(_CREATE_EDITS)
             conn.execute(_CREATE_HISTORY)
             conn.execute(_CREATE_INDEX)
+            # Migration : colonne ajoutée après la création initiale de la table
+            try:
+                conn.execute(_MIGRATE_STRAIGHTEN)
+            except sqlite3.OperationalError:
+                pass  # colonne déjà présente
             conn.commit()
 
     def _connect(self) -> sqlite3.Connection:
@@ -99,6 +109,7 @@ class EditDatabase:
                     sharpness=row["sharpness"],
                     noise_reduction=row["noise_reduction"],
                     rotation=row["rotation"],
+                    straighten=row["straighten"] or 0.0,
                     flip_h=bool(row["flip_h"]),
                     flip_v=bool(row["flip_v"]),
                     crop=tuple(json.loads(row["crop"])) if row["crop"] else None,
@@ -126,16 +137,17 @@ class EditDatabase:
                             """
                             INSERT OR REPLACE INTO photo_edits
                                 (photo_path, brightness, contrast, saturation, gamma,
-                                 sharpness, noise_reduction, rotation, flip_h, flip_v,
-                                 crop, bw, bw_red, bw_green, bw_blue, modified_at)
-                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                                 sharpness, noise_reduction, rotation, straighten,
+                                 flip_h, flip_v, crop, bw, bw_red, bw_green, bw_blue,
+                                 modified_at)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
                                     CURRENT_TIMESTAMP)
                             """,
                             (
                                 photo_path,
                                 edit.brightness, edit.contrast, edit.saturation,
                                 edit.gamma, edit.sharpness, edit.noise_reduction,
-                                edit.rotation,
+                                edit.rotation, edit.straighten,
                                 int(edit.flip_h), int(edit.flip_v),
                                 json.dumps(list(edit.crop)) if edit.crop else None,
                                 int(edit.bw),
