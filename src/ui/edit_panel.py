@@ -488,9 +488,9 @@ class EditPanel(QWidget):
         btn_straighten.setToolButtonStyle(Qt.ToolButtonTextUnderIcon)
         btn_straighten.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         btn_straighten.setFixedHeight(_ICON_SIZE + 28)
-        btn_straighten.setToolTip("Corriger l'inclinaison de l'horizon (-45° à +45°)")
+        btn_straighten.setToolTip("Corriger l'inclinaison de l'horizon (-10° à +10°)")
         btn_straighten.clicked.connect(
-            lambda: self._open_treatment("Redresser", [("Angle (°)", "straighten", -45.0, 45.0, 1)])
+            lambda: self._open_treatment("Redresser", [("Angle (°)", "straighten", -10.0, 10.0, 1)])
         )
         row_sr.addWidget(btn_straighten)
 

@@ -18,12 +18,25 @@ from src.processing.adjustments import ImageAdjuster
 
 logger = logging.getLogger(__name__)
 
+# Résolution maximale pour l'affichage à l'écran.
+# Les retouches (rotation, recadrage, etc.) s'appliquent sur cette copie réduite.
+# L'image originale pleine résolution n'est utilisée que pour l'export final.
+_PREVIEW_MAX_PX = 1024
+
 
 def _build_pixmap(photo: PhotoInfo, edit: EditInfo | None) -> QPixmap | None:
     try:
         from PIL import Image, ImageOps
         with Image.open(photo.path) as img:
             img = ImageOps.exif_transpose(img)
+            # Downscale à la résolution d'affichage avant tout traitement
+            w, h = img.size
+            if max(w, h) > _PREVIEW_MAX_PX:
+                scale = _PREVIEW_MAX_PX / max(w, h)
+                img = img.resize(
+                    (round(w * scale), round(h * scale)),
+                    Image.LANCZOS,
+                )
             if edit and edit.is_modified():
                 img = ImageAdjuster.apply_all(img, edit)
             if img.mode not in ("RGB", "RGBA"):
@@ -195,7 +208,8 @@ class _Canvas(QWidget):
         self._crop_quad[self._crop_handle] = QPointF(px, py)
 
     def _apply_drag_edge(self, pos: QPointF) -> None:
-        """Déplace les deux coins de l'arête active de la même quantité (solidaire)."""
+        """Déplace l'arête en conservant l'orientation des côtés adjacents.
+        Chaque coin glisse le long de son côté adjacent — allongement/réduction seulement."""
         if self._crop_quad is None or self._crop_handle is None:
             return
         if not self._crop_quad_start or not self._crop_mouse_start:
@@ -203,11 +217,64 @@ class _Canvas(QWidget):
         ir = self._img_rect()
         dx = pos.x() - self._crop_mouse_start.x()
         dy = pos.y() - self._crop_mouse_start.y()
+
         i, j = _EDGE_INDICES[self._crop_handle]
-        for k in (i, j):
-            px = max(ir.left(), min(ir.right(),  self._crop_quad_start[k].x() + dx))
-            py = max(ir.top(),  min(ir.bottom(), self._crop_quad_start[k].y() + dy))
-            self._crop_quad[k] = QPointF(px, py)
+        # Coin adjacent fixe pour chaque extrémité de l'arête
+        # Dans le cycle TL(0)-TR(1)-BR(2)-BL(3), les voisins de i (≠j) et j (≠i) sont :
+        i_adj = (i - 1) % 4
+        j_adj = (j + 1) % 4
+
+        q_i = self._crop_quad_start[i]       # position de départ du coin i
+        q_j = self._crop_quad_start[j]       # position de départ du coin j
+        p_i = self._crop_quad_start[i_adj]   # coin adjacent fixe de i
+        p_j = self._crop_quad_start[j_adj]   # coin adjacent fixe de j
+
+        # Normale à l'arête
+        ex, ey = q_j.x() - q_i.x(), q_j.y() - q_i.y()
+        length = math.hypot(ex, ey)
+        if length < 1:
+            return
+        nx, ny = -ey / length, ex / length
+
+        # Projection du déplacement souris sur la normale
+        proj = dx * nx + dy * ny
+
+        # Pour chaque coin : déplacement le long du côté adjacent
+        # new_corner = q + proj * (q - p) / ((q - p) · n)
+        # soit new_corner = q + proj * (sx, sy)
+        dq_i_dot_n = (q_i.x() - p_i.x()) * nx + (q_i.y() - p_i.y()) * ny
+        dq_j_dot_n = (q_j.x() - p_j.x()) * nx + (q_j.y() - p_j.y()) * ny
+        if abs(dq_i_dot_n) < 1e-9 or abs(dq_j_dot_n) < 1e-9:
+            return  # côté adjacent quasi-parallèle à l'arête — cas dégénéré
+
+        si_x = (q_i.x() - p_i.x()) / dq_i_dot_n
+        si_y = (q_i.y() - p_i.y()) / dq_i_dot_n
+        sj_x = (q_j.x() - p_j.x()) / dq_j_dot_n
+        sj_y = (q_j.y() - p_j.y()) / dq_j_dot_n
+
+        # Clamp proj pour que les deux nouveaux coins restent dans l'image
+        proj_min, proj_max = -1e9, 1e9
+        for sx, sy, qx, qy in [(si_x, si_y, q_i.x(), q_i.y()),
+                                 (sj_x, sj_y, q_j.x(), q_j.y())]:
+            if abs(sx) > 1e-9:
+                lo = (ir.left()  - qx) / sx
+                hi = (ir.right() - qx) / sx
+                if sx < 0:
+                    lo, hi = hi, lo
+                proj_min = max(proj_min, lo)
+                proj_max = min(proj_max, hi)
+            if abs(sy) > 1e-9:
+                lo = (ir.top()    - qy) / sy
+                hi = (ir.bottom() - qy) / sy
+                if sy < 0:
+                    lo, hi = hi, lo
+                proj_min = max(proj_min, lo)
+                proj_max = min(proj_max, hi)
+
+        proj = max(proj_min, min(proj_max, proj))
+
+        self._crop_quad[i] = QPointF(q_i.x() + proj * si_x, q_i.y() + proj * si_y)
+        self._crop_quad[j] = QPointF(q_j.x() + proj * sj_x, q_j.y() + proj * sj_y)
 
     def _apply_move(self, pos: QPointF) -> None:
         if not self._crop_quad_start or not self._crop_mouse_start:
@@ -301,16 +368,17 @@ class _Canvas(QWidget):
         ir = self._img_rect()
         if ir.width() < 1 or ir.height() < 1:
             return
-        # Lignes fines : 10 divisions régulières
-        p.setPen(QPen(QColor(255, 255, 255, 70), 1.5))
+        # Lignes fines en pointillés : 10 divisions régulières
+        pen_dots = QPen(QColor(255, 255, 255, 255), 0.8, Qt.DotLine)
+        p.setPen(pen_dots)
         for i in range(1, 10):
             t = i / 10
             p.drawLine(QPointF(ir.left() + t * ir.width(), ir.top()),
                        QPointF(ir.left() + t * ir.width(), ir.bottom()))
             p.drawLine(QPointF(ir.left(),  ir.top() + t * ir.height()),
                        QPointF(ir.right(), ir.top() + t * ir.height()))
-        # Lignes de tiers plus visibles (repères d'alignement clés)
-        p.setPen(QPen(QColor(255, 255, 255, 180), 2.0))
+        # Lignes de tiers pleines (repères d'alignement clés)
+        p.setPen(QPen(QColor(255, 255, 255, 255), 1.2))
         for t in (1 / 3, 2 / 3):
             p.drawLine(QPointF(ir.left() + t * ir.width(), ir.top()),
                        QPointF(ir.left() + t * ir.width(), ir.bottom()))
