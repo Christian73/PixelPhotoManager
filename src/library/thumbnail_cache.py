@@ -8,9 +8,11 @@ from pathlib import Path
 from PySide6.QtGui import QPixmap
 from PySide6.QtCore import QByteArray
 
+from src.core.app_dirs import APP_DATA_DIR
+
 logger = logging.getLogger(__name__)
 
-_DB_PATH = Path.home() / ".pixelphotomanager" / "thumbnails.db"
+_DB_PATH = APP_DATA_DIR / "thumbnails.db"
 
 _CREATE_TABLE = """
 CREATE TABLE IF NOT EXISTS thumbnails (

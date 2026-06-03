@@ -2,11 +2,11 @@ import json
 import logging
 from pathlib import Path
 
+from .app_dirs import APP_DATA_DIR
+
 logger = logging.getLogger(__name__)
 
-_PROJECT_ROOT = Path(__file__).parent.parent.parent
-_CONFIG_DIR = _PROJECT_ROOT / "config"
-_CONFIG_FILE = _CONFIG_DIR / "config.json"
+_CONFIG_FILE = APP_DATA_DIR / "config.json"
 
 _DEFAULTS = {
     "scan_folders": [],
@@ -32,7 +32,7 @@ class Config:
         return cls._instance
 
     def load(self) -> None:
-        _CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+        APP_DATA_DIR.mkdir(parents=True, exist_ok=True)
         if _CONFIG_FILE.exists():
             try:
                 with open(_CONFIG_FILE, "r", encoding="utf-8") as f:
@@ -45,7 +45,7 @@ class Config:
 
     def save(self) -> None:
         try:
-            _CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+            APP_DATA_DIR.mkdir(parents=True, exist_ok=True)
             with open(_CONFIG_FILE, "w", encoding="utf-8") as f:
                 json.dump(self._data, f, indent=2, ensure_ascii=False)
         except Exception as e:
