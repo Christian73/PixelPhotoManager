@@ -1,0 +1,39 @@
+# Interface utilisateur
+PySide6>=6.6.0
+
+# Traitement image
+Pillow>=10.2.0
+opencv-python>=4.9.0
+
+# Base de données / indexation
+# SQLite est inclus dans Python (stdlib)
+
+# Lecture EXIF / GPS
+piexif>=1.1.3
+GPSPhoto>=2.2.3
+
+# Reconnaissance faciale
+deepface>=0.0.91
+retinaface>=0.0.17
+scikit-learn>=1.4.0          # DBSCAN clustering
+
+# Hashing perceptuel (détection doublons)
+imagehash>=4.3.1
+
+# Carte géographique
+folium>=0.16.0
+
+# Export PDF (planches contact, diaporamas)
+reportlab>=4.1.0
+
+# Packaging
+pyinstaller>=6.4.0
+
+# --- Plugins IA (optionnels, lourds, nécessitent GPU recommandé) ---
+# Décommenter selon les besoins :
+# torch>=2.2.0                # Base PyTorch (CUDA ou CPU)
+# torchvision>=0.17.0
+# basicsr>=1.4.2              # Real-ESRGAN, GFPGAN
+# realesrgan>=0.3.0           # Super-résolution ×2/×4
+# gfpgan>=1.3.8               # Amélioration visages
+# iopaint>=1.3.3              # Réparation (inpainting)

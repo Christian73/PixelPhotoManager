@@ -1,0 +1,311 @@
+import logging
+import weakref
+
+from PySide6.QtCore import Qt, Signal, QRunnable, QThreadPool, QObject, Slot, QSize
+from PySide6.QtGui import QPixmap, QColor, QPainter, QFont
+from PySide6.QtWidgets import (
+    QScrollArea, QWidget, QLabel, QVBoxLayout, QSizePolicy,
+    QMenu, QApplication,
+)
+
+from src.core.models import PhotoInfo
+from src.library.thumbnail_cache import ThumbnailCache
+
+logger = logging.getLogger(__name__)
+
+
+class _ThumbSignals(QObject):
+    ready = Signal(str, QPixmap)  # photo_path, pixmap
+
+
+class _ThumbWorker(QRunnable):
+    def __init__(self, photo_path: str, cache: ThumbnailCache, signals: _ThumbSignals):
+        super().__init__()
+        self._path = photo_path
+        self._cache = cache
+        self._signals_ref = weakref.ref(signals)  # évite de garder la cellule en vie
+        self.setAutoDelete(True)
+
+    def run(self) -> None:
+        try:
+            pixmap = self._cache.generate(self._path)
+            if pixmap:
+                signals = self._signals_ref()
+                if signals is not None:
+                    signals.ready.emit(self._path, pixmap)
+        except Exception:
+            logger.debug(f"Erreur génération vignette {self._path}", exc_info=True)
+
+
+def _make_placeholder(size: int) -> QPixmap:
+    px = QPixmap(size, size)
+    px.fill(QColor(55, 55, 55))
+    p = QPainter(px)
+    p.setPen(QColor(90, 90, 90))
+    p.drawRect(size // 4, size // 4, size // 2, size // 2)
+    p.drawLine(size // 4, size // 4, size * 3 // 4, size * 3 // 4)
+    p.drawLine(size * 3 // 4, size // 4, size // 4, size * 3 // 4)
+    p.end()
+    return px
+
+
+class ThumbnailCell(QWidget):
+    double_clicked = Signal(object)                # PhotoInfo
+    right_clicked  = Signal(object, object)        # PhotoInfo, QPoint
+    clicked        = Signal(object, Qt.KeyboardModifier)  # PhotoInfo, modifiers
+
+    def __init__(self, photo: PhotoInfo, cache: ThumbnailCache, size: int, parent=None):
+        super().__init__(parent)
+        self._photo = photo
+        self._cache = cache
+        self._size = size
+        self._selected = False
+        self._pixmap: QPixmap | None = None
+        self._signals = _ThumbSignals()
+        self._signals.ready.connect(self._on_thumb_ready)
+        self._setup_ui()
+        self._load_thumb()
+
+    def _setup_ui(self) -> None:
+        self.setFixedSize(self._size + 8, self._size + 8)
+        self.setCursor(Qt.PointingHandCursor)
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(4, 4, 4, 4)
+        layout.setSpacing(0)
+
+        self._img_label = QLabel()
+        self._img_label.setFixedSize(self._size, self._size)
+        self._img_label.setAlignment(Qt.AlignCenter)
+        self._img_label.setPixmap(_make_placeholder(self._size))
+        layout.addWidget(self._img_label)
+
+    def _load_thumb(self) -> None:
+        pixmap = self._cache.get(self._photo.path)
+        if pixmap:
+            self._set_pixmap(pixmap)
+        else:
+            worker = _ThumbWorker(self._photo.path, self._cache, self._signals)
+            QThreadPool.globalInstance().start(worker)
+
+    @Slot(str, QPixmap)
+    def _on_thumb_ready(self, path: str, pixmap: QPixmap) -> None:
+        if path == self._photo.path:
+            self._set_pixmap(pixmap)
+
+    def _set_pixmap(self, pixmap: QPixmap) -> None:
+        self._pixmap = pixmap
+        scaled = pixmap.scaled(
+            self._size, self._size,
+            Qt.KeepAspectRatio,
+            Qt.SmoothTransformation,
+        )
+        self._img_label.setPixmap(scaled)
+
+    def set_selected(self, selected: bool) -> None:
+        self._selected = selected
+        self.setStyleSheet(
+            "background: rgba(70,130,180,120); border-radius:4px;" if selected else ""
+        )
+
+    def set_size(self, size: int) -> None:
+        self._size = size
+        self.setFixedSize(size + 8, size + 8)
+        self._img_label.setFixedSize(size, size)
+        self._img_label.setPixmap(_make_placeholder(size))
+        self._load_thumb()
+
+    @property
+    def photo(self) -> PhotoInfo:
+        return self._photo
+
+    # ------------------------------------------------------------------ events
+
+    def mouseDoubleClickEvent(self, _event) -> None:
+        self.double_clicked.emit(self._photo)
+
+    def mousePressEvent(self, event) -> None:
+        if event.button() == Qt.RightButton:
+            self.right_clicked.emit(self._photo, event.globalPosition().toPoint())
+        elif event.button() == Qt.LeftButton:
+            self.clicked.emit(self._photo, QApplication.keyboardModifiers())
+        super().mousePressEvent(event)
+
+    def contextMenuEvent(self, event) -> None:
+        self.right_clicked.emit(self._photo, event.globalPos())
+
+
+class _GridContainer(QWidget):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._cells: list[ThumbnailCell] = []
+        self._cell_w = 188
+        self._spacing = 6
+        self._relayout_pending = False
+
+    def set_cells(self, cells: list[ThumbnailCell]) -> None:
+        for c in self._cells:
+            c.setParent(None)
+        self._cells = list(cells)
+        for c in self._cells:
+            c.setParent(self)
+            c.show()
+        self._relayout()
+
+    def append_cell(self, cell: ThumbnailCell) -> None:
+        self._cells.append(cell)
+        cell.setParent(self)
+        cell.show()
+        self._relayout()
+
+    def set_cell_width(self, w: int) -> None:
+        self._cell_w = w
+        self._relayout()
+
+    def _relayout(self) -> None:
+        container_w = self.parentWidget().width() if self.parentWidget() else self.width()
+        container_w = container_w or 800
+
+        cols = max(1, (container_w + self._spacing) // (self._cell_w + self._spacing))
+        x, y = self._spacing, self._spacing
+        col = 0
+        max_y = self._spacing
+        for cell in self._cells:
+            cell.move(x, y)
+            x += self._cell_w + self._spacing
+            col += 1
+            if col >= cols:
+                col = 0
+                x = self._spacing
+                y += cell.height() + self._spacing
+            max_y = max(max_y, y + cell.height())
+
+        total_h = max_y + self._spacing if self._cells else self._spacing
+        self.setMinimumHeight(total_h)
+        # Éviter de déclencher resizeEvent en boucle
+        if self.height() != total_h:
+            self.setFixedHeight(total_h)
+
+    def resizeEvent(self, event) -> None:
+        super().resizeEvent(event)
+        self._relayout()
+
+
+class ThumbnailGrid(QScrollArea):
+    photo_activated  = Signal(object)  # PhotoInfo
+    selection_changed = Signal(list)   # list[PhotoInfo]
+
+    def __init__(self, cache: ThumbnailCache, parent=None):
+        super().__init__(parent)
+        self._cache = cache
+        self._thumb_size = 180
+        self._cells: list[ThumbnailCell] = []
+        self._selected: set[str] = set()
+
+        self._container = _GridContainer()
+        self._container.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        self.setWidget(self._container)
+        self.setWidgetResizable(True)
+        self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+
+    def set_photos(self, photos: list[PhotoInfo]) -> None:
+        self._selected.clear()
+        cells = [self._make_cell(p) for p in photos]
+        self._cells = cells
+        self._container.set_cells(cells)
+
+    def add_photo(self, photo: PhotoInfo) -> None:
+        cell = self._make_cell(photo)
+        self._cells.append(cell)
+        self._container.append_cell(cell)
+
+    def _make_cell(self, photo: PhotoInfo) -> ThumbnailCell:
+        cell = ThumbnailCell(photo, self._cache, self._thumb_size)
+        cell.double_clicked.connect(self.photo_activated.emit)
+        cell.right_clicked.connect(self._on_right_click)
+        cell.clicked.connect(self._on_cell_clicked)
+        return cell
+
+    @Slot(object, object)
+    def _on_cell_clicked(self, photo: PhotoInfo, modifiers) -> None:
+        path = photo.path
+        ctrl  = bool(modifiers & Qt.ControlModifier)
+        shift = bool(modifiers & Qt.ShiftModifier)
+
+        if ctrl:
+            if path in self._selected:
+                self._selected.discard(path)
+                self._set_cell_selected(path, False)
+            else:
+                self._selected.add(path)
+                self._set_cell_selected(path, True)
+        elif shift:
+            self._range_select(path)
+        else:
+            self._clear_selection()
+            self._selected.add(path)
+            self._set_cell_selected(path, True)
+
+        self.selection_changed.emit(self.get_selected())
+
+    def _set_cell_selected(self, path: str, selected: bool) -> None:
+        for c in self._cells:
+            if c.photo.path == path:
+                c.set_selected(selected)
+                return
+
+    def _clear_selection(self) -> None:
+        for c in self._cells:
+            c.set_selected(False)
+        self._selected.clear()
+
+    def _range_select(self, target_path: str) -> None:
+        if not self._selected:
+            self._selected.add(target_path)
+            self._set_cell_selected(target_path, True)
+            return
+        paths = [c.photo.path for c in self._cells]
+        last = next((p for p in reversed(paths) if p in self._selected), None)
+        if last is None:
+            return
+        lo = min(paths.index(last), paths.index(target_path))
+        hi = max(paths.index(last), paths.index(target_path))
+        for i, cell in enumerate(self._cells):
+            if lo <= i <= hi:
+                self._selected.add(cell.photo.path)
+                cell.set_selected(True)
+
+    @Slot(object, object)
+    def _on_right_click(self, photo: PhotoInfo, pos) -> None:
+        menu = QMenu(self)
+        menu.addAction("Ouvrir", lambda: self.photo_activated.emit(photo))
+        menu.addSeparator()
+        fav_label = "Retirer des favoris" if photo.is_favorite else "Marquer comme favori"
+        menu.addAction(fav_label)
+        menu.addAction("Informations EXIF")
+        menu.addAction("Retoucher")
+        menu.addSeparator()
+        menu.addAction("Révéler dans l'Explorateur",
+                       lambda: __import__('os').startfile(
+                           __import__('os.path').path.dirname(photo.path)))
+        menu.exec(pos)
+
+    def set_thumbnail_size(self, size: int) -> None:
+        self._thumb_size = size
+        self._container.set_cell_width(size + 8)
+        for cell in self._cells:
+            cell.set_size(size)
+
+    def get_selected(self) -> list[PhotoInfo]:
+        return [c.photo for c in self._cells if c.photo.path in self._selected]
+
+    def clear(self) -> None:
+        self._selected.clear()
+        self._cells.clear()
+        self._container.set_cells([])
+
+    def select_all(self) -> None:
+        for cell in self._cells:
+            self._selected.add(cell.photo.path)
+            cell.set_selected(True)
+        self.selection_changed.emit(self.get_selected())
