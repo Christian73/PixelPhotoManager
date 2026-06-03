@@ -1061,6 +1061,7 @@ class MainWindow(QMainWindow):
                    f"exportée{'s' if n > 1 else ''}  →  {export_dir}")
             self._lbl_action.setText(msg)
             QTimer.singleShot(5000, lambda: self._lbl_action.setText(""))
+            os.startfile(str(export_dir))
 
     def closeEvent(self, event) -> None:
         self._config.set("ui.window_width", self.width())
