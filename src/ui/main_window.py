@@ -344,7 +344,7 @@ class MainWindow(QMainWindow):
         tb.addWidget(self._btn_export)
 
         margin = QWidget()
-        margin.setFixedWidth(8)
+        margin.setFixedWidth(20)
         tb.addWidget(margin)
 
     def _setup_central(self) -> None:
