@@ -1,0 +1,15 @@
+{
+  "scan_folders": [
+    "D:/Dev/ExtractPicturesFromBackground/Testset"
+  ],
+  "thumbnail_size": 180,
+  "sort_by": "date_taken",
+  "sort_desc": true,
+  "plugins": {},
+  "ui": {
+    "sidebar_width": 240,
+    "theme": "dark",
+    "window_width": 1536,
+    "window_height": 793
+  }
+}
