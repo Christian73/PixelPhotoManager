@@ -9,7 +9,7 @@ from PySide6.QtGui import (
 )
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
-    QLabel, QSizePolicy, QToolButton, QButtonGroup,
+    QLabel, QSizePolicy, QToolButton, QButtonGroup, QMenu,
 )
 
 from src.core.models import PhotoInfo, EditInfo
@@ -129,9 +129,10 @@ _EDGE_INDICES = [(0, 1), (1, 2), (2, 3), (3, 0)]
 
 
 class _Canvas(QWidget):
-    zoom_changed    = Signal(float)
-    wheel_navigate  = Signal(int)                  # ±1 photo
-    crop_confirmed  = Signal(object)               # tuple 8 coords relatives (x0,y0,…,x3,y3)
+    zoom_changed           = Signal(float)
+    wheel_navigate         = Signal(int)    # ±1 photo
+    crop_confirmed         = Signal(object) # tuple 8 coords relatives (x0,y0,…,x3,y3)
+    context_menu_requested = Signal(object) # QPoint global
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -791,6 +792,10 @@ class _Canvas(QWidget):
         elif event.button() == Qt.LeftButton:
             self._drag_start = None
 
+    def contextMenuEvent(self, event) -> None:
+        if not self._crop_mode:
+            self.context_menu_requested.emit(event.globalPos())
+
     def resizeEvent(self, event) -> None:
         super().resizeEvent(event)
         if self._pixmap:
@@ -801,10 +806,11 @@ class _Canvas(QWidget):
 
 
 class PhotoViewer(QWidget):
-    closed     = Signal()
-    navigate   = Signal(int)
-    zoom_changed = Signal(float)
-    crop_ready = Signal(object)   # tuple 8 coords relatives (x0,y0,…,x3,y3)
+    closed        = Signal()
+    navigate      = Signal(int)
+    zoom_changed  = Signal(float)
+    crop_ready    = Signal(object)  # tuple 8 coords relatives (x0,y0,…,x3,y3)
+    save_requested = Signal(object) # PhotoInfo
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -868,6 +874,7 @@ class PhotoViewer(QWidget):
         self._canvas.zoom_changed.connect(self.zoom_changed)
         self._canvas.wheel_navigate.connect(self.navigate)
         self._canvas.crop_confirmed.connect(self._on_crop_confirmed)
+        self._canvas.context_menu_requested.connect(self._show_context_menu)
         layout.addWidget(self._canvas, stretch=1)
 
         # ---- Pied de page ----
@@ -1018,6 +1025,14 @@ class PhotoViewer(QWidget):
         self.crop_ready.emit(quad)
 
     # ------------------------------------------------------------------ misc
+
+    def _show_context_menu(self, pos) -> None:
+        if not self._photo:
+            return
+        menu = QMenu(self)
+        menu.addAction("Sauver l'image traitée sur le disque",
+                       lambda: self.save_requested.emit(self._photo))
+        menu.exec(pos)
 
     def _toggle_favorite(self, checked: bool) -> None:
         if self._photo:

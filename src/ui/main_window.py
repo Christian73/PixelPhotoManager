@@ -172,6 +172,7 @@ class MainWindow(QMainWindow):
         self._viewer.closed.connect(self.show_grid)
         self._viewer.navigate.connect(self._navigate_photo)
         self._viewer.zoom_changed.connect(self._on_viewer_zoom_changed)
+        self._viewer.save_requested.connect(self._on_save_requested)
         self._edit_panel.edits_changed.connect(self._viewer.update_edit)
         self._edit_panel.crop_mode_requested.connect(self._viewer.enter_crop_mode)
         self._edit_panel.grid_visibility_changed.connect(self._viewer.set_grid_visible)
