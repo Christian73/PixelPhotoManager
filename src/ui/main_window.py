@@ -353,6 +353,7 @@ class MainWindow(QMainWindow):
         tb.addWidget(self._search_box)
 
         act_clear = QAction("✕", self)
+        act_clear.setToolTip("")
         act_clear.triggered.connect(lambda: self._search_box.clear())
         tb.addAction(act_clear)
 
