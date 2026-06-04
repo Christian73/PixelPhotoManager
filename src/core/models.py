@@ -44,6 +44,10 @@ class EditInfo:
     contrast: float = 0.0
     saturation: float = 0.0
     gamma: float = 1.0
+    gamma_use_curve: bool = False
+    gamma_curve_points: list = field(
+        default_factory=lambda: [(0.0, 0.0), (0.5, 0.5), (1.0, 1.0)]
+    )
     sharpness: float = 0.0
     noise_reduction: float = 0.0
     rotation: float = 0.0
@@ -62,6 +66,7 @@ class EditInfo:
             or self.contrast != 0.0
             or self.saturation != 0.0
             or self.gamma != 1.0
+            or self.gamma_use_curve
             or self.sharpness != 0.0
             or self.noise_reduction != 0.0
             or self.rotation != 0.0
@@ -78,6 +83,8 @@ class EditInfo:
             "contrast": self.contrast,
             "saturation": self.saturation,
             "gamma": self.gamma,
+            "gamma_use_curve": self.gamma_use_curve,
+            "gamma_curve_points": self.gamma_curve_points,
             "sharpness": self.sharpness,
             "noise_reduction": self.noise_reduction,
             "rotation": self.rotation,
@@ -99,6 +106,11 @@ class EditInfo:
             contrast=float(data.get("contrast", 0.0)),
             saturation=float(data.get("saturation", 0.0)),
             gamma=float(data.get("gamma", 1.0)),
+            gamma_use_curve=bool(data.get("gamma_use_curve", False)),
+            gamma_curve_points=[
+                (float(x), float(y))
+                for x, y in data.get("gamma_curve_points", [(0.0, 0.0), (0.5, 0.5), (1.0, 1.0)])
+            ],
             sharpness=float(data.get("sharpness", 0.0)),
             noise_reduction=float(data.get("noise_reduction", 0.0)),
             rotation=float(data.get("rotation", 0.0)),
@@ -127,3 +139,16 @@ class PersonInfo:
     id: Optional[int] = None
     photo_count: int = 0
     cover_path: str = ""
+    cover_bbox: Optional[tuple] = None  # (x, y, w, h) dans cover_path
+
+
+@dataclass
+class FaceInfo:
+    id: int = 0
+    photo_path: str = ""
+    bbox_x: int = 0
+    bbox_y: int = 0
+    bbox_w: int = 0
+    bbox_h: int = 0
+    cluster_id: Optional[int] = None
+    person_id: Optional[int] = None

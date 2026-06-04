@@ -1,3 +1,5 @@
+import math
+
 from PIL import Image, ImageEnhance, ImageFilter
 from src.core.models import EditInfo
 from src.processing.geometry import GeometryProcessor
@@ -22,7 +24,9 @@ class ImageAdjuster:
             image = ImageAdjuster.apply_contrast(image, edit.contrast)
         if edit.saturation != 0.0:
             image = ImageAdjuster.apply_saturation(image, edit.saturation)
-        if edit.gamma != 1.0:
+        if edit.gamma_use_curve:
+            image = ImageAdjuster.apply_gamma_curve(image, edit.gamma_curve_points)
+        elif edit.gamma != 1.0:
             image = ImageAdjuster.apply_gamma(image, edit.gamma)
         if edit.sharpness > 0.0:
             image = ImageAdjuster.apply_sharpness(image, edit.sharpness)
@@ -64,6 +68,82 @@ class ImageAdjuster:
         else:
             image = image.convert("RGB")
             lut_full = list(lut) * 3
+        return image.point(lut_full)
+
+    @staticmethod
+    def _curve_lut(points) -> list:
+        """Compute 256-entry LUT from control points (monotone cubic spline)."""
+        seen: dict[float, float] = {}
+        for pt in points:
+            x, y = max(0.0, min(1.0, float(pt[0]))), max(0.0, min(1.0, float(pt[1])))
+            if x not in seen:
+                seen[x] = y
+        pts = sorted(seen.items())
+
+        if len(pts) < 2:
+            return list(range(256))
+
+        if pts[0][0] > 0.0:
+            pts.insert(0, (0.0, pts[0][1]))
+        if pts[-1][0] < 1.0:
+            pts.append((1.0, pts[-1][1]))
+
+        xs = [p[0] for p in pts]
+        ys = [p[1] for p in pts]
+        n = len(xs)
+        h = [xs[i + 1] - xs[i] for i in range(n - 1)]
+        delta = [(ys[i + 1] - ys[i]) / h[i] if h[i] > 1e-10 else 0.0 for i in range(n - 1)]
+
+        m = [0.0] * n
+        m[0] = delta[0]
+        m[n - 1] = delta[-1]
+        for i in range(1, n - 1):
+            m[i] = 0.0 if delta[i - 1] * delta[i] <= 0 else (delta[i - 1] + delta[i]) / 2.0
+
+        for i in range(n - 1):
+            if abs(delta[i]) < 1e-10:
+                m[i] = m[i + 1] = 0.0
+                continue
+            alpha, beta = m[i] / delta[i], m[i + 1] / delta[i]
+            s = alpha * alpha + beta * beta
+            if s > 9.0:
+                tau = 3.0 / math.sqrt(s)
+                m[i] = tau * alpha * delta[i]
+                m[i + 1] = tau * beta * delta[i]
+
+        lut = []
+        for k in range(256):
+            t = k / 255.0
+            seg = n - 2
+            for i in range(n - 1):
+                if t <= xs[i + 1]:
+                    seg = i
+                    break
+            dx = xs[seg + 1] - xs[seg]
+            if dx < 1e-10:
+                y = ys[seg]
+            else:
+                u = (t - xs[seg]) / dx
+                u2, u3 = u * u, u * u * u
+                y = (ys[seg] * (2 * u3 - 3 * u2 + 1)
+                     + m[seg] * dx * (u3 - 2 * u2 + u)
+                     + ys[seg + 1] * (-2 * u3 + 3 * u2)
+                     + m[seg + 1] * dx * (u3 - u2))
+            lut.append(int(max(0, min(255, round(y * 255)))))
+        return lut
+
+    @staticmethod
+    def apply_gamma_curve(image: Image.Image, points) -> Image.Image:
+        lut = ImageAdjuster._curve_lut(points)
+        if image.mode == "RGB":
+            lut_full = lut * 3
+        elif image.mode == "RGBA":
+            lut_full = lut * 3 + list(range(256))
+        elif image.mode == "L":
+            lut_full = lut
+        else:
+            image = image.convert("RGB")
+            lut_full = lut * 3
         return image.point(lut_full)
 
     @staticmethod

@@ -39,6 +39,10 @@ CREATE TABLE IF NOT EXISTS photo_edits (
 _MIGRATE_STRAIGHTEN = (
     "ALTER TABLE photo_edits ADD COLUMN straighten REAL DEFAULT 0.0"
 )
+_MIGRATE_GAMMA_CURVE = [
+    "ALTER TABLE photo_edits ADD COLUMN gamma_use_curve   INTEGER DEFAULT 0",
+    "ALTER TABLE photo_edits ADD COLUMN gamma_curve_points TEXT    DEFAULT NULL",
+]
 
 _CREATE_HISTORY = """
 CREATE TABLE IF NOT EXISTS edit_history (
@@ -81,6 +85,11 @@ class EditDatabase:
                 conn.execute(_MIGRATE_STRAIGHTEN)
             except sqlite3.OperationalError:
                 pass  # colonne déjà présente
+            for _sql in _MIGRATE_GAMMA_CURVE:
+                try:
+                    conn.execute(_sql)
+                except sqlite3.OperationalError:
+                    pass
             self._migrate_normalize_paths(conn)
             conn.commit()
 
@@ -117,11 +126,17 @@ class EditDatabase:
                     ).fetchone()
                 if row is None:
                     return EditInfo()
+                _curve_pts = row["gamma_curve_points"]
                 return EditInfo(
                     brightness=row["brightness"],
                     contrast=row["contrast"],
                     saturation=row["saturation"],
                     gamma=row["gamma"],
+                    gamma_use_curve=bool(row["gamma_use_curve"]) if row["gamma_use_curve"] is not None else False,
+                    gamma_curve_points=(
+                        [(float(x), float(y)) for x, y in json.loads(_curve_pts)]
+                        if _curve_pts else [(0.0, 0.0), (0.5, 0.5), (1.0, 1.0)]
+                    ),
                     sharpness=row["sharpness"],
                     noise_reduction=row["noise_reduction"],
                     rotation=row["rotation"],
@@ -154,16 +169,20 @@ class EditDatabase:
                             """
                             INSERT OR REPLACE INTO photo_edits
                                 (photo_path, brightness, contrast, saturation, gamma,
+                                 gamma_use_curve, gamma_curve_points,
                                  sharpness, noise_reduction, rotation, straighten,
                                  flip_h, flip_v, crop, bw, bw_red, bw_green, bw_blue,
                                  modified_at)
-                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
                                     CURRENT_TIMESTAMP)
                             """,
                             (
                                 photo_path,
                                 edit.brightness, edit.contrast, edit.saturation,
-                                edit.gamma, edit.sharpness, edit.noise_reduction,
+                                edit.gamma,
+                                int(edit.gamma_use_curve),
+                                json.dumps(edit.gamma_curve_points) if edit.gamma_use_curve else None,
+                                edit.sharpness, edit.noise_reduction,
                                 edit.rotation, edit.straighten,
                                 int(edit.flip_h), int(edit.flip_v),
                                 json.dumps(list(edit.crop)) if edit.crop else None,

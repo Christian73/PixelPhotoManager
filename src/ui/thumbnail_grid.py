@@ -342,7 +342,7 @@ class ThumbnailGrid(QScrollArea):
         menu.addAction(fav_label)
         menu.addAction("Informations EXIF")
         menu.addAction("Renommer l'image", lambda: self.rename_requested.emit(photo))
-        menu.addAction("Sauver l'image traitée sur le disque",
+        menu.addAction("Enregistrer l'image traitée sur le disque",
                        lambda: self.save_requested.emit(photo))
         menu.addSeparator()
         menu.addAction("Révéler dans l'Explorateur",

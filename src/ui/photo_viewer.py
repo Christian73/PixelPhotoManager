@@ -839,6 +839,10 @@ class PhotoViewer(QWidget):
 
         self._lbl_name = QLabel("")
         self._lbl_name.setStyleSheet("color: #ccc;")
+        self._lbl_name.setTextInteractionFlags(
+            Qt.TextSelectableByMouse | Qt.TextSelectableByKeyboard
+        )
+        self._lbl_name.setCursor(Qt.IBeamCursor)
         tb_layout.addWidget(self._lbl_name, stretch=1)
 
         self._btn_fav = QPushButton("♡")
@@ -945,6 +949,9 @@ class PhotoViewer(QWidget):
 
     # ------------------------------------------------------------------ photo
 
+    def current_photo(self) -> "PhotoInfo | None":
+        return self._photo
+
     def set_photo(self, photo: PhotoInfo, edit: EditInfo | None = None) -> None:
         self._photo = photo
         self._edit = edit or self._db.load(photo.path)
@@ -1030,7 +1037,7 @@ class PhotoViewer(QWidget):
         if not self._photo:
             return
         menu = QMenu(self)
-        menu.addAction("Sauver l'image traitée sur le disque",
+        menu.addAction("Enregistrer l'image traitée sur le disque",
                        lambda: self.save_requested.emit(self._photo))
         menu.exec(pos)
 
