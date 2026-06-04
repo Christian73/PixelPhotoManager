@@ -3,7 +3,8 @@ import logging
 import shutil
 import subprocess
 
-from PySide6.QtCore import Signal, Qt, QUrl
+from PySide6.QtCore import Signal, Qt, QRect, QSize, QUrl
+from PySide6.QtGui import QColor, QFont, QIcon, QPainter
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QSplitter,
     QTreeWidget, QTreeWidgetItem, QListWidget, QListWidgetItem,
@@ -11,7 +12,8 @@ from PySide6.QtWidgets import (
 )
 
 from src.core.event_bus import bus
-from src.core.models import AlbumInfo
+from src.core.models import AlbumInfo, PersonInfo
+from src.ui.people_panel import load_face_pixmap
 
 logger = logging.getLogger(__name__)
 
@@ -65,14 +67,63 @@ class _FolderTree(QTreeWidget):
             event.ignore()
 
 
+_SPECIAL_PERSON = "__person__"   # préfixe pour l'identifiant de contexte personne
+
+
+class _BadgeButton(QPushButton):
+    """QPushButton avec un badge circulaire rouge en coin supérieur droit."""
+
+    def __init__(self, text: str, parent=None) -> None:
+        super().__init__(text, parent)
+        self._badge: int = 0
+
+    def set_badge(self, count: int) -> None:
+        if count != self._badge:
+            self._badge = count
+            self.update()
+
+    def paintEvent(self, event) -> None:
+        super().paintEvent(event)
+        if self._badge <= 0:
+            return
+
+        label = str(self._badge) if self._badge < 100 else "99+"
+
+        p = QPainter(self)
+        p.setRenderHint(QPainter.Antialiasing)
+
+        font = QFont()
+        font.setPixelSize(9)
+        font.setBold(True)
+        p.setFont(font)
+
+        text_w = p.fontMetrics().horizontalAdvance(label)
+        radius = max(8, text_w // 2 + 5)
+        diameter = radius * 2
+        x = self.width()  - diameter - 2
+        y = 2
+
+        p.setPen(Qt.NoPen)
+        p.setBrush(QColor("#d94f4f"))
+        p.drawEllipse(x, y, diameter, diameter)
+
+        p.setPen(QColor("white"))
+        p.drawText(QRect(x, y, diameter, diameter), Qt.AlignCenter, label)
+        p.end()
+
+
 class Sidebar(QWidget):
-    folder_selected = Signal(str)
-    album_selected  = Signal(object)   # AlbumInfo | str (special key)
-    scan_requested  = Signal(str)
-    folder_removed  = Signal(str)
-    folder_created  = Signal(str)      # chemin du nouveau sous-dossier créé
-    folder_moved    = Signal(str, str) # (ancien_chemin, nouveau_chemin)
-    photos_dropped  = Signal(list, str) # (file_paths, dest_folder_path)
+    folder_selected    = Signal(str)
+    album_selected     = Signal(object)   # AlbumInfo | str (special key)
+    scan_requested     = Signal(str)
+    folder_removed     = Signal(str)
+    folder_created     = Signal(str)      # chemin du nouveau sous-dossier créé
+    folder_moved       = Signal(str, str) # (ancien_chemin, nouveau_chemin)
+    photos_dropped     = Signal(list, str) # (file_paths, dest_folder_path)
+    person_selected        = Signal(object)   # PersonInfo
+    identify_requested     = Signal()         # ouvrir PeopleDialog
+    person_merge_requested = Signal(object)   # PersonInfo à fusionner
+    person_rename_requested = Signal(object)  # PersonInfo à renommer
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -136,12 +187,44 @@ class Sidebar(QWidget):
 
         splitter.addWidget(album_widget)
 
-        splitter.setStretchFactor(0, 2)
+        # --- Persons list ---
+        persons_widget = QWidget()
+        pw_layout = QVBoxLayout(persons_widget)
+        pw_layout.setContentsMargins(0, 0, 0, 0)
+        pw_layout.setSpacing(0)
+
+        persons_header_bar = QHBoxLayout()
+        persons_header = QLabel("  Personnes")
+        persons_header.setStyleSheet("color: #ccc; font-weight: bold;")
+        persons_header_bar.addWidget(persons_header)
+        persons_header_bar.addStretch()
+        self._btn_identify = _BadgeButton("Identifier…")
+        self._btn_identify.setToolTip("Nommer les groupes de visages détectés")
+        self._btn_identify.clicked.connect(self.identify_requested)
+        persons_header_bar.addWidget(self._btn_identify)
+
+        persons_header_container = QWidget()
+        persons_header_container.setStyleSheet("background: #2a2a2a;")
+        persons_header_container.setLayout(persons_header_bar)
+        pw_layout.addWidget(persons_header_container)
+
+        self._persons_list = QListWidget()
+        self._persons_list.setIconSize(QSize(36, 36))
+        self._persons_list.itemClicked.connect(self._on_person_clicked)
+        self._persons_list.setContextMenuPolicy(Qt.CustomContextMenu)
+        self._persons_list.customContextMenuRequested.connect(self._person_context_menu)
+        pw_layout.addWidget(self._persons_list)
+
+        splitter.addWidget(persons_widget)
+
+        splitter.setStretchFactor(0, 3)
         splitter.setStretchFactor(1, 1)
+        splitter.setStretchFactor(2, 1)
 
         layout.addWidget(splitter)
 
         self._albums: list[AlbumInfo] = []
+        self._persons: list[PersonInfo] = []
 
         self._add_special_albums()
 
@@ -310,3 +393,51 @@ class Sidebar(QWidget):
         name, ok = QInputDialog.getText(self, "Nouvel album", "Nom de l'album :")
         if ok and name.strip():
             bus.emit("album.create_requested", name=name.strip())
+
+    # ------------------------------------------------------------------ persons
+
+    def refresh_persons(self, persons: list[PersonInfo]) -> None:
+        self._persons = persons
+        self._persons_list.clear()
+        for person in persons:
+            label = f"{person.name}  ({person.photo_count})"
+            item = QListWidgetItem(label)
+            item.setData(Qt.UserRole, person)
+            if person.cover_path and person.cover_bbox:
+                try:
+                    from src.core.models import FaceInfo
+                    face = FaceInfo(
+                        photo_path=person.cover_path,
+                        bbox_x=person.cover_bbox[0],
+                        bbox_y=person.cover_bbox[1],
+                        bbox_w=person.cover_bbox[2],
+                        bbox_h=person.cover_bbox[3],
+                    )
+                    pix = load_face_pixmap(face, size=36)
+                    item.setIcon(QIcon(pix))
+                except Exception:
+                    pass
+            self._persons_list.addItem(item)
+
+    def update_cluster_badge(self, count: int) -> None:
+        """Mettre à jour le badge du bouton Identifier avec le nombre de groupes en attente."""
+        self._btn_identify.set_badge(count)
+
+    def _on_person_clicked(self, item: QListWidgetItem) -> None:
+        person = item.data(Qt.UserRole)
+        if isinstance(person, PersonInfo):
+            self.person_selected.emit(person)
+
+    def _person_context_menu(self, pos) -> None:
+        item = self._persons_list.itemAt(pos)
+        if not item:
+            return
+        person = item.data(Qt.UserRole)
+        if not isinstance(person, PersonInfo):
+            return
+        menu = QMenu(self)
+        menu.addAction("Renommer…",
+                       lambda: self.person_rename_requested.emit(person))
+        menu.addAction("Fusionner avec…",
+                       lambda: self.person_merge_requested.emit(person))
+        menu.exec(self._persons_list.mapToGlobal(pos))

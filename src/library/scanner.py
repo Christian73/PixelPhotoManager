@@ -14,6 +14,16 @@ logger = logging.getLogger(__name__)
 SUPPORTED_EXT = ExifReader.SUPPORTED
 
 
+def _is_hidden(path: str) -> bool:
+    """Return True if path is hidden (Windows hidden attribute or leading dot)."""
+    if os.path.basename(path).startswith("."):
+        return True
+    try:
+        return bool(os.stat(path).st_file_attributes & 0x2)
+    except (AttributeError, OSError):
+        return False
+
+
 class ScanThread(QThread):
     photo_discovered = Signal(object)
     photos_removed   = Signal(list)   # list[str] — chemins supprimés du catalogue
@@ -41,11 +51,14 @@ class ScanThread(QThread):
             for root, dirs, files in os.walk(folder):
                 if self._stop_flag:
                     break
-                # Exclure les dossiers de sauvegarde temporaires et les dossiers cachés
-                dirs[:] = [d for d in dirs if not d.startswith(".tmp_")]
+                dirs[:] = [
+                    d for d in dirs
+                    if not _is_hidden(os.path.join(root, d))
+                ]
                 for fname in files:
-                    if Path(fname).suffix.lower() in SUPPORTED_EXT:
-                        all_files.append(os.path.normpath(os.path.join(root, fname)))
+                    fpath = os.path.join(root, fname)
+                    if Path(fname).suffix.lower() in SUPPORTED_EXT and not _is_hidden(fpath):
+                        all_files.append(os.path.normpath(fpath))
 
         grand_total = len(all_files)
 

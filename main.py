@@ -47,9 +47,9 @@ sys.excepthook = _excepthook
 threading.excepthook = _thread_excepthook
 
 from PySide6.QtWidgets import (
-    QApplication, QDialog, QVBoxLayout, QHBoxLayout,
+    QApplication, QCheckBox, QDialog, QVBoxLayout, QHBoxLayout,
     QLabel, QPushButton, QListWidget, QListWidgetItem,
-    QFileDialog, QWidget,
+    QFileDialog, QFrame, QWidget,
 )
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QFont
@@ -58,10 +58,10 @@ from PySide6.QtGui import QFont
 def _build_onboarding(config) -> QDialog:
     dlg = QDialog()
     dlg.setWindowTitle("Bienvenue dans PixelPhotoManager")
-    dlg.setMinimumWidth(480)
+    dlg.setMinimumWidth(500)
 
     layout = QVBoxLayout(dlg)
-    layout.setSpacing(12)
+    layout.setSpacing(14)
     layout.setContentsMargins(24, 24, 24, 24)
 
     title = QLabel("Bienvenue dans PixelPhotoManager !")
@@ -72,6 +72,7 @@ def _build_onboarding(config) -> QDialog:
     title.setAlignment(Qt.AlignCenter)
     layout.addWidget(title)
 
+    # --- Dossiers ---
     layout.addWidget(QLabel("Où sont vos photos ? Choisissez au moins un dossier à surveiller."))
 
     folder_list = QListWidget()
@@ -94,12 +95,41 @@ def _build_onboarding(config) -> QDialog:
     btn_row.addStretch()
     layout.addLayout(btn_row)
 
+    # --- Séparateur ---
+    sep = QFrame()
+    sep.setFrameShape(QFrame.HLine)
+    sep.setStyleSheet("color: #444;")
+    layout.addWidget(sep)
+
+    # --- Reconnaissance faciale ---
+    lbl_faces = QLabel("Reconnaissance des personnes")
+    font2 = QFont()
+    font2.setBold(True)
+    lbl_faces.setFont(font2)
+    layout.addWidget(lbl_faces)
+
+    chk_faces = QCheckBox(
+        "Analyser automatiquement les visages après chaque scan\n"
+        "(traitement en arrière-plan — recommandé)"
+    )
+    chk_faces.setChecked(True)
+    layout.addWidget(chk_faces)
+
+    lbl_note = QLabel(
+        "La première analyse peut prendre plusieurs minutes selon la taille\n"
+        "de votre bibliothèque. Elle n'est faite qu'une seule fois par photo."
+    )
+    lbl_note.setStyleSheet("color: #888; font-size: 11px;")
+    layout.addWidget(lbl_note)
+
+    # --- Bouton démarrer ---
     btn_start = QPushButton("Commencer →")
     btn_start.setDefault(True)
 
     def _start():
         for i in range(folder_list.count()):
             config.add_scan_folder(folder_list.item(i).text())
+        config.set("faces.auto_index", chk_faces.isChecked())
         dlg.accept()
 
     btn_start.clicked.connect(_start)
@@ -241,6 +271,7 @@ def main() -> None:
     from src.library.catalog import Catalog
     from src.library.thumbnail_cache import ThumbnailCache
     from src.library.scanner import LibraryScanner
+    from src.faces.face_database import FaceDatabase
     from src.ui.main_window import MainWindow
 
     logger.debug("Initialisation Config")
@@ -251,6 +282,8 @@ def main() -> None:
     thumb_cache = ThumbnailCache()
     logger.debug("Initialisation LibraryScanner")
     scanner = LibraryScanner(catalog, thumb_cache)
+    logger.debug("Initialisation FaceDatabase")
+    face_db = FaceDatabase()
 
     if not config.get_scan_folders():
         logger.debug("Aucun dossier configuré — affichage onboarding")
@@ -260,7 +293,7 @@ def main() -> None:
             return  # propre, sans sys.exit()
 
     logger.debug("Création MainWindow")
-    window = MainWindow(config, catalog, thumb_cache, scanner)
+    window = MainWindow(config, catalog, thumb_cache, scanner, face_db)
     window.show()
     logger.debug("Entrée dans la boucle Qt")
     sys.exit(app.exec())

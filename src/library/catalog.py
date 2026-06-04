@@ -6,7 +6,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
-from src.core.models import PhotoInfo, AlbumInfo
+from src.core.models import PhotoInfo, AlbumInfo, PersonInfo
 from src.core.app_dirs import APP_DATA_DIR
 
 logger = logging.getLogger(__name__)
@@ -463,6 +463,70 @@ class Catalog:
                 conn.executemany(
                     "DELETE FROM photos WHERE path=?", [(p,) for p in paths]
                 )
+                conn.commit()
+            finally:
+                conn.close()
+
+    def get_photos_by_paths(self, paths: list[str]) -> list[PhotoInfo]:
+        """Returns PhotoInfo objects for the given paths (in catalog order)."""
+        if not paths:
+            return []
+        placeholders = ",".join("?" * len(paths))
+        with self._lock:
+            conn = self._conn()
+            try:
+                rows = conn.execute(
+                    f"SELECT * FROM photos WHERE path IN ({placeholders})"
+                    " ORDER BY date_taken DESC, filename",
+                    paths,
+                ).fetchall()
+            finally:
+                conn.close()
+        return [_photo_from_row(r) for r in rows]
+
+    # ------------------------------------------------------------------ persons
+
+    def get_persons(self) -> list[PersonInfo]:
+        """Returns all persons ordered by name. photo_count is 0; call face_db.enrich_persons()."""
+        with self._lock:
+            conn = self._conn()
+            try:
+                rows = conn.execute(
+                    "SELECT id, name FROM persons ORDER BY name"
+                ).fetchall()
+            finally:
+                conn.close()
+        return [PersonInfo(name=r[1], id=r[0]) for r in rows]
+
+    def create_person(self, name: str) -> PersonInfo:
+        with self._lock:
+            conn = self._conn()
+            try:
+                cur = conn.execute(
+                    "INSERT INTO persons (name) VALUES (?)", (name,)
+                )
+                conn.commit()
+                person_id = cur.lastrowid
+            finally:
+                conn.close()
+        return PersonInfo(name=name, id=person_id)
+
+    def rename_person(self, person_id: int, name: str) -> None:
+        with self._lock:
+            conn = self._conn()
+            try:
+                conn.execute(
+                    "UPDATE persons SET name=? WHERE id=?", (name, person_id)
+                )
+                conn.commit()
+            finally:
+                conn.close()
+
+    def delete_person(self, person_id: int) -> None:
+        with self._lock:
+            conn = self._conn()
+            try:
+                conn.execute("DELETE FROM persons WHERE id=?", (person_id,))
                 conn.commit()
             finally:
                 conn.close()
