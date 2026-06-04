@@ -413,14 +413,35 @@ class MainWindow(QMainWindow):
         self._splitter.setStretchFactor(0, 0)
         self._splitter.setStretchFactor(1, 1)
 
-        # Index 0 — Grille photos
+        # Index 0 — Grille photos (avec barre de contexte masquée par défaut)
         self._grid = ThumbnailGrid(self._thumb_cache)
         self._grid.photo_activated.connect(self._on_photo_activated)
         self._grid.selection_changed.connect(self._on_selection_changed)
         self._grid.rename_requested.connect(self._on_rename_requested)
         self._grid.delete_requested.connect(self._on_delete_requested)
         self._grid.save_requested.connect(self._on_save_requested)
-        self._stack.addWidget(self._grid)
+
+        self._grid_nav_bar = QWidget()
+        self._grid_nav_bar.setStyleSheet("background: rgba(0,0,0,200);")
+        _nav_layout = QHBoxLayout(self._grid_nav_bar)
+        _nav_layout.setContentsMargins(8, 4, 8, 4)
+        _btn_back_nav = QPushButton("←")
+        _btn_back_nav.setToolTip("Retour à la page précédente")
+        _btn_back_nav.setFixedWidth(32)
+        _btn_back_nav.clicked.connect(self._on_back_nav_clicked)
+        _nav_layout.addWidget(_btn_back_nav)
+        self._lbl_grid_nav = QLabel("")
+        self._lbl_grid_nav.setStyleSheet("color: #ccc;")
+        _nav_layout.addWidget(self._lbl_grid_nav, stretch=1)
+        self._grid_nav_bar.hide()
+
+        _grid_container = QWidget()
+        _grid_vbox = QVBoxLayout(_grid_container)
+        _grid_vbox.setContentsMargins(0, 0, 0, 0)
+        _grid_vbox.setSpacing(0)
+        _grid_vbox.addWidget(self._grid_nav_bar)
+        _grid_vbox.addWidget(self._grid)
+        self._stack.addWidget(_grid_container)
 
         # Index 1 — Visionneuse (avec panneau Visages rétractable à gauche)
         self._viewer = PhotoViewer()
@@ -516,13 +537,6 @@ class MainWindow(QMainWindow):
         self._zoom_pct_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
         self._zoom_pct_label.hide()
         sb.addPermanentWidget(self._zoom_pct_label)
-
-        # --- Bouton retour groupes (visible uniquement en vue photos d'un groupe) ---
-        self._btn_back_clusters = QPushButton("← Groupes")
-        self._btn_back_clusters.setToolTip("Retour aux groupes de visages")
-        self._btn_back_clusters.clicked.connect(self.show_face_clusters)
-        self._btn_back_clusters.hide()
-        sb.addPermanentWidget(self._btn_back_clusters)
 
         # --- Bouton retour grille (masqué en mode visionneuse) ---
         self._btn_grid_status = QPushButton("▦")
@@ -701,8 +715,15 @@ class MainWindow(QMainWindow):
         self._current_context = f"{_PERSON_CTX_PREFIX}cluster_{cluster_id}"
         self._grid.set_photos(photos)
         self.show_grid()
-        self._lbl_action.setText(label)
-        self._btn_back_clusters.show()
+        self._lbl_grid_nav.setText(label)
+        self._grid_nav_bar.show()
+
+    def _on_back_nav_clicked(self) -> None:
+        if self._current_context.startswith(f"{_PERSON_CTX_PREFIX}cluster_"):
+            self.show_face_clusters()
+        else:
+            self._grid_nav_bar.hide()
+            self.show_grid()
 
     @Slot(object)
     def _on_person_merge_requested(self, source: PersonInfo) -> None:
@@ -959,7 +980,7 @@ class MainWindow(QMainWindow):
         self._zoom_slider.hide()
         self._zoom_pct_label.hide()
         self._btn_grid_status.show()
-        self._btn_back_clusters.hide()
+        self._grid_nav_bar.hide()
         self._act_faces_toggle.setVisible(False)
         self._lbl_fileinfo.setText("")
         self._update_status()
@@ -974,7 +995,6 @@ class MainWindow(QMainWindow):
         self._zoom_slider.hide()
         self._zoom_pct_label.hide()
         self._btn_grid_status.hide()
-        self._btn_back_clusters.hide()
         self._act_faces_toggle.setVisible(False)
         self._lbl_fileinfo.setText("")
         self._lbl_action.setText("")
@@ -991,7 +1011,6 @@ class MainWindow(QMainWindow):
         self._zoom_slider.show()
         self._zoom_pct_label.show()
         self._btn_grid_status.hide()
-        self._btn_back_clusters.hide()
         self._act_faces_toggle.setVisible(True)
         if self._face_panel.isVisible():
             self._face_panel.set_photo(photo.path)
