@@ -82,6 +82,12 @@ class FaceDatabase:
                     conn.execute(
                         "ALTER TABLE faces ADD COLUMN pinned INTEGER DEFAULT 0"
                     )
+                # Migration indexed_photos
+                ip_cols = {r[1] for r in conn.execute("PRAGMA table_info(indexed_photos)")}
+                if "rotation" not in ip_cols:
+                    conn.execute(
+                        "ALTER TABLE indexed_photos ADD COLUMN rotation INTEGER DEFAULT 0"
+                    )
                 conn.commit()
             finally:
                 conn.close()
@@ -103,10 +109,11 @@ class FaceDatabase:
         indexed = {r[0] for r in rows}
         return [p for p in all_paths if os.path.normpath(p) not in indexed]
 
-    def save_faces(self, photo_path: str, detections: list[dict]) -> None:
+    def save_faces(self, photo_path: str, detections: list[dict], rotation: int = 0) -> None:
         """
         Persist detected faces for a photo.
         detections: list of {'bbox': (x,y,w,h), 'embedding': list[float]}
+        rotation: CW degrees applied during detection (stored to reconstruct face crops).
         """
         photo_path = os.path.normpath(photo_path)
         with self._lock:
@@ -127,8 +134,8 @@ class FaceDatabase:
                     )
                 conn.execute(
                     "INSERT OR REPLACE INTO indexed_photos"
-                    " (photo_path, indexed_at, face_count) VALUES (?,?,?)",
-                    (photo_path, time.time(), len(detections)),
+                    " (photo_path, indexed_at, face_count, rotation) VALUES (?,?,?,?)",
+                    (photo_path, time.time(), len(detections), rotation),
                 )
                 conn.commit()
             finally:
@@ -300,9 +307,12 @@ class FaceDatabase:
             conn = self._conn()
             try:
                 rows = conn.execute(
-                    "SELECT id, photo_path, bbox_x, bbox_y, bbox_w, bbox_h,"
-                    "       cluster_id, person_id, ignored, pinned"
-                    " FROM faces WHERE photo_path=?",
+                    "SELECT f.id, f.photo_path, f.bbox_x, f.bbox_y, f.bbox_w, f.bbox_h,"
+                    "       f.cluster_id, f.person_id, f.ignored, f.pinned,"
+                    "       COALESCE(ip.rotation, 0)"
+                    " FROM faces f"
+                    " LEFT JOIN indexed_photos ip ON f.photo_path = ip.photo_path"
+                    " WHERE f.photo_path=?",
                     (photo_path,),
                 ).fetchall()
             finally:
@@ -314,6 +324,7 @@ class FaceDatabase:
                 cluster_id=r[6], person_id=r[7],
                 ignored=bool(r[8]),
                 pinned=bool(r[9]),
+                detected_rotation=r[10],
             )
             for r in rows
         ]
