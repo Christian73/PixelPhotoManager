@@ -337,6 +337,10 @@ class MainWindow(QMainWindow):
         act_reindex = QAction("Réinitialiser et réindexer…", self)
         act_reindex.triggered.connect(self._reset_and_reindex_faces)
         m_faces.addAction(act_reindex)
+        m_faces.addSeparator()
+        act_picasa = QAction("Importer depuis Picasa…", self)
+        act_picasa.triggered.connect(self._import_from_picasa)
+        m_faces.addAction(act_picasa)
 
         # Aide
         m_help = mb.addMenu("Aide")
@@ -673,6 +677,11 @@ class MainWindow(QMainWindow):
         self._act_index_faces.setText("Analyse en cours…")
         self._act_index_faces.setEnabled(False)
         self._face_indexer.start()
+
+    def _import_from_picasa(self) -> None:
+        from src.ui.picasa_import_dialog import PicasaImportDialog
+        dlg = PicasaImportDialog(self._config, self._catalog, self._face_db, self)
+        dlg.exec()
 
     @Slot(int, int)
     def _on_face_progress(self, current: int, total: int) -> None:

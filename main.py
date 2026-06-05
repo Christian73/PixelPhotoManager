@@ -51,7 +51,7 @@ from PySide6.QtWidgets import (
     QLabel, QPushButton, QListWidget, QListWidgetItem,
     QFileDialog, QFrame, QWidget,
 )
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QFont
 
 
@@ -295,6 +295,14 @@ def main() -> None:
     logger.debug("Création MainWindow")
     window = MainWindow(config, catalog, thumb_cache, scanner, face_db)
     window.show()
+
+    # Proposer l'import Picasa après le premier affichage de la fenêtre
+    def _check_picasa():
+        from src.ui.picasa_import_dialog import check_and_prompt
+        check_and_prompt(config, catalog, face_db, window)
+
+    QTimer.singleShot(800, _check_picasa)
+
     logger.debug("Entrée dans la boucle Qt")
     sys.exit(app.exec())
 
