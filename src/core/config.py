@@ -21,6 +21,9 @@ _DEFAULTS = {
     "faces": {
         "similarity_eps": 0.5,
     },
+    "picasa": {
+        "import_done": False,
+    },
 }
 
 
