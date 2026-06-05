@@ -152,3 +152,5 @@ class FaceInfo:
     bbox_h: int = 0
     cluster_id: Optional[int] = None
     person_id: Optional[int] = None
+    ignored: bool = False
+    pinned: bool = False   # True = face isolée manuellement, exclue du re-clustering

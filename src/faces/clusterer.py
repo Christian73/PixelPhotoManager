@@ -2,53 +2,65 @@ import logging
 
 from PySide6.QtCore import QThread, Signal
 
+from src.core.config import Config
 from src.faces.face_database import FaceDatabase
 
 logger = logging.getLogger(__name__)
 
-_EPS = 0.4
-_MIN_SAMPLES = 2
+# Distance cosinus par défaut : deux visages sont dans le même groupe si leur
+# distance cosinus est ≤ à ce seuil. ArcFace : même personne ≈ 0.10–0.30,
+# personnes différentes > 0.45–0.60.
+_DEFAULT_THRESHOLD = 0.40
 
 
-def _run_dbscan(face_db: FaceDatabase) -> int:
+def _run_clustering(face_db: FaceDatabase) -> int:
     """
-    Core DBSCAN logic (no Qt, safe to call from any thread).
+    Agglomerative clustering (average linkage, cosine distance) sur les
+    embeddings ArcFace. Safe to call from any thread.
     Returns number of distinct clusters. Raises RuntimeError if deps missing.
     """
     try:
         import numpy as np
-        from sklearn.cluster import DBSCAN
+        from sklearn.cluster import AgglomerativeClustering
     except ImportError as exc:
         raise RuntimeError(f"Le clustering nécessite numpy et scikit-learn : {exc}")
 
     embeddings, face_ids = face_db.get_all_embeddings()
     n = len(embeddings)
 
-    if n < _MIN_SAMPLES:
-        logger.debug("ClusterThread: %d visage(s), pas assez", n)
+    if n == 0:
+        logger.debug("Clustering: aucun visage")
         return 0
 
-    logger.info("ClusterThread: clustérisation de %d visages", n)
+    threshold = Config().get("faces.cluster_threshold", _DEFAULT_THRESHOLD)
+    logger.info("Clustering: %d visages (seuil cosinus=%.2f)", n, threshold)
+
     X = np.array(embeddings, dtype=np.float32)
     norms = np.linalg.norm(X, axis=1, keepdims=True)
     norms[norms == 0] = 1.0
     X /= norms
 
-    labels = DBSCAN(
-        eps=_EPS, min_samples=_MIN_SAMPLES, metric="euclidean", n_jobs=-1
+    if n == 1:
+        face_db.update_clusters(face_ids, [0])
+        return 1
+
+    labels = AgglomerativeClustering(
+        n_clusters=None,
+        metric="cosine",
+        linkage="average",
+        distance_threshold=threshold,
     ).fit_predict(X)
 
     face_db.update_clusters(face_ids, labels.tolist())
 
-    n_clusters = int(len(set(labels) - {-1}))
-    n_noise    = int((labels == -1).sum())
-    logger.info("ClusterThread: %d cluster(s), %d bruit", n_clusters, n_noise)
+    n_clusters = int(labels.max() + 1)
+    logger.info("Clustering: %d groupe(s)", n_clusters)
     return n_clusters
 
 
 class ClusterThread(QThread):
     """
-    Off-UI-thread wrapper around DBSCAN clustering.
+    Off-UI-thread wrapper around agglomerative clustering.
 
     Signals
     -------
@@ -65,7 +77,7 @@ class ClusterThread(QThread):
 
     def run(self) -> None:
         try:
-            n = _run_dbscan(self._face_db)
+            n = _run_clustering(self._face_db)
             self.finished.emit(n)
         except Exception as exc:
             logger.warning("ClusterThread erreur: %s", exc)

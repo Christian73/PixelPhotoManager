@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (
 
 from src.core.models import FaceInfo, PersonInfo
 from src.faces.face_database import FaceDatabase
+from src.ui.loading_label import LoadingLabel
 
 logger = logging.getLogger(__name__)
 
@@ -284,11 +285,11 @@ class _ClusterRow(QFrame):
         row.setContentsMargins(8, 6, 8, 6)
         row.setSpacing(12)
 
-        self._lbl_avatar = QLabel()
+        self._lbl_avatar = LoadingLabel("#2a2a2a")
         self._lbl_avatar.setFixedSize(_AVATAR_SIZE, _AVATAR_SIZE)
         self._lbl_avatar.setAlignment(Qt.AlignCenter)
         self._lbl_avatar.setStyleSheet("border: none;")
-        self._lbl_avatar.setPixmap(_placeholder_pixmap())
+        self._lbl_avatar.start_loading()
         row.addWidget(self._lbl_avatar)
 
         plural = "s" if face_count > 1 else ""

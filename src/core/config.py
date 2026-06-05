@@ -18,6 +18,9 @@ _DEFAULTS = {
         "sidebar_width": 240,
         "theme": "dark",
     },
+    "faces": {
+        "similarity_eps": 0.5,
+    },
 }
 
 

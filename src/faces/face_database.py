@@ -72,11 +72,15 @@ class FaceDatabase:
                 conn.execute(
                     "CREATE INDEX IF NOT EXISTS idx_faces_person  ON faces(person_id)"
                 )
-                # Migration : ajouter la colonne ignored si elle n'existe pas
+                # Migrations : ajouter les colonnes manquantes
                 cols = {r[1] for r in conn.execute("PRAGMA table_info(faces)")}
                 if "ignored" not in cols:
                     conn.execute(
                         "ALTER TABLE faces ADD COLUMN ignored INTEGER DEFAULT 0"
+                    )
+                if "pinned" not in cols:
+                    conn.execute(
+                        "ALTER TABLE faces ADD COLUMN pinned INTEGER DEFAULT 0"
                     )
                 conn.commit()
             finally:
@@ -133,12 +137,14 @@ class FaceDatabase:
     # ------------------------------------------------------------------ clustering
 
     def get_all_embeddings(self) -> tuple[list[list[float]], list[int]]:
-        """Returns (embeddings, face_ids) for all faces with stored embeddings."""
+        """Returns (embeddings, face_ids) for non-pinned faces with stored embeddings."""
         with self._lock:
             conn = self._conn()
             try:
                 rows = conn.execute(
-                    "SELECT id, embedding FROM faces WHERE embedding IS NOT NULL"
+                    "SELECT id, embedding FROM faces"
+                    " WHERE embedding IS NOT NULL"
+                    "   AND (pinned IS NULL OR pinned = 0)"
                 ).fetchall()
             finally:
                 conn.close()
@@ -152,7 +158,11 @@ class FaceDatabase:
         with self._lock:
             conn = self._conn()
             try:
-                conn.execute("UPDATE faces SET cluster_id=NULL")
+                # Ne pas toucher les faces isolées manuellement (pinned=1)
+                conn.execute(
+                    "UPDATE faces SET cluster_id=NULL"
+                    " WHERE pinned IS NULL OR pinned = 0"
+                )
                 conn.executemany(
                     "UPDATE faces SET cluster_id=? WHERE id=?",
                     [
@@ -181,8 +191,8 @@ class FaceDatabase:
         return [(r[0], r[1]) for r in rows]
 
     def get_unnamed_clusters(self) -> list[tuple[int, int]]:
-        """Returns [(cluster_id, face_count)] for clusters with no person assigned
-        and not ignored."""
+        """Returns [(cluster_id, face_count)] for clusters with no person assigned,
+        not ignored and not pinned (isolated faces are excluded)."""
         with self._lock:
             conn = self._conn()
             try:
@@ -191,6 +201,7 @@ class FaceDatabase:
                     " WHERE cluster_id IS NOT NULL"
                     "   AND person_id IS NULL"
                     "   AND ignored = 0"
+                    "   AND (pinned IS NULL OR pinned = 0)"
                     " GROUP BY cluster_id ORDER BY COUNT(*) DESC"
                 ).fetchall()
             finally:
@@ -290,7 +301,7 @@ class FaceDatabase:
             try:
                 rows = conn.execute(
                     "SELECT id, photo_path, bbox_x, bbox_y, bbox_w, bbox_h,"
-                    "       cluster_id, person_id"
+                    "       cluster_id, person_id, ignored, pinned"
                     " FROM faces WHERE photo_path=?",
                     (photo_path,),
                 ).fetchall()
@@ -301,6 +312,8 @@ class FaceDatabase:
                 id=r[0], photo_path=r[1],
                 bbox_x=r[2], bbox_y=r[3], bbox_w=r[4], bbox_h=r[5],
                 cluster_id=r[6], person_id=r[7],
+                ignored=bool(r[8]),
+                pinned=bool(r[9]),
             )
             for r in rows
         ]
@@ -332,6 +345,78 @@ class FaceDatabase:
         return [r[0] for r in rows]
 
     # ------------------------------------------------------------------ assignment
+
+    def assign_person_to_face(self, face_id: int, person_id: int) -> None:
+        """Assign a named person to a single face."""
+        with self._lock:
+            conn = self._conn()
+            try:
+                conn.execute(
+                    "UPDATE faces SET person_id=? WHERE id=?", (person_id, face_id)
+                )
+                conn.commit()
+            finally:
+                conn.close()
+
+    def unassign_face(self, face_id: int) -> None:
+        """Remove person and cluster from a single face (returns it to unknowns).
+        Clears pinned so the face re-entre dans le clustering automatique."""
+        with self._lock:
+            conn = self._conn()
+            try:
+                conn.execute(
+                    "UPDATE faces SET person_id=NULL, cluster_id=NULL, pinned=0"
+                    " WHERE id=?",
+                    (face_id,),
+                )
+                conn.commit()
+            finally:
+                conn.close()
+
+    def isolate_face(self, face_id: int) -> None:
+        """Sépare une face de son groupe et la protège du re-clustering.
+        Lui assigne un cluster_id négatif unique (isolé, invisible dans la grille)."""
+        with self._lock:
+            conn = self._conn()
+            try:
+                row = conn.execute(
+                    "SELECT MIN(cluster_id) FROM faces WHERE pinned=1"
+                ).fetchone()
+                min_pinned = row[0] if row and row[0] is not None else 0
+                new_cluster_id = min(min_pinned, 0) - 1   # -1, -2, -3, ...
+                conn.execute(
+                    "UPDATE faces SET cluster_id=?, pinned=1, person_id=NULL"
+                    " WHERE id=?",
+                    (new_cluster_id, face_id),
+                )
+                conn.commit()
+            finally:
+                conn.close()
+
+    def ignore_face(self, face_id: int) -> None:
+        """Mark a single face as ignored."""
+        with self._lock:
+            conn = self._conn()
+            try:
+                conn.execute(
+                    "UPDATE faces SET ignored=1 WHERE id=?", (face_id,)
+                )
+                conn.commit()
+            finally:
+                conn.close()
+
+    def merge_clusters(self, source_cluster_id: int, target_cluster_id: int) -> None:
+        """Move all faces from source_cluster_id into target_cluster_id."""
+        with self._lock:
+            conn = self._conn()
+            try:
+                conn.execute(
+                    "UPDATE faces SET cluster_id=? WHERE cluster_id=?",
+                    (target_cluster_id, source_cluster_id),
+                )
+                conn.commit()
+            finally:
+                conn.close()
 
     def assign_person_to_cluster(self, cluster_id: int, person_id: int) -> None:
         with self._lock:
@@ -398,6 +483,18 @@ class FaceDatabase:
                     p.cover_bbox = (rep.bbox_x, rep.bbox_y, rep.bbox_w, rep.bbox_h)
 
     # ------------------------------------------------------------------ cleanup
+
+    def reset_index(self) -> None:
+        """Efface toutes les détections et l'index des photos analysées.
+        Les personnes nommées dans le catalogue sont conservées."""
+        with self._lock:
+            conn = self._conn()
+            try:
+                conn.execute("DELETE FROM faces")
+                conn.execute("DELETE FROM indexed_photos")
+                conn.commit()
+            finally:
+                conn.close()
 
     def delete_for_path(self, photo_path: str) -> None:
         """Remove all face data for a deleted photo."""
