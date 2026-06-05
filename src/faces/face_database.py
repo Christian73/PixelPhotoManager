@@ -38,6 +38,35 @@ CREATE TABLE IF NOT EXISTS faces (
 """
 
 
+_CREATE_PICASA_ANNOTATIONS = """
+CREATE TABLE IF NOT EXISTS picasa_annotations (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    photo_path TEXT NOT NULL,
+    bbox_x     INTEGER NOT NULL,
+    bbox_y     INTEGER NOT NULL,
+    bbox_w     INTEGER NOT NULL,
+    bbox_h     INTEGER NOT NULL,
+    person_id  INTEGER NOT NULL,
+    consumed   INTEGER DEFAULT 0
+)
+"""
+
+_IOU_THRESHOLD = 0.30   # recouvrement minimum pour associer un visage Picasa à un visage détecté
+
+
+def _iou(a: tuple, b: tuple) -> float:
+    """IoU entre deux bboxes (x, y, w, h)."""
+    ax2, ay2 = a[0] + a[2], a[1] + a[3]
+    bx2, by2 = b[0] + b[2], b[1] + b[3]
+    ix1, iy1 = max(a[0], b[0]), max(a[1], b[1])
+    ix2, iy2 = min(ax2, bx2),   min(ay2, by2)
+    if ix2 <= ix1 or iy2 <= iy1:
+        return 0.0
+    inter = (ix2 - ix1) * (iy2 - iy1)
+    union = a[2] * a[3] + b[2] * b[3] - inter
+    return inter / union if union > 0 else 0.0
+
+
 def _enc(embedding: list[float]) -> bytes:
     return struct.pack(f"{len(embedding)}f", *embedding)
 
@@ -63,14 +92,18 @@ class FaceDatabase:
             try:
                 conn.execute(_CREATE_INDEXED)
                 conn.execute(_CREATE_FACES)
+                conn.execute(_CREATE_PICASA_ANNOTATIONS)
                 conn.execute(
-                    "CREATE INDEX IF NOT EXISTS idx_faces_photo   ON faces(photo_path)"
+                    "CREATE INDEX IF NOT EXISTS idx_faces_photo    ON faces(photo_path)"
                 )
                 conn.execute(
-                    "CREATE INDEX IF NOT EXISTS idx_faces_cluster ON faces(cluster_id)"
+                    "CREATE INDEX IF NOT EXISTS idx_faces_cluster  ON faces(cluster_id)"
                 )
                 conn.execute(
-                    "CREATE INDEX IF NOT EXISTS idx_faces_person  ON faces(person_id)"
+                    "CREATE INDEX IF NOT EXISTS idx_faces_person   ON faces(person_id)"
+                )
+                conn.execute(
+                    "CREATE INDEX IF NOT EXISTS idx_picasa_photo   ON picasa_annotations(photo_path)"
                 )
                 # Migrations : ajouter les colonnes manquantes
                 cols = {r[1] for r in conn.execute("PRAGMA table_info(faces)")}
@@ -137,6 +170,8 @@ class FaceDatabase:
                     " (photo_path, indexed_at, face_count, rotation) VALUES (?,?,?,?)",
                     (photo_path, time.time(), len(detections), rotation),
                 )
+                # Appliquer les annotations Picasa en attente (si présentes)
+                self._apply_picasa_annotations(conn, photo_path)
                 conn.commit()
             finally:
                 conn.close()
@@ -495,14 +530,101 @@ class FaceDatabase:
 
     # ------------------------------------------------------------------ cleanup
 
+    # ------------------------------------------------------------------ Picasa annotations
+
+    def save_picasa_annotations(
+        self, photo_path: str, annotations: list[dict]
+    ) -> None:
+        """
+        Persist Picasa face annotations for a photo.
+        annotations: [{'bbox': (x,y,w,h), 'person_id': int}, ...]
+
+        Les annotations remplacent les précédentes pour ce chemin.
+        Si des visages détectés existent déjà, elles leur sont immédiatement
+        associées par IoU ; sinon elles seront appliquées lors de la prochaine
+        détection via save_faces().
+        """
+        photo_path = os.path.normpath(photo_path)
+        with self._lock:
+            conn = self._conn()
+            try:
+                conn.execute(
+                    "DELETE FROM picasa_annotations WHERE photo_path=?", (photo_path,)
+                )
+                for ann in annotations:
+                    x, y, w, h = ann["bbox"]
+                    conn.execute(
+                        "INSERT INTO picasa_annotations"
+                        " (photo_path, bbox_x, bbox_y, bbox_w, bbox_h, person_id)"
+                        " VALUES (?,?,?,?,?,?)",
+                        (photo_path, x, y, w, h, ann["person_id"]),
+                    )
+                conn.commit()
+                self._apply_picasa_annotations(conn, photo_path)
+                conn.commit()
+            finally:
+                conn.close()
+
+    def _apply_picasa_annotations(self, conn, photo_path: str) -> None:
+        """
+        Associe les annotations Picasa non consommées aux visages détectés
+        du même chemin en utilisant l'IoU comme critère de proximité.
+        Doit être appelée dans un contexte conn+lock déjà ouvert.
+        Seuls les visages sans person_id existant sont candidats.
+        """
+        ann_rows = conn.execute(
+            "SELECT id, bbox_x, bbox_y, bbox_w, bbox_h, person_id"
+            " FROM picasa_annotations"
+            " WHERE photo_path=? AND consumed=0",
+            (photo_path,),
+        ).fetchall()
+        if not ann_rows:
+            return
+
+        face_rows = conn.execute(
+            "SELECT id, bbox_x, bbox_y, bbox_w, bbox_h"
+            " FROM faces"
+            " WHERE photo_path=? AND person_id IS NULL AND ignored=0",
+            (photo_path,),
+        ).fetchall()
+        if not face_rows:
+            return
+
+        used_face_ids: set[int] = set()
+        for ann_id, ax, ay, aw, ah, person_id in ann_rows:
+            best_iou  = _IOU_THRESHOLD
+            best_face = None
+            for face_id, fx, fy, fw, fh in face_rows:
+                if face_id in used_face_ids:
+                    continue
+                score = _iou((ax, ay, aw, ah), (fx, fy, fw, fh))
+                if score > best_iou:
+                    best_iou  = score
+                    best_face = face_id
+            if best_face is not None:
+                conn.execute(
+                    "UPDATE faces SET person_id=? WHERE id=?", (person_id, best_face)
+                )
+                conn.execute(
+                    "UPDATE picasa_annotations SET consumed=1 WHERE id=?", (ann_id,)
+                )
+                used_face_ids.add(best_face)
+                logger.debug(
+                    "Picasa: visage %d → person %d (IoU=%.2f) dans %s",
+                    best_face, person_id, best_iou, os.path.basename(photo_path),
+                )
+
     def reset_index(self) -> None:
         """Efface toutes les détections et l'index des photos analysées.
-        Les personnes nommées dans le catalogue sont conservées."""
+        Les personnes nommées et les annotations Picasa sont conservées ;
+        les annotations sont réinitialisées pour être ré-appliquées après
+        la prochaine détection."""
         with self._lock:
             conn = self._conn()
             try:
                 conn.execute("DELETE FROM faces")
                 conn.execute("DELETE FROM indexed_photos")
+                conn.execute("UPDATE picasa_annotations SET consumed=0")
                 conn.commit()
             finally:
                 conn.close()
@@ -516,6 +638,9 @@ class FaceDatabase:
                 conn.execute("DELETE FROM faces WHERE photo_path=?", (photo_path,))
                 conn.execute(
                     "DELETE FROM indexed_photos WHERE photo_path=?", (photo_path,)
+                )
+                conn.execute(
+                    "DELETE FROM picasa_annotations WHERE photo_path=?", (photo_path,)
                 )
                 conn.commit()
             finally:
@@ -534,6 +659,10 @@ class FaceDatabase:
                 )
                 conn.execute(
                     "UPDATE indexed_photos SET photo_path=? WHERE photo_path=?",
+                    (new_path, old_path),
+                )
+                conn.execute(
+                    "UPDATE picasa_annotations SET photo_path=? WHERE photo_path=?",
                     (new_path, old_path),
                 )
                 conn.commit()
