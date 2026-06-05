@@ -1,9 +1,15 @@
 import contextlib
 import logging
 import os
+import shutil
 import tempfile
 
 logger = logging.getLogger(__name__)
+
+# Dimension maximale avant de réduire l'image pour la détection.
+# RetinaFace échoue fréquemment sur les photos smartphone haute résolution
+# (>10 MP) quand les visages occupent une large fraction du cadre.
+_MAX_DETECT_DIM = 1920
 
 
 @contextlib.contextmanager
@@ -14,21 +20,80 @@ def _exif_corrected(image_path: str):
     son chemin habituel — aucun changement de code path interne.
     """
     temp_path = None
+    result_path = image_path
     try:
         from PIL import Image, ImageOps
         with Image.open(image_path) as img:
             orientation = img.getexif().get(274, 1)   # 274 = Orientation tag
-            if orientation in (None, 1):
-                yield image_path
-                return
-            corrected = ImageOps.exif_transpose(img)
-        suffix = os.path.splitext(image_path)[1] or ".jpg"
-        fd, temp_path = tempfile.mkstemp(suffix=suffix)
-        os.close(fd)
-        corrected.save(temp_path, quality=95)
-        yield temp_path
+            if orientation not in (None, 1):
+                corrected = ImageOps.exif_transpose(img)
+                suffix = os.path.splitext(image_path)[1] or ".jpg"
+                fd, temp_path = tempfile.mkstemp(suffix=suffix)
+                os.close(fd)
+                corrected.save(temp_path, quality=95)
+                result_path = temp_path
     except Exception:
-        yield image_path   # en cas d'erreur, on passe le fichier original
+        pass   # en cas d'erreur de lecture EXIF, on passe le fichier original
+
+    # DeepFace rejette les chemins avec des caractères non-ASCII (accents français).
+    # Si aucun fichier temp n'a encore été créé pour la correction EXIF, on en crée
+    # un maintenant pour garantir un chemin ASCII vers DeepFace.
+    if temp_path is None:
+        try:
+            image_path.encode('ascii')
+        except UnicodeEncodeError:
+            try:
+                suffix = os.path.splitext(image_path)[1] or ".jpg"
+                fd, temp_path = tempfile.mkstemp(suffix=suffix)
+                os.close(fd)
+                shutil.copy2(image_path, temp_path)
+                result_path = temp_path
+            except Exception:
+                pass
+
+    try:
+        yield result_path
+    finally:
+        if temp_path and os.path.exists(temp_path):
+            os.unlink(temp_path)
+
+
+@contextlib.contextmanager
+def _resized_for_detection(image_path: str):
+    """
+    Si l'image dépasse _MAX_DETECT_DIM, produit une version réduite dans un
+    fichier temporaire et retourne (chemin_reduit, facteur_echelle).
+    Sinon retourne (chemin_original, 1.0).
+
+    Le facteur d'échelle permet de ramener les bbox détectées aux coordonnées
+    de l'image originale.
+    """
+    temp_path = None
+    result_path = image_path
+    scale = 1.0
+    try:
+        from PIL import Image
+        with Image.open(image_path) as img:
+            w, h = img.size
+            max_dim = max(w, h)
+            if max_dim > _MAX_DETECT_DIM:
+                scale = _MAX_DETECT_DIM / max_dim
+                new_w = int(w * scale)
+                new_h = int(h * scale)
+                resized = img.resize((new_w, new_h), Image.LANCZOS)
+                suffix = os.path.splitext(image_path)[1] or ".jpg"
+                fd, temp_path = tempfile.mkstemp(suffix=suffix)
+                os.close(fd)
+                resized.save(temp_path, quality=92)
+                logger.debug(
+                    "Détection sur image réduite %dx%d→%dx%d (%.2f×) pour %s",
+                    w, h, new_w, new_h, scale, os.path.basename(image_path),
+                )
+                result_path = temp_path
+    except Exception:
+        pass   # en cas d'erreur de redimensionnement, on passe le fichier original
+    try:
+        yield result_path, scale
     finally:
         if temp_path and os.path.exists(temp_path):
             os.unlink(temp_path)
@@ -68,14 +133,15 @@ def detect_and_embed(image_path: str) -> list[dict]:
     try:
         os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "3")
 
-        with _exif_corrected(image_path) as path:
-            results = DeepFace.represent(
-                img_path=path,
-                model_name="ArcFace",
-                detector_backend="retinaface",
-                enforce_detection=False,
-                align=True,
-            )
+        with _exif_corrected(image_path) as corrected_path:
+            with _resized_for_detection(corrected_path) as (detect_path, scale):
+                results = DeepFace.represent(
+                    img_path=detect_path,
+                    model_name="ArcFace",
+                    detector_backend="retinaface",
+                    enforce_detection=True,
+                    align=True,
+                )
     except Exception as e:
         logger.warning("DeepFace.represent() a échoué pour %s : %s", image_path, e)
         return []
@@ -91,9 +157,15 @@ def detect_and_embed(image_path: str) -> list[dict]:
         w = int(area.get("w", 0))
         h = int(area.get("h", 0))
         emb: list[float] = r.get("embedding") or []
-        # Skip trivial detections (enforce_detection=False returns dummy area when no face)
         if w < 20 or h < 20:
             continue
+        # Ramener les coordonnées à l'échelle de l'image originale
+        if scale != 1.0:
+            inv = 1.0 / scale
+            x = int(x * inv)
+            y = int(y * inv)
+            w = int(w * inv)
+            h = int(h * inv)
         faces.append({"bbox": (x, y, w, h), "embedding": emb})
 
     return faces

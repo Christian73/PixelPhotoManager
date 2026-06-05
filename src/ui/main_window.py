@@ -33,6 +33,7 @@ from src.ui.edit_panel import EditPanel
 from src.ui.face_cluster_grid import FaceClusterGrid
 from src.ui.face_panel import FacePanel
 from src.ui.people_panel import MergePersonsDialog, PeopleDialog
+from src.ui.settings_dialog import SettingsDialog
 
 logger = logging.getLogger(__name__)
 
@@ -319,6 +320,7 @@ class MainWindow(QMainWindow):
         # Outils
         m_tools = mb.addMenu("Outils")
         act_settings = QAction("Paramètres", self)
+        act_settings.triggered.connect(self._open_settings)
         m_tools.addAction(act_settings)
 
         # Visages
@@ -326,13 +328,14 @@ class MainWindow(QMainWindow):
         self._act_index_faces = QAction("Analyser les visages", self)
         self._act_index_faces.triggered.connect(self._start_face_indexing)
         m_faces.addAction(self._act_index_faces)
-        self._act_cluster_faces = QAction("Regrouper les visages", self)
-        self._act_cluster_faces.triggered.connect(self._run_clustering)
-        m_faces.addAction(self._act_cluster_faces)
         m_faces.addSeparator()
         act_identify = QAction("Identifier les personnes…", self)
         act_identify.triggered.connect(self.show_face_clusters)
         m_faces.addAction(act_identify)
+        m_faces.addSeparator()
+        act_reindex = QAction("Réinitialiser et réindexer…", self)
+        act_reindex.triggered.connect(self._reset_and_reindex_faces)
+        m_faces.addAction(act_reindex)
 
         # Aide
         m_help = mb.addMenu("Aide")
@@ -460,10 +463,10 @@ class MainWindow(QMainWindow):
         self._face_panel.hide()
 
         self._viewer_splitter = QSplitter(Qt.Horizontal)
-        self._viewer_splitter.addWidget(self._face_panel)
         self._viewer_splitter.addWidget(self._viewer)
-        self._viewer_splitter.setStretchFactor(0, 0)
-        self._viewer_splitter.setStretchFactor(1, 1)
+        self._viewer_splitter.addWidget(self._face_panel)
+        self._viewer_splitter.setStretchFactor(0, 1)
+        self._viewer_splitter.setStretchFactor(1, 0)
         self._viewer_splitter.setCollapsible(0, False)
         self._viewer_splitter.setCollapsible(1, False)
         self._stack.addWidget(self._viewer_splitter)
@@ -475,6 +478,7 @@ class MainWindow(QMainWindow):
         self._face_cluster_grid.cluster_named.connect(self._on_cluster_named)
         self._face_cluster_grid.cluster_assigned.connect(self._on_cluster_assigned)
         self._face_cluster_grid.cluster_ignored.connect(self._on_cluster_ignored)
+        self._face_cluster_grid.cluster_merged.connect(self._on_cluster_merged)
         self._face_cluster_grid.photos_requested.connect(self._on_cluster_photos_requested)
         self._face_cluster_grid.back_requested.connect(self.show_grid)
         self._stack.addWidget(self._face_cluster_grid)
@@ -576,6 +580,8 @@ class MainWindow(QMainWindow):
         self._current_photos = photos
         self._current_context = "Toutes les photos"
         self._grid.set_photos(photos)
+        self._grid_nav_bar.hide()
+        self.show_grid()
         self._update_status()
 
     def _start_scan(self, folders: list[str]) -> None:
@@ -623,7 +629,31 @@ class MainWindow(QMainWindow):
         if self._config.get("faces.auto_index", False):
             self._start_face_indexing()
 
+    # ------------------------------------------------------------------ settings
+
+    def _open_settings(self) -> None:
+        dlg = SettingsDialog(self._config, self)
+        dlg.recluster_needed.connect(self._run_clustering)
+        dlg.exec()
+
     # ------------------------------------------------------------------ faces
+
+    def _reset_and_reindex_faces(self) -> None:
+        reply = QMessageBox.question(
+            self,
+            "Réinitialiser l'index des visages",
+            "Toutes les détections et les regroupements seront effacés.\n"
+            "Les personnes nommées sont conservées, mais leurs associations\n"
+            "aux visages seront perdues.\n\n"
+            "Continuer ?",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No,
+        )
+        if reply != QMessageBox.Yes:
+            return
+        self._face_db.reset_index()
+        self._face_cluster_grid.refresh()
+        self._start_face_indexing()
 
     def _start_face_indexing(self) -> None:
         if self._face_indexer and self._face_indexer.isRunning():
@@ -707,6 +737,10 @@ class MainWindow(QMainWindow):
     def _on_cluster_ignored(self, _cluster_id: int) -> None:
         self._face_cluster_grid.refresh()
 
+    @Slot(int, int)
+    def _on_cluster_merged(self, _source: int, _target: int) -> None:
+        self._face_cluster_grid.refresh()
+
     @Slot(int, str)
     def _on_cluster_photos_requested(self, cluster_id: int, label: str) -> None:
         """Clic simple sur un groupe : afficher ses photos dans la grille."""
@@ -764,6 +798,8 @@ class MainWindow(QMainWindow):
         self._current_photos = photos
         self._current_context = f"{_PERSON_CTX_PREFIX}{person.id}"
         self._grid.set_photos(photos)
+        self._grid_nav_bar.hide()
+        self.show_grid()
         self._update_status()
 
     def _refresh_persons(self) -> None:
@@ -827,6 +863,8 @@ class MainWindow(QMainWindow):
         self._current_photos = photos
         self._current_context = folder
         self._grid.set_photos(photos)
+        self._grid_nav_bar.hide()
+        self.show_grid()
         self._update_status()
 
     @Slot(object)
@@ -838,12 +876,16 @@ class MainWindow(QMainWindow):
             self._current_photos = photos
             self._current_context = "Favoris"
             self._grid.set_photos(photos)
+            self._grid_nav_bar.hide()
+            self.show_grid()
             self._update_status()
         elif isinstance(data, AlbumInfo) and data.id:
             photos = self._catalog.get_photos_in_album(data.id)
             self._current_photos = photos
             self._current_context = data.name
             self._grid.set_photos(photos)
+            self._grid_nav_bar.hide()
+            self.show_grid()
             self._update_status()
 
     @Slot(str)
@@ -981,7 +1023,6 @@ class MainWindow(QMainWindow):
         self._zoom_slider.hide()
         self._zoom_pct_label.hide()
         self._btn_grid_status.show()
-        self._grid_nav_bar.hide()
         self._act_faces_toggle.setVisible(False)
         self._lbl_fileinfo.setText("")
         self._update_status()

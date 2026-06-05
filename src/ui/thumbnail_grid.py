@@ -2,12 +2,14 @@ import logging
 import weakref
 from pathlib import Path
 
-from PySide6.QtCore import Qt, Signal, QRunnable, QThreadPool, QObject, Slot, QSize, QPoint, QUrl, QMimeData
+from PySide6.QtCore import Qt, Signal, QRunnable, QThreadPool, QObject, Slot, QSize, QPoint, QRect, QTimer, QUrl, QMimeData
 from PySide6.QtGui import QPixmap, QColor, QPainter, QFont, QDrag
 from PySide6.QtWidgets import (
     QScrollArea, QWidget, QLabel, QVBoxLayout, QSizePolicy,
     QMenu, QApplication,
 )
+
+from src.ui.loading_label import LoadingLabel
 
 from src.core.models import PhotoInfo
 from src.library.thumbnail_cache import ThumbnailCache
@@ -40,17 +42,6 @@ class _ThumbWorker(QRunnable):
             logger.debug(f"Erreur génération vignette {self._path}", exc_info=True)
 
 
-def _make_placeholder(size: int) -> QPixmap:
-    px = QPixmap(size, size)
-    px.fill(QColor(55, 55, 55))
-    p = QPainter(px)
-    p.setPen(QColor(90, 90, 90))
-    p.drawRect(size // 4, size // 4, size // 2, size // 2)
-    p.drawLine(size // 4, size // 4, size * 3 // 4, size * 3 // 4)
-    p.drawLine(size * 3 // 4, size // 4, size // 4, size * 3 // 4)
-    p.end()
-    return px
-
 
 class ThumbnailCell(QWidget):
     double_clicked = Signal(object)                # PhotoInfo
@@ -65,11 +56,12 @@ class ThumbnailCell(QWidget):
         self._size = size
         self._selected = False
         self._pixmap: QPixmap | None = None
+        self._load_requested = False   # True dès que load() a été appelé
         self._signals = _ThumbSignals()
         self._signals.ready.connect(self._on_thumb_ready)
         self._drag_start_pos: QPoint | None = None
         self._setup_ui()
-        self._load_thumb()
+        # Pas d'appel à load() ici — ThumbnailGrid décide de la priorité
 
     def _setup_ui(self) -> None:
         self.setFixedSize(self._size + 8, self._size + 8)
@@ -79,19 +71,23 @@ class ThumbnailCell(QWidget):
         layout.setContentsMargins(4, 4, 4, 4)
         layout.setSpacing(0)
 
-        self._img_label = QLabel()
+        self._img_label = LoadingLabel("#373737")
         self._img_label.setFixedSize(self._size, self._size)
         self._img_label.setAlignment(Qt.AlignCenter)
-        self._img_label.setPixmap(_make_placeholder(self._size))
+        self._img_label.start_loading()
         layout.addWidget(self._img_label)
 
-    def _load_thumb(self) -> None:
+    def load(self, priority: int = 0) -> None:
+        """Démarre le chargement de la vignette. Sans effet si déjà demandé."""
+        if self._load_requested:
+            return
+        self._load_requested = True
         pixmap = self._cache.get(self._photo.path)
         if pixmap:
             self._set_pixmap(pixmap)
         else:
             worker = _ThumbWorker(self._photo.path, self._cache, self._signals)
-            QThreadPool.globalInstance().start(worker)
+            QThreadPool.globalInstance().start(worker, priority)
 
     def reload_with_edit(self, edit) -> None:
         """Invalide le cache et régénère la vignette en appliquant les retouches."""
@@ -123,8 +119,14 @@ class ThumbnailCell(QWidget):
         self._size = size
         self.setFixedSize(size + 8, size + 8)
         self._img_label.setFixedSize(size, size)
-        self._img_label.setPixmap(_make_placeholder(size))
-        self._load_thumb()
+        if self._pixmap:
+            # Re-scale le pixmap déjà chargé — pas besoin de re-générer
+            scaled = self._pixmap.scaled(size, size,
+                                         Qt.KeepAspectRatio,
+                                         Qt.SmoothTransformation)
+            self._img_label.setPixmap(scaled)
+        else:
+            self._img_label.start_loading()
 
     @property
     def photo(self) -> PhotoInfo:
@@ -238,16 +240,48 @@ class ThumbnailGrid(QScrollArea):
         self.setWidgetResizable(True)
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
 
+        # Debounce scroll : re-priorise le chargement 50 ms après l'arrêt du défilement
+        self._scroll_timer = QTimer(self)
+        self._scroll_timer.setSingleShot(True)
+        self._scroll_timer.setInterval(50)
+        self._scroll_timer.timeout.connect(self._schedule_loads)
+        self.verticalScrollBar().valueChanged.connect(self._scroll_timer.start)
+
     def set_photos(self, photos: list[PhotoInfo]) -> None:
         self._selected.clear()
         cells = [self._make_cell(p) for p in photos]
         self._cells = cells
         self._container.set_cells(cells)
+        # Différer d'un tick pour que _relayout() ait positionné les cellules
+        QTimer.singleShot(0, self._schedule_loads)
 
     def add_photo(self, photo: PhotoInfo) -> None:
         cell = self._make_cell(photo)
         self._cells.append(cell)
         self._container.append_cell(cell)
+        # Différer d'un tick pour que la cellule soit positionnée avant de vérifier la visibilité
+        QTimer.singleShot(0, lambda c=cell: c.load(
+            priority=10 if self._cell_is_visible(c) else 0
+        ))
+
+    def _cell_is_visible(self, cell: ThumbnailCell) -> bool:
+        """Retourne True si la cellule est (au moins partiellement) dans le viewport."""
+        try:
+            top_left = cell.mapTo(self.viewport(), QPoint(0, 0))
+            return self.viewport().rect().intersects(QRect(top_left, cell.size()))
+        except RuntimeError:
+            return False
+
+    def _schedule_loads(self) -> None:
+        """
+        Parcourt toutes les cellules non encore chargées et les met en queue
+        avec une priorité haute pour les cellules visibles, basse pour les autres.
+        """
+        for cell in self._cells:
+            if cell._load_requested:
+                continue
+            priority = 10 if self._cell_is_visible(cell) else 0
+            cell.load(priority)
 
     def _make_cell(self, photo: PhotoInfo) -> ThumbnailCell:
         cell = ThumbnailCell(photo, self._cache, self._thumb_size)

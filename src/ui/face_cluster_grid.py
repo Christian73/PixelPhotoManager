@@ -7,18 +7,18 @@ Cliquer sur un groupe ouvre le dialogue de nommage.
 
 import logging
 
-from PySide6.QtCore import Qt, QTimer, Signal
+from PySide6.QtCore import Qt, QPoint, QRect, QTimer, Signal
 from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import (
-    QDialog, QFrame, QGridLayout, QHBoxLayout, QLabel,
-    QPushButton, QScrollArea, QVBoxLayout, QWidget,
+    QDialog, QDialogButtonBox, QFrame, QGridLayout, QHBoxLayout, QLabel,
+    QMenu, QPushButton, QScrollArea, QVBoxLayout, QWidget,
 )
 
 from src.core.models import PersonInfo
 from src.faces.face_database import FaceDatabase
+from src.ui.loading_label import LoadingLabel
 from src.ui.people_panel import (
-    _AssignDialog, _AvatarLoader, _cosine_sim,
-    _placeholder_pixmap, _SIM_WEAK,
+    _AssignDialog, _AvatarLoader, _cosine_sim, _SIM_WEAK,
 )
 
 logger = logging.getLogger(__name__)
@@ -39,7 +39,9 @@ class _ClusterCard(QFrame):
     """
 
     photos_requested = Signal(int)   # cluster_id — clic gauche
-    name_requested   = Signal(int)   # cluster_id — clic droit
+    name_requested   = Signal(int)   # cluster_id → ouvrir dialogue de nommage
+    merge_requested  = Signal(int)   # cluster_id → ouvrir dialogue de fusion
+    ignore_requested = Signal(int)   # cluster_id → ignorer directement
 
     def __init__(
         self,
@@ -74,14 +76,12 @@ class _ClusterCard(QFrame):
         col.setSpacing(4)
         col.setAlignment(Qt.AlignTop | Qt.AlignHCenter)
 
-        # Vignette (placeholder remplacé dès que l'avatar est chargé)
-        self._lbl_img = QLabel()
+        # Vignette (spinner remplacé dès que l'avatar est chargé)
+        self._lbl_img = LoadingLabel("#1a1a1a")
         self._lbl_img.setFixedSize(_CARD_IMG, _CARD_IMG)
         self._lbl_img.setAlignment(Qt.AlignCenter)
-        self._lbl_img.setStyleSheet(
-            "border: none; background: #1a1a1a; border-radius: 4px;"
-        )
-        self._lbl_img.setPixmap(_placeholder_pixmap(_CARD_IMG))
+        self._lbl_img.setStyleSheet("border: none; border-radius: 4px;")
+        self._lbl_img.start_loading()
         col.addWidget(self._lbl_img, alignment=Qt.AlignHCenter)
 
         # Nombre de visages
@@ -102,12 +102,12 @@ class _ClusterCard(QFrame):
             col.addWidget(lbl_sugg)
 
         # Hint discret
-        lbl_hint = QLabel("clic droit pour nommer")
+        lbl_hint = QLabel("clic droit pour options")
         lbl_hint.setAlignment(Qt.AlignCenter)
         lbl_hint.setStyleSheet("border: none; font-size: 9px; color: #555;")
         col.addWidget(lbl_hint)
 
-        self.setToolTip("Clic : voir les photos  —  Clic droit : nommer")
+        self.setToolTip("Clic : voir les photos  —  Clic droit : nommer / fusionner / ignorer")
 
     def set_avatar(self, data: bytes) -> None:
         pix = QPixmap()
@@ -123,8 +123,176 @@ class _ClusterCard(QFrame):
         if event.button() == Qt.LeftButton:
             self.photos_requested.emit(self._cluster_id)
         elif event.button() == Qt.RightButton:
-            self.name_requested.emit(self._cluster_id)
+            menu = QMenu(self)
+            act_name   = menu.addAction("Nommer ce groupe…")
+            act_merge  = menu.addAction("Fusionner avec un autre groupe…")
+            menu.addSeparator()
+            act_ignore = menu.addAction("Ignorer ce groupe")
+            chosen = menu.exec(event.globalPosition().toPoint())
+            if chosen == act_name:
+                self.name_requested.emit(self._cluster_id)
+            elif chosen == act_merge:
+                self.merge_requested.emit(self._cluster_id)
+            elif chosen == act_ignore:
+                self.ignore_requested.emit(self._cluster_id)
         super().mousePressEvent(event)
+
+
+# ------------------------------------------------------------------ merge dialog
+
+class _MergeRow(QFrame):
+    """Ligne cliquable représentant un groupe candidat à la fusion."""
+
+    selected = Signal(int)  # cluster_id
+
+    def __init__(self, cluster_id: int, face_count: int, parent=None) -> None:
+        super().__init__(parent)
+        self._cluster_id  = cluster_id
+        self._is_selected = False
+        self.setFrameShape(QFrame.NoFrame)
+        self.setCursor(Qt.PointingHandCursor)
+        self.setFixedHeight(54)
+        self._apply_style()
+
+        row = QHBoxLayout(self)
+        row.setContentsMargins(8, 6, 8, 6)
+        row.setSpacing(10)
+
+        self._lbl_avatar = LoadingLabel("#2a2a2a")
+        self._lbl_avatar.setFixedSize(40, 40)
+        self._lbl_avatar.setAlignment(Qt.AlignCenter)
+        self._lbl_avatar.setStyleSheet("border-radius: 20px; border: none;")
+        self._lbl_avatar.start_loading()
+        row.addWidget(self._lbl_avatar)
+
+        plural = "s" if face_count > 1 else ""
+        lbl = QLabel(f"Groupe {cluster_id}  —  {face_count} visage{plural}")
+        lbl.setStyleSheet("border: none; color: #ddd;")
+        row.addWidget(lbl, stretch=1)
+
+    def set_avatar(self, data: bytes) -> None:
+        pix = QPixmap()
+        pix.loadFromData(data)
+        scaled = pix.scaled(40, 40, Qt.KeepAspectRatioByExpanding, Qt.SmoothTransformation)
+        self._lbl_avatar.setPixmap(scaled)
+
+    def set_selected(self, selected: bool) -> None:
+        self._is_selected = selected
+        self._apply_style()
+
+    def _apply_style(self) -> None:
+        if self._is_selected:
+            self.setStyleSheet(
+                "QFrame { background: #1e3a5f; border-radius: 4px; }"
+            )
+        else:
+            self.setStyleSheet(
+                "QFrame { background: transparent; border-radius: 4px; }"
+                "QFrame:hover { background: #2a2a2a; }"
+            )
+
+    def mousePressEvent(self, event) -> None:
+        if event.button() == Qt.LeftButton:
+            self.selected.emit(self._cluster_id)
+        super().mousePressEvent(event)
+
+    def mouseDoubleClickEvent(self, event) -> None:
+        if event.button() == Qt.LeftButton:
+            self.selected.emit(self._cluster_id)
+        super().mouseDoubleClickEvent(event)
+
+
+class _MergePickerDialog(QDialog):
+    """
+    Dialogue permettant de choisir le groupe cible d'une fusion.
+    Affiche tous les groupes non nommés (sauf la source) avec leur vignette.
+    """
+
+    def __init__(
+        self,
+        source_cluster_id: int,
+        face_db: FaceDatabase,
+        parent=None,
+    ) -> None:
+        super().__init__(parent)
+        self._source_id  = source_cluster_id
+        self._face_db    = face_db
+        self._target_id: int | None = None
+        self._rows: dict[int, _MergeRow] = {}
+        self._loader = None
+
+        self.setWindowTitle(f"Fusionner le groupe {source_cluster_id}")
+        self.setMinimumSize(340, 420)
+        self._build()
+        QTimer.singleShot(0, self._start_loader)
+
+    def _build(self) -> None:
+        layout = QVBoxLayout(self)
+        layout.setSpacing(10)
+        layout.setContentsMargins(16, 16, 16, 16)
+
+        lbl = QLabel(f"Fusionner le groupe {self._source_id} avec :")
+        lbl.setStyleSheet("font-weight: bold; font-size: 12px;")
+        layout.addWidget(lbl)
+
+        content = QWidget()
+        vbox = QVBoxLayout(content)
+        vbox.setContentsMargins(0, 0, 0, 0)
+        vbox.setSpacing(2)
+        vbox.setAlignment(Qt.AlignTop)
+
+        for cid, count in self._face_db.get_unnamed_clusters():
+            if cid == self._source_id:
+                continue
+            row = _MergeRow(cid, count)
+            row.selected.connect(self._on_row_selected)
+            vbox.addWidget(row)
+            self._rows[cid] = row
+
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setWidget(content)
+        scroll.setStyleSheet("border: 1px solid #333;")
+        layout.addWidget(scroll, stretch=1)
+
+        if not self._rows:
+            lbl_empty = QLabel("Aucun autre groupe disponible.")
+            lbl_empty.setAlignment(Qt.AlignCenter)
+            lbl_empty.setStyleSheet("color: #555;")
+            vbox.addWidget(lbl_empty)
+
+        buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        self._btn_ok = buttons.button(QDialogButtonBox.Ok)
+        self._btn_ok.setText("Fusionner")
+        self._btn_ok.setEnabled(False)
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+        layout.addWidget(buttons)
+
+    def _on_row_selected(self, cluster_id: int) -> None:
+        for cid, row in self._rows.items():
+            row.set_selected(cid == cluster_id)
+        self._target_id = cluster_id
+        self._btn_ok.setEnabled(True)
+
+    def _start_loader(self) -> None:
+        items = []
+        for cid in self._rows:
+            rep = self._face_db.get_representative_face(cluster_id=cid)
+            if rep:
+                items.append((cid, rep))
+        if items:
+            self._loader = _AvatarLoader(items, 40, self)
+            self._loader.avatar_ready.connect(self._on_avatar_ready)
+            self._loader.start()
+
+    def _on_avatar_ready(self, cluster_id: int, data: bytes) -> None:
+        row = self._rows.get(cluster_id)
+        if row:
+            row.set_avatar(data)
+
+    def selected_cluster_id(self) -> int | None:
+        return self._target_id
 
 
 # ------------------------------------------------------------------ grid
@@ -144,6 +312,7 @@ class FaceClusterGrid(QWidget):
     cluster_named      = Signal(int, str)
     cluster_assigned   = Signal(int, int)
     cluster_ignored    = Signal(int)
+    cluster_merged     = Signal(int, int)  # source_id, target_id
     back_requested     = Signal()
     photos_requested   = Signal(int, str)  # cluster_id, label affiché dans la grille
 
@@ -278,6 +447,8 @@ class FaceClusterGrid(QWidget):
             )
             card.photos_requested.connect(self._on_card_photos_requested)
             card.name_requested.connect(self._on_card_name_requested)
+            card.merge_requested.connect(self._on_card_merge_requested)
+            card.ignore_requested.connect(self._on_card_ignore_requested)
             self._gl.addWidget(card, i // self._current_cols, i % self._current_cols)
             self._cards[cluster_id] = card
             self._ordered_cards.append((cluster_id, card))
@@ -287,9 +458,11 @@ class FaceClusterGrid(QWidget):
                 avatar_items.append((cluster_id, rep))
 
         if avatar_items:
-            self._loader = _AvatarLoader(avatar_items, _CARD_IMG, self)
-            self._loader.avatar_ready.connect(self._on_avatar_ready)
-            self._loader.start()
+            # Différer d'un tick : le layout a positionné les cartes ET la position
+            # de scroll est restaurée → on peut trier les visibles en premier.
+            QTimer.singleShot(
+                0, lambda items=avatar_items: self._start_cluster_loader(items)
+            )
 
     # ------------------------------------------------------------------ internal
 
@@ -319,6 +492,25 @@ class FaceClusterGrid(QWidget):
             return best_p.id, f"≈ {best_p.name} ({pct} %)", "#7aabdb"
         return best_p.id, f"~ {best_p.name} ({pct} %)", "#888"
 
+    def _card_is_visible(self, card: _ClusterCard) -> bool:
+        """Retourne True si la carte est (au moins partiellement) dans le viewport."""
+        try:
+            top_left = card.mapTo(self._scroll.viewport(), QPoint(0, 0))
+            return self._scroll.viewport().rect().intersects(QRect(top_left, card.size()))
+        except RuntimeError:
+            return False
+
+    def _start_cluster_loader(self, avatar_items: list) -> None:
+        """Démarre _AvatarLoader après avoir mis les cartes visibles en tête de liste."""
+        visible_ids = {
+            cid for cid, card in self._cards.items()
+            if self._card_is_visible(card)
+        }
+        avatar_items.sort(key=lambda item: 0 if item[0] in visible_ids else 1)
+        self._loader = _AvatarLoader(avatar_items, _CARD_IMG, self)
+        self._loader.avatar_ready.connect(self._on_avatar_ready)
+        self._loader.start()
+
     def _on_avatar_ready(self, cluster_id: int, data: bytes) -> None:
         card = self._cards.get(cluster_id)
         if card:
@@ -333,6 +525,21 @@ class FaceClusterGrid(QWidget):
         plural = "s" if face_count > 1 else ""
         label = f"Groupe {cluster_id} — {face_count} visage{plural}"
         self.photos_requested.emit(cluster_id, label)
+
+    def _on_card_ignore_requested(self, cluster_id: int) -> None:
+        """Ignorer un groupe directement via le menu contextuel."""
+        self._face_db.ignore_cluster(cluster_id)
+        self.cluster_ignored.emit(cluster_id)
+
+    def _on_card_merge_requested(self, cluster_id: int) -> None:
+        """Ouvrir le dialogue de fusion et fusionner si confirmé."""
+        dlg = _MergePickerDialog(cluster_id, self._face_db, self)
+        if dlg.exec() != QDialog.Accepted:
+            return
+        target_id = dlg.selected_cluster_id()
+        if target_id is not None:
+            self._face_db.merge_clusters(cluster_id, target_id)
+            self.cluster_merged.emit(cluster_id, target_id)
 
     def _on_card_name_requested(self, cluster_id: int) -> None:
         """Double clic : ouvrir le dialogue de nommage."""
