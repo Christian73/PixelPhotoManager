@@ -806,11 +806,12 @@ class _Canvas(QWidget):
 
 
 class PhotoViewer(QWidget):
-    closed        = Signal()
-    navigate      = Signal(int)
-    zoom_changed  = Signal(float)
-    crop_ready    = Signal(object)  # tuple 8 coords relatives (x0,y0,…,x3,y3)
-    save_requested = Signal(object) # PhotoInfo
+    closed          = Signal()
+    navigate        = Signal(int)
+    zoom_changed    = Signal(float)
+    crop_ready      = Signal(object)  # tuple 8 coords relatives (x0,y0,…,x3,y3)
+    save_requested  = Signal(object)  # PhotoInfo
+    rename_requested = Signal(object) # PhotoInfo
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -965,6 +966,10 @@ class PhotoViewer(QWidget):
         pixmap = _build_pixmap(self._photo, self._edit)
         self._canvas.set_pixmap(pixmap)
 
+    def refresh_name(self) -> None:
+        if self._photo:
+            self._lbl_name.setText(self._photo.path)
+
     def update_edit(self, edit: EditInfo) -> None:
         self._edit = edit
         self._reload_pixmap()
@@ -1037,6 +1042,8 @@ class PhotoViewer(QWidget):
         if not self._photo:
             return
         menu = QMenu(self)
+        menu.addAction("Renommer…", lambda: self.rename_requested.emit(self._photo))
+        menu.addSeparator()
         menu.addAction("Enregistrer l'image traitée sur le disque",
                        lambda: self.save_requested.emit(self._photo))
         menu.exec(pos)

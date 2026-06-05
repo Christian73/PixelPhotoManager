@@ -92,6 +92,8 @@ class _FaceAssignDialog(QDialog):
         self._name_input = QLineEdit()
         self._name_input.setPlaceholderText("Nom de la personne…")
         self._name_input.textChanged.connect(lambda: rb_new.setChecked(True))
+        _orig_focus = self._name_input.focusInEvent
+        self._name_input.focusInEvent = lambda e: (rb_new.setChecked(True), _orig_focus(e))
         layout.addWidget(self._name_input)
 
         if not persons:
@@ -178,7 +180,8 @@ class _FaceItem(QFrame):
 
     def contextMenuEvent(self, event) -> None:
         menu = QMenu(self)
-        act_assign   = menu.addAction("Ré-affecter à une autre personne…")
+        label_assign = "Ré-affecter à une autre personne…" if self._face.person_id else "Affecter à une personne…"
+        act_assign   = menu.addAction(label_assign)
         act_unassign = menu.addAction("Désallouer")
         act_unassign.setEnabled(
             self._face.person_id is not None

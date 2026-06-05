@@ -454,6 +454,7 @@ class MainWindow(QMainWindow):
         self._viewer.navigate.connect(self._navigate_photo)
         self._viewer.zoom_changed.connect(self._on_viewer_zoom_changed)
         self._viewer.save_requested.connect(self._on_save_requested)
+        self._viewer.rename_requested.connect(self._on_rename_requested)
         self._edit_panel.edits_changed.connect(self._viewer.update_edit)
         self._edit_panel.crop_mode_requested.connect(self._viewer.enter_crop_mode)
         self._edit_panel.grid_visibility_changed.connect(self._viewer.set_grid_visible)
@@ -1232,6 +1233,7 @@ class MainWindow(QMainWindow):
                 p.filename = new_p.name
                 break
 
+        self._viewer.refresh_name()
         self._update_status()
 
     @Slot(object)
