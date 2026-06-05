@@ -740,6 +740,7 @@ class EditPanel(QWidget):
     crop_mode_requested    = Signal()
     grid_visibility_changed = Signal(bool)
     photo_saved            = Signal(str, object)  # (photo_path, EditInfo) — uniquement lors d'un enregistrement réel
+    rotation_stepped       = Signal(str, int)     # (photo_path, new_rotation_degrees) — émis uniquement pour les rotations 90°
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -1019,12 +1020,16 @@ class EditPanel(QWidget):
         self._edit.rotation = (self._edit.rotation + 90) % 360
         self.edits_changed.emit(copy.copy(self._edit))
         self._save("rotation")
+        if self._photo:
+            self.rotation_stepped.emit(self._photo.path, self._edit.rotation)
 
     def _rotate_ccw(self) -> None:
         self._push_undo()
         self._edit.rotation = (self._edit.rotation - 90) % 360
         self.edits_changed.emit(copy.copy(self._edit))
         self._save("rotation")
+        if self._photo:
+            self.rotation_stepped.emit(self._photo.path, self._edit.rotation)
 
     def _flip_h(self) -> None:
         self._push_undo()

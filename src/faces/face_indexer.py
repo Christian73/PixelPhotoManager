@@ -103,3 +103,48 @@ class FaceIndexThread(QThread):
 
     def stop(self) -> None:
         self._stop_flag = True
+
+
+class SingleFaceReindexThread(QThread):
+    """
+    Re-détecte les visages d'une seule photo (typiquement après une rotation 90°).
+
+    Signals
+    -------
+    finished(photo_path, face_count)
+    cluster_requested()
+    error(photo_path, message)
+    """
+
+    finished          = Signal(str, int)
+    cluster_requested = Signal()
+    error             = Signal(str, str)
+
+    def __init__(
+        self,
+        face_db: FaceDatabase,
+        photo_path: str,
+        rotation: int = 0,
+        parent=None,
+    ) -> None:
+        super().__init__(parent)
+        self._face_db    = face_db
+        self._photo_path = photo_path
+        self._rotation   = rotation
+
+    def run(self) -> None:
+        try:
+            detections = detect_and_embed(self._photo_path, rotation=self._rotation)
+        except RuntimeError:
+            return   # deepface non installé
+        except Exception as exc:
+            logger.error("SingleFaceReindexThread erreur %s: %s", self._photo_path, exc)
+            self.error.emit(self._photo_path, str(exc))
+            return
+        self._face_db.save_faces(self._photo_path, detections, rotation=self._rotation)
+        logger.info(
+            "SingleFaceReindexThread: %d visage(s) détecté(s) dans %s (rotation=%d°)",
+            len(detections), os.path.basename(self._photo_path), self._rotation,
+        )
+        self.finished.emit(self._photo_path, len(detections))
+        self.cluster_requested.emit()

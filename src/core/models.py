@@ -154,3 +154,4 @@ class FaceInfo:
     person_id: Optional[int] = None
     ignored: bool = False
     pinned: bool = False   # True = face isolée manuellement, exclue du re-clustering
+    detected_rotation: int = 0   # rotation CW (degrés) appliquée lors de la détection

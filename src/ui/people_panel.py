@@ -52,6 +52,8 @@ def _face_bytes(face: "FaceInfo", size: int) -> bytes:
     try:
         from PIL import Image, ImageOps
         img = ImageOps.exif_transpose(Image.open(face.photo_path)).convert("RGB")
+        if face.detected_rotation:
+            img = img.rotate(-face.detected_rotation, expand=True)
         x, y, w, h = face.bbox_x, face.bbox_y, face.bbox_w, face.bbox_h
         pad = int(max(w, h) * 0.18)
         crop = img.crop((

@@ -23,7 +23,7 @@ from src.library.thumbnail_cache import ThumbnailCache
 from src.library.folder_watcher import FolderWatcher
 from src.library.scanner import LibraryScanner
 from src.faces.face_database import FaceDatabase
-from src.faces.face_indexer import FaceIndexThread
+from src.faces.face_indexer import FaceIndexThread, SingleFaceReindexThread
 from src.faces.clusterer import ClusterThread
 from src.processing.edit_database import EditDatabase
 from src.ui.sidebar import Sidebar, _SPECIAL_ALL, _SPECIAL_FAV
@@ -262,6 +262,7 @@ class MainWindow(QMainWindow):
         self._face_db = face_db
         self._edit_db = EditDatabase()
         self._face_indexer: FaceIndexThread | None = None
+        self._reindex_thread: SingleFaceReindexThread | None = None
         self._cluster_thread: ClusterThread | None = None
 
         self._current_photos: list[PhotoInfo] = []
@@ -457,6 +458,7 @@ class MainWindow(QMainWindow):
         self._edit_panel.crop_mode_requested.connect(self._viewer.enter_crop_mode)
         self._edit_panel.grid_visibility_changed.connect(self._viewer.set_grid_visible)
         self._edit_panel.photo_saved.connect(self._on_photo_saved)
+        self._edit_panel.rotation_stepped.connect(self._on_rotation_stepped)
         self._viewer.crop_ready.connect(self._edit_panel.apply_crop)
 
         self._face_panel = FacePanel(self._face_db, self._catalog, self)
@@ -1090,6 +1092,24 @@ class MainWindow(QMainWindow):
     @Slot(str, object)
     def _on_photo_saved(self, photo_path: str, edit) -> None:
         self._grid.refresh_photo(photo_path, edit)
+
+    def _on_rotation_stepped(self, photo_path: str, rotation: int) -> None:
+        """Re-détecte les visages après une rotation 90° de l'utilisateur."""
+        from src.faces.detector import is_available
+        if not is_available():
+            return
+        if self._reindex_thread and self._reindex_thread.isRunning():
+            return
+        self._reindex_thread = SingleFaceReindexThread(
+            self._face_db, photo_path, rotation, self
+        )
+        self._reindex_thread.finished.connect(self._on_single_reindex_finished)
+        self._reindex_thread.cluster_requested.connect(self._run_clustering)
+        self._reindex_thread.start()
+
+    def _on_single_reindex_finished(self, photo_path: str, _face_count: int) -> None:
+        if self._face_panel.isVisible():
+            self._face_panel.set_photo(photo_path)
 
     @Slot(list)
     def _on_delete_requested(self, photos: list) -> None:

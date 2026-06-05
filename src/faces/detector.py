@@ -13,43 +13,39 @@ _MAX_DETECT_DIM = 1920
 
 
 @contextlib.contextmanager
-def _exif_corrected(image_path: str):
+def _exif_corrected(image_path: str, extra_rotation: int = 0):
     """
-    Corrige la rotation EXIF en écrivant un fichier temporaire uniquement si
-    nécessaire (orientation ≠ 1 / normale). DeepFace lit ensuite ce fichier via
-    son chemin habituel — aucun changement de code path interne.
+    Corrige la rotation EXIF et applique extra_rotation (degrés CW) en écrivant
+    un fichier temporaire si nécessaire. DeepFace rejette les chemins non-ASCII —
+    un temp est aussi créé dans ce cas.
     """
     temp_path = None
     result_path = image_path
+
+    needs_rotation = extra_rotation % 360 != 0
+    needs_ascii = False
+    try:
+        image_path.encode('ascii')
+    except UnicodeEncodeError:
+        needs_ascii = True
+
     try:
         from PIL import Image, ImageOps
         with Image.open(image_path) as img:
             orientation = img.getexif().get(274, 1)   # 274 = Orientation tag
-            if orientation not in (None, 1):
-                corrected = ImageOps.exif_transpose(img)
+            needs_exif = orientation not in (None, 1)
+
+            if needs_exif or needs_rotation or needs_ascii:
+                corrected = ImageOps.exif_transpose(img) if needs_exif else img.copy()
+                if needs_rotation:
+                    corrected = corrected.rotate(-extra_rotation, expand=True)
                 suffix = os.path.splitext(image_path)[1] or ".jpg"
                 fd, temp_path = tempfile.mkstemp(suffix=suffix)
                 os.close(fd)
                 corrected.save(temp_path, quality=95)
                 result_path = temp_path
     except Exception:
-        pass   # en cas d'erreur de lecture EXIF, on passe le fichier original
-
-    # DeepFace rejette les chemins avec des caractères non-ASCII (accents français).
-    # Si aucun fichier temp n'a encore été créé pour la correction EXIF, on en crée
-    # un maintenant pour garantir un chemin ASCII vers DeepFace.
-    if temp_path is None:
-        try:
-            image_path.encode('ascii')
-        except UnicodeEncodeError:
-            try:
-                suffix = os.path.splitext(image_path)[1] or ".jpg"
-                fd, temp_path = tempfile.mkstemp(suffix=suffix)
-                os.close(fd)
-                shutil.copy2(image_path, temp_path)
-                result_path = temp_path
-            except Exception:
-                pass
+        pass
 
     try:
         yield result_path
@@ -108,7 +104,7 @@ def is_available() -> bool:
         return False
 
 
-def detect_and_embed(image_path: str) -> list[dict]:
+def detect_and_embed(image_path: str, rotation: int = 0) -> list[dict]:
     """
     Detect faces in an image and compute ArcFace embeddings.
 
@@ -133,7 +129,7 @@ def detect_and_embed(image_path: str) -> list[dict]:
     try:
         os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "3")
 
-        with _exif_corrected(image_path) as corrected_path:
+        with _exif_corrected(image_path, extra_rotation=rotation) as corrected_path:
             with _resized_for_detection(corrected_path) as (detect_path, scale):
                 results = DeepFace.represent(
                     img_path=detect_path,
