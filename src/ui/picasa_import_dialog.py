@@ -85,9 +85,9 @@ class PicasaImportDialog(QDialog):
         layout.addWidget(stats_frame)
 
         layout.addWidget(QLabel(
-            "L'import créera les personnes manquantes et associera\n"
-            "les visages correspondants dans votre bibliothèque.\n"
-            "Les photos déjà analysées ne seront pas modifiées."
+            "L'import créera les personnes manquantes et enregistrera\n"
+            "les positions des visages Picasa. Elles seront associées\n"
+            "automatiquement lors de l'analyse ArcFace, même ultérieure."
         ))
 
         # Separator
@@ -160,7 +160,7 @@ class PicasaImportDialog(QDialog):
 
         summary = (
             f"{result.persons_created} personne(s) créée(s), "
-            f"{result.faces_imported} visage(s) importé(s) "
+            f"{result.faces_imported} annotation(s) enregistrée(s) "
             f"dans {result.photos_processed} photo(s)."
         )
         self._lbl_status.setText(summary)

@@ -211,8 +211,7 @@ def _run_import(
             except Exception:
                 continue
 
-            detections: list[dict] = []
-            person_hashes: list[str] = []
+            annotations: list[dict] = []
             for rect_hex, person_hash in entries:
                 try:
                     lf, tf, rf, bf = _decode_rect64(rect_hex)
@@ -222,24 +221,19 @@ def _run_import(
                     h = int((bf - tf) * img_h)
                     if w < 10 or h < 10:
                         continue
-                    detections.append({"bbox": (x, y, w, h), "embedding": None})
-                    person_hashes.append(person_hash)
+                    pid = hash_to_person_id.get(person_hash)
+                    if pid:
+                        annotations.append({"bbox": (x, y, w, h), "person_id": pid})
                 except Exception as exc:
                     result.errors.append(f"{photo_path.name}: {exc}")
 
-            if not detections:
+            if not annotations:
                 continue
 
-            face_db.save_faces(str(photo_path), detections)
-
-            # Assign persons in insertion order (matches save_faces insertion)
-            saved_faces = face_db.get_faces_for_photo(str(photo_path))
-            for face, ph in zip(saved_faces, person_hashes):
-                pid = hash_to_person_id.get(ph)
-                if pid:
-                    face_db.assign_person_to_face(face.id, pid)
-
-            result.faces_imported  += len(detections)
+            # Stocker en table dédiée ; sera appliqué lors de la détection ArcFace
+            # (ou immédiatement si la photo est déjà détectée)
+            face_db.save_picasa_annotations(str(photo_path), annotations)
+            result.faces_imported  += len(annotations)
             result.photos_processed += 1
 
     logger.info(
