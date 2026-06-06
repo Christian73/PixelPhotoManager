@@ -2,8 +2,8 @@ import logging
 import weakref
 from pathlib import Path
 
-from PySide6.QtCore import Qt, Signal, QRunnable, QThreadPool, QObject, Slot, QSize, QPoint, QRect, QTimer, QUrl, QMimeData
-from PySide6.QtGui import QPixmap, QColor, QPainter, QFont, QDrag, QPainterPath
+from PySide6.QtCore import Qt, Signal, QRunnable, QThreadPool, QObject, Slot, QPoint, QRect, QTimer, QUrl, QMimeData
+from PySide6.QtGui import QPixmap, QColor, QPainter, QFont, QDrag
 from PySide6.QtWidgets import (
     QScrollArea, QWidget, QLabel, QVBoxLayout, QSizePolicy,
     QMenu, QApplication,
@@ -15,6 +15,8 @@ from src.core.models import PhotoInfo
 from src.library.thumbnail_cache import ThumbnailCache
 
 logger = logging.getLogger(__name__)
+
+_BUFFER_ROWS = 3
 
 
 class _ThumbSignals(QObject):
@@ -42,7 +44,6 @@ class _ThumbWorker(QRunnable):
             logger.debug(f"Erreur génération vignette {self._path}", exc_info=True)
 
 
-
 class ThumbnailCell(QWidget):
     double_clicked = Signal(object)                # PhotoInfo
     right_clicked  = Signal(object, object)        # PhotoInfo, QPoint
@@ -56,12 +57,11 @@ class ThumbnailCell(QWidget):
         self._size = size
         self._selected = False
         self._pixmap: QPixmap | None = None
-        self._load_requested = False   # True dès que load() a été appelé
+        self._load_requested = False
         self._signals = _ThumbSignals()
         self._signals.ready.connect(self._on_thumb_ready)
         self._drag_start_pos: QPoint | None = None
         self._setup_ui()
-        # Pas d'appel à load() ici — ThumbnailGrid décide de la priorité
 
     def _setup_ui(self) -> None:
         self.setFixedSize(self._size + 8, self._size + 8)
@@ -78,7 +78,6 @@ class ThumbnailCell(QWidget):
         layout.addWidget(self._img_label)
 
     def load(self, priority: int = 0) -> None:
-        """Démarre le chargement de la vignette. Sans effet si déjà demandé."""
         if self._load_requested:
             return
         self._load_requested = True
@@ -90,7 +89,6 @@ class ThumbnailCell(QWidget):
             QThreadPool.globalInstance().start(worker, priority)
 
     def reload_with_edit(self, edit) -> None:
-        """Invalide le cache et régénère la vignette en appliquant les retouches."""
         self._cache.invalidate(self._photo.path)
         worker = _ThumbWorker(self._photo.path, self._cache, self._signals, edit)
         QThreadPool.globalInstance().start(worker)
@@ -112,7 +110,6 @@ class ThumbnailCell(QWidget):
         self._img_label.setPixmap(scaled)
 
     def _add_video_badge(self, pixmap: QPixmap) -> QPixmap:
-        """Composite un badge ▶ sur le coin inférieur droit de la vignette vidéo."""
         result = QPixmap(pixmap)
         p = QPainter(result)
         p.setRenderHint(QPainter.Antialiasing)
@@ -141,7 +138,6 @@ class ThumbnailCell(QWidget):
         self.setFixedSize(size + 8, size + 8)
         self._img_label.setFixedSize(size, size)
         if self._pixmap:
-            # Re-scale le pixmap déjà chargé — pas besoin de re-générer
             scaled = self._pixmap.scaled(size, size,
                                          Qt.KeepAspectRatio,
                                          Qt.SmoothTransformation)
@@ -152,8 +148,6 @@ class ThumbnailCell(QWidget):
     @property
     def photo(self) -> PhotoInfo:
         return self._photo
-
-    # ------------------------------------------------------------------ events
 
     def mouseDoubleClickEvent(self, _event) -> None:
         self.double_clicked.emit(self._photo)
@@ -185,70 +179,77 @@ class ThumbnailCell(QWidget):
 
 
 class _GridContainer(QWidget):
+    """
+    Conteneur virtuel : calcule la hauteur totale sans créer de widgets.
+    ThumbnailGrid place directement ses cellules via cell_rect(index).
+    """
+
+    layout_changed = Signal()   # emis quand le nombre de colonnes change
+
     def __init__(self, parent=None):
         super().__init__(parent)
-        self._cells: list[ThumbnailCell] = []
+        self._total = 0
         self._cell_w = 188
+        self._cell_h = 188
         self._spacing = 6
-        self._relayout_pending = False
+        self._cols = 1
 
-    def set_cells(self, cells: list[ThumbnailCell]) -> None:
-        for c in self._cells:
-            c.setParent(None)
-        self._cells = list(cells)
-        for c in self._cells:
-            c.setParent(self)
-            c.show()
-        self._relayout()
+    def configure(self, total: int, cell_w: int, cell_h: int) -> None:
+        self._total = total
+        self._cell_w = cell_w
+        self._cell_h = cell_h
+        self._recompute(check_cols=False)
 
-    def append_cell(self, cell: ThumbnailCell) -> None:
-        self._cells.append(cell)
-        cell.setParent(self)
-        cell.show()
-        self._relayout()
-
-    def append_cells_batch(self, cells: list) -> None:
-        """Ajoute plusieurs cellules avec un seul relayout final (perf batch)."""
-        for cell in cells:
-            self._cells.append(cell)
-            cell.setParent(self)
-            cell.show()
-        self._relayout()
+    def set_total(self, total: int) -> None:
+        self._total = total
+        self._recompute(check_cols=False)
 
     def set_cell_width(self, w: int) -> None:
         self._cell_w = w
-        self._relayout()
+        self._recompute(check_cols=True)
 
-    def _relayout(self) -> None:
-        container_w = self.parentWidget().width() if self.parentWidget() else self.width()
-        container_w = container_w or 800
+    def _recompute(self, check_cols: bool = True) -> None:
+        parent_w = (self.parentWidget().width()
+                    if self.parentWidget() else self.width()) or 800
+        old_cols = self._cols
+        self._cols = max(1, (parent_w + self._spacing) // (self._cell_w + self._spacing))
+        rows = max(1, (self._total + self._cols - 1) // self._cols) if self._total else 1
+        h = rows * (self._cell_h + self._spacing) + self._spacing
+        self.setFixedHeight(h)
+        if check_cols and self._cols != old_cols:
+            self.layout_changed.emit()
 
-        cols = max(1, (container_w + self._spacing) // (self._cell_w + self._spacing))
-        x, y = self._spacing, self._spacing
-        col = 0
-        max_y = self._spacing
-        for cell in self._cells:
-            cell.move(x, y)
-            x += self._cell_w + self._spacing
-            col += 1
-            if col >= cols:
-                col = 0
-                x = self._spacing
-                y += cell.height() + self._spacing
-            max_y = max(max_y, y + cell.height())
+    def cell_rect(self, index: int) -> QRect:
+        row = index // self._cols
+        col = index % self._cols
+        x = self._spacing + col * (self._cell_w + self._spacing)
+        y = self._spacing + row * (self._cell_h + self._spacing)
+        return QRect(x, y, self._cell_w, self._cell_h)
 
-        total_h = max_y + self._spacing if self._cells else self._spacing
-        self.setMinimumHeight(total_h)
-        # Éviter de déclencher resizeEvent en boucle
-        if self.height() != total_h:
-            self.setFixedHeight(total_h)
+    @property
+    def cols(self) -> int:
+        return self._cols
+
+    @property
+    def cell_h(self) -> int:
+        return self._cell_h
+
+    @property
+    def spacing(self) -> int:
+        return self._spacing
 
     def resizeEvent(self, event) -> None:
         super().resizeEvent(event)
-        self._relayout()
+        self._recompute(check_cols=True)
 
 
 class ThumbnailGrid(QScrollArea):
+    """
+    Grille virtuelle : seules les cellules visibles (± _BUFFER_ROWS rangées)
+    sont instanciées comme QWidget. Le reste n'existe qu'en tant que PhotoInfo.
+    Supporte 100 000+ photos sans bloquer le thread UI.
+    """
+
     photo_activated   = Signal(object)  # PhotoInfo
     selection_changed = Signal(list)    # list[PhotoInfo]
     rename_requested  = Signal(object)  # PhotoInfo
@@ -259,67 +260,153 @@ class ThumbnailGrid(QScrollArea):
         super().__init__(parent)
         self._cache = cache
         self._thumb_size = 180
-        self._cells: list[ThumbnailCell] = []
+        self._photos: list[PhotoInfo] = []           # toutes les photos (pas de widgets)
         self._selected: set[str] = set()
+        self._materialized: dict[int, ThumbnailCell] = {}  # index → widget visible
+
         self.setFocusPolicy(Qt.StrongFocus)
 
         self._container = _GridContainer()
         self._container.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        self._container.layout_changed.connect(self._on_layout_changed)
         self.setWidget(self._container)
         self.setWidgetResizable(True)
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
 
-        # Debounce scroll : re-priorise le chargement 50 ms après l'arrêt du défilement
-        self._scroll_timer = QTimer(self)
-        self._scroll_timer.setSingleShot(True)
-        self._scroll_timer.setInterval(50)
-        self._scroll_timer.timeout.connect(self._schedule_loads)
-        self.verticalScrollBar().valueChanged.connect(self._scroll_timer.start)
+        # Debounce scroll : rematerialise 50 ms après l'arrêt du défilement
+        self._update_timer = QTimer(self)
+        self._update_timer.setSingleShot(True)
+        self._update_timer.setInterval(50)
+        self._update_timer.timeout.connect(self._update_materialized)
+        self.verticalScrollBar().valueChanged.connect(self._update_timer.start)
+
+    # ------------------------------------------------------------------ données
 
     def set_photos(self, photos: list[PhotoInfo]) -> None:
         self._selected.clear()
-        cells = [self._make_cell(p) for p in photos]
-        self._cells = cells
-        self._container.set_cells(cells)
-        # Différer d'un tick pour que _relayout() ait positionné les cellules
-        QTimer.singleShot(0, self._schedule_loads)
+        self._dematerialize_all()
+        self._photos = list(photos)
+        self._container.configure(
+            len(photos), self._thumb_size + 8, self._thumb_size + 8
+        )
+        QTimer.singleShot(0, self._update_materialized)
 
     def add_photo(self, photo: PhotoInfo) -> None:
-        cell = self._make_cell(photo)
-        self._cells.append(cell)
-        self._container.append_cell(cell)
-        # Différer d'un tick pour que la cellule soit positionnée avant de vérifier la visibilité
-        QTimer.singleShot(0, lambda c=cell: c.load(
-            priority=10 if self._cell_is_visible(c) else 0
-        ))
+        self._photos.append(photo)
+        self._container.set_total(len(self._photos))
+        QTimer.singleShot(0, self._update_materialized)
 
     def add_photos_batch(self, photos: list[PhotoInfo]) -> None:
-        """Ajoute un lot de photos avec un seul relayout (vs N relayouts pour add_photo × N)."""
         if not photos:
             return
-        new_cells = [self._make_cell(p) for p in photos]
-        self._cells.extend(new_cells)
-        self._container.append_cells_batch(new_cells)
-        QTimer.singleShot(0, self._schedule_loads)
+        self._photos.extend(photos)
+        self._container.set_total(len(self._photos))
+        # Idempotent : appels rapides successifs → une seule matérialisation
+        QTimer.singleShot(0, self._update_materialized)
 
-    def _cell_is_visible(self, cell: ThumbnailCell) -> bool:
-        """Retourne True si la cellule est (au moins partiellement) dans le viewport."""
-        try:
-            top_left = cell.mapTo(self.viewport(), QPoint(0, 0))
-            return self.viewport().rect().intersects(QRect(top_left, cell.size()))
-        except RuntimeError:
-            return False
+    def remove_photos(self, paths: list[str]) -> None:
+        paths_set = set(paths)
+        self._dematerialize_all()
+        self._photos = [p for p in self._photos if p.path not in paths_set]
+        self._selected -= paths_set
+        self._container.set_total(len(self._photos))
+        QTimer.singleShot(0, self._update_materialized)
+        self.selection_changed.emit(self.get_selected())
 
-    def _schedule_loads(self) -> None:
-        """
-        Parcourt toutes les cellules non encore chargées et les met en queue
-        avec une priorité haute pour les cellules visibles, basse pour les autres.
-        """
-        for cell in self._cells:
-            if cell._load_requested:
-                continue
-            priority = 10 if self._cell_is_visible(cell) else 0
-            cell.load(priority)
+    def refresh_photo(self, photo_path: str, edit) -> None:
+        for cell in self._materialized.values():
+            if cell.photo.path == photo_path:
+                cell.reload_with_edit(edit)
+                return
+
+    def clear(self) -> None:
+        self._selected.clear()
+        self._dematerialize_all()
+        self._photos.clear()
+        self._container.set_total(0)
+
+    def update_photo_path(self, old_path: str, new_path: str) -> None:
+        new_p = Path(new_path)
+        for photo in self._photos:
+            if photo.path == old_path:
+                photo.path = new_path
+                photo.filename = new_p.name
+                photo.directory = str(new_p.parent)
+                break
+        if old_path in self._selected:
+            self._selected.discard(old_path)
+            self._selected.add(new_path)
+
+    # ------------------------------------------------------------------ sélection
+
+    def get_selected(self) -> list[PhotoInfo]:
+        return [p for p in self._photos if p.path in self._selected]
+
+    def select_all(self) -> None:
+        self._selected = {p.path for p in self._photos}
+        for cell in self._materialized.values():
+            cell.set_selected(True)
+        self.selection_changed.emit(self.get_selected())
+
+    def set_thumbnail_size(self, size: int) -> None:
+        self._thumb_size = size
+        self._dematerialize_all()
+        self._container.configure(len(self._photos), size + 8, size + 8)
+        QTimer.singleShot(0, self._update_materialized)
+
+    # ------------------------------------------------------------------ virtualisation
+
+    def _visible_range(self) -> tuple[int, int]:
+        scroll_y = self.verticalScrollBar().value()
+        vp_h = max(1, self.viewport().height())
+        spacing = self._container.spacing
+        cols = self._container.cols
+        row_h = self._thumb_size + 8 + spacing
+
+        first_row = max(0, (scroll_y - spacing) // row_h - _BUFFER_ROWS)
+        last_row = (scroll_y + vp_h - spacing) // row_h + _BUFFER_ROWS
+
+        first_idx = first_row * cols
+        last_idx = min(len(self._photos) - 1, (last_row + 1) * cols - 1)
+        return first_idx, last_idx
+
+    def _update_materialized(self) -> None:
+        if not self._photos:
+            return
+        first_idx, last_idx = self._visible_range()
+        needed = set(range(first_idx, last_idx + 1))
+
+        # Dématérialise les cellules hors fenêtre
+        for i in list(self._materialized.keys()):
+            if i not in needed:
+                self._materialized.pop(i).setParent(None)
+
+        # Matérialise les cellules visibles manquantes
+        for i in needed:
+            if i >= len(self._photos):
+                break
+            if i not in self._materialized:
+                cell = self._make_cell(self._photos[i])
+                rect = self._container.cell_rect(i)
+                cell.setParent(self._container)
+                cell.setGeometry(rect)
+                if self._photos[i].path in self._selected:
+                    cell.set_selected(True)
+                cell.show()
+                cell.load(priority=10)
+                self._materialized[i] = cell
+
+    def _dematerialize_all(self) -> None:
+        for cell in self._materialized.values():
+            cell.setParent(None)
+        self._materialized.clear()
+
+    def _on_layout_changed(self) -> None:
+        """Le nombre de colonnes a changé (redimensionnement) → repositionne tout."""
+        self._dematerialize_all()
+        QTimer.singleShot(0, self._update_materialized)
+
+    # ------------------------------------------------------------------ fabrique + événements
 
     def _make_cell(self, photo: PhotoInfo) -> ThumbnailCell:
         cell = ThumbnailCell(photo, self._cache, self._thumb_size)
@@ -328,33 +415,6 @@ class ThumbnailGrid(QScrollArea):
         cell.clicked.connect(self._on_cell_clicked)
         cell.drag_started.connect(self._on_cell_drag_started)
         return cell
-
-    @Slot(object)
-    def _on_cell_drag_started(self, photo: PhotoInfo) -> None:
-        """Lance un drag interne avec un type MIME applicatif (évite l'interception OS)."""
-        if photo.path in self._selected:
-            photos = [c.photo for c in self._cells if c.photo.path in self._selected]
-        else:
-            photos = [photo]
-
-        # Type MIME interne : l'OS ne l'intercepte pas, pas de copie parasite
-        paths_bytes = '\n'.join(p.path for p in photos).encode('utf-8')
-        mime = QMimeData()
-        mime.setData('application/x-pixelphoto-paths', paths_bytes)
-
-        drag = QDrag(self)
-        drag.setMimeData(mime)
-
-        # Vignette de prévisualisation
-        for cell in self._cells:
-            if cell.photo.path == photos[0].path and cell._pixmap:
-                px = cell._pixmap.scaled(72, 72, Qt.KeepAspectRatio,
-                                         Qt.SmoothTransformation)
-                drag.setPixmap(px)
-                drag.setHotSpot(px.rect().center())
-                break
-
-        drag.exec(Qt.MoveAction)
 
     @Slot(object, object)
     def _on_cell_clicked(self, photo: PhotoInfo, modifiers) -> None:
@@ -379,14 +439,14 @@ class ThumbnailGrid(QScrollArea):
         self.selection_changed.emit(self.get_selected())
 
     def _set_cell_selected(self, path: str, selected: bool) -> None:
-        for c in self._cells:
-            if c.photo.path == path:
-                c.set_selected(selected)
+        for cell in self._materialized.values():
+            if cell.photo.path == path:
+                cell.set_selected(selected)
                 return
 
     def _clear_selection(self) -> None:
-        for c in self._cells:
-            c.set_selected(False)
+        for cell in self._materialized.values():
+            cell.set_selected(False)
         self._selected.clear()
 
     def _range_select(self, target_path: str) -> None:
@@ -394,16 +454,40 @@ class ThumbnailGrid(QScrollArea):
             self._selected.add(target_path)
             self._set_cell_selected(target_path, True)
             return
-        paths = [c.photo.path for c in self._cells]
+        paths = [p.path for p in self._photos]
         last = next((p for p in reversed(paths) if p in self._selected), None)
         if last is None:
             return
         lo = min(paths.index(last), paths.index(target_path))
         hi = max(paths.index(last), paths.index(target_path))
-        for i, cell in enumerate(self._cells):
-            if lo <= i <= hi:
-                self._selected.add(cell.photo.path)
-                cell.set_selected(True)
+        for i in range(lo, hi + 1):
+            self._selected.add(paths[i])
+        for cell in self._materialized.values():
+            cell.set_selected(cell.photo.path in self._selected)
+
+    @Slot(object)
+    def _on_cell_drag_started(self, photo: PhotoInfo) -> None:
+        if photo.path in self._selected:
+            photos = [p for p in self._photos if p.path in self._selected]
+        else:
+            photos = [photo]
+
+        paths_bytes = '\n'.join(p.path for p in photos).encode('utf-8')
+        mime = QMimeData()
+        mime.setData('application/x-pixelphoto-paths', paths_bytes)
+
+        drag = QDrag(self)
+        drag.setMimeData(mime)
+
+        for cell in self._materialized.values():
+            if cell.photo.path == photos[0].path and cell._pixmap:
+                px = cell._pixmap.scaled(72, 72, Qt.KeepAspectRatio,
+                                         Qt.SmoothTransformation)
+                drag.setPixmap(px)
+                drag.setHotSpot(px.rect().center())
+                break
+
+        drag.exec(Qt.MoveAction)
 
     @Slot(object, object)
     def _on_right_click(self, photo: PhotoInfo, pos) -> None:
@@ -432,52 +516,3 @@ class ThumbnailGrid(QScrollArea):
                 self.delete_requested.emit(selected)
         else:
             super().keyPressEvent(event)
-
-    def remove_photos(self, paths: list[str]) -> None:
-        """Retire les cellules correspondant aux chemins donnés de la grille."""
-        paths_set = set(paths)
-        remaining = [c for c in self._cells if c.photo.path not in paths_set]
-        self._cells = remaining
-        self._selected -= paths_set
-        self._container.set_cells(remaining)
-        self.selection_changed.emit(self.get_selected())
-
-    def refresh_photo(self, photo_path: str, edit) -> None:
-        """Régénère la vignette d'une photo après modification de ses retouches."""
-        for cell in self._cells:
-            if cell.photo.path == photo_path:
-                cell.reload_with_edit(edit)
-                return
-
-    def set_thumbnail_size(self, size: int) -> None:
-        self._thumb_size = size
-        self._container.set_cell_width(size + 8)
-        for cell in self._cells:
-            cell.set_size(size)
-
-    def get_selected(self) -> list[PhotoInfo]:
-        return [c.photo for c in self._cells if c.photo.path in self._selected]
-
-    def clear(self) -> None:
-        self._selected.clear()
-        self._cells.clear()
-        self._container.set_cells([])
-
-    def update_photo_path(self, old_path: str, new_path: str) -> None:
-        """Met à jour le PhotoInfo d'une cellule après renommage."""
-        new_p = Path(new_path)
-        for cell in self._cells:
-            if cell.photo.path == old_path:
-                cell.photo.path = new_path
-                cell.photo.filename = new_p.name
-                cell.photo.directory = str(new_p.parent)
-                break
-        if old_path in self._selected:
-            self._selected.discard(old_path)
-            self._selected.add(new_path)
-
-    def select_all(self) -> None:
-        for cell in self._cells:
-            self._selected.add(cell.photo.path)
-            cell.set_selected(True)
-        self.selection_changed.emit(self.get_selected())
