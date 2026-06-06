@@ -35,15 +35,26 @@ class ExifReader:
                 img = ImageOps.exif_transpose(img)
                 result["width"], result["height"] = img.size
 
-                raw_exif = img._getexif() if hasattr(img, "_getexif") else None
-                if not raw_exif:
+                exif_obj = img.getexif()
+                if not exif_obj:
                     return result
 
                 exif = {
                     ExifTags.TAGS.get(k, k): v
-                    for k, v in raw_exif.items()
+                    for k, v in exif_obj.items()
                     if k in ExifTags.TAGS
                 }
+
+                # ExifIFD sub-tags (DateTimeOriginal, ISO, ExposureTime, etc.)
+                try:
+                    exif_ifd = exif_obj.get_ifd(0x8769)
+                    if exif_ifd:
+                        for k, v in exif_ifd.items():
+                            tag_name = ExifTags.TAGS.get(k, k)
+                            if isinstance(tag_name, str):
+                                exif.setdefault(tag_name, v)
+                except Exception:
+                    pass
 
                 for tag in ("DateTimeOriginal", "DateTimeDigitized", "DateTime"):
                     if tag in exif and exif[tag]:
@@ -59,7 +70,7 @@ class ExifReader:
                 result["camera_model"] = str(exif.get("Model", "")).strip()
                 result["lens_model"] = str(exif.get("LensModel", "")).strip()
 
-                iso_val = exif.get("ISOSpeedRatings")
+                iso_val = exif.get("ISOSpeedRatings") or exif.get("PhotographicSensitivity")
                 if iso_val is not None:
                     result["iso"] = int(iso_val) if not isinstance(iso_val, tuple) else int(iso_val[0])
 
@@ -84,12 +95,15 @@ class ExifReader:
                     except (TypeError, ValueError):
                         pass
 
-                gps_info = exif.get("GPSInfo")
-                if gps_info:
-                    coords = ExifReader._parse_gps(gps_info)
-                    if coords:
-                        result["has_gps"] = True
-                        result["gps_lat"], result["gps_lon"] = coords
+                try:
+                    gps_ifd = exif_obj.get_ifd(0x8825)
+                    if gps_ifd:
+                        coords = ExifReader._parse_gps(gps_ifd)
+                        if coords:
+                            result["has_gps"] = True
+                            result["gps_lat"], result["gps_lon"] = coords
+                except Exception:
+                    pass
 
         except Exception as e:
             logger.debug(f"Erreur lecture EXIF {path}: {e}")
@@ -103,10 +117,16 @@ class ExifReader:
 
             gps_tags = {ExifTags.GPSTAGS.get(k, k): v for k, v in gps_info.items()}
 
+            def _to_float(val) -> float:
+                # IFDRational supports float(); raw (num, denom) tuple does not
+                if isinstance(val, tuple) and len(val) == 2:
+                    return val[0] / val[1]
+                return float(val)
+
             def dms_to_dd(dms, ref: str) -> float:
-                d = float(dms[0])
-                m = float(dms[1])
-                s = float(dms[2])
+                d = _to_float(dms[0])
+                m = _to_float(dms[1])
+                s = _to_float(dms[2])
                 dd = d + m / 60.0 + s / 3600.0
                 if ref in ("S", "W"):
                     dd = -dd

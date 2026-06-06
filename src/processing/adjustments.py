@@ -34,6 +34,8 @@ class ImageAdjuster:
             image = ImageAdjuster.apply_sharpness(image, edit.sharpness)
         if edit.noise_reduction > 0.0:
             image = ImageAdjuster.apply_noise_reduction(image, edit.noise_reduction)
+        if edit.red_eye_regions:
+            image = ImageAdjuster.apply_red_eye_correction(image, edit.red_eye_regions)
 
         return image
 
@@ -170,6 +172,29 @@ class ImageAdjuster:
         lut_full = list(_lut(red)) + list(_lut(green)) + list(_lut(blue))
         img = image.convert("RGB") if image.mode != "RGB" else image
         return img.point(lut_full)
+
+    @staticmethod
+    def apply_red_eye_correction(image: Image.Image, regions: list) -> Image.Image:
+        """Corrige les yeux rouges dans les zones circulaires définies (coords normalisées 0-1)."""
+        import numpy as np
+        if not regions:
+            return image
+        img = image.convert("RGB")
+        arr = np.array(img, dtype=np.int16)
+        h, w = arr.shape[:2]
+        ys, xs = np.mgrid[0:h, 0:w]
+        for region in regions:
+            cx, cy, r = region[0], region[1], region[2]
+            px, py = cx * w, cy * h
+            pr = max(1.0, r * min(w, h))
+            circle = ((xs - px) ** 2 + (ys - py) ** 2) <= pr ** 2
+            r_ch = arr[:, :, 0].astype(np.float32)
+            g_ch = arr[:, :, 1].astype(np.float32)
+            b_ch = arr[:, :, 2].astype(np.float32)
+            red_mask = circle & (r_ch > 80) & (r_ch > g_ch * 1.3) & (r_ch > b_ch * 1.3)
+            lum = ((g_ch + b_ch) / 2.0).clip(0, 255)
+            arr[:, :, 0] = np.where(red_mask, lum.astype(np.int16), arr[:, :, 0])
+        return Image.fromarray(arr.clip(0, 255).astype(np.uint8))
 
     @staticmethod
     def apply_bw(image: Image.Image, red: float, green: float, blue: float) -> Image.Image:

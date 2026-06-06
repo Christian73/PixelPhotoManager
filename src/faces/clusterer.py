@@ -8,9 +8,9 @@ from src.faces.face_database import FaceDatabase
 logger = logging.getLogger(__name__)
 
 # Distance cosinus par défaut : deux visages sont dans le même groupe si leur
-# distance cosinus est ≤ à ce seuil. ArcFace : même personne ≈ 0.10–0.30,
-# personnes différentes > 0.45–0.60.
-_DEFAULT_THRESHOLD = 0.40
+# distance cosinus est ≤ à ce seuil. ArcFace : même personne ≈ 0.10–0.40,
+# personnes différentes > 0.50–0.70.
+_DEFAULT_THRESHOLD = 0.60
 
 
 def _run_clustering(face_db: FaceDatabase) -> int:

@@ -7,7 +7,7 @@ Apparaît à gauche du PhotoViewer quand le bouton "Visages" est activé.
 import logging
 
 from PySide6.QtCore import Qt, QThread, Signal
-from PySide6.QtGui import QPixmap
+from PySide6.QtGui import QMouseEvent, QPixmap
 from PySide6.QtWidgets import (
     QButtonGroup, QDialog, QDialogButtonBox, QFrame, QLabel, QLineEdit,
     QMenu, QRadioButton, QScrollArea, QSizePolicy, QVBoxLayout, QWidget,
@@ -133,17 +133,21 @@ class _FaceAssignDialog(QDialog):
 class _FaceItem(QFrame):
     """Un visage dans le panneau : vignette + nom. Supporte le menu contextuel."""
 
+    clicked            = Signal(int)   # face_id  (clic gauche)
     assign_requested   = Signal(int)   # face_id
     unassign_requested = Signal(int)   # face_id
     ignore_requested   = Signal(int)   # face_id
     isolate_requested  = Signal(int)   # face_id
+
+    _STYLE_NORMAL   = "background: transparent; border: none;"
+    _STYLE_SELECTED = "background: #1a2f45; border: 2px solid #4a9fd4; border-radius: 4px;"
 
     def __init__(self, face: FaceInfo, name: str, parent=None) -> None:
         super().__init__(parent)
         self._face    = face
         self._face_id = face.id
         self.setFrameShape(QFrame.NoFrame)
-        self.setStyleSheet("background: transparent;")
+        self.setStyleSheet(self._STYLE_NORMAL)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(4, 4, 4, 4)
@@ -177,6 +181,14 @@ class _FaceItem(QFrame):
                             Qt.KeepAspectRatioByExpanding,
                             Qt.SmoothTransformation)
         self._lbl_img.setPixmap(scaled)
+
+    def set_selected(self, on: bool) -> None:
+        self.setStyleSheet(self._STYLE_SELECTED if on else self._STYLE_NORMAL)
+
+    def mousePressEvent(self, event: QMouseEvent) -> None:
+        if event.button() == Qt.LeftButton:
+            self.clicked.emit(self._face_id)
+        super().mousePressEvent(event)
 
     def contextMenuEvent(self, event) -> None:
         menu = QMenu(self)
@@ -216,6 +228,8 @@ class FacePanel(QWidget):
     Panneau latéral affichant les visages détectés dans la photo courante.
     """
 
+    face_highlighted = Signal(object)   # FaceInfo sélectionné, ou None si désélection
+
     def __init__(
         self,
         face_db: FaceDatabase,
@@ -226,8 +240,10 @@ class FacePanel(QWidget):
         self._face_db  = face_db
         self._catalog  = catalog
         self._items:   dict[int, _FaceItem] = {}
+        self._faces:   dict[int, FaceInfo]  = {}
         self._loader:  _FacePanelLoader | None = None
         self._current_photo: str = ""
+        self._selected_face_id: int | None = None
         self._setup_ui()
 
     # ------------------------------------------------------------------ setup
@@ -298,12 +314,14 @@ class FacePanel(QWidget):
                 name = "Inconnu"
 
             item = _FaceItem(face, name, self._content)
+            item.clicked.connect(self._on_item_clicked)
             item.assign_requested.connect(self._on_assign_requested)
             item.unassign_requested.connect(self._on_unassign_requested)
             item.ignore_requested.connect(self._on_ignore_requested)
             item.isolate_requested.connect(self._on_isolate_requested)
             self._vbox.addWidget(item)
             self._items[face.id] = item
+            self._faces[face.id] = face
             loader_items.append((face.id, face))
 
         # Charger les vignettes en arrière-plan
@@ -311,6 +329,23 @@ class FacePanel(QWidget):
             self._loader = _FacePanelLoader(loader_items, self)
             self._loader.ready.connect(self._on_face_ready)
             self._loader.start()
+
+    # ------------------------------------------------------------------ selection
+
+    def _on_item_clicked(self, face_id: int) -> None:
+        if face_id == self._selected_face_id:
+            # Désélection (toggle)
+            self._items[face_id].set_selected(False)
+            self._selected_face_id = None
+            self.face_highlighted.emit(None)
+        else:
+            # Désélection de l'ancien
+            if self._selected_face_id is not None and self._selected_face_id in self._items:
+                self._items[self._selected_face_id].set_selected(False)
+            # Sélection du nouveau
+            self._selected_face_id = face_id
+            self._items[face_id].set_selected(True)
+            self.face_highlighted.emit(self._faces.get(face_id))
 
     # ------------------------------------------------------------------ context menu handlers
 
@@ -356,6 +391,8 @@ class FacePanel(QWidget):
             if child.widget():
                 child.widget().deleteLater()
         self._items.clear()
+        self._faces.clear()
+        self._selected_face_id = None
 
     def _stop_loader(self) -> None:
         if self._loader and self._loader.isRunning():

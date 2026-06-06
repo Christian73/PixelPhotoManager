@@ -20,7 +20,7 @@ from PySide6.QtWidgets import (
 
 from src.core.config import Config
 
-_DEFAULT_THRESHOLD_PCT = 40
+_DEFAULT_THRESHOLD_PCT = 60
 
 
 class _FaceRecognitionPage(QWidget):
