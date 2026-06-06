@@ -26,18 +26,24 @@ def _is_hidden(path: str) -> bool:
         return False
 
 
-def _find_ignored_subdirs(folder: str) -> list[tuple[str, str]]:
-    """Retourne les sous-dossiers directs ignorés lors du scan : (nom, raison)."""
+def _find_subdirs(folder: str) -> list[tuple[str, bool, str]]:
+    """
+    Retourne tous les sous-dossiers directs : (nom, is_excluded, raison).
+    is_excluded=True  → dossier ignoré par le scan.
+    is_excluded=False → dossier inclus dans le scan.
+    """
     result = []
     try:
-        for name in sorted(os.listdir(folder)):
+        for name in sorted(os.listdir(folder), key=str.lower):
             fullpath = os.path.join(folder, name)
             if not os.path.isdir(fullpath):
                 continue
             if name == "Originals":
-                result.append((name, "sauvegarde Picasa"))
+                result.append((name, True, "sauvegarde Picasa"))
             elif _is_hidden(fullpath):
-                result.append((name, "dossier caché"))
+                result.append((name, True, "dossier caché"))
+            else:
+                result.append((name, False, ""))
     except PermissionError:
         pass
     return result
@@ -53,6 +59,8 @@ class _FolderRow(QWidget):
     def __init__(self, folder: str, photo_count: int, parent=None):
         super().__init__(parent)
         self._folder = folder
+        self._subdir_panel: QWidget | None = None
+        self._toggle_btn: QPushButton | None = None
         self._setup_ui(folder, photo_count)
 
     def _setup_ui(self, folder: str, photo_count: int) -> None:
@@ -86,7 +94,7 @@ class _FolderRow(QWidget):
         path_lbl.setToolTip(folder)
         top.addWidget(path_lbl, stretch=1)
 
-        count_lbl = QLabel(f"{photo_count:,}".replace(",", " ") + " fichiers")
+        count_lbl = QLabel(f"{photo_count:,}".replace(",", " ") + " fichiers")
         count_lbl.setStyleSheet("color: #888; font-size: 11px; min-width: 90px; background: transparent; border: none;")
         count_lbl.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
         top.addWidget(count_lbl)
@@ -123,9 +131,9 @@ class _FolderRow(QWidget):
             outer.addWidget(warn)
             return
 
-        # Sous-dossiers ignorés
-        ignored = _find_ignored_subdirs(folder)
-        if not ignored:
+        # Sous-dossiers
+        subdirs = _find_subdirs(folder)
+        if not subdirs:
             return
 
         sep = QFrame()
@@ -133,21 +141,73 @@ class _FolderRow(QWidget):
         sep.setStyleSheet("color: #333; margin-left: 20px; border: none; border-top: 1px solid #333;")
         outer.addWidget(sep)
 
-        hdr = QLabel("Sous-dossiers exclus du scan :")
-        hdr.setStyleSheet("color: #666; font-size: 10px; margin-left: 20px; background: transparent; border: none;")
-        outer.addWidget(hdr)
+        excluded = sum(1 for _, exc, _ in subdirs if exc)
+        total = len(subdirs)
+        label = f"▶  {total} sous-dossier{'s' if total > 1 else ''}"
+        if excluded:
+            label += f"  ({excluded} exclu{'s' if excluded > 1 else ''})"
 
-        for name, reason in ignored:
+        self._toggle_btn = QPushButton(label)
+        self._toggle_btn.setStyleSheet(
+            "QPushButton { background: transparent; color: #888; border: none;"
+            " font-size: 10px; padding: 2px 0px; text-align: left; }"
+            "QPushButton:hover { color: #bbb; }"
+        )
+        self._toggle_btn.setCursor(Qt.PointingHandCursor)
+        self._toggle_btn.clicked.connect(self._toggle_subdirs)
+        outer.addWidget(self._toggle_btn)
+
+        # Panneau de sous-dossiers (caché par défaut)
+        self._subdir_panel = QWidget()
+        self._subdir_panel.setStyleSheet("background: transparent; border: none;")
+        panel_layout = QVBoxLayout(self._subdir_panel)
+        panel_layout.setContentsMargins(20, 2, 0, 2)
+        panel_layout.setSpacing(2)
+
+        for name, is_excluded, reason in subdirs:
             row_w = QHBoxLayout()
-            row_w.setContentsMargins(22, 0, 0, 0)
-            name_lbl = QLabel(f"• {name}")
-            name_lbl.setStyleSheet("color: #888; font-size: 11px; background: transparent; border: none;")
-            row_w.addWidget(name_lbl)
-            reason_lbl = QLabel(f"({reason})")
-            reason_lbl.setStyleSheet("color: #555; font-size: 11px; background: transparent; border: none;")
-            row_w.addWidget(reason_lbl)
+            row_w.setSpacing(6)
+            row_w.setContentsMargins(0, 0, 0, 0)
+
+            if is_excluded:
+                icon = QLabel("✗")
+                icon.setStyleSheet("color: #844; font-size: 11px; background: transparent; border: none;")
+                name_lbl = QLabel(name)
+                name_lbl.setStyleSheet("color: #666; font-size: 11px; background: transparent; border: none;")
+                reason_lbl = QLabel(f"— {reason}")
+                reason_lbl.setStyleSheet("color: #555; font-size: 10px; background: transparent; border: none;")
+                row_w.addWidget(icon)
+                row_w.addWidget(name_lbl)
+                row_w.addWidget(reason_lbl)
+            else:
+                icon = QLabel("✓")
+                icon.setStyleSheet("color: #484; font-size: 11px; background: transparent; border: none;")
+                name_lbl = QLabel(name)
+                name_lbl.setStyleSheet("color: #999; font-size: 11px; background: transparent; border: none;")
+                row_w.addWidget(icon)
+                row_w.addWidget(name_lbl)
+
             row_w.addStretch()
-            outer.addLayout(row_w)
+            panel_layout.addLayout(row_w)
+
+        self._subdir_panel.setVisible(False)
+        outer.addWidget(self._subdir_panel)
+
+    def _toggle_subdirs(self) -> None:
+        if self._subdir_panel is None or self._toggle_btn is None:
+            return
+        visible = not self._subdir_panel.isVisible()
+        self._subdir_panel.setVisible(visible)
+        # Met à jour la flèche du bouton
+        text = self._toggle_btn.text()
+        if visible:
+            self._toggle_btn.setText(text.replace("▶", "▼", 1))
+        else:
+            self._toggle_btn.setText(text.replace("▼", "▶", 1))
+        # Force le recalcul de la taille du widget parent
+        self.adjustSize()
+        if self.parent():
+            self.parent().adjustSize()
 
 
 # ---------------------------------------------------------------------------
@@ -219,7 +279,6 @@ class FolderManagerDialog(QDialog):
         self._refresh()
 
     def _refresh(self) -> None:
-        # Vider les lignes existantes (conserver le stretch final)
         while self._layout.count() > 1:
             item = self._layout.takeAt(0)
             w = item.widget()
