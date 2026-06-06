@@ -1,6 +1,6 @@
 # Guide utilisateur — PixelPhotoManager
 
-> **PixelPhotoManager** est un gestionnaire de photos non destructif pour Windows. Vos fichiers originaux ne sont jamais modifiés : toutes les retouches sont stockées séparément et appliquées à la volée à l'affichage.
+> **PixelPhotoManager** est un gestionnaire de photos et vidéos non destructif pour Windows. Vos fichiers originaux ne sont jamais modifiés : toutes les retouches sont stockées séparément et appliquées à la volée à l'affichage.
 
 ---
 
@@ -10,13 +10,15 @@
 2. [Interface générale](#2-interface-générale)
 3. [Gérer vos dossiers](#3-gérer-vos-dossiers)
 4. [La grille de photos](#4-la-grille-de-photos)
-5. [Visualiser une photo](#5-visualiser-une-photo)
+5. [Visualiser une photo ou une vidéo](#5-visualiser-une-photo-ou-une-vidéo)
 6. [Retoucher une photo](#6-retoucher-une-photo)
 7. [Albums et favoris](#7-albums-et-favoris)
 8. [Recherche](#8-recherche)
 9. [Déplacer des photos](#9-déplacer-des-photos)
-10. [Raccourcis clavier](#10-raccourcis-clavier)
-11. [Où sont stockées vos données](#11-où-sont-stockées-vos-données)
+10. [Diaporama](#10-diaporama)
+11. [Reconnaissance faciale](#11-reconnaissance-faciale)
+12. [Raccourcis clavier](#12-raccourcis-clavier)
+13. [Où sont stockées vos données](#13-où-sont-stockées-vos-données)
 
 ---
 
@@ -30,7 +32,7 @@ Au premier démarrage, une fenêtre d'accueil vous invite à choisir au moins un
 2. Répétez l'opération si vous avez plusieurs dossiers.
 3. Cliquez sur **Commencer →**.
 
-L'application indexe immédiatement vos photos en arrière-plan. La barre de statut en bas indique la progression du scan (`Scan… 42%  —  nom_du_fichier.jpg`).
+L'application indexe immédiatement vos photos et vidéos en arrière-plan. La barre de statut en bas indique la progression du scan (`Scan… 42%  —  nom_du_fichier.jpg`).
 
 ### Ajouter un dossier ultérieurement
 
@@ -92,9 +94,20 @@ La sidebar gauche affiche l'arborescence de vos dossiers surveillés. Cliquez su
 
 > **Note :** Renommer ou déplacer un dossier met automatiquement à jour les chemins dans le catalogue et les retouches associées. Aucune donnée n'est perdue.
 
-### Scanner un dossier
+### Gestionnaire de dossiers (Outils › Dossiers…)
 
-Après avoir copié de nouvelles photos dans un dossier surveillé depuis l'extérieur de l'application, faites **clic droit › Scanner maintenant** sur ce dossier pour que les nouvelles photos apparaissent.
+Le menu **Outils › Dossiers…** ouvre un dialogue de gestion avancée des dossiers surveillés.
+
+**Pour chaque dossier, le dialogue affiche :**
+- Un indicateur ✓ (dossier trouvé sur le disque) ou ✗ (dossier introuvable)
+- Le chemin complet du dossier
+- Le nombre de fichiers indexés
+- Les sous-dossiers exclus du scan (dossiers cachés, dossiers `Originals` de Picasa) avec la raison de l'exclusion
+
+**Actions disponibles :**
+- **⟳ Re-scanner** — force le re-scan complet du dossier, même pour les fichiers non modifiés depuis le dernier scan. Utile pour détecter des modifications faites hors de l'application.
+- **Retirer** — retire le dossier de la surveillance (les photos déjà indexées restent dans le catalogue ; seul le scan futur est désactivé).
+- **＋ Ajouter un dossier…** — ajoute un nouveau dossier à surveiller.
 
 ---
 
@@ -120,7 +133,11 @@ Le curseur **Taille** en bas à droite de la fenêtre permet de choisir parmi qu
 
 La barre de statut affiche le nombre de photos sélectionnées et le total.
 
-### Ouvrir une photo
+### Vignettes vidéo
+
+Les vidéos sont représentées dans la grille par une vignette extraite automatiquement (à environ 10 % de la durée de la vidéo), avec un badge **▶** superposé pour les distinguer des photos.
+
+### Ouvrir une photo ou une vidéo
 
 **Double-clic** sur une vignette → ouvre la visionneuse.
 
@@ -130,7 +147,6 @@ La barre de statut affiche le nombre de photos sélectionnées et le total.
 |---|---|
 | **Ouvrir** | Ouvre la photo dans la visionneuse |
 | **Marquer comme favori / Retirer des favoris** | Gère l'état favori |
-| **Informations EXIF** | (prévu) Affiche les métadonnées EXIF |
 | **Renommer l'image** | Renomme le fichier sur le disque |
 | **Révéler dans l'Explorateur** | Ouvre le dossier contenant la photo |
 | **Effacer le fichier…** | Supprime définitivement le fichier après confirmation |
@@ -145,7 +161,7 @@ Clic droit sur la vignette › **Renommer l'image** — saisissez le nouveau nom
 
 ---
 
-## 5. Visualiser une photo
+## 5. Visualiser une photo ou une vidéo
 
 ### Ouvrir la visionneuse
 
@@ -155,8 +171,8 @@ Double-cliquez sur une vignette dans la grille.
 
 | Action | Résultat |
 |---|---|
-| **← / ↑** ou **◀ Précédente** | Photo précédente |
-| **→ / ↓** ou **Suivante ▶** | Photo suivante |
+| **← / ↑** ou **◀ Précédente** | Photo précédente (s'arrête à la première photo) |
+| **→ / ↓** ou **Suivante ▶** | Photo suivante (s'arrête à la dernière photo) |
 | **Échap** ou **✕** | Retour à la grille |
 | **▦** (barre de statut) | Retour à la grille |
 
@@ -173,9 +189,41 @@ Double-cliquez sur une vignette dans la grille.
 
 > En **mode recadrage**, la molette de la souris sert à zoomer. En **mode normal**, elle passe à la photo suivante ou précédente.
 
+### Panneau EXIF
+
+Appuyez sur **I** (ou cliquez sur le bouton `[i]` dans la barre d'outils) pour afficher/masquer le panneau EXIF. Il affiche :
+- Appareil photo et objectif
+- Date et heure de prise de vue
+- ISO, vitesse d'obturation, ouverture, focale
+- Résolution et taille du fichier
+- Coordonnées GPS (si présentes)
+
+> Le panneau EXIF et le panneau Visages sont mutuellement exclusifs : ouvrir l'un ferme l'autre.
+
+### Visualiser une vidéo
+
+Quand vous ouvrez une vidéo dans la visionneuse :
+- La première image extraite est affichée.
+- Un bouton **▶ Ouvrir la vidéo** apparaît dans la barre d'outils.
+- Cliquez dessus pour lire la vidéo dans le lecteur multimédia par défaut de Windows.
+- Le panneau de retouche n'est **pas disponible** pour les vidéos.
+
+### Localiser sur la carte
+
+Si une photo contient des coordonnées GPS, faites un **clic droit** dans la visionneuse et choisissez **Localiser sur la carte**. OpenStreetMap s'ouvre dans le navigateur, centré sur le lieu de prise de vue.
+
+> L'option est grisée si la photo ne contient pas de données GPS.
+
 ### Marquer comme favori
 
 Cliquez sur le bouton **♡** dans la barre d'outils de la visionneuse. L'étoile pleine **★** indique un favori actif.
+
+### Menu contextuel dans la visionneuse (clic droit)
+
+| Option | Effet |
+|---|---|
+| **Révéler dans l'Explorateur** | Ouvre le dossier contenant la photo |
+| **Localiser sur la carte** | Ouvre OpenStreetMap à la position GPS (grisé si pas de GPS) |
 
 ---
 
@@ -186,6 +234,8 @@ Cliquez sur le bouton **♡** dans la barre d'outils de la visionneuse. L'étoil
 Ouvrez une photo dans la visionneuse. Le panneau **Retouche** apparaît automatiquement à gauche.
 
 > **Principe non destructif** : les retouches ne modifient jamais le fichier original. Elles sont stockées dans une base de données séparée et appliquées à la volée à l'affichage et à l'export. Vous pouvez toujours récupérer l'original.
+
+> Le panneau de retouche n'est pas disponible pour les vidéos.
 
 ---
 
@@ -208,6 +258,19 @@ Cliquez sur l'un des six boutons de correction pour ouvrir son dialogue de régl
 - **Double-clic sur le slider** remet la valeur à zéro.
 - L'**aperçu** se met à jour en temps réel dans la visionneuse.
 - **Valider** applique le réglage ; **Annuler** restaure la valeur précédente.
+
+---
+
+### Couleurs (Noir & Blanc avec mixage de canaux)
+
+Le traitement **Couleurs** convertit la photo en noir et blanc avec contrôle des contributions de chaque canal.
+
+1. Cliquez sur **Couleurs** dans le panneau de retouche.
+2. Cochez **Noir & Blanc** pour activer la conversion.
+3. Ajustez les trois curseurs **Rouge**, **Vert**, **Bleu** (plage −1,00 à +1,00) pour doser la contribution de chaque canal dans les tons de gris.
+4. Cliquez **Valider**.
+
+> Un rouge à +1,00 avec bleu à −1,00 donne un résultat dramatique avec un ciel foncé et des peaux claires — l'équivalent d'un filtre rouge argentique.
 
 ---
 
@@ -333,7 +396,36 @@ Après le déplacement :
 
 ---
 
-## 10. Raccourcis clavier
+## 10. Diaporama
+
+Lancez un diaporama depuis **Affichage › Diaporama** ou avec la touche **F5**.
+
+- Les photos défilent automatiquement selon un intervalle configurable.
+- Appuyez sur **Échap** ou fermez la visionneuse pour arrêter le diaporama.
+
+---
+
+## 11. Reconnaissance faciale
+
+> La reconnaissance faciale nécessite des dépendances optionnelles (DeepFace, RetinaFace). Si elles ne sont pas installées, cette section n'est pas disponible.
+
+### Détecter les visages
+
+Depuis le menu **Outils › Détecter les visages**, l'application analyse les photos et regroupe les visages similaires en clusters.
+
+### Nommer les personnes
+
+Dans le panneau **Visages** de la visionneuse ou dans la vue Personnes :
+1. Cliquez sur un groupe de visages non identifiés.
+2. Saisissez le nom de la personne.
+
+### Importer depuis Picasa
+
+Si vous avez utilisé Picasa, ses annotations de visages (fichiers `.picasa.ini` dans chaque dossier) peuvent être importées via **Outils › Importer visages Picasa…**. Les noms et régions de visages existants sont reconnus et associés aux photos correspondantes.
+
+---
+
+## 12. Raccourcis clavier
 
 ### Grille
 
@@ -342,6 +434,7 @@ Après le déplacement :
 | **Ctrl + F** | Activer la recherche |
 | **Ctrl + A** | Sélectionner toutes les photos |
 | **Suppr** | Supprimer les photos sélectionnées (avec confirmation) |
+| **F5** | Lancer le diaporama |
 | **F9** | Afficher/masquer la sidebar |
 | **F11** | Plein écran |
 
@@ -351,6 +444,7 @@ Après le déplacement :
 |---|---|
 | **← / ↑** | Photo précédente |
 | **→ / ↓** | Photo suivante |
+| **I** | Afficher/masquer le panneau EXIF |
 | **0** | Ajuster à la fenêtre |
 | **1** | Zoom 100 % |
 | **Échap** | Retour à la grille |
@@ -373,7 +467,7 @@ Après le déplacement :
 
 ---
 
-## 11. Où sont stockées vos données
+## 13. Où sont stockées vos données
 
 Toutes les données de l'application se trouvent dans :
 
@@ -385,17 +479,21 @@ Soit typiquement : `C:\Users\VotreNom\AppData\Local\PixelPhotoManager\`
 
 | Fichier | Contenu |
 |---|---|
-| `catalog.db` | Index de toutes vos photos (chemins, EXIF, métadonnées) |
-| `thumbnails.db` | Cache des vignettes générées |
+| `catalog.db` | Index de toutes vos photos et vidéos (chemins, EXIF, métadonnées) |
+| `thumbnails.db` | Cache des vignettes générées (images et premières frames vidéo) |
 | `edits.db` | Toutes vos retouches et leur historique |
 | `config.json` | Dossiers surveillés et préférences de l'interface |
 | `logs\pixelphotomanager.log` | Journal de l'application (pour le dépannage) |
 
-> **Vos photos originales ne sont jamais modifiées.** Vous pouvez supprimer `edits.db` pour effacer toutes les retouches et repartir de zéro, ou supprimer `catalog.db` pour forcer une réindexation complète.
+> **Vos photos et vidéos originales ne sont jamais modifiées.** Vous pouvez supprimer `edits.db` pour effacer toutes les retouches et repartir de zéro, ou supprimer `catalog.db` pour forcer une réindexation complète.
 
-### Formats d'images supportés
+### Formats supportés
 
+**Images :**  
 `.jpg` · `.jpeg` · `.png` · `.tiff` · `.tif` · `.webp` · `.bmp` · `.gif` · `.heic` · `.raw` · `.cr2` · `.nef` · `.arw` · `.dng`
+
+**Vidéos :**  
+`.mp4` · `.mov` · `.avi` · `.mkv` · `.wmv` · `.webm` · `.m4v` · `.3gp` · `.flv` · `.ts` · `.mts` · `.mpg` · `.mpeg`
 
 *(La disponibilité des formats RAW dépend des pilotes installés sur le système.)*
 
@@ -405,8 +503,9 @@ Soit typiquement : `C:\Users\VotreNom\AppData\Local\PixelPhotoManager\`
 
 | Problème | Solution |
 |---|---|
-| Des photos n'apparaissent pas après les avoir copiées | Clic droit sur le dossier dans la sidebar › **Scanner maintenant** |
+| Des photos n'apparaissent pas après les avoir copiées | Clic droit sur le dossier dans la sidebar › **Scanner maintenant**, ou utilisez **Outils › Dossiers…** › **⟳ Re-scanner** |
 | La vignette d'une photo retouchée n'est pas à jour | Ouvrez la photo, les retouches sont appliquées automatiquement |
 | L'application est lente au démarrage | Normal lors du premier scan d'une grande bibliothèque ; le scan suivant sera beaucoup plus rapide (seules les nouvelles photos sont analysées) |
 | Un dossier déplacé manuellement (hors de l'application) n'est plus trouvé | Utilisez **Supprimer des dossiers surveillés** puis **Fichier › Ajouter un dossier…** pour le réenregistrer |
 | Récupérer l'original d'une photo retouchée | Le fichier original n'a jamais été modifié — il suffit d'effacer les retouches via **Annuler** (↩) jusqu'à l'état initial |
+| La vignette d'une vidéo est noire | OpenCV n'a pas pu lire la vidéo — vérifiez que le codec est installé sur votre système |

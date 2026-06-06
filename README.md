@@ -12,18 +12,22 @@ A non-destructive desktop photo manager for Windows, built with Python and PySid
 ## Features
 
 - **Non-destructive editing** — original files are never modified; all adjustments are stored in a separate SQLite database and applied on the fly
-- **Folder management** — watch multiple folders, create/rename/move subfolders from within the app, drag photos between folders
+- **Video support** — scan, index, and browse video files (MP4, MOV, AVI, MKV, WMV, WebM, M4V and more); thumbnails extracted from first frames, playback in the system player
+- **Folder management** — watch multiple folders, create/rename/move subfolders from within the app, drag photos between folders; **Outils › Dossiers** shows scan status and lets you force-rescan any folder
 - **Fast thumbnail grid** — three-level cache (RAM LRU → SQLite → on-demand generation in background threads), four zoom levels
-- **Full-screen viewer** — smooth zoom, pan, previous/next navigation
+- **Full-screen viewer** — smooth zoom, pan, previous/next navigation (stops at first/last, no wrap-around)
 - **Photo editing**
   - Tonal corrections: brightness, contrast, saturation, gamma, sharpness, noise reduction
+  - Colour treatment: black & white with per-channel R/G/B mixing sliders
   - Geometry: ±90° rotation, straighten (−10° to +10°), horizontal/vertical flip
   - Crop with free-form or locked aspect ratios (10×15, 13×18 landscape/portrait)
-  - Black & white conversion with RGB channel mixing
 - **Persistent undo/redo** — up to 50 edit states per photo, restored across sessions
+- **EXIF panel** — toggle with `I` in the viewer; shows camera, lens, exposure, GPS coordinates
+- **Map localization** — right-click a photo in the viewer → "Localiser sur la carte" opens OpenStreetMap at the photo's GPS position
+- **Slideshow** — **Affichage › Diaporama** or `F5`; configurable interval
+- **Face recognition** — detect, cluster and name people; import face annotations from Picasa
 - **Albums & favorites** — organize photos across folders
 - **Full-text search** — filter by filename or camera model
-- **EXIF metadata** — date, dimensions, camera make/model, lens, ISO, exposure, aperture, focal length, GPS coordinates
 - **Plugin system** — extend the app without modifying core code
 
 ---
@@ -34,7 +38,7 @@ A non-destructive desktop photo manager for Windows, built with Python and PySid
 |---|---|
 | [PySide6](https://doc.qt.io/qtforpython/) | UI framework (Qt 6) |
 | [Pillow](https://python-pillow.org/) | Image loading, processing, EXIF reading |
-| [OpenCV](https://opencv.org/) | Advanced image operations |
+| [OpenCV](https://opencv.org/) | Advanced image operations, video thumbnail extraction |
 | [piexif](https://github.com/hMatoba/Piexif) | EXIF metadata writing |
 | [imagehash](https://github.com/JohannesBuchner/imagehash) | Perceptual hashing (duplicate detection) |
 | [folium](https://python-visualization.github.io/folium/) | GPS map view |
@@ -84,10 +88,11 @@ Requirements: PyInstaller must be installed in the venv (`pip install pyinstalle
 ```
 src/
 ├── core/        Event bus, config, plugin manager, data models
-├── library/     Folder scanner, SQLite catalog, thumbnail cache, EXIF reader
-├── ui/          Main window, thumbnail grid, photo viewer, edit panel, sidebar
+├── library/     Folder scanner, SQLite catalog, thumbnail cache, EXIF/video reader
+├── ui/          Main window, thumbnail grid, photo viewer, edit panel, sidebar,
+│                folder manager dialog, EXIF panel
 ├── processing/  Non-destructive image adjustments, geometry, edit database
-└── faces/       Face detection and clustering (optional, heavy dependencies)
+└── faces/       Face detection, clustering, Picasa import (optional, heavy dependencies)
 plugins/         External user plugins (one folder per plugin)
 ```
 
@@ -95,8 +100,8 @@ Application data is stored in `%LOCALAPPDATA%\PixelPhotoManager\`:
 
 | File | Contents |
 |---|---|
-| `catalog.db` | Photo index (paths, EXIF, metadata) |
-| `thumbnails.db` | Generated thumbnail cache |
+| `catalog.db` | Photo index (paths, EXIF, metadata, media type) |
+| `thumbnails.db` | Generated thumbnail cache (images and video frames) |
 | `edits.db` | All edits and their history |
 | `config.json` | Watched folders and UI preferences |
 
@@ -111,7 +116,9 @@ Application data is stored in `%LOCALAPPDATA%\PixelPhotoManager\`:
 | Grid | `Del` | Delete selected |
 | Grid | `F9` | Toggle sidebar |
 | Grid | `F11` | Fullscreen |
+| Grid/Viewer | `F5` | Start slideshow |
 | Viewer | `← / →` | Previous / next photo |
+| Viewer | `I` | Toggle EXIF panel |
 | Viewer | `0` | Fit to window |
 | Viewer | `1` | Zoom 100% |
 | Viewer | `Esc` | Back to grid |

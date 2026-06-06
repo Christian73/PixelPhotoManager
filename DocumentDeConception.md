@@ -1,10 +1,10 @@
 # PixelPhotoManager — Document de Conception
 
-**Version** : 1.1  
-**Date** : 2026  
+**Version** : 1.2  
+**Date** : 2026-06  
 **Langage** : Python 3.11  
 **Framework UI** : PySide6  
-**Statut** : Conception initiale
+**Statut** : En développement actif
 
 ---
 
@@ -159,22 +159,32 @@ La sidebar contient trois sections séparées par des séparateurs glissables :
 ```
 
 **Interactions :**
-- Flèche gauche/droite : photo précédente/suivante
+- Flèche gauche/droite : photo précédente/suivante (**s'arrête à la première/dernière, pas de boucle**)
 - Molette : zoom centré sur la position du curseur
 - Double-clic : zoom 100% / ajustement fenêtre
 - Clic maintenu + glisser : panoramique quand zoomé
 - Échap : retour à la grille
-- F : plein écran natif Windows
-- Barre espace : lecture/pause diaporama
+- F : marquer/retirer des favoris
+- I : afficher/masquer le panneau EXIF
+- F5 : démarrer le diaporama
+
+**Support vidéo :**
+- Les vidéos (`.mp4`, `.mov`, `.avi`, `.mkv`, etc.) s'affichent avec la première frame extraite.
+- Le bouton **▶ Ouvrir la vidéo** ouvre le lecteur multimédia système.
+- Le panneau de retouche est désactivé pour les vidéos.
 
 **Panneau EXIF (touche `I` ou bouton `[i]`) :**
-Panneau latéral droit de 280 px affichant :
+Panneau latéral togglé, exclusif avec le panneau Visages. Affiche :
 - Appareil photo et objectif
 - Date et heure
 - ISO, vitesse d'obturation, ouverture, focale
-- Flash (oui/non)
 - Résolution et taille de fichier
-- Coordonnées GPS (si présentes) + miniature de carte cliquable
+- Coordonnées GPS (si présentes)
+- Pour les vidéos : résolution, fps, durée
+
+**Menu contextuel (clic droit dans la visionneuse) :**
+- Révéler dans l'Explorateur
+- **Localiser sur la carte** — ouvre OpenStreetMap à la position GPS (grisé si pas de données GPS)
 
 ### 3.5 Panneau de retouche
 
@@ -193,9 +203,11 @@ Accessible depuis la visionneuse via le bouton `[✏]` ou depuis la grille via l
 │  Gamma         ────●───  1.10    │
 ├──────────────────────────────────┤
 │ ▾ COULEUR                        │
-│  Balance blancs [Auto] [Pipette] │
-│  Température    ───●────  5500K  │
-│  Teinte         ────●───    +2   │
+│  [Couleurs / N&B]                │
+│   ☑ Noir & Blanc                 │
+│   Rouge  ───●────  +0.30         │
+│   Vert   ────●───   0.00         │
+│   Bleu   ──────●─  -0.20         │
 ├──────────────────────────────────┤
 │ ▾ DÉTAILS                        │
 │  Netteté        ────●───   +20   │
@@ -243,28 +255,23 @@ Accessible depuis la visionneuse via le bouton `[✏]` ou depuis la grille via l
 | `Entrée` ou `Double-clic` | Ouvrir la visionneuse |
 | `Ctrl+A` | Tout sélectionner |
 | `Échap` | Désélectionner tout |
-| `Suppr` | Marquer pour suppression (confirmation requise) |
+| `Suppr` | Supprimer la photo (confirmation requise) |
 | `F2` | Renommer la photo |
 | `Ctrl+C` | Copier le chemin du fichier |
 | `+` / `-` | Agrandir / réduire les vignettes |
-| `Ctrl+F5` | Forcer le re-scan du dossier courant |
+| `F5` | Démarrer le diaporama |
 
 **Visionneuse :**
 
 | Raccourci | Action |
 |-----------|--------|
-| `←` / `→` | Photo précédente / suivante |
+| `←` / `→` | Photo précédente / suivante (s'arrête aux extrémités) |
 | `↑` / `↓` | Photo précédente / suivante (identique) |
-| `Accueil` | Première photo |
-| `Fin` | Dernière photo |
 | `+` / `-` ou molette | Zoom avant / arrière |
 | `0` | Ajustement à la fenêtre |
 | `1` | Zoom 100% |
-| `Ctrl+R` | Rotation 90° horaire |
-| `Ctrl+Shift+R` | Rotation 90° anti-horaire |
 | `F` | Marquer/démarquer favori |
-| `I` | Panneau EXIF |
-| `E` | Ouvrir le panneau de retouche |
+| `I` | Afficher/masquer le panneau EXIF |
 | `Espace` | Lecture/pause diaporama |
 | `Échap` | Retour à la grille |
 
@@ -361,7 +368,11 @@ La barre de recherche (`Ctrl+F`) est unifiée et accepte plusieurs syntaxes :
 
 ### 4.1 Gestion de la bibliothèque
 
-**Découverte automatique** — PixelPhotoManager scanne les dossiers configurés au démarrage et en arrière-plan. Aucun import manuel requis. Les photos restent à leur emplacement d'origine.
+**Découverte automatique** — PixelPhotoManager scanne les dossiers configurés au démarrage et en arrière-plan. Aucun import manuel requis. Les photos et vidéos restent à leur emplacement d'origine.
+
+**Support vidéo** — Les fichiers vidéo (`.mp4`, `.mov`, `.avi`, `.mkv`, `.wmv`, `.webm`, `.m4v`, `.3gp`, `.flv`, `.ts`, `.mts`, `.mpg`, `.mpeg`) sont indexés au même titre que les photos. Leurs vignettes sont extraites automatiquement via OpenCV. La lecture se fait dans le lecteur système via `QDesktopServices`.
+
+**Gestionnaire de dossiers** — Le dialogue **Outils › Dossiers…** liste les dossiers surveillés avec leur statut, le nombre de fichiers indexés, et les sous-dossiers exclus du scan. Permet d'ajouter, retirer, ou forcer un re-scan complet de n'importe quel dossier.
 
 **Navigation par dossiers** — Arborescence fidèle à la structure du disque. L'utilisateur retrouve ses photos exactement comme dans l'explorateur Windows.
 
@@ -377,17 +388,19 @@ La barre de recherche (`Ctrl+F`) est unifiée et accepte plusieurs syntaxes :
 
 **Affichage haute qualité** — Rendu net avec zoom fluide de 10 % à 1600 %. Navigation au clavier (flèches) et à la molette.
 
-**Diaporama** — Plein écran avec transitions, vitesse configurable, musique optionnelle.
+**Diaporama** — Lancé via **Affichage › Diaporama** ou `F5`. Vitesse configurable, arrêt par Échap.
 
 **Comparaison côte à côte** — Affichage de deux photos en parallèle pour comparer les versions.
 
-**Informations EXIF** — Panneau détachable affichant toutes les métadonnées de la photo sélectionnée (appareil, objectif, ISO, vitesse, ouverture, GPS).
+**Informations EXIF** — Panneau togglé (`I`) affichant les métadonnées de la photo sélectionnée (appareil, objectif, ISO, vitesse, ouverture, GPS). Pour les vidéos : résolution, fps, durée.
+
+**Géolocalisation depuis la visionneuse** — Menu contextuel › **Localiser sur la carte** ouvre OpenStreetMap à la position GPS de la photo.
 
 ### 4.3 Retouches basiques (non destructives)
 
 Toutes les retouches sont stockées dans la base de données et appliquées à la volée. L'original n'est jamais modifié.
 
-Les retouches disponibles sont les suivantes : ajustement de la luminosité, du contraste et de la saturation via des sliders en temps réel ; correction gamma ; balance des blancs avec pipette de neutralisation ; recadrage libre ou selon des ratios prédéfinis ; rotation libre et redressement automatique de l'horizon ; correction des yeux rouges automatique et manuelle ; netteté et réduction du bruit ; conversion en noir et blanc avec contrôle des canaux.
+Les retouches disponibles sont les suivantes : ajustement de la luminosité, du contraste et de la saturation via des sliders en temps réel ; correction gamma ; recadrage libre ou selon des ratios prédéfinis (10×15, 13×18 paysage/portrait) ; rotation ±90° et redressement de l'horizon (−10° à +10°) ; miroir horizontal et vertical ; netteté et réduction du bruit ; conversion en noir et blanc avec mixage des canaux R/G/B par sliders indépendants.
 
 ### 4.4 Reconnaissance faciale
 
@@ -399,13 +412,15 @@ Les retouches disponibles sont les suivantes : ajustement de la luminosité, du 
 
 **Album par personne** — Chaque personne nommée génère automatiquement un album virtuel contenant toutes ses photos.
 
-**Import de données existantes** — Les tags de reconnaissance existants dans les fichiers `.ini` et `contacts.xml` issus d'autres gestionnaires sont importés automatiquement, préservant le travail déjà accompli par l'utilisateur.
+**Import de données existantes** — Les annotations Picasa sont importées via **Outils › Importer visages Picasa…**. Les fichiers `.picasa.ini` (présents dans chaque dossier de photos Picasa) contiennent les noms et positions de visages ; ils sont parsés et stockés dans `catalog.db` (table `picasa_annotations`). Les noms Picasa sont réutilisés comme étiquettes pour les clusters DBSCAN.
 
 **Modèle IA** — ArcFace via DeepFace pour une précision de 99 %+ en reconnaissance faciale.
 
 ### 4.5 Géolocalisation
 
 **Carte interactive** — Visualisation de toutes les photos géolocalisées sur une carte (OpenStreetMap, hors ligne possible).
+
+**Localisation depuis la visionneuse** — Clic droit sur une photo › **Localiser sur la carte** ouvre directement OpenStreetMap dans le navigateur, centré sur la position GPS de la photo (option grisée si pas de données GPS).
 
 **Regroupement géographique** — Les photos prises au même endroit sont regroupées automatiquement.
 
@@ -432,30 +447,31 @@ PixelPhotoManager/
 │   │   └── plugin_manager.py    ← Gestionnaire de plugins
 │   │
 │   ├── library/                 ← Gestion de la bibliothèque
-│   │   ├── scanner.py           ← Scan des dossiers (thread)
+│   │   ├── scanner.py           ← Scan des dossiers (thread, force rescan)
 │   │   ├── catalog.py           ← Base de données catalogue
-│   │   ├── thumbnail_cache.py   ← Cache des vignettes
-│   │   └── exif_reader.py       ← Lecture des métadonnées
+│   │   ├── thumbnail_cache.py   ← Cache des vignettes (images + vidéos)
+│   │   └── exif_reader.py       ← ExifReader + VideoMetadataReader + VIDEO_EXT
 │   │
 │   ├── ui/                      ← Interface utilisateur
 │   │   ├── main_window.py       ← Fenêtre principale
-│   │   ├── thumbnail_grid.py    ← Grille de vignettes
-│   │   ├── photo_viewer.py      ← Visionneuse plein écran
+│   │   ├── thumbnail_grid.py    ← Grille de vignettes (badge ▶ vidéos)
+│   │   ├── photo_viewer.py      ← Visionneuse + vidéos + carte
 │   │   ├── sidebar.py           ← Panneau de navigation
-│   │   ├── edit_panel.py        ← Panneau de retouche
-│   │   └── people_panel.py      ← Panneau personnes
+│   │   ├── edit_panel.py        ← Panneau de retouche (N&B R/G/B)
+│   │   ├── exif_panel.py        ← Panneau EXIF (toggle I)
+│   │   └── folder_manager_dialog.py ← Gestion dossiers (Outils › Dossiers…)
 │   │
 │   ├── processing/              ← Traitements image
-│   │   ├── base_processor.py    ← Interface abstraite
-│   │   ├── adjustments.py       ← Luminosité, contraste...
+│   │   ├── adjustments.py       ← Luminosité, contraste, N&B mixage...
 │   │   ├── geometry.py          ← Recadrage, rotation
-│   │   └── filters.py           ← Netteté, bruit...
+│   │   └── edit_database.py     ← Persistence retouches (SQLite)
 │   │
 │   ├── faces/                   ← Reconnaissance faciale
 │   │   ├── detector.py          ← Détection des visages
-│   │   ├── recognizer.py        ← Identification
-│   │   ├── clusterer.py         ← Regroupement automatique
-│   │   └── legacy_importer.py   ← Import données existantes
+│   │   ├── recognizer.py        ← Identification (ArcFace/DeepFace)
+│   │   ├── clusterer.py         ← Regroupement automatique (DBSCAN)
+│   │   ├── face_panel.py        ← Panneau visages dans la visionneuse
+│   │   └── picasa_importer.py   ← Import annotations Picasa (.picasa.ini)
 │   │
 │   └── plugins/                 ← Plugins intégrés
 │       ├── restoration/         ← Restauration IA
@@ -1505,20 +1521,20 @@ def on_photo_changed(self, index: int):
 | Export PDF | Processor | Planche contact, diaporama | reportlab |
 | Détection doublons | Tool | Hash perceptuel | imagehash |
 | Import données legacy | Tool | Formats .ini + contacts.xml | — |
-| Slideshow | View | Diaporama plein écran | — |
+| Slideshow | View | Diaporama plein écran | — | ✓ Implémenté |
 
 ---
 
 ## 10. Roadmap
 
-### Version 1.0 — Fondations (MVP)
-Scan et indexation des photos, grille de vignettes rapide, visionneuse avec zoom, retouches basiques non destructives, reconnaissance faciale avec import de données existantes, recherche basique, export JPEG/PNG.
+### Version 1.0 — Fondations (MVP) ✓ Livré
+Scan et indexation des photos, grille de vignettes rapide, visionneuse avec zoom, retouches basiques non destructives (luminosité, contraste, saturation, gamma, netteté, débruitage, rotation, redressement, recadrage, miroir, N&B avec mixage R/G/B), undo/redo persistant, albums, favoris, recherche.
 
-### Version 1.1 — Organisation
-Albums virtuels, chronologie, géolocalisation sur carte, détection des doublons, tags et mots-clés, diaporama.
+### Version 1.1 — Organisation ✓ Livré
+Albums virtuels, diaporama, géolocalisation (carte depuis la visionneuse), reconnaissance faciale avec clustering DBSCAN et import Picasa, panneau EXIF toggle, support vidéo complet (13 extensions), gestionnaire de dossiers (Outils › Dossiers…).
 
-### Version 1.2 — Intelligence
-Reconnaissance faciale complète avec clustering automatique, suggestions intelligentes d'albums, recherche par contenu visuel, détection automatique de scènes.
+### Version 1.2 — Intelligence (en cours)
+Suggestions intelligentes d'albums, recherche par contenu visuel, détection automatique de scènes, chronologie avancée, détection des doublons.
 
 ### Version 2.0 — Extensions IA
 Intégration des modèles de restauration (HYPIR, SUPIR, DDColor, Real-ESRGAN), marketplace de plugins, synchronisation optionnelle avec le cloud.
@@ -1532,7 +1548,7 @@ Intégration des modèles de restauration (HYPIR, SUPIR, DDColor, Real-ESRGAN), 
 | Interface | PySide6 | Maturité, performance, richesse widgets |
 | Base de données | SQLite | Embarqué, rapide, zéro config |
 | Cache vignettes | SQLite + RAM LRU | Double niveau, invalidation automatique |
-| Traitement image | Pillow + OpenCV | Complémentaires, bien maîtrisés |
+| Traitement image | Pillow + OpenCV | Complémentaires, bien maîtrisés ; OpenCV pour les vignettes vidéo |
 | Reconnaissance faciale | DeepFace + ArcFace | 99%+ précision, open source |
 | Détection visages | RetinaFace | Meilleur détecteur open source |
 | Clustering | scikit-learn DBSCAN | Adapté aux données de visages |
