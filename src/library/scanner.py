@@ -4,14 +4,14 @@ from pathlib import Path
 
 from PySide6.QtCore import QThread, Signal
 
-from src.library.exif_reader import ExifReader
+from src.library.exif_reader import ExifReader, VideoMetadataReader, VIDEO_EXT
 from src.library.catalog import Catalog
 from src.library.thumbnail_cache import ThumbnailCache
 from src.core.models import PhotoInfo
 
 logger = logging.getLogger(__name__)
 
-SUPPORTED_EXT = ExifReader.SUPPORTED
+SUPPORTED_EXT = ExifReader.SUPPORTED | VIDEO_EXT
 
 
 def _is_hidden(path: str) -> bool:
@@ -35,12 +35,14 @@ class ScanThread(QThread):
         folders: list[str],
         catalog: Catalog,
         thumb_cache: ThumbnailCache,
+        force: bool = False,
     ):
         super().__init__()
         self._folders = folders
         self._catalog = catalog
         self._thumb_cache = thumb_cache
         self._stop_flag = False
+        self._force = force
 
     def run(self) -> None:
         total = 0
@@ -54,6 +56,7 @@ class ScanThread(QThread):
                 dirs[:] = [
                     d for d in dirs
                     if not _is_hidden(os.path.join(root, d))
+                    and d != "Originals"
                 ]
                 for fname in files:
                     fpath = os.path.join(root, fname)
@@ -63,8 +66,9 @@ class ScanThread(QThread):
         grand_total = len(all_files)
 
         known: dict[str, float] = {}
-        for folder in self._folders:
-            known.update(self._catalog.get_known_mtimes(folder))
+        if not self._force:
+            for folder in self._folders:
+                known.update(self._catalog.get_known_mtimes(folder))
 
         for filepath in all_files:
             if self._stop_flag:
@@ -80,7 +84,8 @@ class ScanThread(QThread):
                         self.progress.emit(pct, filepath)
                     continue
 
-                exif = ExifReader.read(filepath)
+                is_video = Path(filepath).suffix.lower() in VIDEO_EXT
+                exif = VideoMetadataReader.read(filepath) if is_video else ExifReader.read(filepath)
                 photo = PhotoInfo(
                     path=filepath,
                     file_size=stat.st_size,
@@ -98,6 +103,8 @@ class ScanThread(QThread):
                     has_gps=exif.get("has_gps", False),
                     gps_lat=exif.get("gps_lat"),
                     gps_lon=exif.get("gps_lon"),
+                    media_type="video" if is_video else "image",
+                    duration=float(exif.get("duration", 0.0)),
                 )
                 photo = self._catalog.add_or_update_photo(photo)
                 total += 1
@@ -138,9 +145,9 @@ class LibraryScanner:
         self._thumb_cache = thumb_cache
         self._thread: ScanThread | None = None
 
-    def scan(self, folders: list[str]) -> ScanThread:
+    def scan(self, folders: list[str], force: bool = False) -> ScanThread:
         self.stop()
-        self._thread = ScanThread(folders, self._catalog, self._thumb_cache)
+        self._thread = ScanThread(folders, self._catalog, self._thumb_cache, force=force)
         self._thread.start()
         return self._thread
 

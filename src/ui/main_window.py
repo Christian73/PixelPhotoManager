@@ -32,6 +32,7 @@ from src.ui.photo_viewer import PhotoViewer
 from src.ui.edit_panel import EditPanel
 from src.ui.face_cluster_grid import FaceClusterGrid
 from src.ui.face_panel import FacePanel
+from src.ui.exif_panel import ExifPanel
 from src.ui.people_panel import MergePersonsDialog, PeopleDialog
 from src.ui.settings_dialog import SettingsDialog
 
@@ -317,9 +318,19 @@ class MainWindow(QMainWindow):
         act_fs.setShortcut(Qt.Key_F11)
         act_fs.triggered.connect(self._toggle_fullscreen)
         m_view.addAction(act_fs)
+        m_view.addSeparator()
+        act_slideshow = QAction("Diaporama", self)
+        act_slideshow.setShortcut(Qt.Key_F5)
+        act_slideshow.triggered.connect(self._start_slideshow)
+        m_view.addAction(act_slideshow)
 
         # Outils
         m_tools = mb.addMenu("Outils")
+        act_folders = QAction("Dossiers…", self)
+        act_folders.setToolTip("Gérer les dossiers surveillés et forcer un re-scan")
+        act_folders.triggered.connect(self._open_folder_manager)
+        m_tools.addAction(act_folders)
+        m_tools.addSeparator()
         act_settings = QAction("Paramètres", self)
         act_settings.triggered.connect(self._open_settings)
         m_tools.addAction(act_settings)
@@ -376,6 +387,13 @@ class MainWindow(QMainWindow):
         self._btn_faces_toggle.toggled.connect(self._on_faces_toggle)
         self._act_faces_toggle = tb.addWidget(self._btn_faces_toggle)
         self._act_faces_toggle.setVisible(False)
+
+        self._btn_exif_toggle = QPushButton("EXIF")
+        self._btn_exif_toggle.setCheckable(True)
+        self._btn_exif_toggle.setToolTip("Afficher / masquer les métadonnées EXIF")
+        self._btn_exif_toggle.toggled.connect(self._on_exif_toggle)
+        self._act_exif_toggle = tb.addWidget(self._btn_exif_toggle)
+        self._act_exif_toggle.setVisible(False)
 
         self._btn_export = QPushButton("⬆  Exporter")
         self._btn_export.setToolTip(
@@ -468,10 +486,21 @@ class MainWindow(QMainWindow):
 
         self._face_panel = FacePanel(self._face_db, self._catalog, self)
         self._face_panel.hide()
+        self._exif_panel = ExifPanel(self)
+        self._exif_panel.hide()
+
+        # Conteneur droit (face OU exif) — un seul visible à la fois
+        self._right_panel = QWidget(self)
+        _rp_layout = QVBoxLayout(self._right_panel)
+        _rp_layout.setContentsMargins(0, 0, 0, 0)
+        _rp_layout.setSpacing(0)
+        _rp_layout.addWidget(self._face_panel)
+        _rp_layout.addWidget(self._exif_panel)
+        self._right_panel.hide()
 
         self._viewer_splitter = QSplitter(Qt.Horizontal)
         self._viewer_splitter.addWidget(self._viewer)
-        self._viewer_splitter.addWidget(self._face_panel)
+        self._viewer_splitter.addWidget(self._right_panel)
         self._viewer_splitter.setStretchFactor(0, 1)
         self._viewer_splitter.setStretchFactor(1, 0)
         self._viewer_splitter.setCollapsible(0, False)
@@ -591,8 +620,8 @@ class MainWindow(QMainWindow):
         self.show_grid()
         self._update_status()
 
-    def _start_scan(self, folders: list[str]) -> None:
-        thread = self._scanner.scan(folders)
+    def _start_scan(self, folders: list[str], force: bool = False) -> None:
+        thread = self._scanner.scan(folders, force=force)
         thread.photo_discovered.connect(self._on_photo_discovered)
         thread.photos_removed.connect(self._on_photos_removed)
         thread.finished.connect(self._on_scan_finished)
@@ -643,6 +672,24 @@ class MainWindow(QMainWindow):
         dlg.recluster_needed.connect(self._run_clustering)
         dlg.exec()
 
+    def _open_folder_manager(self) -> None:
+        from src.ui.folder_manager_dialog import FolderManagerDialog
+        dlg = FolderManagerDialog(self._config, self._catalog, self)
+        dlg.rescan_requested.connect(self._on_folder_rescan_requested)
+        dlg.folder_removed.connect(self._on_folder_removed)
+        dlg.folder_added.connect(self._on_folder_added_from_manager)
+        dlg.exec()
+
+    def _on_folder_rescan_requested(self, folder: str) -> None:
+        self._start_scan([folder], force=True)
+
+    def _on_folder_added_from_manager(self, folder: str) -> None:
+        self._config.add_scan_folder(folder)
+        all_folders = self._config.get_scan_folders()
+        self._sidebar.refresh_folders(all_folders)
+        self._start_scan([folder])
+        self._folder_watcher.set_folders(all_folders)
+
     # ------------------------------------------------------------------ faces
 
     def _reset_and_reindex_faces(self) -> None:
@@ -680,7 +727,7 @@ class MainWindow(QMainWindow):
 
     def _import_from_picasa(self) -> None:
         from src.ui.picasa_import_dialog import PicasaImportDialog
-        dlg = PicasaImportDialog(self._config, self._catalog, self._face_db, self)
+        dlg = PicasaImportDialog(self._config, self._catalog, self._face_db, self._edit_db, self)
         dlg.exec()
 
     @Slot(int, int)
@@ -823,7 +870,7 @@ class MainWindow(QMainWindow):
 
     @Slot(int, str)
     def _on_scan_progress(self, percent: int, path: str) -> None:
-        self._lbl_action.setText(f"Scan… {percent}%  —  {os.path.basename(path)}")
+        self._lbl_action.setText(f"Scan… {percent}%  —  {path}")
 
     @Slot(object)
     def _on_photo_activated(self, photo: PhotoInfo) -> None:
@@ -838,23 +885,60 @@ class MainWindow(QMainWindow):
 
     @Slot(bool)
     def _on_faces_toggle(self, checked: bool) -> None:
-        self._face_panel.setVisible(checked)
         if checked:
+            self._btn_exif_toggle.setChecked(False)
+            self._exif_panel.hide()
+            self._face_panel.show()
+            self._right_panel.show()
             photo = self._viewer.current_photo()
             if photo:
                 self._face_panel.set_photo(photo.path)
+        else:
+            self._face_panel.hide()
+            if not self._exif_panel.isVisible():
+                self._right_panel.hide()
+
+    def _on_exif_toggle(self, checked: bool) -> None:
+        if checked:
+            self._btn_faces_toggle.setChecked(False)
+            self._face_panel.hide()
+            self._exif_panel.show()
+            self._right_panel.show()
+            photo = self._viewer.current_photo()
+            if photo:
+                self._exif_panel.set_photo(photo.path)
+        else:
+            self._exif_panel.hide()
+            if not self._face_panel.isVisible():
+                self._right_panel.hide()
+
+    def _update_nav_arrows(self) -> None:
+        n = len(self._current_photos)
+        self._viewer.update_nav_arrows(
+            has_prev=self._current_photo_index > 0,
+            has_next=self._current_photo_index < n - 1,
+        )
 
     @Slot(int)
     def _navigate_photo(self, delta: int) -> None:
         if not self._current_photos:
             return
-        self._current_photo_index = (self._current_photo_index + delta) % len(self._current_photos)
+        new_index = max(0, min(self._current_photo_index + delta, len(self._current_photos) - 1))
+        if new_index == self._current_photo_index:
+            return
+        self._current_photo_index = new_index
         photo = self._current_photos[self._current_photo_index]
+        is_video = photo.media_type == "video"
         self._viewer.set_photo(photo)
-        self._edit_panel.set_photo(photo)
+        if not is_video:
+            self._edit_panel.set_photo(photo)
+        self._left_stack.setCurrentIndex(0 if is_video else 1)
         if self._face_panel.isVisible():
             self._face_panel.set_photo(photo.path)
+        if self._exif_panel.isVisible():
+            self._exif_panel.set_photo(photo.path)
         self._update_viewer_status(photo)
+        self._update_nav_arrows()
 
     @Slot(float)
     def _on_viewer_zoom_changed(self, zoom: float) -> None:
@@ -1036,6 +1120,7 @@ class MainWindow(QMainWindow):
         self._zoom_pct_label.hide()
         self._btn_grid_status.show()
         self._act_faces_toggle.setVisible(False)
+        self._act_exif_toggle.setVisible(False)
         self._lbl_fileinfo.setText("")
         self._update_status()
 
@@ -1050,14 +1135,17 @@ class MainWindow(QMainWindow):
         self._zoom_pct_label.hide()
         self._btn_grid_status.hide()
         self._act_faces_toggle.setVisible(False)
+        self._act_exif_toggle.setVisible(False)
         self._lbl_fileinfo.setText("")
         self._lbl_action.setText("")
 
     def show_viewer(self, photo: PhotoInfo) -> None:
+        is_video = photo.media_type == "video"
         self._viewer.set_photo(photo)
-        self._edit_panel.set_photo(photo)
+        if not is_video:
+            self._edit_panel.set_photo(photo)
         self._stack.setCurrentIndex(1)
-        self._left_stack.setCurrentIndex(1)
+        self._left_stack.setCurrentIndex(0 if is_video else 1)
         self._viewer.setFocus()
         self._lbl_thumb_size.hide()
         self._thumb_slider.hide()
@@ -1066,9 +1154,13 @@ class MainWindow(QMainWindow):
         self._zoom_pct_label.show()
         self._btn_grid_status.hide()
         self._act_faces_toggle.setVisible(True)
+        self._act_exif_toggle.setVisible(True)
         if self._face_panel.isVisible():
             self._face_panel.set_photo(photo.path)
+        if self._exif_panel.isVisible():
+            self._exif_panel.set_photo(photo.path)
         self._update_viewer_status(photo)
+        self._update_nav_arrows()
 
     def toggle_sidebar(self) -> None:
         self._left_stack.setVisible(not self._left_stack.isVisible())
@@ -1091,6 +1183,18 @@ class MainWindow(QMainWindow):
             self.showNormal()
         else:
             self.showFullScreen()
+
+    def _start_slideshow(self) -> None:
+        if not self._current_photos:
+            return
+        from src.ui.slideshow import SlideshowWindow
+        win = SlideshowWindow(
+            photos=self._current_photos,
+            start_index=self._current_photo_index,
+            edit_db=self._edit_db,
+            parent=self,
+        )
+        win.show()
 
     def _show_about(self) -> None:
         QMessageBox.about(

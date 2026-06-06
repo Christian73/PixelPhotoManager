@@ -51,8 +51,8 @@ from PySide6.QtWidgets import (
     QLabel, QPushButton, QListWidget, QListWidgetItem,
     QFileDialog, QFrame, QWidget,
 )
-from PySide6.QtCore import Qt, QTimer
-from PySide6.QtGui import QFont
+from PySide6.QtCore import Qt, QPoint, QTimer
+from PySide6.QtGui import QColor, QFont, QPainter, QPen, QPixmap
 
 
 def _build_onboarding(config) -> QDialog:
@@ -143,6 +143,19 @@ def main() -> None:
     app = QApplication(sys.argv)
     app.setApplicationName("PixelPhotoManager")
     app.setOrganizationName("PixelPhotoManager")
+
+    # Génère l'icône coche pour le style global des QCheckBox
+    import tempfile
+    _chk_px = QPixmap(13, 13)
+    _chk_px.fill(QColor(0, 0, 0, 0))
+    _p = QPainter(_chk_px)
+    _p.setRenderHint(QPainter.Antialiasing)
+    _p.setPen(QPen(QColor(255, 255, 255), 2.2, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin))
+    _p.drawLine(QPoint(2, 7), QPoint(5, 10))
+    _p.drawLine(QPoint(5, 10), QPoint(11, 3))
+    _p.end()
+    _check_icon = os.path.join(tempfile.gettempdir(), "ppm_check.png").replace("\\", "/")
+    _chk_px.save(_check_icon, "PNG")
 
     app.setStyleSheet("""
         QToolTip {
@@ -239,6 +252,31 @@ def main() -> None:
             background: #252525;
             color: #aaa;
         }
+        QCheckBox {
+            color: #ccc;
+            spacing: 6px;
+        }
+        QCheckBox::indicator {
+            width: 14px;
+            height: 14px;
+            border-radius: 2px;
+        }
+        QCheckBox::indicator:unchecked {
+            border: 1px solid #777;
+            background: #222232;
+        }
+        QCheckBox::indicator:unchecked:hover {
+            border-color: #bbb;
+            background: #2a2a3e;
+        }
+        QCheckBox::indicator:unchecked:disabled {
+            border: 1px solid #444;
+            background: #1a1a1a;
+        }
+        QCheckBox::indicator:checked:disabled {
+            border: 1px solid #444;
+            background: #1a3060;
+        }
         QSplitter::handle {
             background: #333;
         }
@@ -264,6 +302,15 @@ def main() -> None:
         QScrollBar::sub-page:vertical {
             background: none;
         }
+    """ + f"""
+        QCheckBox::indicator:checked {{
+            border: 1px solid #5577ff;
+            background: #2244bb;
+            image: url({_check_icon});
+        }}
+        QCheckBox::indicator:checked:hover {{
+            background: #3355cc;
+        }}
     """)
 
     logger.debug("Import des modules internes")
@@ -299,7 +346,7 @@ def main() -> None:
     # Proposer l'import Picasa après le premier affichage de la fenêtre
     def _check_picasa():
         from src.ui.picasa_import_dialog import check_and_prompt
-        check_and_prompt(config, catalog, face_db, window)
+        check_and_prompt(config, catalog, face_db, window._edit_db, window)
 
     QTimer.singleShot(800, _check_picasa)
 

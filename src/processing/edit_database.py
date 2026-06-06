@@ -32,6 +32,9 @@ CREATE TABLE IF NOT EXISTS photo_edits (
     bw_red         REAL    DEFAULT 0.0,
     bw_green       REAL    DEFAULT 0.0,
     bw_blue        REAL    DEFAULT 0.0,
+    color_red      REAL    DEFAULT 0.0,
+    color_green    REAL    DEFAULT 0.0,
+    color_blue     REAL    DEFAULT 0.0,
     modified_at    TEXT    DEFAULT CURRENT_TIMESTAMP
 )
 """
@@ -42,6 +45,11 @@ _MIGRATE_STRAIGHTEN = (
 _MIGRATE_GAMMA_CURVE = [
     "ALTER TABLE photo_edits ADD COLUMN gamma_use_curve   INTEGER DEFAULT 0",
     "ALTER TABLE photo_edits ADD COLUMN gamma_curve_points TEXT    DEFAULT NULL",
+]
+_MIGRATE_COLOR_CHANNELS = [
+    "ALTER TABLE photo_edits ADD COLUMN color_red   REAL DEFAULT 0.0",
+    "ALTER TABLE photo_edits ADD COLUMN color_green REAL DEFAULT 0.0",
+    "ALTER TABLE photo_edits ADD COLUMN color_blue  REAL DEFAULT 0.0",
 ]
 
 _CREATE_HISTORY = """
@@ -86,6 +94,11 @@ class EditDatabase:
             except sqlite3.OperationalError:
                 pass  # colonne déjà présente
             for _sql in _MIGRATE_GAMMA_CURVE:
+                try:
+                    conn.execute(_sql)
+                except sqlite3.OperationalError:
+                    pass
+            for _sql in _MIGRATE_COLOR_CHANNELS:
                 try:
                     conn.execute(_sql)
                 except sqlite3.OperationalError:
@@ -148,6 +161,9 @@ class EditDatabase:
                     bw_red=row["bw_red"],
                     bw_green=row["bw_green"],
                     bw_blue=row["bw_blue"],
+                    color_red=row["color_red"] or 0.0,
+                    color_green=row["color_green"] or 0.0,
+                    color_blue=row["color_blue"] or 0.0,
                 )
             except Exception as e:
                 logger.error(f"Erreur lecture retouches {photo_path}: {e}")
@@ -172,9 +188,10 @@ class EditDatabase:
                                  gamma_use_curve, gamma_curve_points,
                                  sharpness, noise_reduction, rotation, straighten,
                                  flip_h, flip_v, crop, bw, bw_red, bw_green, bw_blue,
+                                 color_red, color_green, color_blue,
                                  modified_at)
                             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                                    CURRENT_TIMESTAMP)
+                                    ?, ?, ?, CURRENT_TIMESTAMP)
                             """,
                             (
                                 photo_path,
@@ -188,6 +205,7 @@ class EditDatabase:
                                 json.dumps(list(edit.crop)) if edit.crop else None,
                                 int(edit.bw),
                                 edit.bw_red, edit.bw_green, edit.bw_blue,
+                                edit.color_red, edit.color_green, edit.color_blue,
                             ),
                         )
                     conn.execute(

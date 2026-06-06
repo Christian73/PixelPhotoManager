@@ -8,7 +8,7 @@ import logging
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QFont
 from PySide6.QtWidgets import (
-    QDialog, QDialogButtonBox, QFrame, QLabel,
+    QCheckBox, QDialog, QDialogButtonBox, QFrame, QLabel,
     QProgressBar, QPushButton, QVBoxLayout, QHBoxLayout,
 )
 
@@ -27,11 +27,12 @@ class PicasaImportDialog(QDialog):
     parent   : widget parent optionnel
     """
 
-    def __init__(self, config, catalog, face_db, parent=None) -> None:
+    def __init__(self, config, catalog, face_db, edit_db=None, parent=None) -> None:
         super().__init__(parent)
         self._config  = config
         self._catalog = catalog
         self._face_db = face_db
+        self._edit_db = edit_db
         self._thread  = None
 
         self.setWindowTitle("Données Picasa détectées")
@@ -65,7 +66,7 @@ class PicasaImportDialog(QDialog):
 
         # Stats box
         folders = self._config.get_scan_folders()
-        n_contacts, n_photos = scan(folders)
+        n_contacts, n_photos, n_edits = scan(folders)
 
         stats_frame = QFrame()
         stats_frame.setFrameShape(QFrame.StyledPanel)
@@ -80,8 +81,11 @@ class PicasaImportDialog(QDialog):
         lbl_contacts.setStyleSheet("color: #ccc; border: none;")
         lbl_photos = QLabel(f"  {n_photos} photo(s) avec des visages identifiés")
         lbl_photos.setStyleSheet("color: #ccc; border: none;")
+        lbl_edits = QLabel(f"  {n_edits} photo(s) avec des retouches (rotation, recadrage, luminosité…)")
+        lbl_edits.setStyleSheet("color: #ccc; border: none;")
         stats_layout.addWidget(lbl_contacts)
         stats_layout.addWidget(lbl_photos)
+        stats_layout.addWidget(lbl_edits)
         layout.addWidget(stats_frame)
 
         layout.addWidget(QLabel(
@@ -89,6 +93,14 @@ class PicasaImportDialog(QDialog):
             "les positions des visages Picasa. Elles seront associées\n"
             "automatiquement lors de l'analyse ArcFace, même ultérieure."
         ))
+
+        # Checkbox retouches
+        self._chk_edits = QCheckBox("Importer aussi les retouches Picasa (rotation, recadrage, luminosité…)")
+        self._chk_edits.setChecked(n_edits > 0 and self._edit_db is not None)
+        self._chk_edits.setEnabled(n_edits > 0 and self._edit_db is not None)
+        if self._edit_db is None:
+            self._chk_edits.setToolTip("Base de retouches non disponible")
+        layout.addWidget(self._chk_edits)
 
         # Separator
         sep = QFrame()
@@ -111,22 +123,22 @@ class PicasaImportDialog(QDialog):
         layout.addWidget(self._lbl_status)
 
         # Buttons
-        btn_row = QHBoxLayout()
-        btn_row.setSpacing(10)
+        self._btn_row = QHBoxLayout()
+        self._btn_row.setSpacing(10)
 
         self._btn_skip = QPushButton("Plus tard")
         self._btn_skip.clicked.connect(self._on_skip)
-        btn_row.addWidget(self._btn_skip)
+        self._btn_row.addWidget(self._btn_skip)
 
-        btn_row.addStretch()
+        self._btn_row.addStretch()
 
         self._btn_import = QPushButton("Importer →")
         self._btn_import.setDefault(True)
         self._btn_import.clicked.connect(self._on_import)
-        self._btn_import.setEnabled(n_photos > 0)
-        btn_row.addWidget(self._btn_import)
+        self._btn_import.setEnabled(n_photos > 0 or n_edits > 0)
+        self._btn_row.addWidget(self._btn_import)
 
-        layout.addLayout(btn_row)
+        layout.addLayout(self._btn_row)
 
     # ------------------------------------------------------------------ handlers
 
@@ -137,14 +149,15 @@ class PicasaImportDialog(QDialog):
     def _on_import(self) -> None:
         from src.faces.picasa_importer import PicasaImportThread
 
-        self._btn_import.setEnabled(False)
+        self._btn_import.hide()
         self._btn_skip.setEnabled(False)
         self._progress.show()
         self._lbl_status.setText("Analyse des dossiers en cours…")
         self._lbl_status.show()
 
-        folders = self._config.get_scan_folders()
-        self._thread = PicasaImportThread(self._catalog, self._face_db, folders, self)
+        folders  = self._config.get_scan_folders()
+        edit_db  = self._edit_db if self._chk_edits.isChecked() else None
+        self._thread = PicasaImportThread(self._catalog, self._face_db, folders, edit_db, self)
         self._thread.progress.connect(self._on_progress)
         self._thread.finished.connect(self._on_finished)
         self._thread.start()
@@ -158,11 +171,13 @@ class PicasaImportDialog(QDialog):
         self._progress.setValue(100)
         self._config.set("picasa.import_done", True)
 
-        summary = (
-            f"{result.persons_created} personne(s) créée(s), "
-            f"{result.faces_imported} annotation(s) enregistrée(s) "
-            f"dans {result.photos_processed} photo(s)."
-        )
+        parts = [
+            f"{result.persons_created} personne(s) créée(s)",
+            f"{result.faces_imported} annotation(s) de visage dans {result.photos_processed} photo(s)",
+        ]
+        if result.edits_imported:
+            parts.append(f"{result.edits_imported} retouche(s) importée(s)")
+        summary = ", ".join(parts) + "."
         self._lbl_status.setText(summary)
         self._lbl_status.setStyleSheet("color: #7fba7f; font-size: 11px;")
 
@@ -170,13 +185,14 @@ class PicasaImportDialog(QDialog):
         self._btn_skip.setEnabled(True)
         self._btn_skip.clicked.disconnect()
         self._btn_skip.clicked.connect(self.accept)
+        self._btn_row.insertStretch(0)  # centre le bouton Fermer
 
         logger.info("Import Picasa terminé : %s", summary)
 
 
 # ------------------------------------------------------------------ helper
 
-def check_and_prompt(config, catalog, face_db, parent=None) -> bool:
+def check_and_prompt(config, catalog, face_db, edit_db=None, parent=None) -> bool:
     """
     Show the Picasa import dialog if data is available and hasn't been imported yet.
 
@@ -190,10 +206,10 @@ def check_and_prompt(config, catalog, face_db, parent=None) -> bool:
     if not folders:
         return False
 
-    n_contacts, n_photos = scan(folders)
-    if n_contacts == 0 and n_photos == 0:
+    n_contacts, n_photos, n_edits = scan(folders)
+    if n_contacts == 0 and n_photos == 0 and n_edits == 0:
         return False
 
-    dlg = PicasaImportDialog(config, catalog, face_db, parent)
+    dlg = PicasaImportDialog(config, catalog, face_db, edit_db, parent)
     dlg.exec()
     return True

@@ -36,7 +36,9 @@ CREATE TABLE IF NOT EXISTS photos (
     gps_lon REAL,
     is_favorite INTEGER DEFAULT 0,
     tags TEXT,
-    indexed_at TEXT DEFAULT CURRENT_TIMESTAMP
+    indexed_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    media_type TEXT DEFAULT 'image',
+    duration REAL DEFAULT 0.0
 )
 """
 
@@ -71,7 +73,8 @@ def _photo_from_row(row) -> PhotoInfo:
         id_, path, filename, directory, date_taken, width, height,
         file_size, file_mtime, camera_make, camera_model, lens_model,
         iso, exposure_time, aperture, focal_length,
-        has_gps, gps_lat, gps_lon, is_favorite, tags, _indexed_at
+        has_gps, gps_lat, gps_lon, is_favorite, tags, _indexed_at,
+        media_type, duration,
     ) = row
 
     dt = None
@@ -103,6 +106,8 @@ def _photo_from_row(row) -> PhotoInfo:
         is_favorite=bool(is_favorite),
         tags=tags.split(",") if tags else [],
         id=id_,
+        media_type=media_type or "image",
+        duration=float(duration or 0.0),
     )
 
 
@@ -125,9 +130,20 @@ class Catalog:
                 conn.execute(_CREATE_ALBUM_PHOTOS)
                 conn.execute(_CREATE_PERSONS)
                 self._migrate_normalize_paths(conn)
+                self._migrate_video_fields(conn)
                 conn.commit()
             finally:
                 conn.close()
+
+    def _migrate_video_fields(self, conn) -> None:
+        for stmt in (
+            "ALTER TABLE photos ADD COLUMN media_type TEXT DEFAULT 'image'",
+            "ALTER TABLE photos ADD COLUMN duration REAL DEFAULT 0.0",
+        ):
+            try:
+                conn.execute(stmt)
+            except Exception:
+                pass  # colonne déjà présente
 
     def _migrate_normalize_paths(self, conn) -> None:
         """Normalise les séparateurs de chemin dans les données existantes.
@@ -168,8 +184,9 @@ class Catalog:
                         (path, filename, directory, date_taken, width, height,
                          file_size, file_mtime, camera_make, camera_model, lens_model,
                          iso, exposure_time, aperture, focal_length,
-                         has_gps, gps_lat, gps_lon, is_favorite, tags)
-                    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                         has_gps, gps_lat, gps_lon, is_favorite, tags,
+                         media_type, duration)
+                    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                     ON CONFLICT(path) DO UPDATE SET
                         filename=excluded.filename,
                         directory=excluded.directory,
@@ -189,6 +206,8 @@ class Catalog:
                         gps_lat=excluded.gps_lat,
                         gps_lon=excluded.gps_lon,
                         tags=excluded.tags,
+                        media_type=excluded.media_type,
+                        duration=excluded.duration,
                         indexed_at=CURRENT_TIMESTAMP
                     """,
                     (
@@ -198,6 +217,7 @@ class Catalog:
                         photo.iso, photo.exposure_time, photo.aperture, photo.focal_length,
                         int(photo.has_gps), photo.gps_lat, photo.gps_lon,
                         int(photo.is_favorite), tags_str,
+                        photo.media_type, photo.duration,
                     ),
                 )
                 conn.commit()
@@ -209,6 +229,21 @@ class Catalog:
         if row:
             return _photo_from_row(row)
         return photo
+
+    def count_photos_in_folder(self, folder: str) -> int:
+        """Retourne le nombre de photos (et vidéos) indexées sous folder (récursivement)."""
+        folder = os.path.normpath(folder)
+        like_pattern = folder + os.sep + "%"
+        with self._lock:
+            conn = self._conn()
+            try:
+                row = conn.execute(
+                    "SELECT COUNT(*) FROM photos WHERE directory=? OR directory LIKE ?",
+                    (folder, like_pattern),
+                ).fetchone()
+            finally:
+                conn.close()
+        return row[0] if row else 0
 
     def get_photos_in_folder(self, folder: str) -> list[PhotoInfo]:
         folder = os.path.normpath(folder)

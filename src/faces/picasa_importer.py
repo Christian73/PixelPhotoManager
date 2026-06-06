@@ -19,6 +19,8 @@ from pathlib import Path
 
 from PySide6.QtCore import QThread, Signal
 
+from src.core.models import EditInfo
+
 logger = logging.getLogger(__name__)
 
 _CONTACTS_PATHS = [
@@ -26,6 +28,8 @@ _CONTACTS_PATHS = [
     Path(os.environ.get("APPDATA", ""))       / "Google/Picasa2/contacts/contacts.xml",
 ]
 _INI_NAMES = ("picasa.ini", ".picasa.ini", "Picasa.ini")
+
+_CROP_RE = re.compile(r"rect64\(([0-9a-fA-F]+)\)", re.IGNORECASE)
 
 
 # ------------------------------------------------------------------ contacts
@@ -66,7 +70,123 @@ def _decode_rect64(hex_str: str) -> tuple[float, float, float, float]:
     return left, top, right, bottom
 
 
-def _parse_ini(ini_path: Path) -> tuple[dict[str, str], dict[str, list[tuple[str, str]]]]:
+def _parse_filters(filters_str: str) -> dict[str, list[float]]:
+    """
+    Parse the Picasa filters chain.
+
+    Format: "filtername=enabled,p1,p2,...;filtername2=...;"
+    Returns {name: [float params including enabled flag]}.
+    """
+    result: dict[str, list[float]] = {}
+    for entry in filters_str.split(";"):
+        entry = entry.strip()
+        if not entry or "=" not in entry:
+            continue
+        name, _, params_str = entry.partition("=")
+        name = name.strip()
+        try:
+            params = [float(p) for p in params_str.split(",") if p.strip()]
+        except ValueError:
+            continue
+        if params:
+            result[name] = params
+    return result
+
+
+def _parse_section_edits(cp: configparser.RawConfigParser, section: str) -> dict:
+    """Extract edit metadata from a picasa.ini section. Returns raw dict (may be empty)."""
+    raw: dict = {}
+
+    # Rotation: rotate=1 (90° CW), 2 (180°), 3 (270° CW / 90° CCW)
+    if cp.has_option(section, "rotate"):
+        try:
+            raw["rotate"] = int(cp.get(section, "rotate"))
+        except ValueError:
+            pass
+
+    # Crop: crop=rect64(hex) ou crop64=hex (Picasa >= 3)
+    for key in ("crop", "crop64"):
+        if cp.has_option(section, key):
+            val = cp.get(section, key).strip()
+            m = _CROP_RE.search(val)
+            hex_str = m.group(1) if m else (val if re.match(r"^[0-9a-fA-F]{16}$", val) else None)
+            if hex_str:
+                raw["crop"] = _decode_rect64(hex_str)
+                break
+
+    # Filters chain
+    if cp.has_option(section, "filters"):
+        filters = _parse_filters(cp.get(section, "filters"))
+        if filters:
+            raw["filters"] = filters
+
+    return raw
+
+
+def _picasa_to_edit_info(raw: dict) -> EditInfo | None:
+    """
+    Convert raw Picasa edit dict to EditInfo.
+
+    Mappings
+    --------
+    rotate 1/2/3            → rotation 90/180/270°
+    crop rect               → crop (left, top, right, bottom) normalized
+    filters.bw              → bw
+    filters.finetune2       → brightness (fill light), saturation
+      finetune2=en,fill,highlights,color_temp,saturation,0
+    filters.anisotropic     → sharpness (0–1)
+    filters.sharpen         → sharpness (fallback, older Picasa)
+
+    Returns None if no edits are found.
+    """
+    edit = EditInfo()
+    changed = False
+
+    rotate_map = {1: 90.0, 2: 180.0, 3: 270.0}
+    if "rotate" in raw:
+        deg = rotate_map.get(raw["rotate"])
+        if deg is not None:
+            edit.rotation = deg
+            changed = True
+
+    if "crop" in raw:
+        left, top, right, bottom = raw["crop"]
+        if right > left and bottom > top:
+            edit.crop = (left, top, right, bottom)
+            changed = True
+
+    filters = raw.get("filters", {})
+
+    # Black & white
+    if "bw" in filters and filters["bw"] and filters["bw"][0] >= 1:
+        edit.bw = True
+        changed = True
+
+    # Fine tune: finetune2=enabled,fill_light,highlights,color_temp,saturation,0
+    if "finetune2" in filters:
+        p = filters["finetune2"]
+        if p and p[0] >= 1:  # enabled
+            if len(p) >= 2 and p[1] != 0.0:
+                edit.brightness = max(-1.0, min(1.0, p[1]))
+                changed = True
+            if len(p) >= 5 and p[4] != 0.0:
+                edit.saturation = max(-1.0, min(1.0, p[4]))
+                changed = True
+
+    # Sharpening
+    for fname in ("anisotropic", "sharpen"):
+        if fname in filters:
+            p = filters[fname]
+            if p and p[0] >= 1:
+                strength = p[1] if len(p) >= 2 else 0.5
+                edit.sharpness = max(0.0, min(1.0, strength))
+                changed = True
+                break
+
+    return edit if changed else None
+
+
+def _parse_ini(ini_path: Path) -> tuple[dict[str, str], dict[str, list[tuple[str, str]]], dict[str, dict]]:
     """
     Parse a single picasa.ini file.
 
@@ -74,6 +194,7 @@ def _parse_ini(ini_path: Path) -> tuple[dict[str, str], dict[str, list[tuple[str
     -------
     contacts : {hash: name}  from the [Contacts2] section
     faces    : {filename: [(rect64_hex, person_hash), ...]}
+    edits    : {filename: raw_edit_dict}
     """
     cp = configparser.RawConfigParser()
     for enc in ("utf-8", "latin-1", "cp1252"):
@@ -92,6 +213,7 @@ def _parse_ini(ini_path: Path) -> tuple[dict[str, str], dict[str, list[tuple[str
 
     rect_re = re.compile(r"rect64\(([0-9a-fA-F]+)\),([0-9a-fA-F]+)")
     faces: dict[str, list[tuple[str, str]]] = {}
+    edits: dict[str, dict] = {}
     for section in cp.sections():
         if section in ("Contacts2", "Picasa") or section.startswith(".album:"):
             continue
@@ -102,8 +224,11 @@ def _parse_ini(ini_path: Path) -> tuple[dict[str, str], dict[str, list[tuple[str
             ]
             if entries:
                 faces[section] = entries
+        raw = _parse_section_edits(cp, section)
+        if raw:
+            edits[section] = raw
 
-    return contacts, faces
+    return contacts, faces, edits
 
 
 # ------------------------------------------------------------------ discovery
@@ -114,20 +239,21 @@ def find_ini_files(folders: list[str]) -> list[Path]:
     for folder in folders:
         if not os.path.isdir(folder):
             continue
-        for dirpath, _dirs, filenames in os.walk(folder):
+        for dirpath, dirs, filenames in os.walk(folder):
+            dirs[:] = [d for d in dirs if d != "Originals"]
             for name in _INI_NAMES:
                 if name in filenames:
                     found.append(Path(dirpath) / name)
     return found
 
 
-def scan(folders: list[str]) -> tuple[int, int]:
+def scan(folders: list[str]) -> tuple[int, int, int]:
     """
     Quick scan without full import.
 
     Returns
     -------
-    (n_global_contacts, n_photos_with_faces)
+    (n_global_contacts, n_photos_with_faces, n_photos_with_edits)
     """
     n_contacts = 0
     cx = find_contacts_xml()
@@ -135,11 +261,13 @@ def scan(folders: list[str]) -> tuple[int, int]:
         n_contacts = len(parse_contacts_xml(cx))
 
     n_photos = 0
+    n_edits = 0
     for ini_path in find_ini_files(folders):
-        _, faces = _parse_ini(ini_path)
+        _, faces, edits = _parse_ini(ini_path)
         n_photos += len(faces)
+        n_edits += len(edits)
 
-    return n_contacts, n_photos
+    return n_contacts, n_photos, n_edits
 
 
 # ------------------------------------------------------------------ result
@@ -149,6 +277,7 @@ class PicasaImportResult:
         self.persons_created:  int       = 0
         self.faces_imported:   int       = 0
         self.photos_processed: int       = 0
+        self.edits_imported:   int       = 0
         self.errors:           list[str] = []
 
 
@@ -158,7 +287,8 @@ def _run_import(
     catalog,
     face_db,
     folders: list[str],
-    progress_cb=None,   # callable(current: int, total: int) → None
+    edit_db=None,           # EditDatabase optionnel pour importer les retouches
+    progress_cb=None,       # callable(current: int, total: int) → None
 ) -> PicasaImportResult:
     result = PicasaImportResult()
 
@@ -177,11 +307,11 @@ def _run_import(
         return result
 
     # First pass: collect all local contacts to build a complete hash→name map
-    ini_data: list[tuple[Path, dict[str, list]]] = []
+    ini_data: list[tuple[Path, dict, dict]] = []
     for ini_path in ini_files:
-        local_contacts, faces = _parse_ini(ini_path)
+        local_contacts, faces, edits = _parse_ini(ini_path)
         all_contacts.update(local_contacts)
-        ini_data.append((ini_path, faces))
+        ini_data.append((ini_path, faces, edits))
 
     # Create missing persons in catalog
     existing_persons = {p.name: p for p in catalog.get_persons()}
@@ -193,8 +323,8 @@ def _run_import(
             result.persons_created += 1
         hash_to_person_id[h] = existing_persons[name].id
 
-    # Second pass: import faces
-    for i, (ini_path, faces) in enumerate(ini_data):
+    # Second pass: import faces and edits
+    for i, (ini_path, faces, edits_map) in enumerate(ini_data):
         if progress_cb:
             progress_cb(i + 1, total)
         folder = ini_path.parent
@@ -236,9 +366,23 @@ def _run_import(
             result.faces_imported  += len(annotations)
             result.photos_processed += 1
 
+        # Import des retouches Picasa (seulement si demandé et photo non encore retouchée)
+        if edit_db is not None:
+            for filename, raw in edits_map.items():
+                photo_path = folder / filename
+                if not photo_path.exists():
+                    continue
+                path_str = os.path.normpath(str(photo_path))
+                if edit_db.has_edits(path_str):
+                    continue  # ne pas écraser les retouches existantes
+                edit_info = _picasa_to_edit_info(raw)
+                if edit_info is not None:
+                    edit_db.save(path_str, edit_info, operation="picasa_import")
+                    result.edits_imported += 1
+
     logger.info(
-        "Picasa import terminé : %d personnes créées, %d visages, %d photos",
-        result.persons_created, result.faces_imported, result.photos_processed,
+        "Picasa import terminé : %d personnes créées, %d visages, %d photos, %d retouches",
+        result.persons_created, result.faces_imported, result.photos_processed, result.edits_imported,
     )
     return result
 
@@ -251,17 +395,19 @@ class PicasaImportThread(QThread):
     progress = Signal(int, int)   # current_ini, total_ini
     finished = Signal(object)     # PicasaImportResult
 
-    def __init__(self, catalog, face_db, folders: list[str], parent=None) -> None:
+    def __init__(self, catalog, face_db, folders: list[str], edit_db=None, parent=None) -> None:
         super().__init__(parent)
         self._catalog = catalog
         self._face_db = face_db
         self._folders = folders
+        self._edit_db = edit_db
 
     def run(self) -> None:
         result = _run_import(
             self._catalog,
             self._face_db,
             self._folders,
+            edit_db=self._edit_db,
             progress_cb=lambda cur, tot: self.progress.emit(cur, tot),
         )
         self.finished.emit(result)

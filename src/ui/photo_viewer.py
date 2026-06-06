@@ -2,9 +2,9 @@ import io
 import logging
 import math
 
-from PySide6.QtCore import Qt, Signal, QPoint, QRectF, QPointF, QSize
+from PySide6.QtCore import Qt, QUrl, Signal, QPoint, QRectF, QPointF, QSize
 from PySide6.QtGui import (
-    QPixmap, QPainter, QKeyEvent, QWheelEvent,
+    QDesktopServices, QPixmap, QPainter, QKeyEvent, QWheelEvent,
     QMouseEvent, QPen, QColor, QPainterPath, QPolygonF, QIcon,
 )
 from PySide6.QtWidgets import (
@@ -25,6 +25,10 @@ _PREVIEW_MAX_PX = 1024
 
 
 def _build_pixmap(photo: PhotoInfo, edit: EditInfo | None) -> QPixmap | None:
+    from pathlib import Path as _Path
+    from src.library.exif_reader import VIDEO_EXT
+    if _Path(photo.path).suffix.lower() in VIDEO_EXT:
+        return _build_video_pixmap(photo.path)
     try:
         from PIL import Image, ImageOps
         with Image.open(photo.path) as img:
@@ -48,6 +52,41 @@ def _build_pixmap(photo: PhotoInfo, edit: EditInfo | None) -> QPixmap | None:
             return pixmap
     except Exception as e:
         logger.error(f"Erreur chargement photo {photo.path}: {e}")
+        return None
+
+
+def _build_video_pixmap(video_path: str) -> QPixmap | None:
+    """Extrait une frame de la vidéo pour l'afficher dans la visionneuse."""
+    try:
+        import cv2
+        from PIL import Image
+
+        cap = cv2.VideoCapture(video_path)
+        if not cap.isOpened():
+            return None
+        frame_count = cap.get(cv2.CAP_PROP_FRAME_COUNT)
+        if frame_count > 10:
+            cap.set(cv2.CAP_PROP_POS_FRAMES, int(frame_count * 0.1))
+        ret, frame = cap.read()
+        cap.release()
+        if not ret:
+            return None
+
+        frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        img = Image.fromarray(frame)
+        w, h = img.size
+        if max(w, h) > _PREVIEW_MAX_PX:
+            scale = _PREVIEW_MAX_PX / max(w, h)
+            img = img.resize((round(w * scale), round(h * scale)), Image.LANCZOS)
+        if img.mode != "RGB":
+            img = img.convert("RGB")
+        buf = io.BytesIO()
+        img.save(buf, format="JPEG", quality=92)
+        pixmap = QPixmap()
+        pixmap.loadFromData(buf.getvalue())
+        return pixmap
+    except Exception as e:
+        logger.error("Erreur chargement vidéo %s: %s", video_path, e)
         return None
 
 
@@ -865,6 +904,17 @@ class PhotoViewer(QWidget):
         self._btn_100.clicked.connect(self.zoom_100)
         tb_layout.addWidget(self._btn_100)
 
+        self._btn_play_video = QPushButton("▶  Ouvrir la vidéo")
+        self._btn_play_video.setToolTip("Ouvrir dans le lecteur vidéo par défaut")
+        self._btn_play_video.setStyleSheet(
+            "QPushButton { background:#2a6a2a; color:white; border:none;"
+            " border-radius:3px; padding:4px 10px; }"
+            "QPushButton:hover { background:#3a7a3a; }"
+        )
+        self._btn_play_video.clicked.connect(self._open_in_player)
+        self._btn_play_video.hide()
+        tb_layout.addWidget(self._btn_play_video)
+
         self._btn_close = QPushButton("✕")
         self._btn_close.setToolTip("Fermer  (Echap)")
         self._btn_close.setFixedWidth(32)
@@ -955,9 +1005,11 @@ class PhotoViewer(QWidget):
 
     def set_photo(self, photo: PhotoInfo, edit: EditInfo | None = None) -> None:
         self._photo = photo
-        self._edit = edit or self._db.load(photo.path)
+        is_video = photo.media_type == "video"
+        self._edit = None if is_video else (edit or self._db.load(photo.path))
         self._lbl_name.setText(photo.path)
         self._btn_fav.setChecked(photo.is_favorite)
+        self._btn_play_video.setVisible(is_video)
         self._reload_pixmap()
 
     def _reload_pixmap(self) -> None:
@@ -1018,6 +1070,10 @@ class PhotoViewer(QWidget):
     def confirm_crop(self) -> None:
         self._canvas.confirm_crop()    # émet crop_confirmed → _on_crop_confirmed
 
+    def update_nav_arrows(self, has_prev: bool, has_next: bool) -> None:
+        self._btn_prev.setVisible(has_prev)
+        self._btn_next.setVisible(has_next)
+
     def cancel_crop(self) -> None:
         self._canvas.cancel_crop()
         self._crop_format_widget.hide()
@@ -1038,6 +1094,10 @@ class PhotoViewer(QWidget):
 
     # ------------------------------------------------------------------ misc
 
+    def _open_in_player(self) -> None:
+        if self._photo:
+            QDesktopServices.openUrl(QUrl.fromLocalFile(self._photo.path))
+
     def _show_context_menu(self, pos) -> None:
         if not self._photo:
             return
@@ -1046,6 +1106,23 @@ class PhotoViewer(QWidget):
         menu.addSeparator()
         menu.addAction("Enregistrer l'image traitée sur le disque",
                        lambda: self.save_requested.emit(self._photo))
+
+        has_gps = bool(
+            self._photo.has_gps
+            and self._photo.gps_lat is not None
+            and self._photo.gps_lon is not None
+        )
+        menu.addSeparator()
+        act_map = menu.addAction("Localiser sur la carte")
+        act_map.setEnabled(has_gps)
+        if has_gps:
+            lat, lon = self._photo.gps_lat, self._photo.gps_lon
+            act_map.triggered.connect(
+                lambda: QDesktopServices.openUrl(
+                    QUrl(f"https://www.openstreetmap.org/?mlat={lat}&mlon={lon}&zoom=15#map=15/{lat}/{lon}")
+                )
+            )
+
         menu.exec(pos)
 
     def _toggle_favorite(self, checked: bool) -> None:

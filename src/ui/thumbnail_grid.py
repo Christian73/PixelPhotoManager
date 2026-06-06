@@ -3,7 +3,7 @@ import weakref
 from pathlib import Path
 
 from PySide6.QtCore import Qt, Signal, QRunnable, QThreadPool, QObject, Slot, QSize, QPoint, QRect, QTimer, QUrl, QMimeData
-from PySide6.QtGui import QPixmap, QColor, QPainter, QFont, QDrag
+from PySide6.QtGui import QPixmap, QColor, QPainter, QFont, QDrag, QPainterPath
 from PySide6.QtWidgets import (
     QScrollArea, QWidget, QLabel, QVBoxLayout, QSizePolicy,
     QMenu, QApplication,
@@ -107,7 +107,28 @@ class ThumbnailCell(QWidget):
             Qt.KeepAspectRatio,
             Qt.SmoothTransformation,
         )
+        if self._photo.media_type == "video":
+            scaled = self._add_video_badge(scaled)
         self._img_label.setPixmap(scaled)
+
+    def _add_video_badge(self, pixmap: QPixmap) -> QPixmap:
+        """Composite un badge ▶ sur le coin inférieur droit de la vignette vidéo."""
+        result = QPixmap(pixmap)
+        p = QPainter(result)
+        p.setRenderHint(QPainter.Antialiasing)
+        r = 12
+        cx = result.width()  - r - 4
+        cy = result.height() - r - 4
+        p.setBrush(QColor(0, 0, 0, 160))
+        p.setPen(Qt.NoPen)
+        p.drawEllipse(cx - r, cy - r, 2 * r, 2 * r)
+        p.setPen(QColor(255, 255, 255))
+        f = QFont()
+        f.setPixelSize(13)
+        p.setFont(f)
+        p.drawText(QRect(cx - r, cy - r, 2 * r, 2 * r), Qt.AlignCenter, "▶")
+        p.end()
+        return result
 
     def set_selected(self, selected: bool) -> None:
         self._selected = selected
