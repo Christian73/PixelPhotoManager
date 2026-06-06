@@ -495,7 +495,7 @@ class MainWindow(QMainWindow):
         self._stack.addWidget(_grid_container)
 
         # Index 1 — Visionneuse (avec panneau Visages rétractable à gauche)
-        self._viewer = PhotoViewer()
+        self._viewer = PhotoViewer(config=self._config)
         self._viewer.closed.connect(self.show_grid)
         self._viewer.navigate.connect(self._navigate_photo)
         self._viewer.zoom_changed.connect(self._on_viewer_zoom_changed)
