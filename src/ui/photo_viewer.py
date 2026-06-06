@@ -906,17 +906,6 @@ class PhotoViewer(QWidget):
         self._btn_100.clicked.connect(self.zoom_100)
         tb_layout.addWidget(self._btn_100)
 
-        self._btn_play_video = QPushButton("▶  Ouvrir la vidéo")
-        self._btn_play_video.setToolTip("Ouvrir dans le lecteur vidéo par défaut")
-        self._btn_play_video.setStyleSheet(
-            "QPushButton { background:#2a6a2a; color:white; border:none;"
-            " border-radius:3px; padding:4px 10px; }"
-            "QPushButton:hover { background:#3a7a3a; }"
-        )
-        self._btn_play_video.clicked.connect(self._open_in_player)
-        self._btn_play_video.hide()
-        tb_layout.addWidget(self._btn_play_video)
-
         self._btn_close = QPushButton("✕")
         self._btn_close.setToolTip("Fermer  (Echap)")
         self._btn_close.setFixedWidth(32)
@@ -949,6 +938,18 @@ class PhotoViewer(QWidget):
         nav_layout.addStretch()
 
         # Boutons de format de recadrage (masqués hors mode crop)
+        self._btn_play_video = QPushButton("▶  Ouvrir la vidéo")
+        self._btn_play_video.setToolTip("Ouvrir dans le lecteur vidéo par défaut")
+        self._btn_play_video.setFixedHeight(36)
+        self._btn_play_video.setStyleSheet(
+            "QPushButton { background:#2a6a2a; color:white; border:none;"
+            " border-radius:3px; padding:4px 16px; font-size: 13px; }"
+            "QPushButton:hover { background:#3a7a3a; }"
+        )
+        self._btn_play_video.clicked.connect(self._open_in_player)
+        self._btn_play_video.hide()
+        nav_layout.addWidget(self._btn_play_video)
+
         self._crop_format_widget = QWidget()
         self._crop_format_widget.setStyleSheet("background: transparent;")
         fmt_layout = QHBoxLayout(self._crop_format_widget)
