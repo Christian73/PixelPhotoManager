@@ -24,6 +24,8 @@ class ImageAdjuster:
             image = ImageAdjuster.apply_contrast(image, edit.contrast)
         if edit.saturation != 0.0:
             image = ImageAdjuster.apply_saturation(image, edit.saturation)
+        if edit.color_red != 0.0 or edit.color_green != 0.0 or edit.color_blue != 0.0:
+            image = ImageAdjuster.apply_color_channels(image, edit.color_red, edit.color_green, edit.color_blue)
         if edit.gamma_use_curve:
             image = ImageAdjuster.apply_gamma_curve(image, edit.gamma_curve_points)
         elif edit.gamma != 1.0:
@@ -158,6 +160,16 @@ class ImageAdjuster:
             return image
         radius = value * 2.0
         return image.filter(ImageFilter.GaussianBlur(radius=radius))
+
+    @staticmethod
+    def apply_color_channels(image: Image.Image, red: float, green: float, blue: float) -> Image.Image:
+        """Ajuste chaque canal indépendamment. Valeurs en [-1, 1] : 0 = neutre."""
+        import array
+        def _lut(v):
+            return array.array("B", [int(min(255, max(0, i * (1.0 + v)))) for i in range(256)])
+        lut_full = list(_lut(red)) + list(_lut(green)) + list(_lut(blue))
+        img = image.convert("RGB") if image.mode != "RGB" else image
+        return img.point(lut_full)
 
     @staticmethod
     def apply_bw(image: Image.Image, red: float, green: float, blue: float) -> Image.Image:

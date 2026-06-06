@@ -28,6 +28,8 @@ class PhotoInfo:
     is_favorite: bool = False
     tags: list[str] = field(default_factory=list)
     id: Optional[int] = None
+    media_type: str = "image"   # "image" or "video"
+    duration: float = 0.0       # durée en secondes (vidéos uniquement)
 
     def __post_init__(self):
         if self.path:
@@ -59,6 +61,9 @@ class EditInfo:
     bw_red: float = 0.0
     bw_green: float = 0.0
     bw_blue: float = 0.0
+    color_red: float = 0.0
+    color_green: float = 0.0
+    color_blue: float = 0.0
 
     def is_modified(self) -> bool:
         return (
@@ -75,6 +80,9 @@ class EditInfo:
             or self.flip_v
             or self.crop is not None
             or self.bw
+            or self.color_red != 0.0
+            or self.color_green != 0.0
+            or self.color_blue != 0.0
         )
 
     def to_dict(self) -> dict:
@@ -96,6 +104,9 @@ class EditInfo:
             "bw_red": self.bw_red,
             "bw_green": self.bw_green,
             "bw_blue": self.bw_blue,
+            "color_red": self.color_red,
+            "color_green": self.color_green,
+            "color_blue": self.color_blue,
         }
 
     @classmethod
@@ -122,6 +133,9 @@ class EditInfo:
             bw_red=float(data.get("bw_red", 0.0)),
             bw_green=float(data.get("bw_green", 0.0)),
             bw_blue=float(data.get("bw_blue", 0.0)),
+            color_red=float(data.get("color_red", 0.0)),
+            color_green=float(data.get("color_green", 0.0)),
+            color_blue=float(data.get("color_blue", 0.0)),
         )
 
 

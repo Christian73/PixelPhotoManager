@@ -62,6 +62,9 @@ class ThumbnailCache:
     def generate(self, photo_path: str, edit=None) -> QPixmap | None:
         """Génère (et met en cache) la vignette de photo_path.
         Si edit (EditInfo) est fourni, les retouches sont appliquées avant le redimensionnement."""
+        from src.library.exif_reader import VIDEO_EXT
+        if Path(photo_path).suffix.lower() in VIDEO_EXT:
+            return self._generate_video_thumb(photo_path)
         try:
             from PIL import Image, ImageOps
 
@@ -106,6 +109,56 @@ class ThumbnailCache:
             return pixmap
         except Exception as e:
             logger.debug(f"Erreur génération vignette {photo_path}: {e}")
+            return None
+
+    def _generate_video_thumb(self, video_path: str) -> QPixmap | None:
+        """Extrait une frame de la vidéo et en fait une vignette mise en cache."""
+        try:
+            import cv2
+            from PIL import Image
+
+            cap = cv2.VideoCapture(video_path)
+            if not cap.isOpened():
+                return None
+            frame_count = cap.get(cv2.CAP_PROP_FRAME_COUNT)
+            if frame_count > 10:
+                cap.set(cv2.CAP_PROP_POS_FRAMES, int(frame_count * 0.1))
+            ret, frame = cap.read()
+            cap.release()
+            if not ret:
+                return None
+
+            frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            img = Image.fromarray(frame)
+            img.thumbnail(self.THUMB_SIZE, Image.LANCZOS)
+            if img.mode != "RGB":
+                img = img.convert("RGB")
+
+            buf = io.BytesIO()
+            img.save(buf, format="JPEG", quality=85)
+            data = buf.getvalue()
+
+            key   = self._key(video_path)
+            mtime = Path(video_path).stat().st_mtime
+            with self._lock:
+                conn = self._conn()
+                try:
+                    conn.execute(
+                        "INSERT OR REPLACE INTO thumbnails"
+                        " (photo_hash, photo_path, file_mtime, thumbnail_data)"
+                        " VALUES (?, ?, ?, ?)",
+                        (key, video_path, mtime, data),
+                    )
+                    conn.commit()
+                finally:
+                    conn.close()
+
+            pixmap = QPixmap()
+            pixmap.loadFromData(QByteArray(data))
+            self._store_ram(key, pixmap)
+            return pixmap
+        except Exception as e:
+            logger.debug("Erreur génération vignette vidéo %s: %s", video_path, e)
             return None
 
     def move_photo(self, old_path: str, new_path: str) -> None:

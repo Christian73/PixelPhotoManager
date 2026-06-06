@@ -2,7 +2,6 @@ import copy
 import logging
 import math
 import os
-import tempfile
 
 from PySide6.QtCore import Qt, Signal, QSize, QPoint, QTimer
 from PySide6.QtGui import (
@@ -393,27 +392,6 @@ class TreatmentDialog(QDialog):
 
 # ------------------------------------------------------------------ courbe gamma
 
-_CHECK_ICON_PATH: str | None = None
-
-
-def _check_icon_path() -> str:
-    """Génère une icône coche blanche (PNG temporaire) et retourne son chemin."""
-    global _CHECK_ICON_PATH
-    if _CHECK_ICON_PATH is None:
-        px = QPixmap(13, 13)
-        px.fill(QColor(0, 0, 0, 0))
-        painter = QPainter(px)
-        painter.setRenderHint(QPainter.Antialiasing)
-        pen = QPen(QColor(255, 255, 255), 2.2, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin)
-        painter.setPen(pen)
-        painter.drawLine(QPoint(2, 7), QPoint(5, 10))
-        painter.drawLine(QPoint(5, 10), QPoint(11, 3))
-        painter.end()
-        path = os.path.join(tempfile.gettempdir(), "ppm_check.png")
-        px.save(path, "PNG")
-        _CHECK_ICON_PATH = path.replace("\\", "/")
-    return _CHECK_ICON_PATH
-
 
 def _compute_luminosity_histogram(photo_path: str) -> list[float]:
     """Retourne 256 valeurs normalisées (log) de l'histogramme de luminosité."""
@@ -629,30 +607,9 @@ class GammaTreatmentDialog(QDialog):
         self._gamma_slider.value_changed.connect(self._on_gamma_changed)
         layout.addWidget(self._gamma_slider)
 
-        # Checkbox avec indicateur visible sur fond sombre
         self._chk = QCheckBox("Paramétrage avancé…")
         self._chk.setChecked(edit.gamma_use_curve)
         self._chk.toggled.connect(self._on_advanced_toggled)
-        icon = _check_icon_path()
-        self._chk.setStyleSheet(f"""
-            QCheckBox {{ color: #ccc; spacing: 6px; }}
-            QCheckBox::indicator {{
-                width: 14px; height: 14px; border-radius: 2px;
-            }}
-            QCheckBox::indicator:unchecked {{
-                border: 1px solid #777; background: #222232;
-            }}
-            QCheckBox::indicator:unchecked:hover {{
-                border-color: #bbb; background: #2a2a3e;
-            }}
-            QCheckBox::indicator:checked {{
-                border: 1px solid #5577ff; background: #2244bb;
-                image: url({icon});
-            }}
-            QCheckBox::indicator:checked:hover {{
-                background: #3355cc;
-            }}
-        """)
         layout.addWidget(self._chk)
 
         # Section avancée (masquée par défaut)
@@ -722,13 +679,88 @@ class GammaTreatmentDialog(QDialog):
         return self._edit
 
 
+# ------------------------------------------------------------------ dialogue couleurs
+
+
+class CouleursTreatmentDialog(QDialog):
+    preview = Signal(object)  # EditInfo
+
+    def __init__(self, edit: EditInfo, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Couleurs")
+        self.setMinimumWidth(720)
+        self._edit = copy.copy(edit)
+        self._panel = None
+
+        layout = QVBoxLayout(self)
+        layout.setSpacing(8)
+        layout.setContentsMargins(12, 12, 12, 12)
+
+        # Curseur saturation globale
+        self._sl_sat = EditSlider("Saturation", -1.0, 1.0, edit.saturation, 2)
+        self._sl_sat.value_changed.connect(lambda v: self._on_changed("saturation", v))
+        layout.addWidget(self._sl_sat)
+
+        # Checkbox avancé
+        chk = QCheckBox("Fonctions avancées…")
+        has_channel_edits = any(v != 0.0 for v in (edit.color_red, edit.color_green, edit.color_blue))
+        chk.setChecked(has_channel_edits)
+        layout.addWidget(chk)
+
+        # Section RVB (masquée par défaut)
+        self._adv = QWidget()
+        adv_layout = QVBoxLayout(self._adv)
+        adv_layout.setContentsMargins(0, 4, 0, 0)
+        adv_layout.setSpacing(4)
+
+        lbl = QLabel("Réglage des couleurs indépendantes")
+        lbl.setStyleSheet("color: #999; font-size: 10px;")
+        adv_layout.addWidget(lbl)
+
+        self._sl_r = EditSlider("Rouge",  -1.0, 1.0, edit.color_red,   2)
+        self._sl_g = EditSlider("Vert",   -1.0, 1.0, edit.color_green, 2)
+        self._sl_b = EditSlider("Bleu",   -1.0, 1.0, edit.color_blue,  2)
+        for sl, attr in [
+            (self._sl_r, "color_red"),
+            (self._sl_g, "color_green"),
+            (self._sl_b, "color_blue"),
+        ]:
+            sl.value_changed.connect(lambda v, a=attr: self._on_changed(a, v))
+            adv_layout.addWidget(sl)
+
+        self._adv.setVisible(has_channel_edits)
+        chk.toggled.connect(self._adv.setVisible)
+        chk.toggled.connect(lambda _: QTimer.singleShot(0, self.adjustSize))
+        layout.addWidget(self._adv)
+
+        btn_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        btn_box.button(QDialogButtonBox.Ok).setText("Valider")
+        btn_box.button(QDialogButtonBox.Cancel).setText("Annuler")
+        btn_box.accepted.connect(self.accept)
+        btn_box.rejected.connect(self.reject)
+        layout.addWidget(btn_box)
+
+    def showEvent(self, event) -> None:
+        super().showEvent(event)
+        if self._panel is not None:
+            pos = self._panel._compute_dialog_pos(self.width(), self.height())
+            QTimer.singleShot(0, lambda: self.move(pos))
+
+    def _on_changed(self, attr: str, value: float) -> None:
+        setattr(self._edit, attr, value)
+        self.preview.emit(copy.copy(self._edit))
+
+    def get_edit(self) -> EditInfo:
+        return self._edit
+
+
 # ------------------------------------------------------------------ panneau principal
 
 # (label, icône_fn, sliders_def)
 _TREATMENTS: list[tuple] = [
     ("Luminosité",  _icon_brightness, [("Luminosité",  "brightness",      -1.0, 1.0, 2)]),
     ("Contraste",   _icon_contrast,   [("Contraste",   "contrast",        -1.0, 1.0, 2)]),
-    ("Saturation",  _icon_saturation, [("Saturation",  "saturation",      -1.0, 1.0, 2)]),
+    ("Couleurs",    _icon_saturation, [("Saturation",  "saturation",      -1.0, 1.0, 2)]),
     ("Gamma",       _icon_gamma,      [("Gamma",       "gamma",            0.1, 3.0, 2)]),
     ("Netteté",     _icon_sharpness,  [("Netteté",     "sharpness",        0.0, 1.0, 2)]),
     ("Débruitage",  _icon_noise,      [("Débruitage",  "noise_reduction",  0.0, 1.0, 2)]),
@@ -928,6 +960,9 @@ class EditPanel(QWidget):
         if title == "Gamma":
             self._open_gamma_treatment()
             return
+        if title == "Couleurs":
+            self._open_couleurs_treatment()
+            return
 
         original = copy.copy(self._edit)
         dlg = TreatmentDialog(title, sliders_def, self._edit, parent=self)
@@ -951,6 +986,23 @@ class EditPanel(QWidget):
 
         if is_straighten:
             self.grid_visibility_changed.emit(False)
+
+    def _open_couleurs_treatment(self) -> None:
+        original = copy.copy(self._edit)
+        dlg = CouleursTreatmentDialog(self._edit, parent=self)
+        dlg.preview.connect(self._on_preview)
+        dlg._panel = self
+
+        if dlg.exec() == QDialog.Accepted:
+            self._push_undo()
+            new_edit = dlg.get_edit()
+            for attr in ("saturation", "color_red", "color_green", "color_blue"):
+                setattr(self._edit, attr, getattr(new_edit, attr))
+            self.edits_changed.emit(copy.copy(self._edit))
+            self._save("Couleurs")
+        else:
+            self._edit = original
+            self.edits_changed.emit(copy.copy(self._edit))
 
     def _open_gamma_treatment(self) -> None:
         original = copy.copy(self._edit)
