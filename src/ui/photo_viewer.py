@@ -854,8 +854,9 @@ class PhotoViewer(QWidget):
     rename_requested = Signal(object)  # PhotoInfo
     delete_requested = Signal(list)    # list[PhotoInfo]
 
-    def __init__(self, parent=None):
+    def __init__(self, config=None, parent=None):
         super().__init__(parent)
+        self._config = config
         self._photo: PhotoInfo | None = None
         self._edit: EditInfo | None = None
         self._db = EditDatabase()
@@ -1098,8 +1099,17 @@ class PhotoViewer(QWidget):
     # ------------------------------------------------------------------ misc
 
     def _open_in_player(self) -> None:
-        if self._photo:
-            QDesktopServices.openUrl(QUrl.fromLocalFile(self._photo.path))
+        if not self._photo:
+            return
+        player = self._config.get("video.player_path", "") if self._config else ""
+        if player:
+            import subprocess
+            try:
+                subprocess.Popen([player, self._photo.path])
+                return
+            except Exception as e:
+                logger.warning("Lecteur vidéo introuvable (%s) : %s", player, e)
+        QDesktopServices.openUrl(QUrl.fromLocalFile(self._photo.path))
 
     def _show_context_menu(self, pos) -> None:
         if not self._photo:
