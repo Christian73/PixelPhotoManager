@@ -64,6 +64,7 @@ class EditInfo:
     color_red: float = 0.0
     color_green: float = 0.0
     color_blue: float = 0.0
+    red_eye_regions: list = field(default_factory=list)  # [(cx, cy, r), ...] normalisés 0-1
 
     def is_modified(self) -> bool:
         return (
@@ -83,6 +84,7 @@ class EditInfo:
             or self.color_red != 0.0
             or self.color_green != 0.0
             or self.color_blue != 0.0
+            or bool(self.red_eye_regions)
         )
 
     def to_dict(self) -> dict:
@@ -107,6 +109,7 @@ class EditInfo:
             "color_red": self.color_red,
             "color_green": self.color_green,
             "color_blue": self.color_blue,
+            "red_eye_regions": [list(r) for r in self.red_eye_regions],
         }
 
     @classmethod
@@ -136,6 +139,9 @@ class EditInfo:
             color_red=float(data.get("color_red", 0.0)),
             color_green=float(data.get("color_green", 0.0)),
             color_blue=float(data.get("color_blue", 0.0)),
+            red_eye_regions=[
+                tuple(r) for r in data.get("red_eye_regions", [])
+            ],
         )
 
 

@@ -17,8 +17,9 @@ from src.ui.people_panel import load_face_pixmap
 
 logger = logging.getLogger(__name__)
 
-_SPECIAL_ALL = "__all__"
-_SPECIAL_FAV = "__favorites__"
+_SPECIAL_ALL    = "__all__"
+_SPECIAL_FAV    = "__favorites__"
+_SPECIAL_VIDEOS = "__videos__"
 
 
 _MIME_PHOTOS = 'application/x-pixelphoto-paths'
@@ -238,6 +239,10 @@ class Sidebar(QWidget):
         item_fav.setData(Qt.UserRole, _SPECIAL_FAV)
         self._albums_list.addItem(item_fav)
 
+        item_vid = QListWidgetItem("▶ Vidéos")
+        item_vid.setData(Qt.UserRole, _SPECIAL_VIDEOS)
+        self._albums_list.addItem(item_vid)
+
     def refresh_folders(self, folders: list[str]) -> None:
         self._folder_tree.clear()
         for folder in folders:
@@ -294,9 +299,9 @@ class Sidebar(QWidget):
 
     def refresh_albums(self, albums: list[AlbumInfo]) -> None:
         self._albums = albums
-        # Remove existing album items (keep special ones at top)
-        while self._albums_list.count() > 2:
-            self._albums_list.takeItem(2)
+        # Remove existing album items (keep the 3 special ones at top)
+        while self._albums_list.count() > 3:
+            self._albums_list.takeItem(3)
         for album in albums:
             item = QListWidgetItem(f"📁 {album.name} ({album.photo_count})")
             item.setData(Qt.UserRole, album)

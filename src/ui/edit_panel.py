@@ -754,6 +754,26 @@ class CouleursTreatmentDialog(QDialog):
         return self._edit
 
 
+def _icon_red_eye(size: int = _ICON_SIZE) -> QPixmap:
+    px, p = _base_pixmap(size)
+    c, h = size // 2, size // 2
+    eye_w = int(size * 0.7)
+    eye_h = int(size * 0.32)
+    p.setPen(QPen(QColor(200, 200, 200), 1.5))
+    p.setBrush(QColor(60, 60, 60))
+    path = QPainterPath()
+    path.moveTo(c - eye_w // 2, h)
+    path.quadTo(c, h - eye_h, c + eye_w // 2, h)
+    path.quadTo(c, h + eye_h, c - eye_w // 2, h)
+    p.drawPath(path)
+    pr = int(size * 0.12)
+    p.setPen(Qt.NoPen)
+    p.setBrush(QColor(220, 40, 40))
+    p.drawEllipse(c - pr, h - pr, pr * 2, pr * 2)
+    p.end()
+    return px
+
+
 # ------------------------------------------------------------------ panneau principal
 
 # (label, icône_fn, sliders_def)
@@ -768,11 +788,12 @@ _TREATMENTS: list[tuple] = [
 
 
 class EditPanel(QWidget):
-    edits_changed          = Signal(object)       # EditInfo
-    crop_mode_requested    = Signal()
+    edits_changed           = Signal(object)       # EditInfo
+    crop_mode_requested     = Signal()
     grid_visibility_changed = Signal(bool)
-    photo_saved            = Signal(str, object)  # (photo_path, EditInfo) — uniquement lors d'un enregistrement réel
-    rotation_stepped       = Signal(str, int)     # (photo_path, new_rotation_degrees) — émis uniquement pour les rotations 90°
+    photo_saved             = Signal(str, object)  # (photo_path, EditInfo) — uniquement lors d'un enregistrement réel
+    rotation_stepped        = Signal(str, int)     # (photo_path, new_rotation_degrees) — émis uniquement pour les rotations 90°
+    red_eye_mode_requested  = Signal(bool, float)  # (active, radius) — bascule le mode yeux rouges dans le canvas
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -781,6 +802,7 @@ class EditPanel(QWidget):
         self._undo_stack: list[EditInfo] = []
         self._redo_stack: list[EditInfo] = []
         self._db = EditDatabase()
+        self._red_eye_active = False
         self._setup_ui()
 
     def _setup_ui(self) -> None:
@@ -827,6 +849,56 @@ class EditPanel(QWidget):
             btn = self._make_treatment_button(name, icon_fn(), sliders_def)
             grid.addWidget(btn, idx // 2, idx % 2)
         inner_layout.addLayout(grid)
+
+        # Bouton Yeux rouges
+        self._btn_red_eye = QToolButton()
+        self._btn_red_eye.setText("Yeux rouges")
+        self._btn_red_eye.setIcon(QIcon(_icon_red_eye()))
+        self._btn_red_eye.setIconSize(QSize(_ICON_SIZE, _ICON_SIZE))
+        self._btn_red_eye.setToolButtonStyle(Qt.ToolButtonTextUnderIcon)
+        self._btn_red_eye.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self._btn_red_eye.setFixedHeight(_ICON_SIZE + 28)
+        self._btn_red_eye.setToolTip("Corriger les yeux rouges — cliquez sur chaque œil")
+        self._btn_red_eye.setCheckable(True)
+        self._btn_red_eye.clicked.connect(self._toggle_red_eye_mode)
+        inner_layout.addWidget(self._btn_red_eye)
+
+        # Panneau de contrôle yeux rouges (masqué hors mode)
+        self._red_eye_panel = QGroupBox("Correction yeux rouges")
+        re_layout = QVBoxLayout(self._red_eye_panel)
+        re_layout.setContentsMargins(6, 8, 6, 6)
+        re_layout.setSpacing(4)
+
+        lbl_instr = QLabel("Cliquez sur chaque œil rouge dans la photo")
+        lbl_instr.setStyleSheet("color: #bbb; font-size: 10px;")
+        lbl_instr.setAlignment(Qt.AlignCenter)
+        lbl_instr.setWordWrap(True)
+        re_layout.addWidget(lbl_instr)
+
+        radius_row = QHBoxLayout()
+        radius_row.addWidget(QLabel("Taille :"))
+        self._red_eye_slider = QSlider(Qt.Horizontal)
+        self._red_eye_slider.setRange(5, 80)   # 0.5% – 8% de la plus petite dimension
+        self._red_eye_slider.setValue(30)       # défaut : 3%
+        self._red_eye_slider.setToolTip("Rayon de correction (% de l'image)")
+        self._red_eye_slider.valueChanged.connect(self._on_red_eye_radius_changed)
+        radius_row.addWidget(self._red_eye_slider)
+        re_layout.addLayout(radius_row)
+
+        re_btns = QHBoxLayout()
+        re_btns.setSpacing(4)
+        btn_clear_re = QPushButton("Effacer tout")
+        btn_clear_re.setToolTip("Supprimer toutes les corrections yeux rouges")
+        btn_clear_re.clicked.connect(self._clear_red_eye)
+        re_btns.addWidget(btn_clear_re)
+        btn_done_re = QPushButton("Terminé")
+        btn_done_re.setToolTip("Quitter le mode yeux rouges  (Echap)")
+        btn_done_re.clicked.connect(self._done_red_eye)
+        re_btns.addWidget(btn_done_re)
+        re_layout.addLayout(re_btns)
+
+        self._red_eye_panel.hide()
+        inner_layout.addWidget(self._red_eye_panel)
 
         # Géométrie (boutons directs)
         grp_geo = QGroupBox("Géométrie")
@@ -1029,6 +1101,9 @@ class EditPanel(QWidget):
     # ------------------------------------------------------------------ public
 
     def set_photo(self, photo: PhotoInfo) -> None:
+        if self._red_eye_active:
+            self._btn_red_eye.setChecked(False)
+            self._toggle_red_eye_mode(False)
         self._photo = photo
         self._edit = self._db.load(photo.path)
         self._undo_stack = self._db.get_history(photo.path, limit=_UNDO_MAX)
@@ -1100,3 +1175,44 @@ class EditPanel(QWidget):
         self._edit.crop = quad
         self.edits_changed.emit(copy.copy(self._edit))
         self._save("crop")
+
+    # ------------------------------------------------------------------ yeux rouges
+
+    def _toggle_red_eye_mode(self, checked: bool) -> None:
+        self._red_eye_active = checked
+        if checked:
+            self._btn_red_eye.setStyleSheet(
+                "QToolButton { background: #3a1a1a; border: 1px solid #8a2020; border-radius: 4px; }"
+            )
+            self._red_eye_panel.show()
+            radius = self._red_eye_slider.value() / 1000.0
+            self.red_eye_mode_requested.emit(True, radius)
+        else:
+            self._btn_red_eye.setStyleSheet("")
+            self._red_eye_panel.hide()
+            self.red_eye_mode_requested.emit(False, 0.0)
+
+    def _on_red_eye_radius_changed(self, value: int) -> None:
+        if self._red_eye_active:
+            self.red_eye_mode_requested.emit(True, value / 1000.0)
+
+    def _clear_red_eye(self) -> None:
+        if not self._edit.red_eye_regions:
+            return
+        self._push_undo()
+        self._edit.red_eye_regions = []
+        self.edits_changed.emit(copy.copy(self._edit))
+        self._save("red_eye_clear")
+
+    def _done_red_eye(self) -> None:
+        self._btn_red_eye.setChecked(False)
+        self._toggle_red_eye_mode(False)
+
+    def on_red_eye_added(self, cx: float, cy: float) -> None:
+        """Reçu depuis le canvas quand l'utilisateur clique sur un œil rouge."""
+        self._push_undo()
+        radius = self._red_eye_slider.value() / 1000.0
+        self._edit.red_eye_regions = list(self._edit.red_eye_regions)
+        self._edit.red_eye_regions.append((cx, cy, radius))
+        self.edits_changed.emit(copy.copy(self._edit))
+        self._save("red_eye")

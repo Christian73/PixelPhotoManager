@@ -335,8 +335,9 @@ def _run_import(
                 continue
 
             try:
-                from PIL import Image
+                from PIL import Image, ImageOps
                 with Image.open(str(photo_path)) as img:
+                    img = ImageOps.exif_transpose(img)
                     img_w, img_h = img.size
             except Exception:
                 continue

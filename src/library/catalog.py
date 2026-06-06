@@ -432,6 +432,17 @@ class Catalog:
                 conn.close()
         return [_photo_from_row(r) for r in rows]
 
+    def get_videos(self) -> list[PhotoInfo]:
+        with self._lock:
+            conn = self._conn()
+            try:
+                rows = conn.execute(
+                    "SELECT * FROM photos WHERE media_type='video' ORDER BY date_taken DESC"
+                ).fetchall()
+            finally:
+                conn.close()
+        return [_photo_from_row(r) for r in rows]
+
     def get_stats(self) -> dict:
         with self._lock:
             conn = self._conn()

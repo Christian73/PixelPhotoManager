@@ -25,7 +25,9 @@ logger = logging.getLogger(__name__)
 _PREVIEW_MAX_PX = 1024
 
 
-def _build_pixmap(photo: PhotoInfo, edit: EditInfo | None) -> QPixmap | None:
+def _build_pixmap(photo: PhotoInfo, edit: EditInfo | None) -> "tuple[QPixmap, int, int] | None":
+    """Retourne (pixmap, orig_w, orig_h) — dimensions de l'image EXIF-corrigée avant
+    tout edit, à utiliser pour mapper les bbox de détection faciale."""
     from pathlib import Path as _Path
     from src.library.exif_reader import VIDEO_EXT
     if _Path(photo.path).suffix.lower() in VIDEO_EXT:
@@ -34,12 +36,11 @@ def _build_pixmap(photo: PhotoInfo, edit: EditInfo | None) -> QPixmap | None:
         from PIL import Image, ImageOps
         with Image.open(photo.path) as img:
             img = ImageOps.exif_transpose(img)
-            # Downscale à la résolution d'affichage avant tout traitement
-            w, h = img.size
-            if max(w, h) > _PREVIEW_MAX_PX:
-                scale = _PREVIEW_MAX_PX / max(w, h)
+            orig_w, orig_h = img.size   # dimensions EXIF-corrigées (référence pour les bbox)
+            if max(orig_w, orig_h) > _PREVIEW_MAX_PX:
+                scale = _PREVIEW_MAX_PX / max(orig_w, orig_h)
                 img = img.resize(
-                    (round(w * scale), round(h * scale)),
+                    (round(orig_w * scale), round(orig_h * scale)),
                     Image.LANCZOS,
                 )
             if edit and edit.is_modified():
@@ -50,13 +51,13 @@ def _build_pixmap(photo: PhotoInfo, edit: EditInfo | None) -> QPixmap | None:
             img.save(buf, format="JPEG", quality=92)
             pixmap = QPixmap()
             pixmap.loadFromData(buf.getvalue())
-            return pixmap
+            return pixmap, orig_w, orig_h
     except Exception as e:
         logger.error(f"Erreur chargement photo {photo.path}: {e}")
         return None
 
 
-def _build_video_pixmap(video_path: str) -> QPixmap | None:
+def _build_video_pixmap(video_path: str) -> "tuple[QPixmap, int, int] | None":
     """Extrait une frame de la vidéo pour l'afficher dans la visionneuse."""
     try:
         import cv2
@@ -75,17 +76,17 @@ def _build_video_pixmap(video_path: str) -> QPixmap | None:
 
         frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         img = Image.fromarray(frame)
-        w, h = img.size
-        if max(w, h) > _PREVIEW_MAX_PX:
-            scale = _PREVIEW_MAX_PX / max(w, h)
-            img = img.resize((round(w * scale), round(h * scale)), Image.LANCZOS)
+        orig_w, orig_h = img.size
+        if max(orig_w, orig_h) > _PREVIEW_MAX_PX:
+            scale = _PREVIEW_MAX_PX / max(orig_w, orig_h)
+            img = img.resize((round(orig_w * scale), round(orig_h * scale)), Image.LANCZOS)
         if img.mode != "RGB":
             img = img.convert("RGB")
         buf = io.BytesIO()
         img.save(buf, format="JPEG", quality=92)
         pixmap = QPixmap()
         pixmap.loadFromData(buf.getvalue())
-        return pixmap
+        return pixmap, orig_w, orig_h
     except Exception as e:
         logger.error("Erreur chargement vidéo %s: %s", video_path, e)
         return None
@@ -173,6 +174,7 @@ class _Canvas(QWidget):
     wheel_navigate         = Signal(int)    # ±1 photo
     crop_confirmed         = Signal(object) # tuple 8 coords relatives (x0,y0,…,x3,y3)
     context_menu_requested = Signal(object) # QPoint global
+    red_eye_point_added    = Signal(float, float)  # cx_norm, cy_norm (0-1)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -192,6 +194,14 @@ class _Canvas(QWidget):
         self._crop_quad_start:   list[QPointF] | None = None
         self._crop_draw_start:   QPointF | None = None
         self._grid_visible = False
+        # Visage mis en surbrillance (clic dans le FacePanel)
+        self._highlighted_face = None
+        self._orig_w: int = 0
+        self._orig_h: int = 0
+        # Mode correction yeux rouges
+        self._red_eye_mode: bool = False
+        self._red_eye_radius: float = 0.03   # rayon normalisé (0-1) pour le curseur
+        self._red_eye_mouse: QPointF | None = None
         self.setMouseTracking(True)
         self.setFocusPolicy(Qt.NoFocus)
 
@@ -608,6 +618,101 @@ class _Canvas(QWidget):
             p.drawLine(QPointF(ir.left(),  ir.top() + t * ir.height()),
                        QPointF(ir.right(), ir.top() + t * ir.height()))
 
+    def set_orig_size(self, w: int, h: int) -> None:
+        """Dimensions EXIF-corrigées de l'image chargée (source de vérité pour les bbox)."""
+        self._orig_w = w
+        self._orig_h = h
+
+    # ------------------------------------------------------------------ red-eye mode
+
+    def enter_red_eye_mode(self, radius: float = 0.03) -> None:
+        self._red_eye_mode = True
+        self._red_eye_radius = max(0.005, radius)
+        self._red_eye_mouse = None
+        self.setCursor(Qt.CrossCursor)
+        self.update()
+
+    def exit_red_eye_mode(self) -> None:
+        self._red_eye_mode = False
+        self._red_eye_mouse = None
+        self.setCursor(Qt.ArrowCursor)
+        self.update()
+
+    def set_red_eye_radius(self, radius: float) -> None:
+        self._red_eye_radius = max(0.005, radius)
+        self.update()
+
+    def _red_eye_screen_radius(self) -> float:
+        """Rayon du curseur yeux rouges en pixels écran."""
+        if not self._pixmap:
+            return 20.0
+        return self._red_eye_radius * min(self._pixmap.width(), self._pixmap.height()) * self._zoom
+
+    def _draw_red_eye_overlay(self, p: QPainter) -> None:
+        if not self._red_eye_mouse or not self._pixmap:
+            return
+        r = self._red_eye_screen_radius()
+        center = self._red_eye_mouse
+        p.setPen(QPen(QColor(220, 60, 60, 200), 1.5))
+        p.setBrush(QColor(220, 60, 60, 40))
+        p.drawEllipse(center, r, r)
+        # Réticule
+        p.setPen(QPen(QColor(220, 60, 60, 160), 1))
+        arm = r * 0.6
+        p.drawLine(QPointF(center.x() - arm, center.y()), QPointF(center.x() + arm, center.y()))
+        p.drawLine(QPointF(center.x(), center.y() - arm), QPointF(center.x(), center.y() + arm))
+
+    def set_highlighted_face(self, face) -> None:
+        self._highlighted_face = face
+        self.update()
+
+    def _face_screen_rect(self) -> "QRectF | None":
+        f = self._highlighted_face
+        if f is None or self._pixmap is None or self._orig_w == 0 or self._orig_h == 0:
+            return None
+        # bbox stocké dans l'espace de l'image après detected_rotation CW supplémentaire.
+        # On ramène dans l'espace d'affichage (image EXIF-corrigée, sans rotation extra).
+        bx, by, bw, bh = f.bbox_x, f.bbox_y, f.bbox_w, f.bbox_h
+        r = getattr(f, "detected_rotation", 0) % 360
+        dw, dh = self._orig_w, self._orig_h   # dimensions de l'image affichée
+        if r == 90:
+            # rotate(-90) = 90° CW sur dw×dh → espace détection dh×dw
+            bx, by, bw, bh = by, dh - bx - bw, bh, bw
+        elif r == 180:
+            bx, by, bw, bh = dw - bx - bw, dh - by - bh, bw, bh
+        elif r == 270:
+            # rotate(-270) = 90° CCW sur dw×dh → espace détection dh×dw
+            bx, by, bw, bh = dw - by - bh, bx, bh, bw
+        # Mise à l'échelle pixmap puis zoom
+        sx = self._pixmap.width()  / dw
+        sy = self._pixmap.height() / dh
+        x = self._offset.x() + bx * sx * self._zoom
+        y = self._offset.y() + by * sy * self._zoom
+        w = bw * sx * self._zoom
+        h = bh * sy * self._zoom
+        return QRectF(x, y, w, h)
+
+    def _draw_face_highlight(self, p: QPainter) -> None:
+        rect = self._face_screen_rect()
+        if rect is None:
+            return
+        p.fillRect(rect, QColor(74, 159, 212, 45))
+        pen = QPen(QColor(74, 159, 212), 2.5)
+        p.setPen(pen)
+        p.setBrush(Qt.NoBrush)
+        p.drawRect(rect)
+        # Coins renforcés (L-shapes)
+        p.setPen(QPen(QColor(130, 200, 255), 3))
+        arm = min(rect.width(), rect.height()) * 0.18
+        for cx, cy, dx, dy in [
+            (rect.left(),  rect.top(),    1,  1),
+            (rect.right(), rect.top(),   -1,  1),
+            (rect.right(), rect.bottom(),-1, -1),
+            (rect.left(),  rect.bottom(), 1, -1),
+        ]:
+            p.drawLine(QPointF(cx, cy), QPointF(cx + dx * arm, cy))
+            p.drawLine(QPointF(cx, cy), QPointF(cx, cy + dy * arm))
+
     def paintEvent(self, _event) -> None:
         p = QPainter(self)
         p.setRenderHint(QPainter.SmoothPixmapTransform)
@@ -616,6 +721,10 @@ class _Canvas(QWidget):
             pw = int(self._pixmap.width() * self._zoom)
             ph = int(self._pixmap.height() * self._zoom)
             p.drawPixmap(int(self._offset.x()), int(self._offset.y()), pw, ph, self._pixmap)
+            if self._highlighted_face is not None:
+                self._draw_face_highlight(p)
+            if self._red_eye_mode:
+                self._draw_red_eye_overlay(p)
             if self._grid_visible:
                 self._draw_grid(p)
             if self._crop_mode:
@@ -697,6 +806,8 @@ class _Canvas(QWidget):
 
     def wheelEvent(self, event: QWheelEvent) -> None:
         delta = event.angleDelta().y()
+        if self._red_eye_mode:
+            return
         if self._crop_mode:
             # Zoom centré sur le milieu, en préservant le quadrilatère de crop
             factor = 1.15 if delta > 0 else 1 / 1.15
@@ -718,6 +829,15 @@ class _Canvas(QWidget):
             self.wheel_navigate.emit(-1 if delta > 0 else 1)
 
     def mousePressEvent(self, event: QMouseEvent) -> None:
+        if self._red_eye_mode:
+            if event.button() == Qt.LeftButton and self._pixmap:
+                pos = event.position()
+                ir = self._img_rect()
+                if ir.contains(pos) and ir.width() > 0 and ir.height() > 0:
+                    cx = (pos.x() - ir.x()) / ir.width()
+                    cy = (pos.y() - ir.y()) / ir.height()
+                    self.red_eye_point_added.emit(cx, cy)
+            return
         if self._crop_mode:
             if event.button() != Qt.LeftButton:
                 return
@@ -771,6 +891,10 @@ class _Canvas(QWidget):
 
     def mouseMoveEvent(self, event: QMouseEvent) -> None:
         pos = event.position()
+        if self._red_eye_mode:
+            self._red_eye_mouse = pos
+            self.update()
+            return
         if self._crop_mode:
             if self._crop_action == 'DRAWING':
                 ir = self._img_rect()
@@ -833,7 +957,7 @@ class _Canvas(QWidget):
             self._drag_start = None
 
     def contextMenuEvent(self, event) -> None:
-        if not self._crop_mode:
+        if not self._crop_mode and not self._red_eye_mode:
             self.context_menu_requested.emit(event.globalPos())
 
     def resizeEvent(self, event) -> None:
@@ -846,13 +970,14 @@ class _Canvas(QWidget):
 
 
 class PhotoViewer(QWidget):
-    closed          = Signal()
-    navigate        = Signal(int)
-    zoom_changed    = Signal(float)
-    crop_ready      = Signal(object)  # tuple 8 coords relatives (x0,y0,…,x3,y3)
-    save_requested   = Signal(object)  # PhotoInfo
-    rename_requested = Signal(object)  # PhotoInfo
-    delete_requested = Signal(list)    # list[PhotoInfo]
+    closed               = Signal()
+    navigate             = Signal(int)
+    zoom_changed         = Signal(float)
+    crop_ready           = Signal(object)  # tuple 8 coords relatives (x0,y0,…,x3,y3)
+    save_requested       = Signal(object)  # PhotoInfo
+    rename_requested     = Signal(object)  # PhotoInfo
+    delete_requested     = Signal(list)    # list[PhotoInfo]
+    red_eye_point_added  = Signal(float, float)  # cx_norm, cy_norm (0-1)
 
     def __init__(self, config=None, parent=None):
         super().__init__(parent)
@@ -922,6 +1047,7 @@ class PhotoViewer(QWidget):
         self._canvas.wheel_navigate.connect(self.navigate)
         self._canvas.crop_confirmed.connect(self._on_crop_confirmed)
         self._canvas.context_menu_requested.connect(self._show_context_menu)
+        self._canvas.red_eye_point_added.connect(self.red_eye_point_added)
         layout.addWidget(self._canvas, stretch=1)
 
         # ---- Pied de page ----
@@ -1014,13 +1140,24 @@ class PhotoViewer(QWidget):
         self._lbl_name.setText(photo.path)
         self._btn_fav.setChecked(photo.is_favorite)
         self._btn_play_video.setVisible(is_video)
+        self._canvas.set_highlighted_face(None)
         self._reload_pixmap()
+
+    def highlight_face(self, face) -> None:
+        """Encadre le visage sur la photo (appelé depuis main_window)."""
+        self._canvas.set_highlighted_face(face)
 
     def _reload_pixmap(self) -> None:
         if not self._photo:
             return
-        pixmap = _build_pixmap(self._photo, self._edit)
-        self._canvas.set_pixmap(pixmap)
+        result = _build_pixmap(self._photo, self._edit)
+        if result is None:
+            self._canvas.set_orig_size(0, 0)
+            self._canvas.set_pixmap(None)
+        else:
+            pixmap, orig_w, orig_h = result
+            self._canvas.set_orig_size(orig_w, orig_h)
+            self._canvas.set_pixmap(pixmap)
 
     def refresh_name(self) -> None:
         if self._photo:
@@ -1096,6 +1233,17 @@ class PhotoViewer(QWidget):
         self._btn_next.show()
         self.crop_ready.emit(quad)
 
+    # ------------------------------------------------------------------ red-eye mode
+
+    def enter_red_eye_mode(self, radius: float = 0.03) -> None:
+        self._canvas.enter_red_eye_mode(radius)
+
+    def exit_red_eye_mode(self) -> None:
+        self._canvas.exit_red_eye_mode()
+
+    def set_red_eye_radius(self, radius: float) -> None:
+        self._canvas.set_red_eye_radius(radius)
+
     # ------------------------------------------------------------------ misc
 
     def _open_in_player(self) -> None:
@@ -1127,15 +1275,11 @@ class PhotoViewer(QWidget):
                        lambda: os.startfile(os.path.dirname(photo.path)))
         menu.addSeparator()
 
-        has_gps = bool(
-            photo.has_gps
-            and photo.gps_lat is not None
-            and photo.gps_lon is not None
-        )
+        gps_coords = self._resolve_gps(photo)
         act_map = menu.addAction("Localiser sur la carte")
-        act_map.setEnabled(has_gps)
-        if has_gps:
-            lat, lon = photo.gps_lat, photo.gps_lon
+        act_map.setEnabled(gps_coords is not None)
+        if gps_coords is not None:
+            lat, lon = gps_coords
             act_map.triggered.connect(
                 lambda: QDesktopServices.openUrl(
                     QUrl(f"https://www.openstreetmap.org/?mlat={lat}&mlon={lon}&zoom=15#map=15/{lat}/{lon}")
@@ -1146,6 +1290,22 @@ class PhotoViewer(QWidget):
         menu.addAction("Effacer le fichier…", lambda: self.delete_requested.emit([photo]))
 
         menu.exec(pos)
+
+    def _resolve_gps(self, photo) -> "tuple[float, float] | None":
+        """Return (lat, lon) from catalog cache or by reading EXIF directly."""
+        if photo.has_gps and photo.gps_lat is not None and photo.gps_lon is not None:
+            return photo.gps_lat, photo.gps_lon
+        # Catalog field missing (indexed before GPS support or parse failure) — read live
+        try:
+            from PIL import Image
+            from src.library.exif_reader import ExifReader
+            with Image.open(photo.path) as img:
+                gps_ifd = img.getexif().get_ifd(0x8825)
+                if gps_ifd:
+                    return ExifReader._parse_gps(gps_ifd)
+        except Exception:
+            pass
+        return None
 
     def _toggle_fav_from_menu(self) -> None:
         if not self._photo:
@@ -1164,16 +1324,18 @@ class PhotoViewer(QWidget):
         if key == Qt.Key_Escape:
             if self._canvas._crop_mode:
                 self.cancel_crop()
+            elif self._canvas._red_eye_mode:
+                self.exit_red_eye_mode()
             else:
                 self.closed.emit()
         elif key == Qt.Key_Return or key == Qt.Key_Enter:
             if self._canvas._crop_mode:
                 self.confirm_crop()
         elif key in (Qt.Key_Left, Qt.Key_Up):
-            if not self._canvas._crop_mode:
+            if not self._canvas._crop_mode and not self._canvas._red_eye_mode:
                 self.navigate.emit(-1)
         elif key in (Qt.Key_Right, Qt.Key_Down):
-            if not self._canvas._crop_mode:
+            if not self._canvas._crop_mode and not self._canvas._red_eye_mode:
                 self.navigate.emit(1)
         elif key == Qt.Key_0:
             self.zoom_fit()

@@ -26,7 +26,7 @@ from src.faces.face_database import FaceDatabase
 from src.faces.face_indexer import FaceIndexThread, SingleFaceReindexThread
 from src.faces.clusterer import ClusterThread
 from src.processing.edit_database import EditDatabase
-from src.ui.sidebar import Sidebar, _SPECIAL_ALL, _SPECIAL_FAV
+from src.ui.sidebar import Sidebar, _SPECIAL_ALL, _SPECIAL_FAV, _SPECIAL_VIDEOS
 from src.ui.thumbnail_grid import ThumbnailGrid
 from src.ui.photo_viewer import PhotoViewer
 from src.ui.edit_panel import EditPanel
@@ -507,9 +507,12 @@ class MainWindow(QMainWindow):
         self._edit_panel.grid_visibility_changed.connect(self._viewer.set_grid_visible)
         self._edit_panel.photo_saved.connect(self._on_photo_saved)
         self._edit_panel.rotation_stepped.connect(self._on_rotation_stepped)
+        self._edit_panel.red_eye_mode_requested.connect(self._on_red_eye_mode_requested)
         self._viewer.crop_ready.connect(self._edit_panel.apply_crop)
+        self._viewer.red_eye_point_added.connect(self._edit_panel.on_red_eye_added)
 
         self._face_panel = FacePanel(self._face_db, self._catalog, self)
+        self._face_panel.face_highlighted.connect(self._on_face_highlighted)
         self._face_panel.hide()
         self._exif_panel = ExifPanel(self)
         self._exif_panel.hide()
@@ -943,6 +946,15 @@ class MainWindow(QMainWindow):
     def _on_selection_changed(self, photos: list[PhotoInfo]) -> None:
         self._update_status(photos)
 
+    def _on_face_highlighted(self, face) -> None:
+        self._viewer.highlight_face(face)
+
+    def _on_red_eye_mode_requested(self, active: bool, radius: float) -> None:
+        if active:
+            self._viewer.enter_red_eye_mode(radius)
+        else:
+            self._viewer.exit_red_eye_mode()
+
     @Slot(bool)
     def _on_faces_toggle(self, checked: bool) -> None:
         if checked:
@@ -1031,6 +1043,14 @@ class MainWindow(QMainWindow):
             photos = self._catalog.get_favorites()
             self._current_photos = photos
             self._current_context = "Favoris"
+            self._grid.set_photos(photos)
+            self._grid_nav_bar.hide()
+            self.show_grid()
+            self._update_status()
+        elif data == _SPECIAL_VIDEOS:
+            photos = self._catalog.get_videos()
+            self._current_photos = photos
+            self._current_context = "Vidéos"
             self._grid.set_photos(photos)
             self._grid_nav_bar.hide()
             self.show_grid()
