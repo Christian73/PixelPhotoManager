@@ -14,12 +14,13 @@
 5. [Composants library](#5-composants-library)
 6. [Composants UI](#6-composants-ui)
 7. [Composants processing](#7-composants-processing)
-8. [Système de plugins](#8-système-de-plugins)
-9. [Schémas des bases de données](#9-schémas-des-bases-de-données)
-10. [Modèle de threading](#10-modèle-de-threading)
-11. [Normalisation des chemins Windows](#11-normalisation-des-chemins-windows)
-12. [Packaging et distribution](#12-packaging-et-distribution)
-13. [Patterns à suivre pour les évolutions](#13-patterns-à-suivre-pour-les-évolutions)
+8. [Reconnaissance faciale](#8-reconnaissance-faciale)
+9. [Système de plugins](#9-système-de-plugins)
+10. [Schémas des bases de données](#10-schémas-des-bases-de-données)
+11. [Modèle de threading](#11-modèle-de-threading)
+12. [Normalisation des chemins Windows](#12-normalisation-des-chemins-windows)
+13. [Packaging et distribution](#13-packaging-et-distribution)
+14. [Patterns à suivre pour les évolutions](#14-patterns-à-suivre-pour-les-évolutions)
 
 ---
 
@@ -52,14 +53,16 @@ PixelPhotoManager/
 │   │   ├── catalog.py             # Catalogue SQLite (photos, albums)
 │   │   ├── scanner.py             # Scan de dossiers en thread
 │   │   ├── thumbnail_cache.py     # Cache vignettes 3 niveaux
-│   │   └── exif_reader.py         # Lecture EXIF via Pillow
+│   │   └── exif_reader.py         # Lecture EXIF (ExifReader) + vidéo (VideoMetadataReader)
 │   │
 │   ├── ui/                        # Interface PySide6
 │   │   ├── main_window.py         # Fenêtre principale + orchestration
 │   │   ├── sidebar.py             # Arborescence dossiers + albums
-│   │   ├── thumbnail_grid.py      # Grille de vignettes
-│   │   ├── photo_viewer.py        # Visionneuse + mode recadrage
-│   │   └── edit_panel.py          # Panneau de retouche
+│   │   ├── thumbnail_grid.py      # Grille de vignettes (badge ▶ pour vidéos)
+│   │   ├── photo_viewer.py        # Visionneuse + mode recadrage + vidéos
+│   │   ├── edit_panel.py          # Panneau de retouche
+│   │   ├── exif_panel.py          # Panneau EXIF (toggle avec touche I)
+│   │   └── folder_manager_dialog.py  # Dialogue Outils › Dossiers…
 │   │
 │   ├── processing/                # Traitement image
 │   │   ├── adjustments.py         # ImageAdjuster.apply_all()
@@ -67,6 +70,11 @@ PixelPhotoManager/
 │   │   └── edit_database.py       # Persistence des retouches (SQLite)
 │   │
 │   ├── faces/                     # Reconnaissance faciale (optionnel)
+│   │   ├── detector.py            # Détection (RetinaFace / OpenCV)
+│   │   ├── recognizer.py          # Embeddings (DeepFace / ArcFace)
+│   │   ├── clusterer.py           # Clustering DBSCAN (scikit-learn)
+│   │   ├── face_panel.py          # Panneau visages dans la visionneuse
+│   │   └── picasa_importer.py     # Import annotations Picasa (.picasa.ini)
 │   └── plugins/                   # Plugins intégrés (src/)
 │
 └── plugins/                       # Plugins utilisateur externes
@@ -76,7 +84,7 @@ PixelPhotoManager/
 
 ```
 %LOCALAPPDATA%\PixelPhotoManager\
-├── catalog.db       # Index des photos
+├── catalog.db       # Index des photos et vidéos
 ├── thumbnails.db    # Cache des vignettes
 ├── edits.db         # Retouches non destructives
 ├── config.json      # Configuration
@@ -128,6 +136,8 @@ python -m venv .venv
 │  ThumbnailGrid        │              │  (singleton global)    │
 │  PhotoViewer          │              └────────────────────────┘
 │  EditPanel            │
+│  ExifPanel            │
+│  FolderManagerDialog  │
 └───────────┬───────────┘
             │ appels directs
             ▼
@@ -135,6 +145,7 @@ python -m venv .venv
 │                      Library / Processing                      │
 │   Catalog (SQLite)    ThumbnailCache    LibraryScanner        │
 │   EditDatabase        ImageAdjuster     ExifReader            │
+│   VideoMetadataReader                                         │
 └───────────────────────────────────────────────────────────────┘
 ```
 
@@ -222,7 +233,7 @@ bus.off("library.photo_selected", self.handler)
 
 #### `PhotoInfo` (dataclass)
 
-Représente une photo dans le catalogue. **Le champ `path` est normalisé** (`os.path.normpath`) dans `__post_init__`.
+Représente une photo ou une vidéo dans le catalogue. **Le champ `path` est normalisé** (`os.path.normpath`) dans `__post_init__`.
 
 ```python
 @dataclass
@@ -238,6 +249,8 @@ class PhotoInfo:
     camera_make: str = ""
     camera_model: str = ""
     # ... EXIF, GPS, favoris, tags, id
+    media_type: str = "image"   # "image" ou "video"
+    duration: float = 0.0       # durée en secondes (vidéos uniquement)
 ```
 
 #### `EditInfo` (dataclass)
@@ -286,33 +299,42 @@ catalog.rename_photo(old_path, new_path)
 catalog.delete_photo(path)
 catalog.get_known_mtimes(folder)            # dict {path: mtime} pour le scanner
 catalog.update_paths_prefix(old, new)       # renommage de dossier en masse
+catalog.count_photos_in_folder(folder)      # int — compte récursif pour le FolderManagerDialog
 ```
 
-**Migration au démarrage** : `_migrate_normalize_paths()` est appelée dans `_init_db()` à chaque démarrage. Elle normalise les séparateurs de chemins dans les données existantes (invariant de `os.path.normpath`).
+**Migrations au démarrage** (dans `_init_db()`) :
+- `_migrate_normalize_paths()` — normalise les séparateurs de chemins dans les données existantes.
+- `_migrate_video_fields()` — ajoute les colonnes `media_type` et `duration` si absentes (pattern `try: ALTER TABLE … except OperationalError: pass`).
 
 ---
 
 ### `scanner.py` — Scan de dossiers
 
 ```
-LibraryScanner.scan(folders) → ScanThread (QThread)
+LibraryScanner.scan(folders, force=False) → ScanThread (QThread)
 ```
+
+**Paramètre `force`** : quand `True`, `ScanThread` initialise `known = {}` au lieu de charger les mtimes depuis le catalogue. Tous les fichiers sont relus, même si non modifiés. Utilisé par le bouton **Re-scanner** du `FolderManagerDialog`.
+
+**Extensions supportées** : `SUPPORTED_EXT = ExifReader.SUPPORTED | VIDEO_EXT`  
+(`VIDEO_EXT` = `.mp4 .mov .avi .mkv .wmv .webm .m4v .3gp .flv .ts .mts .mpg .mpeg`)
 
 **Algorithme du ScanThread :**
 
-1. `os.walk(folder)` récursif → liste de tous les fichiers image (`os.path.normpath` appliqué).
-2. `catalog.get_known_mtimes(folder)` → dict `{path: mtime}` des fichiers déjà indexés.
-3. Pour chaque fichier : si `mtime` inchangé (±1 s) → skip. Sinon → lecture EXIF → `catalog.add_or_update_photo()` → `photo_discovered.emit(photo)`.
+1. `os.walk(folder)` récursif → liste de tous les fichiers image/vidéo (`os.path.normpath` appliqué).
+   - Exclut les dossiers cachés (attribut Windows `0x2` ou préfixe `.`) et les dossiers `Originals`.
+2. Si `force=False` : `catalog.get_known_mtimes(folder)` → dict `{path: mtime}` des fichiers déjà indexés.
+3. Pour chaque fichier : si `mtime` inchangé (±1 s) → skip. Sinon → lecture EXIF/vidéo → `catalog.add_or_update_photo()` → `photo_discovered.emit(photo)`.
+4. Nettoyage des fantômes : supprime du catalogue les entrées dont le fichier a disparu du disque (seulement si le scan n'a pas été interrompu).
 
 **Signaux émis** :
 
 | Signal | Args | Fréquence |
 |---|---|---|
 | `photo_discovered` | `PhotoInfo` | Par photo nouvelle/modifiée |
+| `photos_removed` | `list[str]` | Une fois, si des fantômes ont été trouvés |
 | `progress` | `(int, str)` | Toutes les 50 photos |
 | `finished` | `int` (total nouvelles) | Une fois |
-
-> `LibraryScanner.scan()` appelle `stop()` sur le thread précédent avant d'en créer un nouveau. Ne pas appeler `stop()` manuellement sauf à la fermeture de l'application.
 
 ---
 
@@ -325,10 +347,13 @@ get(path)
   ├─ 1. RAM dict (LRU, max 500 entrées)  → O(1), retour immédiat
   ├─ 2. SQLite thumbnails.db (clé = MD5(path), mtime check)
   └─ 3. Génération en QThreadPool (_ThumbWorker)
-            └─ generate(path, edit=None) → PIL → JPEG → store RAM + DB
+            ├─ image : PIL.Image.open + resize → JPEG → RAM + DB
+            └─ vidéo : cv2.VideoCapture → seek 10% → BGR→RGB → PIL → JPEG → RAM + DB
 ```
 
 **Clé de cache** : `MD5(os.path.normpath(path))` — sensible à la casse et aux séparateurs. Toujours passer des chemins normalisés.
+
+**Vignettes vidéo** : `generate()` détecte l'extension dans `VIDEO_EXT` et délègue à `_generate_video_thumb()`. La frame est extraite à `frame_count * 0.1` (10 % de la durée). Si cv2 n'est pas disponible ou si la lecture échoue, une vignette noire est stockée.
 
 **API principale** :
 
@@ -336,6 +361,7 @@ get(path)
 cache.get(photo_path)                  # QPixmap | None (niveaux 1 et 2 seulement)
 cache.generate(photo_path, edit=None)  # Force la génération (thread secondaire)
 cache.invalidate(photo_path)           # Supprime RAM + DB
+cache.invalidate_many(paths)           # Supprime plusieurs entrées
 cache.move_photo(old_path, new_path)   # Transfère l'entrée sans régénérer
 ```
 
@@ -343,7 +369,9 @@ cache.move_photo(old_path, new_path)   # Transfère l'entrée sans régénérer
 
 ---
 
-### `exif_reader.py` — Lecture EXIF
+### `exif_reader.py` — Lecture EXIF et métadonnées vidéo
+
+#### `ExifReader`
 
 ```python
 data = ExifReader.read(filepath)
@@ -352,9 +380,25 @@ data = ExifReader.read(filepath)
 #               has_gps, gps_lat, gps_lon
 ```
 
-Formats supportés : `.jpg .jpeg .png .tiff .tif .webp .bmp .gif`
+Formats supportés (`.jpg .jpeg .png .tiff .tif .webp .bmp .gif`). La lecture GPS convertit les degrés/minutes/secondes en degrés décimaux.
 
-La lecture GPS convertit les degrés/minutes/secondes en degrés décimaux.
+#### `VideoMetadataReader`
+
+```python
+data = VideoMetadataReader.read(filepath)
+# → dict avec : date_taken (st_mtime), width, height, fps, duration (secondes)
+```
+
+Utilise `cv2.VideoCapture`. Si cv2 n'est pas disponible, retourne un dict avec des valeurs neutres. La date de prise de vue est `os.stat(path).st_mtime` (date de modification du fichier).
+
+#### Constante `VIDEO_EXT`
+
+```python
+VIDEO_EXT = {".mp4", ".mov", ".avi", ".mkv", ".wmv", ".webm",
+             ".m4v", ".3gp", ".flv", ".ts", ".mts", ".mpg", ".mpeg"}
+```
+
+Importée par `scanner.py` et `thumbnail_cache.py`. Toujours utiliser cette constante pour tester si un fichier est une vidéo.
 
 ---
 
@@ -393,20 +437,39 @@ ScanThread.photo_discovered.emit(photo)
         → _current_photos.append(photo)
 ```
 
-La double vérification (contexte + déduplication) est essentielle : `photo_discovered` peut être émis pour des photos qui n'appartiennent pas au dossier affiché, ou pour des photos déjà présentes lors d'un re-scan.
-
-**Flux d'un déplacement par glisser-déposer :**
+**Flux d'ouverture de la visionneuse :**
 
 ```
-Sidebar.photos_dropped.emit(file_paths, dest_folder)
-  → MainWindow._on_photos_dropped(file_paths, dest_folder)
-    → shutil.move(src, dst)                  # fichier disque
-    → catalog.move_photo(src, dst)           # catalogue
-    → edit_db.rename_photo(src, dst)         # retouches
-    → thumb_cache.move_photo(src, dst)       # vignettes
-    → catalog.get_photos_in_folder(dest)     # navigation auto
-    → grid.set_photos(new_photos)
+grid.photo_activated.emit(photo)
+  → MainWindow.show_viewer(photo)
+    → is_video = photo.media_type == "video"
+    → si video : _left_stack.setCurrentIndex(0)  # sidebar visible
+    → si image : _left_stack.setCurrentIndex(1)  # panneau retouche visible
+                 _edit_panel.set_photo(photo)
+    → _viewer.set_photo(photo, edit)
 ```
+
+**Gestion du `FolderManagerDialog`** :
+- `_open_folder_manager()` : crée et affiche le dialogue, connecte ses signaux.
+- `_on_folder_rescan_requested(folder)` : appelle `_start_scan(force=True)` sur ce seul dossier.
+- `_on_folder_added_from_manager(folder)` : ajoute le dossier à la config, lance le scan.
+
+---
+
+### `folder_manager_dialog.py` — Gestion des dossiers
+
+`FolderManagerDialog(QDialog)` — ouvert via **Outils › Dossiers…**.
+
+**Signaux** :
+- `rescan_requested(str)` — chemin du dossier à re-scanner (force)
+- `folder_removed(str)` — dossier retiré de la surveillance
+- `folder_added(str)` — nouveau dossier ajouté
+
+**`_FolderRow(QWidget)`** : widget par dossier, affiche statut (✓/✗), chemin, nombre de fichiers, sous-dossiers ignorés. Boutons **Re-scanner** et **Retirer**.
+
+**`_find_ignored_subdirs(folder)`** : retourne les sous-dossiers directs exclus du scan avec leur raison :
+- Dossiers cachés (attribut Windows `0x2` ou préfixe `.`) → `"dossier caché"`
+- Dossiers nommés `Originals` → `"sauvegarde Picasa"`
 
 ---
 
@@ -441,6 +504,7 @@ ThumbnailGrid (QScrollArea)
 - Charge la vignette via `ThumbnailCache.get()` ; si absente, lance un `_ThumbWorker`.
 - Le signal `ready` de `_ThumbSignals` communique le `QPixmap` généré vers l'UI (cross-thread safe).
 - La référence aux signaux est une `weakref` pour éviter de retenir la cellule après sa destruction.
+- Si `photo.media_type == "video"`, `_add_video_badge(pixmap)` superpose un cercle sombre avec le caractère `▶` via `QPainter`.
 
 **Sélection** :
 - `_selected: set[str]` contient les paths des photos sélectionnées.
@@ -452,12 +516,26 @@ ThumbnailGrid (QScrollArea)
 
 ```
 PhotoViewer (QWidget)
-  ├─ _toolbar (QWidget) — nom fichier, favoris, zoom
+  ├─ _toolbar (QWidget) — nom fichier, favoris, zoom, bouton play vidéo
   ├─ _Canvas (QWidget)  — rendu image + interactions
-  └─ _navbar (QWidget)  — précédente/suivante + boutons recadrage
+  └─ _navbar (QWidget)  — précédente/suivante (s'arrête aux extrémités)
 ```
 
-**`_build_pixmap(photo, edit)`** : charge l'image avec Pillow, applique `ImageOps.exif_transpose` (correction orientation EXIF), downscale à `_PREVIEW_MAX_PX = 1024 px`, puis applique `ImageAdjuster.apply_all(img, edit)`. Retourne un `QPixmap`.
+**`_build_pixmap(photo, edit)`** : charge l'image avec Pillow, applique `ImageOps.exif_transpose`, downscale à `_PREVIEW_MAX_PX = 1024 px`, puis applique `ImageAdjuster.apply_all(img, edit)`. Pour les vidéos, délègue à `_build_video_pixmap(path)` qui extrait une frame via `cv2`.
+
+**Navigation sans boucle** : les boutons Précédente/Suivante sont désactivés (`setEnabled(False)`) quand on est à la première/dernière photo. Aucun wrap-around.
+
+**Support vidéo** :
+- `set_photo()` : si `photo.media_type == "video"`, affiche `_btn_play_video` et masque le panneau d'édition.
+- `_open_in_player()` : `QDesktopServices.openUrl(QUrl.fromLocalFile(path))` — ouvre le lecteur système.
+- `_build_video_pixmap()` : `cv2.VideoCapture` → seek 10% → frame BGR→RGB → PIL → `QPixmap`.
+
+**Menu contextuel** :
+```python
+act_map = menu.addAction("Localiser sur la carte")
+act_map.setEnabled(has_gps)   # grisé si pas de GPS
+# si GPS disponible : QDesktopServices.openUrl(QUrl("https://www.openstreetmap.org/..."))
+```
 
 **Mode recadrage** :
 
@@ -481,6 +559,16 @@ Le quadrilatère de recadrage est toujours stocké en **coordonnées relatives �
 
 ---
 
+### `exif_panel.py` — Panneau EXIF
+
+`ExifPanel(QWidget)` — affiché dans la visionneuse, togglé par la touche `I` ou un bouton toolbar.
+
+- Affiche : résolution, taille du fichier, date, appareil photo, objectif, ISO, vitesse, ouverture, focale, coordonnées GPS.
+- Pour les vidéos, affiche : résolution, fps, durée — via `cv2.VideoCapture` ou les champs `PhotoInfo`.
+- **Exclusion mutuelle** avec le panneau Visages : ouvrir l'un ferme l'autre.
+
+---
+
 ### `edit_panel.py` — Panneau de retouche
 
 **Structure UI** :
@@ -490,6 +578,8 @@ EditPanel
   ├─ Barre titre + boutons ↩ ↪ (undo/redo)
   └─ QScrollArea
        ├─ QGridLayout (6 boutons corrections : 2 colonnes)
+       │    Luminosité · Contraste · Saturation · Gamma · Netteté · Débruitage
+       ├─ Bouton Couleurs (N&B + mixage R/G/B)
        └─ QGroupBox "Géométrie"
             ├─ Rotation ↺ ↻
             ├─ Redresser | Recadrer
@@ -497,6 +587,8 @@ EditPanel
 ```
 
 **`TreatmentDialog`** : dialogue modal avec un ou plusieurs `EditSlider`. L'aperçu est en temps réel via `preview.emit(EditInfo)` → `PhotoViewer.update_edit()`. Si l'utilisateur annule, l'`EditInfo` original est restauré.
+
+**Couleurs (N&B)** : `TreatmentDialog` avec checkbox `bw` + trois `EditSlider` pour `bw_red`, `bw_green`, `bw_blue`. La checkbox active/désactive les sliders.
 
 **Pile undo/redo** :
 
@@ -560,7 +652,30 @@ Tous les chemins sont normalisés avec `os.path.normpath` à l'entrée de chaque
 
 ---
 
-## 8. Système de plugins
+## 8. Reconnaissance faciale
+
+> Module optionnel — dépendances lourdes (DeepFace, RetinaFace, PyTorch, scikit-learn). L'application fonctionne sans ces packages ; les fonctionnalités de visages sont simplement désactivées.
+
+### Architecture
+
+```
+faces/
+├── detector.py        # Détection via RetinaFace (fallback : OpenCV Haar)
+├── recognizer.py      # Embeddings facials via DeepFace/ArcFace
+├── clusterer.py       # Clustering DBSCAN (scikit-learn)
+├── face_panel.py      # Widget visionneuse : boîtes, noms, menu contextuel
+└── picasa_importer.py # Import .picasa.ini → table picasa_annotations
+```
+
+### Import Picasa
+
+`PicasaImporter` lit les fichiers `.picasa.ini` dans chaque dossier scanné. Il parse les sections `[contacts]` (mapping hash → nom) et les entrées `rect=` des photos (coordonnées de visage encodées en base64).
+
+Les annotations sont stockées dans `catalog.db` dans la table `picasa_annotations`. La coexistence avec le moteur ArcFace est gérée : les noms Picasa peuvent être réutilisés comme étiquettes pour les clusters DBSCAN.
+
+---
+
+## 9. Système de plugins
 
 ### Structure d'un plugin
 
@@ -623,7 +738,7 @@ manager.deactivate("mon_plugin")
 
 ---
 
-## 9. Schémas des bases de données
+## 10. Schémas des bases de données
 
 ### `catalog.db`
 
@@ -650,7 +765,9 @@ CREATE TABLE photos (
     gps_lon     REAL,
     is_favorite INTEGER DEFAULT 0,
     tags        TEXT,                  -- CSV "tag1,tag2"
-    indexed_at  TEXT DEFAULT CURRENT_TIMESTAMP
+    indexed_at  TEXT DEFAULT CURRENT_TIMESTAMP,
+    media_type  TEXT DEFAULT 'image',  -- 'image' ou 'video'
+    duration    REAL DEFAULT 0.0       -- durée en secondes (vidéos)
 );
 
 CREATE TABLE albums (
@@ -671,7 +788,21 @@ CREATE TABLE persons (
     name        TEXT NOT NULL,
     created_at  TEXT DEFAULT CURRENT_TIMESTAMP
 );
+
+-- Annotations de visages importées depuis Picasa (.picasa.ini)
+CREATE TABLE picasa_annotations (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    photo_path  TEXT NOT NULL,
+    person_name TEXT NOT NULL,
+    rect_x1     REAL,   -- coordonnées relatives (0-1)
+    rect_y1     REAL,
+    rect_x2     REAL,
+    rect_y2     REAL,
+    imported_at TEXT DEFAULT CURRENT_TIMESTAMP
+);
 ```
+
+> Les colonnes `media_type` et `duration` sont ajoutées par migration automatique au démarrage si elles n'existent pas (`_migrate_video_fields()`).
 
 ### `thumbnails.db`
 
@@ -685,7 +816,7 @@ CREATE TABLE thumbnails (
 );
 ```
 
-La clé est le **hash MD5 du chemin normalisé**. Si la vignette a été générée avec des retouches appliquées (`reload_with_edit`), `file_mtime` correspond au mtime du fichier à ce moment. La correspondance `abs(stored_mtime - current_mtime) < 1.0` invalide la vignette si le fichier a changé.
+La clé est le **hash MD5 du chemin normalisé**. La correspondance `abs(stored_mtime - current_mtime) < 1.0` invalide la vignette si le fichier a changé.
 
 ### `edits.db`
 
@@ -725,7 +856,7 @@ L'historique est **limité à 50 entrées par photo** (nettoyage dans `EditDatab
 
 ---
 
-## 10. Modèle de threading
+## 11. Modèle de threading
 
 ```
 Thread UI (main)
@@ -734,13 +865,14 @@ Thread UI (main)
   └─ Signals/Slots cross-thread (Qt::QueuedConnection automatique)
 
 Thread scan (ScanThread / QThread)
-  ├─ os.walk + EXIF reading
+  ├─ os.walk + EXIF/vidéo reading (ExifReader / VideoMetadataReader)
   ├─ catalog.add_or_update_photo()   ← verrou threading.Lock
   └─ photo_discovered.emit()         → reçu dans le thread UI
 
 ThreadPool (QThreadPool global)
-  └─ _ThumbWorker (QRunnable) × N   ← génération vignettes
-       ├─ PIL Image.open + resize
+  └─ _ThumbWorker (QRunnable) × N   ← génération vignettes images et vidéos
+       ├─ image : PIL.Image.open + resize
+       ├─ vidéo : cv2.VideoCapture + frame extraction
        ├─ thumbnail_cache.generate()  ← verrou threading.Lock
        └─ _ThumbSignals.ready.emit()  → reçu dans ThumbnailCell (UI)
 ```
@@ -753,7 +885,7 @@ ThreadPool (QThreadPool global)
 
 ---
 
-## 11. Normalisation des chemins Windows
+## 12. Normalisation des chemins Windows
 
 ### Le problème
 
@@ -767,7 +899,7 @@ Sur Windows, `QFileDialog` retourne des chemins avec `/` (`D:/Photos`). `os.path
 |---|---|
 | Création de `PhotoInfo` | `PhotoInfo.__post_init__` |
 | Scan de fichiers | `scanner.py` : `os.path.normpath(os.path.join(root, fname))` |
-| Requêtes catalogue | `catalog.get_photos_in_folder()`, `get_known_mtimes()` |
+| Requêtes catalogue | `catalog.get_photos_in_folder()`, `get_known_mtimes()`, `count_photos_in_folder()` |
 | Écritures catalogue | `catalog.move_photo()` (old_path et new_path) |
 | Écritures edits | `edit_database.py` : toutes les méthodes publiques |
 | Glisser-déposer | `main_window._on_photos_dropped()` : `os.path.normpath(os.path.join(...))` |
@@ -776,7 +908,7 @@ Sur Windows, `QFileDialog` retourne des chemins avec `/` (`D:/Photos`). `os.path
 
 ---
 
-## 12. Packaging et distribution
+## 13. Packaging et distribution
 
 ### Prérequis
 
@@ -858,7 +990,7 @@ else:
 
 ---
 
-## 13. Patterns à suivre pour les évolutions
+## 14. Patterns à suivre pour les évolutions
 
 ### Ajouter une retouche image
 
@@ -866,6 +998,15 @@ else:
 2. **`src/processing/adjustments.py`** — Ajouter la méthode statique dans `ImageAdjuster` et l'appeler dans `apply_all()` à la bonne position dans l'ordre.
 3. **`src/ui/edit_panel.py`** — Ajouter un tuple dans `_TREATMENTS` (label, icône, sliders_def).
 4. **`src/processing/edit_database.py`** — Ajouter la colonne SQL via une migration `ALTER TABLE` dans `_init_db()` (pattern du `_MIGRATE_STRAIGHTEN` existant).
+
+### Ajouter un nouveau type de média
+
+1. Ajouter l'extension dans une constante dédiée dans `exif_reader.py`.
+2. Créer un reader de métadonnées similaire à `VideoMetadataReader`.
+3. Mettre à jour `SUPPORTED_EXT` dans `scanner.py`.
+4. Ajouter la génération de vignette dans `thumbnail_cache.py`.
+5. Gérer l'affichage dans `photo_viewer.py` (pixmap + bouton d'action).
+6. Ajouter la migration de colonne dans `catalog.py` si des champs spécifiques sont nécessaires.
 
 ### Ajouter un événement bus
 
