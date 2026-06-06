@@ -244,9 +244,12 @@ class Sidebar(QWidget):
             root_item = QTreeWidgetItem([os.path.basename(folder) or folder])
             root_item.setData(0, Qt.UserRole, folder)
             root_item.setToolTip(0, folder)
+            # Placeholder : rend le nœud dépliable sans toucher le disque.
+            # Les sous-dossiers sont chargés à la demande dans _on_folder_expanded.
+            root_item.addChild(QTreeWidgetItem([""]))
             self._folder_tree.addTopLevelItem(root_item)
-            self._populate_subfolders(root_item, folder)
-            root_item.setExpanded(True)
+            # Pas de setExpanded() ici : avec >100 dossiers, _populate_subfolders
+            # sur chaque racine bloque l'UI (scandir × N dossiers).
 
     def _has_subdirs(self, folder_path: str) -> bool:
         """Retourne True si folder_path contient au moins un sous-dossier visible."""
