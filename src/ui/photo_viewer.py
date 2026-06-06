@@ -1,6 +1,7 @@
 import io
 import logging
 import math
+import os
 
 from PySide6.QtCore import Qt, QUrl, Signal, QPoint, QRectF, QPointF, QSize
 from PySide6.QtGui import (
@@ -849,8 +850,9 @@ class PhotoViewer(QWidget):
     navigate        = Signal(int)
     zoom_changed    = Signal(float)
     crop_ready      = Signal(object)  # tuple 8 coords relatives (x0,y0,…,x3,y3)
-    save_requested  = Signal(object)  # PhotoInfo
-    rename_requested = Signal(object) # PhotoInfo
+    save_requested   = Signal(object)  # PhotoInfo
+    rename_requested = Signal(object)  # PhotoInfo
+    delete_requested = Signal(list)    # list[PhotoInfo]
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -1101,29 +1103,45 @@ class PhotoViewer(QWidget):
     def _show_context_menu(self, pos) -> None:
         if not self._photo:
             return
+        photo = self._photo
         menu = QMenu(self)
-        menu.addAction("Renommer…", lambda: self.rename_requested.emit(self._photo))
-        menu.addSeparator()
+
+        fav_label = "Retirer des favoris" if photo.is_favorite else "Marquer comme favori"
+        menu.addAction(fav_label, self._toggle_fav_from_menu)
+        menu.addAction("Renommer…", lambda: self.rename_requested.emit(photo))
         menu.addAction("Enregistrer l'image traitée sur le disque",
-                       lambda: self.save_requested.emit(self._photo))
+                       lambda: self.save_requested.emit(photo))
+        menu.addSeparator()
+        menu.addAction("Révéler dans l'Explorateur",
+                       lambda: os.startfile(os.path.dirname(photo.path)))
+        menu.addSeparator()
 
         has_gps = bool(
-            self._photo.has_gps
-            and self._photo.gps_lat is not None
-            and self._photo.gps_lon is not None
+            photo.has_gps
+            and photo.gps_lat is not None
+            and photo.gps_lon is not None
         )
-        menu.addSeparator()
         act_map = menu.addAction("Localiser sur la carte")
         act_map.setEnabled(has_gps)
         if has_gps:
-            lat, lon = self._photo.gps_lat, self._photo.gps_lon
+            lat, lon = photo.gps_lat, photo.gps_lon
             act_map.triggered.connect(
                 lambda: QDesktopServices.openUrl(
                     QUrl(f"https://www.openstreetmap.org/?mlat={lat}&mlon={lon}&zoom=15#map=15/{lat}/{lon}")
                 )
             )
 
+        menu.addSeparator()
+        menu.addAction("Effacer le fichier…", lambda: self.delete_requested.emit([photo]))
+
         menu.exec(pos)
+
+    def _toggle_fav_from_menu(self) -> None:
+        if not self._photo:
+            return
+        new_state = not self._photo.is_favorite
+        self._btn_fav.setChecked(new_state)
+        self._toggle_favorite(new_state)
 
     def _toggle_favorite(self, checked: bool) -> None:
         if self._photo:
