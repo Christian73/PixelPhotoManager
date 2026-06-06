@@ -496,7 +496,6 @@ class ThumbnailGrid(QScrollArea):
         menu.addSeparator()
         fav_label = "Retirer des favoris" if photo.is_favorite else "Marquer comme favori"
         menu.addAction(fav_label)
-        menu.addAction("Informations EXIF")
         menu.addAction("Renommer l'image", lambda: self.rename_requested.emit(photo))
         menu.addAction("Enregistrer l'image traitée sur le disque",
                        lambda: self.save_requested.emit(photo))
