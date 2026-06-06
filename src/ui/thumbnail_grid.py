@@ -207,6 +207,14 @@ class _GridContainer(QWidget):
         cell.show()
         self._relayout()
 
+    def append_cells_batch(self, cells: list) -> None:
+        """Ajoute plusieurs cellules avec un seul relayout final (perf batch)."""
+        for cell in cells:
+            self._cells.append(cell)
+            cell.setParent(self)
+            cell.show()
+        self._relayout()
+
     def set_cell_width(self, w: int) -> None:
         self._cell_w = w
         self._relayout()
@@ -284,6 +292,15 @@ class ThumbnailGrid(QScrollArea):
         QTimer.singleShot(0, lambda c=cell: c.load(
             priority=10 if self._cell_is_visible(c) else 0
         ))
+
+    def add_photos_batch(self, photos: list[PhotoInfo]) -> None:
+        """Ajoute un lot de photos avec un seul relayout (vs N relayouts pour add_photo × N)."""
+        if not photos:
+            return
+        new_cells = [self._make_cell(p) for p in photos]
+        self._cells.extend(new_cells)
+        self._container.append_cells_batch(new_cells)
+        QTimer.singleShot(0, self._schedule_loads)
 
     def _cell_is_visible(self, cell: ThumbnailCell) -> bool:
         """Retourne True si la cellule est (au moins partiellement) dans le viewport."""

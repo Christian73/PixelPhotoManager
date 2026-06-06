@@ -5,7 +5,7 @@ import shutil
 from datetime import datetime
 from pathlib import Path
 
-from PySide6.QtCore import Qt, QTimer, Slot
+from PySide6.QtCore import Qt, QThread, QTimer, Signal, Slot
 from PySide6.QtGui import QAction, QKeySequence
 from PySide6.QtWidgets import (
     QApplication, QButtonGroup, QCheckBox, QDialog, QDialogButtonBox, QGroupBox,
@@ -246,6 +246,28 @@ class _SaveOptionsDialog(QDialog):
 _PERSON_CTX_PREFIX = "__person__"
 
 
+class _CatalogLoadThread(QThread):
+    """Charge get_all_photos() hors du thread UI et émet les résultats par lots."""
+
+    batch_ready = Signal(list)  # list[PhotoInfo]
+
+    def __init__(self, catalog: "Catalog", batch_size: int = 300):
+        super().__init__()
+        self._catalog = catalog
+        self._batch_size = batch_size
+        self._stop = False
+
+    def stop(self) -> None:
+        self._stop = True
+
+    def run(self) -> None:
+        photos = self._catalog.get_all_photos()
+        for i in range(0, len(photos), self._batch_size):
+            if self._stop:
+                break
+            self.batch_ready.emit(photos[i : i + self._batch_size])
+
+
 class MainWindow(QMainWindow):
     def __init__(
         self,
@@ -269,6 +291,7 @@ class MainWindow(QMainWindow):
         self._current_photos: list[PhotoInfo] = []
         self._current_photo_index: int = 0
         self._current_context: str = ""   # dossier ou album actif
+        self._catalog_loader: _CatalogLoadThread | None = None
         self._search_timer = QTimer()
         self._search_timer.setSingleShot(True)
         self._search_timer.setInterval(150)
@@ -283,7 +306,8 @@ class MainWindow(QMainWindow):
         self._connect_scanner()
         self._setup_folder_watcher()
 
-        self._load_library()
+        # Déféré : laisse window.show() s'exécuter avant de charger la bibliothèque.
+        QTimer.singleShot(0, self._load_library)
 
     # ------------------------------------------------------------------ setup
 
@@ -612,12 +636,30 @@ class MainWindow(QMainWindow):
         self._sidebar.refresh_albums(albums)
 
     def _show_all_photos(self) -> None:
-        photos = self._catalog.get_all_photos()
-        self._current_photos = photos
+        # Annule un chargement précédent si toujours actif.
+        if self._catalog_loader is not None:
+            self._catalog_loader.stop()
+            self._catalog_loader.wait()
+            self._catalog_loader = None
+
+        self._current_photos = []
         self._current_context = "Toutes les photos"
-        self._grid.set_photos(photos)
+        self._grid.set_photos([])
         self._grid_nav_bar.hide()
         self.show_grid()
+        self._update_status()
+
+        loader = _CatalogLoadThread(self._catalog)
+        loader.batch_ready.connect(self._on_catalog_batch)
+        self._catalog_loader = loader
+        loader.start()
+
+    @Slot(list)
+    def _on_catalog_batch(self, photos: list) -> None:
+        if self._current_context != "Toutes les photos":
+            return
+        self._current_photos.extend(photos)
+        self._grid.add_photos_batch(photos)
         self._update_status()
 
     def _start_scan(self, folders: list[str], force: bool = False) -> None:

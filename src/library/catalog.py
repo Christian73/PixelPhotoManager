@@ -148,6 +148,12 @@ class Catalog:
     def _migrate_normalize_paths(self, conn) -> None:
         """Normalise les séparateurs de chemin dans les données existantes.
         Supprime les doublons qui apparaissent après normalisation (garde le premier vu)."""
+        # Vérification rapide : s'il n'existe aucun chemin avec '/', la normalisation
+        # est déjà faite — évite de charger toutes les lignes à chaque démarrage.
+        if not conn.execute(
+            "SELECT id FROM photos WHERE instr(path, '/') > 0 LIMIT 1"
+        ).fetchone():
+            return
         rows = conn.execute("SELECT id, path, directory FROM photos").fetchall()
         if not rows:
             return
