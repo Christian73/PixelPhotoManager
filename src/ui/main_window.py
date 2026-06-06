@@ -537,6 +537,8 @@ class MainWindow(QMainWindow):
         )
         self._face_cluster_grid.cluster_named.connect(self._on_cluster_named)
         self._face_cluster_grid.cluster_assigned.connect(self._on_cluster_assigned)
+        self._face_cluster_grid.clusters_named.connect(self._on_clusters_named)
+        self._face_cluster_grid.clusters_assigned.connect(self._on_clusters_assigned)
         self._face_cluster_grid.cluster_ignored.connect(self._on_cluster_ignored)
         self._face_cluster_grid.cluster_merged.connect(self._on_cluster_merged)
         self._face_cluster_grid.photos_requested.connect(self._on_cluster_photos_requested)
@@ -831,6 +833,21 @@ class MainWindow(QMainWindow):
     @Slot(int, int)
     def _on_cluster_assigned(self, cluster_id: int, person_id: int) -> None:
         self._face_db.assign_person_to_cluster(cluster_id, person_id)
+        self._refresh_persons()
+        self._face_cluster_grid.refresh()
+
+    @Slot(list, str)
+    def _on_clusters_named(self, cluster_ids: list, name: str) -> None:
+        person = self._catalog.create_person(name)
+        for cid in cluster_ids:
+            self._face_db.assign_person_to_cluster(cid, person.id)
+        self._refresh_persons()
+        self._face_cluster_grid.refresh()
+
+    @Slot(list, int)
+    def _on_clusters_assigned(self, cluster_ids: list, person_id: int) -> None:
+        for cid in cluster_ids:
+            self._face_db.assign_person_to_cluster(cid, person_id)
         self._refresh_persons()
         self._face_cluster_grid.refresh()
 
