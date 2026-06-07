@@ -29,7 +29,7 @@ from src.processing.edit_database import EditDatabase
 from src.ui.sidebar import Sidebar, _SPECIAL_ALL, _SPECIAL_FAV, _SPECIAL_VIDEOS
 from src.ui.thumbnail_grid import ThumbnailGrid
 from src.ui.photo_viewer import PhotoViewer
-from src.ui.edit_panel import EditPanel
+from src.ui.edit_panel import EditPanel, MarkedSlider
 from src.ui.face_cluster_grid import FaceClusterGrid
 from src.ui.face_panel import FacePanel
 from src.ui.exif_panel import ExifPanel
@@ -308,6 +308,8 @@ class MainWindow(QMainWindow):
 
         # Déféré : laisse window.show() s'exécuter avant de charger la bibliothèque.
         QTimer.singleShot(0, self._load_library)
+        _sw = self._config.get("ui.sidebar_width", 280)
+        QTimer.singleShot(0, lambda: self._splitter.setSizes([_sw, max(1, self._splitter.width() - _sw)]))
 
     # ------------------------------------------------------------------ setup
 
@@ -449,8 +451,9 @@ class MainWindow(QMainWindow):
         # Panneau gauche : sidebar (grille) ou edit panel (visionneuse)
         sidebar_w = self._config.get("ui.sidebar_width", 280)
         self._left_stack = QStackedWidget()
-        self._left_stack.setFixedWidth(sidebar_w)
+        self._left_stack.setMinimumWidth(160)
         self._splitter.addWidget(self._left_stack)
+        self._splitter.setCollapsible(0, False)
 
         self._sidebar = Sidebar()
         self._left_stack.addWidget(self._sidebar)   # index 0 — mode grille
@@ -583,7 +586,10 @@ class MainWindow(QMainWindow):
         self._lbl_thumb_size = QLabel("Taille :")
         sb.addPermanentWidget(self._lbl_thumb_size)
 
-        self._thumb_slider = QSlider(Qt.Horizontal)
+        self._thumb_slider = MarkedSlider(
+            Qt.Horizontal,
+            fmt=lambda v: f"{_THUMB_SIZES[max(0, min(len(_THUMB_SIZES)-1, v))]}",
+        )
         self._thumb_slider.setRange(0, len(_THUMB_SIZES) - 1)
         self._thumb_slider.setValue(1)
         self._thumb_slider.setFixedWidth(100)
@@ -595,7 +601,7 @@ class MainWindow(QMainWindow):
         self._lbl_zoom.hide()
         sb.addPermanentWidget(self._lbl_zoom)
 
-        self._zoom_slider = QSlider(Qt.Horizontal)
+        self._zoom_slider = MarkedSlider(Qt.Horizontal, fmt=lambda v: f"{v}%")
         self._zoom_slider.setRange(10, 400)    # 10 % à 400 %
         self._zoom_slider.setValue(100)
         self._zoom_slider.setFixedWidth(120)
@@ -775,8 +781,15 @@ class MainWindow(QMainWindow):
 
     def _import_from_picasa(self) -> None:
         from src.ui.picasa_import_dialog import PicasaImportDialog
-        dlg = PicasaImportDialog(self._config, self._catalog, self._face_db, self._edit_db, self)
+        dlg = PicasaImportDialog(
+            self._config, self._catalog, self._face_db, self._edit_db, self,
+            on_edits_imported=self._on_picasa_edits_imported,
+        )
         dlg.exec()
+
+    def _on_picasa_edits_imported(self, edited_map: dict) -> None:
+        for path, edit_info in edited_map.items():
+            self._grid.refresh_photo(path, edit_info)
 
     @Slot(int, int)
     def _on_face_progress(self, current: int, total: int) -> None:

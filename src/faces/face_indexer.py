@@ -1,5 +1,6 @@
 import logging
 import os
+import time
 
 from PySide6.QtCore import QThread, Signal
 
@@ -11,6 +12,7 @@ logger = logging.getLogger(__name__)
 
 
 _CLUSTER_EVERY = 25   # relancer le clustering tous les N visages trouvés
+_THROTTLE_SLEEP = 0.8  # secondes de pause entre chaque photo (céder le CPU à l'UI)
 
 
 class FaceIndexThread(QThread):
@@ -52,6 +54,9 @@ class FaceIndexThread(QThread):
         self._stop_flag = False
 
     def run(self) -> None:
+        # Priorité minimale pour ne pas concurrencer le thread UI
+        self.setPriority(QThread.LowestPriority)
+
         all_paths = [p.path for p in self._catalog.get_all_photos()]
         to_index = self._face_db.get_paths_to_index(all_paths)
         total = len(to_index)
@@ -84,6 +89,9 @@ class FaceIndexThread(QThread):
                 logger.error("FaceIndexThread erreur %s: %s", path, exc)
                 self.error.emit(path, str(exc))
                 continue
+            finally:
+                # Pause pour céder le CPU à l'UI entre deux analyses lourdes
+                time.sleep(_THROTTLE_SLEEP)
 
             self._face_db.save_faces(path, detections)
             faces_found += len(detections)

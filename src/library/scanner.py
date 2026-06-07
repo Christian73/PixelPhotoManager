@@ -1,5 +1,6 @@
 import logging
 import os
+import time
 from pathlib import Path
 
 from PySide6.QtCore import QThread, Signal
@@ -45,6 +46,7 @@ class ScanThread(QThread):
         self._force = force
 
     def run(self) -> None:
+        self.setPriority(QThread.LowestPriority)
         total = 0
         processed = 0
 
@@ -109,6 +111,8 @@ class ScanThread(QThread):
                 photo = self._catalog.add_or_update_photo(photo)
                 total += 1
                 self.photo_discovered.emit(photo)
+                # Céder le CPU au thread UI après chaque lecture EXIF (opération lourde)
+                time.sleep(0.005)
             except Exception as e:
                 logger.error(f"Erreur scan {filepath}: {e}", exc_info=True)
 

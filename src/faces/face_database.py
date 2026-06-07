@@ -561,6 +561,29 @@ class FaceDatabase:
                     )
                 conn.commit()
                 self._apply_picasa_annotations(conn, photo_path)
+
+                # Si aucun visage ArcFace n'existe encore, insérer des placeholders
+                # (sans embedding) pour que la personne soit visible immédiatement.
+                # Les annotations restent non-consommées afin d'être ré-appliquées
+                # proprement lors de la future analyse ArcFace (save_faces).
+                has_faces = conn.execute(
+                    "SELECT COUNT(*) FROM faces WHERE photo_path=?", (photo_path,)
+                ).fetchone()[0]
+                if has_faces == 0:
+                    pending = conn.execute(
+                        "SELECT bbox_x, bbox_y, bbox_w, bbox_h, person_id"
+                        " FROM picasa_annotations"
+                        " WHERE photo_path=? AND consumed=0",
+                        (photo_path,),
+                    ).fetchall()
+                    for bx, by, bw, bh, pid in pending:
+                        conn.execute(
+                            "INSERT INTO faces"
+                            " (photo_path, bbox_x, bbox_y, bbox_w, bbox_h, person_id)"
+                            " VALUES (?,?,?,?,?,?)",
+                            (photo_path, bx, by, bw, bh, pid),
+                        )
+
                 conn.commit()
             finally:
                 conn.close()
@@ -568,7 +591,10 @@ class FaceDatabase:
     def _apply_picasa_annotations(self, conn, photo_path: str) -> None:
         """
         Associe les annotations Picasa non consommées aux visages détectés
-        du même chemin en utilisant l'IoU comme critère de proximité.
+        du même chemin. Critère principal : le centre du visage ArcFace est
+        à l'intérieur de la région Picasa (robuste car Picasa stocke une zone
+        large englobant la tête/buste, alors qu'ArcFace donne une bbox serrée).
+        Fallback : IoU > seuil si aucun centre ne tombe dans la région.
         Doit être appelée dans un contexte conn+lock déjà ouvert.
         Seuls les visages sans person_id existant sont candidats.
         """
@@ -592,15 +618,25 @@ class FaceDatabase:
 
         used_face_ids: set[int] = set()
         for ann_id, ax, ay, aw, ah, person_id in ann_rows:
-            best_iou  = _IOU_THRESHOLD
-            best_face = None
+            best_score = -1.0
+            best_face  = None
             for face_id, fx, fy, fw, fh in face_rows:
                 if face_id in used_face_ids:
                     continue
-                score = _iou((ax, ay, aw, ah), (fx, fy, fw, fh))
-                if score > best_iou:
-                    best_iou  = score
-                    best_face = face_id
+                # Critère 1 : centre du visage ArcFace dans la région Picasa
+                cx, cy = fx + fw // 2, fy + fh // 2
+                if ax <= cx <= ax + aw and ay <= cy <= ay + ah:
+                    # Score = surface de recouvrement / surface du visage (favorise le meilleur)
+                    iou_score = _iou((ax, ay, aw, ah), (fx, fy, fw, fh))
+                    score = 1.0 + iou_score  # > 1 pour toujours primer sur le fallback IoU
+                else:
+                    # Critère 2 (fallback) : IoU classique
+                    score = _iou((ax, ay, aw, ah), (fx, fy, fw, fh))
+                    if score < _IOU_THRESHOLD:
+                        continue
+                if score > best_score:
+                    best_score = score
+                    best_face  = face_id
             if best_face is not None:
                 conn.execute(
                     "UPDATE faces SET person_id=? WHERE id=?", (person_id, best_face)
@@ -610,8 +646,8 @@ class FaceDatabase:
                 )
                 used_face_ids.add(best_face)
                 logger.debug(
-                    "Picasa: visage %d → person %d (IoU=%.2f) dans %s",
-                    best_face, person_id, best_iou, os.path.basename(photo_path),
+                    "Picasa: visage %d → person %d (score=%.2f) dans %s",
+                    best_face, person_id, best_score, os.path.basename(photo_path),
                 )
 
     def reset_index(self) -> None:

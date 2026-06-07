@@ -27,13 +27,15 @@ class PicasaImportDialog(QDialog):
     parent   : widget parent optionnel
     """
 
-    def __init__(self, config, catalog, face_db, edit_db=None, parent=None) -> None:
+    def __init__(self, config, catalog, face_db, edit_db=None, parent=None,
+                 on_edits_imported=None) -> None:
         super().__init__(parent)
-        self._config  = config
-        self._catalog = catalog
-        self._face_db = face_db
-        self._edit_db = edit_db
-        self._thread  = None
+        self._config             = config
+        self._catalog            = catalog
+        self._face_db            = face_db
+        self._edit_db            = edit_db
+        self._thread             = None
+        self._on_edits_imported  = on_edits_imported  # callable({path: EditInfo}) | None
 
         self.setWindowTitle("Données Picasa détectées")
         self.setMinimumWidth(460)
@@ -118,6 +120,7 @@ class PicasaImportDialog(QDialog):
 
         self._lbl_status = QLabel("")
         self._lbl_status.setAlignment(Qt.AlignCenter)
+        self._lbl_status.setWordWrap(True)
         self._lbl_status.setStyleSheet("color: #888; font-size: 11px;")
         self._lbl_status.hide()
         layout.addWidget(self._lbl_status)
@@ -187,12 +190,16 @@ class PicasaImportDialog(QDialog):
         self._btn_skip.clicked.connect(self.accept)
         self._btn_row.insertStretch(0)  # centre le bouton Fermer
 
+        if self._on_edits_imported and result.edited_map:
+            self._on_edits_imported(result.edited_map)
+
         logger.info("Import Picasa terminé : %s", summary)
 
 
 # ------------------------------------------------------------------ helper
 
-def check_and_prompt(config, catalog, face_db, edit_db=None, parent=None) -> bool:
+def check_and_prompt(config, catalog, face_db, edit_db=None, parent=None,
+                     on_edits_imported=None) -> bool:
     """
     Show the Picasa import dialog if data is available and hasn't been imported yet.
 
@@ -210,6 +217,7 @@ def check_and_prompt(config, catalog, face_db, edit_db=None, parent=None) -> boo
     if n_contacts == 0 and n_photos == 0 and n_edits == 0:
         return False
 
-    dlg = PicasaImportDialog(config, catalog, face_db, edit_db, parent)
+    dlg = PicasaImportDialog(config, catalog, face_db, edit_db, parent,
+                             on_edits_imported=on_edits_imported)
     dlg.exec()
     return True

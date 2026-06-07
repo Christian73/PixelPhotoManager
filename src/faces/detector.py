@@ -18,6 +18,9 @@ def _exif_corrected(image_path: str, extra_rotation: int = 0):
     Corrige la rotation EXIF et applique extra_rotation (degrés CW) en écrivant
     un fichier temporaire si nécessaire. DeepFace rejette les chemins non-ASCII —
     un temp est aussi créé dans ce cas.
+
+    Pour les vidéos, extrait une frame représentative via cv2 (DeepFace ne peut
+    pas traiter les fichiers vidéo directement, et rejette les chemins non-ASCII).
     """
     temp_path = None
     result_path = image_path
@@ -30,20 +33,41 @@ def _exif_corrected(image_path: str, extra_rotation: int = 0):
         needs_ascii = True
 
     try:
-        from PIL import Image, ImageOps
-        with Image.open(image_path) as img:
-            orientation = img.getexif().get(274, 1)   # 274 = Orientation tag
-            needs_exif = orientation not in (None, 1)
+        from src.library.exif_reader import VIDEO_EXT
+        is_video = os.path.splitext(image_path)[1].lower() in VIDEO_EXT
+    except Exception:
+        is_video = False
 
-            if needs_exif or needs_rotation or needs_ascii:
-                corrected = ImageOps.exif_transpose(img) if needs_exif else img.copy()
-                if needs_rotation:
-                    corrected = corrected.rotate(-extra_rotation, expand=True)
-                suffix = os.path.splitext(image_path)[1] or ".jpg"
-                fd, temp_path = tempfile.mkstemp(suffix=suffix)
-                os.close(fd)
-                corrected.save(temp_path, quality=95)
-                result_path = temp_path
+    try:
+        if is_video:
+            import cv2
+            cap = cv2.VideoCapture(image_path)
+            if cap.isOpened():
+                total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+                target = max(0, int(total * 0.1))
+                cap.set(cv2.CAP_PROP_POS_FRAMES, target)
+                ret, frame = cap.read()
+                cap.release()
+                if ret:
+                    fd, temp_path = tempfile.mkstemp(suffix=".jpg")
+                    os.close(fd)
+                    cv2.imwrite(temp_path, frame)
+                    result_path = temp_path
+        else:
+            from PIL import Image, ImageOps
+            with Image.open(image_path) as img:
+                orientation = img.getexif().get(274, 1)   # 274 = Orientation tag
+                needs_exif = orientation not in (None, 1)
+
+                if needs_exif or needs_rotation or needs_ascii:
+                    corrected = ImageOps.exif_transpose(img) if needs_exif else img.copy()
+                    if needs_rotation:
+                        corrected = corrected.rotate(-extra_rotation, expand=True)
+                    suffix = os.path.splitext(image_path)[1] or ".jpg"
+                    fd, temp_path = tempfile.mkstemp(suffix=suffix)
+                    os.close(fd)
+                    corrected.save(temp_path, quality=95)
+                    result_path = temp_path
     except Exception:
         pass
 
