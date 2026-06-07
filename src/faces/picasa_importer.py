@@ -11,7 +11,9 @@ Person names come from contacts.xml (global) and [Contacts2] sections
 """
 
 import configparser
+import copy
 import logging
+import math
 import os
 import re
 import xml.etree.ElementTree as ET
@@ -123,55 +125,118 @@ def _parse_section_edits(cp: configparser.RawConfigParser, section: str) -> dict
     return raw
 
 
-def _picasa_to_edit_info(raw: dict) -> EditInfo | None:
+def _picasa_to_edit_steps(raw: dict) -> list[tuple[str, EditInfo]]:
     """
-    Convert raw Picasa edit dict to EditInfo.
-
-    Mappings
-    --------
-    rotate 1/2/3            → rotation 90/180/270°
-    crop rect               → crop (left, top, right, bottom) normalized
-    filters.bw              → bw
-    filters.finetune2       → brightness (fill light), saturation
-      finetune2=en,fill,highlights,color_temp,saturation,0
-    filters.anisotropic     → sharpness (0–1)
-    filters.sharpen         → sharpness (fallback, older Picasa)
-
-    Returns None if no edits are found.
+    Convertit un dict de retouches Picasa en une liste de (label, EditInfo cumulé),
+    une entrée par filtre Picasa dans l'ordre du pipeline.
+    Chaque EditInfo est l'état *accumulé* après application du filtre courant.
+    Enregistrer chaque étape dans edit_history permet un undo filtre par filtre.
+    Retourne [] si aucune retouche n'est trouvée.
     """
+    steps: list[tuple[str, EditInfo]] = []
     edit = EditInfo()
-    changed = False
 
     rotate_map = {1: 90.0, 2: 180.0, 3: 270.0}
     if "rotate" in raw:
         deg = rotate_map.get(raw["rotate"])
         if deg is not None:
+            edit = copy.copy(edit)
             edit.rotation = deg
-            changed = True
+            steps.append(("picasa_rotate", copy.copy(edit)))
 
     if "crop" in raw:
         left, top, right, bottom = raw["crop"]
         if right > left and bottom > top:
-            edit.crop = (left, top, right, bottom)
-            changed = True
+            # apply_crop attend (x, y, w, h) ; Picasa donne (left, top, right, bottom)
+            edit = copy.copy(edit)
+            edit.crop = (left, top, right - left, bottom - top)
+            steps.append(("picasa_crop", copy.copy(edit)))
 
     filters = raw.get("filters", {})
 
-    # Black & white
     if "bw" in filters and filters["bw"] and filters["bw"][0] >= 1:
+        edit = copy.copy(edit)
         edit.bw = True
-        changed = True
+        steps.append(("picasa_bw", copy.copy(edit)))
+
+    # Tilt / straighten: tilt=enabled,value[,0]
+    # Picasa stocke la valeur dans [-π/4, π/4] correspondant à [-2.5°, +2.5°] (empirique).
+    # Signe inversé par rapport à notre convention de redressement.
+    if "tilt" in filters:
+        p = filters["tilt"]
+        if p and p[0] >= 1 and len(p) >= 2 and p[1] != 0.0:
+            angle_deg = -(p[1] * 2.5 / (math.pi / 4.0))
+            if abs(angle_deg) > 0.05:
+                edit = copy.copy(edit)
+                edit.straighten = max(-2.5, min(2.5, angle_deg))
+                steps.append(("picasa_tilt", copy.copy(edit)))
 
     # Fine tune: finetune2=enabled,fill_light,highlights,color_temp,saturation,0
     if "finetune2" in filters:
         p = filters["finetune2"]
-        if p and p[0] >= 1:  # enabled
+        if p and p[0] >= 1:
+            changed = False
+            edit = copy.copy(edit)
             if len(p) >= 2 and p[1] != 0.0:
                 edit.brightness = max(-1.0, min(1.0, p[1]))
+                changed = True
+            if len(p) >= 3 and p[2] != 0.0:
+                edit.contrast = max(-1.0, min(1.0, p[2] * 0.5))
+                changed = True
+            if len(p) >= 4 and p[3] != 0.0:
+                temp = max(-1.0, min(1.0, p[3]))
+                edit.color_red  = max(-1.0, min(1.0, edit.color_red  + temp * 0.15))
+                edit.color_blue = max(-1.0, min(1.0, edit.color_blue - temp * 0.15))
                 changed = True
             if len(p) >= 5 and p[4] != 0.0:
                 edit.saturation = max(-1.0, min(1.0, p[4]))
                 changed = True
+            if changed:
+                steps.append(("picasa_finetune2", copy.copy(edit)))
+
+    # Fill light: fill=enabled,amount (0..1) → brightness (filtre dédié Picasa)
+    if "fill" in filters:
+        p = filters["fill"]
+        if p and p[0] >= 1 and len(p) >= 2 and p[1] != 0.0:
+            edit = copy.copy(edit)
+            edit.brightness = max(-1.0, min(1.0, edit.brightness + p[1] * 0.8))
+            steps.append(("picasa_fill", copy.copy(edit)))
+
+    # Warmth: warmth=enabled,amount (-1..1)
+    if "warmth" in filters:
+        p = filters["warmth"]
+        if p and p[0] >= 1 and len(p) >= 2 and p[1] != 0.0:
+            temp = max(-1.0, min(1.0, p[1]))
+            edit = copy.copy(edit)
+            edit.color_red  = max(-1.0, min(1.0, edit.color_red  + temp * 0.20))
+            edit.color_blue = max(-1.0, min(1.0, edit.color_blue - temp * 0.20))
+            steps.append(("picasa_warmth", copy.copy(edit)))
+
+    # Luminosity: lumi=enabled,amount (-1..1)
+    if "lumi" in filters:
+        p = filters["lumi"]
+        if p and p[0] >= 1 and len(p) >= 2 and p[1] != 0.0:
+            edit = copy.copy(edit)
+            edit.brightness = max(-1.0, min(1.0, edit.brightness + p[1]))
+            steps.append(("picasa_lumi", copy.copy(edit)))
+
+    # Auto-éclairage: autolight=enabled,amount (0..1)
+    if "autolight" in filters:
+        p = filters["autolight"]
+        if p and p[0] >= 1 and len(p) >= 2 and p[1] != 0.0:
+            amount = max(0.0, min(1.0, p[1]))
+            edit = copy.copy(edit)
+            edit.brightness = max(-1.0, min(1.0, edit.brightness + amount * 0.15))
+            edit.contrast   = max(-1.0, min(1.0, edit.contrast   + amount * 0.20))
+            steps.append(("picasa_autolight", copy.copy(edit)))
+
+    # Saturation dédiée (Picasa < 3)
+    if "sat" in filters:
+        p = filters["sat"]
+        if p and p[0] >= 1 and len(p) >= 2 and p[1] != 0.0:
+            edit = copy.copy(edit)
+            edit.saturation = max(-1.0, min(1.0, edit.saturation + p[1]))
+            steps.append(("picasa_sat", copy.copy(edit)))
 
     # Sharpening
     for fname in ("anisotropic", "sharpen"):
@@ -179,11 +244,26 @@ def _picasa_to_edit_info(raw: dict) -> EditInfo | None:
             p = filters[fname]
             if p and p[0] >= 1:
                 strength = p[1] if len(p) >= 2 else 0.5
+                edit = copy.copy(edit)
                 edit.sharpness = max(0.0, min(1.0, strength))
-                changed = True
+                steps.append((f"picasa_{fname}", copy.copy(edit)))
                 break
 
-    return edit if changed else None
+    # Soft focus: softfocus=enabled,amount (0..1) → noise_reduction
+    if "softfocus" in filters:
+        p = filters["softfocus"]
+        if p and p[0] >= 1 and len(p) >= 2 and p[1] != 0.0:
+            edit = copy.copy(edit)
+            edit.noise_reduction = max(0.0, min(1.0, p[1] * 0.5))
+            steps.append(("picasa_softfocus", copy.copy(edit)))
+
+    return steps
+
+
+def _picasa_to_edit_info(raw: dict) -> EditInfo | None:
+    """Retourne l'état final fusionné (dernier step). Wrapper de _picasa_to_edit_steps."""
+    steps = _picasa_to_edit_steps(raw)
+    return steps[-1][1] if steps else None
 
 
 def _parse_ini(ini_path: Path) -> tuple[dict[str, str], dict[str, list[tuple[str, str]]], dict[str, dict]]:
@@ -274,11 +354,12 @@ def scan(folders: list[str]) -> tuple[int, int, int]:
 
 class PicasaImportResult:
     def __init__(self) -> None:
-        self.persons_created:  int       = 0
-        self.faces_imported:   int       = 0
-        self.photos_processed: int       = 0
-        self.edits_imported:   int       = 0
-        self.errors:           list[str] = []
+        self.persons_created:  int             = 0
+        self.faces_imported:   int             = 0
+        self.photos_processed: int             = 0
+        self.edits_imported:   int             = 0
+        self.errors:           list[str]       = []
+        self.edited_map:       dict           = {}  # {path_str: EditInfo}
 
 
 # ------------------------------------------------------------------ import logic
@@ -376,10 +457,14 @@ def _run_import(
                 path_str = os.path.normpath(str(photo_path))
                 if edit_db.has_edits(path_str):
                     continue  # ne pas écraser les retouches existantes
-                edit_info = _picasa_to_edit_info(raw)
-                if edit_info is not None:
-                    edit_db.save(path_str, edit_info, operation="picasa_import")
+                steps = _picasa_to_edit_steps(raw)
+                if steps:
+                    # État vierge = point de départ pour undo complet
+                    edit_db.save(path_str, EditInfo(), operation="picasa_before")
+                    for op_name, step_edit in steps:
+                        edit_db.save(path_str, step_edit, operation=op_name)
                     result.edits_imported += 1
+                    result.edited_map[path_str] = steps[-1][1]
 
     logger.info(
         "Picasa import terminé : %d personnes créées, %d visages, %d photos, %d retouches",

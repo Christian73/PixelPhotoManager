@@ -51,6 +51,9 @@ _MIGRATE_COLOR_CHANNELS = [
     "ALTER TABLE photo_edits ADD COLUMN color_green REAL DEFAULT 0.0",
     "ALTER TABLE photo_edits ADD COLUMN color_blue  REAL DEFAULT 0.0",
 ]
+_MIGRATE_RED_EYE = (
+    "ALTER TABLE photo_edits ADD COLUMN red_eye_regions TEXT DEFAULT NULL"
+)
 
 _CREATE_HISTORY = """
 CREATE TABLE IF NOT EXISTS edit_history (
@@ -103,6 +106,10 @@ class EditDatabase:
                     conn.execute(_sql)
                 except sqlite3.OperationalError:
                     pass
+            try:
+                conn.execute(_MIGRATE_RED_EYE)
+            except sqlite3.OperationalError:
+                pass
             self._migrate_normalize_paths(conn)
             conn.commit()
 
@@ -164,6 +171,10 @@ class EditDatabase:
                     color_red=row["color_red"] or 0.0,
                     color_green=row["color_green"] or 0.0,
                     color_blue=row["color_blue"] or 0.0,
+                    red_eye_regions=(
+                        [tuple(r) for r in json.loads(row["red_eye_regions"])]
+                        if row["red_eye_regions"] else []
+                    ),
                 )
             except Exception as e:
                 logger.error(f"Erreur lecture retouches {photo_path}: {e}")
@@ -188,10 +199,10 @@ class EditDatabase:
                                  gamma_use_curve, gamma_curve_points,
                                  sharpness, noise_reduction, rotation, straighten,
                                  flip_h, flip_v, crop, bw, bw_red, bw_green, bw_blue,
-                                 color_red, color_green, color_blue,
+                                 color_red, color_green, color_blue, red_eye_regions,
                                  modified_at)
                             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                                    ?, ?, ?, CURRENT_TIMESTAMP)
+                                    ?, ?, ?, ?, CURRENT_TIMESTAMP)
                             """,
                             (
                                 photo_path,
@@ -206,6 +217,7 @@ class EditDatabase:
                                 int(edit.bw),
                                 edit.bw_red, edit.bw_green, edit.bw_blue,
                                 edit.color_red, edit.color_green, edit.color_blue,
+                                json.dumps([list(r) for r in edit.red_eye_regions]) if edit.red_eye_regions else None,
                             ),
                         )
                     conn.execute(
@@ -278,15 +290,17 @@ class EditDatabase:
             except Exception as e:
                 logger.error(f"Erreur renommage retouches {old_path} → {new_path}: {e}")
 
-    def get_history(self, photo_path: str, limit: int = 20) -> list[EditInfo]:
-        """Retourne les états précédents du plus ancien au plus récent (pour undo persistant)."""
+    def get_history(self, photo_path: str, limit: int = 20) -> list[tuple]:
+        """Retourne les états précédents du plus ancien au plus récent (pour undo persistant).
+
+        Chaque entrée est un tuple ``(EditInfo, operation_name)``."""
         photo_path = os.path.normpath(photo_path)
         with self._lock:
             try:
                 with self._connect() as conn:
                     rows = conn.execute(
                         """
-                        SELECT state_json FROM edit_history
+                        SELECT state_json, operation FROM edit_history
                         WHERE photo_path = ?
                         ORDER BY id DESC LIMIT ?
                         """,
@@ -295,7 +309,10 @@ class EditDatabase:
                 result = []
                 for row in reversed(rows):
                     try:
-                        result.append(EditInfo.from_dict(json.loads(row["state_json"])))
+                        result.append((
+                            EditInfo.from_dict(json.loads(row["state_json"])),
+                            row["operation"],
+                        ))
                     except Exception:
                         pass
                 return result

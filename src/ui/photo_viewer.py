@@ -198,6 +198,7 @@ class _Canvas(QWidget):
         self._highlighted_face = None
         self._orig_w: int = 0
         self._orig_h: int = 0
+        self._current_edit = None   # EditInfo courant pour transformer les bbox
         # Mode correction yeux rouges
         self._red_eye_mode: bool = False
         self._red_eye_radius: float = 0.03   # rayon normalisé (0-1) pour le curseur
@@ -623,6 +624,10 @@ class _Canvas(QWidget):
         self._orig_w = w
         self._orig_h = h
 
+    def set_edit(self, edit) -> None:
+        """Edit courant à prendre en compte pour le mapping bbox → écran."""
+        self._current_edit = edit
+
     # ------------------------------------------------------------------ red-eye mode
 
     def enter_red_eye_mode(self, radius: float = 0.03) -> None:
@@ -672,17 +677,43 @@ class _Canvas(QWidget):
             return None
         # bbox stocké dans l'espace de l'image après detected_rotation CW supplémentaire.
         # On ramène dans l'espace d'affichage (image EXIF-corrigée, sans rotation extra).
-        bx, by, bw, bh = f.bbox_x, f.bbox_y, f.bbox_w, f.bbox_h
+        bx, by, bw, bh = float(f.bbox_x), float(f.bbox_y), float(f.bbox_w), float(f.bbox_h)
         r = getattr(f, "detected_rotation", 0) % 360
-        dw, dh = self._orig_w, self._orig_h   # dimensions de l'image affichée
+        dw, dh = float(self._orig_w), float(self._orig_h)
         if r == 90:
-            # rotate(-90) = 90° CW sur dw×dh → espace détection dh×dw
             bx, by, bw, bh = by, dh - bx - bw, bh, bw
         elif r == 180:
             bx, by, bw, bh = dw - bx - bw, dh - by - bh, bw, bh
         elif r == 270:
-            # rotate(-270) = 90° CCW sur dw×dh → espace détection dh×dw
             bx, by, bw, bh = dw - by - bh, bx, bh, bw
+
+        # Appliquer les transformations géométriques de l'edit (même ordre que apply_all) :
+        # rotation CW → straighten (ignoré, petit angle) → flip → crop
+        edit = self._current_edit
+        if edit is not None:
+            rot = int(round(getattr(edit, "rotation", 0.0))) % 360
+            if rot == 90:
+                bx, by, bw, bh = dh - by - bh, bx, bh, bw
+                dw, dh = dh, dw
+            elif rot == 180:
+                bx, by, bw, bh = dw - bx - bw, dh - by - bh, bw, bh
+            elif rot == 270:
+                bx, by, bw, bh = by, dw - bx - bw, bh, bw
+                dw, dh = dh, dw
+
+            if getattr(edit, "flip_h", False):
+                bx = dw - bx - bw
+            if getattr(edit, "flip_v", False):
+                by = dh - by - bh
+
+            crop = getattr(edit, "crop", None)
+            if crop and len(crop) == 4:
+                cx, cy, cw, ch = crop
+                bx = bx - cx * dw
+                by = by - cy * dh
+                dw = cw * dw
+                dh = ch * dh
+
         # Mise à l'échelle pixmap puis zoom
         sx = self._pixmap.width()  / dw
         sy = self._pixmap.height() / dh
@@ -1151,6 +1182,7 @@ class PhotoViewer(QWidget):
         if not self._photo:
             return
         result = _build_pixmap(self._photo, self._edit)
+        self._canvas.set_edit(self._edit)
         if result is None:
             self._canvas.set_orig_size(0, 0)
             self._canvas.set_pixmap(None)

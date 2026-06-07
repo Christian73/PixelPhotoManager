@@ -346,7 +346,13 @@ def main() -> None:
     # Proposer l'import Picasa après le premier affichage de la fenêtre
     def _check_picasa():
         from src.ui.picasa_import_dialog import check_and_prompt
-        check_and_prompt(config, catalog, face_db, window._edit_db, window)
+
+        def _on_edits(edited_map):
+            for path, edit_info in edited_map.items():
+                window._grid.refresh_photo(path, edit_info)
+
+        check_and_prompt(config, catalog, face_db, window._edit_db, window,
+                         on_edits_imported=_on_edits)
 
     QTimer.singleShot(800, _check_picasa)
 

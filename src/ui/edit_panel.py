@@ -6,13 +6,13 @@ import os
 from PySide6.QtCore import Qt, Signal, QSize, QPoint, QTimer
 from PySide6.QtGui import (
     QPixmap, QPainter, QColor, QFont, QPen, QIcon,
-    QPolygon, QBrush, QLinearGradient, QPainterPath,
+    QPolygon, QBrush, QLinearGradient, QPainterPath, QKeySequence,
 )
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QSlider,
     QPushButton, QScrollArea, QGroupBox, QDialog,
     QDialogButtonBox, QToolButton, QGridLayout, QSizePolicy,
-    QToolBar, QCheckBox,
+    QCheckBox, QStyle, QStyleOptionSlider,
 )
 
 from src.core.models import PhotoInfo, EditInfo
@@ -23,6 +23,36 @@ logger = logging.getLogger(__name__)
 
 _UNDO_MAX = 20
 _ICON_SIZE = 44
+
+# Noms d'affichage pour les opérations stockées en DB (undo/redo persistant)
+_OP_LABELS: dict[str, str] = {
+    "rotation":           "Rotation",
+    "flip_h":             "Miroir H",
+    "flip_v":             "Miroir V",
+    "crop":               "Recadrage",
+    "red_eye":            "Yeux rouges",
+    "red_eye_clear":      "Effacer yeux rouges",
+    "undo":               "Annuler",
+    "redo":               "Rétablir",
+    "picasa_before":      "Avant import",
+    "picasa_rotate":      "Rotation",
+    "picasa_crop":        "Recadrage",
+    "picasa_bw":          "Noir et blanc",
+    "picasa_tilt":        "Redressement",
+    "picasa_finetune2":   "Réglages fins",
+    "picasa_fill":        "Lumière",
+    "picasa_warmth":      "Chaleur",
+    "picasa_lumi":        "Luminosité",
+    "picasa_autolight":   "Auto-éclairage",
+    "picasa_sat":         "Saturation",
+    "picasa_anisotropic": "Netteté",
+    "picasa_sharpen":     "Netteté",
+    "picasa_softfocus":   "Adoucissement",
+}
+
+
+def _op_label(op: str) -> str:
+    return _OP_LABELS.get(op, op.replace("_", " ").capitalize())
 
 
 # ------------------------------------------------------------------ icônes
@@ -259,6 +289,97 @@ def _icon_flip_v(size: int = _ICON_SIZE) -> QPixmap:
     return px
 
 
+# ------------------------------------------------------------------ repères de curseur
+
+
+class _Ruler(QWidget):
+    """Bande de repères (min / zéro si dans la plage / max) sous un QSlider."""
+    _H = 14
+
+    def __init__(self, slider: QSlider, fmt, parent=None):
+        super().__init__(parent)
+        self._slider = slider
+        self._fmt = fmt
+        self.setFixedHeight(self._H)
+        self.setAttribute(Qt.WA_TransparentForMouseEvents)
+
+    def _x_for(self, value: int) -> int:
+        sl = self._slider
+        opt = QStyleOptionSlider()
+        sl.initStyleOption(opt)
+        groove = sl.style().subControlRect(QStyle.CC_Slider, opt, QStyle.SC_SliderGroove, sl)
+        handle = sl.style().subControlRect(QStyle.CC_Slider, opt, QStyle.SC_SliderHandle, sl)
+        hw = handle.width() // 2
+        avail = max(1, groove.width() - handle.width())
+        pos = QStyle.sliderPositionFromValue(sl.minimum(), sl.maximum(), value, avail)
+        return groove.x() + hw + pos
+
+    def paintEvent(self, _event):
+        sl = self._slider
+        mn, mx = sl.minimum(), sl.maximum()
+        marks: set[int] = {mn, mx}
+        if mn < 0 < mx:
+            marks.add(0)
+
+        p = QPainter(self)
+        font = QFont()
+        font.setPixelSize(9)
+        p.setFont(font)
+        fm = p.fontMetrics()
+
+        for val in sorted(marks):
+            x = self._x_for(val)
+            is_zero = (val == 0 and mn < 0 < mx)
+            p.setPen(QColor(200, 200, 200) if is_zero else QColor(110, 110, 110))
+            p.drawLine(x, 0, x, 5 if is_zero else 3)
+            label = self._fmt(val)
+            tw = fm.horizontalAdvance(label)
+            lx = max(0, min(self.width() - tw, x - tw // 2))
+            p.drawText(lx, self._H - 1, label)
+        p.end()
+
+
+class MarkedSlider(QWidget):
+    """QSlider avec repères de valeur gravés en dessous (min / zéro si dans la plage / max)."""
+    valueChanged = Signal(int)
+    rangeChanged = Signal(int, int)
+
+    def __init__(self, orientation: Qt.Orientation = Qt.Horizontal,
+                 fmt=None, parent=None):
+        super().__init__(parent)
+        self._fmt = fmt or str
+        vbox = QVBoxLayout(self)
+        vbox.setContentsMargins(0, 0, 0, 0)
+        vbox.setSpacing(0)
+        self._slider = QSlider(orientation)
+        vbox.addWidget(self._slider)
+        self._ruler = _Ruler(self._slider, self._fmt)
+        vbox.addWidget(self._ruler)
+        self._slider.valueChanged.connect(self.valueChanged)
+        self._slider.rangeChanged.connect(self.rangeChanged)
+        self._slider.rangeChanged.connect(lambda *_: self._ruler.update())
+
+    # --- Proxy API QSlider ---
+    def value(self) -> int:              return self._slider.value()
+    def minimum(self) -> int:            return self._slider.minimum()
+    def maximum(self) -> int:            return self._slider.maximum()
+    def setValue(self, v: int):          self._slider.setValue(v)
+    def setRange(self, a: int, b: int):  self._slider.setRange(a, b)
+    def setMinimum(self, v: int):        self._slider.setMinimum(v)
+    def setMaximum(self, v: int):        self._slider.setMaximum(v)
+    def setSingleStep(self, v: int):     self._slider.setSingleStep(v)
+    def setPageStep(self, v: int):       self._slider.setPageStep(v)
+    def setTickPosition(self, v):        pass   # remplacé par le ruler
+    def setTickInterval(self, v: int):   pass   # idem
+
+    def set_double_click_handler(self, handler) -> None:
+        self._slider.mouseDoubleClickEvent = handler
+
+    def blockSignals(self, b: bool) -> bool:
+        self._slider.blockSignals(b)
+        return super().blockSignals(b)
+
+
 # ------------------------------------------------------------------ slider
 
 class EditSlider(QWidget):
@@ -280,7 +401,8 @@ class EditSlider(QWidget):
         lbl.setFixedWidth(110)
         layout.addWidget(lbl)
 
-        self._slider = QSlider(Qt.Horizontal)
+        _fmt = lambda v, s=self._scale, d=self._decimals: f"{v / s:.{d}f}"
+        self._slider = MarkedSlider(Qt.Horizontal, fmt=_fmt)
         self._slider.setRange(int(min_val * self._scale), int(max_val * self._scale))
         self._slider.setValue(int(default_val * self._scale))
         self._slider.valueChanged.connect(self._on_changed)
@@ -312,10 +434,10 @@ class EditSlider(QWidget):
         arrows.addWidget(btn_dn)
         layout.addLayout(arrows)
 
-        self._slider.mouseDoubleClickEvent = lambda _e: (
+        self._slider.set_double_click_handler(lambda _e: (
             self.set_value(self._default),
             self.value_changed.emit(self._default),
-        )
+        ))
 
     def _fmt(self, v: float) -> str:
         return f"{v:.{self._decimals}f}"
@@ -730,7 +852,7 @@ class CouleursTreatmentDialog(QDialog):
 
         self._adv.setVisible(has_channel_edits)
         chk.toggled.connect(self._adv.setVisible)
-        chk.toggled.connect(lambda _: QTimer.singleShot(0, self.adjustSize))
+        chk.toggled.connect(lambda _: self._resize_and_reposition())
         layout.addWidget(self._adv)
 
         btn_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
@@ -745,6 +867,15 @@ class CouleursTreatmentDialog(QDialog):
         if self._panel is not None:
             pos = self._panel._compute_dialog_pos(self.width(), self.height())
             QTimer.singleShot(0, lambda: self.move(pos))
+
+    def _resize_and_reposition(self) -> None:
+        self.adjustSize()
+        QTimer.singleShot(0, self._reposition)
+
+    def _reposition(self) -> None:
+        if self._panel is not None:
+            pos = self._panel._compute_dialog_pos(self.width(), self.height())
+            self.move(pos)
 
     def _on_changed(self, attr: str, value: float) -> None:
         setattr(self._edit, attr, value)
@@ -810,25 +941,10 @@ class EditPanel(QWidget):
         root.setContentsMargins(4, 4, 4, 4)
         root.setSpacing(6)
 
-        # Barre titre + undo/redo
-        title_bar = QHBoxLayout()
+        # Barre titre
         self._title_label = QLabel("Retouche")
         self._title_label.setStyleSheet("font-weight: bold;")
-        title_bar.addWidget(self._title_label, stretch=1)
-
-        btn_undo = QPushButton("↩")
-        btn_undo.setToolTip("Annuler  (Ctrl+Z)")
-        btn_undo.setFixedWidth(28)
-        btn_undo.clicked.connect(self.undo)
-        title_bar.addWidget(btn_undo)
-
-        btn_redo = QPushButton("↪")
-        btn_redo.setToolTip("Rétablir  (Ctrl+Y)")
-        btn_redo.setFixedWidth(28)
-        btn_redo.clicked.connect(self.redo)
-        title_bar.addWidget(btn_redo)
-
-        root.addLayout(title_bar)
+        root.addWidget(self._title_label)
 
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
@@ -877,7 +993,7 @@ class EditPanel(QWidget):
 
         radius_row = QHBoxLayout()
         radius_row.addWidget(QLabel("Taille :"))
-        self._red_eye_slider = QSlider(Qt.Horizontal)
+        self._red_eye_slider = MarkedSlider(Qt.Horizontal, fmt=lambda v: f"{v/10:.1f}%")
         self._red_eye_slider.setRange(5, 80)   # 0.5% – 8% de la plus petite dimension
         self._red_eye_slider.setValue(30)       # défaut : 3%
         self._red_eye_slider.setToolTip("Rayon de correction (% de l'image)")
@@ -899,6 +1015,21 @@ class EditPanel(QWidget):
 
         self._red_eye_panel.hide()
         inner_layout.addWidget(self._red_eye_panel)
+
+        # Annuler / Rétablir
+        undo_row = QHBoxLayout()
+        undo_row.setSpacing(4)
+        self._btn_undo = QPushButton("Annuler")
+        self._btn_undo.setEnabled(False)
+        self._btn_undo.setShortcut(QKeySequence("Ctrl+Z"))
+        self._btn_undo.clicked.connect(self.undo)
+        undo_row.addWidget(self._btn_undo)
+        self._btn_redo = QPushButton("Rétablir")
+        self._btn_redo.setEnabled(False)
+        self._btn_redo.setShortcut(QKeySequence("Ctrl+Y"))
+        self._btn_redo.clicked.connect(self.redo)
+        undo_row.addWidget(self._btn_redo)
+        inner_layout.addLayout(undo_row)
 
         # Géométrie (boutons directs)
         grp_geo = QGroupBox("Géométrie")
@@ -1026,6 +1157,15 @@ class EditPanel(QWidget):
         y = bottom_y - dh
         x = min(x, img_right - dw)
         y = max(y, top_y)
+
+        # Clamper aux limites de l'écran
+        from PySide6.QtWidgets import QApplication
+        screen = QApplication.screenAt(QPoint(x + dw // 2, y + dh // 2)) or QApplication.primaryScreen()
+        if screen:
+            sg = screen.availableGeometry()
+            x = max(sg.left(), min(x, sg.right() - dw))
+            y = max(sg.top(), min(y, sg.bottom() - dh))
+
         return QPoint(x, y)
 
     def _open_treatment(self, title: str, sliders_def: list) -> None:
@@ -1046,7 +1186,7 @@ class EditPanel(QWidget):
             self.grid_visibility_changed.emit(True)
 
         if dlg.exec() == QDialog.Accepted:
-            self._push_undo()
+            self._push_undo(title)
             new_edit = dlg.get_edit()
             for _, attr, *_ in sliders_def:
                 setattr(self._edit, attr, getattr(new_edit, attr))
@@ -1066,7 +1206,7 @@ class EditPanel(QWidget):
         dlg._panel = self
 
         if dlg.exec() == QDialog.Accepted:
-            self._push_undo()
+            self._push_undo("Couleurs")
             new_edit = dlg.get_edit()
             for attr in ("saturation", "color_red", "color_green", "color_blue"):
                 setattr(self._edit, attr, getattr(new_edit, attr))
@@ -1084,7 +1224,7 @@ class EditPanel(QWidget):
         dlg._panel = self
 
         if dlg.exec() == QDialog.Accepted:
-            self._push_undo()
+            self._push_undo("Gamma")
             new_edit = dlg.get_edit()
             self._edit.gamma = new_edit.gamma
             self._edit.gamma_use_curve = new_edit.gamma_use_curve
@@ -1106,9 +1246,15 @@ class EditPanel(QWidget):
             self._toggle_red_eye_mode(False)
         self._photo = photo
         self._edit = self._db.load(photo.path)
-        self._undo_stack = self._db.get_history(photo.path, limit=_UNDO_MAX)
+        # get_history retourne aussi l'état courant (dernier enregistrement).
+        # On le retire : la pile ne doit contenir que les états PRÉCÉDENTS.
+        history = self._db.get_history(photo.path, limit=_UNDO_MAX + 1)
+        if history:
+            history.pop()
+        self._undo_stack = history   # list[(EditInfo, op_label)]
         self._redo_stack.clear()
         self._title_label.setText(f"Retouche — {photo.filename}")
+        self._update_undo_buttons()
 
     def get_edit(self) -> EditInfo:
         return copy.copy(self._edit)
@@ -1116,18 +1262,22 @@ class EditPanel(QWidget):
     def undo(self) -> None:
         if not self._undo_stack:
             return
-        self._redo_stack.append(copy.copy(self._edit))
-        self._edit = self._undo_stack.pop()
+        prev_edit, op_label = self._undo_stack.pop()
+        self._redo_stack.append((copy.copy(self._edit), op_label))
+        self._edit = prev_edit
         self.edits_changed.emit(copy.copy(self._edit))
         self._save("undo")
+        self._update_undo_buttons()
 
     def redo(self) -> None:
         if not self._redo_stack:
             return
-        self._undo_stack.append(copy.copy(self._edit))
-        self._edit = self._redo_stack.pop()
+        prev_edit, op_label = self._redo_stack.pop()
+        self._undo_stack.append((copy.copy(self._edit), op_label))
+        self._edit = prev_edit
         self.edits_changed.emit(copy.copy(self._edit))
         self._save("redo")
+        self._update_undo_buttons()
 
     # ------------------------------------------------------------------ private
 
@@ -1136,14 +1286,31 @@ class EditPanel(QWidget):
             self._db.save(self._photo.path, self._edit, operation=operation)
             self.photo_saved.emit(self._photo.path, copy.copy(self._edit))
 
-    def _push_undo(self) -> None:
-        self._undo_stack.append(copy.copy(self._edit))
+    def _push_undo(self, op_label: str) -> None:
+        self._undo_stack.append((copy.copy(self._edit), op_label))
         if len(self._undo_stack) > _UNDO_MAX:
             self._undo_stack.pop(0)
         self._redo_stack.clear()
+        self._update_undo_buttons()
+
+    def _update_undo_buttons(self) -> None:
+        if self._undo_stack:
+            _, label = self._undo_stack[-1]
+            self._btn_undo.setText(f"Annuler  {_op_label(label)}")
+            self._btn_undo.setEnabled(True)
+        else:
+            self._btn_undo.setText("Annuler")
+            self._btn_undo.setEnabled(False)
+        if self._redo_stack:
+            _, label = self._redo_stack[-1]
+            self._btn_redo.setText(f"Rétablir  {_op_label(label)}")
+            self._btn_redo.setEnabled(True)
+        else:
+            self._btn_redo.setText("Rétablir")
+            self._btn_redo.setEnabled(False)
 
     def _rotate_cw(self) -> None:
-        self._push_undo()
+        self._push_undo("Rotation +90°")
         self._edit.rotation = (self._edit.rotation + 90) % 360
         self.edits_changed.emit(copy.copy(self._edit))
         self._save("rotation")
@@ -1151,7 +1318,7 @@ class EditPanel(QWidget):
             self.rotation_stepped.emit(self._photo.path, self._edit.rotation)
 
     def _rotate_ccw(self) -> None:
-        self._push_undo()
+        self._push_undo("Rotation −90°")
         self._edit.rotation = (self._edit.rotation - 90) % 360
         self.edits_changed.emit(copy.copy(self._edit))
         self._save("rotation")
@@ -1159,19 +1326,19 @@ class EditPanel(QWidget):
             self.rotation_stepped.emit(self._photo.path, self._edit.rotation)
 
     def _flip_h(self) -> None:
-        self._push_undo()
+        self._push_undo("Miroir H")
         self._edit.flip_h = not self._edit.flip_h
         self.edits_changed.emit(copy.copy(self._edit))
         self._save("flip_h")
 
     def _flip_v(self) -> None:
-        self._push_undo()
+        self._push_undo("Miroir V")
         self._edit.flip_v = not self._edit.flip_v
         self.edits_changed.emit(copy.copy(self._edit))
         self._save("flip_v")
 
     def apply_crop(self, quad: tuple) -> None:
-        self._push_undo()
+        self._push_undo("Recadrage")
         self._edit.crop = quad
         self.edits_changed.emit(copy.copy(self._edit))
         self._save("crop")
@@ -1199,7 +1366,7 @@ class EditPanel(QWidget):
     def _clear_red_eye(self) -> None:
         if not self._edit.red_eye_regions:
             return
-        self._push_undo()
+        self._push_undo("Effacer yeux rouges")
         self._edit.red_eye_regions = []
         self.edits_changed.emit(copy.copy(self._edit))
         self._save("red_eye_clear")
@@ -1210,7 +1377,7 @@ class EditPanel(QWidget):
 
     def on_red_eye_added(self, cx: float, cy: float) -> None:
         """Reçu depuis le canvas quand l'utilisateur clique sur un œil rouge."""
-        self._push_undo()
+        self._push_undo("Yeux rouges")
         radius = self._red_eye_slider.value() / 1000.0
         self._edit.red_eye_regions = list(self._edit.red_eye_regions)
         self._edit.red_eye_regions.append((cx, cy, radius))

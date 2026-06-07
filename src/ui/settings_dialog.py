@@ -12,13 +12,13 @@ from PySide6.QtWidgets import (
     QListWidgetItem,
     QPushButton,
     QRadioButton,
-    QSlider,
     QStackedWidget,
     QVBoxLayout,
     QWidget,
 )
 
 from src.core.config import Config
+from src.ui.edit_panel import MarkedSlider
 
 _DEFAULT_THRESHOLD_PCT = 60
 
@@ -60,31 +60,18 @@ class _FaceRecognitionPage(QWidget):
         lbl_desc.setWordWrap(True)
         layout.addWidget(lbl_desc)
 
-        slider_row = QHBoxLayout()
-        lbl_low = QLabel("Strict")
-        lbl_low.setStyleSheet("color: #888; font-size: 10px;")
-        slider_row.addWidget(lbl_low)
-
-        self._slider = QSlider(Qt.Horizontal)
+        self._slider = MarkedSlider(Qt.Horizontal, fmt=lambda v: f"{v}%")
         self._slider.setMinimum(25)
         self._slider.setMaximum(70)
         self._slider.setSingleStep(5)
         self._slider.setPageStep(5)
-        self._slider.setTickPosition(QSlider.TicksBelow)
-        self._slider.setTickInterval(5)
         current = int(round(
             self._config.get("faces.cluster_threshold", _DEFAULT_THRESHOLD_PCT / 100.0) * 100
         ))
         current = max(25, min(70, current))
         self._initial_value = current
         self._slider.setValue(current)
-        slider_row.addWidget(self._slider, stretch=1)
-
-        lbl_high = QLabel("Large")
-        lbl_high.setStyleSheet("color: #888; font-size: 10px;")
-        slider_row.addWidget(lbl_high)
-
-        layout.addLayout(slider_row)
+        layout.addWidget(self._slider)
 
         self._lbl_value = QLabel()
         self._lbl_value.setAlignment(Qt.AlignCenter)
