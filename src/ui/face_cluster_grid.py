@@ -197,6 +197,28 @@ class _ClusterCard(QFrame):
         )
         self._lbl_img.setPixmap(scaled)
 
+    def set_suggestion(
+        self,
+        sugg_id: "int | None",
+        label: str,
+        color: str,
+    ) -> None:
+        """Met à jour (ou crée) le label de suggestion sans recréer la carte."""
+        self._suggested_person_id = sugg_id
+        if not hasattr(self, "_lbl_sugg"):
+            self._lbl_sugg = QLabel()
+            self._lbl_sugg.setAlignment(Qt.AlignCenter)
+            self._lbl_sugg.setWordWrap(True)
+            self.layout().addWidget(self._lbl_sugg)
+        if label:
+            self._lbl_sugg.setText(label)
+            self._lbl_sugg.setStyleSheet(
+                f"border: none; font-size: 10px; color: {color};"
+            )
+            self._lbl_sugg.setVisible(True)
+        else:
+            self._lbl_sugg.setVisible(False)
+
     def set_selected(self, selected: bool) -> None:
         self._is_selected = selected
         self.setStyleSheet(self._STYLE_SELECTED if selected else self._STYLE_NORMAL)
@@ -419,10 +441,21 @@ class _SectionWidget(QFrame):
 # ------------------------------------------------------------------ refresh thread
 
 class _ClusterRefreshThread(QThread):
-    """Charge et pré-calcule en arrière-plan tout ce dont _build_from_data a besoin.
-    L'UI reçoit des données prêtes à l'emploi — aucun calcul lourd dans le thread UI."""
+    """
+    Chargement en deux phases pour un affichage progressif.
 
-    data_ready = Signal(object)   # dict | None
+    Phase 1 — initial_ready (rapide, < 1 s) :
+        2 requêtes SQL (face counts + faces représentatives).
+        Émet une structure plate (1 groupe = 1 cluster) sans suggestions.
+        Les cartes peuvent être affichées immédiatement.
+
+    Phase 2 — data_ready (lent, O(n²)) :
+        Embeddings, Union-Find, suggestions.
+        Émet la structure complète groupée avec suggestions.
+    """
+
+    initial_ready = Signal(object)   # dict — affiché immédiatement
+    data_ready    = Signal(object)   # dict | None — affiché après calcul lourd
 
     def __init__(self, face_db: "FaceDatabase", catalog, parent=None) -> None:
         super().__init__(parent)
@@ -432,38 +465,48 @@ class _ClusterRefreshThread(QThread):
     def run(self) -> None:
         try:
             clusters = self._face_db.get_unnamed_clusters()
+
+            _empty = {
+                "face_counts": {}, "groups_sorted": [], "group_labels": {},
+                "suggestions": {}, "representative_faces": {}, "persons": [],
+                "person_cluster_embeddings": {}, "is_partial": False,
+            }
             if not clusters:
-                self.data_ready.emit({
-                    "face_counts": {},
-                    "groups_sorted": [],
-                    "group_labels": {},
-                    "suggestions": {},
-                    "representative_faces": {},
-                    "persons": [],
-                    "person_cluster_embeddings": {},
-                })
+                self.initial_ready.emit(_empty)
+                self.data_ready.emit(_empty)
                 return
 
-            cluster_ids  = [cid for cid, _ in clusters]
-            face_counts  = {cid: fc for cid, fc in clusters}
+            cluster_ids = [cid for cid, _ in clusters]
+            face_counts = {cid: fc for cid, fc in clusters}
 
-            # ── Embeddings ─────────────────────────────────────────────────
-            cluster_embeddings = self._face_db.get_all_cluster_centroids(cluster_ids)
+            # ── Phase 1 : structure plate, sans suggestion ─────────────────
+            representative_faces = self._face_db.get_all_representative_faces(cluster_ids)
+            flat_groups = [[cid] for cid in cluster_ids]   # déjà trié DESC par face_count
+            self.initial_ready.emit({
+                "face_counts":               face_counts,
+                "groups_sorted":             flat_groups,
+                "group_labels":              {},
+                "suggestions":               {},
+                "representative_faces":      representative_faces,
+                "persons":                   [],
+                "person_cluster_embeddings": {},
+                "is_partial":                True,
+            })
 
-            persons = self._catalog.get_persons()
+            # ── Phase 2 : calcul lourd ─────────────────────────────────────
+            cluster_embeddings        = self._face_db.get_all_cluster_centroids(cluster_ids)
+            persons                   = self._catalog.get_persons()
             self._face_db.enrich_persons(persons)
-            person_ids = [p.id for p in persons]
+            person_ids                = [p.id for p in persons]
             person_cluster_embeddings = self._face_db.get_all_person_cluster_centroids(person_ids)
 
-            # ── Regroupement O(n²) — fait ici, pas dans l'UI ──────────────
-            raw_groups = _compute_cluster_groups_bg(cluster_ids, cluster_embeddings)
+            raw_groups    = _compute_cluster_groups_bg(cluster_ids, cluster_embeddings)
             groups_sorted = sorted(
                 raw_groups.values(),
                 key=lambda g: (-len(g), -sum(face_counts.get(c, 0) for c in g)),
             )
 
-            # ── Labels de section par groupe ───────────────────────────────
-            group_labels: dict[int, tuple[str, str]] = {}  # root_cid → (label, color)
+            group_labels: dict[int, tuple[str, str]] = {}
             for group in groups_sorted:
                 root = group[0]
                 if len(group) > 1:
@@ -475,10 +518,10 @@ class _ClusterRefreshThread(QThread):
                         if ci in cluster_embeddings and cj in cluster_embeddings
                     ]
                     avg_sim = sum(sims) / len(sims) if sims else 0.0
-                    pct = int(avg_sim * 100)
+                    pct     = int(avg_sim * 100)
                     n_faces = sum(face_counts.get(c, 0) for c in group)
-                    fp = "s" if n_faces > 1 else ""
-                    label = (
+                    fp      = "s" if n_faces > 1 else ""
+                    label   = (
                         f"≈ Probablement la même personne"
                         f"  —  {len(group)} groupes, {n_faces} visage{fp}"
                         f"  (sim. {pct} %)"
@@ -488,16 +531,12 @@ class _ClusterRefreshThread(QThread):
                 else:
                     group_labels[root] = ("", "")
 
-            # ── Suggestions par cluster ────────────────────────────────────
             suggestions: dict[int, tuple] = {
                 cid: _compute_suggestion_bg(
                     cid, cluster_embeddings, persons, person_cluster_embeddings
                 )
                 for cid in cluster_ids
             }
-
-            # ── Faces représentatives (1 requête batch) ────────────────────
-            representative_faces = self._face_db.get_all_representative_faces(cluster_ids)
 
             self.data_ready.emit({
                 "face_counts":               face_counts,
@@ -507,6 +546,7 @@ class _ClusterRefreshThread(QThread):
                 "representative_faces":      representative_faces,
                 "persons":                   persons,
                 "person_cluster_embeddings": person_cluster_embeddings,
+                "is_partial":                False,
             })
         except Exception:
             logger.exception("_ClusterRefreshThread: erreur inattendue")
@@ -552,6 +592,9 @@ class FaceClusterGrid(QWidget):
         self._loader  = None
         self._refresh_thread: _ClusterRefreshThread | None = None
         self._selected_ids: set[int] = set()
+        # Cache des bytes JPEG d'avatars : persiste entre la phase 1 et la phase 2
+        # pour éviter de relire les fichiers lors du rebuild avec suggestions.
+        self._avatar_cache: dict[int, bytes] = {}
         self._setup_ui()
 
     # ------------------------------------------------------------------ setup
@@ -680,21 +723,47 @@ class FaceClusterGrid(QWidget):
         self._content_vbox.addWidget(lbl_loading)
 
         self._refresh_thread = _ClusterRefreshThread(self._face_db, self._catalog, self)
-        self._refresh_thread.data_ready.connect(self._on_refresh_data_ready)
+        self._refresh_thread.initial_ready.connect(self._on_initial_ready)
+        self._refresh_thread.data_ready.connect(self._on_data_ready)
         self._refresh_thread.start()
 
     @Slot(object)
-    def _on_refresh_data_ready(self, data: object) -> None:
-        # Vider le spinner
+    def _on_initial_ready(self, data: object) -> None:
+        """Phase 1 : affiche immédiatement les cartes en liste plate (sans suggestions)."""
         while self._content_vbox.count():
             item = self._content_vbox.takeAt(0)
             if item.widget():
                 item.widget().deleteLater()
+        if data is None:
+            return
+        self._build_from_data(data)
 
+    @Slot(object)
+    def _on_data_ready(self, data: object) -> None:
+        """Phase 2 : reconstruit la vue avec groupes similaires et suggestions."""
         if data is None:
             self._lbl_title.setText("Erreur lors du chargement")
             return
+        if data.get("is_partial"):
+            return  # ne devrait pas arriver, mais garde-fou
 
+        # Arrêter le loader d'avatars de la phase 1 (les bytes sont dans _avatar_cache)
+        if self._loader and self._loader.isRunning():
+            try:
+                self._loader.avatar_ready.disconnect(self._on_avatar_ready)
+            except RuntimeError:
+                pass
+            self._loader = None
+
+        # Vider et reconstruire
+        while self._content_vbox.count():
+            item = self._content_vbox.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+        self._cards.clear()
+        self._sections.clear()
+        self._selected_ids.clear()
+        self._action_bar.setVisible(False)
         self._build_from_data(data)
 
     def _build_from_data(self, data: dict) -> None:
@@ -718,10 +787,16 @@ class FaceClusterGrid(QWidget):
             self._content_vbox.addWidget(lbl)
             return
 
+        is_partial = data.get("is_partial", False)
         plural = "s" if n > 1 else ""
-        self._lbl_title.setText(
-            f"{n} groupe{plural} de visages non identifié{plural}"
-        )
+        if is_partial:
+            self._lbl_title.setText(
+                f"{n} groupe{plural} — analyse en cours…"
+            )
+        else:
+            self._lbl_title.setText(
+                f"{n} groupe{plural} de visages non identifié{plural}"
+            )
 
         available = self._scroll.viewport().width()
         if available > 0:
@@ -748,9 +823,13 @@ class FaceClusterGrid(QWidget):
                 section.add_card(cluster_id, card)
                 self._cards[cluster_id] = card
 
-                rep = representative_faces.get(cluster_id)
-                if rep:
-                    avatar_items.append((cluster_id, rep))
+                # Utiliser le cache d'avatars si disponible (phase 2 → pas de relecture disque)
+                if cluster_id in self._avatar_cache:
+                    card.set_avatar(self._avatar_cache[cluster_id])
+                else:
+                    rep = representative_faces.get(cluster_id)
+                    if rep:
+                        avatar_items.append((cluster_id, rep))
 
             section.reflow(self._current_cols)
             self._content_vbox.addWidget(section)
@@ -896,6 +975,7 @@ class FaceClusterGrid(QWidget):
         self._loader.start()
 
     def _on_avatar_ready(self, cluster_id: int, data: bytes) -> None:
+        self._avatar_cache[cluster_id] = data   # conservé pour la phase 2
         card = self._cards.get(cluster_id)
         if card:
             card.set_avatar(data)
