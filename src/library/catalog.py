@@ -144,6 +144,18 @@ class Catalog:
                 conn.execute(stmt)
             except Exception:
                 pass  # colonne déjà présente
+        # Rétro-remplissage : vidéos ajoutées avant le support vidéo ont media_type='image'
+        video_exts = (
+            ".mp4", ".mov", ".avi", ".mkv", ".wmv", ".webm",
+            ".m4v", ".3gp", ".flv", ".ts", ".mts", ".mpg", ".mpeg",
+        )
+        like_clauses = " OR ".join(
+            f"LOWER(filename) LIKE '%{ext}'" for ext in video_exts
+        )
+        conn.execute(
+            f"UPDATE photos SET media_type='video' WHERE media_type='image' AND ({like_clauses})"
+        )
+        conn.commit()
 
     def _migrate_normalize_paths(self, conn) -> None:
         """Normalise les séparateurs de chemin dans les données existantes.
@@ -257,19 +269,29 @@ class Catalog:
             conn = self._conn()
             try:
                 rows = conn.execute(
-                    "SELECT * FROM photos WHERE directory=? ORDER BY date_taken DESC, filename",
+                    "SELECT * FROM photos WHERE directory=? ORDER BY COALESCE(date_taken, datetime(file_mtime, 'unixepoch')) DESC, filename",
                     (folder,),
                 ).fetchall()
             finally:
                 conn.close()
         return [_photo_from_row(r) for r in rows]
 
+    def get_all_photo_paths(self) -> list[str]:
+        """Retourne uniquement les chemins de toutes les photos (plus léger que get_all_photos)."""
+        with self._lock:
+            conn = self._conn()
+            try:
+                rows = conn.execute("SELECT path FROM photos").fetchall()
+            finally:
+                conn.close()
+        return [r[0] for r in rows]
+
     def get_all_photos(self) -> list[PhotoInfo]:
         with self._lock:
             conn = self._conn()
             try:
                 rows = conn.execute(
-                    "SELECT * FROM photos ORDER BY date_taken DESC, filename"
+                    "SELECT * FROM photos ORDER BY COALESCE(date_taken, datetime(file_mtime, 'unixepoch')) DESC, filename"
                 ).fetchall()
             finally:
                 conn.close()
@@ -284,7 +306,7 @@ class Catalog:
                     """
                     SELECT * FROM photos
                     WHERE filename LIKE ? OR camera_make LIKE ? OR camera_model LIKE ?
-                    ORDER BY date_taken DESC
+                    ORDER BY COALESCE(date_taken, datetime(file_mtime, 'unixepoch')) DESC
                     """,
                     (pattern, pattern, pattern),
                 ).fetchall()
@@ -413,7 +435,7 @@ class Catalog:
                     SELECT p.* FROM photos p
                     JOIN album_photos ap ON p.id = ap.photo_id
                     WHERE ap.album_id = ?
-                    ORDER BY p.date_taken DESC
+                    ORDER BY COALESCE(p.date_taken, datetime(p.file_mtime, 'unixepoch')) DESC
                     """,
                     (album_id,),
                 ).fetchall()
@@ -426,7 +448,7 @@ class Catalog:
             conn = self._conn()
             try:
                 rows = conn.execute(
-                    "SELECT * FROM photos WHERE is_favorite=1 ORDER BY date_taken DESC"
+                    "SELECT * FROM photos WHERE is_favorite=1 ORDER BY COALESCE(date_taken, datetime(file_mtime, 'unixepoch')) DESC"
                 ).fetchall()
             finally:
                 conn.close()
@@ -437,7 +459,7 @@ class Catalog:
             conn = self._conn()
             try:
                 rows = conn.execute(
-                    "SELECT * FROM photos WHERE media_type='video' ORDER BY date_taken DESC"
+                    "SELECT * FROM photos WHERE media_type='video' ORDER BY COALESCE(date_taken, datetime(file_mtime, 'unixepoch')) DESC"
                 ).fetchall()
             finally:
                 conn.close()
@@ -505,6 +527,28 @@ class Catalog:
                 conn.close()
         return {r[0] for r in rows}
 
+    def cleanup_asset_dirs(self) -> list[str]:
+        """Supprime du catalogue les fichiers dans des répertoires *_assets (assets logiciels
+        type Lightroom/Capture One). Retourne les chemins supprimés."""
+        to_delete: list[str] = []
+        with self._lock:
+            conn = self._conn()
+            try:
+                rows = conn.execute("SELECT path FROM photos").fetchall()
+                to_delete = [
+                    r[0] for r in rows
+                    if any(part.endswith("_assets") for part in Path(r[0]).parts)
+                ]
+                if to_delete:
+                    conn.executemany("DELETE FROM photos WHERE path=?",
+                                     [(p,) for p in to_delete])
+                    conn.commit()
+            finally:
+                conn.close()
+        if to_delete:
+            logger.info("cleanup_asset_dirs : %d entrée(s) supprimée(s)", len(to_delete))
+        return to_delete
+
     def delete_photos(self, paths: list[str]) -> None:
         """Supprime en une seule transaction les entrées dont les fichiers ont disparu."""
         if not paths:
@@ -529,7 +573,7 @@ class Catalog:
             try:
                 rows = conn.execute(
                     f"SELECT * FROM photos WHERE path IN ({placeholders})"
-                    " ORDER BY date_taken DESC, filename",
+                    " ORDER BY COALESCE(date_taken, datetime(file_mtime, 'unixepoch')) DESC, filename",
                     paths,
                 ).fetchall()
             finally:

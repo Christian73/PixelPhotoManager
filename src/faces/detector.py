@@ -128,6 +128,47 @@ def is_available() -> bool:
         return False
 
 
+def warmup_worker() -> None:
+    """
+    Initialise TF/DeepFace dans le sous-processus worker de ProcessPoolExecutor.
+
+    Doit être une fonction MODULE-LEVEL (non-lambda, non-méthode) pour être
+    picklable par multiprocessing sur Windows (spawn).
+
+    Appelée une seule fois avant la boucle de détection, ce warmup fait que
+    le premier vrai appel à detect_and_embed() est rapide (modèles déjà chargés).
+    """
+    import numpy as np
+    os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "3")
+    # Dans le sous-processus worker il n'y a pas d'UI à protéger :
+    # on utilise la moitié des cœurs disponibles pour accélérer l'inférence.
+    _ncpu = str(max(2, (os.cpu_count() or 4) // 2))
+    os.environ.setdefault("TF_NUM_INTRAOP_THREADS", _ncpu)
+    os.environ.setdefault("TF_NUM_INTEROP_THREADS", "2")
+    try:
+        from deepface import DeepFace
+        # detector_backend="skip" → appelle ArcFace directement, sans détection,
+        # garantissant que le graphe TF est compilé quel que soit l'image.
+        dummy_face = np.zeros((112, 112, 3), dtype=np.uint8)
+        DeepFace.represent(
+            img_path=dummy_face,
+            model_name="ArcFace",
+            detector_backend="skip",
+            enforce_detection=False,
+            align=False,
+        )
+        dummy_photo = np.zeros((1080, 1920, 3), dtype=np.uint8)
+        DeepFace.represent(
+            img_path=dummy_photo,
+            model_name="ArcFace",
+            detector_backend="retinaface",
+            enforce_detection=False,
+            align=False,
+        )
+    except Exception:
+        pass
+
+
 def detect_and_embed(image_path: str, rotation: int = 0) -> list[dict]:
     """
     Detect faces in an image and compute ArcFace embeddings.
@@ -142,6 +183,14 @@ def detect_and_embed(image_path: str, rotation: int = 0) -> list[dict]:
     if not os.path.exists(image_path):
         raise FileNotFoundError(image_path)
 
+    # Définir AVANT le premier import de tensorflow (setdefault = ne remplace pas
+    # si déjà défini par TFWarmUpThread).  Limite TF à 2 threads pour ne pas
+    # saturer tous les cœurs CPU et laisser l'UI réactive.
+    os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "3")
+    _ncpu = str(max(2, (os.cpu_count() or 4) // 2))
+    os.environ.setdefault("TF_NUM_INTRAOP_THREADS", _ncpu)
+    os.environ.setdefault("TF_NUM_INTEROP_THREADS", "2")
+
     try:
         from deepface import DeepFace
     except ImportError:
@@ -151,8 +200,6 @@ def detect_and_embed(image_path: str, rotation: int = 0) -> list[dict]:
         )
 
     try:
-        os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "3")
-
         with _exif_corrected(image_path, extra_rotation=rotation) as corrected_path:
             with _resized_for_detection(corrected_path) as (detect_path, scale):
                 results = DeepFace.represent(

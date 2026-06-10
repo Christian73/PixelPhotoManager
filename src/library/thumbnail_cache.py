@@ -44,6 +44,8 @@ class ThumbnailCache:
         with self._lock:
             conn = self._conn()
             try:
+                conn.execute("PRAGMA journal_mode=WAL")
+                conn.execute("PRAGMA synchronous=NORMAL")
                 conn.execute(_CREATE_TABLE)
                 conn.commit()
             finally:
@@ -59,9 +61,14 @@ class ThumbnailCache:
             return self._ram[key]
         return self._get_from_db(photo_path, key)
 
-    def generate(self, photo_path: str, edit=None) -> QPixmap | None:
-        """Génère (et met en cache) la vignette de photo_path.
-        Si edit (EditInfo) est fourni, les retouches sont appliquées avant le redimensionnement."""
+    def get_ram(self, photo_path: str) -> QPixmap | None:
+        """Retourne la vignette depuis le cache RAM uniquement, sans toucher SQLite."""
+        return self._ram.get(self._key(photo_path))
+
+    def generate(self, photo_path: str, edit=None) -> bytes | None:
+        """Génère la vignette JPEG de photo_path et la sauvegarde en base.
+        Retourne les bytes JPEG bruts — NE crée pas de QPixmap (thread-safe).
+        L'appelant doit créer le QPixmap dans le thread UI et appeler store_pixmap()."""
         from src.library.exif_reader import VIDEO_EXT
         if Path(photo_path).suffix.lower() in VIDEO_EXT:
             return self._generate_video_thumb(photo_path)
@@ -79,7 +86,7 @@ class ThumbnailCache:
                     from src.processing.adjustments import ImageAdjuster
                     img = ImageAdjuster.apply_all(img, edit)
                 img.thumbnail(self.THUMB_SIZE, Image.LANCZOS)
-                if img.mode not in ("RGB", "RGBA"):
+                if img.mode != "RGB":
                     img = img.convert("RGB")
                 buf = io.BytesIO()
                 img.save(buf, format="JPEG", quality=85)
@@ -103,16 +110,18 @@ class ThumbnailCache:
                 finally:
                     conn.close()
 
-            pixmap = QPixmap()
-            pixmap.loadFromData(QByteArray(data))
-            self._store_ram(key, pixmap)
-            return pixmap
+            return data
         except Exception as e:
-            logger.debug(f"Erreur génération vignette {photo_path}: {e}")
+            logger.warning("Erreur génération vignette %s: %s", photo_path, e)
             return None
 
-    def _generate_video_thumb(self, video_path: str) -> QPixmap | None:
-        """Extrait une frame de la vidéo et en fait une vignette mise en cache."""
+    def store_pixmap(self, photo_path: str, pixmap: QPixmap) -> None:
+        """Stocke un QPixmap dans le cache RAM. Doit être appelé depuis le thread UI."""
+        self._store_ram(self._key(photo_path), pixmap)
+
+    def _generate_video_thumb(self, video_path: str) -> bytes | None:
+        """Extrait une frame de la vidéo et en fait une vignette mise en cache.
+        Retourne les bytes JPEG bruts — NE crée pas de QPixmap (thread-safe)."""
         try:
             import cv2
             from PIL import Image
@@ -153,12 +162,9 @@ class ThumbnailCache:
                 finally:
                     conn.close()
 
-            pixmap = QPixmap()
-            pixmap.loadFromData(QByteArray(data))
-            self._store_ram(key, pixmap)
-            return pixmap
+            return data
         except Exception as e:
-            logger.debug("Erreur génération vignette vidéo %s: %s", video_path, e)
+            logger.warning("Erreur génération vignette vidéo %s: %s", video_path, e)
             return None
 
     def move_photo(self, old_path: str, new_path: str) -> None:

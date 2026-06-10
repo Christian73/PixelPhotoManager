@@ -135,10 +135,10 @@ class _AvatarLoader(QThread):
 
 class _AssignDialog(QDialog):
     """
-    Dialog shown when the user clicks 'Nommer…' on a cluster.
-    Offers two choices:
-      • Associer à une personne existante  (radio list)
-      • Créer une nouvelle personne         (text input)
+    Dialogue unifié pour identifier un groupe ou un visage.
+
+    Affiche en tête la personne suggérée (si disponible), puis les autres
+    personnes dans une liste filtrabe, puis les options de création / d'ignorance.
     """
 
     def __init__(
@@ -146,89 +146,164 @@ class _AssignDialog(QDialog):
         cluster_id: int,
         existing_persons: list[PersonInfo],
         suggested_person_id: int | None = None,
+        show_ignore: bool = True,
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
-        self.setWindowTitle(f"Identifier le groupe {cluster_id}")
+        self.setWindowTitle("Identifier cette personne")
         self.setMinimumWidth(360)
         self.setStyleSheet(_RADIO_STYLE)
         self._selected_person_id: int | None = None
         self._new_name: str = ""
         self._ignored: bool = False
-        self._setup_ui(cluster_id, existing_persons, suggested_person_id)
+        self._rb_ignore: QRadioButton | None = None
+        self._person_rbs: list[tuple[QRadioButton, str]] = []
+        self._setup_ui(existing_persons, suggested_person_id, show_ignore)
 
     def _setup_ui(
         self,
-        cluster_id: int,
         persons: list[PersonInfo],
         suggested_person_id: int | None,
+        show_ignore: bool,
     ) -> None:
         layout = QVBoxLayout(self)
         layout.setSpacing(10)
         layout.setContentsMargins(16, 16, 16, 16)
 
-        layout.addWidget(QLabel(f"Qui est la personne du groupe {cluster_id} ?"))
-
         self._btn_group = QButtonGroup(self)
-        preselect_rb = None
+        preselect_rb: QRadioButton | None = None
 
-        if persons:
-            lbl_existing = QLabel("Associer à une personne existante :")
-            lbl_existing.setStyleSheet("color: #aaa; font-size: 11px;")
-            layout.addWidget(lbl_existing)
+        # --- Personne probable (suggestion) ---
+        suggested_person = (
+            next((p for p in persons if p.id == suggested_person_id), None)
+            if suggested_person_id is not None else None
+        )
 
-            for p in persons:
-                rb = QRadioButton(f"{p.name}  ({p.photo_count} photo{'s' if p.photo_count != 1 else ''})")
+        if suggested_person:
+            lbl_sugg = QLabel("Personne probable :")
+            lbl_sugg.setStyleSheet("color: #7aabdb; font-size: 11px; font-weight: bold;")
+            layout.addWidget(lbl_sugg)
+
+            rb_sugg = QRadioButton(
+                f"{suggested_person.name}"
+                f"  ({suggested_person.photo_count}"
+                f" photo{'s' if suggested_person.photo_count != 1 else ''})"
+            )
+            rb_sugg.setProperty("person_id", suggested_person.id)
+            self._btn_group.addButton(rb_sugg)
+            layout.addWidget(rb_sugg)
+            preselect_rb = rb_sugg
+
+            sep = QFrame()
+            sep.setFrameShape(QFrame.HLine)
+            sep.setStyleSheet("color: #444;")
+            layout.addWidget(sep)
+
+        # --- Autres personnes existantes ---
+        other_persons = [p for p in persons if p.id != suggested_person_id]
+
+        if other_persons:
+            lbl_others = QLabel(
+                "Autres personnes :" if suggested_person else "Personnes existantes :"
+            )
+            lbl_others.setStyleSheet("color: #aaa; font-size: 11px;")
+            layout.addWidget(lbl_others)
+
+            self._search_input = QLineEdit()
+            self._search_input.setPlaceholderText("🔍  Rechercher un nom…")
+            self._search_input.setClearButtonEnabled(True)
+            self._search_input.textChanged.connect(self._filter_persons)
+            layout.addWidget(self._search_input)
+
+            scroll_content = QWidget()
+            scroll_content.setStyleSheet("background: transparent;")
+            sc_layout = QVBoxLayout(scroll_content)
+            sc_layout.setContentsMargins(4, 4, 4, 4)
+            sc_layout.setSpacing(2)
+
+            for p in other_persons:
+                rb = QRadioButton(
+                    f"{p.name}  ({p.photo_count} photo{'s' if p.photo_count != 1 else ''})"
+                )
                 rb.setProperty("person_id", p.id)
                 self._btn_group.addButton(rb)
-                layout.addWidget(rb)
-                if p.id == suggested_person_id:
+                sc_layout.addWidget(rb)
+                self._person_rbs.append((rb, p.name))
+                if preselect_rb is None:
                     preselect_rb = rb
 
-        # Separator
-        sep = QFrame()
-        sep.setFrameShape(QFrame.HLine)
-        sep.setStyleSheet("color: #444;")
-        layout.addWidget(sep)
+            scroll_area = QScrollArea()
+            scroll_area.setWidget(scroll_content)
+            scroll_area.setWidgetResizable(True)
+            scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+            scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+            scroll_area.setMaximumHeight(200)
+            scroll_area.setStyleSheet(
+                "QScrollArea { border: 1px solid #444; border-radius: 3px;"
+                " background: transparent; }"
+            )
+            layout.addWidget(scroll_area)
 
-        # New person option
+        # --- Nouvelle personne ---
+        sep_new = QFrame()
+        sep_new.setFrameShape(QFrame.HLine)
+        sep_new.setStyleSheet("color: #444;")
+        layout.addWidget(sep_new)
+
         rb_new = QRadioButton("Créer une nouvelle personne :")
         self._btn_group.addButton(rb_new)
         self._rb_new = rb_new
         layout.addWidget(rb_new)
 
-        # Pré-sélection : suggestion si disponible, sinon "Créer"
-        if preselect_rb:
+        self._name_input = QLineEdit()
+        self._name_input.setPlaceholderText("Nom de la personne…")
+        self._name_input.textChanged.connect(lambda: rb_new.setChecked(True))
+        _orig_focus = self._name_input.focusInEvent
+        self._name_input.focusInEvent = lambda e: (rb_new.setChecked(True), _orig_focus(e))
+        layout.addWidget(self._name_input)
+
+        # --- Ignorer ---
+        if show_ignore:
+            sep_ign = QFrame()
+            sep_ign.setFrameShape(QFrame.HLine)
+            sep_ign.setStyleSheet("color: #444;")
+            layout.addWidget(sep_ign)
+
+            rb_ignore = QRadioButton("Ignorer ce groupe")
+            self._btn_group.addButton(rb_ignore)
+            self._rb_ignore = rb_ignore
+            layout.addWidget(rb_ignore)
+
+        # Pré-sélection : suggestion ou premier de liste, sinon "Créer"
+        if preselect_rb is not None:
             preselect_rb.setChecked(True)
         else:
             rb_new.setChecked(True)
 
-        self._name_input = QLineEdit()
-        self._name_input.setPlaceholderText("Nom de la personne…")
-        self._name_input.textChanged.connect(lambda: rb_new.setChecked(True))
-        layout.addWidget(self._name_input)
-
-        # Separator
-        sep2 = QFrame()
-        sep2.setFrameShape(QFrame.HLine)
-        sep2.setStyleSheet("color: #444;")
-        layout.addWidget(sep2)
-
-        # Ignore option
-        rb_ignore = QRadioButton("Ignorer ce groupe")
-        self._btn_group.addButton(rb_ignore)
-        self._rb_ignore = rb_ignore
-        layout.addWidget(rb_ignore)
-
-        # Buttons
+        # Boutons
         buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         buttons.accepted.connect(self._on_accept)
         buttons.rejected.connect(self.reject)
         layout.addWidget(buttons)
 
+    def _filter_persons(self, text: str) -> None:
+        query = text.lower().strip()
+        first_visible: QRadioButton | None = None
+        for rb, name in self._person_rbs:
+            visible = not query or query in name.lower()
+            rb.setVisible(visible)
+            if visible and first_visible is None:
+                first_visible = rb
+        checked = self._btn_group.checkedButton()
+        if checked is not None and checked is not self._rb_new and not checked.isVisible():
+            if first_visible is not None:
+                first_visible.setChecked(True)
+            else:
+                self._rb_new.setChecked(True)
+
     def _on_accept(self) -> None:
         checked = self._btn_group.checkedButton()
-        if checked is self._rb_ignore:
+        if self._rb_ignore is not None and checked is self._rb_ignore:
             self._ignored = True
             self.accept()
         elif checked is self._rb_new:
@@ -242,8 +317,6 @@ class _AssignDialog(QDialog):
         else:
             self._selected_person_id = checked.property("person_id")
             self.accept()
-
-    # Result accessors
 
     def is_ignored(self) -> bool:
         return self._ignored
@@ -370,9 +443,7 @@ class MergePersonsDialog(QDialog):
         layout.setContentsMargins(16, 16, 16, 16)
         layout.setSpacing(10)
 
-        layout.addWidget(QLabel(
-            f"Fusionner <b>{source.name}</b> avec :"
-        ))
+        layout.addWidget(QLabel(f"Fusionner <b>{source.name}</b> avec :"))
 
         if not others:
             layout.addWidget(QLabel("Aucune autre personne à fusionner."))
@@ -382,14 +453,46 @@ class MergePersonsDialog(QDialog):
             return
 
         self._btn_group = QButtonGroup(self)
+        self._person_rbs: list[tuple[QRadioButton, str]] = []
+
+        self._search_input = QLineEdit()
+        self._search_input.setPlaceholderText("🔍  Rechercher un nom…")
+        self._search_input.setClearButtonEnabled(True)
+        self._search_input.textChanged.connect(self._filter_persons)
+        layout.addWidget(self._search_input)
+
+        scroll_content = QWidget()
+        scroll_content.setStyleSheet("background: transparent;")
+        sc_layout = QVBoxLayout(scroll_content)
+        sc_layout.setContentsMargins(4, 4, 4, 4)
+        sc_layout.setSpacing(2)
+
         for p in others:
-            rb = QRadioButton(f"{p.name}  ({p.photo_count} photo{'s' if p.photo_count != 1 else ''})")
+            rb = QRadioButton(
+                f"{p.name}  ({p.photo_count} photo{'s' if p.photo_count != 1 else ''})"
+            )
             rb.setProperty("person_id", p.id)
             self._btn_group.addButton(rb)
-            layout.addWidget(rb)
+            sc_layout.addWidget(rb)
+            self._person_rbs.append((rb, p.name))
         self._btn_group.buttons()[0].setChecked(True)
 
-        note = QLabel(f"Les visages de <i>{source.name}</i> seront rattachés à la personne choisie.\n{source.name} sera ensuite supprimé.")
+        scroll_area = QScrollArea()
+        scroll_area.setWidget(scroll_content)
+        scroll_area.setWidgetResizable(True)
+        scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        scroll_area.setMaximumHeight(200)
+        scroll_area.setStyleSheet(
+            "QScrollArea { border: 1px solid #444; border-radius: 3px;"
+            " background: transparent; }"
+        )
+        layout.addWidget(scroll_area)
+
+        note = QLabel(
+            f"Les visages de <i>{source.name}</i> seront rattachés à la personne choisie."
+            f"\n{source.name} sera ensuite supprimé."
+        )
         note.setWordWrap(True)
         note.setStyleSheet("color: #888; font-size: 11px;")
         layout.addWidget(note)
@@ -398,6 +501,19 @@ class MergePersonsDialog(QDialog):
         buttons.accepted.connect(self._on_accept)
         buttons.rejected.connect(self.reject)
         layout.addWidget(buttons)
+
+    def _filter_persons(self, text: str) -> None:
+        query = text.lower().strip()
+        first_visible: QRadioButton | None = None
+        for rb, name in self._person_rbs:
+            visible = not query or query in name.lower()
+            rb.setVisible(visible)
+            if visible and first_visible is None:
+                first_visible = rb
+        checked = self._btn_group.checkedButton()
+        if checked is not None and not checked.isVisible():
+            if first_visible is not None:
+                first_visible.setChecked(True)
 
     def _on_accept(self) -> None:
         checked = self._btn_group.checkedButton()
@@ -492,31 +608,27 @@ class PeopleDialog(QDialog):
             self._content_layout.addWidget(lbl)
             return
 
-        # Personnes existantes et leurs embeddings représentatifs
+        # Personnes existantes et leurs centroïdes par groupe
         persons = self._catalog.get_persons()
         self._face_db.enrich_persons(persons)
 
-        person_embeddings: dict[int, list[float]] = {}
-        for p in persons:
-            emb = self._face_db.get_representative_embedding(person_id=p.id)
-            if emb:
-                person_embeddings[p.id] = emb
+        person_ids = [p.id for p in persons if p.id is not None]
+        person_cluster_embs = self._face_db.get_all_person_cluster_centroids(person_ids)
 
         avatar_items: list[tuple[int, FaceInfo]] = []
         for cluster_id, face_count in clusters:
             rep = self._face_db.get_representative_face(cluster_id=cluster_id)
 
-            # Calculer la meilleure suggestion de personne
+            # Suggestion : meilleur score contre chaque centroïde de groupe connu
             suggestion: tuple[str, int, float] | None = None
-            if persons and person_embeddings:
+            if persons and person_cluster_embs:
                 cluster_emb = self._face_db.get_representative_embedding(
                     cluster_id=cluster_id
                 )
                 if cluster_emb:
                     best_sim, best_person = 0.0, None
                     for p in persons:
-                        p_emb = person_embeddings.get(p.id)
-                        if p_emb:
+                        for p_emb in person_cluster_embs.get(p.id, {}).values():
                             sim = _cosine_sim(cluster_emb, p_emb)
                             if sim > best_sim:
                                 best_sim, best_person = sim, p

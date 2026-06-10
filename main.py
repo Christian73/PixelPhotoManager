@@ -1,58 +1,64 @@
+from __future__ import annotations  # annotations lazy → QDialog etc. non évalués dans le subprocess
+
 import logging
 import os
 import sys
 import traceback
 from pathlib import Path
+import multiprocessing
 
-# En mode EXE (PyInstaller), stocker les logs dans %LOCALAPPDATA% plutôt que
-# dans le répertoire de l'exécutable (qui peut être en lecture seule).
-if getattr(sys, "frozen", False):
-    _LOG_PATH = (
-        Path(os.environ.get("LOCALAPPDATA", Path.home()))
-        / "PixelPhotoManager" / "logs" / "pixelphotomanager.log"
+# ProcessPoolExecutor sur Windows utilise spawn : le sous-processus worker importe
+# ce module AVANT d'exécuter la tâche.  On limite au strict minimum ce qui s'exécute
+# dans le sous-processus pour éviter les effets de bord (logging doublon, Qt DLLs…).
+if multiprocessing.current_process().name == 'MainProcess':
+    import threading
+
+    # En mode EXE (PyInstaller), stocker les logs dans %LOCALAPPDATA%
+    if getattr(sys, "frozen", False):
+        _LOG_PATH = (
+            Path(os.environ.get("LOCALAPPDATA", Path.home()))
+            / "PixelPhotoManager" / "logs" / "pixelphotomanager.log"
+        )
+    else:
+        _LOG_PATH = Path(__file__).parent / "logs" / "pixelphotomanager.log"
+    _LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
+
+    logging.basicConfig(
+        level=logging.DEBUG,
+        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+        handlers=[
+            logging.FileHandler(_LOG_PATH, encoding="utf-8"),
+            logging.StreamHandler(sys.stdout),
+        ],
     )
-else:
-    _LOG_PATH = Path(__file__).parent / "logs" / "pixelphotomanager.log"
-_LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
 
-logging.basicConfig(
-    level=logging.DEBUG,
-    format="%(asctime)s %(levelname)s %(name)s: %(message)s",
-    handlers=[
-        logging.FileHandler(_LOG_PATH, encoding="utf-8"),
-        logging.StreamHandler(sys.stdout),
-    ],
-)
+    for _noisy in ("PIL", "PIL.Image", "PIL.PngImagePlugin", "PIL.JpegImagePlugin",
+                   "PIL.TiffImagePlugin", "PIL.WebPImagePlugin"):
+        logging.getLogger(_noisy).setLevel(logging.WARNING)
 
-# Réduire les bibliothèques tierces trop verboses au niveau WARNING
-for _noisy in ("PIL", "PIL.Image", "PIL.PngImagePlugin", "PIL.JpegImagePlugin",
-               "PIL.TiffImagePlugin", "PIL.WebPImagePlugin"):
-    logging.getLogger(_noisy).setLevel(logging.WARNING)
+    def _excepthook(exc_type, exc_value, exc_tb):
+        logging.getLogger(__name__).critical(
+            "Exception non gérée", exc_info=(exc_type, exc_value, exc_tb)
+        )
+
+    def _thread_excepthook(args):
+        logging.getLogger(__name__).critical(
+            f"Exception non gérée dans thread {args.thread.name}",
+            exc_info=(args.exc_type, args.exc_value, args.exc_tb),
+        )
+
+    sys.excepthook = _excepthook
+    threading.excepthook = _thread_excepthook
+
+    from PySide6.QtWidgets import (
+        QApplication, QCheckBox, QDialog, QVBoxLayout, QHBoxLayout,
+        QLabel, QPushButton, QListWidget, QListWidgetItem,
+        QFileDialog, QFrame, QWidget,
+    )
+    from PySide6.QtCore import Qt, QPoint, QTimer
+    from PySide6.QtGui import QColor, QFont, QPainter, QPen, QPixmap
 
 logger = logging.getLogger(__name__)
-
-
-import threading
-
-def _excepthook(exc_type, exc_value, exc_tb):
-    logger.critical("Exception non gérée", exc_info=(exc_type, exc_value, exc_tb))
-
-def _thread_excepthook(args):
-    logger.critical(
-        f"Exception non gérée dans thread {args.thread.name}",
-        exc_info=(args.exc_type, args.exc_value, args.exc_tb),
-    )
-
-sys.excepthook = _excepthook
-threading.excepthook = _thread_excepthook
-
-from PySide6.QtWidgets import (
-    QApplication, QCheckBox, QDialog, QVBoxLayout, QHBoxLayout,
-    QLabel, QPushButton, QListWidget, QListWidgetItem,
-    QFileDialog, QFrame, QWidget,
-)
-from PySide6.QtCore import Qt, QPoint, QTimer
-from PySide6.QtGui import QColor, QFont, QPainter, QPen, QPixmap
 
 
 def _build_onboarding(config) -> QDialog:
@@ -327,6 +333,9 @@ def main() -> None:
     catalog = Catalog()
     logger.debug("Initialisation ThumbnailCache")
     thumb_cache = ThumbnailCache()
+    _removed = catalog.cleanup_asset_dirs()
+    if _removed:
+        thumb_cache.invalidate_many(_removed)
     logger.debug("Initialisation LibraryScanner")
     scanner = LibraryScanner(catalog, thumb_cache)
     logger.debug("Initialisation FaceDatabase")

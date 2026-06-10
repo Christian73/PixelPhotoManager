@@ -76,6 +76,12 @@ def _dec(blob: bytes) -> list[float]:
     return list(struct.unpack(f"{n}f", blob))
 
 
+def _centroid(embeddings: list[list[float]]) -> list[float]:
+    n = len(embeddings)
+    dim = len(embeddings[0])
+    return [sum(e[d] for e in embeddings) / n for d in range(dim)]
+
+
 class FaceDatabase:
     def __init__(self, db_path: str | Path = _DB_PATH) -> None:
         self._db_path = str(db_path)
@@ -114,6 +120,10 @@ class FaceDatabase:
                 if "pinned" not in cols:
                     conn.execute(
                         "ALTER TABLE faces ADD COLUMN pinned INTEGER DEFAULT 0"
+                    )
+                if "is_cover" not in cols:
+                    conn.execute(
+                        "ALTER TABLE faces ADD COLUMN is_cover INTEGER DEFAULT 0"
                     )
                 # Migration indexed_photos
                 ip_cols = {r[1] for r in conn.execute("PRAGMA table_info(indexed_photos)")}
@@ -279,18 +289,26 @@ class FaceDatabase:
         cluster_id: Optional[int] = None,
         person_id: Optional[int] = None,
     ) -> Optional[FaceInfo]:
-        """Returns the largest-bbox face for a cluster or person."""
+        """Returns the cover face (is_cover=1) if set, otherwise the largest-bbox face."""
         with self._lock:
             conn = self._conn()
             try:
                 if cluster_id is not None:
+                    # Prefer manually chosen cover
                     row = conn.execute(
                         "SELECT id, photo_path, bbox_x, bbox_y, bbox_w, bbox_h,"
                         "       cluster_id, person_id"
-                        " FROM faces WHERE cluster_id=?"
-                        " ORDER BY (bbox_w * bbox_h) DESC LIMIT 1",
+                        " FROM faces WHERE cluster_id=? AND is_cover=1 LIMIT 1",
                         (cluster_id,),
                     ).fetchone()
+                    if row is None:
+                        row = conn.execute(
+                            "SELECT id, photo_path, bbox_x, bbox_y, bbox_w, bbox_h,"
+                            "       cluster_id, person_id"
+                            " FROM faces WHERE cluster_id=?"
+                            " ORDER BY (bbox_w * bbox_h) DESC LIMIT 1",
+                            (cluster_id,),
+                        ).fetchone()
                 else:
                     row = conn.execute(
                         "SELECT id, photo_path, bbox_x, bbox_y, bbox_w, bbox_h,"
@@ -309,32 +327,191 @@ class FaceDatabase:
             )
         return None
 
+    def set_cover_face(self, face_id: int) -> None:
+        """Définit ce visage comme vignette du groupe (is_cover). Efface l'ancien cover."""
+        with self._lock:
+            conn = self._conn()
+            try:
+                row = conn.execute(
+                    "SELECT cluster_id FROM faces WHERE id=?", (face_id,)
+                ).fetchone()
+                if row is None or row[0] is None:
+                    return
+                cluster_id = row[0]
+                conn.execute(
+                    "UPDATE faces SET is_cover=0 WHERE cluster_id=?", (cluster_id,)
+                )
+                conn.execute(
+                    "UPDATE faces SET is_cover=1 WHERE id=?", (face_id,)
+                )
+                conn.commit()
+            finally:
+                conn.close()
+
     def get_representative_embedding(
         self,
         cluster_id: Optional[int] = None,
         person_id: Optional[int] = None,
     ) -> Optional[list[float]]:
-        """Return the embedding of the representative face for a cluster or person."""
+        """Return the centroid (mean) of all embeddings for a cluster or person.
+
+        Using the centroid rather than a single face captures the full visual
+        diversity accumulated across merged groups and varied photos.
+        """
         with self._lock:
             conn = self._conn()
             try:
                 if cluster_id is not None:
-                    row = conn.execute(
+                    rows = conn.execute(
                         "SELECT embedding FROM faces"
-                        " WHERE cluster_id=? AND embedding IS NOT NULL"
-                        " ORDER BY (bbox_w * bbox_h) DESC LIMIT 1",
+                        " WHERE cluster_id=? AND embedding IS NOT NULL",
                         (cluster_id,),
-                    ).fetchone()
+                    ).fetchall()
                 else:
-                    row = conn.execute(
+                    rows = conn.execute(
                         "SELECT embedding FROM faces"
-                        " WHERE person_id=? AND embedding IS NOT NULL"
-                        " ORDER BY (bbox_w * bbox_h) DESC LIMIT 1",
+                        " WHERE person_id=? AND embedding IS NOT NULL",
                         (person_id,),
-                    ).fetchone()
+                    ).fetchall()
             finally:
                 conn.close()
-        return _dec(row[0]) if row and row[0] else None
+        if not rows:
+            return None
+        embeddings = [_dec(r[0]) for r in rows]
+        n = len(embeddings)
+        dim = len(embeddings[0])
+        return [sum(embeddings[i][d] for i in range(n)) / n for d in range(dim)]
+
+    def get_all_cluster_centroids(
+        self, cluster_ids: list[int]
+    ) -> dict[int, list[float]]:
+        """Retourne {cluster_id: centroïde} pour tous les clusters demandés, en une seule query."""
+        if not cluster_ids:
+            return {}
+        placeholders = ",".join("?" * len(cluster_ids))
+        with self._lock:
+            conn = self._conn()
+            try:
+                rows = conn.execute(
+                    f"SELECT cluster_id, embedding FROM faces"
+                    f" WHERE cluster_id IN ({placeholders}) AND embedding IS NOT NULL",
+                    cluster_ids,
+                ).fetchall()
+            finally:
+                conn.close()
+        by_cluster: dict[int, list] = {}
+        for cid, blob in rows:
+            by_cluster.setdefault(cid, []).append(_dec(blob))
+        return {
+            cid: _centroid(embs)
+            for cid, embs in by_cluster.items()
+        }
+
+    def get_all_person_centroids(
+        self, person_ids: list[int]
+    ) -> dict[int, list[float]]:
+        """Retourne {person_id: centroïde} pour toutes les personnes demandées, en une seule query."""
+        if not person_ids:
+            return {}
+        placeholders = ",".join("?" * len(person_ids))
+        with self._lock:
+            conn = self._conn()
+            try:
+                rows = conn.execute(
+                    f"SELECT person_id, embedding FROM faces"
+                    f" WHERE person_id IN ({placeholders}) AND embedding IS NOT NULL",
+                    person_ids,
+                ).fetchall()
+            finally:
+                conn.close()
+        by_person: dict[int, list] = {}
+        for pid, blob in rows:
+            by_person.setdefault(pid, []).append(_dec(blob))
+        return {
+            pid: _centroid(embs)
+            for pid, embs in by_person.items()
+        }
+
+    def get_all_person_cluster_centroids(
+        self, person_ids: list[int]
+    ) -> dict[int, dict[int, list[float]]]:
+        """
+        Retourne {person_id: {cluster_id: centroïde}} pour toutes les personnes.
+
+        Un nom pouvant être associé à plusieurs groupes distincts, chaque groupe
+        conserve son propre centroïde plutôt que d'être fondu dans une moyenne
+        globale.  Cela préserve la diversité visuelle de la personne et améliore
+        la précision des suggestions de reconnaissance.
+        """
+        if not person_ids:
+            return {}
+        placeholders = ",".join("?" * len(person_ids))
+        with self._lock:
+            conn = self._conn()
+            try:
+                rows = conn.execute(
+                    f"SELECT person_id, cluster_id, embedding FROM faces"
+                    f" WHERE person_id IN ({placeholders})"
+                    f"   AND embedding IS NOT NULL"
+                    f"   AND cluster_id IS NOT NULL",
+                    person_ids,
+                ).fetchall()
+            finally:
+                conn.close()
+        by_pc: dict[tuple, list] = {}
+        for pid, cid, blob in rows:
+            by_pc.setdefault((pid, cid), []).append(_dec(blob))
+        result: dict[int, dict[int, list[float]]] = {}
+        for (pid, cid), embs in by_pc.items():
+            result.setdefault(pid, {})[cid] = _centroid(embs)
+        return result
+
+    def get_cluster_person(self, cluster_id: int) -> int | None:
+        """Retourne le person_id déjà associé à ce groupe, ou None s'il n'est pas nommé."""
+        with self._lock:
+            conn = self._conn()
+            try:
+                row = conn.execute(
+                    "SELECT DISTINCT person_id FROM faces"
+                    " WHERE cluster_id=? AND person_id IS NOT NULL LIMIT 1",
+                    (cluster_id,),
+                ).fetchone()
+            finally:
+                conn.close()
+        return row[0] if row else None
+
+    def get_all_representative_faces(
+        self, cluster_ids: list[int]
+    ) -> "dict[int, FaceInfo]":
+        """Retourne {cluster_id: FaceInfo} pour tous les clusters en une seule requête.
+        Priorité : is_cover=1, sinon le visage avec la plus grande bbox."""
+        if not cluster_ids:
+            return {}
+        placeholders = ",".join("?" * len(cluster_ids))
+        with self._lock:
+            conn = self._conn()
+            try:
+                rows = conn.execute(
+                    f"SELECT id, photo_path, bbox_x, bbox_y, bbox_w, bbox_h,"
+                    f"       cluster_id, person_id, is_cover,"
+                    f"       (bbox_w * bbox_h) AS area"
+                    f" FROM faces"
+                    f" WHERE cluster_id IN ({placeholders})"
+                    f" ORDER BY cluster_id, is_cover DESC, area DESC",
+                    cluster_ids,
+                ).fetchall()
+            finally:
+                conn.close()
+        result: dict[int, FaceInfo] = {}
+        for row in rows:
+            cid = row[6]
+            if cid not in result:  # première ligne = meilleure (cover ou plus grande bbox)
+                result[cid] = FaceInfo(
+                    id=row[0], photo_path=row[1],
+                    bbox_x=row[2], bbox_y=row[3], bbox_w=row[4], bbox_h=row[5],
+                    cluster_id=cid, person_id=row[7],
+                )
+        return result
 
     def get_faces_for_photo(self, photo_path: str) -> list[FaceInfo]:
         photo_path = os.path.normpath(photo_path)
@@ -513,20 +690,35 @@ class FaceDatabase:
         with self._lock:
             conn = self._conn()
             try:
-                rows = conn.execute(
+                count_rows = conn.execute(
                     "SELECT person_id, COUNT(DISTINCT photo_path)"
                     " FROM faces WHERE person_id IS NOT NULL GROUP BY person_id"
                 ).fetchall()
+                # Une seule requête CTE pour toutes les faces représentatives
+                # (remplace N appels get_representative_face → N connexions séparées)
+                rep_rows = conn.execute(
+                    "WITH ranked AS ("
+                    "  SELECT person_id, photo_path, bbox_x, bbox_y, bbox_w, bbox_h,"
+                    "         ROW_NUMBER() OVER ("
+                    "           PARTITION BY person_id"
+                    "           ORDER BY bbox_w * bbox_h DESC"
+                    "         ) AS rn"
+                    "  FROM faces WHERE person_id IS NOT NULL"
+                    ")"
+                    " SELECT person_id, photo_path, bbox_x, bbox_y, bbox_w, bbox_h"
+                    " FROM ranked WHERE rn = 1"
+                ).fetchall()
             finally:
                 conn.close()
-        counts = {r[0]: r[1] for r in rows}
+        counts = {r[0]: r[1] for r in count_rows}
+        reps = {r[0]: r[1:] for r in rep_rows}
         for p in persons:
             if p.id in counts:
                 p.photo_count = counts[p.id]
-                rep = self.get_representative_face(person_id=p.id)
+                rep = reps.get(p.id)
                 if rep:
-                    p.cover_path = rep.photo_path
-                    p.cover_bbox = (rep.bbox_x, rep.bbox_y, rep.bbox_w, rep.bbox_h)
+                    p.cover_path = rep[0]
+                    p.cover_bbox = (rep[1], rep[2], rep[3], rep[4])
 
     # ------------------------------------------------------------------ cleanup
 

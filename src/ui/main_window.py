@@ -17,13 +17,13 @@ from PySide6.QtWidgets import (
 
 from src.core.config import Config
 from src.core.event_bus import bus
-from src.core.models import PhotoInfo, AlbumInfo, PersonInfo
+from src.core.models import PhotoInfo, AlbumInfo, PersonInfo, EditInfo
 from src.library.catalog import Catalog
 from src.library.thumbnail_cache import ThumbnailCache
 from src.library.folder_watcher import FolderWatcher
 from src.library.scanner import LibraryScanner
 from src.faces.face_database import FaceDatabase
-from src.faces.face_indexer import FaceIndexThread, SingleFaceReindexThread
+from src.faces.face_indexer import FaceIndexThread, SingleFaceReindexThread, TFWarmUpThread
 from src.faces.clusterer import ClusterThread
 from src.processing.edit_database import EditDatabase
 from src.ui.sidebar import Sidebar, _SPECIAL_ALL, _SPECIAL_FAV, _SPECIAL_VIDEOS
@@ -246,6 +246,15 @@ class _SaveOptionsDialog(QDialog):
 _PERSON_CTX_PREFIX = "__person__"
 
 
+def _photo_sort_key(p: "PhotoInfo"):
+    """Clé de tri : date_taken, puis file_mtime en fallback — ordre descendant."""
+    if p.date_taken:
+        return p.date_taken
+    if p.file_mtime:
+        return datetime.fromtimestamp(p.file_mtime)
+    return datetime.min
+
+
 class _CatalogLoadThread(QThread):
     """Charge get_all_photos() hors du thread UI et émet les résultats par lots."""
 
@@ -268,6 +277,44 @@ class _CatalogLoadThread(QThread):
             self.batch_ready.emit(photos[i : i + self._batch_size])
 
 
+class _PhotoQueryThread(QThread):
+    """Exécute une requête catalog/face_db dans un thread secondaire."""
+
+    photos_ready = Signal(list, str)   # list[PhotoInfo], context_key
+
+    def __init__(self, fn, context_key: str, parent=None) -> None:
+        super().__init__(parent)
+        self._fn          = fn
+        self._context_key = context_key
+
+    def run(self) -> None:
+        try:
+            photos = self._fn()
+            self.photos_ready.emit(photos, self._context_key)
+        except Exception:
+            self.photos_ready.emit([], self._context_key)
+
+
+class _PersonsRefreshThread(QThread):
+    """Charge get_persons + enrich_persons + get_unnamed_clusters hors du thread UI."""
+
+    result_ready = Signal(list, int)   # persons, unnamed_cluster_count
+
+    def __init__(self, catalog, face_db, parent=None) -> None:
+        super().__init__(parent)
+        self._catalog  = catalog
+        self._face_db  = face_db
+
+    def run(self) -> None:
+        try:
+            persons = self._catalog.get_persons()
+            self._face_db.enrich_persons(persons)
+            count = len(self._face_db.get_unnamed_clusters())
+            self.result_ready.emit(persons, count)
+        except Exception:
+            self.result_ready.emit([], 0)
+
+
 class MainWindow(QMainWindow):
     def __init__(
         self,
@@ -287,6 +334,10 @@ class MainWindow(QMainWindow):
         self._face_indexer: FaceIndexThread | None = None
         self._reindex_thread: SingleFaceReindexThread | None = None
         self._cluster_thread: ClusterThread | None = None
+        self._warmup_thread = None          # TFWarmUpThread — pré-charge TF au démarrage
+        self._face_index_pending: bool = False
+        self._photo_query_thread: _PhotoQueryThread | None = None
+        self._persons_refresh_thread: _PersonsRefreshThread | None = None
 
         self._current_photos: list[PhotoInfo] = []
         self._current_photo_index: int = 0
@@ -310,6 +361,7 @@ class MainWindow(QMainWindow):
         QTimer.singleShot(0, self._load_library)
         _sw = self._config.get("ui.sidebar_width", 280)
         QTimer.singleShot(0, lambda: self._splitter.setSizes([_sw, max(1, self._splitter.width() - _sw)]))
+        QTimer.singleShot(0, self._restore_splitter_states)
 
     # ------------------------------------------------------------------ setup
 
@@ -356,6 +408,19 @@ class MainWindow(QMainWindow):
         act_folders.setToolTip("Gérer les dossiers surveillés et forcer un re-scan")
         act_folders.triggered.connect(self._open_folder_manager)
         m_tools.addAction(act_folders)
+        m_tools.addSeparator()
+        act_exif_date_sync = QAction("Synchroniser dates de création avec l'EXIF…", self)
+        act_exif_date_sync.setToolTip(
+            "Remplace la date de création Windows par la date EXIF "
+            "pour les fichiers où elles diffèrent"
+        )
+        act_exif_date_sync.triggered.connect(self._open_exif_date_sync)
+        m_tools.addAction(act_exif_date_sync)
+        m_tools.addSeparator()
+        act_journal = QAction("Journal des threads…", self)
+        act_journal.setToolTip("Afficher le journal d'activité des threads de fond")
+        act_journal.triggered.connect(self._open_thread_journal)
+        m_tools.addAction(act_journal)
         m_tools.addSeparator()
         act_settings = QAction("Paramètres", self)
         act_settings.triggered.connect(self._open_settings)
@@ -511,13 +576,18 @@ class MainWindow(QMainWindow):
         self._edit_panel.photo_saved.connect(self._on_photo_saved)
         self._edit_panel.rotation_stepped.connect(self._on_rotation_stepped)
         self._edit_panel.red_eye_mode_requested.connect(self._on_red_eye_mode_requested)
+        self._edit_panel.wb_pick_requested.connect(self._on_wb_pick_requested)
         self._viewer.crop_ready.connect(self._edit_panel.apply_crop)
         self._viewer.red_eye_point_added.connect(self._edit_panel.on_red_eye_added)
+        self._viewer.pixel_sampled.connect(self._edit_panel.on_wb_pixel_received)
 
         self._face_panel = FacePanel(self._face_db, self._catalog, self)
         self._face_panel.face_highlighted.connect(self._on_face_highlighted)
+        self._face_panel.all_faces_toggled.connect(self._on_all_faces_toggled)
+        self._viewer.face_context_menu_requested.connect(self._on_face_context_menu)
         self._face_panel.hide()
         self._exif_panel = ExifPanel(self)
+        self._exif_panel.photo_saved.connect(self._on_exif_photo_saved)
         self._exif_panel.hide()
 
         # Conteneur droit (face OU exif) — un seul visible à la fois
@@ -564,6 +634,9 @@ class MainWindow(QMainWindow):
         self._sidebar.identify_requested.connect(self.show_face_clusters)
         self._sidebar.person_merge_requested.connect(self._on_person_merge_requested)
         self._sidebar.person_rename_requested.connect(self._on_person_rename_requested)
+        self._sidebar.tree_state_changed.connect(
+            lambda paths: self._config.set("ui.folder_tree_expanded", paths)
+        )
 
         bus.on("album.create_requested", self._on_album_create)
 
@@ -640,8 +713,17 @@ class MainWindow(QMainWindow):
     def _load_library(self) -> None:
         folders = self._config.get_scan_folders()
         if folders:
+            self._sidebar.set_tree_expanded_paths(
+                self._config.get("ui.folder_tree_expanded", [])
+            )
             self._sidebar.refresh_folders(folders)
             self._show_all_photos()
+            # Pré-charger TF/DeepFace en parallèle du scan pour éliminer le freeze
+            # de ~20 s lors du premier appel à detect_and_embed()
+            if self._config.get("faces.auto_index", False):
+                self._warmup_thread = TFWarmUpThread(self)
+                self._warmup_thread.finished.connect(self._on_warmup_done)
+                self._warmup_thread.start()
             self._start_scan(folders)
             self._folder_watcher.set_folders(folders)
         albums = self._catalog.get_albums()
@@ -656,6 +738,8 @@ class MainWindow(QMainWindow):
 
         self._current_photos = []
         self._current_context = "Toutes les photos"
+        self._grid.set_ribbon_mode(True)
+        self._grid.set_date_overlay_visible(True)
         self._grid.set_photos([])
         self._grid_nav_bar.hide()
         self.show_grid()
@@ -676,26 +760,29 @@ class MainWindow(QMainWindow):
 
     def _start_scan(self, folders: list[str], force: bool = False) -> None:
         thread = self._scanner.scan(folders, force=force)
-        thread.photo_discovered.connect(self._on_photo_discovered)
+        thread.photos_batch.connect(self._on_photos_batch)
         thread.photos_removed.connect(self._on_photos_removed)
         thread.finished.connect(self._on_scan_finished)
         thread.progress.connect(self._on_scan_progress)
 
     # ------------------------------------------------------------------ slots
 
-    @Slot(object)
-    def _on_photo_discovered(self, photo: PhotoInfo) -> None:
-        visible = (
-            self._current_context == "Toutes les photos"
-            or os.path.normcase(photo.directory) == os.path.normcase(self._current_context)
-        )
-        if visible:
-            already_shown = any(p.path == photo.path for p in self._current_photos)
-            if not already_shown:
-                self._grid.add_photo(photo)
+    @Slot(list)
+    def _on_photos_batch(self, photos: list) -> None:
+        existing = {p.path for p in self._current_photos}
+        visible_new: list = []
+        for photo in photos:
+            visible = (
+                self._current_context == "Toutes les photos"
+                or os.path.normcase(photo.directory) == os.path.normcase(self._current_context)
+            )
+            if visible and photo.path not in existing:
+                visible_new.append(photo)
                 self._current_photos.append(photo)
-                self._update_status()
-        bus.emit("library.photo_discovered", photo=photo)
+                existing.add(photo.path)
+        if visible_new:
+            self._grid.add_photos_batch(visible_new)
+            self._update_status()
 
     @Slot(list)
     def _on_photos_removed(self, paths: list[str]) -> None:
@@ -716,14 +803,45 @@ class MainWindow(QMainWindow):
         albums = self._catalog.get_albums()
         self._sidebar.refresh_albums(albums)
         self._refresh_persons()
+
+        # Le scan ajoute les nouvelles photos dans l'ordre filesystem (non daté).
+        # On re-trie la liste courante pour garantir : plus récent en haut.
+        # Applicable à "Toutes les photos" et aux vues dossier (les vues spéciales
+        # comme Favoris, Vidéos ou Person ne reçoivent pas de photos via _on_photos_batch).
+        if self._current_photos and not self._current_context.startswith(_PERSON_CTX_PREFIX):
+            self._current_photos.sort(key=_photo_sort_key, reverse=True)
+            self._grid.set_photos(self._current_photos)
+
         if self._config.get("faces.auto_index", False):
+            if self._warmup_thread and self._warmup_thread.isRunning():
+                # Le pré-chargement TF n'est pas encore terminé — attendre
+                self._lbl_action.setText("Initialisation de la reconnaissance faciale…")
+                self._face_index_pending = True
+            else:
+                self._start_face_indexing()
+
+    @Slot()
+    def _on_warmup_done(self) -> None:
+        if self._face_index_pending:
+            self._face_index_pending = False
+            self._lbl_action.setText("")
             self._start_face_indexing()
 
     # ------------------------------------------------------------------ settings
 
+    def _open_thread_journal(self) -> None:
+        from src.ui.thread_journal_dialog import ThreadJournalDialog
+        dlg = ThreadJournalDialog(self)
+        dlg.exec()
+
     def _open_settings(self) -> None:
         dlg = SettingsDialog(self._config, self)
         dlg.recluster_needed.connect(self._run_clustering)
+        dlg.exec()
+
+    def _open_exif_date_sync(self) -> None:
+        from src.ui.exif_date_sync_dialog import ExifDateSyncDialog
+        dlg = ExifDateSyncDialog(self._catalog, self)
         dlg.exec()
 
     def _open_folder_manager(self) -> None:
@@ -793,7 +911,10 @@ class MainWindow(QMainWindow):
 
     @Slot(int, int)
     def _on_face_progress(self, current: int, total: int) -> None:
-        self._lbl_action.setText(f"Analyse visages… {current}/{total}")
+        if current == 0:
+            self._lbl_action.setText("Initialisation de l'analyse des visages…")
+        else:
+            self._lbl_action.setText(f"Analyse visages… {current}/{total}")
 
     @Slot(int, int)
     def _on_face_indexing_finished(self, indexed: int, faces: int) -> None:
@@ -879,11 +1000,14 @@ class MainWindow(QMainWindow):
     @Slot(int, str)
     def _on_cluster_photos_requested(self, cluster_id: int, label: str) -> None:
         """Clic simple sur un groupe : afficher ses photos dans la grille."""
-        paths  = self._face_db.get_photos_for_cluster(cluster_id)
-        photos = self._catalog.get_photos_by_paths(paths)
-        self._current_photos  = photos
-        self._current_context = f"{_PERSON_CTX_PREFIX}cluster_{cluster_id}"
-        self._grid.set_photos(photos)
+        self._grid.set_ribbon_mode(False)
+        self._grid.set_date_overlay_visible(False)
+        self._start_photo_query(
+            lambda: self._catalog.get_photos_by_paths(
+                self._face_db.get_photos_for_cluster(cluster_id)
+            ),
+            f"{_PERSON_CTX_PREFIX}cluster_{cluster_id}",
+        )
         self.show_grid()
         self._lbl_grid_nav.setText(label)
         self._grid_nav_bar.show()
@@ -928,20 +1052,28 @@ class MainWindow(QMainWindow):
 
     @Slot(object)
     def _on_person_selected(self, person: PersonInfo) -> None:
-        paths = self._face_db.get_photos_for_person(person.id)
-        photos = self._catalog.get_photos_by_paths(paths)
-        self._current_photos = photos
-        self._current_context = f"{_PERSON_CTX_PREFIX}{person.id}"
-        self._grid.set_photos(photos)
+        pid = person.id
+        self._grid.set_ribbon_mode(False)
+        self._grid.set_date_overlay_visible(False)
         self._grid_nav_bar.hide()
         self.show_grid()
-        self._update_status()
+        self._start_photo_query(
+            lambda: self._catalog.get_photos_by_paths(
+                self._face_db.get_photos_for_person(pid)
+            ),
+            f"{_PERSON_CTX_PREFIX}{pid}",
+        )
 
     def _refresh_persons(self) -> None:
-        persons = self._catalog.get_persons()
-        self._face_db.enrich_persons(persons)
+        if self._persons_refresh_thread and self._persons_refresh_thread.isRunning():
+            return  # un refresh est déjà en cours
+        self._persons_refresh_thread = _PersonsRefreshThread(self._catalog, self._face_db, self)
+        self._persons_refresh_thread.result_ready.connect(self._on_persons_refreshed)
+        self._persons_refresh_thread.start()
+
+    @Slot(list, int)
+    def _on_persons_refreshed(self, persons: list, count: int) -> None:
         self._sidebar.refresh_persons(persons)
-        count = len(self._face_db.get_unnamed_clusters())
         self._sidebar.update_cluster_badge(count)
 
     @Slot(int, str)
@@ -962,11 +1094,24 @@ class MainWindow(QMainWindow):
     def _on_face_highlighted(self, face) -> None:
         self._viewer.highlight_face(face)
 
+    def _on_all_faces_toggled(self, faces: list) -> None:
+        self._viewer.set_all_highlighted_faces(faces)
+
+    def _on_face_context_menu(self, face, gpos) -> None:
+        self._face_panel.show_face_context_menu(face, gpos)
+
     def _on_red_eye_mode_requested(self, active: bool, radius: float) -> None:
         if active:
             self._viewer.enter_red_eye_mode(radius)
         else:
             self._viewer.exit_red_eye_mode()
+
+    @Slot(bool)
+    def _on_wb_pick_requested(self, start: bool) -> None:
+        if start:
+            self._viewer.start_color_pick()
+        else:
+            self._viewer.stop_color_pick()
 
     @Slot(bool)
     def _on_faces_toggle(self, checked: bool) -> None:
@@ -980,6 +1125,7 @@ class MainWindow(QMainWindow):
                 self._face_panel.set_photo(photo.path)
         else:
             self._face_panel.hide()
+            self._viewer.highlight_face(None)
             if not self._exif_panel.isVisible():
                 self._right_panel.hide()
 
@@ -1010,6 +1156,7 @@ class MainWindow(QMainWindow):
             return
         new_index = max(0, min(self._current_photo_index + delta, len(self._current_photos) - 1))
         if new_index == self._current_photo_index:
+            self._update_nav_arrows()
             return
         self._current_photo_index = new_index
         photo = self._current_photos[self._current_photo_index]
@@ -1038,44 +1185,59 @@ class MainWindow(QMainWindow):
         self._viewer.set_zoom(value / 100.0)
         self._zoom_pct_label.setText(f"{value}%")
 
+    def _start_photo_query(self, fn, context_key: str) -> None:
+        """Lance une requête photo en arrière-plan et met à jour la grille à l'arrivée."""
+        if self._photo_query_thread and self._photo_query_thread.isRunning():
+            self._photo_query_thread.photos_ready.disconnect()
+        self._photo_query_thread = _PhotoQueryThread(fn, context_key, self)
+        self._photo_query_thread.photos_ready.connect(self._on_photo_query_ready)
+        self._photo_query_thread.start()
+
+    @Slot(list, str)
+    def _on_photo_query_ready(self, photos: list, context_key: str) -> None:
+        self._current_photos  = photos
+        self._current_context = context_key
+        self._grid.set_photos(photos)
+        self._update_status()
+
     @Slot(str)
     def _on_folder_selected(self, folder: str) -> None:
-        photos = self._catalog.get_photos_in_folder(folder)
-        self._current_photos = photos
-        self._current_context = folder
-        self._grid.set_photos(photos)
+        self._grid.set_ribbon_mode(False)
+        self._grid.set_date_overlay_visible(False)
         self._grid_nav_bar.hide()
         self.show_grid()
-        self._update_status()
+        self._start_photo_query(
+            lambda: self._catalog.get_photos_in_folder(folder),
+            folder,
+        )
 
     @Slot(object)
     def _on_album_selected(self, data) -> None:
         if data == _SPECIAL_ALL:
             self._show_all_photos()
         elif data == _SPECIAL_FAV:
-            photos = self._catalog.get_favorites()
-            self._current_photos = photos
-            self._current_context = "Favoris"
-            self._grid.set_photos(photos)
+            self._grid.set_ribbon_mode(False)
+            self._grid.set_date_overlay_visible(False)
             self._grid_nav_bar.hide()
             self.show_grid()
-            self._update_status()
+            self._start_photo_query(self._catalog.get_favorites, "Favoris")
         elif data == _SPECIAL_VIDEOS:
-            photos = self._catalog.get_videos()
-            self._current_photos = photos
-            self._current_context = "Vidéos"
-            self._grid.set_photos(photos)
+            self._grid.set_ribbon_mode(False)
+            self._grid.set_date_overlay_visible(False)
             self._grid_nav_bar.hide()
             self.show_grid()
-            self._update_status()
+            self._start_photo_query(self._catalog.get_videos, "Vidéos")
         elif isinstance(data, AlbumInfo) and data.id:
-            photos = self._catalog.get_photos_in_album(data.id)
-            self._current_photos = photos
-            self._current_context = data.name
-            self._grid.set_photos(photos)
+            album_id   = data.id
+            album_name = data.name
+            self._grid.set_ribbon_mode(False)
+            self._grid.set_date_overlay_visible(False)
             self._grid_nav_bar.hide()
             self.show_grid()
-            self._update_status()
+            self._start_photo_query(
+                lambda: self._catalog.get_photos_in_album(album_id),
+                album_name,
+            )
 
     @Slot(str)
     def _on_scan_requested(self, folder: str) -> None:
@@ -1190,10 +1352,10 @@ class MainWindow(QMainWindow):
         if not query:
             self._show_all_photos()
             return
-        photos = self._catalog.search(query)
-        self._current_photos = photos
-        self._grid.set_photos(photos)
-        self._update_status(len(photos))
+        self._start_photo_query(
+            lambda: self._catalog.search(query),
+            f"Recherche: {query}",
+        )
 
     @Slot(int)
     def _on_thumb_size_changed(self, idx: int) -> None:
@@ -1300,6 +1462,23 @@ class MainWindow(QMainWindow):
     def _on_photo_saved(self, photo_path: str, edit) -> None:
         self._grid.refresh_photo(photo_path, edit)
 
+    @Slot(str)
+    def _on_exif_photo_saved(self, photo_path: str) -> None:
+        """Mise à jour du catalogue après modification EXIF (date_taken peut avoir changé)."""
+        for photo in self._current_photos:
+            if photo.path == photo_path:
+                try:
+                    from PIL import Image
+                    with Image.open(photo_path) as img:
+                        exif_ifd = img.getexif().get_ifd(0x8769)
+                        dt_raw = exif_ifd.get(0x9003) or img.getexif().get(0x0132)
+                        if dt_raw:
+                            photo.date_taken = datetime.strptime(str(dt_raw), "%Y:%m:%d %H:%M:%S")
+                except Exception:
+                    pass
+                self._catalog.add_or_update_photo(photo)
+                break
+
     def _on_rotation_stepped(self, photo_path: str, rotation: int) -> None:
         """Re-détecte les visages après une rotation 90° de l'utilisateur."""
         from src.faces.detector import is_available
@@ -1322,18 +1501,28 @@ class MainWindow(QMainWindow):
     def _on_delete_requested(self, photos: list) -> None:
         if not photos:
             return
-        n = len(photos)
-        if n == 1:
-            msg = f"Supprimer définitivement « {photos[0].filename} » ?\n\nCette action est irréversible."
-        else:
-            msg = f"Supprimer définitivement {n} fichiers sélectionnés ?\n\nCette action est irréversible."
-        reply = QMessageBox.warning(
-            self, "Confirmer la suppression", msg,
-            QMessageBox.Yes | QMessageBox.Cancel,
-            QMessageBox.Cancel,
-        )
-        if reply != QMessageBox.Yes:
-            return
+
+        if not self._config.get("ui.delete_no_confirm", False):
+            n = len(photos)
+            if n == 1:
+                msg = f"Supprimer définitivement « {photos[0].filename} » ?\n\nCette action est irréversible."
+            else:
+                msg = f"Supprimer définitivement {n} fichiers sélectionnés ?\n\nCette action est irréversible."
+            box = QMessageBox(QMessageBox.Warning, "Confirmer la suppression", msg,
+                              QMessageBox.Yes | QMessageBox.Cancel, self)
+            box.setDefaultButton(QMessageBox.Cancel)
+            chk = QCheckBox("Ne plus demander de confirmation")
+            box.setCheckBox(chk)
+            if box.exec() != QMessageBox.Yes:
+                return
+            if chk.isChecked():
+                self._config.set("ui.delete_no_confirm", True)
+
+        # Mémoriser l'état du viewer avant la suppression
+        in_viewer = self._stack.currentIndex() == 1
+        viewed_index = self._current_photo_index
+        deleted_paths_set = {p.path for p in photos}
+
         deleted: list[str] = []
         errors: list[str] = []
         for photo in photos:
@@ -1351,6 +1540,18 @@ class MainWindow(QMainWindow):
             self._update_status()
             for path in deleted:
                 self._face_db.delete_for_path(path)
+
+            # Si le viewer affichait une photo supprimée, naviguer vers le voisin
+            if in_viewer and any(p in deleted_paths_set
+                                 for p in [self._viewer.current_photo().path]
+                                 if self._viewer.current_photo()):
+                if not self._current_photos:
+                    self.show_grid()
+                else:
+                    new_index = min(viewed_index, len(self._current_photos) - 1)
+                    self._current_photo_index = new_index
+                    self.show_viewer(self._current_photos[new_index])
+
         if errors:
             QMessageBox.warning(self, "Erreurs de suppression",
                                 "Impossible de supprimer :\n" + "\n".join(errors))
@@ -1497,12 +1698,41 @@ class MainWindow(QMainWindow):
         shutil.copy2(photo_path, backup_dir / backup_name)
         logger.info("Original sauvegardé : %s", backup_dir / backup_name)
 
+    @staticmethod
+    def _preserve_file_dates(src_stat, dst_path: str) -> None:
+        """Copie atime, mtime et date de création (Windows) de src_stat vers dst_path."""
+        os.utime(dst_path, (src_stat.st_atime, src_stat.st_mtime))
+        try:
+            import ctypes
+            import ctypes.wintypes
+
+            class FILETIME(ctypes.Structure):
+                _fields_ = [("dwLowDateTime",  ctypes.wintypes.DWORD),
+                             ("dwHighDateTime", ctypes.wintypes.DWORD)]
+
+            # Convertir timestamp Unix → FILETIME (100 ns depuis le 1er janvier 1601)
+            val = int((src_stat.st_ctime + 11644473600) * 10_000_000)
+            ft = FILETIME(dwLowDateTime=val & 0xFFFFFFFF,
+                          dwHighDateTime=(val >> 32) & 0xFFFFFFFF)
+
+            kernel32 = ctypes.windll.kernel32
+            handle = kernel32.CreateFileW(
+                dst_path, 0x40000000, 1, None, 3, 0x02000000, None
+            )
+            if handle not in (-1, 0):
+                kernel32.SetFileTime(handle, ctypes.byref(ft), None, None)
+                kernel32.CloseHandle(handle)
+        except Exception:
+            pass   # non-Windows ou droits insuffisants : mtime suffit
+
     def _export_image(self, photo: PhotoInfo, dest: str) -> None:
         """Exporte l'image traitée pleine résolution vers dest."""
         QApplication.setOverrideCursor(Qt.WaitCursor)
         try:
             from PIL import Image, ImageOps
             from src.processing.adjustments import ImageAdjuster
+
+            orig_stat = os.stat(photo.path)
 
             edit = self._edit_db.load(photo.path)
             with Image.open(photo.path) as img:
@@ -1517,6 +1747,18 @@ class MainWindow(QMainWindow):
                     if img.mode == "RGBA":
                         img = img.convert("RGB")
                     img.save(dest, format="JPEG", quality=95, subsampling=0)
+
+            # Restaurer les dates du fichier original (atime, mtime et date de création)
+            self._preserve_file_dates(orig_stat, dest)
+
+            if os.path.normpath(dest) == os.path.normpath(photo.path):
+                # Les retouches sont maintenant baked dans le fichier : supprimer l'edit
+                # et rafraîchir l'UI pour éviter une double application au prochain chargement
+                self._edit_db.delete(photo.path)
+                self._thumb_cache.invalidate(photo.path)
+                self._viewer.update_edit(EditInfo())
+                self._edit_panel.set_photo(photo)
+
             self._lbl_action.setText(f"Image sauvée : {Path(dest).name}")
             QTimer.singleShot(4000, lambda: self._lbl_action.setText(""))
         except Exception as e:
@@ -1597,6 +1839,7 @@ class MainWindow(QMainWindow):
                             while dest.exists():
                                 dest = export_dir / f"{stem}_{n}{suffix}"
                                 n += 1
+                        orig_stat = os.stat(photo.path)
                         if dest.suffix.lower() == ".png":
                             img.save(str(dest), format="PNG")
                         else:
@@ -1604,6 +1847,7 @@ class MainWindow(QMainWindow):
                                 img = img.convert("RGB")
                             img.save(str(dest), format="JPEG",
                                      quality=quality, subsampling=0)
+                        self._preserve_file_dates(orig_stat, str(dest))
                 except Exception as e:
                     errors.append(f"{photo.filename} : {e}")
                     logger.error("Export %s : %s", photo.path, e, exc_info=True)
@@ -1624,10 +1868,37 @@ class MainWindow(QMainWindow):
             QTimer.singleShot(5000, lambda: self._lbl_action.setText(""))
             os.startfile(str(export_dir))
 
+    def _restore_splitter_states(self) -> None:
+        import base64
+        from PySide6.QtCore import QByteArray
+
+        def _apply(splitter, key: str) -> None:
+            state_b64 = self._config.get(key, "")
+            if state_b64:
+                try:
+                    splitter.restoreState(QByteArray(base64.b64decode(state_b64)))
+                except Exception:
+                    pass
+
+        _apply(self._viewer_splitter, "ui.splitters.viewer")
+
+        state_b64 = self._config.get("ui.splitters.sidebar_panels", "")
+        if state_b64:
+            self._sidebar.restore_splitter_state(state_b64)
+
     def closeEvent(self, event) -> None:
         self._config.set("ui.window_width", self.width())
         self._config.set("ui.window_height", self.height())
         self._config.set("ui.sidebar_width", self._left_stack.width())
+        import base64
+        self._config.set(
+            "ui.splitters.viewer",
+            base64.b64encode(self._viewer_splitter.saveState().data()).decode(),
+        )
+        self._config.set(
+            "ui.splitters.sidebar_panels",
+            self._sidebar.save_splitter_state(),
+        )
         self._folder_watcher.set_folders([])
         self._scanner.stop()
         if self._face_indexer and self._face_indexer.isRunning():
@@ -1635,6 +1906,10 @@ class MainWindow(QMainWindow):
             self._face_indexer.wait(3000)
         if self._cluster_thread and self._cluster_thread.isRunning():
             self._cluster_thread.wait(3000)
+        if self._photo_query_thread and self._photo_query_thread.isRunning():
+            self._photo_query_thread.wait(1000)
+        if self._persons_refresh_thread and self._persons_refresh_thread.isRunning():
+            self._persons_refresh_thread.wait(1000)
         super().closeEvent(event)
 
     def keyPressEvent(self, event) -> None:
@@ -1650,9 +1925,9 @@ class MainWindow(QMainWindow):
         elif key == Qt.Key_A and modifiers == Qt.ControlModifier:
             if self._stack.currentIndex() == 0:
                 self._grid.select_all()
-        elif in_viewer and key == Qt.Key_Left and not self._viewer._canvas._crop_mode:
-            self._navigate_photo(-1)
         elif in_viewer and key == Qt.Key_Right and not self._viewer._canvas._crop_mode:
-            self._navigate_photo(1)
+            self._navigate_photo(-1)   # plus récente
+        elif in_viewer and key == Qt.Key_Left and not self._viewer._canvas._crop_mode:
+            self._navigate_photo(1)    # plus ancienne
         else:
             super().keyPressEvent(event)

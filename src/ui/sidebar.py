@@ -3,8 +3,8 @@ import logging
 import shutil
 import subprocess
 
-from PySide6.QtCore import Signal, Qt, QRect, QSize, QUrl
-from PySide6.QtGui import QColor, QFont, QIcon, QPainter
+from PySide6.QtCore import Signal, Qt, QRect, QSize, QUrl, QThread, Slot
+from PySide6.QtGui import QColor, QFont, QIcon, QPainter, QPixmap
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QSplitter,
     QTreeWidget, QTreeWidgetItem, QListWidget, QListWidgetItem,
@@ -13,7 +13,7 @@ from PySide6.QtWidgets import (
 
 from src.core.event_bus import bus
 from src.core.models import AlbumInfo, PersonInfo
-from src.ui.people_panel import load_face_pixmap
+from src.ui.people_panel import _face_bytes
 
 logger = logging.getLogger(__name__)
 
@@ -113,6 +113,40 @@ class _BadgeButton(QPushButton):
         p.end()
 
 
+class _FaceIconLoader(QThread):
+    """Charge les crops de visages en arrière-plan pour éviter de freezer le thread UI."""
+
+    icon_ready = Signal(int, bytes)   # (index dans la liste, PNG bytes)
+
+    def __init__(self, persons: list, parent=None) -> None:
+        super().__init__(parent)
+        self._persons = persons
+        self._stop_flag = False
+
+    def stop(self) -> None:
+        self._stop_flag = True
+
+    def run(self) -> None:
+        from src.core.models import FaceInfo
+        for i, person in enumerate(self._persons):
+            if self._stop_flag:
+                break
+            if person.cover_path and person.cover_bbox:
+                try:
+                    face = FaceInfo(
+                        photo_path=person.cover_path,
+                        bbox_x=person.cover_bbox[0],
+                        bbox_y=person.cover_bbox[1],
+                        bbox_w=person.cover_bbox[2],
+                        bbox_h=person.cover_bbox[3],
+                    )
+                    data = _face_bytes(face, size=36)
+                    if data:
+                        self.icon_ready.emit(i, data)
+                except Exception:
+                    pass
+
+
 class Sidebar(QWidget):
     folder_selected    = Signal(str)
     album_selected     = Signal(object)   # AlbumInfo | str (special key)
@@ -125,9 +159,13 @@ class Sidebar(QWidget):
     identify_requested     = Signal()         # ouvrir PeopleDialog
     person_merge_requested = Signal(object)   # PersonInfo à fusionner
     person_rename_requested = Signal(object)  # PersonInfo à renommer
+    tree_state_changed     = Signal(list)     # list[str] — chemins dépliés
 
     def __init__(self, parent=None):
         super().__init__(parent)
+        self._expanded_paths: set[str] = set()
+        self._restoring: bool = False
+        self._face_loader: _FaceIconLoader | None = None
         self._setup_ui()
 
     def _setup_ui(self) -> None:
@@ -135,7 +173,7 @@ class Sidebar(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
 
-        splitter = QSplitter(Qt.Vertical)
+        self._splitter = QSplitter(Qt.Vertical)
 
         # --- Folder tree ---
         folder_widget = QWidget()
@@ -155,10 +193,11 @@ class Sidebar(QWidget):
         self._folder_tree.customContextMenuRequested.connect(self._folder_context_menu)
         self._folder_tree.itemClicked.connect(self._on_folder_clicked)
         self._folder_tree.itemExpanded.connect(self._on_folder_expanded)
+        self._folder_tree.itemCollapsed.connect(self._on_folder_collapsed)
         self._folder_tree.files_dropped.connect(self.photos_dropped)
         fw_layout.addWidget(self._folder_tree)
 
-        splitter.addWidget(folder_widget)
+        self._splitter.addWidget(folder_widget)
 
         # --- Albums list ---
         album_widget = QWidget()
@@ -186,7 +225,7 @@ class Sidebar(QWidget):
         self._albums_list.itemClicked.connect(self._on_album_clicked)
         aw_layout.addWidget(self._albums_list)
 
-        splitter.addWidget(album_widget)
+        self._splitter.addWidget(album_widget)
 
         # --- Persons list ---
         persons_widget = QWidget()
@@ -216,21 +255,33 @@ class Sidebar(QWidget):
         self._persons_list.customContextMenuRequested.connect(self._person_context_menu)
         pw_layout.addWidget(self._persons_list)
 
-        splitter.addWidget(persons_widget)
+        self._splitter.addWidget(persons_widget)
 
-        splitter.setStretchFactor(0, 3)
-        splitter.setStretchFactor(1, 1)
-        splitter.setStretchFactor(2, 1)
+        self._splitter.setStretchFactor(0, 3)
+        self._splitter.setStretchFactor(1, 1)
+        self._splitter.setStretchFactor(2, 1)
 
-        layout.addWidget(splitter)
+        layout.addWidget(self._splitter)
 
         self._albums: list[AlbumInfo] = []
         self._persons: list[PersonInfo] = []
 
         self._add_special_albums()
 
+    # ── persistance des positions de bordures ──────────────────────────────
+
+    def save_splitter_state(self) -> str:
+        import base64
+        return base64.b64encode(self._splitter.saveState().data()).decode()
+
+    def restore_splitter_state(self, state_b64: str) -> None:
+        import base64
+        from PySide6.QtCore import QByteArray
+        if state_b64:
+            self._splitter.restoreState(QByteArray(base64.b64decode(state_b64)))
+
     def _add_special_albums(self) -> None:
-        item_all = QListWidgetItem("★ Toutes les photos")
+        item_all = QListWidgetItem("★ Chronologie de toutes les photos")
         item_all.setData(Qt.UserRole, _SPECIAL_ALL)
         self._albums_list.addItem(item_all)
         self._albums_list.setCurrentItem(item_all)
@@ -242,6 +293,10 @@ class Sidebar(QWidget):
         item_vid = QListWidgetItem("▶ Vidéos")
         item_vid.setData(Qt.UserRole, _SPECIAL_VIDEOS)
         self._albums_list.addItem(item_vid)
+
+    def set_tree_expanded_paths(self, paths: list[str]) -> None:
+        """Initialise l'état mémorisé depuis la config (appeler avant refresh_folders)."""
+        self._expanded_paths = set(paths)
 
     def refresh_folders(self, folders: list[str]) -> None:
         self._folder_tree.clear()
@@ -255,6 +310,15 @@ class Sidebar(QWidget):
             self._folder_tree.addTopLevelItem(root_item)
             # Pas de setExpanded() ici : avec >100 dossiers, _populate_subfolders
             # sur chaque racine bloque l'UI (scandir × N dossiers).
+
+        # Restaurer l'état d'expansion mémorisé
+        if self._expanded_paths:
+            self._restoring = True
+            try:
+                for path in sorted(self._expanded_paths):
+                    self._restore_expand(path)
+            finally:
+                self._restoring = False
 
     def _has_subdirs(self, folder_path: str) -> bool:
         """Retourne True si folder_path contient au moins un sous-dossier visible."""
@@ -271,7 +335,7 @@ class Sidebar(QWidget):
         Chaque enfant reçoit un placeholder s'il a lui-même des sous-dossiers,
         permettant le lazy loading à l'expansion."""
         try:
-            entries = sorted(os.scandir(folder_path), key=lambda e: e.name.lower())
+            entries = sorted(os.scandir(folder_path), key=lambda e: e.name.lower(), reverse=True)
             for entry in entries:
                 if entry.is_dir() and not entry.name.startswith("."):
                     child = QTreeWidgetItem([entry.name])
@@ -285,17 +349,71 @@ class Sidebar(QWidget):
             pass
 
     def _on_folder_expanded(self, item: QTreeWidgetItem) -> None:
-        """Lazy loading : remplace le placeholder par les vrais sous-dossiers."""
-        if item.childCount() != 1:
+        """Lazy loading + mémorisation de l'état d'expansion."""
+        # Lazy loading si le nœud n'a qu'un placeholder sans données
+        if item.childCount() == 1 and item.child(0).data(0, Qt.UserRole) is None:
+            folder_path = item.data(0, Qt.UserRole)
+            if folder_path:
+                item.removeChild(item.child(0))
+                self._populate_subfolders(item, folder_path)
+        # Mémoriser
+        if not self._restoring:
+            path = item.data(0, Qt.UserRole)
+            if path:
+                self._expanded_paths.add(path)
+                self.tree_state_changed.emit(list(self._expanded_paths))
+
+    def _on_folder_collapsed(self, item: QTreeWidgetItem) -> None:
+        if self._restoring:
             return
-        placeholder = item.child(0)
-        if placeholder.data(0, Qt.UserRole) is not None:
-            return  # déjà chargé
-        folder_path = item.data(0, Qt.UserRole)
-        if not folder_path:
+        path = item.data(0, Qt.UserRole)
+        if not path:
             return
-        item.removeChild(placeholder)
-        self._populate_subfolders(item, folder_path)
+        self._expanded_paths.discard(path)
+        # Supprimer aussi tous les descendants (plus visibles)
+        prefix = os.path.normcase(path + os.sep)
+        self._expanded_paths = {
+            p for p in self._expanded_paths
+            if not os.path.normcase(p).startswith(prefix)
+        }
+        self.tree_state_changed.emit(list(self._expanded_paths))
+
+    def _restore_expand(self, target: str) -> None:
+        """Cherche target dans l'arbre et déplie le chemin vers lui."""
+        norm_target = os.path.normcase(target)
+        for i in range(self._folder_tree.topLevelItemCount()):
+            root = self._folder_tree.topLevelItem(i)
+            root_path = root.data(0, Qt.UserRole)
+            if not root_path:
+                continue
+            norm_root = os.path.normcase(root_path)
+            if norm_target == norm_root or norm_target.startswith(norm_root + os.sep):
+                self._expand_toward(root, norm_target)
+                return
+
+    def _expand_toward(self, item: QTreeWidgetItem, norm_target: str) -> None:
+        """Déplie récursivement vers norm_target, en chargeant les nœuds lazy si besoin."""
+        item_path = item.data(0, Qt.UserRole)
+        if not item_path:
+            return
+        norm_item = os.path.normcase(item_path)
+        # Peupler si placeholder non encore chargé
+        if item.childCount() == 1 and item.child(0).data(0, Qt.UserRole) is None:
+            item.removeChild(item.child(0))
+            self._populate_subfolders(item, item_path)
+        item.setExpanded(True)
+        if norm_item == norm_target:
+            return
+        # Descendre vers l'enfant qui contient target
+        for j in range(item.childCount()):
+            child = item.child(j)
+            child_path = child.data(0, Qt.UserRole)
+            if not child_path:
+                continue
+            norm_child = os.path.normcase(child_path)
+            if norm_target == norm_child or norm_target.startswith(norm_child + os.sep):
+                self._expand_toward(child, norm_target)
+                return
 
     def refresh_albums(self, albums: list[AlbumInfo]) -> None:
         self._albums = albums
@@ -406,26 +524,28 @@ class Sidebar(QWidget):
 
     def refresh_persons(self, persons: list[PersonInfo]) -> None:
         self._persons = persons
+        # Arrêter un chargement précédent si toujours en cours
+        if self._face_loader and self._face_loader.isRunning():
+            self._face_loader.stop()
+            self._face_loader.wait(200)
         self._persons_list.clear()
         for person in persons:
             label = f"{person.name}  ({person.photo_count})"
             item = QListWidgetItem(label)
             item.setData(Qt.UserRole, person)
-            if person.cover_path and person.cover_bbox:
-                try:
-                    from src.core.models import FaceInfo
-                    face = FaceInfo(
-                        photo_path=person.cover_path,
-                        bbox_x=person.cover_bbox[0],
-                        bbox_y=person.cover_bbox[1],
-                        bbox_w=person.cover_bbox[2],
-                        bbox_h=person.cover_bbox[3],
-                    )
-                    pix = load_face_pixmap(face, size=36)
-                    item.setIcon(QIcon(pix))
-                except Exception:
-                    pass
             self._persons_list.addItem(item)
+        # Charger les icônes de visage en arrière-plan
+        if persons:
+            self._face_loader = _FaceIconLoader(persons, self)
+            self._face_loader.icon_ready.connect(self._on_face_icon_ready)
+            self._face_loader.start()
+
+    @Slot(int, bytes)
+    def _on_face_icon_ready(self, index: int, data: bytes) -> None:
+        if index < self._persons_list.count():
+            pix = QPixmap()
+            pix.loadFromData(data)
+            self._persons_list.item(index).setIcon(QIcon(pix))
 
     def update_cluster_badge(self, count: int) -> None:
         """Mettre à jour le badge du bouton Identifier avec le nombre de groupes en attente."""

@@ -17,6 +17,10 @@ _DEFAULTS = {
     "ui": {
         "sidebar_width": 240,
         "theme": "dark",
+        "splitters": {
+            "viewer": "",
+            "sidebar_panels": "",
+        },
     },
     "faces": {
         "similarity_eps": 0.5,
