@@ -426,12 +426,16 @@ class Sidebar(QWidget):
             self._albums_list.addItem(item)
 
     def _on_folder_clicked(self, item: QTreeWidgetItem, _col: int) -> None:
+        self._albums_list.clearSelection()
+        self._persons_list.clearSelection()
         path = item.data(0, Qt.UserRole)
         if path:
             bus.emit("library.folder_selected", folder=path)
             self.folder_selected.emit(path)
 
     def _on_album_clicked(self, item: QListWidgetItem) -> None:
+        self._folder_tree.clearSelection()
+        self._persons_list.clearSelection()
         data = item.data(Qt.UserRole)
         self.album_selected.emit(data)
 
@@ -552,6 +556,8 @@ class Sidebar(QWidget):
         self._btn_identify.set_badge(count)
 
     def _on_person_clicked(self, item: QListWidgetItem) -> None:
+        self._folder_tree.clearSelection()
+        self._albums_list.clearSelection()
         person = item.data(Qt.UserRole)
         if isinstance(person, PersonInfo):
             self.person_selected.emit(person)
