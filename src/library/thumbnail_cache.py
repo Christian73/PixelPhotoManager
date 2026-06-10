@@ -120,21 +120,27 @@ class ThumbnailCache:
         self._store_ram(self._key(photo_path), pixmap)
 
     def _generate_video_thumb(self, video_path: str) -> bytes | None:
-        """Extrait une frame de la vidéo et en fait une vignette mise en cache.
-        Retourne les bytes JPEG bruts — NE crée pas de QPixmap (thread-safe)."""
+        """Extrait la première frame de la vidéo et en fait une vignette mise en cache.
+        Retourne les bytes JPEG bruts — NE crée pas de QPixmap (thread-safe).
+
+        On utilise CAP_FFMPEG pour éviter les appels COM sur Windows (DirectShow
+        peut marshaler des appels sur le thread UI et provoquer des freezes).
+        On lit la première frame sans aucun seek : cv2.CAP_PROP_FRAME_COUNT peut
+        scanner tout le fichier pour les AVI sans index, et cap.set(POS_FRAMES, N)
+        décode depuis le dernier keyframe — les deux bloquent plusieurs secondes."""
         try:
             import cv2
             from PIL import Image
 
-            cap = cv2.VideoCapture(video_path)
+            # CAP_FFMPEG évite DirectShow/Media Foundation sur Windows
+            cap = cv2.VideoCapture(video_path, cv2.CAP_FFMPEG)
             if not cap.isOpened():
-                return None
-            frame_count = cap.get(cv2.CAP_PROP_FRAME_COUNT)
-            if frame_count > 10:
-                cap.set(cv2.CAP_PROP_POS_FRAMES, int(frame_count * 0.1))
-            ret, frame = cap.read()
+                cap = cv2.VideoCapture(video_path)   # fallback
+                if not cap.isOpened():
+                    return None
+            ret, frame = cap.read()   # première frame — aucun seek
             cap.release()
-            if not ret:
+            if not ret or frame is None:
                 return None
 
             frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)

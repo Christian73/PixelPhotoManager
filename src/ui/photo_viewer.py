@@ -57,17 +57,59 @@ def _build_pixmap(photo: PhotoInfo, edit: EditInfo | None) -> "tuple[QPixmap, in
         return None
 
 
+def _build_video_base_image(video_path: str) -> "tuple[bytes, int, int] | None":
+    """
+    Extrait la première frame de la vidéo sans aucun seek.
+    Retourne (jpeg_bytes, orig_w, orig_h).
+
+    Utilise CAP_FFMPEG pour éviter les appels COM/DirectShow qui peuvent marshaler
+    du travail sur le thread UI (STA) et provoquer des freezes.
+    Ne lit jamais CAP_PROP_FRAME_COUNT ni cap.set(POS_FRAMES) : ces deux appels
+    peuvent scanner ou décoder tout le fichier pour les formats sans index.
+    """
+    try:
+        import cv2
+        from PIL import Image
+
+        cap = cv2.VideoCapture(video_path, cv2.CAP_FFMPEG)
+        if not cap.isOpened():
+            cap = cv2.VideoCapture(video_path)
+            if not cap.isOpened():
+                return None
+        orig_w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        orig_h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        ret, frame = cap.read()
+        cap.release()
+        if not ret or frame is None:
+            return None
+
+        frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        img = Image.fromarray(frame_rgb)
+        w, h = img.size
+        if max(w, h) > _PREVIEW_MAX_PX:
+            scale = _PREVIEW_MAX_PX / max(w, h)
+            img = img.resize((round(w * scale), round(h * scale)), Image.LANCZOS)
+        if img.mode != "RGB":
+            img = img.convert("RGB")
+        buf = io.BytesIO()
+        img.save(buf, format="JPEG", quality=92)
+        return buf.getvalue(), orig_w or w, orig_h or h
+    except Exception as e:
+        logger.error("Erreur base vidéo %s: %s", video_path, e)
+        return None
+
+
 def _build_base_image(photo: PhotoInfo) -> "tuple[bytes, int, int] | None":
     """
-    Charge l'image, applique la correction EXIF et réduit à _PREVIEW_MAX_PX.
-    Retourne (jpeg_bytes, orig_w, orig_h) SANS retouche.
+    Charge l'image (ou la première frame vidéo), applique la correction EXIF et réduit
+    à _PREVIEW_MAX_PX. Retourne (jpeg_bytes, orig_w, orig_h) SANS retouche.
     Résultat mis en cache dans PhotoViewer._base_cache : évite de relire le fichier
     complet à chaque mouvement de slider (preview de retouche).
     """
     from pathlib import Path as _Path
     from src.library.exif_reader import VIDEO_EXT
     if _Path(photo.path).suffix.lower() in VIDEO_EXT:
-        return None
+        return _build_video_base_image(photo.path)
     try:
         from PIL import Image, ImageOps
         with Image.open(photo.path) as img:
@@ -1109,6 +1151,22 @@ class _Canvas(QWidget):
                 self._crop_from_rel(crop_rel)
 
 
+class _BaseLoader(QThread):
+    """Charge _build_base_image dans un thread secondaire.
+    Nécessaire pour les vidéos : cv2.VideoCapture peut marshaler des appels COM
+    sur le thread UI (STA Windows) et provoquer des freezes si appelé directement."""
+
+    base_ready = Signal(str, object)   # (photo_path, tuple[bytes,int,int] | None)
+
+    def __init__(self, photo: "PhotoInfo", parent=None) -> None:
+        super().__init__(parent)
+        self._photo = photo
+
+    def run(self) -> None:
+        result = _build_base_image(self._photo)
+        self.base_ready.emit(self._photo.path, result)
+
+
 class PhotoViewer(QWidget):
     closed               = Signal()
     navigate             = Signal(int)
@@ -1130,6 +1188,10 @@ class PhotoViewer(QWidget):
         # Cache de l'image de base (1024px, sans retouche) pour la photo courante.
         # Évite de relire le fichier complet à chaque preview de slider.
         self._base_cache: "tuple[bytes, int, int] | None" = None
+        # Thread de chargement de l'image de base (images et vidéos).
+        # Le chargement est asynchrone pour éviter de bloquer le thread UI,
+        # particulièrement critique pour les vidéos (cv2.VideoCapture + COM).
+        self._base_loader: "_BaseLoader | None" = None
         # Debounce pour les previews de retouche : on ne recharge que 60 ms
         # après le dernier événement slider (évite les surcharges mémoire).
         self._preview_timer = QTimer(self)
@@ -1288,6 +1350,11 @@ class PhotoViewer(QWidget):
 
     def set_photo(self, photo: PhotoInfo, edit: EditInfo | None = None) -> None:
         self._preview_timer.stop()
+        # Annuler un chargement de base image en cours (navigation rapide)
+        if self._base_loader and self._base_loader.isRunning():
+            self._base_loader.base_ready.disconnect()
+            self._base_loader.quit()
+            self._base_loader = None
         self._base_cache = None  # invalide le cache pour la nouvelle photo
         self._photo = photo
         is_video = photo.media_type == "video"
@@ -1309,28 +1376,37 @@ class PhotoViewer(QWidget):
     def _reload_pixmap(self) -> None:
         if not self._photo:
             return
-        from pathlib import Path as _Path
-        from src.library.exif_reader import VIDEO_EXT
         self._canvas.set_edit(self._edit)
-        if _Path(self._photo.path).suffix.lower() in VIDEO_EXT:
-            result = _build_video_pixmap(self._photo.path)
-            if result is None:
-                self._canvas.set_orig_size(0, 0)
-                self._canvas.set_pixmap(None)
-            else:
-                pixmap, orig_w, orig_h = result
-                self._canvas.set_orig_size(orig_w, orig_h)
-                self._canvas.set_pixmap(pixmap)
+
+        if self._base_cache is not None:
+            # Cache chaud : appliquer les retouches et afficher immédiatement
+            base_bytes, orig_w, orig_h = self._base_cache
+            pixmap = _apply_edit_to_base(base_bytes, self._edit)
+            self._canvas.set_orig_size(orig_w, orig_h)
+            self._canvas.set_pixmap(pixmap)
             return
-        # Charger l'image de base une seule fois par photo (cache de session)
-        if self._base_cache is None:
-            self._base_cache = _build_base_image(self._photo)
-        if self._base_cache is None:
-            self._canvas.set_orig_size(0, 0)
-            self._canvas.set_pixmap(None)
+
+        # Cache froid : lancer le chargement en arrière-plan (image ou vidéo)
+        # Afficher un état vide pendant le chargement
+        self._canvas.set_orig_size(0, 0)
+        self._canvas.set_pixmap(None)
+        if self._base_loader and self._base_loader.isRunning():
+            return  # déjà en cours pour cette photo
+        self._base_loader = _BaseLoader(self._photo, self)
+        self._base_loader.base_ready.connect(self._on_base_ready)
+        self._base_loader.start()
+
+    @Slot(str, object)
+    def _on_base_ready(self, path: str, result: object) -> None:
+        """Reçoit le résultat du chargement de base image/vidéo depuis _BaseLoader."""
+        if self._photo is None or self._photo.path != path:
+            return  # navigation entre-temps — résultat obsolète
+        self._base_cache = result
+        if result is None:
             return
-        base_bytes, orig_w, orig_h = self._base_cache
+        base_bytes, orig_w, orig_h = result
         pixmap = _apply_edit_to_base(base_bytes, self._edit)
+        self._canvas.set_edit(self._edit)
         self._canvas.set_orig_size(orig_w, orig_h)
         self._canvas.set_pixmap(pixmap)
 

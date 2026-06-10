@@ -20,6 +20,19 @@ def _get_thumb_pool() -> QThreadPool:
     """Retourne le pool global Qt (threads correctement intégrés à l'event loop)."""
     return QThreadPool.globalInstance()
 
+
+_video_thumb_pool: "QThreadPool | None" = None
+
+def _get_video_thumb_pool() -> QThreadPool:
+    """Pool dédié aux vignettes vidéo, limité à 2 threads.
+    Évite la saturation I/O disque quand de nombreux cv2.VideoCapture s'ouvrent
+    simultanément — ce qui ralentit aussi le thread UI par contention disque."""
+    global _video_thumb_pool
+    if _video_thumb_pool is None:
+        _video_thumb_pool = QThreadPool()
+        _video_thumb_pool.setMaxThreadCount(2)
+    return _video_thumb_pool
+
 _BUFFER_ROWS = 3
 
 _FR_MONTHS = [
@@ -117,7 +130,14 @@ class ThumbnailCell(QWidget):
             self._set_pixmap(pixmap)
         else:
             worker = _ThumbWorker(self._photo.path, self._cache, self._signals)
-            _get_thumb_pool().start(worker, priority)
+            # Les vidéos utilisent un pool séparé (max 2 threads) pour éviter
+            # la saturation I/O disque lors de l'ouverture simultanée de cv2.VideoCapture.
+            from pathlib import Path as _P
+            from src.library.exif_reader import VIDEO_EXT as _VE
+            pool = (_get_video_thumb_pool()
+                    if _P(self._photo.path).suffix.lower() in _VE
+                    else _get_thumb_pool())
+            pool.start(worker, priority)
 
     def reload_with_edit(self, edit) -> None:
         self._cache.invalidate(self._photo.path)
