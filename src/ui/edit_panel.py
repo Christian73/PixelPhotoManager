@@ -3,7 +3,7 @@ import logging
 import math
 import os
 
-from PySide6.QtCore import Qt, Signal, QSize, QPoint, QTimer
+from PySide6.QtCore import Qt, Signal, Slot, QSize, QPoint, QTimer
 from PySide6.QtGui import (
     QPixmap, QPainter, QColor, QFont, QPen, QIcon,
     QPolygon, QBrush, QLinearGradient, QPainterPath, QKeySequence,
@@ -708,15 +708,15 @@ class GammaCurveWidget(QWidget):
         self.update()
 
 
-# ------------------------------------------------------------------ dialogue gamma avancé
+# ------------------------------------------------------------------ dialogue luminosité (+ gamma avancé)
 
-class GammaTreatmentDialog(QDialog):
+class LuminositeTreatmentDialog(QDialog):
     preview = Signal(object)
 
     def __init__(self, edit: EditInfo, photo_path: str | None = None, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("Gamma")
-        self.setMinimumWidth(320)
+        self.setWindowTitle("Luminosité")
+        self.setMinimumWidth(400)
         self._edit = copy.copy(edit)
         self._panel = None
 
@@ -724,21 +724,38 @@ class GammaTreatmentDialog(QDialog):
         layout.setSpacing(8)
         layout.setContentsMargins(12, 12, 12, 12)
 
-        # Slider mode simple
-        self._gamma_slider = EditSlider("Gamma", 0.1, 3.0, edit.gamma, 2)
-        self._gamma_slider.value_changed.connect(self._on_gamma_changed)
-        layout.addWidget(self._gamma_slider)
+        # Slider luminosité principal
+        self._sl_lum = EditSlider("Luminosité", -1.0, 1.0, edit.brightness, 2)
+        self._sl_lum.value_changed.connect(lambda v: self._on_changed("brightness", v))
+        layout.addWidget(self._sl_lum)
 
-        self._chk = QCheckBox("Paramétrage avancé…")
-        self._chk.setChecked(edit.gamma_use_curve)
+        # Checkbox "Fonctions avancées…" (gamma)
+        self._chk = QCheckBox("Fonctions avancées…")
+        has_gamma = edit.gamma != 1.0 or edit.gamma_use_curve
+        self._chk.setChecked(has_gamma)
         self._chk.toggled.connect(self._on_advanced_toggled)
         layout.addWidget(self._chk)
 
-        # Section avancée (masquée par défaut)
+        # Section gamma (masquée si pas d'édition gamma)
         self._adv = QWidget()
         adv_layout = QVBoxLayout(self._adv)
-        adv_layout.setContentsMargins(0, 0, 0, 0)
+        adv_layout.setContentsMargins(0, 4, 0, 0)
         adv_layout.setSpacing(4)
+
+        self._gamma_slider = EditSlider("Gamma", 0.1, 3.0, edit.gamma, 2)
+        self._gamma_slider.value_changed.connect(self._on_gamma_changed)
+        adv_layout.addWidget(self._gamma_slider)
+
+        self._chk_curve = QCheckBox("Fonctions très avancées…")
+        self._chk_curve.setChecked(edit.gamma_use_curve)
+        self._chk_curve.toggled.connect(self._on_curve_toggled)
+        adv_layout.addWidget(self._chk_curve)
+
+        # Section courbe (masquée par défaut)
+        self._curve_section = QWidget()
+        cs_layout = QVBoxLayout(self._curve_section)
+        cs_layout.setContentsMargins(0, 0, 0, 0)
+        cs_layout.setSpacing(4)
 
         lbl = QLabel(
             "Cliquer pour ajouter un point · Glisser pour déplacer · "
@@ -746,20 +763,22 @@ class GammaTreatmentDialog(QDialog):
         )
         lbl.setWordWrap(True)
         lbl.setStyleSheet("color: #999; font-size: 10px;")
-        adv_layout.addWidget(lbl)
+        cs_layout.addWidget(lbl)
 
         histogram = _compute_luminosity_histogram(photo_path) if photo_path else []
         init_pts = edit.gamma_curve_points if edit.gamma_use_curve else _gamma_to_curve_points(edit.gamma)
         self._curve = GammaCurveWidget(points=init_pts, histogram=histogram)
         self._curve.curve_changed.connect(self._on_curve_changed)
-        adv_layout.addWidget(self._curve)
+        cs_layout.addWidget(self._curve)
+        adv_layout.addWidget(self._curve_section)
+
+        # Visibilité initiale
+        self._gamma_slider.setVisible(not edit.gamma_use_curve)
+        self._curve_section.setVisible(edit.gamma_use_curve)
+        self._edit.gamma_curve_points = init_pts
 
         layout.addWidget(self._adv)
-
-        # Appliquer visibilité initiale
-        self._gamma_slider.setVisible(not edit.gamma_use_curve)
-        self._adv.setVisible(edit.gamma_use_curve)
-        self._edit.gamma_curve_points = init_pts
+        self._adv.setVisible(has_gamma)
 
         btn_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         btn_box.button(QDialogButtonBox.Ok).setText("Valider")
@@ -774,13 +793,22 @@ class GammaTreatmentDialog(QDialog):
             pos = self._panel._compute_dialog_pos(self.width(), self.height())
             QTimer.singleShot(0, lambda: self.move(pos))
 
+    def _on_changed(self, attr: str, value: float) -> None:
+        setattr(self._edit, attr, value)
+        self.preview.emit(copy.copy(self._edit))
+
     def _on_gamma_changed(self, value: float) -> None:
         self._edit.gamma = value
         self.preview.emit(copy.copy(self._edit))
 
     def _on_advanced_toggled(self, checked: bool) -> None:
-        self._gamma_slider.setVisible(not checked)
         self._adv.setVisible(checked)
+        self.adjustSize()
+        QTimer.singleShot(0, self._reposition)
+
+    def _on_curve_toggled(self, checked: bool) -> None:
+        self._gamma_slider.setVisible(not checked)
+        self._curve_section.setVisible(checked)
         self._edit.gamma_use_curve = checked
         if checked:
             self._curve.set_from_gamma(self._edit.gamma)
@@ -788,14 +816,14 @@ class GammaTreatmentDialog(QDialog):
         QTimer.singleShot(0, self._reposition)
         self.preview.emit(copy.copy(self._edit))
 
+    def _on_curve_changed(self, points: list) -> None:
+        self._edit.gamma_curve_points = points
+        self.preview.emit(copy.copy(self._edit))
+
     def _reposition(self) -> None:
         if self._panel is not None:
             pos = self._panel._compute_dialog_pos(self.width(), self.height())
             self.move(pos)
-
-    def _on_curve_changed(self, points: list) -> None:
-        self._edit.gamma_curve_points = points
-        self.preview.emit(copy.copy(self._edit))
 
     def get_edit(self) -> EditInfo:
         return self._edit
@@ -805,7 +833,8 @@ class GammaTreatmentDialog(QDialog):
 
 
 class CouleursTreatmentDialog(QDialog):
-    preview = Signal(object)  # EditInfo
+    preview          = Signal(object)  # EditInfo
+    wb_pick_requested = Signal(bool)   # True = démarrer la pipette, False = annuler
 
     def __init__(self, edit: EditInfo, parent=None):
         super().__init__(parent)
@@ -824,10 +853,10 @@ class CouleursTreatmentDialog(QDialog):
         layout.addWidget(self._sl_sat)
 
         # Checkbox avancé
-        chk = QCheckBox("Fonctions avancées…")
+        self._chk = QCheckBox("Fonctions avancées…")
         has_channel_edits = any(v != 0.0 for v in (edit.color_red, edit.color_green, edit.color_blue))
-        chk.setChecked(has_channel_edits)
-        layout.addWidget(chk)
+        self._chk.setChecked(has_channel_edits)
+        layout.addWidget(self._chk)
 
         # Section RVB (masquée par défaut)
         self._adv = QWidget()
@@ -839,6 +868,39 @@ class CouleursTreatmentDialog(QDialog):
         lbl.setStyleSheet("color: #999; font-size: 10px;")
         adv_layout.addWidget(lbl)
 
+        # --- Pipette balance des blancs ---
+        pip_row = QHBoxLayout()
+        pip_row.setContentsMargins(0, 4, 0, 0)
+        self._btn_pip = QPushButton("⌖  Pipette balance des blancs")
+        self._btn_pip.setCheckable(True)
+        self._btn_pip.setToolTip(
+            "Cliquez sur une zone neutre (blanc ou gris) dans l'image\n"
+            "pour équilibrer automatiquement les canaux R, V, B."
+        )
+        pip_row.addWidget(self._btn_pip)
+        self._lbl_pip_hint = QLabel("→ Cliquez sur un point neutre dans l'image principale")
+        self._lbl_pip_hint.setStyleSheet("color: #7ab; font-size: 10px;")
+        self._lbl_pip_hint.hide()
+        pip_row.addWidget(self._lbl_pip_hint, stretch=1)
+        adv_layout.addLayout(pip_row)
+
+        # Swatch de feedback (couleur prélevée)
+        swatch_row = QHBoxLayout()
+        self._wb_swatch_lbl = QLabel("Couleur prélevée :")
+        self._wb_swatch_lbl.setStyleSheet("color: #888; font-size: 10px;")
+        self._wb_swatch_lbl.hide()
+        self._wb_swatch = QLabel()
+        self._wb_swatch.setFixedSize(44, 16)
+        self._wb_swatch.setStyleSheet("border: 1px solid #666;")
+        self._wb_swatch.hide()
+        swatch_row.addWidget(self._wb_swatch_lbl)
+        swatch_row.addWidget(self._wb_swatch)
+        swatch_row.addStretch()
+        adv_layout.addLayout(swatch_row)
+
+        self._btn_pip.toggled.connect(self._on_pip_toggled)
+
+        # Sliders RVB
         self._sl_r = EditSlider("Rouge",  -1.0, 1.0, edit.color_red,   2)
         self._sl_g = EditSlider("Vert",   -1.0, 1.0, edit.color_green, 2)
         self._sl_b = EditSlider("Bleu",   -1.0, 1.0, edit.color_blue,  2)
@@ -851,8 +913,8 @@ class CouleursTreatmentDialog(QDialog):
             adv_layout.addWidget(sl)
 
         self._adv.setVisible(has_channel_edits)
-        chk.toggled.connect(self._adv.setVisible)
-        chk.toggled.connect(lambda _: self._resize_and_reposition())
+        self._chk.toggled.connect(self._adv.setVisible)
+        self._chk.toggled.connect(lambda _: self._resize_and_reposition())
         layout.addWidget(self._adv)
 
         btn_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
@@ -861,6 +923,39 @@ class CouleursTreatmentDialog(QDialog):
         btn_box.accepted.connect(self.accept)
         btn_box.rejected.connect(self.reject)
         layout.addWidget(btn_box)
+
+    def _on_pip_toggled(self, checked: bool) -> None:
+        self._lbl_pip_hint.setVisible(checked)
+        self.wb_pick_requested.emit(checked)
+
+    def apply_wb_pixel(self, r: int, g: int, b: int) -> None:
+        """Applique la correction balance des blancs depuis le pixel prélevé sur la visionneuse."""
+        if r == 0 and g == 0 and b == 0:
+            return
+        mean = (r + g + b) / 3.0
+        def _corr(ch: int) -> float:
+            return max(-1.0, min(1.0, mean / ch - 1.0)) if ch > 0 else 0.0
+        cr, cg, cb = _corr(r), _corr(g), _corr(b)
+        self._sl_r.set_value(cr)
+        self._sl_g.set_value(cg)
+        self._sl_b.set_value(cb)
+        self._edit.color_red   = cr
+        self._edit.color_green = cg
+        self._edit.color_blue  = cb
+        self.preview.emit(copy.copy(self._edit))
+        # Désactiver le bouton pipette (sans réémettre le signal)
+        self._btn_pip.blockSignals(True)
+        self._btn_pip.setChecked(False)
+        self._btn_pip.blockSignals(False)
+        self._lbl_pip_hint.hide()
+        # Feedback : swatch de la couleur prélevée
+        self._wb_swatch.setStyleSheet(f"background: rgb({r},{g},{b}); border: 1px solid #666;")
+        self._wb_swatch.setToolTip(f"Pixel prélevé — R : {r}  V : {g}  B : {b}")
+        self._wb_swatch_lbl.show()
+        self._wb_swatch.show()
+        # Activer la section avancée si elle est masquée
+        if not self._adv.isVisible():
+            self._chk.setChecked(True)
 
     def showEvent(self, event) -> None:
         super().showEvent(event)
@@ -912,7 +1007,6 @@ _TREATMENTS: list[tuple] = [
     ("Luminosité",  _icon_brightness, [("Luminosité",  "brightness",      -1.0, 1.0, 2)]),
     ("Contraste",   _icon_contrast,   [("Contraste",   "contrast",        -1.0, 1.0, 2)]),
     ("Couleurs",    _icon_saturation, [("Saturation",  "saturation",      -1.0, 1.0, 2)]),
-    ("Gamma",       _icon_gamma,      [("Gamma",       "gamma",            0.1, 3.0, 2)]),
     ("Netteté",     _icon_sharpness,  [("Netteté",     "sharpness",        0.0, 1.0, 2)]),
     ("Débruitage",  _icon_noise,      [("Débruitage",  "noise_reduction",  0.0, 1.0, 2)]),
 ]
@@ -925,6 +1019,7 @@ class EditPanel(QWidget):
     photo_saved             = Signal(str, object)  # (photo_path, EditInfo) — uniquement lors d'un enregistrement réel
     rotation_stepped        = Signal(str, int)     # (photo_path, new_rotation_degrees) — émis uniquement pour les rotations 90°
     red_eye_mode_requested  = Signal(bool, float)  # (active, radius) — bascule le mode yeux rouges dans le canvas
+    wb_pick_requested       = Signal(bool)         # True = démarrer la pipette, False = annuler
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -934,6 +1029,7 @@ class EditPanel(QWidget):
         self._redo_stack: list[EditInfo] = []
         self._db = EditDatabase()
         self._red_eye_active = False
+        self._active_color_dlg: "CouleursTreatmentDialog | None" = None
         self._setup_ui()
 
     def _setup_ui(self) -> None:
@@ -963,10 +1059,13 @@ class EditPanel(QWidget):
         grid.setSpacing(4)
         for idx, (name, icon_fn, sliders_def) in enumerate(_TREATMENTS):
             btn = self._make_treatment_button(name, icon_fn(), sliders_def)
-            grid.addWidget(btn, idx // 2, idx % 2)
-        inner_layout.addLayout(grid)
+            # (1,1) est réservé à Yeux rouges → Netteté et Débruitage passent en ligne 2
+            if idx < 3:
+                grid.addWidget(btn, idx // 2, idx % 2)
+            else:
+                grid.addWidget(btn, 2, idx - 3)
 
-        # Bouton Yeux rouges
+        # Bouton Yeux rouges — même ligne que Couleurs (ligne 1, colonne 1)
         self._btn_red_eye = QToolButton()
         self._btn_red_eye.setText("Yeux rouges")
         self._btn_red_eye.setIcon(QIcon(_icon_red_eye()))
@@ -977,7 +1076,8 @@ class EditPanel(QWidget):
         self._btn_red_eye.setToolTip("Corriger les yeux rouges — cliquez sur chaque œil")
         self._btn_red_eye.setCheckable(True)
         self._btn_red_eye.clicked.connect(self._toggle_red_eye_mode)
-        inner_layout.addWidget(self._btn_red_eye)
+        grid.addWidget(self._btn_red_eye, 1, 1)
+        inner_layout.addLayout(grid)
 
         # Panneau de contrôle yeux rouges (masqué hors mode)
         self._red_eye_panel = QGroupBox("Correction yeux rouges")
@@ -1169,8 +1269,8 @@ class EditPanel(QWidget):
         return QPoint(x, y)
 
     def _open_treatment(self, title: str, sliders_def: list) -> None:
-        if title == "Gamma":
-            self._open_gamma_treatment()
+        if title == "Luminosité":
+            self._open_luminosite_treatment()
             return
         if title == "Couleurs":
             self._open_couleurs_treatment()
@@ -1200,37 +1300,69 @@ class EditPanel(QWidget):
             self.grid_visibility_changed.emit(False)
 
     def _open_couleurs_treatment(self) -> None:
+        # Si le dialogue est déjà ouvert, le ramener au premier plan
+        if self._active_color_dlg is not None:
+            self._active_color_dlg.raise_()
+            self._active_color_dlg.activateWindow()
+            return
+
         original = copy.copy(self._edit)
         dlg = CouleursTreatmentDialog(self._edit, parent=self)
         dlg.preview.connect(self._on_preview)
         dlg._panel = self
+        self._active_color_dlg = dlg
 
-        if dlg.exec() == QDialog.Accepted:
+        # Pipette : forward du signal vers main_window → visionneuse
+        dlg.wb_pick_requested.connect(self.wb_pick_requested)
+
+        def _on_accepted() -> None:
             self._push_undo("Couleurs")
             new_edit = dlg.get_edit()
             for attr in ("saturation", "color_red", "color_green", "color_blue"):
                 setattr(self._edit, attr, getattr(new_edit, attr))
             self.edits_changed.emit(copy.copy(self._edit))
             self._save("Couleurs")
-        else:
+
+        def _on_rejected() -> None:
             self._edit = original
             self.edits_changed.emit(copy.copy(self._edit))
 
-    def _open_gamma_treatment(self) -> None:
+        def _cleanup() -> None:
+            # Annuler le mode pipette si toujours actif
+            self.wb_pick_requested.emit(False)
+            self._active_color_dlg = None
+
+        dlg.accepted.connect(_on_accepted)
+        dlg.rejected.connect(_on_rejected)
+        dlg.finished.connect(_cleanup)
+
+        dlg.show()
+        dlg.raise_()
+
+    @Slot(int, int, int)
+    def on_wb_pixel_received(self, r: int, g: int, b: int) -> None:
+        """Appelé par main_window quand l'utilisateur a cliqué sur la visionneuse en mode pipette."""
+        if self._active_color_dlg is not None:
+            self._active_color_dlg.apply_wb_pixel(r, g, b)
+            self._active_color_dlg.raise_()
+            self._active_color_dlg.activateWindow()
+
+    def _open_luminosite_treatment(self) -> None:
         original = copy.copy(self._edit)
         photo_path = self._photo.path if self._photo else None
-        dlg = GammaTreatmentDialog(self._edit, photo_path=photo_path, parent=self)
+        dlg = LuminositeTreatmentDialog(self._edit, photo_path=photo_path, parent=self)
         dlg.preview.connect(self._on_preview)
         dlg._panel = self
 
         if dlg.exec() == QDialog.Accepted:
-            self._push_undo("Gamma")
+            self._push_undo("Luminosité")
             new_edit = dlg.get_edit()
+            self._edit.brightness = new_edit.brightness
             self._edit.gamma = new_edit.gamma
             self._edit.gamma_use_curve = new_edit.gamma_use_curve
             self._edit.gamma_curve_points = new_edit.gamma_curve_points
             self.edits_changed.emit(copy.copy(self._edit))
-            self._save("Gamma")
+            self._save("Luminosité")
         else:
             self._edit = original
             self.edits_changed.emit(copy.copy(self._edit))
@@ -1244,6 +1376,8 @@ class EditPanel(QWidget):
         if self._red_eye_active:
             self._btn_red_eye.setChecked(False)
             self._toggle_red_eye_mode(False)
+        if self._active_color_dlg is not None:
+            self._active_color_dlg.reject()   # ferme le dialogue, déclenche _cleanup
         self._photo = photo
         self._edit = self._db.load(photo.path)
         # get_history retourne aussi l'état courant (dernier enregistrement).

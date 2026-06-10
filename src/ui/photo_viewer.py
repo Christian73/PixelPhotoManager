@@ -3,7 +3,7 @@ import logging
 import math
 import os
 
-from PySide6.QtCore import Qt, QUrl, Signal, QPoint, QRectF, QPointF, QSize
+from PySide6.QtCore import Qt, QTimer, QUrl, Signal, QPoint, QRectF, QPointF, QSize
 from PySide6.QtGui import (
     QDesktopServices, QPixmap, QPainter, QKeyEvent, QWheelEvent,
     QMouseEvent, QPen, QColor, QPainterPath, QPolygonF, QIcon,
@@ -54,6 +54,59 @@ def _build_pixmap(photo: PhotoInfo, edit: EditInfo | None) -> "tuple[QPixmap, in
             return pixmap, orig_w, orig_h
     except Exception as e:
         logger.error(f"Erreur chargement photo {photo.path}: {e}")
+        return None
+
+
+def _build_base_image(photo: PhotoInfo) -> "tuple[bytes, int, int] | None":
+    """
+    Charge l'image, applique la correction EXIF et réduit à _PREVIEW_MAX_PX.
+    Retourne (jpeg_bytes, orig_w, orig_h) SANS retouche.
+    Résultat mis en cache dans PhotoViewer._base_cache : évite de relire le fichier
+    complet à chaque mouvement de slider (preview de retouche).
+    """
+    from pathlib import Path as _Path
+    from src.library.exif_reader import VIDEO_EXT
+    if _Path(photo.path).suffix.lower() in VIDEO_EXT:
+        return None
+    try:
+        from PIL import Image, ImageOps
+        with Image.open(photo.path) as img:
+            img = ImageOps.exif_transpose(img)
+            orig_w, orig_h = img.size
+            if max(orig_w, orig_h) > _PREVIEW_MAX_PX:
+                scale = _PREVIEW_MAX_PX / max(orig_w, orig_h)
+                img = img.resize(
+                    (round(orig_w * scale), round(orig_h * scale)), Image.LANCZOS
+                )
+            if img.mode not in ("RGB", "RGBA"):
+                img = img.convert("RGB")
+            buf = io.BytesIO()
+            img.save(buf, format="JPEG", quality=95)
+            return buf.getvalue(), orig_w, orig_h
+    except Exception as e:
+        logger.error("Erreur base image %s: %s", photo.path, e)
+        return None
+
+
+def _apply_edit_to_base(base_bytes: bytes, edit: "EditInfo | None") -> "QPixmap | None":
+    """
+    Applique les retouches sur l'image de base en cache (bytes JPEG 1024px).
+    Aucune lecture disque — remplace _build_pixmap pour les previews.
+    """
+    try:
+        from PIL import Image
+        img = Image.open(io.BytesIO(base_bytes))
+        if edit and edit.is_modified():
+            img = ImageAdjuster.apply_all(img, edit)
+        if img.mode not in ("RGB", "RGBA"):
+            img = img.convert("RGB")
+        buf = io.BytesIO()
+        img.save(buf, format="JPEG", quality=92)
+        pixmap = QPixmap()
+        pixmap.loadFromData(buf.getvalue())
+        return pixmap
+    except Exception as e:
+        logger.error("Erreur apply edit: %s", e)
         return None
 
 
@@ -170,11 +223,13 @@ _EDGE_INDICES = [(0, 1), (1, 2), (2, 3), (3, 0)]
 
 
 class _Canvas(QWidget):
-    zoom_changed           = Signal(float)
-    wheel_navigate         = Signal(int)    # ±1 photo
-    crop_confirmed         = Signal(object) # tuple 8 coords relatives (x0,y0,…,x3,y3)
-    context_menu_requested = Signal(object) # QPoint global
-    red_eye_point_added    = Signal(float, float)  # cx_norm, cy_norm (0-1)
+    zoom_changed                = Signal(float)
+    wheel_navigate              = Signal(int)    # ±1 photo
+    crop_confirmed              = Signal(object) # tuple 8 coords relatives (x0,y0,…,x3,y3)
+    context_menu_requested      = Signal(object) # QPoint global
+    red_eye_point_added         = Signal(float, float)  # cx_norm, cy_norm (0-1)
+    pixel_sampled               = Signal(int, int, int)  # R, G, B — pipette balance des blancs
+    face_context_menu_requested = Signal(object, object) # (FaceInfo, QPoint global)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -194,8 +249,9 @@ class _Canvas(QWidget):
         self._crop_quad_start:   list[QPointF] | None = None
         self._crop_draw_start:   QPointF | None = None
         self._grid_visible = False
-        # Visage mis en surbrillance (clic dans le FacePanel)
-        self._highlighted_face = None
+        # Visage(s) mis en surbrillance — un seul (FacePanel clic) ou tous (bouton "Tous")
+        self._highlighted_face  = None   # FaceInfo unique
+        self._highlighted_faces: list = []  # liste pour le mode "Tous"
         self._orig_w: int = 0
         self._orig_h: int = 0
         self._current_edit = None   # EditInfo courant pour transformer les bbox
@@ -203,8 +259,21 @@ class _Canvas(QWidget):
         self._red_eye_mode: bool = False
         self._red_eye_radius: float = 0.03   # rayon normalisé (0-1) pour le curseur
         self._red_eye_mouse: QPointF | None = None
+        # Mode pipette balance des blancs
+        self._wb_pick_mode: bool = False
         self.setMouseTracking(True)
         self.setFocusPolicy(Qt.NoFocus)
+
+    # ------------------------------------------------------------------ pipette couleur
+
+    def start_color_pick(self) -> None:
+        """Active le mode pipette : prochain clic gauche → pixel_sampled(r, g, b)."""
+        self._wb_pick_mode = True
+        self.setCursor(Qt.CrossCursor)
+
+    def stop_color_pick(self) -> None:
+        self._wb_pick_mode = False
+        self.unsetCursor()
 
     # ------------------------------------------------------------------ zoom
 
@@ -235,8 +304,16 @@ class _Canvas(QWidget):
         self.update()
 
     def set_zoom(self, factor: float) -> None:
-        self._zoom = max(0.1, min(factor, 4.0))
-        self._center()
+        new_zoom = max(0.1, min(factor, 4.0))
+        if self._pixmap and self._zoom > 0:
+            # Zoom centré sur le centre du viewport : préserve le point visible central
+            ratio = new_zoom / self._zoom
+            cx, cy = self.width() / 2, self.height() / 2
+            self._offset = QPointF(
+                cx - (cx - self._offset.x()) * ratio,
+                cy - (cy - self._offset.y()) * ratio,
+            )
+        self._zoom = new_zoom
         self.update()
 
     def _center(self) -> None:
@@ -668,11 +745,17 @@ class _Canvas(QWidget):
         p.drawLine(QPointF(center.x(), center.y() - arm), QPointF(center.x(), center.y() + arm))
 
     def set_highlighted_face(self, face) -> None:
-        self._highlighted_face = face
+        self._highlighted_face  = face
+        self._highlighted_faces = []
         self.update()
 
-    def _face_screen_rect(self) -> "QRectF | None":
-        f = self._highlighted_face
+    def set_highlighted_faces(self, faces: list) -> None:
+        self._highlighted_faces = list(faces)
+        self._highlighted_face  = None
+        self.update()
+
+    def _face_screen_rect(self, face=None) -> "QRectF | None":
+        f = face if face is not None else self._highlighted_face
         if f is None or self._pixmap is None or self._orig_w == 0 or self._orig_h == 0:
             return None
         # bbox stocké dans l'espace de l'image après detected_rotation CW supplémentaire.
@@ -723,16 +806,11 @@ class _Canvas(QWidget):
         h = bh * sy * self._zoom
         return QRectF(x, y, w, h)
 
-    def _draw_face_highlight(self, p: QPainter) -> None:
-        rect = self._face_screen_rect()
-        if rect is None:
-            return
+    def _draw_one_face_rect(self, p: QPainter, rect: "QRectF") -> None:
         p.fillRect(rect, QColor(74, 159, 212, 45))
-        pen = QPen(QColor(74, 159, 212), 2.5)
-        p.setPen(pen)
+        p.setPen(QPen(QColor(74, 159, 212), 2.5))
         p.setBrush(Qt.NoBrush)
         p.drawRect(rect)
-        # Coins renforcés (L-shapes)
         p.setPen(QPen(QColor(130, 200, 255), 3))
         arm = min(rect.width(), rect.height()) * 0.18
         for cx, cy, dx, dy in [
@@ -744,6 +822,15 @@ class _Canvas(QWidget):
             p.drawLine(QPointF(cx, cy), QPointF(cx + dx * arm, cy))
             p.drawLine(QPointF(cx, cy), QPointF(cx, cy + dy * arm))
 
+    def _draw_face_highlight(self, p: QPainter) -> None:
+        faces = self._highlighted_faces or (
+            [self._highlighted_face] if self._highlighted_face is not None else []
+        )
+        for face in faces:
+            rect = self._face_screen_rect(face)
+            if rect is not None:
+                self._draw_one_face_rect(p, rect)
+
     def paintEvent(self, _event) -> None:
         p = QPainter(self)
         p.setRenderHint(QPainter.SmoothPixmapTransform)
@@ -752,7 +839,7 @@ class _Canvas(QWidget):
             pw = int(self._pixmap.width() * self._zoom)
             ph = int(self._pixmap.height() * self._zoom)
             p.drawPixmap(int(self._offset.x()), int(self._offset.y()), pw, ph, self._pixmap)
-            if self._highlighted_face is not None:
+            if self._highlighted_face is not None or self._highlighted_faces:
                 self._draw_face_highlight(p)
             if self._red_eye_mode:
                 self._draw_red_eye_overlay(p)
@@ -857,9 +944,23 @@ class _Canvas(QWidget):
                 self._crop_from_rel(crop_rel)
             self.update()
         else:
-            self.wheel_navigate.emit(-1 if delta > 0 else 1)
+            self.wheel_navigate.emit(1 if delta > 0 else -1)
 
     def mousePressEvent(self, event: QMouseEvent) -> None:
+        if self._wb_pick_mode:
+            if event.button() == Qt.LeftButton and self._pixmap:
+                pos = event.position()
+                ir  = self._img_rect()
+                if ir.contains(pos) and ir.width() > 0 and ir.height() > 0:
+                    px = max(0, min(self._pixmap.width()  - 1,
+                                   int((pos.x() - ir.x()) * self._pixmap.width()  / ir.width())))
+                    py = max(0, min(self._pixmap.height() - 1,
+                                   int((pos.y() - ir.y()) * self._pixmap.height() / ir.height())))
+                    c = self._pixmap.toImage().pixelColor(px, py)
+                    self.pixel_sampled.emit(c.red(), c.green(), c.blue())
+            self._wb_pick_mode = False
+            self.unsetCursor()
+            return
         if self._red_eye_mode:
             if event.button() == Qt.LeftButton and self._pixmap:
                 pos = event.position()
@@ -989,6 +1090,14 @@ class _Canvas(QWidget):
 
     def contextMenuEvent(self, event) -> None:
         if not self._crop_mode and not self._red_eye_mode:
+            faces = self._highlighted_faces or (
+                [self._highlighted_face] if self._highlighted_face is not None else []
+            )
+            for face in faces:
+                rect = self._face_screen_rect(face)
+                if rect is not None and rect.contains(QPointF(event.pos())):
+                    self.face_context_menu_requested.emit(face, event.globalPos())
+                    return
             self.context_menu_requested.emit(event.globalPos())
 
     def resizeEvent(self, event) -> None:
@@ -1007,8 +1116,10 @@ class PhotoViewer(QWidget):
     crop_ready           = Signal(object)  # tuple 8 coords relatives (x0,y0,…,x3,y3)
     save_requested       = Signal(object)  # PhotoInfo
     rename_requested     = Signal(object)  # PhotoInfo
-    delete_requested     = Signal(list)    # list[PhotoInfo]
-    red_eye_point_added  = Signal(float, float)  # cx_norm, cy_norm (0-1)
+    delete_requested            = Signal(list)    # list[PhotoInfo]
+    red_eye_point_added         = Signal(float, float)  # cx_norm, cy_norm (0-1)
+    pixel_sampled               = Signal(int, int, int)  # R, G, B — pipette balance des blancs
+    face_context_menu_requested = Signal(object, object)  # (FaceInfo, QPoint global)
 
     def __init__(self, config=None, parent=None):
         super().__init__(parent)
@@ -1016,6 +1127,15 @@ class PhotoViewer(QWidget):
         self._photo: PhotoInfo | None = None
         self._edit: EditInfo | None = None
         self._db = EditDatabase()
+        # Cache de l'image de base (1024px, sans retouche) pour la photo courante.
+        # Évite de relire le fichier complet à chaque preview de slider.
+        self._base_cache: "tuple[bytes, int, int] | None" = None
+        # Debounce pour les previews de retouche : on ne recharge que 60 ms
+        # après le dernier événement slider (évite les surcharges mémoire).
+        self._preview_timer = QTimer(self)
+        self._preview_timer.setSingleShot(True)
+        self._preview_timer.setInterval(60)
+        self._preview_timer.timeout.connect(self._reload_pixmap)
         self._setup_ui()
         self.setFocusPolicy(Qt.StrongFocus)
 
@@ -1079,6 +1199,8 @@ class PhotoViewer(QWidget):
         self._canvas.crop_confirmed.connect(self._on_crop_confirmed)
         self._canvas.context_menu_requested.connect(self._show_context_menu)
         self._canvas.red_eye_point_added.connect(self.red_eye_point_added)
+        self._canvas.pixel_sampled.connect(self.pixel_sampled)
+        self._canvas.face_context_menu_requested.connect(self.face_context_menu_requested)
         layout.addWidget(self._canvas, stretch=1)
 
         # ---- Pied de page ----
@@ -1088,9 +1210,9 @@ class PhotoViewer(QWidget):
         nav_layout = QHBoxLayout(self._navbar)
         nav_layout.setContentsMargins(16, 6, 16, 6)
 
-        self._btn_prev = QPushButton("◀  Précédente")
+        self._btn_prev = QPushButton("◀  Plus ancienne")
         self._btn_prev.setFixedHeight(36)
-        self._btn_prev.clicked.connect(lambda: self.navigate.emit(-1))
+        self._btn_prev.clicked.connect(lambda: self.navigate.emit(1))
         nav_layout.addWidget(self._btn_prev)
 
         nav_layout.addStretch()
@@ -1152,9 +1274,9 @@ class PhotoViewer(QWidget):
 
         nav_layout.addStretch()
 
-        self._btn_next = QPushButton("Suivante  ▶")
+        self._btn_next = QPushButton("Plus récente  ▶")
         self._btn_next.setFixedHeight(36)
-        self._btn_next.clicked.connect(lambda: self.navigate.emit(1))
+        self._btn_next.clicked.connect(lambda: self.navigate.emit(-1))
         nav_layout.addWidget(self._btn_next)
 
         layout.addWidget(self._navbar)
@@ -1165,6 +1287,8 @@ class PhotoViewer(QWidget):
         return self._photo
 
     def set_photo(self, photo: PhotoInfo, edit: EditInfo | None = None) -> None:
+        self._preview_timer.stop()
+        self._base_cache = None  # invalide le cache pour la nouvelle photo
         self._photo = photo
         is_video = photo.media_type == "video"
         self._edit = None if is_video else (edit or self._db.load(photo.path))
@@ -1175,21 +1299,40 @@ class PhotoViewer(QWidget):
         self._reload_pixmap()
 
     def highlight_face(self, face) -> None:
-        """Encadre le visage sur la photo (appelé depuis main_window)."""
+        """Encadre un visage unique sur la photo (appelé depuis main_window)."""
         self._canvas.set_highlighted_face(face)
+
+    def set_all_highlighted_faces(self, faces: list) -> None:
+        """Encadre tous les visages (mode 'Tous' du FacePanel)."""
+        self._canvas.set_highlighted_faces(faces)
 
     def _reload_pixmap(self) -> None:
         if not self._photo:
             return
-        result = _build_pixmap(self._photo, self._edit)
+        from pathlib import Path as _Path
+        from src.library.exif_reader import VIDEO_EXT
         self._canvas.set_edit(self._edit)
-        if result is None:
+        if _Path(self._photo.path).suffix.lower() in VIDEO_EXT:
+            result = _build_video_pixmap(self._photo.path)
+            if result is None:
+                self._canvas.set_orig_size(0, 0)
+                self._canvas.set_pixmap(None)
+            else:
+                pixmap, orig_w, orig_h = result
+                self._canvas.set_orig_size(orig_w, orig_h)
+                self._canvas.set_pixmap(pixmap)
+            return
+        # Charger l'image de base une seule fois par photo (cache de session)
+        if self._base_cache is None:
+            self._base_cache = _build_base_image(self._photo)
+        if self._base_cache is None:
             self._canvas.set_orig_size(0, 0)
             self._canvas.set_pixmap(None)
-        else:
-            pixmap, orig_w, orig_h = result
-            self._canvas.set_orig_size(orig_w, orig_h)
-            self._canvas.set_pixmap(pixmap)
+            return
+        base_bytes, orig_w, orig_h = self._base_cache
+        pixmap = _apply_edit_to_base(base_bytes, self._edit)
+        self._canvas.set_orig_size(orig_w, orig_h)
+        self._canvas.set_pixmap(pixmap)
 
     def refresh_name(self) -> None:
         if self._photo:
@@ -1197,7 +1340,10 @@ class PhotoViewer(QWidget):
 
     def update_edit(self, edit: EditInfo) -> None:
         self._edit = edit
-        self._reload_pixmap()
+        # Debounce : reporte le rendu de 60 ms pour absorber les rafales de
+        # sliders. Évite d'accumuler des images PIL de 72 Mo en mémoire.
+        self._preview_timer.stop()
+        self._preview_timer.start()
 
     def set_grid_visible(self, visible: bool) -> None:
         self._canvas.set_grid_visible(visible)
@@ -1223,9 +1369,10 @@ class PhotoViewer(QWidget):
         existing = self._edit.crop if self._edit else None
         # Si un crop est déjà appliqué, afficher l'image sans ce crop pour que
         # l'utilisateur puisse repositionner la zone sur l'image complète.
-        if existing and self._photo and self._edit:
+        if existing and self._photo and self._edit and self._base_cache:
             edit_no_crop = EditInfo.from_dict({**self._edit.to_dict(), 'crop': None})
-            pixmap = _build_pixmap(self._photo, edit_no_crop)
+            base_bytes, _, _ = self._base_cache
+            pixmap = _apply_edit_to_base(base_bytes, edit_no_crop)
             if pixmap:
                 self._canvas.set_pixmap(pixmap)
         self._canvas.enter_crop(existing)
@@ -1275,6 +1422,15 @@ class PhotoViewer(QWidget):
 
     def set_red_eye_radius(self, radius: float) -> None:
         self._canvas.set_red_eye_radius(radius)
+
+    # ------------------------------------------------------------------ pipette couleur (balance des blancs)
+
+    def start_color_pick(self) -> None:
+        """Active le mode pipette : prochain clic gauche sur l'image → pixel_sampled(r, g, b)."""
+        self._canvas.start_color_pick()
+
+    def stop_color_pick(self) -> None:
+        self._canvas.stop_color_pick()
 
     # ------------------------------------------------------------------ misc
 
@@ -1363,12 +1519,16 @@ class PhotoViewer(QWidget):
         elif key == Qt.Key_Return or key == Qt.Key_Enter:
             if self._canvas._crop_mode:
                 self.confirm_crop()
-        elif key in (Qt.Key_Left, Qt.Key_Up):
+        elif key in (Qt.Key_Right, Qt.Key_Up):
             if not self._canvas._crop_mode and not self._canvas._red_eye_mode:
-                self.navigate.emit(-1)
-        elif key in (Qt.Key_Right, Qt.Key_Down):
+                self.navigate.emit(-1)   # plus récente (droite/haut = vers le haut de la liste)
+        elif key in (Qt.Key_Left, Qt.Key_Down):
             if not self._canvas._crop_mode and not self._canvas._red_eye_mode:
-                self.navigate.emit(1)
+                self.navigate.emit(1)    # plus ancienne (gauche/bas = vers le bas de la liste)
+        elif key == Qt.Key_Delete:
+            photo = self.current_photo()
+            if photo and not self._canvas._crop_mode and not self._canvas._red_eye_mode:
+                self.delete_requested.emit([photo])
         elif key == Qt.Key_0:
             self.zoom_fit()
         elif key == Qt.Key_1:

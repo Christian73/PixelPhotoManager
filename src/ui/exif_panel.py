@@ -1,13 +1,16 @@
 """Panneau latéral affichant les métadonnées EXIF d'une photo."""
 
+import io
 import logging
 import os
 from datetime import datetime
 from pathlib import Path
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QDateTime, QThread, Qt, Signal, Slot
 from PySide6.QtWidgets import (
-    QFrame, QHBoxLayout, QLabel, QScrollArea,
+    QCheckBox, QDateTimeEdit, QDialog, QDialogButtonBox,
+    QFormLayout, QFrame, QHBoxLayout, QLabel, QLineEdit,
+    QMessageBox, QPushButton, QScrollArea,
     QSizePolicy, QVBoxLayout, QWidget,
 )
 
@@ -313,6 +316,30 @@ def _fmt_size(n: int) -> str:
     return f"{n / 1024 ** 3:.1f} Go"
 
 
+def _set_file_dates(path: str, dt: datetime) -> None:
+    """Met à jour mtime + date de création Windows (via l'API Win32 SetFileTime)."""
+    ts = dt.timestamp()
+    os.utime(path, (ts, ts))
+    try:
+        import ctypes
+        import ctypes.wintypes
+        _EPOCH = datetime(1601, 1, 1)
+        delta_ns100 = int((dt - _EPOCH).total_seconds() * 10_000_000)
+        low  = delta_ns100 & 0xFFFF_FFFF
+        high = (delta_ns100 >> 32) & 0xFFFF_FFFF
+        ft = ctypes.wintypes.FILETIME(low, high)
+        handle = ctypes.windll.kernel32.CreateFileW(
+            path, 0x4000_0000, 0, None, 3, 0x80, None,
+        )
+        if handle and handle != ctypes.c_void_p(-1).value:
+            ctypes.windll.kernel32.SetFileTime(
+                handle, ctypes.byref(ft), None, ctypes.byref(ft),
+            )
+            ctypes.windll.kernel32.CloseHandle(handle)
+    except Exception as e:
+        logger.debug("_set_file_dates Win32: %s", e)
+
+
 # ---------------------------------------------------------------------------
 # Lecture EXIF robuste (JPEG + TIFF + WebP + PNG)
 
@@ -365,14 +392,227 @@ def _read_exif(img) -> dict:
 
 
 # ---------------------------------------------------------------------------
+# Dialogue d'édition EXIF
+
+class ExifEditDialog(QDialog):
+    """Dialogue permettant de modifier les métadonnées EXIF d'un fichier image."""
+
+    def __init__(self, photo_path: str, parent=None) -> None:
+        super().__init__(parent)
+        self._photo_path = photo_path
+        self._setup_ui()
+        self._load_values()
+
+    def _setup_ui(self) -> None:
+        self.setWindowTitle("Modifier les métadonnées EXIF")
+        self.setMinimumWidth(460)
+        layout = QVBoxLayout(self)
+        layout.setSpacing(12)
+
+        warn = QLabel("⚠  Ces modifications écrivent directement dans le fichier image.")
+        warn.setStyleSheet("color: #f0a800; font-size: 11px; padding: 4px 0;")
+        layout.addWidget(warn)
+
+        form = QFormLayout()
+        form.setSpacing(10)
+        form.setLabelAlignment(Qt.AlignRight | Qt.AlignVCenter)
+
+        self._dt_edit = QDateTimeEdit()
+        self._dt_edit.setDisplayFormat("dd/MM/yyyy  HH:mm:ss")
+        self._dt_edit.setCalendarPopup(True)
+        form.addRow("Date de prise de vue :", self._dt_edit)
+
+        self._desc_edit = QLineEdit()
+        self._desc_edit.setPlaceholderText("Description de l'image")
+        form.addRow("Description :", self._desc_edit)
+
+        self._artist_edit = QLineEdit()
+        self._artist_edit.setPlaceholderText("Photographe / auteur")
+        form.addRow("Artiste :", self._artist_edit)
+
+        self._copyright_edit = QLineEdit()
+        self._copyright_edit.setPlaceholderText("© Auteur 2024")
+        form.addRow("Copyright :", self._copyright_edit)
+
+        layout.addLayout(form)
+
+        self._cb_file_date = QCheckBox(
+            "Mettre à jour aussi la date du fichier (mtime + date de création)"
+        )
+        self._cb_file_date.setChecked(True)
+        layout.addWidget(self._cb_file_date)
+
+        btns = QDialogButtonBox(QDialogButtonBox.Cancel | QDialogButtonBox.Save)
+        btns.button(QDialogButtonBox.Save).setText("Enregistrer")
+        btns.button(QDialogButtonBox.Cancel).setText("Annuler")
+        btns.accepted.connect(self._on_save)
+        btns.rejected.connect(self.reject)
+        layout.addWidget(btns)
+
+    def _load_values(self) -> None:
+        try:
+            from PIL import Image
+            with Image.open(self._photo_path) as img:
+                exif_data = _read_exif(img)
+        except Exception:
+            exif_data = {}
+
+        dt_str = exif_data.get("DateTimeOriginal") or exif_data.get("DateTime", "")
+        if dt_str:
+            try:
+                dt = datetime.strptime(str(dt_str), "%Y:%m:%d %H:%M:%S")
+                self._dt_edit.setDateTime(
+                    QDateTime(dt.year, dt.month, dt.day, dt.hour, dt.minute, dt.second)
+                )
+            except Exception:
+                self._dt_edit.setDateTime(QDateTime.currentDateTime())
+        else:
+            self._dt_edit.setDateTime(QDateTime.currentDateTime())
+
+        self._desc_edit.setText(str(exif_data.get("ImageDescription") or "").strip())
+        self._artist_edit.setText(str(exif_data.get("Artist") or "").strip())
+        self._copyright_edit.setText(str(exif_data.get("Copyright") or "").strip())
+
+    def _on_save(self) -> None:
+        try:
+            self._write_exif()
+            self.accept()
+        except Exception as e:
+            QMessageBox.critical(self, "Erreur", f"Impossible d'écrire les métadonnées :\n{e}")
+
+    def _write_exif(self) -> None:
+        qdt = self._dt_edit.dateTime()
+        new_dt = datetime(
+            qdt.date().year(), qdt.date().month(), qdt.date().day(),
+            qdt.time().hour(), qdt.time().minute(), qdt.time().second(),
+        )
+        dt_str = new_dt.strftime("%Y:%m:%d %H:%M:%S")
+
+        from PIL import Image
+        with Image.open(self._photo_path) as img:
+            fmt = (img.format or "JPEG").upper()
+            exif = img.getexif()
+
+            exif[0x0132] = dt_str                   # DateTime (IFD principal)
+            exif_ifd = exif.get_ifd(0x8769)
+            exif_ifd[0x9003] = dt_str               # DateTimeOriginal
+            exif_ifd[0x9004] = dt_str               # DateTimeDigitized
+
+            desc = self._desc_edit.text().strip()
+            if desc:
+                exif[0x010E] = desc
+            elif 0x010E in exif:
+                del exif[0x010E]
+
+            artist = self._artist_edit.text().strip()
+            if artist:
+                exif[0x013B] = artist
+            elif 0x013B in exif:
+                del exif[0x013B]
+
+            copyright_ = self._copyright_edit.text().strip()
+            if copyright_:
+                exif[0x8298] = copyright_
+            elif 0x8298 in exif:
+                del exif[0x8298]
+
+            save_kwargs: dict = {"exif": exif.tobytes()}
+            if fmt in ("JPEG", "JPG"):
+                save_kwargs["quality"] = "keep"
+
+            buf = io.BytesIO()
+            img.save(buf, format=fmt, **save_kwargs)
+
+        buf.seek(0)
+        with open(self._photo_path, "wb") as f:
+            f.write(buf.read())
+
+        if self._cb_file_date.isChecked():
+            _set_file_dates(self._photo_path, new_dt)
+
+
+# ---------------------------------------------------------------------------
+# Thread de chargement des données EXIF
+
+class _ExifDataLoader(QThread):
+    """Lit les métadonnées EXIF + infos fichier dans un thread secondaire."""
+
+    data_ready = Signal(str, object)   # (photo_path, data_dict | None)
+
+    def __init__(self, photo_path: str, parent=None) -> None:
+        super().__init__(parent)
+        self._path = photo_path
+
+    def run(self) -> None:
+        path = self._path
+        try:
+            from src.library.exif_reader import VIDEO_EXT
+            if Path(path).suffix.lower() in VIDEO_EXT:
+                self.data_ready.emit(path, self._load_video(path))
+                return
+            self.data_ready.emit(path, self._load_image(path))
+        except Exception as e:
+            logger.debug("_ExifDataLoader: %s — %s", path, e)
+            self.data_ready.emit(path, None)
+
+    @staticmethod
+    def _load_image(path: str) -> dict:
+        from PIL import Image, ImageOps
+        with Image.open(path) as img:
+            fmt    = img.format or Path(path).suffix.upper().lstrip(".")
+            mode   = img.mode
+            try:
+                img = ImageOps.exif_transpose(img)
+            except Exception:
+                pass
+            w, h   = img.size
+            exif   = _read_exif(img)
+        stat = os.stat(path)
+        return {
+            "type": "image",
+            "format": fmt, "mode": mode, "width": w, "height": h,
+            "size": stat.st_size, "mtime": stat.st_mtime,
+            "exif": exif,
+        }
+
+    @staticmethod
+    def _load_video(path: str) -> dict:
+        data: dict = {"type": "video"}
+        stat = os.stat(path)
+        data["size"]  = stat.st_size
+        data["mtime"] = stat.st_mtime
+        try:
+            import cv2
+            cap = cv2.VideoCapture(path)
+            if cap.isOpened():
+                data["width"]   = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+                data["height"]  = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+                data["fps"]     = cap.get(cv2.CAP_PROP_FPS)
+                fc              = cap.get(cv2.CAP_PROP_FRAME_COUNT)
+                fps             = data["fps"]
+                data["duration"] = fc / fps if fps > 0 else 0.0
+                codec_raw       = int(cap.get(cv2.CAP_PROP_FOURCC))
+                data["codec"]   = "".join(chr((codec_raw >> (8 * i)) & 0xFF) for i in range(4))
+                cap.release()
+        except Exception:
+            pass
+        return data
+
+
+# ---------------------------------------------------------------------------
 # Widget
 
 class ExifPanel(QWidget):
     """Panneau scrollable affichant les métadonnées EXIF d'une photo."""
 
+    photo_saved = Signal(str)  # émis après une sauvegarde EXIF réussie (path)
+
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
         self.setMinimumWidth(260)
+        self._current_path: str = ""
+        self._is_video: bool = False
+        self._loader: _ExifDataLoader | None = None
         self._setup_ui()
 
     # ------------------------------------------------------------------ UI
@@ -403,18 +643,68 @@ class ExifPanel(QWidget):
         self._rows_layout.addStretch()
 
         scroll.setWidget(self._content)
-        root.addWidget(scroll)
+        root.addWidget(scroll, stretch=1)
+
+        self._btn_edit = QPushButton("✎  Modifier les métadonnées…")
+        self._btn_edit.setFixedHeight(42)
+        self._btn_edit.setEnabled(False)
+        self._btn_edit.setStyleSheet(
+            "QPushButton {"
+            "  background: #2d5a8e; color: #fff; font-size: 13px; border: none;"
+            "}"
+            "QPushButton:hover { background: #3a6eaa; }"
+            "QPushButton:pressed { background: #1e4070; }"
+            "QPushButton:disabled { background: #252525; color: #555; }"
+        )
+        self._btn_edit.clicked.connect(self._on_edit_clicked)
+        root.addWidget(self._btn_edit)
 
     # ------------------------------------------------------------------ API publique
 
     def set_photo(self, photo_path: str) -> None:
+        from src.library.exif_reader import VIDEO_EXT
+        self._current_path = photo_path
+        self._is_video = Path(photo_path).suffix.lower() in VIDEO_EXT
+        self._btn_edit.setEnabled(not self._is_video)
         self._clear()
-        self._populate(photo_path)
+        # Annuler le chargement précédent si encore en cours
+        if self._loader and self._loader.isRunning():
+            self._loader.data_ready.disconnect()
+        self._loader = _ExifDataLoader(photo_path, self)
+        self._loader.data_ready.connect(self._on_data_ready)
+        self._loader.start()
+
+    @Slot(str, object)
+    def _on_data_ready(self, path: str, data: object) -> None:
+        if path != self._current_path:
+            return  # navigation entre-temps → résultat obsolète
+        if data is None:
+            self._add_row("", "Impossible de lire les métadonnées", error=True)
+            return
+        if data.get("type") == "video":
+            self._populate_from_video_data(data, path)
+        else:
+            self._populate_from_image_data(data, path)
 
     def clear(self) -> None:
+        self._current_path = ""
+        self._is_video = False
+        self._btn_edit.setEnabled(False)
         self._clear()
 
     # ------------------------------------------------------------------ private
+
+    def _on_edit_clicked(self) -> None:
+        if not self._current_path or self._is_video:
+            return
+        dlg = ExifEditDialog(self._current_path, self)
+        if dlg.exec() == QDialog.Accepted:
+            self._clear()
+            # Recharger via le thread après édition
+            self._loader = _ExifDataLoader(self._current_path, self)
+            self._loader.data_ready.connect(self._on_data_ready)
+            self._loader.start()
+            self.photo_saved.emit(self._current_path)
 
     def _clear(self) -> None:
         while self._rows_layout.count() > 1:
@@ -423,42 +713,16 @@ class ExifPanel(QWidget):
             if w:
                 w.deleteLater()
 
-    def _populate(self, photo_path: str) -> None:
-        from src.library.exif_reader import VIDEO_EXT
-        if Path(photo_path).suffix.lower() in VIDEO_EXT:
-            self._populate_video(photo_path)
-            return
-        try:
-            from PIL import Image, ImageOps
-            with Image.open(photo_path) as img:
-                img_format = img.format or Path(photo_path).suffix.upper().lstrip(".")
-                img_mode   = img.mode
-                try:
-                    img = ImageOps.exif_transpose(img)
-                except Exception:
-                    pass
-                width, height = img.size
-                exif = _read_exif(img)
-        except Exception as e:
-            logger.debug("ExifPanel: impossible de lire %s — %s", photo_path, e)
-            self._add_row("", "Impossible de lire les métadonnées", error=True)
-            return
+    def _populate_from_image_data(self, data: dict, photo_path: str) -> None:
+        self._add_section("Fichier")
+        self._add_row("Nom",          Path(photo_path).name)
+        self._add_row("Format",       data["format"])
+        self._add_row("Mode couleur", data["mode"])
+        self._add_row("Dimensions",   f"{data['width']} × {data['height']} px")
+        self._add_row("Taille",       _fmt_size(data["size"]))
+        self._add_row("Modifié",      datetime.fromtimestamp(data["mtime"]).strftime("%d/%m/%Y  %H:%M"))
 
-        # Fichier
-        try:
-            stat = os.stat(photo_path)
-            self._add_section("Fichier")
-            self._add_row("Nom",          Path(photo_path).name)
-            self._add_row("Format",       img_format)
-            self._add_row("Mode couleur", img_mode)
-            self._add_row("Dimensions",   f"{width} × {height} px")
-            self._add_row("Taille",       _fmt_size(stat.st_size))
-            mtime = datetime.fromtimestamp(stat.st_mtime)
-            self._add_row("Modifié",      mtime.strftime("%d/%m/%Y  %H:%M"))
-        except OSError:
-            pass
-
-        # Groupes curated
+        exif = data["exif"]
         for group_name, tags in _CURATED_GROUPS:
             rows = [
                 (label, _fmt_value(tag, exif[tag]))
@@ -470,14 +734,12 @@ class ExifPanel(QWidget):
                 for label, val in rows:
                     self._add_row(label, val)
 
-        # GPS
         if "GPSInfo" in exif:
             try:
                 self._populate_gps(exif["GPSInfo"])
             except Exception:
                 pass
 
-        # Tags supplémentaires
         extra = sorted(
             (tag, _fmt_value(tag, val))
             for tag, val in exif.items()
@@ -489,6 +751,28 @@ class ExifPanel(QWidget):
             self._add_section("Autres")
             for tag, val in extra:
                 self._add_row(tag, val)
+
+    def _populate_from_video_data(self, data: dict, video_path: str) -> None:
+        self._add_section("Fichier")
+        self._add_row("Nom",      Path(video_path).name)
+        self._add_row("Format",   Path(video_path).suffix.upper().lstrip("."))
+        self._add_row("Taille",   _fmt_size(data["size"]))
+        self._add_row("Modifié",  datetime.fromtimestamp(data["mtime"]).strftime("%d/%m/%Y  %H:%M"))
+
+        if data.get("width") and data.get("height"):
+            self._add_section("Vidéo")
+            self._add_row("Résolution", f"{data['width']} × {data['height']} px")
+            fps = data.get("fps", 0)
+            if fps:
+                self._add_row("Images/s", f"{fps:.3f}")
+            dur = data.get("duration", 0)
+            if dur:
+                hh, rem = divmod(int(dur), 3600)
+                mm, ss  = divmod(rem, 60)
+                self._add_row("Durée", f"{hh}:{mm:02d}:{ss:02d}" if hh else f"{mm}:{ss:02d}")
+            codec = data.get("codec", "").strip()
+            if codec:
+                self._add_row("Codec", codec)
 
     def _populate_gps(self, gps_info) -> None:
         from PIL import ExifTags
@@ -561,49 +845,6 @@ class ExifPanel(QWidget):
                 self._add_row("Précision GPS", f"±{float(hdop):.1f} m")
             except Exception:
                 pass
-
-    def _populate_video(self, video_path: str) -> None:
-        try:
-            stat = os.stat(video_path)
-            self._add_section("Fichier")
-            self._add_row("Nom",      Path(video_path).name)
-            self._add_row("Format",   Path(video_path).suffix.upper().lstrip("."))
-            self._add_row("Taille",   _fmt_size(stat.st_size))
-            mtime = datetime.fromtimestamp(stat.st_mtime)
-            self._add_row("Modifié", mtime.strftime("%d/%m/%Y  %H:%M"))
-        except OSError:
-            pass
-
-        try:
-            import cv2
-            cap = cv2.VideoCapture(video_path)
-            if cap.isOpened():
-                w   = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-                h   = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-                fps = cap.get(cv2.CAP_PROP_FPS)
-                fc  = cap.get(cv2.CAP_PROP_FRAME_COUNT)
-                codec_raw = int(cap.get(cv2.CAP_PROP_FOURCC))
-                cap.release()
-                self._add_section("Vidéo")
-                if w and h:
-                    self._add_row("Résolution", f"{w} × {h} px")
-                if fps > 0:
-                    self._add_row("Images/s", f"{fps:.3f}")
-                if fps > 0 and fc > 0:
-                    dur = fc / fps
-                    hh, rem = divmod(int(dur), 3600)
-                    mm, ss  = divmod(rem, 60)
-                    if hh:
-                        self._add_row("Durée", f"{hh}:{mm:02d}:{ss:02d}")
-                    else:
-                        self._add_row("Durée", f"{mm}:{ss:02d}")
-                    self._add_row("Nb images", f"{int(fc):,}".replace(",", " "))
-                if codec_raw:
-                    codec = "".join(chr((codec_raw >> 8 * i) & 0xFF) for i in range(4)).strip()
-                    if codec:
-                        self._add_row("Codec", codec)
-        except Exception as e:
-            logger.debug("ExifPanel vidéo %s: %s", video_path, e)
 
     # ------------------------------------------------------------------ widgets
 

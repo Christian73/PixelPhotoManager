@@ -1,6 +1,5 @@
 import logging
 import os
-import time
 from pathlib import Path
 
 from PySide6.QtCore import QThread, Signal
@@ -25,11 +24,14 @@ def _is_hidden(path: str) -> bool:
         return False
 
 
+_BATCH_SIZE = 50   # photos regroupées par émission pour éviter de saturer l'event loop
+
+
 class ScanThread(QThread):
-    photo_discovered = Signal(object)
+    photos_batch     = Signal(list)   # list[PhotoInfo] — nouvelles/modifiées, par lots
     photos_removed   = Signal(list)   # list[str] — chemins supprimés du catalogue
-    progress = Signal(int, str)
-    finished = Signal(int)
+    progress         = Signal(int, str)
+    finished         = Signal(int)
 
     def __init__(
         self,
@@ -46,6 +48,8 @@ class ScanThread(QThread):
         self._force = force
 
     def run(self) -> None:
+        from src.core.thread_journal import journal
+        t0 = journal.start("ScanThread", f"Scan de {len(self._folders)} dossier(s)", force=self._force)
         self.setPriority(QThread.LowestPriority)
         total = 0
         processed = 0
@@ -59,6 +63,7 @@ class ScanThread(QThread):
                     d for d in dirs
                     if not _is_hidden(os.path.join(root, d))
                     and d != "Originals"
+                    and not d.endswith("_assets")
                 ]
                 for fname in files:
                     fpath = os.path.join(root, fname)
@@ -66,11 +71,14 @@ class ScanThread(QThread):
                         all_files.append(os.path.normpath(fpath))
 
         grand_total = len(all_files)
+        journal.step("ScanThread", f"{grand_total} fichier(s) découvert(s)", t0)
 
         known: dict[str, float] = {}
         if not self._force:
             for folder in self._folders:
                 known.update(self._catalog.get_known_mtimes(folder))
+
+        batch: list = []
 
         for filepath in all_files:
             if self._stop_flag:
@@ -81,7 +89,7 @@ class ScanThread(QThread):
                 existing_mtime = known.get(filepath)
                 if existing_mtime is not None and abs(existing_mtime - mtime) < 1.0:
                     processed += 1
-                    if processed % 50 == 0:
+                    if processed % 500 == 0:
                         pct = int(processed * 100 / grand_total) if grand_total else 100
                         self.progress.emit(pct, filepath)
                     continue
@@ -110,16 +118,20 @@ class ScanThread(QThread):
                 )
                 photo = self._catalog.add_or_update_photo(photo)
                 total += 1
-                self.photo_discovered.emit(photo)
-                # Céder le CPU au thread UI après chaque lecture EXIF (opération lourde)
-                time.sleep(0.005)
+                batch.append(photo)
+                if len(batch) >= _BATCH_SIZE:
+                    self.photos_batch.emit(batch)
+                    batch = []
             except Exception as e:
                 logger.error(f"Erreur scan {filepath}: {e}", exc_info=True)
 
             processed += 1
-            if processed % 50 == 0:
+            if processed % 500 == 0:
                 pct = int(processed * 100 / grand_total) if grand_total else 100
                 self.progress.emit(pct, filepath)
+
+        if batch and not self._stop_flag:
+            self.photos_batch.emit(batch)
 
         # Nettoyage des entrées fantômes (fichiers déplacés ou supprimés hors de l'app)
         # Seulement si le scan n'a pas été interrompu (stop_flag) pour éviter les
@@ -137,6 +149,9 @@ class ScanThread(QThread):
                 self._thumb_cache.invalidate_many(removed)
                 self.photos_removed.emit(removed)
 
+        journal.end("ScanThread",
+                    f"{total} nouvelle(s) photo(s), {len(removed) if not self._stop_flag else '?'} supprimée(s)",
+                    t0)
         self.finished.emit(total)
 
     def stop(self) -> None:

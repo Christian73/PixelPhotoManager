@@ -76,9 +76,13 @@ class ClusterThread(QThread):
         self._face_db = face_db
 
     def run(self) -> None:
+        from src.core.thread_journal import journal
+        t0 = journal.start("ClusterThread", "Clustering des visages")
         try:
             n = _run_clustering(self._face_db)
+            journal.end("ClusterThread", f"{n} groupe(s) formé(s)", t0)
             self.finished.emit(n)
         except Exception as exc:
+            journal.error("ClusterThread", str(exc), t0)
             logger.warning("ClusterThread erreur: %s", exc)
             self.error.emit(str(exc))
