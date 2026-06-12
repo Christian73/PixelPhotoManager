@@ -3,7 +3,7 @@ import logging
 import math
 import os
 
-from PySide6.QtCore import Qt, QTimer, QUrl, Signal, QPoint, QRectF, QPointF, QSize
+from PySide6.QtCore import Qt, QThread, QTimer, QUrl, Signal, Slot, QPoint, QRectF, QPointF, QSize
 from PySide6.QtGui import (
     QDesktopServices, QPixmap, QPainter, QKeyEvent, QWheelEvent,
     QMouseEvent, QPen, QColor, QPainterPath, QPolygonF, QIcon,

@@ -77,9 +77,13 @@ def _dec(blob: bytes) -> list[float]:
 
 
 def _centroid(embeddings: list[list[float]]) -> list[float]:
-    n = len(embeddings)
-    dim = len(embeddings[0])
-    return [sum(e[d] for e in embeddings) / n for d in range(dim)]
+    try:
+        import numpy as np
+        return np.mean(np.array(embeddings, dtype=np.float32), axis=0).tolist()
+    except ImportError:
+        n = len(embeddings)
+        dim = len(embeddings[0])
+        return [sum(e[d] for e in embeddings) / n for d in range(dim)]
 
 
 class FaceDatabase:
@@ -385,52 +389,53 @@ class FaceDatabase:
     def get_all_cluster_centroids(
         self, cluster_ids: list[int]
     ) -> dict[int, list[float]]:
-        """Retourne {cluster_id: centroïde} pour tous les clusters demandés, en une seule query."""
+        """Retourne {cluster_id: centroïde} pour tous les clusters demandés.
+        Requête par lots de 500 pour respecter la limite SQLite des variables (999)."""
         if not cluster_ids:
             return {}
-        placeholders = ",".join("?" * len(cluster_ids))
+        _CHUNK = 500
+        by_cluster: dict[int, list] = {}
         with self._lock:
             conn = self._conn()
             try:
-                rows = conn.execute(
-                    f"SELECT cluster_id, embedding FROM faces"
-                    f" WHERE cluster_id IN ({placeholders}) AND embedding IS NOT NULL",
-                    cluster_ids,
-                ).fetchall()
+                for i in range(0, len(cluster_ids), _CHUNK):
+                    chunk = cluster_ids[i:i + _CHUNK]
+                    ph = ",".join("?" * len(chunk))
+                    rows = conn.execute(
+                        f"SELECT cluster_id, embedding FROM faces"
+                        f" WHERE cluster_id IN ({ph}) AND embedding IS NOT NULL",
+                        chunk,
+                    ).fetchall()
+                    for cid, blob in rows:
+                        by_cluster.setdefault(cid, []).append(_dec(blob))
             finally:
                 conn.close()
-        by_cluster: dict[int, list] = {}
-        for cid, blob in rows:
-            by_cluster.setdefault(cid, []).append(_dec(blob))
-        return {
-            cid: _centroid(embs)
-            for cid, embs in by_cluster.items()
-        }
+        return {cid: _centroid(embs) for cid, embs in by_cluster.items()}
 
     def get_all_person_centroids(
         self, person_ids: list[int]
     ) -> dict[int, list[float]]:
-        """Retourne {person_id: centroïde} pour toutes les personnes demandées, en une seule query."""
+        """Retourne {person_id: centroïde} pour toutes les personnes demandées."""
         if not person_ids:
             return {}
-        placeholders = ",".join("?" * len(person_ids))
+        _CHUNK = 500
+        by_person: dict[int, list] = {}
         with self._lock:
             conn = self._conn()
             try:
-                rows = conn.execute(
-                    f"SELECT person_id, embedding FROM faces"
-                    f" WHERE person_id IN ({placeholders}) AND embedding IS NOT NULL",
-                    person_ids,
-                ).fetchall()
+                for i in range(0, len(person_ids), _CHUNK):
+                    chunk = person_ids[i:i + _CHUNK]
+                    ph = ",".join("?" * len(chunk))
+                    rows = conn.execute(
+                        f"SELECT person_id, embedding FROM faces"
+                        f" WHERE person_id IN ({ph}) AND embedding IS NOT NULL",
+                        chunk,
+                    ).fetchall()
+                    for pid, blob in rows:
+                        by_person.setdefault(pid, []).append(_dec(blob))
             finally:
                 conn.close()
-        by_person: dict[int, list] = {}
-        for pid, blob in rows:
-            by_person.setdefault(pid, []).append(_dec(blob))
-        return {
-            pid: _centroid(embs)
-            for pid, embs in by_person.items()
-        }
+        return {pid: _centroid(embs) for pid, embs in by_person.items()}
 
     def get_all_person_cluster_centroids(
         self, person_ids: list[int]
@@ -445,22 +450,24 @@ class FaceDatabase:
         """
         if not person_ids:
             return {}
-        placeholders = ",".join("?" * len(person_ids))
+        _CHUNK = 500
+        by_pc: dict[tuple, list] = {}
         with self._lock:
             conn = self._conn()
             try:
-                rows = conn.execute(
-                    f"SELECT person_id, cluster_id, embedding FROM faces"
-                    f" WHERE person_id IN ({placeholders})"
-                    f"   AND embedding IS NOT NULL"
-                    f"   AND cluster_id IS NOT NULL",
-                    person_ids,
-                ).fetchall()
+                for i in range(0, len(person_ids), _CHUNK):
+                    chunk = person_ids[i:i + _CHUNK]
+                    ph = ",".join("?" * len(chunk))
+                    rows = conn.execute(
+                        f"SELECT person_id, cluster_id, embedding FROM faces"
+                        f" WHERE person_id IN ({ph})"
+                        f"   AND embedding IS NOT NULL AND cluster_id IS NOT NULL",
+                        chunk,
+                    ).fetchall()
+                    for pid, cid, blob in rows:
+                        by_pc.setdefault((pid, cid), []).append(_dec(blob))
             finally:
                 conn.close()
-        by_pc: dict[tuple, list] = {}
-        for pid, cid, blob in rows:
-            by_pc.setdefault((pid, cid), []).append(_dec(blob))
         result: dict[int, dict[int, list[float]]] = {}
         for (pid, cid), embs in by_pc.items():
             result.setdefault(pid, {})[cid] = _centroid(embs)
@@ -479,6 +486,31 @@ class FaceDatabase:
             finally:
                 conn.close()
         return row[0] if row else None
+
+    def get_cluster_persons(self, cluster_ids: list[int]) -> dict[int, int]:
+        """Retourne {cluster_id: person_id} pour les clusters ayant au moins une face nommée.
+        Utile pour afficher le nom d'une personne sur des faces ré-indexées après assignation."""
+        if not cluster_ids:
+            return {}
+        _CHUNK = 500
+        result: dict[int, int] = {}
+        with self._lock:
+            conn = self._conn()
+            try:
+                for i in range(0, len(cluster_ids), _CHUNK):
+                    chunk = cluster_ids[i:i + _CHUNK]
+                    ph = ",".join("?" * len(chunk))
+                    rows = conn.execute(
+                        f"SELECT cluster_id, person_id FROM faces"
+                        f" WHERE cluster_id IN ({ph})"
+                        f"   AND person_id IS NOT NULL"
+                        f" GROUP BY cluster_id",
+                        chunk,
+                    ).fetchall()
+                    result.update({r[0]: r[1] for r in rows})
+            finally:
+                conn.close()
+        return result
 
     def get_all_representative_faces(
         self, cluster_ids: list[int]

@@ -10,7 +10,7 @@ from PySide6.QtGui import QAction, QKeySequence
 from PySide6.QtWidgets import (
     QApplication, QButtonGroup, QCheckBox, QDialog, QDialogButtonBox, QGroupBox,
     QMainWindow, QWidget, QHBoxLayout, QVBoxLayout,
-    QRadioButton, QSplitter, QStackedWidget, QStatusBar, QToolBar,
+    QRadioButton, QScrollBar, QSplitter, QStackedWidget, QStatusBar, QToolBar,
     QLineEdit, QSlider, QLabel, QPushButton,
     QFileDialog, QInputDialog, QMessageBox, QSizePolicy,
 )
@@ -446,6 +446,11 @@ class MainWindow(QMainWindow):
 
         # Aide
         m_help = mb.addMenu("Aide")
+        act_help = QAction("Aide…", self)
+        act_help.setShortcut(QKeySequence("F1"))
+        act_help.triggered.connect(self._show_help)
+        m_help.addAction(act_help)
+        m_help.addSeparator()
         act_about = QAction("À propos", self)
         act_about.triggered.connect(self._show_about)
         m_help.addAction(act_about)
@@ -559,7 +564,18 @@ class MainWindow(QMainWindow):
         _grid_vbox.setContentsMargins(0, 0, 0, 0)
         _grid_vbox.setSpacing(0)
         _grid_vbox.addWidget(self._grid_nav_bar)
-        _grid_vbox.addWidget(self._grid)
+
+        # Rangée grille + ascenseur ruban (affiché uniquement en mode chronologie)
+        _grid_row = QWidget()
+        _grid_hbox = QHBoxLayout(_grid_row)
+        _grid_hbox.setContentsMargins(0, 0, 0, 0)
+        _grid_hbox.setSpacing(0)
+        _grid_hbox.addWidget(self._grid)
+        self._ribbon_scroll = QScrollBar(Qt.Vertical)
+        _grid_hbox.addWidget(self._ribbon_scroll)
+        _grid_vbox.addWidget(_grid_row)
+
+        self._grid.bind_ribbon_nav_bar(self._ribbon_scroll)
         self._stack.addWidget(_grid_container)
 
         # Index 1 — Visionneuse (avec panneau Visages rétractable à gauche)
@@ -961,18 +977,24 @@ class MainWindow(QMainWindow):
         dlg.cluster_assigned.connect(self._on_cluster_assigned)
         dlg.exec()
 
+    def _refresh_face_panel_if_visible(self) -> None:
+        if self._face_panel.isVisible():
+            self._face_panel.refresh()
+
     @Slot(int, str)
     def _on_cluster_named(self, cluster_id: int, name: str) -> None:
         person = self._catalog.create_person(name)
         self._face_db.assign_person_to_cluster(cluster_id, person.id)
         self._refresh_persons()
-        self._face_cluster_grid.refresh()
+        self._face_cluster_grid.remove_clusters([cluster_id])
+        self._refresh_face_panel_if_visible()
 
     @Slot(int, int)
     def _on_cluster_assigned(self, cluster_id: int, person_id: int) -> None:
         self._face_db.assign_person_to_cluster(cluster_id, person_id)
         self._refresh_persons()
-        self._face_cluster_grid.refresh()
+        self._face_cluster_grid.remove_clusters([cluster_id])
+        self._refresh_face_panel_if_visible()
 
     @Slot(list, str)
     def _on_clusters_named(self, cluster_ids: list, name: str) -> None:
@@ -980,18 +1002,20 @@ class MainWindow(QMainWindow):
         for cid in cluster_ids:
             self._face_db.assign_person_to_cluster(cid, person.id)
         self._refresh_persons()
-        self._face_cluster_grid.refresh()
+        self._face_cluster_grid.remove_clusters(cluster_ids)
+        self._refresh_face_panel_if_visible()
 
     @Slot(list, int)
     def _on_clusters_assigned(self, cluster_ids: list, person_id: int) -> None:
         for cid in cluster_ids:
             self._face_db.assign_person_to_cluster(cid, person_id)
         self._refresh_persons()
-        self._face_cluster_grid.refresh()
+        self._face_cluster_grid.remove_clusters(cluster_ids)
+        self._refresh_face_panel_if_visible()
 
     @Slot(int)
     def _on_cluster_ignored(self, _cluster_id: int) -> None:
-        self._face_cluster_grid.refresh()
+        self._face_cluster_grid.remove_clusters([_cluster_id])
 
     @Slot(int, int)
     def _on_cluster_merged(self, _source: int, _target: int) -> None:
@@ -1380,7 +1404,7 @@ class MainWindow(QMainWindow):
         self._update_status()
 
     def show_face_clusters(self) -> None:
-        self._face_cluster_grid.refresh()
+        self._face_cluster_grid.restore()
         self._stack.setCurrentIndex(2)
         self._left_stack.setCurrentIndex(0)
         self._lbl_thumb_size.hide()
@@ -1450,6 +1474,11 @@ class MainWindow(QMainWindow):
             parent=self,
         )
         win.show()
+
+    def _show_help(self) -> None:
+        from src.ui.help_dialog import HelpDialog
+        dlg = HelpDialog(self)
+        dlg.exec()
 
     def _show_about(self) -> None:
         QMessageBox.about(
@@ -1523,6 +1552,12 @@ class MainWindow(QMainWindow):
         viewed_index = self._current_photo_index
         deleted_paths_set = {p.path for p in photos}
 
+        # Index du premier fichier supprimé (pour recentrer le ruban après)
+        first_deleted_idx = next(
+            (i for i, p in enumerate(self._current_photos) if p.path in deleted_paths_set),
+            None,
+        )
+
         deleted: list[str] = []
         errors: list[str] = []
         for photo in photos:
@@ -1551,6 +1586,11 @@ class MainWindow(QMainWindow):
                     new_index = min(viewed_index, len(self._current_photos) - 1)
                     self._current_photo_index = new_index
                     self.show_viewer(self._current_photos[new_index])
+            elif not in_viewer and self._current_photos and first_deleted_idx is not None:
+                neighbor_idx = min(first_deleted_idx, len(self._current_photos) - 1)
+                neighbor_path = self._current_photos[neighbor_idx].path
+                self._grid.scroll_to_photo(neighbor_path)
+                self._grid.select_photo(neighbor_path)
 
         if errors:
             QMessageBox.warning(self, "Erreurs de suppression",

@@ -48,7 +48,7 @@ class _FacePanelLoader(QThread):
 
 class _FacesDataLoader(QThread):
     """Charge get_faces_for_photo + get_persons depuis un thread secondaire."""
-    data_ready = Signal(str, list, dict)   # photo_path, faces, person_names
+    data_ready = Signal(str, list, dict, dict)  # photo_path, faces, person_names, cluster_persons
 
     def __init__(self, face_db: "FaceDatabase", catalog, photo_path: str, parent=None) -> None:
         super().__init__(parent)
@@ -60,13 +60,30 @@ class _FacesDataLoader(QThread):
         try:
             faces = [f for f in self._face_db.get_faces_for_photo(self._photo_path)
                      if not f.ignored]
+
+            # Pour les faces sans person_id mais avec un cluster, vérifier si ce cluster
+            # a déjà une personne assignée via d'autres faces (cas des faces ré-indexées
+            # après qu'une personne a été assignée au cluster).
+            unresolved = [
+                f.cluster_id for f in faces
+                if f.cluster_id is not None and f.cluster_id >= 0 and not f.person_id
+            ]
+            cluster_persons: dict[int, int] = (
+                self._face_db.get_cluster_persons(unresolved) if unresolved else {}
+            )
+
+            all_person_ids = (
+                {f.person_id for f in faces if f.person_id}
+                | set(cluster_persons.values())
+            )
             person_names: dict[int, str] = {}
-            if any(f.person_id for f in faces):
+            if all_person_ids:
                 persons = self._catalog.get_persons()
                 person_names = {p.id: p.name for p in persons}
-            self.data_ready.emit(self._photo_path, faces, person_names)
+
+            self.data_ready.emit(self._photo_path, faces, person_names, cluster_persons)
         except Exception:
-            self.data_ready.emit(self._photo_path, [], {})
+            self.data_ready.emit(self._photo_path, [], {}, {})
 
 
 # ------------------------------------------------------------------ face item
@@ -214,6 +231,11 @@ class FacePanel(QWidget):
 
     # ------------------------------------------------------------------ public
 
+    def refresh(self) -> None:
+        """Recharger les visages de la photo courante (après modification externe)."""
+        if self._current_photo:
+            self.set_photo(self._current_photo)
+
     def set_photo(self, photo_path: str) -> None:
         """Charger et afficher les visages de la photo (asynchrone)."""
         self._current_photo = photo_path
@@ -226,8 +248,10 @@ class FacePanel(QWidget):
         self._data_loader.data_ready.connect(self._on_faces_data_ready)
         self._data_loader.start()
 
-    @Slot(str, list, dict)
-    def _on_faces_data_ready(self, photo_path: str, faces: list, person_names: dict) -> None:
+    @Slot(str, list, dict, dict)
+    def _on_faces_data_ready(
+        self, photo_path: str, faces: list, person_names: dict, cluster_persons: dict
+    ) -> None:
         if photo_path != self._current_photo:
             return  # navigation entre-temps
 
@@ -248,6 +272,11 @@ class FacePanel(QWidget):
         for face in faces_sorted:
             if face.person_id and face.person_id in person_names:
                 name = person_names[face.person_id]
+            elif face.cluster_id is not None and face.cluster_id in cluster_persons:
+                # Face ré-indexée après assignation : le cluster a une personne,
+                # mais cette face individuelle n'a pas encore son person_id mis à jour.
+                pid = cluster_persons[face.cluster_id]
+                name = person_names.get(pid, f"Groupe {face.cluster_id}")
             elif face.pinned:
                 name = "Séparé"
             elif face.cluster_id is not None:
@@ -389,8 +418,10 @@ class FacePanel(QWidget):
             and not face.pinned
         ):
             self._face_db.assign_person_to_cluster(face.cluster_id, person_id)
-        else:
-            self._face_db.assign_person_to_face(face_id, person_id)
+        # Toujours mettre à jour cette face spécifiquement :
+        # le cluster_id en mémoire peut être périmé si le regroupement a tourné
+        # entre-temps, auquel que UPDATE…cluster_id ne touche pas cette face.
+        self._face_db.assign_person_to_face(face_id, person_id)
         self.set_photo(self._current_photo)
 
     def _on_unassign_requested(self, face_id: int) -> None:
