@@ -17,7 +17,7 @@ from PySide6.QtCore import Qt, QPoint, QRect, QThread, QTimer, Signal, Slot
 from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import (
     QDialog, QDialogButtonBox, QFrame, QGridLayout, QHBoxLayout, QLabel,
-    QMenu, QPushButton, QScrollArea, QVBoxLayout, QWidget,
+    QMenu, QProgressBar, QPushButton, QScrollArea, QSizePolicy, QVBoxLayout, QWidget,
 )
 
 from src.core.models import PersonInfo
@@ -34,6 +34,7 @@ _CARD_W       = 148
 _CARD_SPACING = 10
 _COLS_MIN     = 2
 _SIM_GROUP    = 0.72   # seuil pour regrouper deux clusters "même personne probable"
+_BUILD_BATCH  = 10     # sections créées par tick de l'event loop (évite de bloquer l'UI)
 
 
 # ------------------------------------------------------------------ helpers (module-level, utilisés par le thread)
@@ -41,9 +42,14 @@ _SIM_GROUP    = 0.72   # seuil pour regrouper deux clusters "même personne prob
 def _compute_cluster_groups_bg(
     cluster_ids: list[int],
     embeddings: dict[int, list[float]],
+    progress_cb=None,
 ) -> dict[int, list[int]]:
-    """Union-Find : regroupe les clusters dont sim(centroïde) ≥ _SIM_GROUP.
-    Exécuté dans le thread de fond pour ne pas bloquer l'UI."""
+    """Union-Find vectorisé : regroupe les clusters dont sim(centroïde) ≥ _SIM_GROUP.
+
+    Avec numpy disponible, construit une matrice normalisée une seule fois et
+    calcule la similarité de chaque ligne avec toutes les suivantes via un produit
+    matriciel BLAS — O(n²·dim) opérations mais sans allocation Python par paire.
+    progress_cb(i) est appelé au début de chaque itération externe."""
     parent = {cid: cid for cid in cluster_ids}
 
     def find(x: int) -> int:
@@ -57,15 +63,37 @@ def _compute_cluster_groups_bg(
         if px != py:
             parent[px] = py
 
-    ids = list(cluster_ids)
-    for i, ci in enumerate(ids):
-        ei = embeddings.get(ci)
-        if not ei:
-            continue
-        for cj in ids[i + 1:]:
-            ej = embeddings.get(cj)
-            if ej and _cosine_sim(ei, ej) >= _SIM_GROUP:
-                union(ci, cj)
+    valid = [(cid, embeddings[cid]) for cid in cluster_ids if cid in embeddings]
+
+    try:
+        import numpy as np
+        if valid:
+            ids_arr = [cid for cid, _ in valid]
+            m = len(ids_arr)
+            mat = np.array([e for _, e in valid], dtype=np.float32)  # (m, dim)
+            norms = np.linalg.norm(mat, axis=1, keepdims=True)
+            mat /= np.where(norms > 1e-8, norms, 1.0)              # normalisation in-place
+            for i in range(m):
+                if progress_cb is not None:
+                    progress_cb(i)
+                if i + 1 >= m:
+                    break
+                # Similarités avec toutes les lignes i+1..m-1 en un produit BLAS
+                sims = mat[i] @ mat[i + 1:].T                       # ndarray (m-1-i,)
+                for j_off in np.nonzero(sims >= _SIM_GROUP)[0]:
+                    union(ids_arr[i], ids_arr[i + 1 + int(j_off)])
+    except ImportError:
+        ids = list(cluster_ids)
+        for i, ci in enumerate(ids):
+            if progress_cb is not None:
+                progress_cb(i)
+            ei = embeddings.get(ci)
+            if not ei:
+                continue
+            for cj in ids[i + 1:]:
+                ej = embeddings.get(cj)
+                if ej and _cosine_sim(ei, ej) >= _SIM_GROUP:
+                    union(ci, cj)
 
     groups: dict[int, list[int]] = {}
     for cid in cluster_ids:
@@ -80,8 +108,7 @@ def _compute_suggestion_bg(
     persons: list,
     person_cluster_embeddings: dict[int, dict[int, list[float]]],
 ) -> "tuple[int | None, str, str]":
-    """Calcule la meilleure suggestion de personne pour un cluster.
-    Exécuté dans le thread de fond."""
+    """Calcule la meilleure suggestion de personne pour un cluster (fallback scalaire)."""
     if not person_cluster_embeddings:
         return None, "", ""
     c_emb = cluster_embeddings.get(cluster_id)
@@ -102,6 +129,68 @@ def _compute_suggestion_bg(
     if best_sim >= 0.82:
         return best_p.id, f"≈ {best_p.name} ({pct} %)", "#7aabdb"
     return best_p.id, f"~ {best_p.name} ({pct} %)", "#888"
+
+
+def _compute_all_suggestions_bg(
+    cluster_ids: list[int],
+    cluster_embeddings: dict[int, list[float]],
+    persons: list,
+    person_cluster_embeddings: dict[int, dict[int, list[float]]],
+) -> "dict[int, tuple[int | None, str, str]]":
+    """Calcule les suggestions pour tous les clusters en un seul produit matriciel.
+
+    Construit (n_clusters, dim) × (n_person_emb, dim)^T → matrice de similarité
+    complète, puis sélectionne le maximum par ligne. Remplace la boucle Python
+    de N appels _compute_suggestion_bg."""
+    result: dict = {cid: (None, "", "") for cid in cluster_ids}
+
+    if not persons or not person_cluster_embeddings:
+        return result
+
+    # Liste plate (person, embedding) pour toutes les personnes connues
+    person_emb_pairs: list = []
+    for p in persons:
+        for p_emb in person_cluster_embeddings.get(p.id, {}).values():
+            person_emb_pairs.append((p, p_emb))
+    if not person_emb_pairs:
+        return result
+
+    valid_c = [(cid, cluster_embeddings[cid]) for cid in cluster_ids if cid in cluster_embeddings]
+    if not valid_c:
+        return result
+
+    try:
+        import numpy as np
+        cid_arr = [cid for cid, _ in valid_c]
+        c_mat = np.array([e for _, e in valid_c], dtype=np.float32)     # (nc, dim)
+        c_norms = np.linalg.norm(c_mat, axis=1, keepdims=True)
+        c_mat /= np.where(c_norms > 1e-8, c_norms, 1.0)
+
+        p_mat = np.array([e for _, e in person_emb_pairs], dtype=np.float32)  # (np, dim)
+        p_norms = np.linalg.norm(p_mat, axis=1, keepdims=True)
+        p_mat /= np.where(p_norms > 1e-8, p_norms, 1.0)
+
+        sim_mat  = c_mat @ p_mat.T                                      # (nc, np_emb)
+        best_idx = np.argmax(sim_mat, axis=1)                           # (nc,)
+        best_sim = sim_mat[np.arange(len(cid_arr)), best_idx]           # (nc,)
+
+        for k, cid in enumerate(cid_arr):
+            s = float(best_sim[k])
+            if s < _SIM_WEAK:
+                continue
+            best_p = person_emb_pairs[int(best_idx[k])][0]
+            pct = int(s * 100)
+            if s >= 0.82:
+                result[cid] = (best_p.id, f"≈ {best_p.name} ({pct} %)", "#7aabdb")
+            else:
+                result[cid] = (best_p.id, f"~ {best_p.name} ({pct} %)", "#888")
+    except ImportError:
+        for cid in cluster_ids:
+            result[cid] = _compute_suggestion_bg(
+                cid, cluster_embeddings, persons, person_cluster_embeddings
+            )
+
+    return result
 
 
 # ------------------------------------------------------------------ card
@@ -400,6 +489,7 @@ class _SectionWidget(QFrame):
     def __init__(self, label: str, color: str, parent=None) -> None:
         super().__init__(parent)
         self.setFrameShape(QFrame.NoFrame)
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 10, 0, 4)
         outer.setSpacing(4)
@@ -423,9 +513,10 @@ class _SectionWidget(QFrame):
 
         self._card_area = QWidget()
         self._card_area.setStyleSheet("background: transparent;")
+        self._card_area.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
         self._card_gl = QGridLayout(self._card_area)
         self._card_gl.setSpacing(_CARD_SPACING)
-        self._card_gl.setAlignment(Qt.AlignTop | Qt.AlignLeft)
+        self._card_gl.setContentsMargins(0, 0, 0, 0)
         outer.addWidget(self._card_area)
 
         self._entries: list[tuple[int, "_ClusterCard"]] = []
@@ -434,8 +525,15 @@ class _SectionWidget(QFrame):
         self._entries.append((cluster_id, card))
 
     def reflow(self, cols: int) -> None:
+        while self._card_gl.count():
+            self._card_gl.takeAt(0)
+        # Réinitialiser les stretches des colonnes précédentes
+        for c in range(self._card_gl.columnCount() + cols + 1):
+            self._card_gl.setColumnStretch(c, 0)
+        # Colonne fantôme à droite : absorbe l'espace libre → cartes alignées à gauche
+        self._card_gl.setColumnStretch(cols, 1)
         for i, (_, card) in enumerate(self._entries):
-            self._card_gl.addWidget(card, i // cols, i % cols)
+            self._card_gl.addWidget(card, i // cols, i % cols, Qt.AlignLeft | Qt.AlignTop)
 
 
 # ------------------------------------------------------------------ refresh thread
@@ -454,8 +552,9 @@ class _ClusterRefreshThread(QThread):
         Émet la structure complète groupée avec suggestions.
     """
 
-    initial_ready = Signal(object)   # dict — affiché immédiatement
-    data_ready    = Signal(object)   # dict | None — affiché après calcul lourd
+    initial_ready = Signal(object)         # dict — affiché immédiatement
+    data_ready    = Signal(object)         # dict | None — affiché après calcul lourd
+    progress      = Signal(int, int, str)  # étape courante, total, message
 
     def __init__(self, face_db: "FaceDatabase", catalog, parent=None) -> None:
         super().__init__(parent)
@@ -464,6 +563,8 @@ class _ClusterRefreshThread(QThread):
 
     def run(self) -> None:
         try:
+            # ── Récupération initiale (rapide) — N encore inconnu ──────────
+            self.progress.emit(0, 0, "Récupération des groupes de visages…")
             clusters = self._face_db.get_unnamed_clusters()
 
             _empty = {
@@ -472,14 +573,25 @@ class _ClusterRefreshThread(QThread):
                 "person_cluster_embeddings": {}, "is_partial": False,
             }
             if not clusters:
+                self.progress.emit(1, 1, "Aucun groupe à analyser")
                 self.initial_ready.emit(_empty)
                 self.data_ready.emit(_empty)
                 return
 
             cluster_ids = [cid for cid, _ in clusters]
             face_counts = {cid: fc for cid, fc in clusters}
+            n  = len(cluster_ids)
+            s  = "s" if n > 1 else ""
+
+            # Total d'étapes = 5 fixes + ≤100 mises à jour Union-Find + 1 suggestions.
+            # Les suggestions sont vectorisées (1 opération matricielle) donc 1 seule étape.
+            n_uf_steps = min(n, 100)
+            N          = 5 + n_uf_steps + 1
+            step       = 0
 
             # ── Phase 1 : structure plate, sans suggestion ─────────────────
+            step += 1
+            self.progress.emit(step, N, f"Chargement des visages représentatifs ({n} groupe{s})…")
             representative_faces = self._face_db.get_all_representative_faces(cluster_ids)
             flat_groups = [[cid] for cid in cluster_ids]   # déjà trié DESC par face_count
             self.initial_ready.emit({
@@ -493,14 +605,47 @@ class _ClusterRefreshThread(QThread):
                 "is_partial":                True,
             })
 
-            # ── Phase 2 : calcul lourd ─────────────────────────────────────
-            cluster_embeddings        = self._face_db.get_all_cluster_centroids(cluster_ids)
-            persons                   = self._catalog.get_persons()
+            # ── Phase 2 : embeddings clusters ─────────────────────────────
+            step += 1
+            self.progress.emit(step, N, f"Calcul des représentations vectorielles ({n} groupe{s})…")
+            cluster_embeddings = self._face_db.get_all_cluster_centroids(cluster_ids)
+
+            # Affiner N maintenant qu'on connaît le nombre de clusters avec embedding
+            m_emb      = len(cluster_embeddings)
+            n_uf_steps = min(m_emb, 100)
+            N          = step + 3 + n_uf_steps + 1   # restants : 3 fixes + UF + suggestion
+
+            # ── Phase 2 : personnes connues ───────────────────────────────
+            step += 1
+            self.progress.emit(step, N, "Récupération des personnes connues…")
+            persons    = self._catalog.get_persons()
+            np_        = len(persons)
+            sp         = "s" if np_ > 1 else ""
+
+            step += 1
+            self.progress.emit(step, N, f"Analyse des personnes connues ({np_} personne{sp})…")
             self._face_db.enrich_persons(persons)
-            person_ids                = [p.id for p in persons]
+            person_ids = [p.id for p in persons]
+
+            step += 1
+            self.progress.emit(step, N, "Représentations vectorielles des personnes…")
             person_cluster_embeddings = self._face_db.get_all_person_cluster_centroids(person_ids)
 
-            raw_groups    = _compute_cluster_groups_bg(cluster_ids, cluster_embeddings)
+            # ── Phase 2 : Union-Find vectorisé, progression au % près ─────
+            _last_uf_pct = -1
+
+            def uf_progress(i: int) -> None:
+                nonlocal step, _last_uf_pct
+                pct = i * 100 // m_emb if m_emb else 100
+                if pct != _last_uf_pct:
+                    _last_uf_pct = pct
+                    step += 1
+                    self.progress.emit(
+                        step, N,
+                        f"Regroupement des visages similaires… {pct} %",
+                    )
+
+            raw_groups    = _compute_cluster_groups_bg(cluster_ids, cluster_embeddings, uf_progress)
             groups_sorted = sorted(
                 raw_groups.values(),
                 key=lambda g: (-len(g), -sum(face_counts.get(c, 0) for c in g)),
@@ -531,12 +676,16 @@ class _ClusterRefreshThread(QThread):
                 else:
                     group_labels[root] = ("", "")
 
-            suggestions: dict[int, tuple] = {
-                cid: _compute_suggestion_bg(
-                    cid, cluster_embeddings, persons, person_cluster_embeddings
-                )
-                for cid in cluster_ids
-            }
+            # ── Phase 2 : suggestions vectorisées (1 produit matriciel) ────
+            step += 1
+            self.progress.emit(
+                step, N,
+                "Calcul des suggestions d'identification…"
+                + (f"  —  {np_} personne{sp} connue{sp}" if np_ else ""),
+            )
+            suggestions = _compute_all_suggestions_bg(
+                cluster_ids, cluster_embeddings, persons, person_cluster_embeddings
+            )
 
             self.data_ready.emit({
                 "face_counts":               face_counts,
@@ -595,6 +744,8 @@ class FaceClusterGrid(QWidget):
         # Cache des bytes JPEG d'avatars : persiste entre la phase 1 et la phase 2
         # pour éviter de relire les fichiers lors du rebuild avec suggestions.
         self._avatar_cache: dict[int, bytes] = {}
+        self._build_generation: int = 0   # annule les lots en file si un nouveau build démarre
+        self._cached_data: dict | None = None  # dernières données complètes (phase 2)
         self._setup_ui()
 
     # ------------------------------------------------------------------ setup
@@ -616,6 +767,36 @@ class FaceClusterGrid(QWidget):
         bar.addWidget(self._lbl_title)
         bar.addStretch()
         root.addLayout(bar)
+
+        # Barre de progression (visible pendant le chargement, cachée ensuite)
+        self._progress_widget = QWidget()
+        self._progress_widget.setVisible(False)
+        _pw_vbox = QVBoxLayout(self._progress_widget)
+        _pw_vbox.setContentsMargins(0, 2, 0, 4)
+        _pw_vbox.setSpacing(3)
+
+        _pw_top = QHBoxLayout()
+        _pw_top.setContentsMargins(0, 0, 0, 0)
+        self._lbl_progress = QLabel("Initialisation…")
+        self._lbl_progress.setStyleSheet("color: #aaa; font-size: 11px;")
+        _pw_top.addWidget(self._lbl_progress)
+        _pw_top.addStretch()
+        self._lbl_progress_step = QLabel("")
+        self._lbl_progress_step.setStyleSheet("color: #555; font-size: 11px;")
+        _pw_top.addWidget(self._lbl_progress_step)
+        _pw_vbox.addLayout(_pw_top)
+
+        self._progress_bar = QProgressBar()
+        self._progress_bar.setTextVisible(False)
+        self._progress_bar.setFixedHeight(5)
+        self._progress_bar.setRange(0, 6)
+        self._progress_bar.setValue(0)
+        self._progress_bar.setStyleSheet(
+            "QProgressBar { background: #2a2a2a; border: none; border-radius: 2px; }"
+            "QProgressBar::chunk { background: #4a8fd4; border-radius: 2px; }"
+        )
+        _pw_vbox.addWidget(self._progress_bar)
+        root.addWidget(self._progress_widget)
 
         # Barre d'action multi-sélection (cachée par défaut)
         self._action_bar = QFrame()
@@ -662,7 +843,6 @@ class FaceClusterGrid(QWidget):
         self._content_vbox = QVBoxLayout(self._content)
         self._content_vbox.setContentsMargins(0, 0, 0, 8)
         self._content_vbox.setSpacing(0)
-        self._content_vbox.setAlignment(Qt.AlignTop)
 
         self._scroll = QScrollArea()
         self._scroll.setWidgetResizable(True)
@@ -686,6 +866,17 @@ class FaceClusterGrid(QWidget):
         for section in self._sections:
             section.reflow(self._current_cols)
 
+    def _force_reflow(self) -> None:
+        """Recalcule les colonnes depuis la largeur réelle et replace toutes les cartes.
+        Appelé en différé après un build pour corriger le cas où le viewport
+        n'était pas encore dimensionné au moment du calcul initial."""
+        available = self._scroll.viewport().width()
+        if available <= 0:
+            QTimer.singleShot(50, self._force_reflow)  # viewport pas encore prêt
+            return
+        self._current_cols = max(_COLS_MIN, available // (_CARD_W + _CARD_SPACING))
+        self._reflow()
+
     # ------------------------------------------------------------------ public
 
     def refresh(self) -> None:
@@ -705,6 +896,7 @@ class FaceClusterGrid(QWidget):
             except RuntimeError:
                 pass
 
+        self._build_generation += 1   # annule tout build par lots encore en file d'attente
         self._cards.clear()
         self._sections.clear()
         self._selected_ids.clear()
@@ -715,17 +907,119 @@ class FaceClusterGrid(QWidget):
             if item.widget():
                 item.widget().deleteLater()
 
-        # Spinner pendant le chargement
+        # Afficher la barre de progression et réinitialiser
+        self._progress_bar.setValue(0)
+        self._lbl_progress.setText("Initialisation…")
+        self._lbl_progress_step.setText("")
+        self._progress_widget.setVisible(True)
         self._lbl_title.setText("Chargement…")
-        lbl_loading = QLabel("Chargement des groupes de visages…")
-        lbl_loading.setAlignment(Qt.AlignCenter)
-        lbl_loading.setStyleSheet("color: #666; font-size: 13px;")
-        self._content_vbox.addWidget(lbl_loading)
 
         self._refresh_thread = _ClusterRefreshThread(self._face_db, self._catalog, self)
         self._refresh_thread.initial_ready.connect(self._on_initial_ready)
         self._refresh_thread.data_ready.connect(self._on_data_ready)
+        self._refresh_thread.progress.connect(self._on_progress)
         self._refresh_thread.start()
+
+    def remove_clusters(self, cluster_ids: list[int]) -> None:
+        """Retire les groupes donnés de l'affichage sans relancer les calculs.
+
+        Supprime les cartes directement et met à jour _cached_data.
+        Si un thread est en cours (Phase 2 non terminée), relance refresh()
+        pour repartir sur des données fraîches du DB."""
+        if not cluster_ids:
+            return
+        if (self._refresh_thread and self._refresh_thread.isRunning()) or self._cached_data is None:
+            self.refresh()
+            return
+
+        cid_set = set(cluster_ids)
+
+        # Cartes : retirer du registre et de l'avatar cache
+        removed_from_sel = cid_set & self._selected_ids
+        self._selected_ids -= removed_from_sel
+        for cid in cid_set:
+            card = self._cards.pop(cid, None)
+            if card is not None:
+                card.deleteLater()
+            self._avatar_cache.pop(cid, None)
+
+        # Sections : filtrer les entrées, reflow si encore peuplée, supprimer sinon
+        sections_to_keep = []
+        for section in self._sections:
+            section._entries = [(c, w) for c, w in section._entries if c not in cid_set]
+            if section._entries:
+                section.reflow(self._current_cols)
+                sections_to_keep.append(section)
+            else:
+                idx = self._content_vbox.indexOf(section)
+                if idx >= 0:
+                    self._content_vbox.takeAt(idx)
+                section.deleteLater()
+        self._sections = sections_to_keep
+
+        # Cache : supprimer les clusters des dicts et reconstruire groups_sorted / group_labels
+        data = self._cached_data
+        for cid in cid_set:
+            data["face_counts"].pop(cid, None)
+            data["representative_faces"].pop(cid, None)
+            data["suggestions"].pop(cid, None)
+        new_groups: list[list[int]] = []
+        new_labels: dict[int, tuple[str, str]] = {}
+        for old_group in data.get("groups_sorted", []):
+            old_root  = old_group[0]
+            new_group = [c for c in old_group if c not in cid_set]
+            if not new_group:
+                continue
+            new_root = new_group[0]
+            new_groups.append(new_group)
+            new_labels[new_root] = ("", "") if len(new_group) == 1 else data["group_labels"].get(old_root, ("", ""))
+        data["groups_sorted"] = new_groups
+        data["group_labels"]  = new_labels
+
+        # Barre d'action
+        if removed_from_sel:
+            self._update_action_bar()
+
+    def restore(self) -> None:
+        """Restaure la grille depuis le cache sans relancer les calculs lourds.
+        Appelé lors d'un retour de navigation (ex : retour depuis les photos d'un groupe).
+        Si aucune donnée n'est en cache, déclenche un refresh() complet."""
+        if self._cached_data is None:
+            self.refresh()
+            return
+
+        # Arrêter un loader d'avatars en cours
+        if self._loader and self._loader.isRunning():
+            try:
+                self._loader.avatar_ready.disconnect(self._on_avatar_ready)
+            except RuntimeError:
+                pass
+            self._loader = None
+
+        self._progress_widget.setVisible(False)
+        self._build_generation += 1
+        self._cards.clear()
+        self._sections.clear()
+        self._selected_ids.clear()
+        self._action_bar.setVisible(False)
+
+        while self._content_vbox.count():
+            item = self._content_vbox.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+
+        self._build_from_data(self._cached_data)
+
+    @Slot(int, int, str)
+    def _on_progress(self, current: int, total: int, message: str) -> None:
+        self._progress_bar.setRange(0, total)
+        self._progress_bar.setValue(current)
+        self._lbl_progress.setText(message)
+        if total > 0:
+            pct = current * 100 // total
+            self._lbl_progress_step.setText(f"{pct} %")
+        else:
+            self._lbl_progress_step.setText("")
 
     @Slot(object)
     def _on_initial_ready(self, data: object) -> None:
@@ -741,11 +1035,15 @@ class FaceClusterGrid(QWidget):
     @Slot(object)
     def _on_data_ready(self, data: object) -> None:
         """Phase 2 : reconstruit la vue avec groupes similaires et suggestions."""
+        self._progress_widget.setVisible(False)
         if data is None:
             self._lbl_title.setText("Erreur lors du chargement")
             return
         if data.get("is_partial"):
             return  # ne devrait pas arriver, mais garde-fou
+
+        # Mémoriser les données finales pour restore()
+        self._cached_data = data
 
         # Arrêter le loader d'avatars de la phase 1 (les bytes sont dans _avatar_cache)
         if self._loader and self._loader.isRunning():
@@ -767,8 +1065,14 @@ class FaceClusterGrid(QWidget):
         self._build_from_data(data)
 
     def _build_from_data(self, data: dict) -> None:
-        """Construit les widgets depuis les données pré-calculées par le thread.
-        Ne fait aucun calcul lourd — tout est déjà dans data."""
+        """Lance la construction par lots (_BUILD_BATCH groupes par tick) pour ne pas
+        bloquer l'UI lors de grandes bibliothèques.  Tout calcul lourd est déjà dans data.
+
+        Stratégie de mise en page :
+        • Groupes de 2+ clusters similaires → chacun sa propre _SectionWidget avec en-tête.
+        • Clusters isolés (groupe de 1) → tous dans une unique section plate partagée,
+          dont la grille est remplie sur plusieurs colonnes (corrige le bug 'colonne gauche').
+        """
         face_counts:               dict = data["face_counts"]
         groups_sorted:             list = data["groups_sorted"]
         group_labels:              dict = data["group_labels"]
@@ -790,55 +1094,82 @@ class FaceClusterGrid(QWidget):
         is_partial = data.get("is_partial", False)
         plural = "s" if n > 1 else ""
         if is_partial:
-            self._lbl_title.setText(
-                f"{n} groupe{plural} — analyse en cours…"
-            )
+            self._lbl_title.setText(f"{n} groupe{plural} — analyse en cours…")
         else:
-            self._lbl_title.setText(
-                f"{n} groupe{plural} de visages non identifié{plural}"
-            )
+            self._lbl_title.setText(f"{n} groupe{plural} de visages non identifié{plural}")
 
         available = self._scroll.viewport().width()
         if available > 0:
             self._current_cols = max(_COLS_MIN, available // (_CARD_W + _CARD_SPACING))
 
-        avatar_items = []
+        # Incrémenter la génération : tout callback _next encore en file d'attente
+        # avec l'ancienne génération s'arrêtera immédiatement.
+        self._build_generation += 1
+        gen = self._build_generation
+        avatar_items: list = []
 
-        for group in groups_sorted:
-            root = group[0]
-            label, color = group_labels.get(root, ("", ""))
-            group_by_size = sorted(group, key=lambda c: -face_counts.get(c, 0))
+        # Section plate partagée pour tous les clusters isolés.
+        # Elle est construite de façon incrémentale au fil des lots, puis ajoutée
+        # au vbox et reflowée une seule fois lors du dernier lot.
+        flat_section = _SectionWidget("", "", self._content)
 
-            section = _SectionWidget(label, color, self._content)
-
-            for cluster_id in group_by_size:
-                fc = face_counts.get(cluster_id, 0)
-                sugg_id, sugg_label, sugg_color = suggestions.get(cluster_id, (None, "", ""))
-                card = _ClusterCard(cluster_id, fc, sugg_id, sugg_label, sugg_color)
-                card.selection_toggled.connect(self._on_card_selection_toggled)
-                card.view_requested.connect(self._on_card_view_requested)
-                card.name_requested.connect(self._on_card_name_requested)
-                card.merge_requested.connect(self._on_card_merge_requested)
-                card.ignore_requested.connect(self._on_card_ignore_requested)
-                section.add_card(cluster_id, card)
-                self._cards[cluster_id] = card
-
-                # Utiliser le cache d'avatars si disponible (phase 2 → pas de relecture disque)
-                if cluster_id in self._avatar_cache:
-                    card.set_avatar(self._avatar_cache[cluster_id])
-                else:
-                    rep = representative_faces.get(cluster_id)
-                    if rep:
-                        avatar_items.append((cluster_id, rep))
-
-            section.reflow(self._current_cols)
-            self._content_vbox.addWidget(section)
-            self._sections.append(section)
-
-        if avatar_items:
-            QTimer.singleShot(
-                0, lambda items=avatar_items: self._start_cluster_loader(items)
+        def _add_card(cluster_id: int, target: _SectionWidget) -> None:
+            fc = face_counts.get(cluster_id, 0)
+            sugg_id, sugg_label, sugg_color = suggestions.get(cluster_id, (None, "", ""))
+            card = _ClusterCard(
+                cluster_id, fc, sugg_id, sugg_label, sugg_color,
+                parent=target._card_area,   # évite les widgets orphelins entre lots
             )
+            card.selection_toggled.connect(self._on_card_selection_toggled)
+            card.view_requested.connect(self._on_card_view_requested)
+            card.name_requested.connect(self._on_card_name_requested)
+            card.merge_requested.connect(self._on_card_merge_requested)
+            card.ignore_requested.connect(self._on_card_ignore_requested)
+            target.add_card(cluster_id, card)
+            self._cards[cluster_id] = card
+            if cluster_id in self._avatar_cache:
+                card.set_avatar(self._avatar_cache[cluster_id])
+            else:
+                rep = representative_faces.get(cluster_id)
+                if rep:
+                    avatar_items.append((cluster_id, rep))
+
+        def _next(start: int) -> None:
+            if gen != self._build_generation:
+                return  # build annulé par refresh() ou _on_data_ready()
+            end = min(start + _BUILD_BATCH, len(groups_sorted))
+            for idx in range(start, end):
+                group = groups_sorted[idx]
+                root  = group[0]
+                if len(group) == 1:
+                    # Cluster isolé → section plate commune (plusieurs par ligne)
+                    _add_card(root, flat_section)
+                else:
+                    # Groupe de clusters similaires → section dédiée avec en-tête
+                    label, color  = group_labels.get(root, ("", ""))
+                    group_by_size = sorted(group, key=lambda c: -face_counts.get(c, 0))
+                    section = _SectionWidget(label, color, self._content)
+                    for cluster_id in group_by_size:
+                        _add_card(cluster_id, section)
+                    section.reflow(self._current_cols)
+                    self._content_vbox.addWidget(section)
+                    self._sections.append(section)
+            if end < len(groups_sorted):
+                QTimer.singleShot(0, lambda: _next(end))
+            else:
+                # Dernier lot : finaliser la section plate puis le layout
+                if flat_section._entries:
+                    flat_section.reflow(self._current_cols)
+                    self._content_vbox.addWidget(flat_section)
+                    self._sections.append(flat_section)
+                self._content_vbox.addStretch(1)
+                if avatar_items:
+                    QTimer.singleShot(
+                        0, lambda items=avatar_items: self._start_cluster_loader(items)
+                    )
+                QTimer.singleShot(0, self._force_reflow)
+
+        QTimer.singleShot(0, lambda: _next(0))
 
     # ------------------------------------------------------------------ sélection
 

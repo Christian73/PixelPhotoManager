@@ -16,9 +16,16 @@ from src.library.thumbnail_cache import ThumbnailCache
 
 logger = logging.getLogger(__name__)
 
+_img_thumb_pool: "QThreadPool | None" = None
+
 def _get_thumb_pool() -> QThreadPool:
-    """Retourne le pool global Qt (threads correctement intégrés à l'event loop)."""
-    return QThreadPool.globalInstance()
+    """Pool dédié aux vignettes image, limité à 4 threads.
+    Évite la saturation RAM + I/O disque lors du décodage JPEG simultané."""
+    global _img_thumb_pool
+    if _img_thumb_pool is None:
+        _img_thumb_pool = QThreadPool()
+        _img_thumb_pool.setMaxThreadCount(4)
+    return _img_thumb_pool
 
 
 _video_thumb_pool: "QThreadPool | None" = None
@@ -33,7 +40,7 @@ def _get_video_thumb_pool() -> QThreadPool:
         _video_thumb_pool.setMaxThreadCount(2)
     return _video_thumb_pool
 
-_BUFFER_ROWS = 3
+_BUFFER_ROWS = 2
 
 _FR_MONTHS = [
     "Janvier", "Février", "Mars", "Avril", "Mai", "Juin",
@@ -78,7 +85,13 @@ class _ThumbWorker(QRunnable):
 
     def run(self) -> None:
         try:
-            data = self._cache.generate(self._path, self._edit)
+            # Vérifier DB avant de relancer PIL — évite le décodage JPEG si déjà en cache
+            if self._edit is None:
+                data = self._cache.get_bytes(self._path)
+            else:
+                data = None
+            if data is None:
+                data = self._cache.generate(self._path, self._edit)
             if data:
                 signals = self._signals_ref()
                 if signals is not None:
@@ -122,16 +135,13 @@ class ThumbnailCell(QWidget):
         if self._load_requested:
             return
         self._load_requested = True
-        # get() vérifie RAM puis DB (thread UI, QPixmap créé ici en sécurité).
-        # Cela permet de récupérer les vignettes générées lors d'un cycle précédent
-        # même si le signal avait été perdu (cellule détruite par un resize).
-        pixmap = self._cache.get(self._photo.path)
+        # Vérifier uniquement le cache RAM dans le thread UI (non bloquant).
+        # La vérification DB et la génération PIL sont déléguées au worker.
+        pixmap = self._cache.get_ram(self._photo.path)
         if pixmap:
             self._set_pixmap(pixmap)
         else:
             worker = _ThumbWorker(self._photo.path, self._cache, self._signals)
-            # Les vidéos utilisent un pool séparé (max 2 threads) pour éviter
-            # la saturation I/O disque lors de l'ouverture simultanée de cv2.VideoCapture.
             from pathlib import Path as _P
             from src.library.exif_reader import VIDEO_EXT as _VE
             pool = (_get_video_thumb_pool()
@@ -389,16 +399,21 @@ class ThumbnailGrid(QScrollArea):
         self._date_label.hide()
 
         # Ascenseur de navigation rapide (mode ruban uniquement)
-        self._nav_bar = QScrollBar(Qt.Vertical, self.viewport())
-        self._nav_bar.setSingleStep(1)
-        self._nav_bar.hide()
+        # La barre est fournie de l'extérieur via bind_ribbon_nav_bar()
+        # et placée dans le layout parent — pas en overlay sur le viewport.
+        self._nav_bar: QScrollBar | None = None
         self._nav_bar_updating = False
-        self._nav_bar.valueChanged.connect(self._on_nav_bar_scroll)
+        self._nav_scrolling = False   # True pendant le scroll rapide via l'ascenseur
+        self._nav_settle_timer = QTimer(self)
+        self._nav_settle_timer.setSingleShot(True)
+        self._nav_settle_timer.setInterval(500)
+        self._nav_settle_timer.timeout.connect(self._on_nav_settled)
 
     # ══════════════════════════════════════════════════════════════════ données
 
     def set_photos(self, photos: list[PhotoInfo]) -> None:
         self._selected.clear()
+        self._cancel_pending_workers()
         self._dematerialize_all()
         self._photos = list(photos)
         if self._ribbon_mode:
@@ -439,6 +454,18 @@ class ThumbnailGrid(QScrollArea):
             QTimer.singleShot(0, self._update_materialized)
         self.selection_changed.emit(self.get_selected())
 
+    def scroll_to_photo(self, path: str) -> None:
+        """Centre le ruban sur la photo path. Sans effet si pas en mode ruban."""
+        if not self._ribbon_mode or not self._r_cols:
+            return
+        idx = next((i for i, p in enumerate(self._photos) if p.path == path), None)
+        if idx is None:
+            return
+        self._ribbon_offset = idx - self._center_pos()
+        self._clamp_ribbon_offset()
+        self._update_ribbon_cells()
+        self._update_date_overlay()
+
     def refresh_photo(self, photo_path: str, edit) -> None:
         for cell in self._materialized.values():
             if cell.photo.path == photo_path:
@@ -447,6 +474,7 @@ class ThumbnailGrid(QScrollArea):
 
     def clear(self) -> None:
         self._selected.clear()
+        self._cancel_pending_workers()
         self._dematerialize_all()
         self._photos.clear()
         if not self._ribbon_mode:
@@ -475,13 +503,35 @@ class ThumbnailGrid(QScrollArea):
             cell.set_selected(True)
         self.selection_changed.emit(self.get_selected())
 
+    def select_photo(self, path: str) -> None:
+        """Sélectionne une seule photo par chemin et émet selection_changed."""
+        if not any(p.path == path for p in self._photos):
+            return
+        self._clear_selection()
+        self._selected.add(path)
+        self._set_cell_selected(path, True)
+        self.selection_changed.emit(self.get_selected())
+
     def set_thumbnail_size(self, size: int) -> None:
         self._thumb_size = size
         if self._ribbon_mode:
             return          # taille déterminée par viewport, pas par ce réglage
+        self._cancel_pending_workers()
         self._dematerialize_all()
         self._container.configure(len(self._photos), size + 8, size + 8)
         QTimer.singleShot(0, self._update_materialized)
+
+    def bind_ribbon_nav_bar(self, bar: QScrollBar) -> None:
+        """Associe la QScrollBar externe qui pilote la navigation du ruban.
+
+        Doit être appelé une seule fois depuis main_window, avant toute navigation.
+        """
+        if self._nav_bar is not None:
+            self._nav_bar.valueChanged.disconnect(self._on_nav_bar_scroll)
+        self._nav_bar = bar
+        self._nav_bar.setSingleStep(1)
+        self._nav_bar.hide()
+        self._nav_bar.valueChanged.connect(self._on_nav_bar_scroll)
 
     # ══════════════════════════════════════════════════════════════════ mode ruban
 
@@ -489,6 +539,7 @@ class ThumbnailGrid(QScrollArea):
         if self._ribbon_mode == enabled:
             return
         self._ribbon_mode = enabled
+        self._cancel_pending_workers()
         self._dematerialize_all()
         self._ribbon_offset = 0
 
@@ -504,7 +555,8 @@ class ThumbnailGrid(QScrollArea):
             self._inertia_timer.stop()
             self._inertia_vel  = 0.0
             self._inertia_frac = 0.0
-            self._nav_bar.hide()
+            if self._nav_bar is not None:
+                self._nav_bar.hide()
             self._container._managed_height = True
             self.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
             self._container.configure(
@@ -539,20 +591,18 @@ class ThumbnailGrid(QScrollArea):
         return sum(self._r_cols[:_RIBBON_CENTER]) + self._r_cols[_RIBBON_CENTER] // 2
 
     def _update_nav_bar(self) -> None:
-        """Positionne, dimensionne et synchronise l'ascenseur (appelé après resize)."""
+        """Affiche/cache et synchronise l'ascenseur externe (appelé après resize)."""
+        if self._nav_bar is None:
+            return
         if not self._ribbon_mode or not self._photos or not self._r_cols:
             self._nav_bar.hide()
             return
-        vp = self.viewport()
-        w  = self._nav_bar.sizeHint().width()
-        self._nav_bar.setGeometry(vp.width() - w, 0, w, vp.height())
         self._nav_bar.show()
-        self._nav_bar.raise_()
         self._sync_nav_bar()
 
     def _sync_nav_bar(self) -> None:
         """Met à jour plage et valeur de l'ascenseur sans le repositionner."""
-        if not self._ribbon_mode or not self._r_cols or not self._photos:
+        if self._nav_bar is None or not self._ribbon_mode or not self._r_cols or not self._photos:
             return
         center      = self._ribbon_offset + self._center_pos()
         max_val     = max(0, len(self._photos) - 1)
@@ -569,12 +619,21 @@ class ThumbnailGrid(QScrollArea):
             return
         self._ribbon_offset = value - self._center_pos()
         self._clamp_ribbon_offset()
-        self._nav_bar_updating = True          # bloque la récursion dans _sync_nav_bar
-        self._update_ribbon_cells()
+        self._nav_bar_updating = True
+        # Pendant le scroll rapide : vider la grille une seule fois et ne mettre
+        # à jour que la date. Les cellules seront recréées après 500 ms d'inactivité.
+        if not self._nav_scrolling:
+            self._nav_scrolling = True
+            self._dematerialize_all()
         self._update_date_overlay()
         self._nav_bar_updating = False
-        # Resynchronise si le clamping a décalé l'offset
         self._sync_nav_bar()
+        self._nav_settle_timer.start()   # relance le délai à chaque mouvement
+
+    def _on_nav_settled(self) -> None:
+        """Déclenché 500 ms après le dernier mouvement de l'ascenseur de navigation."""
+        self._nav_scrolling = False
+        self._update_ribbon_cells()
 
     # ──────────────────────────────────────────────────────────────────────────
 
@@ -593,8 +652,7 @@ class ThumbnailGrid(QScrollArea):
         du mode scroll, ce qui fausserait totalement le calcul de base_size.
         """
         vp_h = max(100, self.viewport().height())
-        _nb_w = self._nav_bar.sizeHint().width() if self._ribbon_mode else 0
-        vp_w = max(100, self.viewport().width() - _nb_w)
+        vp_w = max(100, self.viewport().width())
         n    = len(_RIBBON_FACTORS)
         s    = _RIBBON_SPACING
 
@@ -758,6 +816,15 @@ class ThumbnailGrid(QScrollArea):
 
     # ══════════════════════════════════════════════════════════════════ commun
 
+    def _cancel_pending_workers(self) -> None:
+        """Annule les workers en attente dans les pools (pas encore démarrés).
+        À appeler avant toute réinitialisation majeure de la grille pour éviter
+        que des dizaines de workers lisent le disque pour des photos invisibles.
+        Les workers déjà en cours d'exécution ne sont pas interrompus ; leurs
+        résultats seront stockés dans le cache RAM et réutilisables."""
+        _get_thumb_pool().clear()
+        _get_video_thumb_pool().clear()
+
     def _dematerialize_all(self) -> None:
         for cell in self._materialized.values():
             cell.setParent(None)
@@ -909,6 +976,8 @@ class ThumbnailGrid(QScrollArea):
             self._set_cell_selected(path, True)
 
         self.selection_changed.emit(self.get_selected())
+        if self._ribbon_mode:
+            self.scroll_to_photo(path)
 
     def _set_cell_selected(self, path: str, selected: bool) -> None:
         for cell in self._materialized.values():
@@ -990,6 +1059,16 @@ class ThumbnailGrid(QScrollArea):
                 self._ribbon_offset -= 3
             elif key == Qt.Key_Down:
                 self._ribbon_offset += 3
+            elif key == Qt.Key_Delete:
+                selected = self.get_selected()
+                if selected:
+                    self.delete_requested.emit(selected)
+                else:
+                    center_idx = self._ribbon_offset + self._center_pos()
+                    if 0 <= center_idx < len(self._photos):
+                        self.delete_requested.emit([self._photos[center_idx]])
+                event.accept()
+                return
             else:
                 super().keyPressEvent(event)
                 return
