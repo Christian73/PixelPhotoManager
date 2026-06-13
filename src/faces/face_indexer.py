@@ -11,8 +11,7 @@ from src.library.catalog import Catalog
 logger = logging.getLogger(__name__)
 
 
-_CLUSTER_EVERY    = 25   # relancer le clustering tous les N visages trouvés
-_SESSION_MAX      = 100  # photos analysées par démarrage (le reste au prochain)
+_CLUSTER_EVERY    = 200  # relancer le clustering tous les N visages trouvés
 
 
 class TFWarmUpThread(QThread):
@@ -77,7 +76,6 @@ class FaceIndexThread(QThread):
 
         all_paths = self._catalog.get_all_photo_paths()
         to_index = self._face_db.get_paths_to_index(all_paths)
-        to_index = to_index[:_SESSION_MAX]
         total = len(to_index)
 
         if total == 0:
@@ -151,7 +149,6 @@ class FaceIndexThread(QThread):
                     self.photo_indexed.emit(path, len(detections))
                     if faces_found % _CLUSTER_EVERY == 0:
                         self.cluster_requested.emit()
-                self.msleep(200)
 
         journal.end(
             "FaceIndexThread",
