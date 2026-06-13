@@ -340,12 +340,18 @@ class MainWindow(QMainWindow):
         self._persons_refresh_thread: _PersonsRefreshThread | None = None
 
         self._current_photos: list[PhotoInfo] = []
+        self._current_paths: set[str] = set()
         self._current_photo_index: int = 0
         self._current_context: str = ""   # dossier ou album actif
         self._catalog_loader: _CatalogLoadThread | None = None
         self._search_timer = QTimer()
         self._search_timer.setSingleShot(True)
         self._search_timer.setInterval(150)
+        # Debounce du refresh du face panel après clustering (peut être déclenché
+        # plusieurs fois par seconde pendant l'indexation) — délai de 3 s.
+        self._face_panel_refresh_timer = QTimer()
+        self._face_panel_refresh_timer.setSingleShot(True)
+        self._face_panel_refresh_timer.setInterval(3000)
         self._search_timer.timeout.connect(self._do_search)
 
         self._setup_window()
@@ -601,6 +607,7 @@ class MainWindow(QMainWindow):
         self._face_panel.face_highlighted.connect(self._on_face_highlighted)
         self._face_panel.all_faces_toggled.connect(self._on_all_faces_toggled)
         self._viewer.face_context_menu_requested.connect(self._on_face_context_menu)
+        self._face_panel_refresh_timer.timeout.connect(self._face_panel.refresh)
         self._face_panel.hide()
         self._exif_panel = ExifPanel(self)
         self._exif_panel.photo_saved.connect(self._on_exif_photo_saved)
@@ -753,6 +760,7 @@ class MainWindow(QMainWindow):
             self._catalog_loader = None
 
         self._current_photos = []
+        self._current_paths = set()
         self._current_context = "Toutes les photos"
         self._grid.set_ribbon_mode(True)
         self._grid.set_date_overlay_visible(True)
@@ -771,6 +779,7 @@ class MainWindow(QMainWindow):
         if self._current_context != "Toutes les photos":
             return
         self._current_photos.extend(photos)
+        self._current_paths.update(p.path for p in photos)
         self._grid.add_photos_batch(photos)
         self._update_status()
 
@@ -785,17 +794,16 @@ class MainWindow(QMainWindow):
 
     @Slot(list)
     def _on_photos_batch(self, photos: list) -> None:
-        existing = {p.path for p in self._current_photos}
         visible_new: list = []
         for photo in photos:
             visible = (
                 self._current_context == "Toutes les photos"
                 or os.path.normcase(photo.directory) == os.path.normcase(self._current_context)
             )
-            if visible and photo.path not in existing:
+            if visible and photo.path not in self._current_paths:
                 visible_new.append(photo)
                 self._current_photos.append(photo)
-                existing.add(photo.path)
+                self._current_paths.add(photo.path)
         if visible_new:
             self._grid.add_photos_batch(visible_new)
             self._update_status()
@@ -806,6 +814,7 @@ class MainWindow(QMainWindow):
         removed_set = set(paths)
         self._current_photos = [p for p in self._current_photos
                                  if p.path not in removed_set]
+        self._current_paths -= removed_set
         self._grid.remove_photos(paths)
         self._update_status()
         for path in paths:
@@ -838,6 +847,9 @@ class MainWindow(QMainWindow):
 
     @Slot()
     def _on_warmup_done(self) -> None:
+        if self._warmup_thread is not None:
+            self._warmup_thread.deleteLater()
+            self._warmup_thread = None
         if self._face_index_pending:
             self._face_index_pending = False
             self._lbl_action.setText("")
@@ -900,6 +912,8 @@ class MainWindow(QMainWindow):
     def _start_face_indexing(self) -> None:
         if self._face_indexer and self._face_indexer.isRunning():
             return
+        if self._face_indexer is not None:
+            self._face_indexer.deleteLater()
         self._face_indexer = FaceIndexThread(self._face_db, self._catalog, self)
         self._face_indexer.progress.connect(self._on_face_progress)
         self._face_indexer.cluster_requested.connect(self._run_clustering)
@@ -944,6 +958,8 @@ class MainWindow(QMainWindow):
         """Lance le clustering dans un thread séparé pour ne pas bloquer l'UI."""
         if self._cluster_thread and self._cluster_thread.isRunning():
             return   # un clustering est déjà en cours, le prochain le relancera
+        if self._cluster_thread is not None:
+            self._cluster_thread.deleteLater()
         self._cluster_thread = ClusterThread(self._face_db, self)
         self._cluster_thread.finished.connect(self._on_clustering_finished)
         self._cluster_thread.error.connect(
@@ -957,6 +973,8 @@ class MainWindow(QMainWindow):
             self._lbl_action.setText(f"{n_clusters} groupe(s) de visages détecté(s)")
             QTimer.singleShot(4000, lambda: self._lbl_action.setText(""))
         self._refresh_persons()
+        if self._face_panel.isVisible():
+            self._face_panel_refresh_timer.start()
 
     @Slot()
     def _on_face_unavailable(self) -> None:
@@ -1091,6 +1109,8 @@ class MainWindow(QMainWindow):
     def _refresh_persons(self) -> None:
         if self._persons_refresh_thread and self._persons_refresh_thread.isRunning():
             return  # un refresh est déjà en cours
+        if self._persons_refresh_thread is not None:
+            self._persons_refresh_thread.deleteLater()
         self._persons_refresh_thread = _PersonsRefreshThread(self._catalog, self._face_db, self)
         self._persons_refresh_thread.result_ready.connect(self._on_persons_refreshed)
         self._persons_refresh_thread.start()
@@ -1211,8 +1231,12 @@ class MainWindow(QMainWindow):
 
     def _start_photo_query(self, fn, context_key: str) -> None:
         """Lance une requête photo en arrière-plan et met à jour la grille à l'arrivée."""
-        if self._photo_query_thread and self._photo_query_thread.isRunning():
-            self._photo_query_thread.photos_ready.disconnect()
+        if self._photo_query_thread is not None:
+            if self._photo_query_thread.isRunning():
+                self._photo_query_thread.photos_ready.disconnect()
+                self._photo_query_thread.finished.connect(self._photo_query_thread.deleteLater)
+            else:
+                self._photo_query_thread.deleteLater()
         self._photo_query_thread = _PhotoQueryThread(fn, context_key, self)
         self._photo_query_thread.photos_ready.connect(self._on_photo_query_ready)
         self._photo_query_thread.start()
@@ -1220,6 +1244,7 @@ class MainWindow(QMainWindow):
     @Slot(list, str)
     def _on_photo_query_ready(self, photos: list, context_key: str) -> None:
         self._current_photos  = photos
+        self._current_paths   = {p.path for p in photos}
         self._current_context = context_key
         self._grid.set_photos(photos)
         self._update_status()
@@ -1310,6 +1335,7 @@ class MainWindow(QMainWindow):
             # Naviguer vers le dossier destination pour montrer les photos déplacées
             photos = self._catalog.get_photos_in_folder(dest_folder)
             self._current_photos = photos
+            self._current_paths  = {p.path for p in photos}
             self._current_context = dest_folder
             self._grid.set_photos(photos)
             self._update_status()
@@ -1515,6 +1541,8 @@ class MainWindow(QMainWindow):
             return
         if self._reindex_thread and self._reindex_thread.isRunning():
             return
+        if self._reindex_thread is not None:
+            self._reindex_thread.deleteLater()
         self._reindex_thread = SingleFaceReindexThread(
             self._face_db, photo_path, rotation, self
         )
@@ -1570,8 +1598,10 @@ class MainWindow(QMainWindow):
                 errors.append(f"{photo.filename}: {e}")
         if deleted:
             self._grid.remove_photos(deleted)
+            deleted_set = set(deleted)
             self._current_photos = [p for p in self._current_photos
-                                    if p.path not in set(deleted)]
+                                    if p.path not in deleted_set]
+            self._current_paths -= deleted_set
             self._update_status()
             for path in deleted:
                 self._face_db.delete_for_path(path)

@@ -528,10 +528,18 @@ class Sidebar(QWidget):
 
     def refresh_persons(self, persons: list[PersonInfo]) -> None:
         self._persons = persons
-        # Arrêter un chargement précédent si toujours en cours
-        if self._face_loader and self._face_loader.isRunning():
-            self._face_loader.stop()
-            self._face_loader.wait(200)
+        # Arrêter un chargement précédent et libérer le thread Qt enfant
+        if self._face_loader is not None:
+            try:
+                self._face_loader.icon_ready.disconnect(self._on_face_icon_ready)
+            except RuntimeError:
+                pass
+            if self._face_loader.isRunning():
+                self._face_loader.stop()
+                self._face_loader.finished.connect(self._face_loader.deleteLater)
+            else:
+                self._face_loader.deleteLater()
+            self._face_loader = None
         self._persons_list.clear()
         for person in persons:
             label = f"{person.name}  ({person.photo_count})"
