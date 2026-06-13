@@ -613,15 +613,22 @@ class FaceDatabase:
         return [r[0] for r in rows]
 
     def get_clusters_for_person(self, person_id: int) -> list[tuple[int, int]]:
-        """Returns [(cluster_id, face_count)] for clusters linked to a named person,
-        ordered by face count descending."""
+        """Returns [(cluster_id, photo_count)] for clusters where this person has a face.
+        photo_count = distinct photos in the whole cluster (matches the photo grid count).
+        Ordered by photo_count descending."""
         with self._lock:
             conn = self._conn()
             try:
                 rows = conn.execute(
-                    "SELECT cluster_id, COUNT(*) FROM faces"
-                    " WHERE person_id=? AND cluster_id IS NOT NULL"
-                    " GROUP BY cluster_id ORDER BY COUNT(*) DESC",
+                    # Count all distinct photos in each cluster where the person appears.
+                    "SELECT f.cluster_id, COUNT(DISTINCT f.photo_path)"
+                    " FROM faces f"
+                    " WHERE f.cluster_id IN ("
+                    "   SELECT DISTINCT cluster_id FROM faces"
+                    "   WHERE person_id=? AND cluster_id IS NOT NULL"
+                    " )"
+                    " GROUP BY f.cluster_id"
+                    " ORDER BY COUNT(DISTINCT f.photo_path) DESC",
                     (person_id,),
                 ).fetchall()
             finally:
