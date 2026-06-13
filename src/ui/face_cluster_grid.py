@@ -702,6 +702,52 @@ class _ClusterRefreshThread(QThread):
             self.data_ready.emit(None)
 
 
+class _PersonsLoader(QThread):
+    """Charge get_persons + enrich_persons hors du thread UI avant d'ouvrir un dialogue.
+
+    Pour la sélection multi-groupe, calcule aussi la suggestion de personne en
+    comparant les centroïdes des clusters aux centroïdes connus des personnes.
+    """
+
+    ready = Signal(list, object)   # (persons: list[PersonInfo], suggested_person_id | None)
+
+    def __init__(
+        self, catalog, face_db, parent=None,
+        cluster_ids: list | None = None,
+        persons_snap: list | None = None,
+        emb_snap: dict | None = None,
+    ) -> None:
+        super().__init__(parent)
+        self._catalog      = catalog
+        self._face_db      = face_db
+        self._cluster_ids  = cluster_ids or []
+        self._persons_snap = persons_snap or []
+        self._emb_snap     = emb_snap or {}
+
+    def run(self) -> None:
+        try:
+            persons = self._catalog.get_persons()
+            self._face_db.enrich_persons(persons)
+            suggested_id = None
+            if self._cluster_ids:
+                best_sim = 0.0
+                for cid in self._cluster_ids:
+                    c_emb = self._face_db.get_representative_embedding(cluster_id=cid)
+                    if not c_emb:
+                        continue
+                    for p in self._persons_snap:
+                        for p_emb in self._emb_snap.get(p.id, {}).values():
+                            sim = _cosine_sim(c_emb, p_emb)
+                            if sim > best_sim:
+                                best_sim, suggested_id = sim, p.id
+                if best_sim < _SIM_WEAK:
+                    suggested_id = None
+            self.ready.emit(persons, suggested_id)
+        except Exception:
+            logger.exception("_PersonsLoader: erreur inattendue")
+            self.ready.emit([], None)
+
+
 # ------------------------------------------------------------------ grid
 
 class FaceClusterGrid(QWidget):
@@ -1243,10 +1289,12 @@ class FaceClusterGrid(QWidget):
     def _on_card_name_requested(self, cluster_id: int) -> None:
         card = self._cards.get(cluster_id)
         suggested_id = card._suggested_person_id if card else None
+        t = _PersonsLoader(self._catalog, self._face_db, self)
+        t.ready.connect(lambda persons, _: self._show_assign_dialog(cluster_id, suggested_id, persons))
+        t.finished.connect(t.deleteLater)
+        t.start()
 
-        persons = self._catalog.get_persons()
-        self._face_db.enrich_persons(persons)
-
+    def _show_assign_dialog(self, cluster_id: int, suggested_id, persons: list) -> None:
         dlg = _AssignDialog(
             cluster_id, persons,
             suggested_person_id=suggested_id,
@@ -1254,7 +1302,6 @@ class FaceClusterGrid(QWidget):
         )
         if dlg.exec() != QDialog.Accepted:
             return
-
         if dlg.is_ignored():
             self._face_db.ignore_cluster(cluster_id)
             self.cluster_ignored.emit(cluster_id)
@@ -1273,24 +1320,25 @@ class FaceClusterGrid(QWidget):
         cluster_ids = list(self._selected_ids)
         if not cluster_ids:
             return
-        persons = self._catalog.get_persons()
-        self._face_db.enrich_persons(persons)
-        # Suggestion : meilleur score parmi tous les groupes sélectionnés
-        # comparés aux centroïdes par groupe de chaque personne connue.
-        best_sim, best_pid = 0.0, None
-        for cid in cluster_ids:
-            c_emb = self._face_db.get_representative_embedding(cluster_id=cid)
-            if not c_emb:
-                continue
-            for p in self._persons:
-                for p_emb in self._person_cluster_embeddings.get(p.id, {}).values():
-                    sim = _cosine_sim(c_emb, p_emb)
-                    if sim > best_sim:
-                        best_sim, best_pid = sim, p.id
+        t = _PersonsLoader(
+            self._catalog, self._face_db, self,
+            cluster_ids=cluster_ids,
+            persons_snap=list(self._persons),
+            emb_snap=dict(self._person_cluster_embeddings),
+        )
+        t.ready.connect(
+            lambda persons, suggested_id: self._show_multi_assign_dialog(
+                cluster_ids, persons, suggested_id
+            )
+        )
+        t.finished.connect(t.deleteLater)
+        t.start()
+
+    def _show_multi_assign_dialog(self, cluster_ids: list, persons: list, suggested_id) -> None:
         dlg = _AssignDialog(
             cluster_ids[0],
             persons,
-            suggested_person_id=best_pid if best_sim >= _SIM_WEAK else None,
+            suggested_person_id=suggested_id,
             show_ignore=False,
             parent=self,
         )
