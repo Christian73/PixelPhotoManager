@@ -1063,8 +1063,14 @@ class MainWindow(QMainWindow):
 
     @Slot(object)
     def _on_person_merge_requested(self, source: PersonInfo) -> None:
-        persons = self._catalog.get_persons()
-        self._face_db.enrich_persons(persons)
+        # enrich_persons lance une CTE sur toutes les faces nommées — peut durer
+        # plusieurs secondes sur une grande base. On la déporte dans un thread.
+        t = _PersonsRefreshThread(self._catalog, self._face_db, self)
+        t.result_ready.connect(lambda persons, _: self._show_merge_dialog(source, persons))
+        t.finished.connect(t.deleteLater)
+        t.start()
+
+    def _show_merge_dialog(self, source: PersonInfo, persons: list) -> None:
         dlg = MergePersonsDialog(source, persons, self)
         if dlg.exec() != QDialog.Accepted:
             return
@@ -1073,7 +1079,6 @@ class MainWindow(QMainWindow):
             return
         self._face_db.merge_persons(keep_id=target_id, remove_id=source.id)
         self._catalog.delete_person(source.id)
-        # Si la grille montrait les photos de la personne supprimée, recharger
         if self._current_context == f"{_PERSON_CTX_PREFIX}{source.id}":
             paths = self._face_db.get_photos_for_person(target_id)
             photos = self._catalog.get_photos_by_paths(paths)
