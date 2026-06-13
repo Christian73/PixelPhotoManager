@@ -31,6 +31,7 @@ from src.ui.thumbnail_grid import ThumbnailGrid
 from src.ui.photo_viewer import PhotoViewer
 from src.ui.edit_panel import EditPanel, MarkedSlider
 from src.ui.face_cluster_grid import FaceClusterGrid
+from src.ui.person_cluster_view import PersonClusterView
 from src.ui.face_panel import FacePanel
 from src.ui.exif_panel import ExifPanel
 from src.ui.people_panel import MergePersonsDialog, PeopleDialog
@@ -338,6 +339,7 @@ class MainWindow(QMainWindow):
         self._face_index_pending: bool = False
         self._photo_query_thread: _PhotoQueryThread | None = None
         self._persons_refresh_thread: _PersonsRefreshThread | None = None
+        self._from_person_cluster_view: bool = False
 
         self._current_photos: list[PhotoInfo] = []
         self._current_paths: set[str] = set()
@@ -644,6 +646,14 @@ class MainWindow(QMainWindow):
         self._face_cluster_grid.photos_requested.connect(self._on_cluster_photos_requested)
         self._face_cluster_grid.back_requested.connect(self.show_grid)
         self._stack.addWidget(self._face_cluster_grid)
+
+        # Index 3 — Vue des groupes d'une personne nommée
+        self._person_cluster_view = PersonClusterView(self._face_db, self)
+        self._person_cluster_view.photos_requested.connect(
+            self._on_person_cluster_photos_requested
+        )
+        self._person_cluster_view.back_requested.connect(self._on_person_cluster_back)
+        self._stack.addWidget(self._person_cluster_view)
 
         # Connexions sidebar
         self._sidebar.folder_selected.connect(self._on_folder_selected)
@@ -1055,6 +1065,12 @@ class MainWindow(QMainWindow):
         self._grid_nav_bar.show()
 
     def _on_back_nav_clicked(self) -> None:
+        if self._from_person_cluster_view:
+            self._from_person_cluster_view = False
+            person = self._person_cluster_view.current_person
+            if person:
+                self.show_person_clusters(person)
+                return
         if self._current_context.startswith(f"{_PERSON_CTX_PREFIX}cluster_"):
             self.show_face_clusters()
         else:
@@ -1099,17 +1115,8 @@ class MainWindow(QMainWindow):
 
     @Slot(object)
     def _on_person_selected(self, person: PersonInfo) -> None:
-        pid = person.id
-        self._grid.set_ribbon_mode(False)
-        self._grid.set_date_overlay_visible(False)
         self._grid_nav_bar.hide()
-        self.show_grid()
-        self._start_photo_query(
-            lambda: self._catalog.get_photos_by_paths(
-                self._face_db.get_photos_for_person(pid)
-            ),
-            f"{_PERSON_CTX_PREFIX}{pid}",
-        )
+        self.show_person_clusters(person)
 
     def _refresh_persons(self) -> None:
         if self._persons_refresh_thread and self._persons_refresh_thread.isRunning():
@@ -1448,6 +1455,32 @@ class MainWindow(QMainWindow):
         self._act_exif_toggle.setVisible(False)
         self._lbl_fileinfo.setText("")
         self._lbl_action.setText("")
+
+    def show_person_clusters(self, person: PersonInfo) -> None:
+        """Affiche les groupes de visages d'une personne au lieu de ses photos."""
+        self._person_cluster_view.set_person(person)
+        self._stack.setCurrentIndex(3)
+        self._left_stack.setCurrentIndex(0)
+        self._lbl_thumb_size.hide()
+        self._thumb_slider.hide()
+        self._lbl_zoom.hide()
+        self._zoom_slider.hide()
+        self._zoom_pct_label.hide()
+        self._btn_grid_status.hide()
+        self._act_faces_toggle.setVisible(False)
+        self._act_exif_toggle.setVisible(False)
+        self._lbl_fileinfo.setText("")
+        self._lbl_action.setText("")
+
+    def _on_person_cluster_photos_requested(self, cluster_id: int, label: str) -> None:
+        """Double-clic sur une carte de groupe depuis PersonClusterView."""
+        self._from_person_cluster_view = True
+        self._on_cluster_photos_requested(cluster_id, label)
+
+    def _on_person_cluster_back(self) -> None:
+        """Bouton ← Retour dans PersonClusterView → retour à la grille principale."""
+        self._grid_nav_bar.hide()
+        self.show_grid()
 
     def show_viewer(self, photo: PhotoInfo) -> None:
         is_video = photo.media_type == "video"

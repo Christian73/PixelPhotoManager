@@ -612,6 +612,22 @@ class FaceDatabase:
                 conn.close()
         return [r[0] for r in rows]
 
+    def get_clusters_for_person(self, person_id: int) -> list[tuple[int, int]]:
+        """Returns [(cluster_id, face_count)] for clusters linked to a named person,
+        ordered by face count descending."""
+        with self._lock:
+            conn = self._conn()
+            try:
+                rows = conn.execute(
+                    "SELECT cluster_id, COUNT(*) FROM faces"
+                    " WHERE person_id=? AND cluster_id IS NOT NULL"
+                    " GROUP BY cluster_id ORDER BY COUNT(*) DESC",
+                    (person_id,),
+                ).fetchall()
+            finally:
+                conn.close()
+        return [(r[0], r[1]) for r in rows]
+
     def get_photos_for_person(self, person_id: int) -> list[str]:
         """Returns distinct photo paths for a named person."""
         with self._lock:
