@@ -85,7 +85,7 @@ class _PersonCard(QFrame):
         col.addWidget(self._lbl_img, alignment=Qt.AlignHCenter)
 
         plural = "s" if face_count > 1 else ""
-        lbl = QLabel(f"{face_count} visage{plural}")
+        lbl = QLabel(f"{face_count} photo{plural}")
         lbl.setAlignment(Qt.AlignCenter)
         lbl.setStyleSheet("border: none; font-size: 11px; color: #aaa;")
         col.addWidget(lbl)
@@ -240,7 +240,7 @@ class PersonClusterView(QWidget):
         cols = self._compute_cols()
         for idx, (cluster_id, face_count) in enumerate(clusters):
             plural = "s" if face_count > 1 else ""
-            nav_label = f"Groupe {cluster_id} — {face_count} visage{plural}"
+            nav_label = f"Groupe {cluster_id} — {face_count} photo{plural}"
             card = _PersonCard(cluster_id, face_count, self._content)
             card.double_clicked.connect(
                 lambda cid=cluster_id, lbl=nav_label: self.photos_requested.emit(cid, lbl)
