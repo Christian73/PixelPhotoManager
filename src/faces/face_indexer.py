@@ -11,7 +11,8 @@ from src.library.catalog import Catalog
 logger = logging.getLogger(__name__)
 
 
-_CLUSTER_EVERY    = 200  # relancer le clustering tous les N visages trouvés
+_CLUSTER_EVERY   = 1000  # relancer le clustering tous les N visages trouvés
+_DETECT_TIMEOUT  = 180   # secondes max par photo — au-delà le subprocess est tué et relancé
 
 
 class TFWarmUpThread(QThread):
@@ -90,23 +91,21 @@ class FaceIndexThread(QThread):
         faces_found = 0
 
         # ── Sous-processus dédié pour detect_and_embed ─────────────────────
-        # Le subprocess a son propre GIL Python.  Même si TF tient son GIL
-        # pendant ~20 s lors de l'init (eager context, CUDA, compilation XLA),
-        # le process principal (UI) n'est jamais bloqué.
-        #
-        # progress(0, total) → "Initialisation de l'analyse…" (UI réactive)
-        # progress(i+1, total) → "Analyse visages… i/total" (boucle normale)
-        with concurrent.futures.ProcessPoolExecutor(max_workers=1) as executor:
-
-            # Phase 1 — warmup dans le subprocess (TF s'initialise ~20 s,
-            # sans bloquer l'UI car c'est dans un autre processus).
+        # Géré manuellement (pas de `with`) pour pouvoir recréer l'executor
+        # quand un subprocess se plante ou dépasse _DETECT_TIMEOUT secondes.
+        executor = concurrent.futures.ProcessPoolExecutor(max_workers=1)
+        try:
+            # Phase 1 — warmup dans le subprocess (TF s'initialise ~20 s).
             self.progress.emit(0, total)
             try:
-                executor.submit(warmup_worker).result()
+                executor.submit(warmup_worker).result(timeout=300)
+            except concurrent.futures.TimeoutError:
+                logger.error("FaceIndexThread: warmup timeout, abandon")
+                journal.error("FaceIndexThread", "warmup timeout", t0)
+                self.finished.emit(0, 0)
+                return
             except concurrent.futures.BrokenExecutor as exc:
-                # Le sous-processus a crashé avant même le warmup — abandon propre
-                # (ne pas émettre unavailable : deepface est peut-être bien installé)
-                logger.warning("FaceIndexThread: sous-processus crashé au warmup, abandon: %s", exc)
+                logger.warning("FaceIndexThread: sous-processus crashé au warmup: %s", exc)
                 journal.error("FaceIndexThread", f"warmup crash: {exc}", t0)
                 return
             except Exception as exc:
@@ -127,13 +126,32 @@ class FaceIndexThread(QThread):
                 )
 
                 try:
-                    detections = executor.submit(detect_and_embed, path).result()
+                    future = executor.submit(detect_and_embed, path)
+                    try:
+                        detections = future.result(timeout=_DETECT_TIMEOUT)
+                    except concurrent.futures.TimeoutError:
+                        # Subprocess planté — le tuer et en relancer un propre.
+                        logger.error(
+                            "FaceIndexThread: timeout %ds sur %s — subprocess relancé",
+                            _DETECT_TIMEOUT, os.path.basename(path),
+                        )
+                        journal.step(
+                            "FaceIndexThread",
+                            f"TIMEOUT {os.path.basename(path)}",
+                            t0,
+                        )
+                        executor.shutdown(wait=False, cancel_futures=True)
+                        executor = concurrent.futures.ProcessPoolExecutor(max_workers=1)
+                        try:
+                            executor.submit(warmup_worker).result(timeout=300)
+                        except Exception as exc2:
+                            logger.warning("FaceIndexThread: re-warmup: %s", exc2)
+                        self.error.emit(path, f"timeout ({_DETECT_TIMEOUT}s)")
+                        continue
                 except concurrent.futures.BrokenExecutor as exc:
-                    # Pool cassé (crash process) — pas un problème deepface
                     logger.error("FaceIndexThread: pool cassé, abandon: %s", exc)
                     break
                 except RuntimeError as exc:
-                    # deepface non installé ou erreur fatale dans detect_and_embed
                     logger.warning("FaceIndexThread: %s", exc)
                     self.unavailable.emit()
                     break
@@ -149,6 +167,13 @@ class FaceIndexThread(QThread):
                     self.photo_indexed.emit(path, len(detections))
                     if faces_found % _CLUSTER_EVERY == 0:
                         self.cluster_requested.emit()
+
+        finally:
+            executor.shutdown(wait=False, cancel_futures=True)
+
+        # Clustering final — une passe complète à la fin de l'indexation
+        if indexed > 0:
+            self.cluster_requested.emit()
 
         journal.end(
             "FaceIndexThread",
