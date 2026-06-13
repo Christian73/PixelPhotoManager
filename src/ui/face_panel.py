@@ -30,25 +30,70 @@ _WIDTH  = 130   # largeur totale du panneau
 # ------------------------------------------------------------------ async loader
 
 class _FacePanelLoader(QThread):
-    """Charge les vignettes de visage en arrière-plan."""
+    """Charge les vignettes de visage en arrière-plan.
+
+    Ouvre chaque fichier image UNE SEULE FOIS et en extrait tous les visages,
+    évitant de décoder N fois un même JPEG de 20 Mpx pour N visages.
+    """
     ready = Signal(int, bytes)   # face_id, PNG bytes
 
     def __init__(self, items: list[tuple[int, object]], parent=None) -> None:
         super().__init__(parent)
-        self._items = items   # [(face_id, FaceInfo), ...]
+        self._items     = items   # [(face_id, FaceInfo), ...]
+        self._stop_flag = False
+
+    def stop(self) -> None:
+        self._stop_flag = True
 
     def run(self) -> None:
-        for face_id, face in self._items:
-            data = _face_bytes(face, _THUMB)
-            if data:
-                self.ready.emit(face_id, data)
+        if not self._items:
+            return
+        try:
+            import io as _io
+            from PIL import Image, ImageOps
+
+            # Tous les visages du panneau sont issus de la même photo — une seule ouverture.
+            photo_path = self._items[0][1].photo_path
+            try:
+                base_img = ImageOps.exif_transpose(Image.open(photo_path)).convert("RGB")
+            except Exception as exc:
+                logger.debug("_FacePanelLoader: impossible d'ouvrir %s: %s", photo_path, exc)
+                return
+
+            for face_id, face in self._items:
+                if self._stop_flag:
+                    break
+                try:
+                    img = base_img
+                    if face.detected_rotation:
+                        img = base_img.rotate(-face.detected_rotation, expand=True)
+                    x, y, w, h = face.bbox_x, face.bbox_y, face.bbox_w, face.bbox_h
+                    pad = int(max(w, h) * 0.18)
+                    crop = img.crop((
+                        max(0, x - pad), max(0, y - pad),
+                        min(img.width, x + w + pad), min(img.height, y + h + pad),
+                    )).resize((_THUMB, _THUMB))
+                    buf = _io.BytesIO()
+                    crop.save(buf, format="PNG")
+                    data = buf.getvalue()
+                    if data:
+                        self.ready.emit(face_id, data)
+                except Exception as exc:
+                    logger.debug("_FacePanelLoader face %s: %s", face_id, exc)
+        except Exception as exc:
+            logger.debug("_FacePanelLoader: %s", exc)
 
 
 # ------------------------------------------------------------------ faces data loader
 
 class _FacesDataLoader(QThread):
-    """Charge get_faces_for_photo + get_persons depuis un thread secondaire."""
-    data_ready = Signal(str, list, dict, dict)  # photo_path, faces, person_names, cluster_persons
+    """Charge get_faces_for_photo + get_persons depuis un thread secondaire.
+
+    Les dicts sont transmis comme list de tuples pour éviter la coercition
+    des clés entières en str par PySide6 lors des connexions cross-thread.
+    """
+    # photo_path, faces, person_names_items [(int,str)], cluster_persons_items [(int,int)]
+    data_ready = Signal(str, list, list, list)
 
     def __init__(self, face_db: "FaceDatabase", catalog, photo_path: str, parent=None) -> None:
         super().__init__(parent)
@@ -72,18 +117,17 @@ class _FacesDataLoader(QThread):
                 self._face_db.get_cluster_persons(unresolved) if unresolved else {}
             )
 
-            all_person_ids = (
-                {f.person_id for f in faces if f.person_id}
-                | set(cluster_persons.values())
-            )
-            person_names: dict[int, str] = {}
-            if all_person_ids:
-                persons = self._catalog.get_persons()
-                person_names = {p.id: p.name for p in persons}
+            persons = self._catalog.get_persons()
+            person_names_items = [(p.id, p.name) for p in persons]
 
-            self.data_ready.emit(self._photo_path, faces, person_names, cluster_persons)
+            self.data_ready.emit(
+                self._photo_path, faces,
+                person_names_items,
+                list(cluster_persons.items()),
+            )
         except Exception:
-            self.data_ready.emit(self._photo_path, [], {}, {})
+            logger.exception("[FacesDataLoader] exception during load")
+            self.data_ready.emit(self._photo_path, [], [], [])
 
 
 # ------------------------------------------------------------------ face item
@@ -242,18 +286,36 @@ class FacePanel(QWidget):
         self._stop_loader()
         self._clear()
 
-        if self._data_loader and self._data_loader.isRunning():
-            self._data_loader.data_ready.disconnect()
+        # Toujours déconnecter et libérer l'ancien loader pour éviter l'accumulation
+        # de threads orphelins en tant qu'enfants Qt (zombies C++).
+        if self._data_loader is not None:
+            try:
+                self._data_loader.data_ready.disconnect()
+            except RuntimeError:
+                pass
+            if self._data_loader.isRunning():
+                self._data_loader.finished.connect(self._data_loader.deleteLater)
+            else:
+                self._data_loader.deleteLater()
         self._data_loader = _FacesDataLoader(self._face_db, self._catalog, photo_path, self)
         self._data_loader.data_ready.connect(self._on_faces_data_ready)
         self._data_loader.start()
 
-    @Slot(str, list, dict, dict)
+    @Slot(str, list, list, list)
     def _on_faces_data_ready(
-        self, photo_path: str, faces: list, person_names: dict, cluster_persons: dict
+        self,
+        photo_path: str,
+        faces: list,
+        person_names_items: list,
+        cluster_persons_items: list,
     ) -> None:
         if photo_path != self._current_photo:
             return  # navigation entre-temps
+
+        # Reconstruire les dicts avec des clés int explicites — évite la coercition
+        # des clés en str par PySide6 lors de la transmission cross-thread via Signal.
+        person_names: dict[int, str] = {int(k): v for k, v in person_names_items}
+        cluster_persons: dict[int, int] = {int(k): v for k, v in cluster_persons_items}
 
         self._clear()
         if not faces:
@@ -265,8 +327,15 @@ class FacePanel(QWidget):
                 self.all_faces_toggled.emit([])
             return
 
-        # Trier de gauche à droite (bbox_x)
-        faces_sorted = sorted(faces, key=lambda f: f.bbox_x)
+        # Trier : visages nommés en premier, puis anonymes ; dans chaque groupe, gauche→droite.
+        def _sort_key(f):
+            named = bool(
+                (f.person_id and f.person_id in person_names)
+                or (f.cluster_id is not None and f.cluster_id in cluster_persons)
+            )
+            return (0 if named else 1, f.bbox_x)
+
+        faces_sorted = sorted(faces, key=_sort_key)
 
         loader_items = []
         for face in faces_sorted:
@@ -306,20 +375,11 @@ class FacePanel(QWidget):
         """Construit et affiche le menu contextuel d'un visage.
         Appelé depuis le panneau (via _on_item_context_menu) et depuis la visionneuse."""
         menu = QMenu(self)
-        act_assign = menu.addAction("Identifier cette personne…")
-        act_unassign = menu.addAction("Désallouer")
+        act_assign = menu.addAction("Identifier ce groupe…")
+        act_unassign = menu.addAction("Désallouer le groupe")
         act_unassign.setEnabled(
             face.person_id is not None or face.cluster_id is not None
         )
-        in_normal_cluster = (
-            face.cluster_id is not None
-            and face.cluster_id >= 0
-            and not face.pinned
-        )
-        act_isolate = menu.addAction("Séparer ce visage du groupe")
-        act_isolate.setEnabled(in_normal_cluster)
-        act_set_cover = menu.addAction("Utiliser comme vignette du groupe")
-        act_set_cover.setEnabled(in_normal_cluster)
         menu.addSeparator()
         act_ignore = menu.addAction("Ignorer ce visage")
 
@@ -328,10 +388,6 @@ class FacePanel(QWidget):
             self._on_assign_requested(face.id)
         elif chosen == act_unassign:
             self._on_unassign_requested(face.id)
-        elif chosen == act_isolate:
-            self._on_isolate_requested(face.id)
-        elif chosen == act_set_cover:
-            self._on_set_cover_requested(face.id)
         elif chosen == act_ignore:
             self._on_ignore_requested(face.id)
 
@@ -417,10 +473,15 @@ class FacePanel(QWidget):
             and face.cluster_id >= 0
             and not face.pinned
         ):
+            logger.debug(
+                "[FacePanel] assign_person_to_cluster cluster=%s person=%s",
+                face.cluster_id, person_id,
+            )
             self._face_db.assign_person_to_cluster(face.cluster_id, person_id)
-        # Toujours mettre à jour cette face spécifiquement :
-        # le cluster_id en mémoire peut être périmé si le regroupement a tourné
-        # entre-temps, auquel que UPDATE…cluster_id ne touche pas cette face.
+        logger.debug(
+            "[FacePanel] assign_person_to_face face=%s person=%s",
+            face_id, person_id,
+        )
         self._face_db.assign_person_to_face(face_id, person_id)
         self.set_photo(self._current_photo)
 
@@ -456,9 +517,14 @@ class FacePanel(QWidget):
         self._selected_face_id = None
 
     def _stop_loader(self) -> None:
-        if self._loader and self._loader.isRunning():
-            try:
-                self._loader.ready.disconnect(self._on_face_ready)
-            except RuntimeError:
-                pass
+        if self._loader is not None:
+            self._loader.stop()
+            if self._loader.isRunning():
+                try:
+                    self._loader.ready.disconnect(self._on_face_ready)
+                except RuntimeError:
+                    pass
+                self._loader.finished.connect(self._loader.deleteLater)
+            else:
+                self._loader.deleteLater()
             self._loader = None

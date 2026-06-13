@@ -881,20 +881,34 @@ class FaceClusterGrid(QWidget):
 
     def refresh(self) -> None:
         """Lance le chargement en arrière-plan et affiche un indicateur immédiatement."""
-        # Arrêter le loader d'avatars en cours
-        if self._loader and self._loader.isRunning():
+        # Arrêter le loader d'avatars en cours et libérer le thread Qt enfant
+        if self._loader is not None:
             try:
                 self._loader.avatar_ready.disconnect(self._on_avatar_ready)
             except RuntimeError:
                 pass
+            if self._loader.isRunning():
+                self._loader.finished.connect(self._loader.deleteLater)
+            else:
+                self._loader.deleteLater()
             self._loader = None
 
-        # Arrêter un refresh précédent encore en cours
-        if self._refresh_thread and self._refresh_thread.isRunning():
-            try:
-                self._refresh_thread.data_ready.disconnect()
-            except RuntimeError:
-                pass
+        # Arrêter un refresh précédent encore en cours et libérer le thread Qt enfant
+        if self._refresh_thread is not None:
+            if self._refresh_thread.isRunning():
+                try:
+                    self._refresh_thread.data_ready.disconnect()
+                    self._refresh_thread.initial_ready.disconnect()
+                except RuntimeError:
+                    pass
+                self._refresh_thread.finished.connect(self._refresh_thread.deleteLater)
+            else:
+                self._refresh_thread.deleteLater()
+            self._refresh_thread = None
+
+        # Vider le cache d'avatars : les cluster_id changent à chaque re-clustering,
+        # les anciennes entrées s'accumuleraient sans cette purge.
+        self._avatar_cache.clear()
 
         self._build_generation += 1   # annule tout build par lots encore en file d'attente
         self._cards.clear()
@@ -988,12 +1002,16 @@ class FaceClusterGrid(QWidget):
             self.refresh()
             return
 
-        # Arrêter un loader d'avatars en cours
-        if self._loader and self._loader.isRunning():
+        # Arrêter un loader d'avatars en cours et libérer le thread Qt enfant
+        if self._loader is not None:
             try:
                 self._loader.avatar_ready.disconnect(self._on_avatar_ready)
             except RuntimeError:
                 pass
+            if self._loader.isRunning():
+                self._loader.finished.connect(self._loader.deleteLater)
+            else:
+                self._loader.deleteLater()
             self._loader = None
 
         self._progress_widget.setVisible(False)
@@ -1046,11 +1064,15 @@ class FaceClusterGrid(QWidget):
         self._cached_data = data
 
         # Arrêter le loader d'avatars de la phase 1 (les bytes sont dans _avatar_cache)
-        if self._loader and self._loader.isRunning():
+        if self._loader is not None:
             try:
                 self._loader.avatar_ready.disconnect(self._on_avatar_ready)
             except RuntimeError:
                 pass
+            if self._loader.isRunning():
+                self._loader.finished.connect(self._loader.deleteLater)
+            else:
+                self._loader.deleteLater()
             self._loader = None
 
         # Vider et reconstruire

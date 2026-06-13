@@ -25,6 +25,9 @@ folium>=0.16.0
 # Export PDF (planches contact, diaporamas)
 reportlab>=4.1.0
 
+# Monitoring système (RSS mémoire pour le journal de threads)
+psutil>=5.9.0
+
 # Packaging
 pyinstaller>=6.4.0
 

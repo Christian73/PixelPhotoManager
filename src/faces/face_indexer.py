@@ -11,7 +11,8 @@ from src.library.catalog import Catalog
 logger = logging.getLogger(__name__)
 
 
-_CLUSTER_EVERY = 25   # relancer le clustering tous les N visages trouvés
+_CLUSTER_EVERY    = 25   # relancer le clustering tous les N visages trouvés
+_SESSION_MAX      = 100  # photos analysées par démarrage (le reste au prochain)
 
 
 class TFWarmUpThread(QThread):
@@ -71,11 +72,12 @@ class FaceIndexThread(QThread):
         self._stop_flag = False
 
     def run(self) -> None:
-        from src.core.thread_journal import journal
+        from src.core.thread_journal import journal, rss_mb
         self.setPriority(QThread.LowestPriority)
 
         all_paths = self._catalog.get_all_photo_paths()
         to_index = self._face_db.get_paths_to_index(all_paths)
+        to_index = to_index[:_SESSION_MAX]
         total = len(to_index)
 
         if total == 0:
@@ -83,7 +85,8 @@ class FaceIndexThread(QThread):
             self.finished.emit(0, 0)
             return
 
-        t0 = journal.start("FaceIndexThread", f"{total} photo(s) à analyser (visages)")
+        t0 = journal.start("FaceIndexThread", f"{total} photo(s) à analyser (visages)",
+                           rss_mb=round(rss_mb(), 1))
         logger.info("FaceIndexThread: %d photo(s) à analyser", total)
         indexed = 0
         faces_found = 0
@@ -148,11 +151,13 @@ class FaceIndexThread(QThread):
                     self.photo_indexed.emit(path, len(detections))
                     if faces_found % _CLUSTER_EVERY == 0:
                         self.cluster_requested.emit()
+                self.msleep(200)
 
         journal.end(
             "FaceIndexThread",
             f"{indexed} photo(s) analysée(s), {faces_found} visage(s)",
             t0,
+            rss_mb=round(rss_mb(), 1),
         )
         logger.info(
             "FaceIndexThread terminé : %d photo(s) analysée(s), %d visage(s)",

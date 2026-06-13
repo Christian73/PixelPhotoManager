@@ -25,8 +25,8 @@ def _run_clustering(face_db: FaceDatabase) -> int:
     except ImportError as exc:
         raise RuntimeError(f"Le clustering nécessite numpy et scikit-learn : {exc}")
 
-    embeddings, face_ids = face_db.get_all_embeddings()
-    n = len(embeddings)
+    X, face_ids = face_db.get_all_embeddings()
+    n = len(face_ids)
 
     if n == 0:
         logger.debug("Clustering: aucun visage")
@@ -35,7 +35,7 @@ def _run_clustering(face_db: FaceDatabase) -> int:
     threshold = Config().get("faces.cluster_threshold", _DEFAULT_THRESHOLD)
     logger.info("Clustering: %d visages (seuil cosinus=%.2f)", n, threshold)
 
-    X = np.array(embeddings, dtype=np.float32)
+    X = X.astype(np.float32, copy=False)
     norms = np.linalg.norm(X, axis=1, keepdims=True)
     norms[norms == 0] = 1.0
     X /= norms
@@ -76,11 +76,13 @@ class ClusterThread(QThread):
         self._face_db = face_db
 
     def run(self) -> None:
-        from src.core.thread_journal import journal
-        t0 = journal.start("ClusterThread", "Clustering des visages")
+        from src.core.thread_journal import journal, rss_mb
+        t0 = journal.start("ClusterThread", "Clustering des visages",
+                           rss_mb=round(rss_mb(), 1))
         try:
             n = _run_clustering(self._face_db)
-            journal.end("ClusterThread", f"{n} groupe(s) formé(s)", t0)
+            journal.end("ClusterThread", f"{n} groupe(s) formé(s)", t0,
+                        rss_mb=round(rss_mb(), 1))
             self.finished.emit(n)
         except Exception as exc:
             journal.error("ClusterThread", str(exc), t0)

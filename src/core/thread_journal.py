@@ -24,6 +24,15 @@ from pathlib import Path
 
 from src.core.app_dirs import APP_DATA_DIR
 
+
+def rss_mb() -> float:
+    """Retourne la mémoire résidente (RSS) du processus en Mo. 0.0 si indisponible."""
+    try:
+        import psutil
+        return psutil.Process().memory_info().rss / 1_048_576
+    except Exception:
+        return 0.0
+
 _JOURNAL_PATH = APP_DATA_DIR / "thread_journal.jsonl"
 _MAX_LINES    = 8_000   # rotation au-delà de cette limite
 _KEEP_LINES   = 5_000   # lignes conservées après rotation

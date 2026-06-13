@@ -192,8 +192,13 @@ class FaceDatabase:
 
     # ------------------------------------------------------------------ clustering
 
-    def get_all_embeddings(self) -> tuple[list[list[float]], list[int]]:
-        """Returns (embeddings, face_ids) for non-pinned faces with stored embeddings."""
+    def get_all_embeddings(self) -> tuple["np.ndarray", list[int]]:
+        """Returns (embeddings, face_ids) for non-pinned faces with stored embeddings.
+
+        embeddings is a float32 ndarray of shape (N, D) built directly from the
+        binary blobs — avoids creating N×D Python float objects as an intermediate.
+        """
+        import numpy as np
         with self._lock:
             conn = self._conn()
             try:
@@ -204,8 +209,10 @@ class FaceDatabase:
                 ).fetchall()
             finally:
                 conn.close()
+        if not rows:
+            return np.empty((0, 0), dtype=np.float32), []
         face_ids = [r[0] for r in rows]
-        embeddings = [_dec(r[1]) for r in rows]
+        embeddings = np.stack([np.frombuffer(r[1], dtype=np.float32) for r in rows])
         return embeddings, face_ids
 
     def update_clusters(self, face_ids: list[int], labels: list[int]) -> None:
@@ -226,6 +233,25 @@ class FaceDatabase:
                         for fid, label in zip(face_ids, labels)
                     ],
                 )
+                # Propager le person_id aux faces sans person_id dans un cluster déjà nommé.
+                # Couvre le cas d'une nouvelle face ajoutée par reclustering à un cluster
+                # dont d'autres faces ont déjà un person_id (assignation antérieure).
+                conn.execute("""
+                    UPDATE faces
+                    SET person_id = (
+                        SELECT f2.person_id FROM faces f2
+                        WHERE f2.cluster_id = faces.cluster_id
+                          AND f2.person_id IS NOT NULL
+                        LIMIT 1
+                    )
+                    WHERE cluster_id IS NOT NULL
+                      AND person_id IS NULL
+                      AND EXISTS (
+                          SELECT 1 FROM faces f3
+                          WHERE f3.cluster_id = faces.cluster_id
+                            AND f3.person_id IS NOT NULL
+                      )
+                """)
                 conn.commit()
             finally:
                 conn.close()

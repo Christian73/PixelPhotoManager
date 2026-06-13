@@ -80,9 +80,11 @@ class ScanThread(QThread):
 
         batch: list = []
 
-        for filepath in all_files:
+        for file_count, filepath in enumerate(all_files, 1):
             if self._stop_flag:
                 break
+            if file_count % 200 == 0:
+                self.msleep(5)
             try:
                 stat = os.stat(filepath)
                 mtime = stat.st_mtime

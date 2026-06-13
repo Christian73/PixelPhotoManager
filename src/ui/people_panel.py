@@ -584,10 +584,17 @@ class PeopleDialog(QDialog):
         layout.addWidget(btn_close, alignment=Qt.AlignRight)
 
     def refresh(self) -> None:
-        # Arrêter un éventuel chargement d'avatars en cours
-        if hasattr(self, "_avatar_loader") and self._avatar_loader.isRunning():
-            self._avatar_loader.terminate()
-            self._avatar_loader.wait()
+        # Arrêter un éventuel chargement d'avatars en cours et libérer le thread Qt enfant
+        if hasattr(self, "_avatar_loader") and self._avatar_loader is not None:
+            try:
+                self._avatar_loader.avatar_ready.disconnect(self._on_avatar_ready)
+            except RuntimeError:
+                pass
+            if self._avatar_loader.isRunning():
+                self._avatar_loader.finished.connect(self._avatar_loader.deleteLater)
+            else:
+                self._avatar_loader.deleteLater()
+            self._avatar_loader = None
 
         while self._content_layout.count():
             item = self._content_layout.takeAt(0)
