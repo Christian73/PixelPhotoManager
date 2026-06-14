@@ -59,14 +59,14 @@ def _run_clustering(face_db: FaceDatabase) -> int:
         norms2[norms2 == 0] = 1.0
         X /= norms2
 
-    # cluster_selection_epsilon cause un bug sklearn sur certaines structures
-    # d'arbre (traverse_upwards TypeError avec peu de faces) — désactivé (=0.0).
-    # min_cluster_size=2 + min_samples=1 suffisent pour regrouper les visages proches.
+    # cluster_selection_method='leaf' : sélectionne chaque feuille de l'arbre condensé
+    # comme cluster distinct → groupes serrés, seuls les visages très proches ensemble.
+    # Évite aussi le bug sklearn traverse_upwards (propre à la méthode 'eom').
     labels = HDBSCAN(
         min_cluster_size=2,
         min_samples=1,
         metric="euclidean",
-        cluster_selection_epsilon=0.0,
+        cluster_selection_method="leaf",
         copy=True,
     ).fit_predict(X)
 
