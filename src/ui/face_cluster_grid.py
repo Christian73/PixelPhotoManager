@@ -651,18 +651,41 @@ class _ClusterRefreshThread(QThread):
                 key=lambda g: (-len(g), -sum(face_counts.get(c, 0) for c in g)),
             )
 
+            # ── Phase 2 : étiquettes des groupes multi-clusters (vectorisé) ─
+            step += 1
+            n_multi = sum(1 for g in groups_sorted if len(g) > 1)
+            self.progress.emit(step, N, f"Calcul des étiquettes de groupes ({n_multi} groupe{('s' if n_multi > 1 else '')})…")
+            N += 1   # on ajoute une étape au total pour cette phase
+
+            try:
+                import numpy as _np
+
+                def _avg_sim_np(group: list[int]) -> float:
+                    valid = [c for c in group if c in cluster_embeddings]
+                    if len(valid) < 2:
+                        return 0.0
+                    mat = _np.array([cluster_embeddings[c] for c in valid], dtype=_np.float32)
+                    norms = _np.linalg.norm(mat, axis=1, keepdims=True)
+                    mat /= _np.where(norms > 1e-8, norms, 1.0)
+                    sim_mat = mat @ mat.T
+                    ng = len(valid)
+                    ti, tj = _np.triu_indices(ng, k=1)
+                    return float(sim_mat[ti, tj].mean()) if len(ti) > 0 else 0.0
+            except ImportError:
+                def _avg_sim_np(group: list[int]) -> float:  # type: ignore[misc]
+                    sims = [
+                        _cosine_sim(cluster_embeddings[ci], cluster_embeddings[cj])
+                        for i, ci in enumerate(group)
+                        for cj in group[i + 1:]
+                        if ci in cluster_embeddings and cj in cluster_embeddings
+                    ]
+                    return sum(sims) / len(sims) if sims else 0.0
+
             group_labels: dict[int, tuple[str, str]] = {}
             for group in groups_sorted:
                 root = group[0]
                 if len(group) > 1:
-                    group_by_size = sorted(group, key=lambda c: -face_counts.get(c, 0))
-                    sims = [
-                        _cosine_sim(cluster_embeddings[ci], cluster_embeddings[cj])
-                        for i, ci in enumerate(group_by_size)
-                        for cj in group_by_size[i + 1:]
-                        if ci in cluster_embeddings and cj in cluster_embeddings
-                    ]
-                    avg_sim = sum(sims) / len(sims) if sims else 0.0
+                    avg_sim = _avg_sim_np(sorted(group, key=lambda c: -face_counts.get(c, 0)))
                     pct     = int(avg_sim * 100)
                     n_faces = sum(face_counts.get(c, 0) for c in group)
                     fp      = "s" if n_faces > 1 else ""
