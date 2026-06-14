@@ -37,8 +37,9 @@ class _LoadThread(QThread):
 
     def run(self) -> None:
         edit = self._edit_db.load(self._photo.path) if self._edit_db else None
-        pixmap = _build_pixmap(self._photo, edit)
-        if pixmap:
+        result = _build_pixmap(self._photo, edit)
+        if result:
+            pixmap, *_ = result
             self.ready.emit(pixmap)
 
 
