@@ -16,20 +16,13 @@ _DETECT_TIMEOUT  = 180   # secondes max par photo — au-delà le subprocess est
 
 
 class TFWarmUpThread(QThread):
-    """
-    Pré-initialise TensorFlow et les modèles DeepFace (ArcFace + RetinaFace) en
-    arrière-plan dès le démarrage de l'app, en parallèle avec le scan initial.
+    """Conservé pour compatibilité — se termine immédiatement.
 
-    Sans ce pré-chargement, le premier appel à detect_and_embed() bloque le
-    thread principal ~20 s pendant l'init TF (tenu du GIL Python par l'import).
-    En le faisant ici — avant la fin du scan — ce coût est payé en avance et
-    devient invisible pour l'utilisateur.
+    InsightFace/ONNX n'a pas de warmup UI-bloquant : le chargement des modèles
+    se fait dans le ProcessPoolExecutor worker via warmup_worker().
     """
 
     def run(self) -> None:
-        # Le warmup TF est désormais géré directement dans le sous-processus
-        # de FaceIndexThread (ProcessPoolExecutor).  Ce thread se termine
-        # immédiatement pour débloquer _on_warmup_done → _start_face_indexing().
         pass
 
 
@@ -48,7 +41,7 @@ class FaceIndexThread(QThread):
     finished(photos_indexed, faces_found)
         Emitted when the thread ends (normally or after stop()).
     unavailable()
-        Emitted if deepface is not installed — indexing is aborted.
+        Emitted if insightface is not installed — indexing is aborted.
     error(path, message)
         Emitted for non-fatal per-photo errors.
     """

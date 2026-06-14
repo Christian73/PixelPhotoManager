@@ -12,9 +12,9 @@ opencv-python>=4.9.0
 piexif>=1.1.3
 
 # Reconnaissance faciale
-deepface>=0.0.91
-retinaface>=0.0.17
-scikit-learn>=1.4.0          # DBSCAN clustering
+insightface>=0.7.3           # ArcFace R100 + SCRFD-10GF (buffalo_l)
+onnxruntime>=1.17.0          # backend ONNX pour insightface (CPU)
+scikit-learn>=1.4.0          # HDBSCAN clustering
 
 # Hashing perceptuel (détection doublons)
 imagehash>=4.3.1
