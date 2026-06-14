@@ -169,6 +169,14 @@ class FaceDatabase:
                 conn.execute(
                     "DELETE FROM faces WHERE photo_path=?", (photo_path,)
                 )
+                # Remettre les annotations Picasa à consumed=0 pour qu'elles soient
+                # ré-appliquées aux nouvelles détections ci-dessous.
+                # Sans ça, une re-analyse efface les faces mais laisse consumed=1 :
+                # les annotations ne seraient jamais ré-appliquées.
+                conn.execute(
+                    "UPDATE picasa_annotations SET consumed=0 WHERE photo_path=?",
+                    (photo_path,)
+                )
                 for det in detections:
                     x, y, w, h = det["bbox"]
                     emb = det.get("embedding")
@@ -232,6 +240,16 @@ class FaceDatabase:
                         (int(label) if label >= 0 else None, fid)
                         for fid, label in zip(face_ids, labels)
                     ],
+                )
+                # Nettoyer les faces ArcFace qui sont devenues bruit (cluster_id=NULL)
+                # mais conservent un person_id résiduel d'un clustering précédent.
+                # Les faces sans embedding (placeholders Picasa) sont préservées.
+                conn.execute(
+                    "UPDATE faces SET person_id=NULL"
+                    " WHERE (pinned IS NULL OR pinned=0)"
+                    "   AND cluster_id IS NULL"
+                    "   AND person_id IS NOT NULL"
+                    "   AND embedding IS NOT NULL"
                 )
                 # Propager le person_id aux faces sans person_id dans un cluster déjà nommé.
                 # Couvre le cas d'une nouvelle face ajoutée par reclustering à un cluster
@@ -614,26 +632,36 @@ class FaceDatabase:
 
     def get_clusters_for_person(self, person_id: int) -> list[tuple[int, int]]:
         """Returns [(cluster_id, photo_count)] for clusters where this person has a face.
-        photo_count = distinct photos in the whole cluster (matches the photo grid count).
+        photo_count = distinct photos WHERE THIS PERSON's face appears in the cluster.
         Ordered by photo_count descending."""
         with self._lock:
             conn = self._conn()
             try:
                 rows = conn.execute(
-                    # Count all distinct photos in each cluster where the person appears.
-                    "SELECT f.cluster_id, COUNT(DISTINCT f.photo_path)"
-                    " FROM faces f"
-                    " WHERE f.cluster_id IN ("
-                    "   SELECT DISTINCT cluster_id FROM faces"
-                    "   WHERE person_id=? AND cluster_id IS NOT NULL"
-                    " )"
-                    " GROUP BY f.cluster_id"
-                    " ORDER BY COUNT(DISTINCT f.photo_path) DESC",
+                    "SELECT cluster_id, COUNT(DISTINCT photo_path)"
+                    " FROM faces"
+                    " WHERE person_id=? AND cluster_id IS NOT NULL"
+                    " GROUP BY cluster_id"
+                    " ORDER BY COUNT(DISTINCT photo_path) DESC",
                     (person_id,),
                 ).fetchall()
             finally:
                 conn.close()
         return [(r[0], r[1]) for r in rows]
+
+    def unassign_person_from_cluster(self, person_id: int, cluster_id: int) -> None:
+        """Clears person_id on all faces of cluster_id that belong to this person."""
+        with self._lock:
+            conn = self._conn()
+            try:
+                conn.execute(
+                    "UPDATE faces SET person_id = NULL"
+                    " WHERE person_id = ? AND cluster_id = ?",
+                    (person_id, cluster_id),
+                )
+                conn.commit()
+            finally:
+                conn.close()
 
     def get_photos_for_person(self, person_id: int) -> list[str]:
         """Returns distinct photo paths for a named person."""
@@ -771,9 +799,15 @@ class FaceDatabase:
         with self._lock:
             conn = self._conn()
             try:
+                # Compter les photos où cette personne a un visage détecté dans un cluster.
+                # Cohérent avec get_clusters_for_person qui compte les photos par person_id,
+                # pas toutes les photos du cluster (évite les fausses associations dues
+                # aux clusters mixtes — deux personnes dans le même groupe HDBSCAN).
                 count_rows = conn.execute(
                     "SELECT person_id, COUNT(DISTINCT photo_path)"
-                    " FROM faces WHERE person_id IS NOT NULL GROUP BY person_id"
+                    " FROM faces"
+                    " WHERE person_id IS NOT NULL AND cluster_id IS NOT NULL"
+                    " GROUP BY person_id"
                 ).fetchall()
                 # Une seule requête CTE pour toutes les faces représentatives
                 # (remplace N appels get_representative_face → N connexions séparées)
@@ -922,6 +956,24 @@ class FaceDatabase:
                     "Picasa: visage %d → person %d (score=%.2f) dans %s",
                     best_face, person_id, best_score, os.path.basename(photo_path),
                 )
+
+    def reset_clustering(self) -> None:
+        """Efface uniquement les cluster_id (regroupements HDBSCAN).
+        Les embeddings, person_id et l'index des photos sont conservés :
+        aucune re-détection n'est nécessaire.
+        Après re-clustering, update_clusters propage les person_id existants
+        aux nouvelles faces du même groupe — les associations sont ainsi
+        largement reconstituées sans réimport Picasa."""
+        with self._lock:
+            conn = self._conn()
+            try:
+                conn.execute(
+                    "UPDATE faces SET cluster_id=NULL"
+                    " WHERE pinned IS NULL OR pinned=0"
+                )
+                conn.commit()
+            finally:
+                conn.close()
 
     def reset_index(self) -> None:
         """Efface toutes les détections et l'index des photos analysées.

@@ -10,14 +10,14 @@ import logging
 from PySide6.QtCore import Qt, QThread, Signal, Slot
 from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import (
-    QFrame, QGridLayout, QHBoxLayout, QLabel, QPushButton,
-    QScrollArea, QVBoxLayout, QWidget,
+    QDialog, QFrame, QGridLayout, QHBoxLayout, QLabel, QMenu,
+    QPushButton, QScrollArea, QVBoxLayout, QWidget,
 )
 
 from src.core.models import FaceInfo, PersonInfo
 from src.faces.face_database import FaceDatabase
 from src.ui.loading_label import LoadingLabel
-from src.ui.people_panel import _face_bytes
+from src.ui.people_panel import _AssignDialog, _face_bytes
 
 logger = logging.getLogger(__name__)
 
@@ -25,6 +25,26 @@ _CARD_IMG = 130
 _CARD_W   = 148
 _CARD_GAP = 10
 _COLS_MIN = 2
+
+
+class _PersonsLoaderThread(QThread):
+    """Charge les personnes existantes en arrière-plan avant d'ouvrir le dialogue de réallocation."""
+
+    ready = Signal(list)   # list[PersonInfo]
+
+    def __init__(self, catalog, face_db: FaceDatabase, parent=None) -> None:
+        super().__init__(parent)
+        self._catalog = catalog
+        self._face_db = face_db
+
+    def run(self) -> None:
+        try:
+            persons = self._catalog.get_persons()
+            self._face_db.enrich_persons(persons)
+            self.ready.emit(persons)
+        except Exception:
+            logger.exception("_PersonsLoaderThread: erreur inattendue")
+            self.ready.emit([])
 
 
 class _CardLoader(QThread):
@@ -53,13 +73,21 @@ class _PersonCard(QFrame):
     """
     Carte représentant un groupe de visages lié à une personne.
     Double-clic → afficher les photos du groupe.
+    Clic droit → dé-associer ou réallouer à une autre personne.
     """
 
-    double_clicked = Signal(int)   # cluster_id
+    double_clicked       = Signal(int)   # cluster_id
+    dissociate_requested = Signal(int)   # cluster_id
+    reassign_requested   = Signal(int)   # cluster_id
 
     _STYLE = (
         "QFrame { border: 2px solid #3a3a3a; border-radius: 6px; background: #252525; }"
         "QFrame:hover { border-color: #7aabdb; background: #2a3545; }"
+    )
+    _MENU_STYLE = (
+        "QMenu { background: #2a2a2a; color: #eee; border: 1px solid #555; }"
+        "QMenu::item { padding: 6px 20px; }"
+        "QMenu::item:selected { background: #3a4a5a; }"
     )
 
     def __init__(self, cluster_id: int, face_count: int, parent=None) -> None:
@@ -105,6 +133,17 @@ class _PersonCard(QFrame):
             self.double_clicked.emit(self._cluster_id)
         super().mouseDoubleClickEvent(event)
 
+    def contextMenuEvent(self, event) -> None:
+        menu = QMenu(self)
+        menu.setStyleSheet(self._MENU_STYLE)
+        act_dissociate = menu.addAction("Dé-associer ce groupe de cette personne")
+        act_reassign   = menu.addAction("Réallouer à une autre personne…")
+        action = menu.exec(event.globalPos())
+        if action == act_dissociate:
+            self.dissociate_requested.emit(self._cluster_id)
+        elif action == act_reassign:
+            self.reassign_requested.emit(self._cluster_id)
+
 
 class PersonClusterView(QWidget):
     """
@@ -114,13 +153,18 @@ class PersonClusterView(QWidget):
 
     photos_requested = Signal(int, str)   # cluster_id, label
     back_requested   = Signal()
+    cluster_unassigned = Signal(int)      # cluster_id — groupe dé-associé (DB déjà à jour)
+    cluster_named      = Signal(int, str) # cluster_id, name — réallouer à une nouvelle personne
+    cluster_assigned   = Signal(int, int) # cluster_id, person_id — réallouer à une personne existante
 
-    def __init__(self, face_db: FaceDatabase, parent=None) -> None:
+    def __init__(self, face_db: FaceDatabase, catalog, parent=None) -> None:
         super().__init__(parent)
         self._face_db = face_db
+        self._catalog = catalog
         self._person: PersonInfo | None = None
         self._cards: dict[int, _PersonCard] = {}
         self._loader: _CardLoader | None = None
+        self._persons_loader: _PersonsLoaderThread | None = None
         self._build()
 
     @property
@@ -209,12 +253,12 @@ class PersonClusterView(QWidget):
         if self._loader is not None:
             try:
                 self._loader.avatar_ready.disconnect(self._on_avatar_ready)
+                if self._loader.isRunning():
+                    self._loader.finished.connect(self._loader.deleteLater)
+                else:
+                    self._loader.deleteLater()
             except RuntimeError:
-                pass
-            if self._loader.isRunning():
-                self._loader.finished.connect(self._loader.deleteLater)
-            else:
-                self._loader.deleteLater()
+                pass  # C++ object already deleted by a previous deleteLater()
             self._loader = None
 
         # Vider la grille
@@ -245,6 +289,8 @@ class PersonClusterView(QWidget):
             card.double_clicked.connect(
                 lambda cid=cluster_id, lbl=nav_label: self.photos_requested.emit(cid, lbl)
             )
+            card.dissociate_requested.connect(self._on_dissociate)
+            card.reassign_requested.connect(self._on_reassign)
             self._flow.addWidget(card, idx // cols, idx % cols)
             self._cards[cluster_id] = card
 
@@ -276,3 +322,50 @@ class PersonClusterView(QWidget):
         card = self._cards.get(cluster_id)
         if card:
             card.set_avatar(data)
+
+    # ------------------------------------------------------------------ context menu
+
+    @Slot(int)
+    def _on_dissociate(self, cluster_id: int) -> None:
+        if self._person is None:
+            return
+        self._face_db.unassign_person_from_cluster(self._person.id, cluster_id)
+        self._remove_cluster_card(cluster_id)
+        self.cluster_unassigned.emit(cluster_id)
+
+    @Slot(int)
+    def _on_reassign(self, cluster_id: int) -> None:
+        if self._persons_loader is not None and self._persons_loader.isRunning():
+            return
+        self._persons_loader = _PersonsLoaderThread(self._catalog, self._face_db, self)
+        self._persons_loader.ready.connect(
+            lambda persons, cid=cluster_id: self._show_reassign_dialog(cid, persons)
+        )
+        self._persons_loader.finished.connect(self._persons_loader.deleteLater)
+        self._persons_loader.start()
+
+    def _show_reassign_dialog(self, cluster_id: int, persons: list[PersonInfo]) -> None:
+        current_pid = self._person.id if self._person else None
+        other_persons = [p for p in persons if p.id != current_pid]
+        dlg = _AssignDialog(cluster_id, other_persons, show_ignore=False, parent=self)
+        dlg.setWindowTitle("Réallouer ce groupe à une autre personne")
+        if dlg.exec() != QDialog.Accepted:
+            return
+        if dlg.is_new_person():
+            name = dlg.new_name()
+            self._remove_cluster_card(cluster_id)
+            self.cluster_named.emit(cluster_id, name)
+        elif dlg.existing_person_id() is not None:
+            self._remove_cluster_card(cluster_id)
+            self.cluster_assigned.emit(cluster_id, dlg.existing_person_id())
+
+    def _remove_cluster_card(self, cluster_id: int) -> None:
+        card = self._cards.pop(cluster_id, None)
+        if card:
+            self._flow.removeWidget(card)
+            card.deleteLater()
+        if not self._cards:
+            self._scroll.hide()
+            self._lbl_empty.show()
+        else:
+            self._reflow()
