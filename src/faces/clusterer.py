@@ -2,14 +2,9 @@ import logging
 
 from PySide6.QtCore import QThread, Signal
 
-from src.core.config import Config
 from src.faces.face_database import FaceDatabase
 
 logger = logging.getLogger(__name__)
-
-# Distance cosinus par défaut : même personne ArcFace ≈ 0.10–0.40,
-# personnes différentes > 0.50–0.70.
-_DEFAULT_THRESHOLD = 0.60
 
 
 def _run_clustering(face_db: FaceDatabase) -> int:
@@ -44,8 +39,7 @@ def _run_clustering(face_db: FaceDatabase) -> int:
         logger.debug("Clustering: aucun visage")
         return 0
 
-    threshold = float(Config().get("faces.cluster_threshold", _DEFAULT_THRESHOLD))
-    logger.info("Clustering HDBSCAN: %d visages (seuil cosinus=%.2f)", n, threshold)
+    logger.info("Clustering HDBSCAN: %d visages", n)
 
     X = X.astype(np.float32, copy=False)
     norms = np.linalg.norm(X, axis=1, keepdims=True)
@@ -65,14 +59,14 @@ def _run_clustering(face_db: FaceDatabase) -> int:
         norms2[norms2 == 0] = 1.0
         X /= norms2
 
-    # Sur vecteurs unitaires : d_eucl = sqrt(2 * d_cosinus).
-    # max(0, ...) évite sqrt d'un négatif si threshold invalide.
-    eucl_eps = float(np.sqrt(max(0.0, 2.0 * threshold)))
+    # cluster_selection_epsilon cause un bug sklearn sur certaines structures
+    # d'arbre (traverse_upwards TypeError avec peu de faces) — désactivé (=0.0).
+    # min_cluster_size=2 + min_samples=1 suffisent pour regrouper les visages proches.
     labels = HDBSCAN(
         min_cluster_size=2,
         min_samples=1,
         metric="euclidean",
-        cluster_selection_epsilon=eucl_eps,
+        cluster_selection_epsilon=0.0,
         copy=True,
     ).fit_predict(X)
 
