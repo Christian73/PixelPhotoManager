@@ -8,7 +8,7 @@ from pathlib import Path
 from PySide6.QtCore import Qt, QThread, QTimer, Signal, Slot
 from PySide6.QtGui import QAction, QKeySequence
 from PySide6.QtWidgets import (
-    QApplication, QButtonGroup, QCheckBox, QDialog, QDialogButtonBox, QGroupBox,
+    QApplication, QButtonGroup, QCheckBox, QDialog, QDialogButtonBox, QFrame, QGroupBox,
     QMainWindow, QWidget, QHBoxLayout, QVBoxLayout,
     QRadioButton, QScrollBar, QSplitter, QStackedWidget, QStatusBar, QToolBar,
     QLineEdit, QSlider, QLabel, QPushButton,
@@ -316,6 +316,161 @@ class _PersonsRefreshThread(QThread):
             self.result_ready.emit([], 0)
 
 
+class _ResetWorkerThread(QThread):
+    """
+    Attend l'arrêt des threads d'indexation/clustering en cours,
+    effectue le reset DB demandé, puis émet done(choice).
+    """
+
+    done = Signal(int)   # choice : RESET_CLUSTERING ou RESET_FULL
+
+    def __init__(
+        self,
+        face_db,
+        choice: int,
+        threads_to_wait: list,
+        parent=None,
+    ) -> None:
+        super().__init__(parent)
+        self._face_db = face_db
+        self._choice  = choice
+        self._threads = threads_to_wait   # refs Python fortes → gardés en vie
+
+    def run(self) -> None:
+        for t in self._threads:
+            try:
+                if t.isRunning():
+                    t.wait(10_000)   # 10 s max par thread
+            except RuntimeError:
+                pass   # objet C++ déjà supprimé
+        if self._choice == 1:   # RESET_CLUSTERING
+            self._face_db.reset_clustering()
+        else:                    # RESET_FULL
+            self._face_db.reset_index()
+        self.done.emit(self._choice)
+
+
+class _ResetFacesDialog(QDialog):
+    """Dialogue de choix entre reset clustering seul et réinitialisation complète."""
+
+    RESET_CLUSTERING = 1
+    RESET_FULL       = 2
+
+    _FRAME_BASE = (
+        "QFrame#opt {"
+        "  border: 2px solid #444; border-radius: 6px; background: #252525;"
+        "}"
+    )
+    _FRAME_SEL = (
+        "QFrame#opt {"
+        "  border: 2px solid #4a9fd4; border-radius: 6px; background: #1a2f45;"
+        "}"
+    )
+
+    def __init__(self, parent=None) -> None:
+        super().__init__(parent)
+        self.setWindowTitle("Réinitialiser l'index des visages")
+        self.setMinimumWidth(480)
+        self.setStyleSheet(
+            "QDialog { background: #1e1e1e; color: #ddd; }"
+            "QRadioButton { color: #eee; font-size: 12px; font-weight: bold;"
+            "  background: transparent; spacing: 8px; }"
+            "QRadioButton::indicator { width: 15px; height: 15px; }"
+            "QLabel { color: #aaa; font-size: 11px; background: transparent; }"
+            "QDialogButtonBox QPushButton {"
+            "  min-width: 90px; padding: 5px 12px;"
+            "  background: #2a2a2a; color: #ddd;"
+            "  border: 1px solid #555; border-radius: 4px;"
+            "}"
+            "QDialogButtonBox QPushButton:hover { background: #333; border-color: #888; }"
+            "QDialogButtonBox QPushButton:default {"
+            "  background: #1a3a5a; border-color: #4a9fd4; color: #fff;"
+            "}"
+        )
+        self._choice = self.RESET_CLUSTERING
+        self._build()
+
+    def _build(self) -> None:
+        root = QVBoxLayout(self)
+        root.setContentsMargins(16, 16, 16, 16)
+        root.setSpacing(10)
+
+        self._btn_group = QButtonGroup(self)
+
+        self._rb_cluster = QRadioButton(
+            "Réinitialiser les groupes uniquement  —  rapide"
+        )
+        self._rb_full = QRadioButton(
+            "Réinitialisation complète + réindexation  —  lente"
+        )
+        self._btn_group.addButton(self._rb_cluster)
+        self._btn_group.addButton(self._rb_full)
+
+        self._frame_cluster = self._make_frame(
+            self._rb_cluster,
+            [
+                "Les embeddings ArcFace (analyse des visages) sont conservés.",
+                "Seuls les regroupements HDBSCAN sont effacés et recalculés.",
+                "Les associations visage → personne (Picasa, identification manuelle)",
+                "sont préservées et redistribuées dans les nouveaux groupes.",
+                "⏱  Durée : quelques secondes.",
+            ],
+        )
+        self._frame_full = self._make_frame(
+            self._rb_full,
+            [
+                "Tout est effacé : embeddings, groupes, associations visage → personne.",
+                "La détection ArcFace est relancée sur l'ensemble de la bibliothèque.",
+                "Les personnes nommées sont conservées ; les annotations Picasa",
+                "sont ré-appliquées automatiquement après re-détection.",
+                "⏱  Durée : plusieurs heures selon la taille de la bibliothèque.",
+            ],
+        )
+        root.addWidget(self._frame_cluster)
+        root.addWidget(self._frame_full)
+
+        btn_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        btn_box.button(QDialogButtonBox.Ok).setText("Confirmer")
+        btn_box.button(QDialogButtonBox.Cancel).setText("Annuler")
+        btn_box.accepted.connect(self.accept)
+        btn_box.rejected.connect(self.reject)
+        root.addWidget(btn_box)
+
+        self._rb_cluster.setChecked(True)
+        self._frame_cluster.setStyleSheet(self._FRAME_SEL)
+        self._btn_group.buttonToggled.connect(self._on_toggled)
+
+    def _make_frame(self, rb: QRadioButton, lines: list[str]) -> QFrame:
+        frame = QFrame()
+        frame.setObjectName("opt")
+        frame.setStyleSheet(self._FRAME_BASE)
+        lay = QVBoxLayout(frame)
+        lay.setContentsMargins(12, 10, 12, 10)
+        lay.setSpacing(4)
+        lay.addWidget(rb)
+        for line in lines:
+            lbl = QLabel(line)
+            lbl.setIndent(23)
+            lay.addWidget(lbl)
+        return frame
+
+    def _on_toggled(self, btn: QRadioButton, checked: bool) -> None:
+        if not checked:
+            return
+        if btn is self._rb_cluster:
+            self._choice = self.RESET_CLUSTERING
+            self._frame_cluster.setStyleSheet(self._FRAME_SEL)
+            self._frame_full.setStyleSheet(self._FRAME_BASE)
+        else:
+            self._choice = self.RESET_FULL
+            self._frame_cluster.setStyleSheet(self._FRAME_BASE)
+            self._frame_full.setStyleSheet(self._FRAME_SEL)
+
+    @property
+    def choice(self) -> int:
+        return self._choice
+
+
 class MainWindow(QMainWindow):
     def __init__(
         self,
@@ -336,6 +491,7 @@ class MainWindow(QMainWindow):
         self._reindex_thread: SingleFaceReindexThread | None = None
         self._cluster_thread: ClusterThread | None = None
         self._warmup_thread = None          # TFWarmUpThread — pré-charge TF au démarrage
+        self._reset_worker: _ResetWorkerThread | None = None
         self._face_index_pending: bool = False
         self._photo_query_thread: _PhotoQueryThread | None = None
         self._persons_refresh_thread: _PersonsRefreshThread | None = None
@@ -648,11 +804,16 @@ class MainWindow(QMainWindow):
         self._stack.addWidget(self._face_cluster_grid)
 
         # Index 3 — Vue des groupes d'une personne nommée
-        self._person_cluster_view = PersonClusterView(self._face_db, self)
+        self._person_cluster_view = PersonClusterView(self._face_db, self._catalog, self)
         self._person_cluster_view.photos_requested.connect(
             self._on_person_cluster_photos_requested
         )
         self._person_cluster_view.back_requested.connect(self._on_person_cluster_back)
+        self._person_cluster_view.cluster_unassigned.connect(
+            self._on_pcv_cluster_unassigned
+        )
+        self._person_cluster_view.cluster_named.connect(self._on_cluster_named)
+        self._person_cluster_view.cluster_assigned.connect(self._on_cluster_assigned)
         self._stack.addWidget(self._person_cluster_view)
 
         # Connexions sidebar
@@ -903,21 +1064,63 @@ class MainWindow(QMainWindow):
     # ------------------------------------------------------------------ faces
 
     def _reset_and_reindex_faces(self) -> None:
-        reply = QMessageBox.question(
-            self,
-            "Réinitialiser l'index des visages",
-            "Toutes les détections et les regroupements seront effacés.\n"
-            "Les personnes nommées sont conservées, mais leurs associations\n"
-            "aux visages seront perdues.\n\n"
-            "Continuer ?",
-            QMessageBox.Yes | QMessageBox.No,
-            QMessageBox.No,
-        )
-        if reply != QMessageBox.Yes:
+        dlg = _ResetFacesDialog(self)
+        if dlg.exec() != QDialog.Accepted:
             return
-        self._face_db.reset_index()
+        choice = dlg.choice
+
+        # ── Arrêter proprement les threads en cours ──────────────────────────
+        threads_to_wait: list[QThread] = []
+
+        if self._face_indexer and self._face_indexer.isRunning():
+            try:
+                self._face_indexer.cluster_requested.disconnect(self._run_clustering)
+            except RuntimeError:
+                pass
+            self._face_indexer.stop()
+            threads_to_wait.append(self._face_indexer)
+
+        if self._cluster_thread and self._cluster_thread.isRunning():
+            threads_to_wait.append(self._cluster_thread)
+
+        # ── Mise à jour UI immédiate ─────────────────────────────────────────
+        self._act_index_faces.setEnabled(False)
+        self._act_index_faces.setText("Réinitialisation en cours…")
+        msg = "Arrêt des analyses en cours…" if threads_to_wait else "Réinitialisation en cours…"
+        self._lbl_action.setText(msg)
+
+        # ── Worker hors UI : attend les threads + reset DB ───────────────────
+        self._reset_worker = _ResetWorkerThread(
+            self._face_db, choice, threads_to_wait, self
+        )
+        self._reset_worker.done.connect(self._on_reset_done)
+        self._reset_worker.finished.connect(self._reset_worker.deleteLater)
+        self._reset_worker.start()
+
+    @Slot(int)
+    def _on_reset_done(self, choice: int) -> None:
         self._face_cluster_grid.refresh()
-        self._start_face_indexing()
+        self._lbl_action.setText("")
+
+        if choice == _ResetFacesDialog.RESET_CLUSTERING:
+            msg = (
+                "La réinitialisation des groupes est terminée.\n\n"
+                "Le regroupement HDBSCAN va redémarrer."
+            )
+        else:
+            msg = (
+                "La réinitialisation complète est terminée.\n\n"
+                "L'analyse des visages va redémarrer. Cette opération peut\n"
+                "prendre plusieurs heures selon la taille de la bibliothèque."
+            )
+        QMessageBox.information(self, "Réinitialisation terminée", msg)
+
+        if choice == _ResetFacesDialog.RESET_CLUSTERING:
+            self._act_index_faces.setText("Analyser les visages")
+            self._act_index_faces.setEnabled(True)
+            self._run_clustering()
+        else:
+            self._start_face_indexing()
 
     def _start_face_indexing(self) -> None:
         if self._face_indexer and self._face_indexer.isRunning():
@@ -1481,6 +1684,12 @@ class MainWindow(QMainWindow):
         """Bouton ← Retour dans PersonClusterView → retour à la grille principale."""
         self._grid_nav_bar.hide()
         self.show_grid()
+
+    @Slot(int)
+    def _on_pcv_cluster_unassigned(self, _cluster_id: int) -> None:
+        """Groupe dé-associé depuis PersonClusterView (DB déjà à jour) → rafraîchir la sidebar."""
+        self._refresh_persons()
+        self._refresh_face_panel_if_visible()
 
     def show_viewer(self, photo: PhotoInfo) -> None:
         is_video = photo.media_type == "video"

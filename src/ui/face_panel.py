@@ -132,14 +132,26 @@ class _FacesDataLoader(QThread):
 
 # ------------------------------------------------------------------ face item
 
+_BTN_IGNORE_SZ = 20   # diamètre du bouton ✕
+
 class _FaceItem(QFrame):
     """Un visage dans le panneau : vignette + nom. Supporte le menu contextuel."""
 
     clicked                = Signal(int)           # face_id  (clic gauche)
     context_menu_requested = Signal(int, object)   # (face_id, QPoint global)
+    ignore_requested       = Signal(int)           # face_id  (bouton ✕)
 
     _STYLE_NORMAL   = "background: transparent; border: none;"
     _STYLE_SELECTED = "background: #1a2f45; border: 2px solid #4a9fd4; border-radius: 4px;"
+    _BTN_STYLE = (
+        "QPushButton {"
+        "  background: rgba(180,30,30,210);"
+        "  color: white; border-radius: 10px;"
+        "  font-weight: bold; font-size: 12px;"
+        "  border: none; padding: 0;"
+        "}"
+        "QPushButton:hover { background: rgba(220,50,50,240); }"
+    )
 
     def __init__(self, face: FaceInfo, name: str, parent=None) -> None:
         super().__init__(parent)
@@ -153,12 +165,31 @@ class _FaceItem(QFrame):
         layout.setSpacing(3)
         layout.setAlignment(Qt.AlignHCenter | Qt.AlignTop)
 
-        self._lbl_img = LoadingLabel("#1a1a1a")
-        self._lbl_img.setFixedSize(_THUMB, _THUMB)
+        # Container image : LoadingLabel + bouton ✕ superposé en bas
+        img_container = QWidget()
+        img_container.setFixedSize(_THUMB, _THUMB)
+        img_container.setStyleSheet("background: transparent;")
+
+        self._lbl_img = LoadingLabel("#1a1a1a", img_container)
+        self._lbl_img.setGeometry(0, 0, _THUMB, _THUMB)
         self._lbl_img.setAlignment(Qt.AlignCenter)
         self._lbl_img.setStyleSheet("border-radius: 4px; border: none;")
         self._lbl_img.start_loading()
-        layout.addWidget(self._lbl_img, alignment=Qt.AlignHCenter)
+
+        self._btn_ignore = QPushButton("✕", img_container)
+        self._btn_ignore.setGeometry(
+            _THUMB - _BTN_IGNORE_SZ - 2,
+            _THUMB - _BTN_IGNORE_SZ - 2,
+            _BTN_IGNORE_SZ,
+            _BTN_IGNORE_SZ,
+        )
+        self._btn_ignore.setStyleSheet(self._BTN_STYLE)
+        self._btn_ignore.setCursor(Qt.PointingHandCursor)
+        self._btn_ignore.setToolTip("Ignorer ce visage")
+        self._btn_ignore.clicked.connect(lambda: self.ignore_requested.emit(self._face_id))
+        self._btn_ignore.raise_()
+
+        layout.addWidget(img_container, alignment=Qt.AlignHCenter)
 
         lbl_name = QLabel(name)
         lbl_name.setAlignment(Qt.AlignCenter)
@@ -356,6 +387,7 @@ class FacePanel(QWidget):
             item = _FaceItem(face, name, self._content)
             item.clicked.connect(self._on_item_clicked)
             item.context_menu_requested.connect(self._on_item_context_menu)
+            item.ignore_requested.connect(self._on_ignore_requested)
             self._vbox.addWidget(item)
             self._items[face.id] = item
             self._faces[face.id] = face
