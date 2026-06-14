@@ -1198,8 +1198,8 @@ class MainWindow(QMainWindow):
         QMessageBox.information(
             self,
             "Reconnaissance faciale indisponible",
-            "Le module deepface n'est pas installé.\n\n"
-            "pip install deepface",
+            "Le module insightface n'est pas installé.\n\n"
+            "pip install insightface onnxruntime",
         )
 
     def _open_people_dialog(self) -> None:
