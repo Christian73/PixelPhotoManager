@@ -1,18 +1,50 @@
 import concurrent.futures
 import logging
 import os
+import time
+from collections import deque
 
 from PySide6.QtCore import QThread, Signal
 
 from src.faces.face_database import FaceDatabase
-from src.faces.detector import detect_and_embed, warmup_worker
+from src.faces.detector import detect_and_embed, warmup_worker, warmup_worker_cpu
 from src.library.catalog import Catalog
 
 logger = logging.getLogger(__name__)
 
 
-_CLUSTER_EVERY   = 1000  # relancer le clustering tous les N visages trouvés
-_DETECT_TIMEOUT  = 180   # secondes max par photo — au-delà le subprocess est tué et relancé
+_WORKERS              = 4     # subprocesses en pipeline GPU/CPU
+_CLUSTER_EVERY        = 1000  # relancer le clustering tous les N visages trouvés
+_DETECT_TIMEOUT       = 60    # secondes max par photo avant de tuer le subprocess
+_WARMUP_TIMEOUT       = 120   # secondes max pour le warmup initial (GPU peut être lent)
+_MAX_CONSECUTIVE_FAIL = 5     # échecs consécutifs avant abandon définitif
+
+
+def _kill_executor(executor: concurrent.futures.ProcessPoolExecutor) -> None:
+    """Tue de force tous les subprocesses de l'executor (nécessaire sur Windows :
+    shutdown(wait=False) ne tue PAS les processus en cours d'exécution)."""
+    try:
+        for process in list(executor._processes.values()):
+            try:
+                process.kill()
+            except Exception:
+                pass
+    except Exception:
+        pass
+    executor.shutdown(wait=False, cancel_futures=True)
+
+
+def _fresh_executor_cpu() -> concurrent.futures.ProcessPoolExecutor:
+    """Crée un executor propre pré-initialisé en mode CPU forcé (1 worker, conservateur)."""
+    ex = concurrent.futures.ProcessPoolExecutor(max_workers=1)
+    try:
+        ex.submit(warmup_worker_cpu).result(timeout=30)
+        logger.info("FaceIndexThread: re-warmup CPU OK")
+    except Exception as exc:
+        logger.warning("FaceIndexThread: re-warmup CPU échoué (%s) — executor nu", exc)
+        _kill_executor(ex)
+        ex = concurrent.futures.ProcessPoolExecutor(max_workers=1)
+    return ex
 
 
 class TFWarmUpThread(QThread):
@@ -68,8 +100,12 @@ class FaceIndexThread(QThread):
         from src.core.thread_journal import journal, rss_mb
         self.setPriority(QThread.LowestPriority)
 
+        from src.library.exif_reader import VIDEO_EXT
         all_paths = self._catalog.get_all_photo_paths()
-        to_index = self._face_db.get_paths_to_index(all_paths)
+        to_index = [
+            p for p in self._face_db.get_paths_to_index(all_paths)
+            if os.path.splitext(p)[1].lower() not in VIDEO_EXT
+        ]
         total = len(to_index)
 
         if total == 0:
@@ -83,15 +119,18 @@ class FaceIndexThread(QThread):
         indexed = 0
         faces_found = 0
 
-        # ── Sous-processus dédié pour detect_and_embed ─────────────────────
-        # Géré manuellement (pas de `with`) pour pouvoir recréer l'executor
-        # quand un subprocess se plante ou dépasse _DETECT_TIMEOUT secondes.
-        executor = concurrent.futures.ProcessPoolExecutor(max_workers=1)
+        # Les DLLs nvidia sont ajoutées au PATH ici (processus parent) ;
+        # les subprocesses les héritent automatiquement.
+        from src.faces.detector import _register_nvidia_dll_dirs
+        _register_nvidia_dll_dirs()
+        executor = concurrent.futures.ProcessPoolExecutor(max_workers=_WORKERS)
         try:
-            # Phase 1 — warmup dans le subprocess (TF s'initialise ~20 s).
+            # ── Phase 1 : warmup des _WORKERS subprocesses ─────────────────
             self.progress.emit(0, total)
             try:
-                executor.submit(warmup_worker).result(timeout=300)
+                warmup_futs = [executor.submit(warmup_worker) for _ in range(_WORKERS)]
+                for f in warmup_futs:
+                    f.result(timeout=_WARMUP_TIMEOUT)
             except concurrent.futures.TimeoutError:
                 logger.error("FaceIndexThread: warmup timeout, abandon")
                 journal.error("FaceIndexThread", "warmup timeout", t0)
@@ -104,55 +143,109 @@ class FaceIndexThread(QThread):
             except Exception as exc:
                 logger.warning("FaceIndexThread: warmup avertissement: %s", exc)
 
-            # Phase 2 — boucle de détection
-            for i, path in enumerate(to_index):
-                if self._stop_flag:
-                    break
-                if not os.path.exists(path):
-                    continue
+            # ── Phase 2 : boucle de détection FIFO (_WORKERS en vol) ───────
+            # File d'attente ordonnée : (future, path, heure_soumission)
+            # On maintient exactement _WORKERS futures en cours simultanément.
+            # Pendant que le GPU traite l'image N (worker 1), le worker 2
+            # charge et préprocesse l'image N+1 sur CPU → pipeline GPU plein.
+            in_flight: deque = deque()
+            path_iter = iter(to_index)
+            processed = 0
+            consecutive_fails = 0
 
-                self.progress.emit(i + 1, total)
+            def _enqueue() -> None:
+                """Remplit la file jusqu'à _WORKERS futures simultanées."""
+                while len(in_flight) < _WORKERS:
+                    path = next(path_iter, None)
+                    if path is None:
+                        break
+                    if not os.path.exists(path):
+                        continue
+                    try:
+                        fut = executor.submit(detect_and_embed, path)
+                        in_flight.append((fut, path, time.monotonic()))
+                    except concurrent.futures.BrokenExecutor:
+                        break
+
+            _enqueue()
+
+            while in_flight and not self._stop_flag:
+                fut, path, t_submit = in_flight[0]
+
+                # Temps restant avant timeout pour cette photo
+                remaining = max(0.5, _DETECT_TIMEOUT - (time.monotonic() - t_submit))
+
+                processed += 1
+                self.progress.emit(processed, total)
                 journal.step(
                     "FaceIndexThread",
-                    f"[{i + 1}/{total}] {os.path.basename(path)}",
+                    f"[{processed}/{total}] {os.path.basename(path)}",
                     t0,
                 )
 
                 try:
-                    future = executor.submit(detect_and_embed, path)
-                    try:
-                        detections = future.result(timeout=_DETECT_TIMEOUT)
-                    except concurrent.futures.TimeoutError:
-                        # Subprocess planté — le tuer et en relancer un propre.
-                        logger.error(
-                            "FaceIndexThread: timeout %ds sur %s — subprocess relancé",
-                            _DETECT_TIMEOUT, os.path.basename(path),
-                        )
-                        journal.step(
-                            "FaceIndexThread",
-                            f"TIMEOUT {os.path.basename(path)}",
-                            t0,
-                        )
-                        executor.shutdown(wait=False, cancel_futures=True)
-                        executor = concurrent.futures.ProcessPoolExecutor(max_workers=1)
-                        try:
-                            executor.submit(warmup_worker).result(timeout=300)
-                        except Exception as exc2:
-                            logger.warning("FaceIndexThread: re-warmup: %s", exc2)
-                        self.error.emit(path, f"timeout ({_DETECT_TIMEOUT}s)")
-                        continue
+                    detections = fut.result(timeout=remaining)
+
+                except concurrent.futures.TimeoutError:
+                    logger.error("FaceIndexThread: timeout %ds sur %s",
+                                 _DETECT_TIMEOUT, os.path.basename(path))
+                    journal.step("FaceIndexThread", f"TIMEOUT {os.path.basename(path)}", t0)
+                    in_flight.popleft()
+                    self._face_db.save_faces(path, [])
+                    # Les autres futures en vol sont aussi invalides après kill
+                    for f, p, _ in in_flight:
+                        self._face_db.save_faces(p, [])
+                        processed += 1
+                        self.progress.emit(processed, total)
+                    in_flight.clear()
+                    _kill_executor(executor)
+                    executor = _fresh_executor_cpu()
+                    self.error.emit(path, f"timeout ({_DETECT_TIMEOUT}s)")
+                    consecutive_fails += 1
+                    if consecutive_fails >= _MAX_CONSECUTIVE_FAIL:
+                        logger.error("FaceIndexThread: %d échecs consécutifs, abandon",
+                                     consecutive_fails)
+                        break
+                    _enqueue()
+                    continue
+
                 except concurrent.futures.BrokenExecutor as exc:
-                    logger.error("FaceIndexThread: pool cassé, abandon: %s", exc)
-                    break
+                    logger.error("FaceIndexThread: subprocess crashé sur %s",
+                                 os.path.basename(path))
+                    journal.step("FaceIndexThread", f"CRASH {os.path.basename(path)}", t0)
+                    in_flight.popleft()
+                    self._face_db.save_faces(path, [])
+                    for f, p, _ in in_flight:
+                        self._face_db.save_faces(p, [])
+                        processed += 1
+                        self.progress.emit(processed, total)
+                    in_flight.clear()
+                    _kill_executor(executor)
+                    executor = _fresh_executor_cpu()
+                    self.error.emit(path, f"subprocess crash: {exc}")
+                    consecutive_fails += 1
+                    if consecutive_fails >= _MAX_CONSECUTIVE_FAIL:
+                        logger.error("FaceIndexThread: %d crashs consécutifs, abandon",
+                                     consecutive_fails)
+                        break
+                    _enqueue()
+                    continue
+
                 except RuntimeError as exc:
                     logger.warning("FaceIndexThread: %s", exc)
                     self.unavailable.emit()
                     break
+
                 except Exception as exc:
                     logger.error("FaceIndexThread erreur %s: %s", path, exc)
                     self.error.emit(path, str(exc))
+                    in_flight.popleft()
+                    _enqueue()
                     continue
 
+                # Succès
+                in_flight.popleft()
+                consecutive_fails = 0
                 self._face_db.save_faces(path, detections)
                 faces_found += len(detections)
                 indexed += 1
@@ -160,11 +253,11 @@ class FaceIndexThread(QThread):
                     self.photo_indexed.emit(path, len(detections))
                     if faces_found % _CLUSTER_EVERY == 0:
                         self.cluster_requested.emit()
+                _enqueue()
 
         finally:
             executor.shutdown(wait=False, cancel_futures=True)
 
-        # Clustering final — une passe complète à la fin de l'indexation
         if indexed > 0:
             self.cluster_requested.emit()
 
@@ -216,7 +309,7 @@ class SingleFaceReindexThread(QThread):
         try:
             detections = detect_and_embed(self._photo_path, rotation=self._rotation)
         except RuntimeError:
-            return   # deepface non installé
+            return   # insightface non installé
         except Exception as exc:
             logger.error("SingleFaceReindexThread erreur %s: %s", self._photo_path, exc)
             self.error.emit(self._photo_path, str(exc))

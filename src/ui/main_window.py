@@ -2,6 +2,7 @@ import ctypes
 import logging
 import os
 import shutil
+import time
 from datetime import datetime
 from pathlib import Path
 
@@ -490,6 +491,7 @@ class MainWindow(QMainWindow):
         self._face_indexer: FaceIndexThread | None = None
         self._reindex_thread: SingleFaceReindexThread | None = None
         self._cluster_thread: ClusterThread | None = None
+        self._cluster_start_time: float | None = None
         self._warmup_thread = None          # TFWarmUpThread — pré-charge TF au démarrage
         self._reset_worker: _ResetWorkerThread | None = None
         self._face_index_pending: bool = False
@@ -595,6 +597,9 @@ class MainWindow(QMainWindow):
         self._act_index_faces = QAction("Analyser les visages", self)
         self._act_index_faces.triggered.connect(self._start_face_indexing)
         m_faces.addAction(self._act_index_faces)
+        self._act_cluster_faces = QAction("Regrouper les visages…", self)
+        self._act_cluster_faces.triggered.connect(self._start_clustering_with_confirm)
+        m_faces.addAction(self._act_cluster_faces)
         m_faces.addSeparator()
         act_identify = QAction("Identifier les personnes…", self)
         act_identify.triggered.connect(self.show_face_clusters)
@@ -764,6 +769,10 @@ class MainWindow(QMainWindow):
         self._face_panel = FacePanel(self._face_db, self._catalog, self)
         self._face_panel.face_highlighted.connect(self._on_face_highlighted)
         self._face_panel.all_faces_toggled.connect(self._on_all_faces_toggled)
+        self._face_panel.person_assigned.connect(self._refresh_persons)
+        self._face_panel.person_cluster_requested.connect(
+            self._on_face_panel_person_cluster_requested
+        )
         self._viewer.face_context_menu_requested.connect(self._on_face_context_menu)
         self._face_panel_refresh_timer.timeout.connect(self._face_panel.refresh)
         self._face_panel.hide()
@@ -808,12 +817,16 @@ class MainWindow(QMainWindow):
         self._person_cluster_view.photos_requested.connect(
             self._on_person_cluster_photos_requested
         )
+        self._person_cluster_view.photo_requested.connect(
+            self._on_person_cluster_photo_requested
+        )
         self._person_cluster_view.back_requested.connect(self._on_person_cluster_back)
         self._person_cluster_view.cluster_unassigned.connect(
             self._on_pcv_cluster_unassigned
         )
         self._person_cluster_view.cluster_named.connect(self._on_cluster_named)
         self._person_cluster_view.cluster_assigned.connect(self._on_cluster_assigned)
+        self._person_cluster_view.faces_reassigned.connect(self._refresh_persons)
         self._stack.addWidget(self._person_cluster_view)
 
         # Connexions sidebar
@@ -1167,21 +1180,68 @@ class MainWindow(QMainWindow):
         if faces > 0:
             self._run_clustering()
 
+    def _start_clustering_with_confirm(self) -> None:
+        """Affiche une explication du clustering, puis le lance si l'utilisateur confirme."""
+        if self._cluster_thread and self._cluster_thread.isRunning():
+            QMessageBox.information(
+                self,
+                "Regroupement en cours",
+                "Un regroupement des visages est déjà en cours.\n"
+                "Suivez sa progression dans la barre de statut.",
+            )
+            return
+
+        n_total = self._face_db.count_embeddings()
+        n_identified = self._face_db.count_identified_faces()
+        n_unidentified = n_total - n_identified
+
+        dlg = QMessageBox(self)
+        dlg.setWindowTitle("Regrouper les visages")
+        dlg.setIcon(QMessageBox.Icon.Information)
+        dlg.setText("<b>Regroupement automatique des visages (clustering)</b>")
+        dlg.setInformativeText(
+            "Cette opération analyse les visages non encore identifiés et les regroupe "
+            "automatiquement par similarité (algorithme HDBSCAN sur vecteurs ArcFace).<br><br>"
+            f"<b>{n_unidentified:,}</b> visages non identifiés seront traités "
+            f"({n_identified:,} visages déjà identifiés sont conservés intacts).<br><br>"
+            "Les groupes obtenus apparaîtront dans <i>Identifier les personnes…</i> "
+            "pour que vous puissiez nommer chaque groupe.<br><br>"
+            "<b>Durée estimée : 15 à 30 minutes.</b> "
+            "La progression s'affiche dans la barre de statut en bas de la fenêtre."
+        )
+        dlg.setStandardButtons(
+            QMessageBox.StandardButton.Ok | QMessageBox.StandardButton.Cancel
+        )
+        dlg.setDefaultButton(QMessageBox.StandardButton.Ok)
+        dlg.button(QMessageBox.StandardButton.Ok).setText("Démarrer")
+        dlg.button(QMessageBox.StandardButton.Cancel).setText("Annuler")
+        if dlg.exec() != QMessageBox.StandardButton.Ok:
+            return
+
+        self._run_clustering()
+
     def _run_clustering(self) -> None:
         """Lance le clustering dans un thread séparé pour ne pas bloquer l'UI."""
         if self._cluster_thread and self._cluster_thread.isRunning():
-            return   # un clustering est déjà en cours, le prochain le relancera
+            return   # un clustering est déjà en cours
         if self._cluster_thread is not None:
             self._cluster_thread.deleteLater()
         self._cluster_thread = ClusterThread(self._face_db, self)
+        self._cluster_thread.progress.connect(self._lbl_action.setText)
         self._cluster_thread.finished.connect(self._on_clustering_finished)
         self._cluster_thread.error.connect(
             lambda msg: logger.warning("Clustering: %s", msg)
         )
+        self._act_cluster_faces.setEnabled(False)
+        self._act_cluster_faces.setText("Regroupement en cours…")
+        self._cluster_start_time = time.monotonic()
         self._cluster_thread.start()
 
     @Slot(int)
     def _on_clustering_finished(self, n_clusters: int) -> None:
+        self._cluster_start_time = None
+        self._act_cluster_faces.setText("Regrouper les visages…")
+        self._act_cluster_faces.setEnabled(True)
         if n_clusters > 0:
             self._lbl_action.setText(f"{n_clusters} groupe(s) de visages détecté(s)")
             QTimer.singleShot(4000, lambda: self._lbl_action.setText(""))
@@ -1358,6 +1418,14 @@ class MainWindow(QMainWindow):
 
     def _on_face_context_menu(self, face, gpos) -> None:
         self._face_panel.show_face_context_menu(face, gpos)
+
+    def _on_face_panel_person_cluster_requested(self, person_id: int) -> None:
+        """Double-clic sur un visage nommé dans le panneau → vue clusters de la personne."""
+        person = self._catalog.get_person(person_id)
+        if person is None:
+            return
+        self._face_db.enrich_persons([person])
+        self.show_person_clusters(person)
 
     def _on_red_eye_mode_requested(self, active: bool, radius: float) -> None:
         if active:
@@ -1679,6 +1747,15 @@ class MainWindow(QMainWindow):
         """Double-clic sur une carte de groupe depuis PersonClusterView."""
         self._from_person_cluster_view = True
         self._on_cluster_photos_requested(cluster_id, label)
+
+    def _on_person_cluster_photo_requested(self, path: str) -> None:
+        """Double-clic sur une vignette en mode dégroupé → ouvrir la photo dans la visionneuse."""
+        photo = self._catalog.get_photo_by_path(path)
+        if photo is None:
+            return
+        self._current_photos = [photo]
+        self._current_photo_index = 0
+        self.show_viewer(photo)
 
     def _on_person_cluster_back(self) -> None:
         """Bouton ← Retour dans PersonClusterView → retour à la grille principale."""
@@ -2222,7 +2299,36 @@ class MainWindow(QMainWindow):
             self._face_indexer.stop()
             self._face_indexer.wait(3000)
         if self._cluster_thread and self._cluster_thread.isRunning():
-            self._cluster_thread.wait(3000)
+            elapsed = int(time.monotonic() - self._cluster_start_time) if self._cluster_start_time else 0
+            m, s = divmod(elapsed, 60)
+            h, m = divmod(m, 60)
+            if h:
+                duree = f"{h}h{m:02d}min{s:02d}s"
+            elif m:
+                duree = f"{m}min{s:02d}s"
+            else:
+                duree = f"{s}s"
+            dlg = QMessageBox(self)
+            dlg.setWindowTitle("Regroupement en cours")
+            dlg.setIcon(QMessageBox.Icon.Warning)
+            dlg.setText("<b>Un regroupement de visages est en cours.</b>")
+            dlg.setInformativeText(
+                f"Le regroupement tourne depuis <b>{duree}</b>.<br><br>"
+                "Si vous fermez l'application maintenant, le calcul sera "
+                "interrompu et <b>le résultat sera perdu</b>. "
+                "Il faudra tout recommencer au prochain démarrage.<br><br>"
+                "Voulez-vous quand même fermer l'application ?"
+            )
+            dlg.setStandardButtons(
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+            )
+            dlg.setDefaultButton(QMessageBox.StandardButton.No)
+            dlg.button(QMessageBox.StandardButton.Yes).setText("Fermer quand même")
+            dlg.button(QMessageBox.StandardButton.No).setText("Annuler")
+            if dlg.exec() != QMessageBox.StandardButton.Yes:
+                event.ignore()
+                return
+            self._cluster_thread.wait(500)
         if self._photo_query_thread and self._photo_query_thread.isRunning():
             self._photo_query_thread.wait(1000)
         if self._persons_refresh_thread and self._persons_refresh_thread.isRunning():

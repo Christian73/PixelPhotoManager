@@ -1,4 +1,7 @@
 import logging
+import multiprocessing
+import time
+from typing import Callable
 
 from PySide6.QtCore import QThread, Signal
 
@@ -6,20 +9,99 @@ from src.faces.face_database import FaceDatabase
 
 logger = logging.getLogger(__name__)
 
+_PCA_DIMS        = 32    # ball_tree efficace sous ~30 dims ; 32 conserve >90 % variance ArcFace
+_CLUSTER_TIMEOUT = 1800  # secondes max (30 min) avant abandon
 
-def _run_clustering(face_db: FaceDatabase) -> int:
+_NB_SP = " "  # espace fine insécable utilisée comme séparateur de milliers
+
+
+def _clustering_worker_proc(X_bytes: bytes, n: int, d: int, conn) -> None:
+    """
+    PCA + HDBSCAN dans un sous-processus isolé.
+
+    Envoie des messages de progression via le pipe :
+      ("pca",)                       — normalisation terminée, PCA démarre
+      ("hdbscan",)                   — PCA terminée, HDBSCAN démarre
+      ("result", n_clusters, n_singletons, labels)  — terminé avec succès
+      ("error", message)             — exception inattendue
+
+    Doit être MODULE-LEVEL pour être picklable sur Windows (spawn).
+    """
+    import numpy as np
+    from hdbscan import HDBSCAN
+    from sklearn.decomposition import PCA
+
+    try:
+        X = np.frombuffer(X_bytes, dtype=np.float32).reshape(n, d).copy()
+
+        # Normalisation L2 → sphère unité
+        norms = np.linalg.norm(X, axis=1, keepdims=True)
+        norms[norms == 0] = 1.0
+        X /= norms
+
+        # Réduction PCA
+        if X.shape[1] > _PCA_DIMS and n > _PCA_DIMS:
+            conn.send(("pca",))
+            X = PCA(n_components=_PCA_DIMS, random_state=42).fit_transform(X).astype(np.float32)
+            norms2 = np.linalg.norm(X, axis=1, keepdims=True)
+            norms2[norms2 == 0] = 1.0
+            X /= norms2
+
+        conn.send(("hdbscan",))
+
+        # hdbscan package (C++/Cython) — beaucoup plus rapide que sklearn pour grands n.
+        # boruvka_balltree : MST Borůvka O(n log²n) vs Prim O(n²) avec sklearn.
+        # core_dist_n_jobs=1 : 1 thread → évite duplication des buffers mémoire.
+        labels = HDBSCAN(
+            min_cluster_size=2,
+            min_samples=1,
+            metric="euclidean",
+            cluster_selection_method="leaf",
+            algorithm="boruvka_balltree",
+            leaf_size=100,
+            core_dist_n_jobs=1,
+        ).fit_predict(X)
+
+        labels = labels.tolist()
+        max_real = max((lbl for lbl in labels if lbl >= 0), default=-1)
+        next_singleton = max_real + 1
+        n_singletons = 0
+        for i, lbl in enumerate(labels):
+            if lbl == -1:
+                labels[i] = next_singleton
+                next_singleton += 1
+                n_singletons += 1
+
+        conn.send(("result", max_real + 1, n_singletons, labels))
+
+    except MemoryError:
+        conn.send(("error", "MemoryError : RAM insuffisante pour HDBSCAN"))
+    except Exception as exc:
+        conn.send(("error", str(exc)))
+    finally:
+        conn.close()
+
+
+def _fmt_n(n: int) -> str:
+    """Formate un entier avec espace fine insécable comme séparateur de milliers."""
+    return f"{n:,}".replace(",", _NB_SP)
+
+
+def _run_clustering(
+    face_db: FaceDatabase,
+    progress_cb: Callable[[str], None] | None = None,
+) -> int:
     """
     HDBSCAN clustering sur les embeddings ArcFace normalisés.
 
     Pipeline :
-    1. Normalisation L2 → sphère unité  (d_eucl = sqrt(2 * d_cosinus))
-    2. PCA 512 → 64 dims  — contourne la malédiction de la dimensionnalité :
-       le BallTree de HDBSCAN dégénère en O(N²) au-delà de ~20 dims,
-       rendant le clustering impraticable sur 93 000+ visages à 512 dims.
-       PCA conserve >90 % de la variance discriminante et réduit le temps
-       de ~20 min (512 dims) à ~30 s (64 dims).
-    3. Re-normalisation après PCA.
-    4. HDBSCAN euclidien (≡ cosinus sur sphère unité après normalisation).
+    1. Assignation synthétique des cluster_ids pour les visages déjà identifiés.
+    2. Normalisation L2 → sphère unité sur les visages non identifiés.
+    3. PCA 512 → _PCA_DIMS dims + re-normalisation.
+    4. HDBSCAN euclidien ball_tree.
+
+    Le calcul s'exécute dans un subprocess isolé via multiprocessing.Process + Pipe.
+    Les étapes sont remontées au thread appelant via progress_cb(message).
 
     Safe to call from any thread.
     Returns number of distinct clusters (singletons exclus).
@@ -27,65 +109,132 @@ def _run_clustering(face_db: FaceDatabase) -> int:
     """
     try:
         import numpy as np
-        from sklearn.cluster import HDBSCAN
-        from sklearn.decomposition import PCA
     except ImportError as exc:
-        raise RuntimeError(f"Le clustering nécessite numpy et scikit-learn >= 1.3 : {exc}")
+        raise RuntimeError(f"Le clustering nécessite numpy : {exc}")
 
-    X, face_ids = face_db.get_all_embeddings()
+    n_synthetic = face_db.assign_person_synthetic_clusters()
+    if n_synthetic and progress_cb:
+        progress_cb(f"Clustering : {_fmt_n(n_synthetic)} visages identifiés pré-assignés…")
+
+    X, face_ids = face_db.get_all_embeddings(only_unidentified=True)
     n = len(face_ids)
 
     if n == 0:
-        logger.debug("Clustering: aucun visage")
+        logger.debug("Clustering: aucun visage (tous déjà identifiés)")
         return 0
 
-    logger.info("Clustering HDBSCAN: %d visages", n)
-
-    X = X.astype(np.float32, copy=False)
-    norms = np.linalg.norm(X, axis=1, keepdims=True)
-    norms[norms == 0] = 1.0
-    X /= norms
+    logger.info("Clustering HDBSCAN: %d visages non identifiés", n)
+    if progress_cb:
+        progress_cb(f"Clustering : normalisation ({_fmt_n(n)} visages)…")
 
     if n == 1:
         face_db.update_clusters(face_ids, [0])
         return 1
 
-    # ── Réduction PCA 512 → 64 dims ────────────────────────────────────────
-    _PCA_DIMS = 64
-    if X.shape[1] > _PCA_DIMS and n > _PCA_DIMS:
-        logger.info("Clustering PCA: %d → %d dims", X.shape[1], _PCA_DIMS)
-        X = PCA(n_components=_PCA_DIMS, random_state=42).fit_transform(X).astype(np.float32)
-        norms2 = np.linalg.norm(X, axis=1, keepdims=True)
-        norms2[norms2 == 0] = 1.0
-        X /= norms2
+    d = X.shape[1]
+    logger.info("Clustering PCA: %d → %d dims", d, min(_PCA_DIMS, d))
 
-    # cluster_selection_method='leaf' : sélectionne chaque feuille de l'arbre condensé
-    # comme cluster distinct → groupes serrés, seuls les visages très proches ensemble.
-    # Évite aussi le bug sklearn traverse_upwards (propre à la méthode 'eom').
-    labels = HDBSCAN(
-        min_cluster_size=2,
-        min_samples=1,
-        metric="euclidean",
-        cluster_selection_method="leaf",
-        copy=True,
-    ).fit_predict(X)
+    X_bytes = X.astype(np.float32).tobytes()
+    n_fmt = _fmt_n(n)
 
-    # HDBSCAN marque les visages isolés (bruit) comme -1.
-    # On leur attribue un cluster singleton unique au-delà des vrais clusters
-    # pour qu'ils restent accessibles dans l'interface.
-    labels = labels.tolist()
-    max_real = max((lbl for lbl in labels if lbl >= 0), default=-1)
-    next_singleton = max_real + 1
-    n_singletons = 0
-    for i, lbl in enumerate(labels):
-        if lbl == -1:
-            labels[i] = next_singleton
-            next_singleton += 1
-            n_singletons += 1
+    parent_conn, child_conn = multiprocessing.Pipe(duplex=False)
+    proc = multiprocessing.Process(
+        target=_clustering_worker_proc,
+        args=(X_bytes, n, d, child_conn),
+        daemon=True,
+    )
+    proc.start()
+    child_conn.close()   # ferme le bout enfant dans le processus parent
 
-    face_db.update_clusters(face_ids, labels)
+    deadline = time.monotonic() + _CLUSTER_TIMEOUT
+    result_labels = None
+    n_clusters = n_singletons = 0
+    hdbscan_start: float | None = None
 
-    n_clusters = max_real + 1
+    try:
+        while True:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                logger.error(
+                    "Clustering timeout (%ds) pour %d visages — abandon",
+                    _CLUSTER_TIMEOUT, n,
+                )
+                proc.kill()
+                return 0
+
+            if parent_conn.poll(min(remaining, 1.0)):
+                try:
+                    msg = parent_conn.recv()
+                except EOFError:
+                    proc.join(timeout=2)
+                    exitcode = proc.exitcode
+                    logger.error(
+                        "Clustering subprocess : pipe fermé prématurément"
+                        " (exitcode=%s, %d visages)",
+                        exitcode, n,
+                    )
+                    return 0
+
+                tag = msg[0]
+                if tag == "pca":
+                    hdbscan_start = None
+                    if progress_cb:
+                        progress_cb(
+                            f"Clustering : PCA {d}→{_PCA_DIMS} dims…"
+                        )
+                elif tag == "hdbscan":
+                    hdbscan_start = time.monotonic()
+                    if progress_cb:
+                        progress_cb(
+                            f"Clustering : HDBSCAN ({n_fmt} visages) — 0:00…"
+                        )
+                elif tag == "result":
+                    _, n_clusters, n_singletons, result_labels = msg
+                    break
+                elif tag == "error":
+                    logger.error("Clustering subprocess erreur : %s", msg[1])
+                    return 0
+
+            else:
+                # poll timeout (1 s) — mise à jour du chronomètre pendant HDBSCAN
+                if hdbscan_start is not None and progress_cb:
+                    elapsed = int(time.monotonic() - hdbscan_start)
+                    m, s = divmod(elapsed, 60)
+                    progress_cb(
+                        f"Clustering : HDBSCAN ({n_fmt} visages)"
+                        f" — {m}:{s:02d}…"
+                    )
+                if not proc.is_alive():
+                    exitcode = proc.exitcode
+                    # exitcode < 0 → tué par signal (OOM=-9 sur Linux, ~-1073741819 sur Windows)
+                    # exitcode > 0 → exception non rattrapée dans le worker
+                    logger.error(
+                        "Clustering subprocess mort prématurément"
+                        " (exitcode=%s, %d visages, hdbscan_elapsed=%ss)",
+                        exitcode,
+                        n,
+                        int(time.monotonic() - hdbscan_start) if hdbscan_start else "N/A",
+                    )
+                    return 0
+
+    finally:
+        try:
+            proc.kill()
+        except Exception:
+            pass
+        proc.join(timeout=5)
+        parent_conn.close()
+
+    if result_labels is None:
+        return 0
+
+    if progress_cb:
+        progress_cb(
+            f"Clustering : {_fmt_n(n_clusters)} groupes → sauvegarde…"
+        )
+
+    face_db.update_clusters(face_ids, result_labels, progress_cb=progress_cb)
+
     logger.info("Clustering: %d groupe(s), %d singleton(s)", n_clusters, n_singletons)
     return n_clusters
 
@@ -96,10 +245,12 @@ class ClusterThread(QThread):
 
     Signals
     -------
-    finished(n_clusters)   — clustering done, n distinct groups found
-    error(message)         — dep missing or other failure
+    progress(message)      — étape en cours (pour la barre de status)
+    finished(n_clusters)   — clustering terminé, n groupes distincts trouvés
+    error(message)         — dépendance manquante ou autre échec
     """
 
+    progress = Signal(str)
     finished = Signal(int)
     error    = Signal(str)
 
@@ -112,7 +263,7 @@ class ClusterThread(QThread):
         t0 = journal.start("ClusterThread", "Clustering des visages",
                            rss_mb=round(rss_mb(), 1))
         try:
-            n = _run_clustering(self._face_db)
+            n = _run_clustering(self._face_db, progress_cb=self.progress.emit)
             journal.end("ClusterThread", f"{n} groupe(s) formé(s)", t0,
                         rss_mb=round(rss_mb(), 1))
             self.finished.emit(n)

@@ -135,6 +135,30 @@ class FaceDatabase:
                     conn.execute(
                         "ALTER TABLE indexed_photos ADD COLUMN rotation INTEGER DEFAULT 0"
                     )
+                # Migration : supprimer les visages avec bbox corrompues (stockées en BLOB
+                # au lieu d'INTEGER par une version antérieure du code).  Les photos
+                # concernées sont supprimées de indexed_photos pour être re-analysées.
+                bad_paths = conn.execute(
+                    "SELECT DISTINCT photo_path FROM faces"
+                    " WHERE typeof(bbox_x)='blob' OR typeof(bbox_y)='blob'"
+                    "    OR typeof(bbox_w)='blob' OR typeof(bbox_h)='blob'"
+                ).fetchall()
+                if bad_paths:
+                    placeholders = ",".join("?" * len(bad_paths))
+                    bad_list = [r[0] for r in bad_paths]
+                    conn.execute(
+                        f"DELETE FROM faces WHERE photo_path IN ({placeholders})",
+                        bad_list,
+                    )
+                    conn.execute(
+                        f"DELETE FROM indexed_photos WHERE photo_path IN ({placeholders})",
+                        bad_list,
+                    )
+                    logger.warning(
+                        "Migration: %d photo(s) avec bbox corrompues supprimées "
+                        "et marquées pour re-indexation",
+                        len(bad_paths),
+                    )
                 conn.commit()
             finally:
                 conn.close()
@@ -178,7 +202,7 @@ class FaceDatabase:
                     (photo_path,)
                 )
                 for det in detections:
-                    x, y, w, h = det["bbox"]
+                    x, y, w, h = (int(v) for v in det["bbox"])
                     emb = det.get("embedding")
                     blob = _enc(emb) if emb else None
                     conn.execute(
@@ -200,20 +224,54 @@ class FaceDatabase:
 
     # ------------------------------------------------------------------ clustering
 
-    def get_all_embeddings(self) -> tuple["np.ndarray", list[int]]:
+    def count_embeddings(self) -> int:
+        """Nombre total de faces avec embedding (non épinglées)."""
+        with self._lock:
+            conn = self._conn()
+            try:
+                return conn.execute(
+                    "SELECT COUNT(*) FROM faces"
+                    " WHERE embedding IS NOT NULL"
+                    "   AND (pinned IS NULL OR pinned = 0)"
+                ).fetchone()[0]
+            finally:
+                conn.close()
+
+    def count_identified_faces(self) -> int:
+        """Nombre de faces avec embedding ET person_id assigné (non épinglées)."""
+        with self._lock:
+            conn = self._conn()
+            try:
+                return conn.execute(
+                    "SELECT COUNT(*) FROM faces"
+                    " WHERE embedding IS NOT NULL"
+                    "   AND (pinned IS NULL OR pinned = 0)"
+                    "   AND person_id IS NOT NULL"
+                ).fetchone()[0]
+            finally:
+                conn.close()
+
+    def get_all_embeddings(
+        self,
+        only_unidentified: bool = False,
+    ) -> tuple["np.ndarray", list[int]]:
         """Returns (embeddings, face_ids) for non-pinned faces with stored embeddings.
+
+        only_unidentified=True : n'inclut que les faces sans person_id, pour que
+        HDBSCAN ne tourne que sur les visages non encore identifiés (~20 % de moins).
 
         embeddings is a float32 ndarray of shape (N, D) built directly from the
         binary blobs — avoids creating N×D Python float objects as an intermediate.
         """
         import numpy as np
+        extra = " AND person_id IS NULL" if only_unidentified else ""
         with self._lock:
             conn = self._conn()
             try:
                 rows = conn.execute(
                     "SELECT id, embedding FROM faces"
                     " WHERE embedding IS NOT NULL"
-                    "   AND (pinned IS NULL OR pinned = 0)"
+                    f"   AND (pinned IS NULL OR pinned = 0){extra}"
                 ).fetchall()
             finally:
                 conn.close()
@@ -223,24 +281,37 @@ class FaceDatabase:
         embeddings = np.stack([np.frombuffer(r[1], dtype=np.float32) for r in rows])
         return embeddings, face_ids
 
-    def update_clusters(self, face_ids: list[int], labels: list[int]) -> None:
+    def update_clusters(
+        self,
+        face_ids: list[int],
+        labels: list[int],
+        progress_cb=None,
+    ) -> None:
         if not face_ids:
             return
+        _CHUNK = 10_000
+        pairs = [
+            (int(label) if label >= 0 else None, fid)
+            for fid, label in zip(face_ids, labels)
+        ]
+        total = len(pairs)
         with self._lock:
             conn = self._conn()
             try:
-                # Ne pas toucher les faces isolées manuellement (pinned=1)
+                # Réinitialise uniquement les faces non identifiées.
+                # Les faces avec person_id gardent leur cluster synthétique (10M+)
+                # et restent visibles dans PersonClusterView pendant le clustering.
                 conn.execute(
                     "UPDATE faces SET cluster_id=NULL"
-                    " WHERE pinned IS NULL OR pinned = 0"
+                    " WHERE (pinned IS NULL OR pinned = 0)"
+                    "   AND person_id IS NULL"
                 )
-                conn.executemany(
-                    "UPDATE faces SET cluster_id=? WHERE id=?",
-                    [
-                        (int(label) if label >= 0 else None, fid)
-                        for fid, label in zip(face_ids, labels)
-                    ],
-                )
+                for start in range(0, total, _CHUNK):
+                    chunk = pairs[start:start + _CHUNK]
+                    conn.executemany("UPDATE faces SET cluster_id=? WHERE id=?", chunk)
+                    if progress_cb:
+                        done = min(start + _CHUNK, total)
+                        progress_cb(f"Clustering : sauvegarde {done:,}/{total:,} visages…".replace(",", " "))
                 # Nettoyer les faces ArcFace qui sont devenues bruit (cluster_id=NULL)
                 # mais conservent un person_id résiduel d'un clustering précédent.
                 # Les faces sans embedding (placeholders Picasa) sont préservées.
@@ -676,6 +747,35 @@ class FaceDatabase:
                 conn.close()
         return [r[0] for r in rows]
 
+    def get_faces_for_person(self, person_id: int) -> list["FaceInfo"]:
+        """Returns all FaceInfo for a person, ordered by photo then bbox position."""
+        with self._lock:
+            conn = self._conn()
+            try:
+                rows = conn.execute(
+                    "SELECT f.id, f.photo_path, f.bbox_x, f.bbox_y, f.bbox_w, f.bbox_h,"
+                    "       f.cluster_id, f.person_id, f.ignored, f.pinned,"
+                    "       COALESCE(ip.rotation, 0)"
+                    " FROM faces f"
+                    " LEFT JOIN indexed_photos ip ON f.photo_path = ip.photo_path"
+                    " WHERE f.person_id=?"
+                    " ORDER BY f.photo_path, f.bbox_x",
+                    (person_id,),
+                ).fetchall()
+            finally:
+                conn.close()
+        return [
+            FaceInfo(
+                id=r[0], photo_path=r[1],
+                bbox_x=r[2], bbox_y=r[3], bbox_w=r[4], bbox_h=r[5],
+                cluster_id=r[6], person_id=r[7],
+                ignored=bool(r[8]),
+                pinned=bool(r[9]),
+                detected_rotation=r[10],
+            )
+            for r in rows
+        ]
+
     # ------------------------------------------------------------------ assignment
 
     def assign_person_to_face(self, face_id: int, person_id: int) -> None:
@@ -685,6 +785,21 @@ class FaceDatabase:
             try:
                 conn.execute(
                     "UPDATE faces SET person_id=? WHERE id=?", (person_id, face_id)
+                )
+                conn.commit()
+            finally:
+                conn.close()
+
+    def assign_person_to_faces(self, face_ids: list[int], person_id: int) -> None:
+        """Assign a named person to multiple faces in a single transaction."""
+        if not face_ids:
+            return
+        with self._lock:
+            conn = self._conn()
+            try:
+                conn.executemany(
+                    "UPDATE faces SET person_id=? WHERE id=?",
+                    [(person_id, fid) for fid in face_ids],
                 )
                 conn.commit()
             finally:
@@ -720,6 +835,26 @@ class FaceDatabase:
                     "UPDATE faces SET cluster_id=?, pinned=1, person_id=NULL"
                     " WHERE id=?",
                     (new_cluster_id, face_id),
+                )
+                conn.commit()
+            finally:
+                conn.close()
+
+    def isolate_and_assign_face(self, face_id: int, person_id: int) -> None:
+        """Sépare un visage de son groupe et l'assigne à une personne en une transaction.
+        Résultat : pinned=1, cluster_id négatif unique, person_id=person_id."""
+        with self._lock:
+            conn = self._conn()
+            try:
+                row = conn.execute(
+                    "SELECT MIN(cluster_id) FROM faces WHERE pinned=1"
+                ).fetchone()
+                min_pinned = row[0] if row and row[0] is not None else 0
+                new_cluster_id = min(min_pinned, 0) - 1
+                conn.execute(
+                    "UPDATE faces SET cluster_id=?, pinned=1, person_id=?"
+                    " WHERE id=?",
+                    (new_cluster_id, person_id, face_id),
                 )
                 conn.commit()
             finally:
@@ -813,14 +948,18 @@ class FaceDatabase:
                 # (remplace N appels get_representative_face → N connexions séparées)
                 rep_rows = conn.execute(
                     "WITH ranked AS ("
-                    "  SELECT person_id, photo_path, bbox_x, bbox_y, bbox_w, bbox_h,"
+                    "  SELECT f.person_id, f.photo_path, f.bbox_x, f.bbox_y, f.bbox_w, f.bbox_h,"
+                    "         COALESCE(ip.rotation, 0) AS detected_rotation,"
                     "         ROW_NUMBER() OVER ("
-                    "           PARTITION BY person_id"
-                    "           ORDER BY bbox_w * bbox_h DESC"
+                    "           PARTITION BY f.person_id"
+                    "           ORDER BY f.bbox_w * f.bbox_h DESC"
                     "         ) AS rn"
-                    "  FROM faces WHERE person_id IS NOT NULL"
+                    "  FROM faces f"
+                    "  LEFT JOIN indexed_photos ip ON ip.photo_path = f.photo_path"
+                    "  WHERE f.person_id IS NOT NULL"
                     ")"
-                    " SELECT person_id, photo_path, bbox_x, bbox_y, bbox_w, bbox_h"
+                    " SELECT person_id, photo_path, bbox_x, bbox_y, bbox_w, bbox_h,"
+                    "        detected_rotation"
                     " FROM ranked WHERE rn = 1"
                 ).fetchall()
             finally:
@@ -834,6 +973,7 @@ class FaceDatabase:
                 if rep:
                     p.cover_path = rep[0]
                     p.cover_bbox = (rep[1], rep[2], rep[3], rep[4])
+                    p.cover_detected_rotation = int(rep[5] or 0)
 
     # ------------------------------------------------------------------ cleanup
 
@@ -930,10 +1070,17 @@ class FaceDatabase:
             for face_id, fx, fy, fw, fh in face_rows:
                 if face_id in used_face_ids:
                     continue
-                # Critère 1 : centre du visage ArcFace dans la région Picasa
-                cx, cy = fx + fw // 2, fy + fh // 2
-                if ax <= cx <= ax + aw and ay <= cy <= ay + ah:
-                    # Score = surface de recouvrement / surface du visage (favorise le meilleur)
+                try:
+                    fx, fy, fw, fh = int(fx), int(fy), int(fw), int(fh)
+                except (TypeError, ValueError):
+                    continue
+                # Critère 1a : centre InsightFace dans la région Picasa
+                cx_f, cy_f = fx + fw // 2, fy + fh // 2
+                in_picasa = ax <= cx_f <= ax + aw and ay <= cy_f <= ay + ah
+                # Critère 1b : centre Picasa dans la bbox InsightFace (symétrique)
+                cx_p, cy_p = ax + aw // 2, ay + ah // 2
+                in_face = fx <= cx_p <= fx + fw and fy <= cy_p <= fy + fh
+                if in_picasa or in_face:
                     iou_score = _iou((ax, ay, aw, ah), (fx, fy, fw, fh))
                     score = 1.0 + iou_score  # > 1 pour toujours primer sur le fallback IoU
                 else:
@@ -958,22 +1105,84 @@ class FaceDatabase:
                 )
 
     def reset_clustering(self) -> None:
-        """Efface uniquement les cluster_id (regroupements HDBSCAN).
-        Les embeddings, person_id et l'index des photos sont conservés :
-        aucune re-détection n'est nécessaire.
-        Après re-clustering, update_clusters propage les person_id existants
-        aux nouvelles faces du même groupe — les associations sont ainsi
-        largement reconstituées sans réimport Picasa."""
+        """Efface les cluster_id HDBSCAN des faces non identifiées.
+        Les faces avec person_id conservent leur cluster synthétique (10M+) :
+        les personnes restent visibles dans PersonClusterView pendant/après le reset.
+        Les embeddings et l'index des photos sont toujours conservés."""
         with self._lock:
             conn = self._conn()
             try:
                 conn.execute(
                     "UPDATE faces SET cluster_id=NULL"
-                    " WHERE pinned IS NULL OR pinned=0"
+                    " WHERE (pinned IS NULL OR pinned=0)"
+                    "   AND person_id IS NULL"
                 )
                 conn.commit()
             finally:
                 conn.close()
+
+    # Préfixe des cluster_id synthétiques pour les faces déjà identifiées.
+    # Valeur choisie bien au-dessus du max réaliste d'HDBSCAN (~175 K faces max).
+    _SYNTHETIC_CLUSTER_BASE = 10_000_000
+
+    def assign_person_synthetic_clusters(self) -> int:
+        """Assigne un cluster_id synthétique (10⁷ + person_id) aux faces identifiées
+        qui n'ont pas encore de cluster_id. Permet de les afficher immédiatement dans
+        PersonClusterView sans attendre la fin du clustering HDBSCAN.
+        Ne touche pas les faces déjà dans un cluster.
+        Retourne le nombre de faces mises à jour."""
+        with self._lock:
+            conn = self._conn()
+            try:
+                n = conn.execute(
+                    f"UPDATE faces SET cluster_id = {self._SYNTHETIC_CLUSTER_BASE} + person_id"
+                    " WHERE person_id IS NOT NULL AND cluster_id IS NULL"
+                ).rowcount
+                if n:
+                    conn.commit()
+            finally:
+                conn.close()
+        if n:
+            logger.info(
+                "assign_person_synthetic_clusters: %d face(s) pré-assignées", n
+            )
+        return n
+
+    def cleanup_orphan_person_ids(self, valid_person_ids: set[int]) -> tuple[int, int]:
+        """Remet person_id=NULL sur les faces et supprime les annotations Picasa dont
+        le person_id n'est plus présent dans catalog.db (orphelins après réinitialisation).
+
+        Retourne (n_faces_reset, n_annotations_deleted).
+        Doit être appelé avant un ré-import Picasa pour que _apply_picasa_annotations
+        puisse ré-associer correctement les nouvelles annotations aux bonnes personnes.
+        """
+        if not valid_person_ids:
+            return 0, 0
+        ph = ",".join("?" * len(valid_person_ids))
+        vals = list(valid_person_ids)
+        with self._lock:
+            conn = self._conn()
+            try:
+                n_faces = conn.execute(
+                    f"UPDATE faces SET person_id=NULL"
+                    f" WHERE person_id IS NOT NULL AND person_id NOT IN ({ph})",
+                    vals,
+                ).rowcount
+                n_ann = conn.execute(
+                    f"DELETE FROM picasa_annotations WHERE person_id NOT IN ({ph})",
+                    vals,
+                ).rowcount
+                if n_faces or n_ann:
+                    conn.commit()
+            finally:
+                conn.close()
+        if n_faces or n_ann:
+            logger.info(
+                "cleanup_orphan_person_ids: %d face(s) réinitialisées, "
+                "%d annotation(s) Picasa supprimées",
+                n_faces, n_ann,
+            )
+        return n_faces, n_ann
 
     def reset_index(self) -> None:
         """Efface toutes les détections et l'index des photos analysées.

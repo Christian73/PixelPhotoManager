@@ -13,7 +13,7 @@ from PySide6.QtWidgets import (
 
 from src.core.event_bus import bus
 from src.core.models import AlbumInfo, PersonInfo
-from src.ui.people_panel import _face_bytes
+from src.ui.people_panel import _face_bytes, _load_edit_rotations
 
 logger = logging.getLogger(__name__)
 
@@ -128,6 +128,8 @@ class _FaceIconLoader(QThread):
 
     def run(self) -> None:
         from src.core.models import FaceInfo
+        cover_paths = [p.cover_path for p in self._persons if p.cover_path and p.cover_bbox]
+        edit_rots = _load_edit_rotations(cover_paths)
         for i, person in enumerate(self._persons):
             if self._stop_flag:
                 break
@@ -139,8 +141,10 @@ class _FaceIconLoader(QThread):
                         bbox_y=person.cover_bbox[1],
                         bbox_w=person.cover_bbox[2],
                         bbox_h=person.cover_bbox[3],
+                        detected_rotation=person.cover_detected_rotation,
                     )
-                    data = _face_bytes(face, size=36)
+                    edit_rot = edit_rots.get(person.cover_path, 0)
+                    data = _face_bytes(face, size=36, edit_rotation=edit_rot)
                     if data:
                         self.icon_ready.emit(i, data)
                 except Exception:

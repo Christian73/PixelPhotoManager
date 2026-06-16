@@ -594,6 +594,18 @@ class Catalog:
                 conn.close()
         return [PersonInfo(name=r[1], id=r[0]) for r in rows]
 
+    def get_person(self, person_id: int) -> "PersonInfo | None":
+        """Returns a single PersonInfo by id, or None if not found."""
+        with self._lock:
+            conn = self._conn()
+            try:
+                row = conn.execute(
+                    "SELECT id, name FROM persons WHERE id=?", (person_id,)
+                ).fetchone()
+            finally:
+                conn.close()
+        return PersonInfo(name=row[1], id=row[0]) if row else None
+
     def create_person(self, name: str) -> PersonInfo:
         with self._lock:
             conn = self._conn()

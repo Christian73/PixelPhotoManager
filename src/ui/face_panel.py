@@ -18,7 +18,7 @@ from src.core.models import FaceInfo
 from src.faces.face_database import FaceDatabase
 from src.ui.loading_label import LoadingLabel
 from src.ui.people_panel import (
-    _AssignDialog, _cosine_sim, _face_bytes, _SIM_WEAK,
+    _AssignDialog, _cosine_sim, _face_bytes, _load_edit_rotations, _SIM_WEAK,
 )
 
 logger = logging.getLogger(__name__)
@@ -54,6 +54,7 @@ class _FacePanelLoader(QThread):
 
             # Tous les visages du panneau sont issus de la même photo — une seule ouverture.
             photo_path = self._items[0][1].photo_path
+            edit_rot = _load_edit_rotations([photo_path]).get(photo_path, 0)
             try:
                 base_img = ImageOps.exif_transpose(Image.open(photo_path)).convert("RGB")
             except Exception as exc:
@@ -72,7 +73,11 @@ class _FacePanelLoader(QThread):
                     crop = img.crop((
                         max(0, x - pad), max(0, y - pad),
                         min(img.width, x + w + pad), min(img.height, y + h + pad),
-                    )).resize((_THUMB, _THUMB))
+                    ))
+                    net = (face.detected_rotation - edit_rot) % 360
+                    if net:
+                        crop = crop.rotate(net, expand=True)
+                    crop = crop.resize((_THUMB, _THUMB))
                     buf = _io.BytesIO()
                     crop.save(buf, format="PNG")
                     data = buf.getvalue()
@@ -138,6 +143,7 @@ class _FaceItem(QFrame):
     """Un visage dans le panneau : vignette + nom. Supporte le menu contextuel."""
 
     clicked                = Signal(int)           # face_id  (clic gauche)
+    double_clicked         = Signal(int)           # face_id  (double-clic gauche)
     context_menu_requested = Signal(int, object)   # (face_id, QPoint global)
     ignore_requested       = Signal(int)           # face_id  (bouton ✕)
 
@@ -220,6 +226,11 @@ class _FaceItem(QFrame):
             self.clicked.emit(self._face_id)
         super().mousePressEvent(event)
 
+    def mouseDoubleClickEvent(self, event: QMouseEvent) -> None:
+        if event.button() == Qt.LeftButton:
+            self.double_clicked.emit(self._face_id)
+        super().mouseDoubleClickEvent(event)
+
     def contextMenuEvent(self, event) -> None:
         self.context_menu_requested.emit(self._face_id, event.globalPos())
 
@@ -244,8 +255,10 @@ class FacePanel(QWidget):
     Panneau latéral affichant les visages détectés dans la photo courante.
     """
 
-    face_highlighted  = Signal(object)  # FaceInfo sélectionné, ou None si désélection
-    all_faces_toggled = Signal(list)    # list[FaceInfo] quand "Tous" actif, [] sinon
+    face_highlighted         = Signal(object)  # FaceInfo sélectionné, ou None si désélection
+    all_faces_toggled        = Signal(list)    # list[FaceInfo] quand "Tous" actif, [] sinon
+    person_assigned          = Signal()        # après identification (groupe ou visage individuel)
+    person_cluster_requested = Signal(int)     # person_id — double-clic sur un visage nommé
 
     def __init__(
         self,
@@ -256,11 +269,12 @@ class FacePanel(QWidget):
         super().__init__(parent)
         self._face_db  = face_db
         self._catalog  = catalog
-        self._items:        dict[int, _FaceItem] = {}
-        self._faces:        dict[int, FaceInfo]  = {}
-        self._loader:       _FacePanelLoader | None = None
-        self._data_loader:  _FacesDataLoader | None = None
-        self._current_photo: str = ""
+        self._items:           dict[int, _FaceItem] = {}
+        self._faces:           dict[int, FaceInfo]  = {}
+        self._cluster_persons: dict[int, int]       = {}   # cluster_id → person_id
+        self._loader:          _FacePanelLoader | None = None
+        self._data_loader:     _FacesDataLoader | None = None
+        self._current_photo:   str = ""
         self._selected_face_id: int | None = None
         self._setup_ui()
 
@@ -347,6 +361,7 @@ class FacePanel(QWidget):
         # des clés en str par PySide6 lors de la transmission cross-thread via Signal.
         person_names: dict[int, str] = {int(k): v for k, v in person_names_items}
         cluster_persons: dict[int, int] = {int(k): v for k, v in cluster_persons_items}
+        self._cluster_persons = cluster_persons
 
         self._clear()
         if not faces:
@@ -386,6 +401,7 @@ class FacePanel(QWidget):
 
             item = _FaceItem(face, name, self._content)
             item.clicked.connect(self._on_item_clicked)
+            item.double_clicked.connect(self._on_item_double_clicked)
             item.context_menu_requested.connect(self._on_item_context_menu)
             item.ignore_requested.connect(self._on_ignore_requested)
             self._vbox.addWidget(item)
@@ -407,7 +423,13 @@ class FacePanel(QWidget):
         """Construit et affiche le menu contextuel d'un visage.
         Appelé depuis le panneau (via _on_item_context_menu) et depuis la visionneuse."""
         menu = QMenu(self)
+        act_identify = menu.addAction("Identifier cette personne…")
+        act_identify.setToolTip(
+            "Sépare ce visage de son groupe et l'attache à une personne nommée"
+        )
         act_assign = menu.addAction("Identifier ce groupe…")
+        act_assign.setToolTip("Attribue l'ensemble du groupe à une personne nommée")
+        menu.addSeparator()
         act_unassign = menu.addAction("Désallouer le groupe")
         act_unassign.setEnabled(
             face.person_id is not None or face.cluster_id is not None
@@ -416,12 +438,26 @@ class FacePanel(QWidget):
         act_ignore = menu.addAction("Ignorer ce visage")
 
         chosen = menu.exec(gpos)
-        if chosen == act_assign:
+        if chosen == act_identify:
+            self._on_identify_face_requested(face.id)
+        elif chosen == act_assign:
             self._on_assign_requested(face.id)
         elif chosen == act_unassign:
             self._on_unassign_requested(face.id)
         elif chosen == act_ignore:
             self._on_ignore_requested(face.id)
+
+    def _on_item_double_clicked(self, face_id: int) -> None:
+        face = self._faces.get(face_id)
+        if face is None:
+            return
+        person_id = face.person_id
+        if person_id is None:
+            # Visage non identifié : vérifier si son cluster a une personne
+            if face.cluster_id is not None and face.cluster_id in self._cluster_persons:
+                person_id = self._cluster_persons[face.cluster_id]
+        if person_id is not None:
+            self.person_cluster_requested.emit(person_id)
 
     def _on_item_context_menu(self, face_id: int, gpos) -> None:
         face = self._faces.get(face_id)
@@ -464,25 +500,64 @@ class FacePanel(QWidget):
 
     # ------------------------------------------------------------------ context menu handlers
 
+    def _suggested_person_id(self, face: FaceInfo, persons: list) -> "int | None":
+        """Calcule la personne la plus probable pour un visage via similarité cosinus."""
+        if face.cluster_id is None or face.cluster_id < 0:
+            return None
+        c_emb = self._face_db.get_representative_embedding(cluster_id=face.cluster_id)
+        if not c_emb:
+            return None
+        best_sim, best_id = 0.0, None
+        for p in persons:
+            p_emb = self._face_db.get_representative_embedding(person_id=p.id)
+            if p_emb:
+                sim = _cosine_sim(c_emb, p_emb)
+                if sim > best_sim:
+                    best_sim, best_id = sim, p.id
+        return best_id if best_sim >= _SIM_WEAK else None
+
+    def _on_identify_face_requested(self, face_id: int) -> None:
+        """Sépare ce visage de son groupe et l'attache à une personne nommée."""
+        face = self._faces.get(face_id)
+        if face is None:
+            return
+        persons = self._catalog.get_persons()
+        self._face_db.enrich_persons(persons)
+        suggested_id = self._suggested_person_id(face, persons)
+
+        dlg = _AssignDialog(
+            face_id, persons,
+            suggested_person_id=suggested_id,
+            show_ignore=False,
+            parent=self,
+        )
+        dlg.setWindowTitle("Identifier cette personne")
+        if dlg.exec() != QDialog.Accepted:
+            return
+
+        if dlg.is_new_person():
+            name = dlg.new_name()
+            if not name:
+                return
+            person = self._catalog.create_person(name)
+            person_id = person.id
+        else:
+            person_id = dlg.existing_person_id()
+            if person_id is None:
+                return
+
+        logger.debug(
+            "[FacePanel] isolate_and_assign face=%s person=%s", face_id, person_id
+        )
+        self._face_db.isolate_and_assign_face(face_id, person_id)
+        self.person_assigned.emit()
+        self.set_photo(self._current_photo)
+
     def _on_assign_requested(self, face_id: int) -> None:
         face = self._faces.get(face_id)
         persons = self._catalog.get_persons()
         self._face_db.enrich_persons(persons)
-
-        # Calcul de la suggestion à partir de l'embedding du cluster du visage
-        suggested_id = None
-        if face and face.cluster_id is not None and face.cluster_id >= 0:
-            c_emb = self._face_db.get_representative_embedding(cluster_id=face.cluster_id)
-            if c_emb:
-                best_sim, best_id = 0.0, None
-                for p in persons:
-                    p_emb = self._face_db.get_representative_embedding(person_id=p.id)
-                    if p_emb:
-                        sim = _cosine_sim(c_emb, p_emb)
-                        if sim > best_sim:
-                            best_sim, best_id = sim, p.id
-                if best_sim >= _SIM_WEAK:
-                    suggested_id = best_id
+        suggested_id = self._suggested_person_id(face, persons) if face else None
 
         dlg = _AssignDialog(
             face_id, persons,
@@ -498,6 +573,8 @@ class FacePanel(QWidget):
             person_id = person.id
         else:
             person_id = dlg.existing_person_id()
+            if person_id is None:
+                return
 
         if (
             face is not None
@@ -515,6 +592,7 @@ class FacePanel(QWidget):
             face_id, person_id,
         )
         self._face_db.assign_person_to_face(face_id, person_id)
+        self.person_assigned.emit()
         self.set_photo(self._current_photo)
 
     def _on_unassign_requested(self, face_id: int) -> None:
@@ -546,6 +624,7 @@ class FacePanel(QWidget):
                 child.widget().deleteLater()
         self._items.clear()
         self._faces.clear()
+        self._cluster_persons.clear()
         self._selected_face_id = None
 
     def _stop_loader(self) -> None:
