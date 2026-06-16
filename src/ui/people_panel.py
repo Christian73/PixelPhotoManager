@@ -47,8 +47,36 @@ QRadioButton::indicator:checked {
 
 # ------------------------------------------------------------------ helpers
 
-def _face_bytes(face: "FaceInfo", size: int) -> bytes:
-    """Decode face crop as PNG bytes. Safe to call from any thread."""
+def _load_edit_rotations(photo_paths: list[str]) -> dict[str, int]:
+    """Batch-query edits.db for photo rotations. Returns {path: degrees_CW}."""
+    if not photo_paths:
+        return {}
+    try:
+        import sqlite3 as _sq
+        from src.core.app_dirs import APP_DATA_DIR
+        db = APP_DATA_DIR / "edits.db"
+        if not db.exists():
+            return {}
+        ph = ",".join("?" * len(photo_paths))
+        con = _sq.connect(str(db))
+        rows = con.execute(
+            f"SELECT photo_path, rotation FROM photo_edits WHERE photo_path IN ({ph})",
+            list(photo_paths),
+        ).fetchall()
+        con.close()
+        return {r[0]: int(round(r[1])) % 360 for r in rows if r[1] and int(round(r[1])) % 360}
+    except Exception:
+        return {}
+
+
+def _face_bytes(face: "FaceInfo", size: int, edit_rotation: int = 0) -> bytes:
+    """
+    Decode face crop as PNG bytes. Safe to call from any thread.
+
+    edit_rotation : rotation CW (degrés) appliquée à la photo pour l'affichage.
+    La rotation nette (detected_rotation − edit_rotation) est appliquée au crop
+    pour que la vignette corresponde toujours à l'orientation affichée.
+    """
     try:
         from PIL import Image, ImageOps
         img = ImageOps.exif_transpose(Image.open(face.photo_path)).convert("RGB")
@@ -59,7 +87,13 @@ def _face_bytes(face: "FaceInfo", size: int) -> bytes:
         crop = img.crop((
             max(0, x - pad), max(0, y - pad),
             min(img.width, x + w + pad), min(img.height, y + h + pad),
-        )).resize((size, size))
+        ))
+        # Ramener le crop dans l'espace d'affichage (edit_rotation).
+        # PIL.rotate est CCW ; detected_rotation/edit_rotation sont CW.
+        net = (face.detected_rotation - edit_rotation) % 360
+        if net:
+            crop = crop.rotate(net, expand=True)
+        crop = crop.resize((size, size))
         buf = io.BytesIO()
         crop.save(buf, format="PNG")
         return buf.getvalue()
@@ -68,9 +102,11 @@ def _face_bytes(face: "FaceInfo", size: int) -> bytes:
         return b""
 
 
-def load_face_pixmap(face: "FaceInfo", size: int = _AVATAR_SIZE) -> QPixmap:
+def load_face_pixmap(
+    face: "FaceInfo", size: int = _AVATAR_SIZE, edit_rotation: int = 0
+) -> QPixmap:
     """Return a QPixmap of the face crop. Must be called from the UI thread."""
-    data = _face_bytes(face, size)
+    data = _face_bytes(face, size, edit_rotation=edit_rotation)
     if data:
         pix = QPixmap()
         pix.loadFromData(data)
@@ -125,8 +161,11 @@ class _AvatarLoader(QThread):
         self._size  = size
 
     def run(self) -> None:
+        paths = list({face.photo_path for _, face in self._items})
+        edit_rots = _load_edit_rotations(paths)
         for cluster_id, face in self._items:
-            data = _face_bytes(face, self._size)
+            data = _face_bytes(face, self._size,
+                               edit_rotation=edit_rots.get(face.photo_path, 0))
             if data:
                 self.avatar_ready.emit(cluster_id, data)
 

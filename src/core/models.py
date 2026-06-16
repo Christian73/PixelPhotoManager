@@ -159,7 +159,8 @@ class PersonInfo:
     id: Optional[int] = None
     photo_count: int = 0
     cover_path: str = ""
-    cover_bbox: Optional[tuple] = None  # (x, y, w, h) dans cover_path
+    cover_bbox: Optional[tuple] = None            # (x, y, w, h) dans cover_path
+    cover_detected_rotation: int = 0             # rotation CW lors de la détection
 
 
 @dataclass
