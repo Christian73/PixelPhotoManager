@@ -218,6 +218,36 @@ class FaceDatabase:
                 )
                 # Appliquer les annotations Picasa en attente (si présentes)
                 self._apply_picasa_annotations(conn, photo_path)
+                # Consommer les annotations dont la personne est déjà portée par une face
+                # InsightFace (avec embedding) sur cette photo — évite les placeholders doublons
+                # si l'annotation n'a pas pu être appariée par bbox (tailles trop différentes)
+                # mais que la personne est quand même identifiée sur la photo.
+                conn.execute(
+                    "UPDATE picasa_annotations SET consumed=1"
+                    " WHERE photo_path=? AND consumed=0"
+                    "   AND person_id IN ("
+                    "     SELECT DISTINCT person_id FROM faces"
+                    "     WHERE photo_path=? AND person_id IS NOT NULL AND embedding IS NOT NULL"
+                    "   )",
+                    (photo_path, photo_path),
+                )
+                # Créer des placeholders pour les annotations non appariées à aucun visage
+                # InsightFace (face non détectée : pose, qualité, score trop bas…).
+                # Sans ça, le placeholder créé au moment de l'import Picasa est supprimé
+                # par le DELETE ci-dessus et n'est jamais recréé — la personne disparaît.
+                still_pending = conn.execute(
+                    "SELECT bbox_x, bbox_y, bbox_w, bbox_h, person_id"
+                    " FROM picasa_annotations"
+                    " WHERE photo_path=? AND consumed=0",
+                    (photo_path,),
+                ).fetchall()
+                for bx, by, bw, bh, pid in still_pending:
+                    conn.execute(
+                        "INSERT INTO faces"
+                        " (photo_path, bbox_x, bbox_y, bbox_w, bbox_h, person_id)"
+                        " VALUES (?,?,?,?,?,?)",
+                        (photo_path, bx, by, bw, bh, pid),
+                    )
                 conn.commit()
             finally:
                 conn.close()
@@ -634,23 +664,27 @@ class FaceDatabase:
         Priorité : is_cover=1, sinon le visage avec la plus grande bbox."""
         if not cluster_ids:
             return {}
-        placeholders = ",".join("?" * len(cluster_ids))
+        _CHUNK = 500
+        all_rows = []
         with self._lock:
             conn = self._conn()
             try:
-                rows = conn.execute(
-                    f"SELECT id, photo_path, bbox_x, bbox_y, bbox_w, bbox_h,"
-                    f"       cluster_id, person_id, is_cover,"
-                    f"       (bbox_w * bbox_h) AS area"
-                    f" FROM faces"
-                    f" WHERE cluster_id IN ({placeholders})"
-                    f" ORDER BY cluster_id, is_cover DESC, area DESC",
-                    cluster_ids,
-                ).fetchall()
+                for i in range(0, len(cluster_ids), _CHUNK):
+                    chunk = cluster_ids[i:i + _CHUNK]
+                    ph = ",".join("?" * len(chunk))
+                    all_rows.extend(conn.execute(
+                        f"SELECT id, photo_path, bbox_x, bbox_y, bbox_w, bbox_h,"
+                        f"       cluster_id, person_id, is_cover,"
+                        f"       (bbox_w * bbox_h) AS area"
+                        f" FROM faces"
+                        f" WHERE cluster_id IN ({ph})"
+                        f" ORDER BY cluster_id, is_cover DESC, area DESC",
+                        chunk,
+                    ).fetchall())
             finally:
                 conn.close()
         result: dict[int, FaceInfo] = {}
-        for row in rows:
+        for row in all_rows:
             cid = row[6]
             if cid not in result:  # première ligne = meilleure (cover ou plus grande bbox)
                 result[cid] = FaceInfo(
@@ -872,6 +906,55 @@ class FaceDatabase:
             finally:
                 conn.close()
 
+    def unignore_face(self, face_id: int) -> None:
+        """Restore a previously ignored face."""
+        with self._lock:
+            conn = self._conn()
+            try:
+                conn.execute("UPDATE faces SET ignored=0 WHERE id=?", (face_id,))
+                conn.commit()
+            finally:
+                conn.close()
+
+    def unassign_person_from_face(self, face_id: int) -> None:
+        """Clear person_id from a single face without touching cluster or pinned."""
+        with self._lock:
+            conn = self._conn()
+            try:
+                conn.execute("UPDATE faces SET person_id=NULL WHERE id=?", (face_id,))
+                conn.commit()
+            finally:
+                conn.close()
+
+    def get_ignored_faces_for_photo(self, photo_path: str) -> list:
+        """Return all FaceInfo with ignored=True for this photo."""
+        photo_path = os.path.normpath(photo_path)
+        with self._lock:
+            conn = self._conn()
+            try:
+                rows = conn.execute(
+                    "SELECT f.id, f.photo_path, f.bbox_x, f.bbox_y, f.bbox_w, f.bbox_h,"
+                    "       f.cluster_id, f.person_id, f.ignored, f.pinned,"
+                    "       COALESCE(ip.rotation, 0)"
+                    " FROM faces f"
+                    " LEFT JOIN indexed_photos ip ON f.photo_path = ip.photo_path"
+                    " WHERE f.photo_path=? AND f.ignored=1",
+                    (photo_path,),
+                ).fetchall()
+            finally:
+                conn.close()
+        from src.core.models import FaceInfo
+        return [
+            FaceInfo(
+                id=r[0], photo_path=r[1],
+                bbox_x=r[2], bbox_y=r[3], bbox_w=r[4], bbox_h=r[5],
+                cluster_id=r[6], person_id=r[7],
+                ignored=True, pinned=bool(r[9]),
+                detected_rotation=r[10],
+            )
+            for r in rows
+        ]
+
     def merge_clusters(self, source_cluster_id: int, target_cluster_id: int) -> None:
         """Move all faces from source_cluster_id into target_cluster_id."""
         with self._lock:
@@ -1008,28 +1091,36 @@ class FaceDatabase:
                     )
                 conn.commit()
                 self._apply_picasa_annotations(conn, photo_path)
-
-                # Si aucun visage ArcFace n'existe encore, insérer des placeholders
-                # (sans embedding) pour que la personne soit visible immédiatement.
-                # Les annotations restent non-consommées afin d'être ré-appliquées
-                # proprement lors de la future analyse ArcFace (save_faces).
-                has_faces = conn.execute(
-                    "SELECT COUNT(*) FROM faces WHERE photo_path=?", (photo_path,)
-                ).fetchone()[0]
-                if has_faces == 0:
-                    pending = conn.execute(
-                        "SELECT bbox_x, bbox_y, bbox_w, bbox_h, person_id"
-                        " FROM picasa_annotations"
-                        " WHERE photo_path=? AND consumed=0",
-                        (photo_path,),
-                    ).fetchall()
-                    for bx, by, bw, bh, pid in pending:
-                        conn.execute(
-                            "INSERT INTO faces"
-                            " (photo_path, bbox_x, bbox_y, bbox_w, bbox_h, person_id)"
-                            " VALUES (?,?,?,?,?,?)",
-                            (photo_path, bx, by, bw, bh, pid),
-                        )
+                # Consommer les annotations dont la personne est déjà portée par une face
+                # InsightFace (avec embedding) sur cette photo — évite les placeholders doublons.
+                conn.execute(
+                    "UPDATE picasa_annotations SET consumed=1"
+                    " WHERE photo_path=? AND consumed=0"
+                    "   AND person_id IN ("
+                    "     SELECT DISTINCT person_id FROM faces"
+                    "     WHERE photo_path=? AND person_id IS NOT NULL AND embedding IS NOT NULL"
+                    "   )",
+                    (photo_path, photo_path),
+                )
+                # Insérer des placeholders (sans embedding) pour les annotations non
+                # consommées, que la photo ait été détectée ou non par InsightFace.
+                # Couvre deux cas : (a) photo pas encore analysée — aucun visage ;
+                # (b) InsightFace a détecté d'autres visages mais raté cette personne.
+                # Les annotations restent non-consommées pour être ré-appariées lors
+                # de la future analyse ArcFace (save_faces).
+                still_pending = conn.execute(
+                    "SELECT bbox_x, bbox_y, bbox_w, bbox_h, person_id"
+                    " FROM picasa_annotations"
+                    " WHERE photo_path=? AND consumed=0",
+                    (photo_path,),
+                ).fetchall()
+                for bx, by, bw, bh, pid in still_pending:
+                    conn.execute(
+                        "INSERT INTO faces"
+                        " (photo_path, bbox_x, bbox_y, bbox_w, bbox_h, person_id)"
+                        " VALUES (?,?,?,?,?,?)",
+                        (photo_path, bx, by, bw, bh, pid),
+                    )
 
                 conn.commit()
             finally:

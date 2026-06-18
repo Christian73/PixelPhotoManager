@@ -494,6 +494,7 @@ class MainWindow(QMainWindow):
         self._cluster_start_time: float | None = None
         self._warmup_thread = None          # TFWarmUpThread — pré-charge TF au démarrage
         self._reset_worker: _ResetWorkerThread | None = None
+        self._slideshow_win = None
         self._face_index_pending: bool = False
         self._photo_query_thread: _PhotoQueryThread | None = None
         self._persons_refresh_thread: _PersonsRefreshThread | None = None
@@ -646,6 +647,13 @@ class MainWindow(QMainWindow):
         spacer.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
         tb.addWidget(spacer)
 
+        self._btn_undo = QPushButton("↩ Annuler")
+        self._btn_undo.setToolTip("Annuler la dernière action sur les visages")
+        self._btn_undo.setEnabled(False)
+        self._btn_undo.clicked.connect(self._on_undo_clicked)
+        self._act_undo = tb.addWidget(self._btn_undo)
+        self._act_undo.setVisible(False)
+
         self._btn_faces_toggle = QPushButton("Visages")
         self._btn_faces_toggle.setCheckable(True)
         self._btn_faces_toggle.setToolTip("Afficher / masquer les visages de la photo")
@@ -773,6 +781,7 @@ class MainWindow(QMainWindow):
         self._face_panel.person_cluster_requested.connect(
             self._on_face_panel_person_cluster_requested
         )
+        self._face_panel.undo_stack_changed.connect(self._on_face_undo_stack_changed)
         self._viewer.face_context_menu_requested.connect(self._on_face_context_menu)
         self._face_panel_refresh_timer.timeout.connect(self._face_panel.refresh)
         self._face_panel.hide()
@@ -841,6 +850,7 @@ class MainWindow(QMainWindow):
         self._sidebar.identify_requested.connect(self.show_face_clusters)
         self._sidebar.person_merge_requested.connect(self._on_person_merge_requested)
         self._sidebar.person_rename_requested.connect(self._on_person_rename_requested)
+        self._sidebar.person_clear_requested.connect(self._on_person_clear_requested)
         self._sidebar.tree_state_changed.connect(
             lambda paths: self._config.set("ui.folder_tree_expanded", paths)
         )
@@ -1377,6 +1387,25 @@ class MainWindow(QMainWindow):
             self._refresh_persons()
 
     @Slot(object)
+    def _on_person_clear_requested(self, person: PersonInfo) -> None:
+        """Supprime le nom d'une personne : désassocie toutes ses faces et efface l'entrée."""
+        reply = QMessageBox.question(
+            self,
+            "Effacer le nom",
+            f"Effacer « {person.name} » et supprimer toutes ses associations de visages ?\n\n"
+            "Les visages retourneront dans leurs groupes anonymes.",
+            QMessageBox.Yes | QMessageBox.Cancel,
+            QMessageBox.Cancel,
+        )
+        if reply != QMessageBox.Yes:
+            return
+        self._face_db.unassign_person(person.id)
+        self._catalog.delete_person(person.id)
+        if self._current_context == f"{_PERSON_CTX_PREFIX}{person.id}":
+            self.show_grid()
+        self._refresh_persons()
+
+    @Slot(object)
     def _on_person_selected(self, person: PersonInfo) -> None:
         self._grid_nav_bar.hide()
         self.show_person_clusters(person)
@@ -1418,6 +1447,19 @@ class MainWindow(QMainWindow):
 
     def _on_face_context_menu(self, face, gpos) -> None:
         self._face_panel.show_face_context_menu(face, gpos)
+
+    @Slot(bool)
+    def _on_face_undo_stack_changed(self, can_undo: bool) -> None:
+        self._btn_undo.setEnabled(can_undo)
+        if can_undo and self._face_panel._undo_stack:
+            desc = self._face_panel._undo_stack[-1][0]
+            self._btn_undo.setToolTip(f"Annuler : {desc}")
+        else:
+            self._btn_undo.setToolTip("Annuler la dernière action sur les visages")
+
+    @Slot()
+    def _on_undo_clicked(self) -> None:
+        self._face_panel.undo()
 
     def _on_face_panel_person_cluster_requested(self, person_id: int) -> None:
         """Double-clic sur un visage nommé dans le panneau → vue clusters de la personne."""
@@ -1707,6 +1749,7 @@ class MainWindow(QMainWindow):
         self._zoom_slider.hide()
         self._zoom_pct_label.hide()
         self._btn_grid_status.show()
+        self._act_undo.setVisible(False)
         self._act_faces_toggle.setVisible(False)
         self._act_exif_toggle.setVisible(False)
         self._lbl_fileinfo.setText("")
@@ -1782,6 +1825,7 @@ class MainWindow(QMainWindow):
         self._zoom_slider.show()
         self._zoom_pct_label.show()
         self._btn_grid_status.hide()
+        self._act_undo.setVisible(True)
         self._act_faces_toggle.setVisible(True)
         self._act_exif_toggle.setVisible(True)
         if self._face_panel.isVisible():
@@ -1817,13 +1861,11 @@ class MainWindow(QMainWindow):
         if not self._current_photos:
             return
         from src.ui.slideshow import SlideshowWindow
-        win = SlideshowWindow(
+        self._slideshow_win = SlideshowWindow(
             photos=self._current_photos,
             start_index=self._current_photo_index,
             edit_db=self._edit_db,
-            parent=self,
         )
-        win.show()
 
     def _show_help(self) -> None:
         from src.ui.help_dialog import HelpDialog

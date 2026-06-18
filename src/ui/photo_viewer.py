@@ -838,6 +838,16 @@ class _Canvas(QWidget):
                 by = by - cy * dh
                 dw = cw * dw
                 dh = ch * dh
+            elif crop and len(crop) == 8:
+                # Format quad TL,TR,BR,BL (coords relatives 0-1)
+                xs = [crop[i] for i in range(0, 8, 2)]
+                ys = [crop[i] for i in range(1, 8, 2)]
+                cx, cy = min(xs), min(ys)
+                cw, ch = max(xs) - cx, max(ys) - cy
+                bx = bx - cx * dw
+                by = by - cy * dh
+                dw = cw * dw
+                dh = ch * dh
 
         # Mise à l'échelle pixmap puis zoom
         sx = self._pixmap.width()  / dw

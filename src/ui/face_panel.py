@@ -9,7 +9,7 @@ import logging
 from PySide6.QtCore import Qt, QThread, Signal, Slot
 from PySide6.QtGui import QMouseEvent, QPixmap
 from PySide6.QtWidgets import (
-    QDialog, QFrame, QHBoxLayout, QLabel,
+    QDialog, QDialogButtonBox, QFrame, QHBoxLayout, QLabel,
     QMenu, QPushButton, QScrollArea, QSizePolicy,
     QVBoxLayout, QWidget,
 )
@@ -235,6 +235,103 @@ class _FaceItem(QFrame):
         self.context_menu_requested.emit(self._face_id, event.globalPos())
 
 
+# ------------------------------------------------------------------ ignored faces dialog
+
+class _IgnoredFacesDialog(QDialog):
+    """Dialogue listant les visages ignorés pour cette photo, avec bouton Restaurer."""
+
+    def __init__(self, faces: list[FaceInfo], photo_path: str, parent=None) -> None:
+        super().__init__(parent)
+        self.setWindowTitle("Visages ignorés")
+        self.setMinimumWidth(300)
+        self._restored: list[int] = []   # face_ids restaurés
+        self._photo_path = photo_path
+        self._rows: dict[int, QWidget] = {}
+
+        layout = QVBoxLayout(self)
+
+        lbl = QLabel(f"{len(faces)} visage(s) ignoré(s) sur cette photo :")
+        lbl.setStyleSheet("color: #aaa; font-size: 11px; margin-bottom: 4px;")
+        layout.addWidget(lbl)
+
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setStyleSheet("border: 1px solid #444;")
+        scroll.setMaximumHeight(400)
+        container = QWidget()
+        self._vbox = QVBoxLayout(container)
+        self._vbox.setContentsMargins(4, 4, 4, 4)
+        self._vbox.setSpacing(6)
+        scroll.setWidget(container)
+        layout.addWidget(scroll)
+
+        for face in faces:
+            row = QWidget()
+            row_layout = QHBoxLayout(row)
+            row_layout.setContentsMargins(4, 4, 4, 4)
+            row_layout.setSpacing(8)
+
+            thumb_lbl = LoadingLabel("#1a1a1a", row)
+            thumb_lbl.setFixedSize(48, 48)
+            thumb_lbl.setAlignment(Qt.AlignCenter)
+            thumb_lbl.setStyleSheet("border-radius: 3px; border: none;")
+            thumb_lbl.start_loading()
+            row_layout.addWidget(thumb_lbl)
+
+            info = QLabel(f"x={face.bbox_x}, y={face.bbox_y}\n{face.bbox_w}×{face.bbox_h}px")
+            info.setStyleSheet("font-size: 10px; color: #aaa;")
+            row_layout.addWidget(info, stretch=1)
+
+            btn = QPushButton("Restaurer")
+            btn.setFixedWidth(75)
+            btn.setStyleSheet(
+                "QPushButton { background:#2a5a3a; color:#9d9; border:none;"
+                " border-radius:3px; padding:4px 8px; }"
+                "QPushButton:hover { background:#3a7a4a; }"
+                "QPushButton:disabled { background:#333; color:#666; }"
+            )
+            face_id = face.id
+            btn.clicked.connect(lambda checked=False, fid=face_id, b=btn, r=row: self._restore(fid, b, r))
+            row_layout.addWidget(btn)
+
+            self._vbox.addWidget(row)
+            self._rows[face.id] = (thumb_lbl, face)
+
+        self._vbox.addStretch()
+
+        bb = QDialogButtonBox(QDialogButtonBox.Close)
+        bb.rejected.connect(self.accept)
+        layout.addWidget(bb)
+
+        # Charger les thumbnails
+        items = [(face.id, face) for face in faces]
+        if items:
+            self._loader = _FacePanelLoader(items, self)
+            self._loader.ready.connect(self._on_thumb_ready)
+            self._loader.start()
+        else:
+            self._loader = None
+
+    @Slot(int, bytes)
+    def _on_thumb_ready(self, face_id: int, data: bytes) -> None:
+        row_data = self._rows.get(face_id)
+        if row_data:
+            thumb_lbl, _ = row_data
+            pix = QPixmap()
+            pix.loadFromData(data)
+            scaled = pix.scaled(48, 48, Qt.KeepAspectRatioByExpanding, Qt.SmoothTransformation)
+            thumb_lbl.setPixmap(scaled)
+
+    def _restore(self, face_id: int, btn: QPushButton, row: QWidget) -> None:
+        self._restored.append(face_id)
+        btn.setEnabled(False)
+        btn.setText("Restauré")
+        row.setStyleSheet("background: #1a2a1a; border-radius: 3px;")
+
+    def restored_ids(self) -> list[int]:
+        return self._restored
+
+
 # ------------------------------------------------------------------ panel
 
 _TOUS_BTN_STYLE = (
@@ -249,6 +346,16 @@ _TOUS_BTN_STYLE = (
     "}"
 )
 
+_BOTTOM_BTN_STYLE = (
+    "QPushButton {"
+    "  background: #252525; color: #888;"
+    "  border-top: 1px solid #444; border-radius: 0;"
+    "  font-size: 11px; padding: 5px 4px;"
+    "}"
+    "QPushButton:hover { background: #2e2e2e; color: #bbb; }"
+    "QPushButton:disabled { color: #444; }"
+)
+
 
 class FacePanel(QWidget):
     """
@@ -259,6 +366,7 @@ class FacePanel(QWidget):
     all_faces_toggled        = Signal(list)    # list[FaceInfo] quand "Tous" actif, [] sinon
     person_assigned          = Signal()        # après identification (groupe ou visage individuel)
     person_cluster_requested = Signal(int)     # person_id — double-clic sur un visage nommé
+    undo_stack_changed       = Signal(bool)    # True = can undo
 
     def __init__(
         self,
@@ -276,6 +384,7 @@ class FacePanel(QWidget):
         self._data_loader:     _FacesDataLoader | None = None
         self._current_photo:   str = ""
         self._selected_face_id: int | None = None
+        self._undo_stack:      list[tuple[str, object]] = []
         self._setup_ui()
 
     # ------------------------------------------------------------------ setup
@@ -318,6 +427,14 @@ class FacePanel(QWidget):
         scroll.setStyleSheet("border: none;")
         root.addWidget(scroll)
 
+        self._btn_ignored = QPushButton("Visages ignorés…")
+        self._btn_ignored.setFixedHeight(28)
+        self._btn_ignored.setStyleSheet(_BOTTOM_BTN_STYLE)
+        self._btn_ignored.setToolTip("Restaurer un visage ignoré sur cette photo")
+        self._btn_ignored.clicked.connect(self._on_show_ignored)
+        self._btn_ignored.setEnabled(False)
+        root.addWidget(self._btn_ignored)
+
     # ------------------------------------------------------------------ public
 
     def refresh(self) -> None:
@@ -327,6 +444,9 @@ class FacePanel(QWidget):
 
     def set_photo(self, photo_path: str) -> None:
         """Charger et afficher les visages de la photo (asynchrone)."""
+        if photo_path != self._current_photo:
+            self._undo_stack.clear()
+            self.undo_stack_changed.emit(False)
         self._current_photo = photo_path
         self._stop_loader()
         self._clear()
@@ -346,6 +466,28 @@ class FacePanel(QWidget):
         self._data_loader.data_ready.connect(self._on_faces_data_ready)
         self._data_loader.start()
 
+    # ------------------------------------------------------------------ undo
+
+    def can_undo(self) -> bool:
+        return bool(self._undo_stack)
+
+    def undo(self) -> None:
+        if not self._undo_stack:
+            return
+        _desc, undo_fn = self._undo_stack.pop()
+        try:
+            undo_fn()
+        except Exception as exc:
+            logger.error("[FacePanel] undo failed: %s", exc)
+        finally:
+            self.undo_stack_changed.emit(bool(self._undo_stack))
+
+    def _push_undo(self, description: str, fn) -> None:
+        self._undo_stack.append((description, fn))
+        self.undo_stack_changed.emit(True)
+
+    # ------------------------------------------------------------------ data loading
+
     @Slot(str, list, list, list)
     def _on_faces_data_ready(
         self,
@@ -364,6 +506,14 @@ class FacePanel(QWidget):
         self._cluster_persons = cluster_persons
 
         self._clear()
+
+        # Mettre à jour le bouton "Visages ignorés"
+        ignored = self._face_db.get_ignored_faces_for_photo(photo_path)
+        self._btn_ignored.setEnabled(bool(ignored))
+        self._btn_ignored.setText(
+            f"Visages ignorés… ({len(ignored)})" if ignored else "Visages ignorés…"
+        )
+
         if not faces:
             lbl = QLabel("Aucun visage\ndétecté")
             lbl.setAlignment(Qt.AlignCenter)
@@ -550,6 +700,13 @@ class FacePanel(QWidget):
             "[FacePanel] isolate_and_assign face=%s person=%s", face_id, person_id
         )
         self._face_db.isolate_and_assign_face(face_id, person_id)
+
+        def _undo(fid=face_id):
+            self._face_db.unassign_face(fid)
+            self.person_assigned.emit()
+            self.set_photo(self._current_photo)
+        self._push_undo("Identifier visage", _undo)
+
         self.person_assigned.emit()
         self.set_photo(self._current_photo)
 
@@ -576,6 +733,7 @@ class FacePanel(QWidget):
             if person_id is None:
                 return
 
+        cluster_id_assigned: int | None = None
         if (
             face is not None
             and face.cluster_id is not None
@@ -587,11 +745,22 @@ class FacePanel(QWidget):
                 face.cluster_id, person_id,
             )
             self._face_db.assign_person_to_cluster(face.cluster_id, person_id)
+            cluster_id_assigned = face.cluster_id
         logger.debug(
             "[FacePanel] assign_person_to_face face=%s person=%s",
             face_id, person_id,
         )
         self._face_db.assign_person_to_face(face_id, person_id)
+
+        def _undo(fid=face_id, pid=person_id, cid=cluster_id_assigned):
+            if cid is not None:
+                self._face_db.unassign_person_from_cluster(pid, cid)
+            else:
+                self._face_db.unassign_person_from_face(fid)
+            self.person_assigned.emit()
+            self.set_photo(self._current_photo)
+        self._push_undo("Identifier groupe", _undo)
+
         self.person_assigned.emit()
         self.set_photo(self._current_photo)
 
@@ -601,6 +770,12 @@ class FacePanel(QWidget):
 
     def _on_ignore_requested(self, face_id: int) -> None:
         self._face_db.ignore_face(face_id)
+
+        def _undo(fid=face_id):
+            self._face_db.unignore_face(fid)
+            self.set_photo(self._current_photo)
+        self._push_undo("Ignorer visage", _undo)
+
         self.set_photo(self._current_photo)
 
     def _on_isolate_requested(self, face_id: int) -> None:
@@ -609,6 +784,27 @@ class FacePanel(QWidget):
 
     def _on_set_cover_requested(self, face_id: int) -> None:
         self._face_db.set_cover_face(face_id)
+
+    # ------------------------------------------------------------------ ignored faces
+
+    def _on_show_ignored(self) -> None:
+        ignored = self._face_db.get_ignored_faces_for_photo(self._current_photo)
+        if not ignored:
+            return
+        dlg = _IgnoredFacesDialog(ignored, self._current_photo, self)
+        dlg.exec()
+        restored = dlg.restored_ids()
+        if restored:
+            for face_id in restored:
+                self._face_db.unignore_face(face_id)
+                fid = face_id
+
+                def _undo(fid=fid):
+                    self._face_db.ignore_face(fid)
+                    self.set_photo(self._current_photo)
+                self._push_undo("Restaurer visage ignoré", _undo)
+
+            self.set_photo(self._current_photo)
 
     # ------------------------------------------------------------------ internal
 
