@@ -7,7 +7,7 @@ from collections import deque
 from PySide6.QtCore import QThread, Signal
 
 from src.faces.face_database import FaceDatabase
-from src.faces.detector import detect_and_embed, warmup_worker, warmup_worker_cpu
+from src.faces.detector import detect_and_embed, detect_and_embed_auto, warmup_worker, warmup_worker_cpu
 from src.library.catalog import Catalog
 
 logger = logging.getLogger(__name__)
@@ -162,7 +162,7 @@ class FaceIndexThread(QThread):
                     if not os.path.exists(path):
                         continue
                     try:
-                        fut = executor.submit(detect_and_embed, path)
+                        fut = executor.submit(detect_and_embed_auto, path)
                         in_flight.append((fut, path, time.monotonic()))
                     except concurrent.futures.BrokenExecutor:
                         break
@@ -184,7 +184,7 @@ class FaceIndexThread(QThread):
                 )
 
                 try:
-                    detections = fut.result(timeout=remaining)
+                    detections, det_rotation = fut.result(timeout=remaining)
 
                 except concurrent.futures.TimeoutError:
                     logger.error("FaceIndexThread: timeout %ds sur %s",
@@ -246,7 +246,7 @@ class FaceIndexThread(QThread):
                 # Succès
                 in_flight.popleft()
                 consecutive_fails = 0
-                self._face_db.save_faces(path, detections)
+                self._face_db.save_faces(path, detections, rotation=det_rotation)
                 faces_found += len(detections)
                 indexed += 1
                 if detections:

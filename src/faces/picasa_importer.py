@@ -404,6 +404,13 @@ def _run_import(
             result.persons_created += 1
         hash_to_person_id[h] = existing_persons[name].id
 
+    # Nettoyage des person_ids orphelins : faces et annotations qui référencent
+    # d'anciens IDs devenus invalides (après réinitialisation de catalog.db).
+    # Sans ce nettoyage, les faces portant l'ancien ID restent « invisibles »
+    # même si la personne existe à nouveau avec un nouvel ID.
+    all_valid_ids = {p.id for p in existing_persons.values()}
+    face_db.cleanup_orphan_person_ids(all_valid_ids)
+
     # Second pass: import faces and edits
     for i, (ini_path, faces, edits_map) in enumerate(ini_data):
         if progress_cb:

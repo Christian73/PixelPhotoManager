@@ -8,7 +8,7 @@ from PySide6.QtGui import QColor, QFont, QIcon, QPainter, QPixmap
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QSplitter,
     QTreeWidget, QTreeWidgetItem, QListWidget, QListWidgetItem,
-    QPushButton, QLabel, QMenu, QInputDialog, QMessageBox, QFileDialog,
+    QPushButton, QLabel, QLineEdit, QMenu, QInputDialog, QMessageBox, QFileDialog,
 )
 
 from src.core.event_bus import bus
@@ -161,8 +161,9 @@ class Sidebar(QWidget):
     photos_dropped     = Signal(list, str) # (file_paths, dest_folder_path)
     person_selected        = Signal(object)   # PersonInfo
     identify_requested     = Signal()         # ouvrir PeopleDialog
-    person_merge_requested = Signal(object)   # PersonInfo à fusionner
+    person_merge_requested  = Signal(object)   # PersonInfo à fusionner
     person_rename_requested = Signal(object)  # PersonInfo à renommer
+    person_clear_requested  = Signal(object)  # PersonInfo dont on efface le nom
     tree_state_changed     = Signal(list)     # list[str] — chemins dépliés
 
     def __init__(self, parent=None):
@@ -176,6 +177,13 @@ class Sidebar(QWidget):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
+
+        self._filter_box = QLineEdit()
+        self._filter_box.setPlaceholderText("🔍  Filtrer dossiers et personnes…")
+        self._filter_box.setClearButtonEnabled(True)
+        self._filter_box.setStyleSheet("padding: 4px 6px; background: #2a2a2a; color: #ddd; border: none; border-bottom: 1px solid #444;")
+        self._filter_box.textChanged.connect(self._apply_filter)
+        layout.addWidget(self._filter_box)
 
         self._splitter = QSplitter(Qt.Vertical)
 
@@ -297,6 +305,42 @@ class Sidebar(QWidget):
         item_vid = QListWidgetItem("▶ Vidéos")
         item_vid.setData(Qt.UserRole, _SPECIAL_VIDEOS)
         self._albums_list.addItem(item_vid)
+
+    # ── filtrage live ──────────────────────────────────────────────────────────
+
+    @Slot(str)
+    def _apply_filter(self, text: str) -> None:
+        q = text.strip().lower()
+        self._filter_folder_tree(q)
+        self._filter_persons_list(q)
+
+    def _filter_folder_tree(self, q: str) -> None:
+        for i in range(self._folder_tree.topLevelItemCount()):
+            self._filter_tree_item(self._folder_tree.topLevelItem(i), q)
+
+    def _filter_tree_item(self, item: QTreeWidgetItem, q: str) -> bool:
+        """Cache/montre item selon q. Retourne True si item ou un descendant matche."""
+        if item.data(0, Qt.UserRole) is None:
+            return True  # placeholder lazy-load, ne pas toucher
+        self_match = not q or q in item.text(0).lower()
+        child_match = False
+        for i in range(item.childCount()):
+            child = item.child(i)
+            if child.data(0, Qt.UserRole) is not None:
+                if self._filter_tree_item(child, q):
+                    child_match = True
+        visible = self_match or child_match
+        item.setHidden(not visible)
+        return visible
+
+    def _filter_persons_list(self, q: str) -> None:
+        for i in range(self._persons_list.count()):
+            item = self._persons_list.item(i)
+            person = item.data(Qt.UserRole)
+            name = person.name if isinstance(person, PersonInfo) else item.text()
+            item.setHidden(bool(q) and q not in name.lower())
+
+    # ── persistance des positions de bordures ──────────────────────────────
 
     def set_tree_expanded_paths(self, paths: list[str]) -> None:
         """Initialise l'état mémorisé depuis la config (appeler avant refresh_folders)."""
@@ -586,4 +630,7 @@ class Sidebar(QWidget):
                        lambda: self.person_rename_requested.emit(person))
         menu.addAction("Fusionner avec…",
                        lambda: self.person_merge_requested.emit(person))
+        menu.addSeparator()
+        menu.addAction("Effacer le nom…",
+                       lambda: self.person_clear_requested.emit(person))
         menu.exec(self._persons_list.mapToGlobal(pos))

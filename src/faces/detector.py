@@ -33,16 +33,50 @@ _MAX_DETECT_DIM = 1920
 _insight_app = None
 
 
+def _register_nvidia_dll_dirs() -> None:
+    """Ajoute les répertoires de DLLs nvidia (cuDNN, cuBLAS…) au PATH Windows.
+
+    Nécessaire pour onnxruntime-gpu sur Windows quand cuDNN est installé via pip
+    (nvidia-cudnn-cu12) plutôt que via l'installeur NVIDIA.  onnxruntime charge
+    onnxruntime_providers_cuda.dll via LoadLibraryEx, qui résout ses dépendances
+    implicites (cudnn64_9.dll, etc.) via le PATH système — os.add_dll_directory()
+    ne couvre pas ce cas.  Sans cela, onnxruntime tombe silencieusement sur CPU."""
+    import sys
+    if sys.platform != "win32":
+        return
+    try:
+        import nvidia
+        current_path = os.environ.get("PATH", "")
+        dirs_to_add = []
+        for base in nvidia.__path__:
+            for sub in os.listdir(base):
+                bin_dir = os.path.join(base, sub, "bin")
+                if os.path.isdir(bin_dir) and bin_dir not in current_path:
+                    dirs_to_add.append(bin_dir)
+                    os.add_dll_directory(bin_dir)
+        if dirs_to_add:
+            prefix = os.pathsep.join(dirs_to_add)
+            os.environ["PATH"] = prefix + os.pathsep + current_path
+            logger.debug("nvidia DLL dirs ajoutés au PATH : %s", dirs_to_add)
+    except Exception as exc:
+        logger.debug("_register_nvidia_dll_dirs : %s", exc)
+
+
 def _get_insight_app():
-    """Retourne (et initialise si besoin) le singleton FaceAnalysis."""
+    """Retourne (et initialise si besoin) le singleton FaceAnalysis.
+
+    Utilise CUDA si disponible (onnxruntime-gpu), sinon CPU en fallback.
+    ctx_id=0 = premier GPU ; ctx_id=-1 = CPU forcé.
+    """
     global _insight_app
     if _insight_app is None:
+        _register_nvidia_dll_dirs()
         from insightface.app import FaceAnalysis
         _insight_app = FaceAnalysis(
             name="buffalo_l",
-            providers=["CPUExecutionProvider"],
+            providers=["CUDAExecutionProvider", "CPUExecutionProvider"],
         )
-        _insight_app.prepare(ctx_id=-1, det_size=(640, 640))
+        _insight_app.prepare(ctx_id=0, det_size=(640, 640))
     return _insight_app
 
 
@@ -168,15 +202,43 @@ def warmup_worker() -> None:
     Au premier appel, télécharge les modèles buffalo_l (~380 Mo) si absents.
     Les appels suivants sont instantanés (modèles déjà en cache local).
     """
-    import numpy as np
     try:
         app = _get_insight_app()
-        dummy = np.zeros((112, 112, 3), dtype=np.uint8)
-        app.get(dummy)
-        logger.info("InsightFace warmup OK (buffalo_l, CPU)")
+        import onnxruntime as _ort
+        providers = []
+        for model in app.models.values():
+            sess = getattr(model, "session", None) or getattr(getattr(model, "model", None), "session", None)
+            if sess:
+                providers = sess.get_providers()
+                break
+        backend = "GPU" if any("CUDA" in p for p in providers) else "CPU"
+        logger.info("InsightFace warmup OK (buffalo_l, %s, providers=%s)", backend, providers)
     except Exception as exc:
         logger.error("InsightFace warmup échoué : %s", exc)
         raise
+
+
+def warmup_worker_cpu() -> None:
+    """Variante CPU forcé — utilisée en fallback quand CUDA bloque."""
+    global _insight_app
+    _insight_app = None  # reset tout singleton GPU partiel
+    from insightface.app import FaceAnalysis
+    _insight_app = FaceAnalysis(name="buffalo_l", providers=["CPUExecutionProvider"])
+    _insight_app.prepare(ctx_id=-1, det_size=(640, 640))
+    logger.info("InsightFace warmup OK (buffalo_l, CPU forcé)")
+
+
+def detect_and_embed_auto(image_path: str) -> "tuple[list[dict], int]":
+    """Détecte les visages en essayant 0°, 90°, 180°, 270° si aucun visage n'est trouvé.
+
+    Retourne (détections, rotation_utilisée).  Utile pour les photos prises avec
+    un téléphone tenu à la verticale ou à l'envers quand l'EXIF ne suffit pas.
+    """
+    for rotation in (0, 90, 180, 270):
+        result = detect_and_embed(image_path, rotation=rotation)
+        if result:
+            return result, rotation
+    return [], 0
 
 
 def detect_and_embed(image_path: str, rotation: int = 0) -> list[dict]:
