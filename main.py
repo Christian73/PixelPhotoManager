@@ -34,7 +34,11 @@ if multiprocessing.current_process().name == 'MainProcess':
 
     for _noisy in ("PIL", "PIL.Image", "PIL.PngImagePlugin", "PIL.JpegImagePlugin",
                    "PIL.TiffImagePlugin", "PIL.WebPImagePlugin"):
-        logging.getLogger(_noisy).setLevel(logging.WARNING)
+        logging.getLogger(_noisy).setLevel(logging.ERROR)
+
+    import warnings
+    from PIL import Image as _PilImage
+    warnings.filterwarnings("ignore", category=_PilImage.DecompressionBombWarning)
 
     def _excepthook(exc_type, exc_value, exc_tb):
         logging.getLogger(__name__).critical(

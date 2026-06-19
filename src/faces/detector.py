@@ -139,6 +139,28 @@ def _exif_corrected(image_path: str, extra_rotation: int = 0):
     except Exception:
         pass
 
+    # Fallback : si le chemin est non-ASCII mais que PIL a échoué silencieusement
+    # (JPEG corrompu, mode sans alpha, etc.), copier le fichier brut vers un temp
+    # ASCII pour que cv2.imread puisse l'ouvrir.
+    if needs_ascii and result_path == image_path and not is_video:
+        try:
+            import shutil
+            if temp_path and os.path.exists(temp_path):
+                os.unlink(temp_path)
+                temp_path = None
+            suffix = os.path.splitext(image_path)[1] or ".jpg"
+            fd, temp_path = tempfile.mkstemp(suffix=suffix)
+            os.close(fd)
+            shutil.copy2(image_path, temp_path)
+            result_path = temp_path
+        except Exception:
+            if temp_path:
+                try:
+                    os.unlink(temp_path)
+                except Exception:
+                    pass
+                temp_path = None
+
     try:
         yield result_path
     finally:

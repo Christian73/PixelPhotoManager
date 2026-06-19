@@ -27,7 +27,7 @@ from src.faces.face_database import FaceDatabase
 from src.faces.face_indexer import FaceIndexThread, SingleFaceReindexThread, TFWarmUpThread
 from src.faces.clusterer import ClusterThread
 from src.processing.edit_database import EditDatabase
-from src.ui.sidebar import Sidebar, _SPECIAL_ALL, _SPECIAL_FAV, _SPECIAL_VIDEOS
+from src.ui.sidebar import Sidebar, _SPECIAL_ALL, _SPECIAL_FAV, _SPECIAL_VIDEOS, _SPECIAL_FILENAME
 from src.ui.thumbnail_grid import ThumbnailGrid
 from src.ui.photo_viewer import PhotoViewer
 from src.ui.edit_panel import EditPanel, MarkedSlider
@@ -499,21 +499,18 @@ class MainWindow(QMainWindow):
         self._photo_query_thread: _PhotoQueryThread | None = None
         self._persons_refresh_thread: _PersonsRefreshThread | None = None
         self._from_person_cluster_view: bool = False
+        self._viewer_back_target: str = "grid"  # "grid" | "person_cluster_view"
 
         self._current_photos: list[PhotoInfo] = []
         self._current_paths: set[str] = set()
         self._current_photo_index: int = 0
         self._current_context: str = ""   # dossier ou album actif
         self._catalog_loader: _CatalogLoadThread | None = None
-        self._search_timer = QTimer()
-        self._search_timer.setSingleShot(True)
-        self._search_timer.setInterval(150)
         # Debounce du refresh du face panel après clustering (peut être déclenché
         # plusieurs fois par seconde pendant l'indexation) — délai de 3 s.
         self._face_panel_refresh_timer = QTimer()
         self._face_panel_refresh_timer.setSingleShot(True)
         self._face_panel_refresh_timer.setInterval(3000)
-        self._search_timer.timeout.connect(self._do_search)
 
         self._setup_window()
         self._setup_menu()
@@ -630,18 +627,6 @@ class MainWindow(QMainWindow):
         tb.setMovable(False)
         self.addToolBar(tb)
 
-        self._search_box = QLineEdit()
-        self._search_box.setPlaceholderText("Rechercher… (Ctrl+F)")
-        self._search_box.setMinimumWidth(130)
-        self._search_box.setMaximumWidth(260)
-        self._search_box.textChanged.connect(self._on_search_text_changed)
-        tb.addWidget(self._search_box)
-
-        act_clear = QAction("✕", self)
-        act_clear.setToolTip("")
-        act_clear.triggered.connect(lambda: self._search_box.clear())
-        tb.addAction(act_clear)
-
         # Espaceur flexible pour pousser le bouton Export à droite
         spacer = QWidget()
         spacer.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
@@ -757,7 +742,7 @@ class MainWindow(QMainWindow):
 
         # Index 1 — Visionneuse (avec panneau Visages rétractable à gauche)
         self._viewer = PhotoViewer(config=self._config)
-        self._viewer.closed.connect(self.show_grid)
+        self._viewer.closed.connect(self._on_viewer_closed)
         self._viewer.navigate.connect(self._navigate_photo)
         self._viewer.zoom_changed.connect(self._on_viewer_zoom_changed)
         self._viewer.save_requested.connect(self._on_save_requested)
@@ -854,7 +839,6 @@ class MainWindow(QMainWindow):
         self._sidebar.tree_state_changed.connect(
             lambda paths: self._config.set("ui.folder_tree_expanded", paths)
         )
-
         bus.on("album.create_requested", self._on_album_create)
 
     def _setup_statusbar(self) -> None:
@@ -1515,8 +1499,8 @@ class MainWindow(QMainWindow):
     def _update_nav_arrows(self) -> None:
         n = len(self._current_photos)
         self._viewer.update_nav_arrows(
-            has_prev=self._current_photo_index > 0,
-            has_next=self._current_photo_index < n - 1,
+            has_prev=self._current_photo_index < n - 1,  # il y a des photos plus anciennes
+            has_next=self._current_photo_index > 0,       # il y a des photos plus récentes
         )
 
     @Slot(int)
@@ -1601,6 +1585,18 @@ class MainWindow(QMainWindow):
             self._grid_nav_bar.hide()
             self.show_grid()
             self._start_photo_query(self._catalog.get_videos, "Vidéos")
+        elif data == _SPECIAL_FILENAME:
+            query = self._sidebar.filter_text
+            if not query:
+                return
+            self._grid.set_ribbon_mode(False)
+            self._grid.set_date_overlay_visible(False)
+            self._grid_nav_bar.hide()
+            self.show_grid()
+            self._start_photo_query(
+                lambda q=query: self._catalog.search(q),
+                f"Fichiers : {query}",
+            )
         elif isinstance(data, AlbumInfo) and data.id:
             album_id   = data.id
             album_name = data.name
@@ -1717,21 +1713,6 @@ class MainWindow(QMainWindow):
     def _on_bus_photo_selected(self, photo: PhotoInfo) -> None:
         pass
 
-    @Slot()
-    def _on_search_text_changed(self) -> None:
-        self._search_timer.start()
-
-    @Slot()
-    def _do_search(self) -> None:
-        query = self._search_box.text().strip()
-        if not query:
-            self._show_all_photos()
-            return
-        self._start_photo_query(
-            lambda: self._catalog.search(query),
-            f"Recherche: {query}",
-        )
-
     @Slot(int)
     def _on_thumb_size_changed(self, idx: int) -> None:
         size = _THUMB_SIZES[idx]
@@ -1796,13 +1777,34 @@ class MainWindow(QMainWindow):
         photo = self._catalog.get_photo_by_path(path)
         if photo is None:
             return
-        self._current_photos = [photo]
-        self._current_photo_index = 0
+        # Charger toutes les photos de la personne pour permettre la navigation prev/next
+        person = self._person_cluster_view.current_person
+        if person:
+            all_paths = self._face_db.get_photos_for_person(person.id)
+            photos = self._catalog.get_photos_by_paths(all_paths)
+        else:
+            photos = [photo]
+        self._current_photos = photos if photos else [photo]
+        self._current_photo_index = next(
+            (i for i, p in enumerate(self._current_photos) if p.path == path), 0
+        )
+        self._viewer_back_target = "person_cluster_view"
         self.show_viewer(photo)
 
     def _on_person_cluster_back(self) -> None:
         """Bouton ← Retour dans PersonClusterView → retour à la grille principale."""
         self._grid_nav_bar.hide()
+        self.show_grid()
+
+    def _on_viewer_closed(self) -> None:
+        """Bouton ← dans la visionneuse : retourne à l'écran d'origine."""
+        target = self._viewer_back_target
+        self._viewer_back_target = "grid"
+        if target == "person_cluster_view":
+            person = self._person_cluster_view.current_person
+            if person:
+                self.show_person_clusters(person)
+                return
         self.show_grid()
 
     @Slot(int)
@@ -1861,9 +1863,14 @@ class MainWindow(QMainWindow):
         if not self._current_photos:
             return
         from src.ui.slideshow import SlideshowWindow
+        # Si la visionneuse est ouverte, partir de la photo affichée ; sinon la plus ancienne
+        if self._viewer.isVisible() and 0 <= self._current_photo_index < len(self._current_photos):
+            start_index = self._current_photo_index
+        else:
+            start_index = len(self._current_photos) - 1
         self._slideshow_win = SlideshowWindow(
             photos=self._current_photos,
-            start_index=self._current_photo_index,
+            start_index=start_index,
             edit_db=self._edit_db,
         )
 
@@ -2267,22 +2274,19 @@ class MainWindow(QMainWindow):
                                 )
                         if img.mode not in ("RGB", "RGBA"):
                             img = img.convert("RGB")
-                        # Résolution du nom de fichier de destination
-                        dest = export_dir / Path(photo.path).name
+                        if img.mode == "RGBA":
+                            img = img.convert("RGB")
+                        # Résolution du nom de fichier de destination (toujours en JPG)
+                        dest = (export_dir / Path(photo.path).name).with_suffix(".jpg")
                         if dest.exists():
-                            stem, suffix = dest.stem, dest.suffix
+                            stem = dest.stem
                             n = 1
                             while dest.exists():
-                                dest = export_dir / f"{stem}_{n}{suffix}"
+                                dest = export_dir / f"{stem}_{n}.jpg"
                                 n += 1
                         orig_stat = os.stat(photo.path)
-                        if dest.suffix.lower() == ".png":
-                            img.save(str(dest), format="PNG")
-                        else:
-                            if img.mode == "RGBA":
-                                img = img.convert("RGB")
-                            img.save(str(dest), format="JPEG",
-                                     quality=quality, subsampling=0)
+                        img.save(str(dest), format="JPEG",
+                                 quality=quality, subsampling=0)
                         self._preserve_file_dates(orig_stat, str(dest))
                 except Exception as e:
                     errors.append(f"{photo.filename} : {e}")
@@ -2384,9 +2388,6 @@ class MainWindow(QMainWindow):
 
         if key == Qt.Key_F9:
             self.toggle_sidebar()
-        elif key == Qt.Key_F and modifiers == Qt.ControlModifier:
-            self._search_box.setFocus()
-            self._search_box.selectAll()
         elif key == Qt.Key_A and modifiers == Qt.ControlModifier:
             if self._stack.currentIndex() == 0:
                 self._grid.select_all()
