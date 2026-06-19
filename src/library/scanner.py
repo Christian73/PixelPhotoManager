@@ -64,6 +64,7 @@ class ScanThread(QThread):
                     if not _is_hidden(os.path.join(root, d))
                     and d != "Originals"
                     and not d.endswith("_assets")
+                    and d.lower() != "thumbnails"
                 ]
                 for fname in files:
                     fpath = os.path.join(root, fname)

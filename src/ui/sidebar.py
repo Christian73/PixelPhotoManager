@@ -68,7 +68,8 @@ class _FolderTree(QTreeWidget):
             event.ignore()
 
 
-_SPECIAL_PERSON = "__person__"   # préfixe pour l'identifiant de contexte personne
+_SPECIAL_PERSON   = "__person__"    # préfixe pour l'identifiant de contexte personne
+_SPECIAL_FILENAME = "__filename__"  # album virtuel "Par nom de fichier"
 
 
 class _BadgeButton(QPushButton):
@@ -179,7 +180,7 @@ class Sidebar(QWidget):
         layout.setSpacing(0)
 
         self._filter_box = QLineEdit()
-        self._filter_box.setPlaceholderText("🔍  Filtrer dossiers et personnes…")
+        self._filter_box.setPlaceholderText("🔍  Filtrer dossiers, personnes et fichiers…")
         self._filter_box.setClearButtonEnabled(True)
         self._filter_box.setStyleSheet("padding: 4px 6px; background: #2a2a2a; color: #ddd; border: none; border-bottom: 1px solid #444;")
         self._filter_box.textChanged.connect(self._apply_filter)
@@ -306,6 +307,11 @@ class Sidebar(QWidget):
         item_vid.setData(Qt.UserRole, _SPECIAL_VIDEOS)
         self._albums_list.addItem(item_vid)
 
+        item_fn = QListWidgetItem("🔍 Par nom de fichier")
+        item_fn.setData(Qt.UserRole, _SPECIAL_FILENAME)
+        item_fn.setToolTip("Afficher les photos dont le nom de fichier contient le texte du filtre")
+        self._albums_list.addItem(item_fn)
+
     # ── filtrage live ──────────────────────────────────────────────────────────
 
     @Slot(str)
@@ -313,6 +319,10 @@ class Sidebar(QWidget):
         q = text.strip().lower()
         self._filter_folder_tree(q)
         self._filter_persons_list(q)
+
+    @property
+    def filter_text(self) -> str:
+        return self._filter_box.text().strip()
 
     def _filter_folder_tree(self, q: str) -> None:
         for i in range(self._folder_tree.topLevelItemCount()):
@@ -465,9 +475,9 @@ class Sidebar(QWidget):
 
     def refresh_albums(self, albums: list[AlbumInfo]) -> None:
         self._albums = albums
-        # Remove existing album items (keep the 3 special ones at top)
-        while self._albums_list.count() > 3:
-            self._albums_list.takeItem(3)
+        # Remove existing album items (keep the 4 special ones at top)
+        while self._albums_list.count() > 4:
+            self._albums_list.takeItem(4)
         for album in albums:
             item = QListWidgetItem(f"📁 {album.name} ({album.photo_count})")
             item.setData(Qt.UserRole, album)
