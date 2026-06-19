@@ -7,10 +7,10 @@ from datetime import datetime
 from pathlib import Path
 
 from PySide6.QtCore import Qt, QThread, QTimer, Signal, Slot
-from PySide6.QtGui import QAction, QKeySequence
+from PySide6.QtGui import QAction, QKeySequence, QPixmap
 from PySide6.QtWidgets import (
     QApplication, QButtonGroup, QCheckBox, QDialog, QDialogButtonBox, QFrame, QGroupBox,
-    QMainWindow, QWidget, QHBoxLayout, QVBoxLayout,
+    QMainWindow, QMenuBar, QWidget, QHBoxLayout, QVBoxLayout,
     QRadioButton, QScrollBar, QSplitter, QStackedWidget, QStatusBar, QToolBar,
     QLineEdit, QSlider, QLabel, QPushButton,
     QFileDialog, QInputDialog, QMessageBox, QSizePolicy,
@@ -537,7 +537,30 @@ class MainWindow(QMainWindow):
         self.resize(w, h)
 
     def _setup_menu(self) -> None:
-        mb = self.menuBar()
+        # Barre unifiée : icône | menus | spacer | boutons contextuels | export
+        top_bar = QWidget()
+        top_bar.setObjectName("top_bar")
+        lay = QHBoxLayout(top_bar)
+        lay.setContentsMargins(2, 0, 0, 0)
+        lay.setSpacing(0)
+
+        # --- Icône application (gauche) ---
+        icon_path = Path(__file__).resolve().parent.parent.parent / "assets" / "cubic.png"
+        if icon_path.exists():
+            pix = QPixmap(str(icon_path)).scaled(
+                48, 48, Qt.AspectRatioMode.KeepAspectRatio,
+                Qt.TransformationMode.SmoothTransformation
+            )
+            lbl_icon = QLabel()
+            lbl_icon.setPixmap(pix)
+            lbl_icon.setFixedSize(54, 54)
+            lbl_icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            lbl_icon.setToolTip("PixelPhotoManager")
+            lay.addWidget(lbl_icon)
+
+        # --- Barre de menus ---
+        mb = QMenuBar(top_bar)
+        mb.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Expanding)
 
         # Fichier
         m_file = mb.addMenu("Fichier")
@@ -622,37 +645,39 @@ class MainWindow(QMainWindow):
         act_about.triggered.connect(self._show_about)
         m_help.addAction(act_about)
 
-    def _setup_toolbar(self) -> None:
-        tb = QToolBar("Recherche")
-        tb.setMovable(False)
-        self.addToolBar(tb)
+        lay.addWidget(mb)
 
-        # Espaceur flexible pour pousser le bouton Export à droite
+        # --- Spacer ---
         spacer = QWidget()
-        spacer.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
-        tb.addWidget(spacer)
+        spacer.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+        lay.addWidget(spacer)
 
+        # --- Boutons contextuels (masqués par défaut) ---
         self._btn_undo = QPushButton("↩ Annuler")
         self._btn_undo.setToolTip("Annuler la dernière action sur les visages")
         self._btn_undo.setEnabled(False)
         self._btn_undo.clicked.connect(self._on_undo_clicked)
-        self._act_undo = tb.addWidget(self._btn_undo)
-        self._act_undo.setVisible(False)
+        self._btn_undo.setVisible(False)
+        lay.addWidget(self._btn_undo)
+        self._act_undo = self._btn_undo          # alias de compatibilité
 
         self._btn_faces_toggle = QPushButton("Visages")
         self._btn_faces_toggle.setCheckable(True)
         self._btn_faces_toggle.setToolTip("Afficher / masquer les visages de la photo")
         self._btn_faces_toggle.toggled.connect(self._on_faces_toggle)
-        self._act_faces_toggle = tb.addWidget(self._btn_faces_toggle)
-        self._act_faces_toggle.setVisible(False)
+        self._btn_faces_toggle.setVisible(False)
+        lay.addWidget(self._btn_faces_toggle)
+        self._act_faces_toggle = self._btn_faces_toggle
 
         self._btn_exif_toggle = QPushButton("EXIF")
         self._btn_exif_toggle.setCheckable(True)
         self._btn_exif_toggle.setToolTip("Afficher / masquer les métadonnées EXIF")
         self._btn_exif_toggle.toggled.connect(self._on_exif_toggle)
-        self._act_exif_toggle = tb.addWidget(self._btn_exif_toggle)
-        self._act_exif_toggle.setVisible(False)
+        self._btn_exif_toggle.setVisible(False)
+        lay.addWidget(self._btn_exif_toggle)
+        self._act_exif_toggle = self._btn_exif_toggle
 
+        # --- Bouton Export ---
         self._btn_export = QPushButton("⬆  Exporter")
         self._btn_export.setToolTip(
             "Exporter la photo en cours (visionneuse) ou les photos sélectionnées (grille)"
@@ -664,11 +689,44 @@ class MainWindow(QMainWindow):
             "QPushButton:pressed { background:#1a4a7a; }"
         )
         self._btn_export.clicked.connect(self._on_export_clicked)
-        tb.addWidget(self._btn_export)
+        lay.addWidget(self._btn_export)
 
         margin = QWidget()
-        margin.setFixedWidth(20)
-        tb.addWidget(margin)
+        margin.setFixedWidth(10)
+        lay.addWidget(margin)
+
+        # Fond noir, items de menu centrés verticalement dans la barre 54 px
+        top_bar.setStyleSheet("""
+            QWidget#top_bar {
+                background: #000;
+            }
+            QWidget#top_bar > QWidget {
+                background: transparent;
+            }
+            QMenuBar {
+                background: transparent;
+                color: #ddd;
+                border: none;
+            }
+            QMenuBar::item {
+                background: transparent;
+                color: #ddd;
+                padding: 18px 10px;
+            }
+            QMenuBar::item:selected {
+                background: #2a2a2a;
+                border-radius: 3px;
+            }
+            QMenuBar::item:pressed {
+                background: #3a5a8a;
+                border-radius: 3px;
+            }
+        """)
+
+        self.setMenuWidget(top_bar)
+
+    def _setup_toolbar(self) -> None:
+        pass  # Fusionné dans _setup_menu
 
     def _setup_central(self) -> None:
         central = QWidget()
