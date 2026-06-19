@@ -57,12 +57,71 @@ if multiprocessing.current_process().name == 'MainProcess':
     from PySide6.QtWidgets import (
         QApplication, QCheckBox, QDialog, QVBoxLayout, QHBoxLayout,
         QLabel, QPushButton, QListWidget, QListWidgetItem,
-        QFileDialog, QFrame, QWidget,
+        QFileDialog, QFrame, QWidget, QSplashScreen,
     )
     from PySide6.QtCore import Qt, QPoint, QTimer
-    from PySide6.QtGui import QColor, QFont, QPainter, QPen, QPixmap
+    from PySide6.QtGui import QColor, QFont, QPainter, QPen, QPixmap, QLinearGradient
 
 logger = logging.getLogger(__name__)
+
+
+def _build_splash() -> QSplashScreen:
+    """Construit le splash screen : fond noir, icône centrée, zone de statut en bas."""
+    W, H = 480, 320
+    STATUS_H = 48          # hauteur réservée à la ligne de statut
+
+    base = QPixmap(W, H)
+    base.fill(QColor("#000000"))
+
+    p = QPainter(base)
+    p.setRenderHint(QPainter.RenderHint.Antialiasing)
+    p.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
+
+    # Icône
+    icon_path = Path(__file__).resolve().parent / "assets" / "cubic.png"
+    if icon_path.exists():
+        icon_px = QPixmap(str(icon_path)).scaled(
+            120, 120,
+            Qt.AspectRatioMode.KeepAspectRatio,
+            Qt.TransformationMode.SmoothTransformation,
+        )
+        ix = (W - icon_px.width()) // 2
+        iy = 36
+        p.drawPixmap(ix, iy, icon_px)
+
+    # Nom de l'application
+    font_title = QFont("Segoe UI", 17, QFont.Weight.Bold)
+    p.setFont(font_title)
+    p.setPen(QColor("#ffffff"))
+    p.drawText(0, 170, W, 36, Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter,
+               "PixelPhotoManager")
+
+    # Séparateur au-dessus de la zone statut
+    sep_y = H - STATUS_H - 1
+    grad = QLinearGradient(0, sep_y, W, sep_y)
+    grad.setColorAt(0.0,  QColor(0, 0, 0, 0))
+    grad.setColorAt(0.2,  QColor("#333333"))
+    grad.setColorAt(0.8,  QColor("#333333"))
+    grad.setColorAt(1.0,  QColor(0, 0, 0, 0))
+    p.setPen(Qt.PenStyle.NoPen)
+    from PySide6.QtGui import QBrush
+    p.fillRect(0, sep_y, W, 1, QBrush(grad))
+
+    p.end()
+
+    splash = QSplashScreen(base, Qt.WindowType.WindowStaysOnTopHint)
+    splash.setFont(QFont("Segoe UI", 10))
+    return splash
+
+
+def _splash_status(splash: QSplashScreen, app: QApplication, msg: str) -> None:
+    """Met à jour le message de statut et force le repaint."""
+    splash.showMessage(
+        msg,
+        Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignBottom,
+        QColor("#888888"),
+    )
+    app.processEvents()
 
 
 def _build_onboarding(config) -> QDialog:
@@ -323,7 +382,13 @@ def main() -> None:
         }}
     """)
 
+    # --- Splash screen ---
+    splash = _build_splash()
+    splash.show()
+    app.processEvents()
+
     logger.debug("Import des modules internes")
+    _splash_status(splash, app, "Chargement des modules…")
     from src.core.config import Config
     from src.library.catalog import Catalog
     from src.library.thumbnail_cache import ThumbnailCache
@@ -332,29 +397,43 @@ def main() -> None:
     from src.ui.main_window import MainWindow
 
     logger.debug("Initialisation Config")
+    _splash_status(splash, app, "Lecture de la configuration…")
     config = Config()
+
     logger.debug("Initialisation Catalog")
+    _splash_status(splash, app, "Ouverture du catalogue…")
     catalog = Catalog()
+
     logger.debug("Initialisation ThumbnailCache")
+    _splash_status(splash, app, "Initialisation du cache de vignettes…")
     thumb_cache = ThumbnailCache()
     _removed = catalog.cleanup_asset_dirs()
     if _removed:
         thumb_cache.invalidate_many(_removed)
+
     logger.debug("Initialisation LibraryScanner")
+    _splash_status(splash, app, "Préparation du scanner de bibliothèque…")
     scanner = LibraryScanner(catalog, thumb_cache)
+
     logger.debug("Initialisation FaceDatabase")
+    _splash_status(splash, app, "Initialisation de la base de données des visages…")
     face_db = FaceDatabase()
 
     if not config.get_scan_folders():
+        splash.hide()
         logger.debug("Aucun dossier configuré — affichage onboarding")
         dlg = _build_onboarding(config)
         if dlg.exec() == QDialog.Rejected and not config.get_scan_folders():
             logger.info("Onboarding annulé sans dossier — fermeture")
             return  # propre, sans sys.exit()
+        splash.show()
+        app.processEvents()
 
     logger.debug("Création MainWindow")
+    _splash_status(splash, app, "Création de la fenêtre principale…")
     window = MainWindow(config, catalog, thumb_cache, scanner, face_db)
     window.show()
+    splash.finish(window)
 
     # Proposer l'import Picasa après le premier affichage de la fenêtre
     def _check_picasa():
