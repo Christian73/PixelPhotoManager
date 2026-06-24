@@ -22,6 +22,7 @@ from PySide6.QtWidgets import (
     QPushButton, QScrollArea, QVBoxLayout, QWidget,
 )
 
+
 from src.core.models import FaceInfo, PersonInfo
 from src.faces.face_database import FaceDatabase
 from src.ui.loading_label import LoadingLabel
@@ -55,6 +56,7 @@ _MENU_STYLE = (
     "QMenu { background: #2a2a2a; color: #eee; border: 1px solid #555; }"
     "QMenu::item { padding: 6px 20px; }"
     "QMenu::item:selected { background: #3a4a5a; }"
+    "QMenu::separator { height: 1px; background: #444; margin: 3px 8px; }"
 )
 
 
@@ -126,6 +128,82 @@ class _FlatFaceLoader(QThread):
                                edit_rotation=edit_rots.get(face.photo_path, 0))
             if data:
                 self.face_ready.emit(face.id, data)
+
+
+class _PendingCard(QFrame):
+    """Carte d'un groupe en attente de vérification (suggestion forte, non encore confirmée)."""
+
+    accepted = Signal(int)   # cluster_id
+    rejected = Signal(int)   # cluster_id
+
+    _STYLE = (
+        "QFrame { border: 2px solid #7a5a10; border-radius: 6px; background: #231e0a; }"
+    )
+
+    def __init__(self, cluster_id: int, face_count: int, score: float, parent=None) -> None:
+        super().__init__(parent)
+        self._cluster_id = cluster_id
+
+        self.setFixedWidth(_CARD_W)
+        self.setFrameShape(QFrame.StyledPanel)
+        self.setStyleSheet(self._STYLE)
+        self.setToolTip(f"En attente de vérification — similarité {int(score * 100)} %")
+
+        col = QVBoxLayout(self)
+        col.setContentsMargins(6, 6, 6, 6)
+        col.setSpacing(4)
+        col.setAlignment(Qt.AlignTop | Qt.AlignHCenter)
+
+        self._lbl_img = LoadingLabel("#1a1a1a")
+        self._lbl_img.setFixedSize(_CARD_IMG, _CARD_IMG)
+        self._lbl_img.setAlignment(Qt.AlignCenter)
+        self._lbl_img.setStyleSheet("border: none; border-radius: 4px;")
+        self._lbl_img.start_loading()
+        col.addWidget(self._lbl_img, alignment=Qt.AlignHCenter)
+
+        plural = "s" if face_count > 1 else ""
+        lbl_info = QLabel(f"{face_count} visage{plural}  •  {int(score * 100)} %")
+        lbl_info.setAlignment(Qt.AlignCenter)
+        lbl_info.setStyleSheet("border: none; font-size: 11px; color: #e8a040;")
+        col.addWidget(lbl_info)
+
+        btn_row = QHBoxLayout()
+        btn_row.setSpacing(4)
+        btn_row.setContentsMargins(0, 2, 0, 0)
+
+        btn_accept = QPushButton("✓")
+        btn_accept.setFixedHeight(24)
+        btn_accept.setToolTip("Confirmer : associer à cette personne")
+        btn_accept.setStyleSheet(
+            "QPushButton { color: #4dbb5a; border: 1px solid #4dbb5a; border-radius: 3px;"
+            " background: #112211; font-size: 14px; font-weight: bold; }"
+            "QPushButton:hover { background: #1a3a1a; border-color: #6ddb7a; }"
+        )
+        btn_accept.clicked.connect(lambda: self.accepted.emit(self._cluster_id))
+        btn_row.addWidget(btn_accept)
+
+        btn_reject = QPushButton("✗")
+        btn_reject.setFixedHeight(24)
+        btn_reject.setToolTip("Refuser : retourner dans la liste à identifier")
+        btn_reject.setStyleSheet(
+            "QPushButton { color: #cc5555; border: 1px solid #cc5555; border-radius: 3px;"
+            " background: #221111; font-size: 14px; font-weight: bold; }"
+            "QPushButton:hover { background: #3a1a1a; border-color: #ee7777; }"
+        )
+        btn_reject.clicked.connect(lambda: self.rejected.emit(self._cluster_id))
+        btn_row.addWidget(btn_reject)
+
+        col.addLayout(btn_row)
+
+    def set_avatar(self, data: bytes) -> None:
+        pix = QPixmap()
+        pix.loadFromData(data)
+        scaled = pix.scaled(
+            _CARD_IMG, _CARD_IMG,
+            Qt.KeepAspectRatioByExpanding,
+            Qt.SmoothTransformation,
+        )
+        self._lbl_img.setPixmap(scaled)
 
 
 class _PersonCard(QFrame):
@@ -207,9 +285,9 @@ class _PersonCard(QFrame):
 class _FaceThumb(QFrame):
     """Vignette compacte d'un visage individuel (mode dégroupé)."""
 
-    clicked                = Signal(int, bool)    # face_id, ctrl_held
-    double_clicked         = Signal(str)           # photo_path
-    context_menu_requested = Signal(int, object)  # face_id, QPoint global
+    clicked                = Signal(int, bool, bool)  # face_id, ctrl_held, shift_held
+    double_clicked         = Signal(str)               # photo_path
+    context_menu_requested = Signal(int, object)       # face_id, QPoint global
 
     _STYLE_NORMAL = (
         "QFrame { border: 1px solid #3a3a3a; border-radius: 4px; background: #252525; }"
@@ -258,8 +336,9 @@ class _FaceThumb(QFrame):
 
     def mousePressEvent(self, event) -> None:
         if event.button() == Qt.LeftButton:
-            ctrl = bool(event.modifiers() & Qt.ControlModifier)
-            self.clicked.emit(self._face_id, ctrl)
+            ctrl  = bool(event.modifiers() & Qt.ControlModifier)
+            shift = bool(event.modifiers() & Qt.ShiftModifier)
+            self.clicked.emit(self._face_id, ctrl, shift)
         super().mousePressEvent(event)
 
     def mouseDoubleClickEvent(self, event) -> None:
@@ -277,13 +356,18 @@ class PersonClusterView(QWidget):
     Empilée dans MainWindow._stack à l'index 3.
     """
 
-    photos_requested   = Signal(int, str)   # cluster_id, label
-    photo_requested    = Signal(str)        # photo_path — double-clic en mode dégroupé
-    back_requested     = Signal()
-    cluster_unassigned = Signal(int)        # cluster_id — groupe dé-associé
-    cluster_named      = Signal(int, str)   # cluster_id, name
-    cluster_assigned   = Signal(int, int)   # cluster_id, person_id
-    faces_reassigned   = Signal()           # visages réassignés en mode dégroupé
+    photos_requested    = Signal(int, str)   # cluster_id, label
+    photo_requested     = Signal(str)        # photo_path — double-clic en mode dégroupé
+    back_requested      = Signal()
+    cluster_unassigned  = Signal(int)        # cluster_id — groupe dé-associé
+    cluster_named       = Signal(int, str)   # cluster_id, name
+    cluster_assigned    = Signal(int, int)   # cluster_id, person_id
+    faces_reassigned    = Signal()           # visages réassignés en mode dégroupé
+    cover_face_set      = Signal(int, object)  # person_id, FaceInfo — vignette principale changée
+    suggestion_accepted      = Signal(int)   # cluster_id confirmé → assigner la personne suggérée
+    suggestion_rejected      = Signal(int)   # cluster_id refusé  → retour dans la liste
+    all_suggestions_accepted = Signal(list)  # tous les cluster_ids confirmés d'un coup
+    all_suggestions_rejected = Signal(list)  # tous les cluster_ids refusés d'un coup
 
     def __init__(self, face_db: FaceDatabase, catalog, parent=None) -> None:
         super().__init__(parent)
@@ -295,11 +379,15 @@ class PersonClusterView(QWidget):
         # Mode groupé
         self._cards: dict[int, _PersonCard] = {}
         self._loader: _CardLoader | None = None
+        self._pending_cards: dict[int, _PendingCard] = {}
+        self._pending_loader: _CardLoader | None = None
 
         # Mode dégroupé
         self._flat_cards: dict[int, _FaceThumb] = {}
         self._flat_loader: _FlatFaceLoader | None = None
-        self._selection: set[int] = set()   # face_ids sélectionnés
+        self._selection: set[int] = set()    # face_ids sélectionnés
+        self._flat_order: list[int] = []     # ordre d'affichage (pour Shift+click)
+        self._last_clicked: int | None = None  # ancre de la sélection par plage
 
         self._persons_loader: _PersonsLoaderThread | None = None
         self._build()
@@ -317,6 +405,10 @@ class PersonClusterView(QWidget):
         else:
             self._lbl_title.setText(f"Groupes identifiés pour {person.name}")
             self._person = person
+
+    def refresh(self) -> None:
+        """Force un rafraîchissement complet de la vue (même personne)."""
+        self._refresh()
 
     # ------------------------------------------------------------------ UI
 
@@ -383,10 +475,78 @@ class PersonClusterView(QWidget):
 
         self._content = QWidget()
         self._content.setStyleSheet("background: #1a1a1a;")
-        self._flow = QGridLayout(self._content)
-        self._flow.setContentsMargins(16, 16, 16, 16)
+        content_vbox = QVBoxLayout(self._content)
+        content_vbox.setContentsMargins(16, 16, 16, 16)
+        content_vbox.setSpacing(16)
+        content_vbox.setAlignment(Qt.AlignTop)
+
+        # Section confirmée
+        self._confirmed_area = QWidget()
+        self._confirmed_area.setStyleSheet("background: transparent;")
+        self._flow = QGridLayout(self._confirmed_area)
+        self._flow.setContentsMargins(0, 0, 0, 0)
         self._flow.setSpacing(_CARD_GAP)
         self._flow.setAlignment(Qt.AlignTop | Qt.AlignLeft)
+        content_vbox.addWidget(self._confirmed_area)
+
+        # Section en attente de vérification
+        self._pending_section = QWidget()
+        self._pending_section.setStyleSheet("background: transparent;")
+        self._pending_section.setVisible(False)
+        pending_vbox = QVBoxLayout(self._pending_section)
+        pending_vbox.setContentsMargins(0, 0, 0, 0)
+        pending_vbox.setSpacing(8)
+
+        pending_hdr = QHBoxLayout()
+        pending_hdr.setSpacing(8)
+        lbl_pending = QLabel("En attente de vérification")
+        lbl_pending.setStyleSheet(
+            "color: #e8a040; font-size: 11px; font-weight: bold; background: transparent;"
+        )
+        pending_hdr.addWidget(lbl_pending)
+        pending_hdr.addStretch()
+
+        self._btn_reject_all = QPushButton("✗ Rejeter toutes")
+        self._btn_reject_all.setCursor(Qt.PointingHandCursor)
+        self._btn_reject_all.setFixedHeight(24)
+        self._btn_reject_all.setStyleSheet(
+            "QPushButton { color: #cc5555; border: 1px solid #cc5555; border-radius: 3px;"
+            " background: #221111; font-size: 11px; padding: 0 10px; }"
+            "QPushButton:hover { background: #3a1a1a; border-color: #ee7777; }"
+        )
+        self._btn_reject_all.clicked.connect(self._on_reject_all)
+        pending_hdr.addWidget(self._btn_reject_all)
+
+        self._btn_accept_all = QPushButton("✓ Accepter toutes")
+        self._btn_accept_all.setCursor(Qt.PointingHandCursor)
+        self._btn_accept_all.setFixedHeight(24)
+        self._btn_accept_all.setStyleSheet(
+            "QPushButton { color: #4dbb5a; border: 1px solid #4dbb5a; border-radius: 3px;"
+            " background: #112211; font-size: 11px; padding: 0 10px; }"
+            "QPushButton:hover { background: #1a3a1a; border-color: #6ddb7a; }"
+        )
+        self._btn_accept_all.clicked.connect(self._on_accept_all)
+        pending_hdr.addWidget(self._btn_accept_all)
+
+        pending_vbox.addLayout(pending_hdr)
+
+        sep = QFrame()
+        sep.setFrameShape(QFrame.HLine)
+        sep.setStyleSheet("background: #e8a040; border: none;")
+        sep.setFixedHeight(1)
+        pending_vbox.addWidget(sep)
+
+        self._pending_area = QWidget()
+        self._pending_area.setStyleSheet("background: transparent;")
+        self._pending_grid = QGridLayout(self._pending_area)
+        self._pending_grid.setContentsMargins(0, 0, 0, 0)
+        self._pending_grid.setSpacing(_CARD_GAP)
+        self._pending_grid.setAlignment(Qt.AlignTop | Qt.AlignLeft)
+        pending_vbox.addWidget(self._pending_area)
+
+        content_vbox.addWidget(self._pending_section)
+        content_vbox.addStretch(1)
+
         self._scroll.setWidget(self._content)
         root.addWidget(self._scroll, stretch=1)
 
@@ -411,8 +571,9 @@ class PersonClusterView(QWidget):
 
     def _stop_loaders(self) -> None:
         for loader, sig in (
-            (self._loader,      getattr(self._loader,      "avatar_ready", None)),
-            (self._flat_loader, getattr(self._flat_loader, "face_ready",   None)),
+            (self._loader,         getattr(self._loader,         "avatar_ready", None)),
+            (self._pending_loader, getattr(self._pending_loader, "avatar_ready", None)),
+            (self._flat_loader,    getattr(self._flat_loader,    "face_ready",   None)),
         ):
             if loader is None:
                 continue
@@ -425,17 +586,26 @@ class PersonClusterView(QWidget):
                     loader.deleteLater()
             except RuntimeError:
                 pass
-        self._loader      = None
-        self._flat_loader = None
+        self._loader         = None
+        self._pending_loader = None
+        self._flat_loader    = None
 
     def _clear_grid(self) -> None:
         for i in range(self._flow.count() - 1, -1, -1):
             item = self._flow.takeAt(i)
             if item and item.widget():
                 item.widget().deleteLater()
+        for i in range(self._pending_grid.count() - 1, -1, -1):
+            item = self._pending_grid.takeAt(i)
+            if item and item.widget():
+                item.widget().deleteLater()
         self._cards.clear()
+        self._pending_cards.clear()
         self._flat_cards.clear()
         self._selection.clear()
+        self._flat_order.clear()
+        self._last_clicked = None
+        self._pending_section.setVisible(False)
 
     def _refresh(self) -> None:
         if self._person is None:
@@ -450,7 +620,9 @@ class PersonClusterView(QWidget):
 
     def _refresh_grouped(self) -> None:
         clusters = self._face_db.get_clusters_for_person(self._person.id)
-        if not clusters:
+        pending  = self._face_db.get_suggested_clusters_for_person(self._person.id)
+
+        if not clusters and not pending:
             self._scroll.hide()
             self._lbl_empty.setText("Aucun groupe associé à cette personne.")
             self._lbl_empty.show()
@@ -459,14 +631,16 @@ class PersonClusterView(QWidget):
         self._lbl_empty.hide()
         self._scroll.show()
 
+        cols = self._compute_cols(_CARD_W, _CARD_GAP)
+
+        # ── Groupes confirmés ──────────────────────────────────────────────
         cluster_ids = [cid for cid, _ in clusters]
-        rep_faces   = self._face_db.get_all_representative_faces(cluster_ids)
-        cols        = self._compute_cols(_CARD_W, _CARD_GAP)
+        rep_faces   = self._face_db.get_all_representative_faces(cluster_ids) if cluster_ids else {}
 
         for idx, (cluster_id, face_count) in enumerate(clusters):
             plural    = "s" if face_count > 1 else ""
             nav_label = f"Groupe {cluster_id} — {face_count} photo{plural}"
-            card      = _PersonCard(cluster_id, face_count, self._content)
+            card      = _PersonCard(cluster_id, face_count, self._confirmed_area)
             card.double_clicked.connect(
                 lambda cid=cluster_id, lbl=nav_label: self.photos_requested.emit(cid, lbl)
             )
@@ -482,6 +656,31 @@ class PersonClusterView(QWidget):
             self._loader.finished.connect(self._loader.deleteLater)
             self._loader.start()
 
+        # ── Groupes en attente de vérification ────────────────────────────
+        if pending:
+            pending_cluster_ids = [cid for cid, _, _ in pending]
+            pending_rep_faces   = self._face_db.get_all_representative_faces(pending_cluster_ids)
+
+            for idx, (cluster_id, face_count, score) in enumerate(pending):
+                card = _PendingCard(cluster_id, face_count, score, self._pending_area)
+                card.accepted.connect(self._on_pending_accepted)
+                card.rejected.connect(self._on_pending_rejected)
+                self._pending_grid.addWidget(card, idx // cols, idx % cols)
+                self._pending_cards[cluster_id] = card
+
+            pending_avatar_items = [
+                (cid, face)
+                for cid, face in pending_rep_faces.items()
+                if cid in self._pending_cards
+            ]
+            if pending_avatar_items:
+                self._pending_loader = _CardLoader(pending_avatar_items, _CARD_IMG, self)
+                self._pending_loader.avatar_ready.connect(self._on_pending_avatar_ready)
+                self._pending_loader.finished.connect(self._pending_loader.deleteLater)
+                self._pending_loader.start()
+
+            self._pending_section.setVisible(True)
+
     def _refresh_flat(self) -> None:
         faces = self._face_db.get_faces_for_person(self._person.id)
         if not faces:
@@ -494,6 +693,7 @@ class PersonClusterView(QWidget):
         self._scroll.show()
 
         cols = self._compute_cols(_THUMB_W, _THUMB_GAP)
+        self._flat_order = [face.id for face in faces]
         for idx, face in enumerate(faces):
             thumb = _FaceThumb(face, self._content)
             thumb.clicked.connect(self._on_thumb_clicked)
@@ -515,16 +715,15 @@ class PersonClusterView(QWidget):
 
     def _reflow(self) -> None:
         if self._mode == "grouped":
-            cards  = list(self._cards.values())
-            card_w, gap = _CARD_W, _CARD_GAP
+            cols = self._compute_cols(_CARD_W, _CARD_GAP)
+            for i, card in enumerate(self._cards.values()):
+                self._flow.addWidget(card, i // cols, i % cols)
+            for i, card in enumerate(self._pending_cards.values()):
+                self._pending_grid.addWidget(card, i // cols, i % cols)
         else:
-            cards  = list(self._flat_cards.values())
-            card_w, gap = _THUMB_W, _THUMB_GAP
-        if not cards:
-            return
-        cols = self._compute_cols(card_w, gap)
-        for i, card in enumerate(cards):
-            self._flow.addWidget(card, i // cols, i % cols)
+            cols = self._compute_cols(_THUMB_W, _THUMB_GAP)
+            for i, card in enumerate(self._flat_cards.values()):
+                self._flow.addWidget(card, i // cols, i % cols)
 
     def resizeEvent(self, event) -> None:
         super().resizeEvent(event)
@@ -539,6 +738,34 @@ class PersonClusterView(QWidget):
             card.set_avatar(data)
 
     @Slot(int, bytes)
+    def _on_pending_avatar_ready(self, cluster_id: int, data: bytes) -> None:
+        card = self._pending_cards.get(cluster_id)
+        if card:
+            card.set_avatar(data)
+
+    # ------------------------------------------------------------------ pending accept/reject
+
+    @Slot(int)
+    def _on_pending_accepted(self, cluster_id: int) -> None:
+        self.suggestion_accepted.emit(cluster_id)
+
+    @Slot(int)
+    def _on_pending_rejected(self, cluster_id: int) -> None:
+        self.suggestion_rejected.emit(cluster_id)
+
+    @Slot()
+    def _on_reject_all(self) -> None:
+        cluster_ids = list(self._pending_cards.keys())
+        if cluster_ids:
+            self.all_suggestions_rejected.emit(cluster_ids)
+
+    @Slot()
+    def _on_accept_all(self) -> None:
+        cluster_ids = list(self._pending_cards.keys())
+        if cluster_ids:
+            self.all_suggestions_accepted.emit(cluster_ids)
+
+    @Slot(int, bytes)
     def _on_face_ready(self, face_id: int, data: bytes) -> None:
         thumb = self._flat_cards.get(face_id)
         if thumb:
@@ -546,17 +773,28 @@ class PersonClusterView(QWidget):
 
     # ------------------------------------------------------------------ sélection (mode flat)
 
-    @Slot(int, bool)
-    def _on_thumb_clicked(self, face_id: int, ctrl_held: bool) -> None:
-        if ctrl_held:
+    @Slot(int, bool, bool)
+    def _on_thumb_clicked(self, face_id: int, ctrl_held: bool, shift_held: bool) -> None:
+        if shift_held and self._last_clicked is not None and self._last_clicked in self._flat_cards:
+            # Sélection par plage entre l'ancre et le visage cliqué
+            try:
+                a = self._flat_order.index(self._last_clicked)
+                b = self._flat_order.index(face_id)
+                lo, hi = min(a, b), max(a, b)
+                self._selection = set(self._flat_order[lo:hi + 1])
+            except ValueError:
+                self._selection = {face_id}
+        elif ctrl_held:
             # Bascule dans/hors de la sélection
             if face_id in self._selection:
                 self._selection.discard(face_id)
             else:
                 self._selection.add(face_id)
+            self._last_clicked = face_id
         else:
             # Sélection exclusive
             self._selection = {face_id}
+            self._last_clicked = face_id
         self._apply_selection_style()
 
     def _apply_selection_style(self) -> None:
@@ -573,22 +811,36 @@ class PersonClusterView(QWidget):
             self._apply_selection_style()
 
         n = len(self._selection)
-        label = f"Réassigner {n} visage{'s' if n > 1 else ''} à une autre personne…"
+        s = "s" if n > 1 else ""
 
         menu = QMenu(self)
         menu.setStyleSheet(_MENU_STYLE)
-        act_reassign = menu.addAction(label)
-        if menu.exec(pos) == act_reassign:
+        act_reassign = menu.addAction(f"Réassigner {n} visage{s} à une autre personne…")
+        act_unassign = menu.addAction(f"Dé-associer {n} visage{s} de la personne")
+        menu.addSeparator()
+        act_cover = menu.addAction("Utiliser ce visage comme vignette principale")
+
+        chosen = menu.exec(pos)
+        if chosen == act_reassign:
             self._start_flat_reassign(list(self._selection))
+        elif chosen == act_unassign:
+            self._flat_unassign(list(self._selection))
+        elif chosen == act_cover:
+            self._set_cover_face(face_id)
 
     def _start_flat_reassign(self, face_ids: list[int]) -> None:
-        if self._persons_loader is not None and self._persons_loader.isRunning():
-            return
+        if self._persons_loader is not None:
+            try:
+                if self._persons_loader.isRunning():
+                    return
+            except RuntimeError:
+                pass
+            self._persons_loader = None
         self._persons_loader = _PersonsLoaderThread(self._catalog, self._face_db, self)
         self._persons_loader.ready.connect(
             lambda persons, fids=face_ids: self._show_flat_reassign_dialog(fids, persons)
         )
-        self._persons_loader.finished.connect(self._persons_loader.deleteLater)
+        self._persons_loader.finished.connect(self._clear_persons_loader)
         self._persons_loader.start()
 
     def _show_flat_reassign_dialog(
@@ -634,6 +886,20 @@ class PersonClusterView(QWidget):
         else:
             self._reflow()
 
+    def _flat_unassign(self, face_ids: list[int]) -> None:
+        for fid in face_ids:
+            self._face_db.unassign_person_from_face(fid)
+        self._remove_flat_thumbs(face_ids)
+        self.faces_reassigned.emit()
+
+    def _set_cover_face(self, face_id: int) -> None:
+        self._face_db.set_cover_face(face_id)
+        if self._person:
+            face = self._face_db.get_face_by_id(face_id)
+            if face:
+                self.cover_face_set.emit(self._person.id, face)
+        self.faces_reassigned.emit()
+
     # ------------------------------------------------------------------ context menu (mode groupé)
 
     @Slot(int)
@@ -644,15 +910,25 @@ class PersonClusterView(QWidget):
         self._remove_cluster_card(cluster_id)
         self.cluster_unassigned.emit(cluster_id)
 
+    def _clear_persons_loader(self) -> None:
+        if self._persons_loader is not None:
+            self._persons_loader.deleteLater()
+            self._persons_loader = None
+
     @Slot(int)
     def _on_reassign(self, cluster_id: int) -> None:
-        if self._persons_loader is not None and self._persons_loader.isRunning():
-            return
+        if self._persons_loader is not None:
+            try:
+                if self._persons_loader.isRunning():
+                    return
+            except RuntimeError:
+                pass
+            self._persons_loader = None
         self._persons_loader = _PersonsLoaderThread(self._catalog, self._face_db, self)
         self._persons_loader.ready.connect(
             lambda persons, cid=cluster_id: self._show_reassign_dialog(cid, persons)
         )
-        self._persons_loader.finished.connect(self._persons_loader.deleteLater)
+        self._persons_loader.finished.connect(self._clear_persons_loader)
         self._persons_loader.start()
 
     def _show_reassign_dialog(self, cluster_id: int, persons: list[PersonInfo]) -> None:

@@ -1,12 +1,12 @@
 """Diaporama plein écran des photos de l'album courant."""
 
 import logging
-from pathlib import Path
+import random
 
-from PySide6.QtCore import Qt, QSize, QTimer, QThread, Signal
-from PySide6.QtGui import QKeyEvent, QMouseEvent, QPixmap
+from PySide6.QtCore import Qt, QRectF, QSize, QTimer, QThread, Signal
+from PySide6.QtGui import QKeyEvent, QMouseEvent, QPainter, QPixmap
 from PySide6.QtWidgets import (
-    QHBoxLayout, QLabel, QPushButton, QSizePolicy, QVBoxLayout, QWidget,
+    QHBoxLayout, QLabel, QPushButton, QWidget,
 )
 
 from src.core.models import PhotoInfo
@@ -19,6 +19,10 @@ _INTERVAL_MIN_MS  = 1_000   # minimum 1 s
 _INTERVAL_MAX_MS  = 60_000  # maximum 60 s
 _INTERVAL_STEP_MS = 1_000   # pas d'ajustement : 1 s
 _OVERLAY_TTL_MS   = 5_000   # délai avant masquage automatique de la barre
+
+_KB_FPS  = 30     # fréquence de l'animation Ken Burns (images/s)
+_KB_ZOOM = 0.08   # amplitude max du zoom (8 %)
+_KB_PAN  = 0.55   # fraction de la marge disponible utilisée pour le pan
 
 _BTN_STYLE = (
     "QPushButton { background: rgba(255,255,255,15); color: white; "
@@ -33,11 +37,107 @@ _BTN_SMALL = (
 )
 
 
-class _LoadThread(QThread):
-    """Charge une photo (avec retouches) dans un thread secondaire.
+class _KenBurnsWidget(QWidget):
+    """Widget plein-écran avec effet Ken Burns (zoom + pan lent)."""
 
-    Le redimensionnement à target_size est effectué ici pour ne pas bloquer l'UI.
-    """
+    def __init__(self, parent=None) -> None:
+        super().__init__(parent)
+        self.setMouseTracking(True)
+        self._pixmap:   QPixmap | None = None
+        self._kb_start: tuple = (1.0, 0.5, 0.5)   # (zoom, cx, cy)
+        self._kb_end:   tuple = (1.0, 0.5, 0.5)
+        self._anim_t:   float = 0.0
+        self._step:     float = 0.0
+
+        self._timer = QTimer(self)
+        self._timer.setInterval(1000 // _KB_FPS)
+        self._timer.timeout.connect(self._tick)
+
+    def set_pixmap(self, pixmap: QPixmap, duration_ms: int) -> None:
+        self._pixmap  = pixmap
+        self._anim_t  = 0.0
+        self._step    = 1.0 / max(1, duration_ms * _KB_FPS // 1000)
+        self._compute_kb()
+        self._timer.start()
+        self.update()
+
+    def stop(self) -> None:
+        self._timer.stop()
+
+    def _compute_kb(self) -> None:
+        if not self._pixmap:
+            return
+        pw, ph = self._pixmap.width(), self._pixmap.height()
+        if pw == 0 or ph == 0:
+            return
+
+        z_a = 1.0 + random.uniform(0.0, _KB_ZOOM)
+        z_b = 1.0 + random.uniform(0.0, _KB_ZOOM)
+        z_max = max(z_a, z_b)
+
+        # Marge de pan = fraction du pixmap non visible à zoom max.
+        # Composante verticale réduite à 35 % pour favoriser
+        # les mouvements horizontaux et diagonaux.
+        pan = 1.0 - 1.0 / z_max
+        mx  = pan * _KB_PAN
+        my  = pan * _KB_PAN * 0.35
+
+        cx_a = 0.5 + random.uniform(-mx, mx)
+        cy_a = 0.5 + random.uniform(-my, my)
+        cx_b = 0.5 + random.uniform(-mx, mx)
+        cy_b = 0.5 + random.uniform(-my, my)
+
+        self._kb_start = (z_a, cx_a, cy_a)
+        self._kb_end   = (z_b, cx_b, cy_b)
+
+    def _tick(self) -> None:
+        if self._anim_t >= 1.0:
+            self._timer.stop()
+            return
+        self._anim_t = min(1.0, self._anim_t + self._step)
+        self.update()
+
+    def _src_rect(self, t: float) -> QRectF:
+        if not self._pixmap:
+            return QRectF()
+        pw, ph = self._pixmap.width(), self._pixmap.height()
+        za, cxa, cya = self._kb_start
+        zb, cxb, cyb = self._kb_end
+        z  = za  + (zb  - za)  * t
+        cx = cxa + (cxb - cxa) * t
+        cy = cya + (cyb - cya) * t
+        sw = pw / z
+        sh = ph / z
+        sx = cx * pw - sw / 2
+        sy = cy * ph - sh / 2
+        sx = max(0.0, min(sx, pw - sw))
+        sy = max(0.0, min(sy, ph - sh))
+        return QRectF(sx, sy, sw, sh)
+
+    def _dst_rect(self) -> QRectF:
+        """Rect destination centré dans le widget (letterbox / pillarbox)."""
+        if not self._pixmap:
+            return QRectF(self.rect())
+        pw, ph = self._pixmap.width(), self._pixmap.height()
+        ww, wh = self.width(), self.height()
+        scale  = min(ww / pw, wh / ph) if pw and ph else 1.0
+        dw, dh = pw * scale, ph * scale
+        return QRectF((ww - dw) / 2, (wh - dh) / 2, dw, dh)
+
+    def paintEvent(self, event) -> None:
+        painter = QPainter(self)
+        painter.fillRect(self.rect(), Qt.black)
+        if self._pixmap:
+            painter.setRenderHint(QPainter.SmoothPixmapTransform)
+            painter.drawPixmap(
+                self._dst_rect(),
+                self._pixmap,
+                self._src_rect(self._anim_t),
+            )
+
+
+class _LoadThread(QThread):
+    """Charge une photo (avec retouches) dans un thread secondaire."""
 
     ready = Signal(int, object)   # (index_demandé, QPixmap)
 
@@ -62,7 +162,9 @@ class _LoadThread(QThread):
             pixmap, *_ = result
             if self._target_size and not self._target_size.isEmpty():
                 pixmap = pixmap.scaled(
-                    self._target_size, Qt.KeepAspectRatio, Qt.SmoothTransformation
+                    self._target_size,
+                    Qt.KeepAspectRatio,
+                    Qt.SmoothTransformation,
                 )
             self.ready.emit(self._index, pixmap)
 
@@ -113,31 +215,35 @@ class SlideshowWindow(QWidget):
 
         self._setup_ui()
         self._setup_timers()
+        # Connexions dépendant des deux : _hide_timer créé dans _setup_timers
+        for _btn in self._overlay_btns:
+            _btn.clicked.connect(self._hide_timer.start)
         self.showFullScreen()
         self._load_current()
 
     # ------------------------------------------------------------------ UI
 
+    _OVERLAY_H = 90   # hauteur totale de la bande overlay (gradient inclus)
+
     def _setup_ui(self) -> None:
-        root = QVBoxLayout(self)
-        root.setContentsMargins(0, 0, 0, 0)
-        root.setSpacing(0)
+        # Widget Ken Burns couvre toute la fenêtre — pas de layout racine
+        self._kb_widget = _KenBurnsWidget(self)
+        self._kb_widget.setStyleSheet("background: black;")
 
-        # Zone photo (prend tout l'espace)
-        self._lbl_photo = QLabel()
-        self._lbl_photo.setAlignment(Qt.AlignCenter)
-        self._lbl_photo.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        self._lbl_photo.setStyleSheet("background: black;")
-        self._lbl_photo.setMouseTracking(True)
-        root.addWidget(self._lbl_photo, stretch=1)
-
-        # ── Overlay de contrôles (bande translucide en bas) ──────────────
-        self._overlay = QWidget()
-        self._overlay.setStyleSheet("background: rgba(0,0,0,200);")
+        # Overlay flottant positionné en bas via resizeEvent
+        # Gradient : transparent en haut → sombre en bas pour lisibilité
+        self._overlay = QWidget(self)
+        self._overlay.setStyleSheet(
+            "background: qlineargradient("
+            "x1:0, y1:0, x2:0, y2:1, "
+            "stop:0 rgba(0,0,0,0), "
+            "stop:0.35 rgba(0,0,0,160), "
+            "stop:1 rgba(0,0,0,220));"
+        )
         self._overlay.setMouseTracking(True)
 
         ol = QHBoxLayout(self._overlay)
-        ol.setContentsMargins(24, 10, 24, 14)
+        ol.setContentsMargins(24, 36, 24, 14)   # marges hautes généreuses pour le gradient
         ol.setSpacing(8)
 
         # Compteur position
@@ -206,7 +312,11 @@ class SlideshowWindow(QWidget):
         btn_close.clicked.connect(self.close)
         ol.addWidget(btn_close)
 
-        root.addWidget(self._overlay)
+        # Sauvegarde des boutons pour connexion dans __init__ (après _setup_timers)
+        self._overlay_btns = (
+            self._btn_prev, btn_minus, btn_plus,
+            self._btn_playpause, self._btn_next, btn_close,
+        )
 
     def _setup_timers(self) -> None:
         self._advance_timer = QTimer(self)
@@ -220,10 +330,16 @@ class SlideshowWindow(QWidget):
         self._hide_timer.timeout.connect(self._overlay.hide)
         self._hide_timer.start()
 
+    def resizeEvent(self, event) -> None:
+        super().resizeEvent(event)
+        w, h = self.width(), self.height()
+        self._kb_widget.setGeometry(0, 0, w, h)
+        self._overlay.setGeometry(0, h - self._OVERLAY_H, w, self._OVERLAY_H)
+
     # ------------------------------------------------------------------ chargement
 
     def _screen_size(self) -> QSize:
-        return self._lbl_photo.size() or self.size()
+        return self._kb_widget.size() or self.size()
 
     def _load_current(self) -> None:
         if not self._photos:
@@ -240,13 +356,11 @@ class SlideshowWindow(QWidget):
         # Si la photo est déjà préchargée, affichage immédiat
         if self._index in self._preload_cache:
             pixmap = self._preload_cache.pop(self._index)
-            self._lbl_photo.setPixmap(pixmap)
+            self._kb_widget.set_pixmap(pixmap, self._interval)
             self._start_preload()
             return
 
-        # Vider l'écran immédiatement pour un retour visuel instantané
-        self._lbl_photo.clear()
-
+        # La photo précédente continue d'animer pendant le chargement
         self._cancel_load(self._load_thread)
         t = _LoadThread(self._index, photo, self._screen_size(), self._edit_db)
         t.ready.connect(self._on_pixmap_ready)
@@ -298,7 +412,7 @@ class SlideshowWindow(QWidget):
     def _on_pixmap_ready(self, index: int, pixmap: QPixmap) -> None:
         if index != self._index:
             return   # navigation entre-temps, ignorer
-        self._lbl_photo.setPixmap(pixmap)
+        self._kb_widget.set_pixmap(pixmap, self._interval)
         self._start_preload()
 
     def _on_preload_ready(self, index: int, pixmap: QPixmap) -> None:
@@ -392,6 +506,7 @@ class SlideshowWindow(QWidget):
     def closeEvent(self, event) -> None:
         self._advance_timer.stop()
         self._hide_timer.stop()
+        self._kb_widget.stop()
         # Déconnecter les signaux pour ignorer tout résultat en cours
         self._cancel_load(self._load_thread)
         self._cancel_load(self._preload_thread)

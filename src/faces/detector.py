@@ -251,16 +251,19 @@ def warmup_worker_cpu() -> None:
 
 
 def detect_and_embed_auto(image_path: str) -> "tuple[list[dict], int]":
-    """Détecte les visages en essayant 0°, 90°, 180°, 270° si aucun visage n'est trouvé.
+    """Essaie les 4 rotations (0°, 90°, 180°, 270°) et retourne celle qui détecte
+    le plus de visages.  En cas d'égalité, la plus petite rotation est préférée.
 
-    Retourne (détections, rotation_utilisée).  Utile pour les photos prises avec
-    un téléphone tenu à la verticale ou à l'envers quand l'EXIF ne suffit pas.
+    Contrairement à la stratégie "stop au premier résultat", ceci évite de
+    s'arrêter sur une rotation partielle (ex. : un seul visage couché détecté à 0°
+    alors que 3 visages droits sont disponibles à 90°).
     """
+    best_result, best_rotation = [], 0
     for rotation in (0, 90, 180, 270):
         result = detect_and_embed(image_path, rotation=rotation)
-        if result:
-            return result, rotation
-    return [], 0
+        if len(result) > len(best_result):
+            best_result, best_rotation = result, rotation
+    return best_result, best_rotation
 
 
 def detect_and_embed(image_path: str, rotation: int = 0) -> list[dict]:
@@ -295,6 +298,7 @@ def detect_and_embed(image_path: str, rotation: int = 0) -> list[dict]:
                 if img is None:
                     logger.warning("cv2.imread a retourné None pour %s", image_path)
                     return []
+                detect_h, detect_w = img.shape[:2]
                 app = _get_insight_app()
                 faces = app.get(img)
     except Exception as exc:
@@ -306,6 +310,10 @@ def detect_and_embed(image_path: str, rotation: int = 0) -> list[dict]:
 
     result = []
     inv = 1.0 / scale if scale != 1.0 else 1.0
+    # Aire de l'image affichée (après correction EXIF et rotation) en pixels²
+    displayed_area = detect_w * inv * detect_h * inv
+    _MIN_AREA_RATIO = 0.001   # 0.1 % — seuil en dessous duquel le visage est ignoré
+
     for face in faces:
         if face.det_score < 0.5:
             continue
@@ -320,6 +328,8 @@ def detect_and_embed(image_path: str, rotation: int = 0) -> list[dict]:
             y1 = int(y1 * inv)
             w  = int(w  * inv)
             h  = int(h  * inv)
+        if displayed_area > 0 and w * h < displayed_area * _MIN_AREA_RATIO:
+            continue
         result.append({
             "bbox":      (x1, y1, w, h),
             "embedding": face.embedding.tolist(),

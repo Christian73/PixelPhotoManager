@@ -54,6 +54,10 @@ class _FacePanelLoader(QThread):
 
             # Tous les visages du panneau sont issus de la même photo — une seule ouverture.
             photo_path = self._items[0][1].photo_path
+            from pathlib import Path as _Path
+            from src.library.exif_reader import VIDEO_EXT as _VIDEO_EXT
+            if _Path(photo_path).suffix.lower() in _VIDEO_EXT:
+                return
             edit_rot = _load_edit_rotations([photo_path]).get(photo_path, 0)
             try:
                 base_img = ImageOps.exif_transpose(Image.open(photo_path)).convert("RGB")
@@ -365,6 +369,7 @@ class FacePanel(QWidget):
     face_highlighted         = Signal(object)  # FaceInfo sélectionné, ou None si désélection
     all_faces_toggled        = Signal(list)    # list[FaceInfo] quand "Tous" actif, [] sinon
     person_assigned          = Signal()        # après identification (groupe ou visage individuel)
+    cover_face_set           = Signal(int, object)  # person_id, FaceInfo — vignette principale changée
     person_cluster_requested = Signal(int)     # person_id — double-clic sur un visage nommé
     undo_stack_changed       = Signal(bool)    # True = can undo
 
@@ -784,6 +789,10 @@ class FacePanel(QWidget):
 
     def _on_set_cover_requested(self, face_id: int) -> None:
         self._face_db.set_cover_face(face_id)
+        face = self._faces.get(face_id)
+        if face and face.person_id:
+            self.cover_face_set.emit(face.person_id, face)
+            self.person_assigned.emit()
 
     # ------------------------------------------------------------------ ignored faces
 
