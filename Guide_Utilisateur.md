@@ -400,8 +400,43 @@ Après le déplacement :
 
 Lancez un diaporama depuis **Affichage › Diaporama** ou avec la touche **F5**.
 
-- Les photos défilent automatiquement selon un intervalle configurable.
-- Appuyez sur **Échap** ou fermez la visionneuse pour arrêter le diaporama.
+Le diaporama s'ouvre en **plein écran** et parcourt les photos du contexte actuel.
+
+### Point de départ
+
+| Situation au lancement | Photo de départ |
+|---|---|
+| Visionneuse ouverte | La photo actuellement affichée |
+| Mode chronologie (ruban) | La photo au **centre** du ruban |
+| Autre vue | La plus ancienne photo du dossier |
+
+### Effet Ken Burns
+
+Chaque photo est animée d'un **léger zoom et d'un panoramique lent** (effet Ken Burns) :
+- Le zoom varie de 0 à 8 % sur toute la durée d'affichage.
+- La direction du mouvement est aléatoire, avec une préférence pour les déplacements **horizontaux et diagonaux**.
+- Les photos dont le rapport hauteur/largeur ne correspond pas à l'écran sont affichées avec des **marges noires** (letterbox / pillarbox) — elles ne sont jamais rognées.
+
+### Contrôles (barre en bas, visible au mouvement de la souris)
+
+| Contrôle | Effet |
+|---|---|
+| **◀ Précédente** | Aller à la photo plus ancienne |
+| **Suivante ▶** | Aller à la photo plus récente |
+| **−** / **+** | Réduire / augmenter l'intervalle d'affichage (1 s à 60 s, par pas de 1 s) |
+| **⏸ / ▶** | Mettre en pause / reprendre le défilement automatique |
+| **✕** | Quitter le diaporama |
+
+La barre disparaît automatiquement après 5 secondes d'inactivité et réapparaît au moindre mouvement de souris.
+
+### Raccourcis clavier
+
+| Raccourci | Action |
+|---|---|
+| **←** ou **↑** | Photo plus ancienne |
+| **→** ou **↓** | Photo plus récente |
+| **Espace** | Pause / Reprendre |
+| **Échap** | Quitter le diaporama |
 
 ---
 
@@ -438,6 +473,15 @@ Si vous avez utilisé Picasa, ses annotations de visages (fichiers `.picasa.ini`
 | **F9** | Afficher/masquer la sidebar |
 | **F11** | Plein écran |
 
+### Mode chronologie (ruban)
+
+| Raccourci | Action |
+|---|---|
+| **← / →** | Déplacer d'une photo |
+| **↑ / ↓** | Déplacer de 3 photos |
+| **Molette** | Défilement avec inertie |
+| **Suppr** | Supprimer la photo centrale (ou la sélection) |
+
 ### Visionneuse
 
 | Raccourci | Action |
@@ -447,8 +491,18 @@ Si vous avez utilisé Picasa, ses annotations de visages (fichiers `.picasa.ini`
 | **I** | Afficher/masquer le panneau EXIF |
 | **0** | Ajuster à la fenêtre |
 | **1** | Zoom 100 % |
+| **Ctrl + Molette** | Zoom avant / arrière |
 | **Échap** | Retour à la grille |
 | **F** | Marquer/retirer des favoris |
+
+### Diaporama
+
+| Raccourci | Action |
+|---|---|
+| **← / ↑** | Photo plus ancienne |
+| **→ / ↓** | Photo plus récente |
+| **Espace** | Pause / Reprendre |
+| **Échap** | Quitter le diaporama |
 
 ### Mode recadrage
 

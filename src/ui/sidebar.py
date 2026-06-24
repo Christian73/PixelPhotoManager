@@ -6,6 +6,7 @@ import subprocess
 from PySide6.QtCore import Signal, Qt, QRect, QSize, QUrl, QThread, Slot
 from PySide6.QtGui import QColor, QFont, QIcon, QPainter, QPixmap
 from PySide6.QtWidgets import (
+    QStyledItemDelegate,
     QWidget, QVBoxLayout, QHBoxLayout, QSplitter,
     QTreeWidget, QTreeWidgetItem, QListWidget, QListWidgetItem,
     QPushButton, QLabel, QLineEdit, QMenu, QInputDialog, QMessageBox, QFileDialog,
@@ -152,6 +153,58 @@ class _FaceIconLoader(QThread):
                     pass
 
 
+class _SingleFaceIconLoader(QThread):
+    """Charge le crop d'un seul visage en arrière-plan pour mettre à jour une icône."""
+
+    icon_ready = Signal(int, bytes)   # (index dans la liste, PNG bytes)
+
+    def __init__(self, index: int, face, parent=None) -> None:
+        super().__init__(parent)
+        self._index = index
+        self._face  = face
+
+    def run(self) -> None:
+        edit_rots = _load_edit_rotations([self._face.photo_path])
+        data = _face_bytes(
+            self._face, size=36,
+            edit_rotation=edit_rots.get(self._face.photo_path, 0),
+        )
+        if data:
+            self.icon_ready.emit(self._index, data)
+
+
+class _PendingBadgeDelegate(QStyledItemDelegate):
+    """Affiche un petit badge orange '?' à droite du nom des personnes avec des suggestions en attente."""
+
+    _R = 7   # rayon du badge en px
+
+    def paint(self, painter, option, index) -> None:
+        super().paint(painter, option, index)
+        person = index.data(Qt.UserRole)
+        if not isinstance(person, PersonInfo):
+            return
+        if getattr(person, "pending_count", 0) <= 0:
+            return
+
+        r = self._R
+        x = option.rect.right() - r * 2 - 4
+        y = option.rect.center().y() - r
+
+        painter.save()
+        painter.setRenderHint(QPainter.Antialiasing, True)
+        painter.setBrush(QColor("#e8a040"))
+        painter.setPen(Qt.NoPen)
+        painter.drawEllipse(x, y, r * 2, r * 2)
+
+        font = QFont()
+        font.setPixelSize(r)
+        font.setBold(True)
+        painter.setFont(font)
+        painter.setPen(QColor("#1a1a1a"))
+        painter.drawText(x, y, r * 2, r * 2, Qt.AlignCenter, "?")
+        painter.restore()
+
+
 class Sidebar(QWidget):
     folder_selected    = Signal(str)
     album_selected     = Signal(object)   # AlbumInfo | str (special key)
@@ -263,6 +316,7 @@ class Sidebar(QWidget):
 
         self._persons_list = QListWidget()
         self._persons_list.setIconSize(QSize(36, 36))
+        self._persons_list.setItemDelegate(_PendingBadgeDelegate(self._persons_list))
         self._persons_list.itemClicked.connect(self._on_person_clicked)
         self._persons_list.setContextMenuPolicy(Qt.CustomContextMenu)
         self._persons_list.customContextMenuRequested.connect(self._person_context_menu)
@@ -616,6 +670,18 @@ class Sidebar(QWidget):
             pix = QPixmap()
             pix.loadFromData(data)
             self._persons_list.item(index).setIcon(QIcon(pix))
+
+    def update_person_icon(self, person_id: int, face) -> None:
+        """Mise à jour immédiate de l'icône d'une personne sans reconstruire toute la liste."""
+        for i in range(self._persons_list.count()):
+            item = self._persons_list.item(i)
+            p = item.data(Qt.UserRole)
+            if isinstance(p, PersonInfo) and p.id == person_id:
+                loader = _SingleFaceIconLoader(i, face, self)
+                loader.icon_ready.connect(self._on_face_icon_ready)
+                loader.finished.connect(loader.deleteLater)
+                loader.start()
+                break
 
     def update_cluster_badge(self, count: int) -> None:
         """Mettre à jour le badge du bouton Identifier avec le nombre de groupes en attente."""

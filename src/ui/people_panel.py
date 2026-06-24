@@ -78,16 +78,24 @@ def _face_bytes(face: "FaceInfo", size: int, edit_rotation: int = 0) -> bytes:
     pour que la vignette corresponde toujours à l'orientation affichée.
     """
     try:
+        from pathlib import Path
+        from src.library.exif_reader import VIDEO_EXT
+        if Path(face.photo_path).suffix.lower() in VIDEO_EXT:
+            return b""
+
         from PIL import Image, ImageOps
         img = ImageOps.exif_transpose(Image.open(face.photo_path)).convert("RGB")
         if face.detected_rotation:
             img = img.rotate(-face.detected_rotation, expand=True)
         x, y, w, h = face.bbox_x, face.bbox_y, face.bbox_w, face.bbox_h
         pad = int(max(w, h) * 0.18)
-        crop = img.crop((
-            max(0, x - pad), max(0, y - pad),
-            min(img.width, x + w + pad), min(img.height, y + h + pad),
-        ))
+        left   = max(0, x - pad)
+        top    = max(0, y - pad)
+        right  = min(img.width,  x + w + pad)
+        bottom = min(img.height, y + h + pad)
+        if right <= left or bottom <= top:
+            return b""
+        crop = img.crop((left, top, right, bottom))
         # Ramener le crop dans l'espace d'affichage (edit_rotation).
         # PIL.rotate est CCW ; detected_rotation/edit_rotation sont CW.
         net = (face.detected_rotation - edit_rotation) % 360
@@ -131,8 +139,8 @@ def _cosine_sim(a: list[float], b: list[float]) -> float:
 
 
 # Seuils pour l'affichage des suggestions
-_SIM_STRONG  = 0.82   # très probable  → libellé en bleu
-_SIM_WEAK    = 0.68   # possible        → libellé en gris
+_SIM_STRONG  = 0.60   # très probable  → libellé en bleu
+_SIM_WEAK    = 0.50   # possible        → libellé en gris
 
 
 def _placeholder_pixmap(size: int = _AVATAR_SIZE) -> QPixmap:
@@ -407,7 +415,8 @@ class _ClusterRow(QFrame):
         row.addWidget(self._lbl_avatar)
 
         plural = "s" if face_count > 1 else ""
-        info_text = f"Groupe {cluster_id}\n{face_count} visage{plural}"
+        group_label = "Isolé" if face_count == 1 else f"Groupe {cluster_id}"
+        info_text = f"{group_label}\n{face_count} visage{plural}"
         lbl_info = QLabel(info_text)
         lbl_info.setStyleSheet("border: none;")
         lbl_info.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
@@ -420,7 +429,7 @@ class _ClusterRow(QFrame):
             else:
                 color, label = "#888", f"→ Peut-être {name} ({pct} %)"
             lbl_info.setText(
-                f"Groupe {cluster_id} — {face_count} visage{plural}\n"
+                f"{group_label} — {face_count} visage{plural}\n"
                 f"<span style='color:{color}; font-size:11px'>{label}</span>"
             )
             lbl_info.setTextFormat(Qt.RichText)

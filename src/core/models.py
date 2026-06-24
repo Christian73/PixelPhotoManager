@@ -161,6 +161,7 @@ class PersonInfo:
     cover_path: str = ""
     cover_bbox: Optional[tuple] = None            # (x, y, w, h) dans cover_path
     cover_detected_rotation: int = 0             # rotation CW lors de la détection
+    pending_count: int = 0                        # groupes en attente de vérification
 
 
 @dataclass

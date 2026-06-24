@@ -721,6 +721,16 @@ class MainWindow(QMainWindow):
                 background: #3a5a8a;
                 border-radius: 3px;
             }
+            QPushButton {
+                background: #3a3a3a;
+                color: #ddd;
+                border: 1px solid #555;
+                border-radius: 3px;
+                padding: 4px 10px;
+            }
+            QPushButton:hover  { background: #4a4a4a; }
+            QPushButton:pressed { background: #2a2a2a; }
+            QPushButton:checked { background: #3a5a8a; border-color: #5a8aba; }
         """)
 
         self.setMenuWidget(top_bar)
@@ -821,6 +831,7 @@ class MainWindow(QMainWindow):
         self._face_panel.face_highlighted.connect(self._on_face_highlighted)
         self._face_panel.all_faces_toggled.connect(self._on_all_faces_toggled)
         self._face_panel.person_assigned.connect(self._refresh_persons)
+        self._face_panel.cover_face_set.connect(self._on_cover_face_set)
         self._face_panel.person_cluster_requested.connect(
             self._on_face_panel_person_cluster_requested
         )
@@ -862,6 +873,7 @@ class MainWindow(QMainWindow):
         self._face_cluster_grid.cluster_merged.connect(self._on_cluster_merged)
         self._face_cluster_grid.photos_requested.connect(self._on_cluster_photos_requested)
         self._face_cluster_grid.back_requested.connect(self.show_grid)
+        self._face_cluster_grid.persons_updated.connect(self._refresh_persons)
         self._stack.addWidget(self._face_cluster_grid)
 
         # Index 3 — Vue des groupes d'une personne nommée
@@ -879,6 +891,11 @@ class MainWindow(QMainWindow):
         self._person_cluster_view.cluster_named.connect(self._on_cluster_named)
         self._person_cluster_view.cluster_assigned.connect(self._on_cluster_assigned)
         self._person_cluster_view.faces_reassigned.connect(self._refresh_persons)
+        self._person_cluster_view.cover_face_set.connect(self._on_cover_face_set)
+        self._person_cluster_view.suggestion_accepted.connect(self._on_suggestion_accepted)
+        self._person_cluster_view.suggestion_rejected.connect(self._on_suggestion_rejected)
+        self._person_cluster_view.all_suggestions_accepted.connect(self._on_all_suggestions_accepted)
+        self._person_cluster_view.all_suggestions_rejected.connect(self._on_all_suggestions_rejected)
         self._stack.addWidget(self._person_cluster_view)
 
         # Connexions sidebar
@@ -977,12 +994,10 @@ class MainWindow(QMainWindow):
             )
             self._sidebar.refresh_folders(folders)
             self._show_all_photos()
-            # Pré-charger TF/DeepFace en parallèle du scan pour éliminer le freeze
-            # de ~20 s lors du premier appel à detect_and_embed()
-            if self._config.get("faces.auto_index", False):
-                self._warmup_thread = TFWarmUpThread(self)
-                self._warmup_thread.finished.connect(self._on_warmup_done)
-                self._warmup_thread.start()
+            # Pré-charger InsightFace en parallèle du scan
+            self._warmup_thread = TFWarmUpThread(self)
+            self._warmup_thread.finished.connect(self._on_warmup_done)
+            self._warmup_thread.start()
             self._start_scan(folders)
             self._folder_watcher.set_folders(folders)
         albums = self._catalog.get_albums()
@@ -1073,13 +1088,11 @@ class MainWindow(QMainWindow):
             self._current_photos.sort(key=_photo_sort_key, reverse=True)
             self._grid.set_photos(self._current_photos)
 
-        if self._config.get("faces.auto_index", False):
-            if self._warmup_thread and self._warmup_thread.isRunning():
-                # Le pré-chargement TF n'est pas encore terminé — attendre
-                self._lbl_action.setText("Initialisation de la reconnaissance faciale…")
-                self._face_index_pending = True
-            else:
-                self._start_face_indexing()
+        if self._warmup_thread and self._warmup_thread.isRunning():
+            self._lbl_action.setText("Initialisation de la reconnaissance faciale…")
+            self._face_index_pending = True
+        else:
+            self._start_face_indexing()
 
     @Slot()
     def _on_warmup_done(self) -> None:
@@ -1200,7 +1213,6 @@ class MainWindow(QMainWindow):
         self._face_indexer.error.connect(
             lambda path, msg: logger.warning("Visage non indexé %s: %s", path, msg)
         )
-        self._config.set("faces.auto_index", True)
         self._act_index_faces.setText("Analyse en cours…")
         self._act_index_faces.setEnabled(False)
         self._face_indexer.start()
@@ -1298,6 +1310,7 @@ class MainWindow(QMainWindow):
             self._lbl_action.setText(f"{n_clusters} groupe(s) de visages détecté(s)")
             QTimer.singleShot(4000, lambda: self._lbl_action.setText(""))
         self._refresh_persons()
+        self._face_cluster_grid.refresh()
         if self._face_panel.isVisible():
             self._face_panel_refresh_timer.start()
 
@@ -1306,7 +1319,6 @@ class MainWindow(QMainWindow):
         self._lbl_action.setText("")
         self._act_index_faces.setText("Analyser les visages")
         self._act_index_faces.setEnabled(True)
-        self._config.set("faces.auto_index", False)
         QMessageBox.information(
             self,
             "Reconnaissance faciale indisponible",
@@ -1451,6 +1463,10 @@ class MainWindow(QMainWindow):
     def _on_person_selected(self, person: PersonInfo) -> None:
         self._grid_nav_bar.hide()
         self.show_person_clusters(person)
+
+    @Slot(int, object)
+    def _on_cover_face_set(self, person_id: int, face) -> None:
+        self._sidebar.update_person_icon(person_id, face)
 
     def _refresh_persons(self) -> None:
         if self._persons_refresh_thread and self._persons_refresh_thread.isRunning():
@@ -1871,6 +1887,38 @@ class MainWindow(QMainWindow):
         self._refresh_persons()
         self._refresh_face_panel_if_visible()
 
+    @Slot(int)
+    def _on_suggestion_accepted(self, cluster_id: int) -> None:
+        """Suggestion confirmée : assigner le groupe à la personne suggérée."""
+        self._face_db.accept_cluster_suggestion(cluster_id)
+        self._refresh_persons()
+        self._refresh_face_panel_if_visible()
+        self._person_cluster_view.refresh()
+
+    @Slot(int)
+    def _on_suggestion_rejected(self, cluster_id: int) -> None:
+        """Suggestion refusée : le groupe retourne dans la liste à identifier."""
+        self._face_db.clear_cluster_suggestion(cluster_id)
+        self._refresh_persons()
+        self._person_cluster_view.refresh()
+
+    @Slot(list)
+    def _on_all_suggestions_accepted(self, cluster_ids: list) -> None:
+        """Toutes les suggestions confirmées d'un coup."""
+        for cid in cluster_ids:
+            self._face_db.accept_cluster_suggestion(cid)
+        self._refresh_persons()
+        self._refresh_face_panel_if_visible()
+        self._person_cluster_view.refresh()
+
+    @Slot(list)
+    def _on_all_suggestions_rejected(self, cluster_ids: list) -> None:
+        """Toutes les suggestions refusées d'un coup."""
+        for cid in cluster_ids:
+            self._face_db.clear_cluster_suggestion(cid)
+        self._refresh_persons()
+        self._person_cluster_view.refresh()
+
     def show_viewer(self, photo: PhotoInfo) -> None:
         is_video = photo.media_type == "video"
         self._viewer.set_photo(photo)
@@ -1921,9 +1969,13 @@ class MainWindow(QMainWindow):
         if not self._current_photos:
             return
         from src.ui.slideshow import SlideshowWindow
-        # Si la visionneuse est ouverte, partir de la photo affichée ; sinon la plus ancienne
+        # Priorité : visionneuse ouverte → photo affichée
+        #            mode chronologie    → photo au centre du ruban
+        #            sinon              → photo la plus ancienne
         if self._viewer.isVisible() and 0 <= self._current_photo_index < len(self._current_photos):
             start_index = self._current_photo_index
+        elif (ribbon_center := self._grid.center_photo_index()) is not None:
+            start_index = ribbon_center
         else:
             start_index = len(self._current_photos) - 1
         self._slideshow_win = SlideshowWindow(

@@ -590,6 +590,13 @@ class ThumbnailGrid(QScrollArea):
             return 0
         return sum(self._r_cols[:_RIBBON_CENTER]) + self._r_cols[_RIBBON_CENTER] // 2
 
+    def center_photo_index(self) -> int | None:
+        """Retourne l'index de la photo au centre du ruban, ou None hors mode ruban."""
+        if not self._ribbon_mode or not self._photos:
+            return None
+        idx = self._ribbon_offset + self._center_pos()
+        return idx if 0 <= idx < len(self._photos) else None
+
     def _update_nav_bar(self) -> None:
         """Affiche/cache et synchronise l'ascenseur externe (appelé après resize)."""
         if self._nav_bar is None:

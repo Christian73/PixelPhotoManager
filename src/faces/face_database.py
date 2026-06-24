@@ -129,6 +129,14 @@ class FaceDatabase:
                     conn.execute(
                         "ALTER TABLE faces ADD COLUMN is_cover INTEGER DEFAULT 0"
                     )
+                if "suggestion_person_id" not in cols:
+                    conn.execute(
+                        "ALTER TABLE faces ADD COLUMN suggestion_person_id INTEGER DEFAULT NULL"
+                    )
+                if "suggestion_score" not in cols:
+                    conn.execute(
+                        "ALTER TABLE faces ADD COLUMN suggestion_score REAL DEFAULT NULL"
+                    )
                 # Migration indexed_photos
                 ip_cols = {r[1] for r in conn.execute("PRAGMA table_info(indexed_photos)")}
                 if "rotation" not in ip_cols:
@@ -331,8 +339,9 @@ class FaceDatabase:
                 # Réinitialise uniquement les faces non identifiées.
                 # Les faces avec person_id gardent leur cluster synthétique (10M+)
                 # et restent visibles dans PersonClusterView pendant le clustering.
+                # Les suggestions en attente sont également invalidées car les cluster_ids changent.
                 conn.execute(
-                    "UPDATE faces SET cluster_id=NULL"
+                    "UPDATE faces SET cluster_id=NULL, suggestion_person_id=NULL, suggestion_score=NULL"
                     " WHERE (pinned IS NULL OR pinned = 0)"
                     "   AND person_id IS NULL"
                 )
@@ -371,6 +380,8 @@ class FaceDatabase:
                             AND f3.person_id IS NOT NULL
                       )
                 """)
+                # Après propagation, dédupliquer sur toutes les photos concernées.
+                self._dedup_in_transaction(conn)
                 conn.commit()
             finally:
                 conn.close()
@@ -393,7 +404,7 @@ class FaceDatabase:
 
     def get_unnamed_clusters(self) -> list[tuple[int, int]]:
         """Returns [(cluster_id, face_count)] for clusters with no person assigned,
-        not ignored and not pinned (isolated faces are excluded)."""
+        not ignored, not pinned and not pending verification."""
         with self._lock:
             conn = self._conn()
             try:
@@ -401,6 +412,7 @@ class FaceDatabase:
                     "SELECT cluster_id, COUNT(*) FROM faces"
                     " WHERE cluster_id IS NOT NULL"
                     "   AND person_id IS NULL"
+                    "   AND suggestion_person_id IS NULL"
                     "   AND ignored = 0"
                     "   AND (pinned IS NULL OR pinned = 0)"
                     " GROUP BY cluster_id ORDER BY COUNT(*) DESC"
@@ -432,6 +444,107 @@ class FaceDatabase:
                 conn.commit()
             finally:
                 conn.close()
+
+    # ------------------------------------------------------------------ pending suggestions
+
+    def set_cluster_suggestions(self, suggestions: "dict[int, tuple[int, float]]") -> None:
+        """Batch-set suggestion_person_id/score for multiple clusters.
+
+        suggestions: {cluster_id: (person_id, score)}
+        Only sets suggestions for clusters that don't already have one (idempotent).
+        """
+        if not suggestions:
+            return
+        with self._lock:
+            conn = self._conn()
+            try:
+                for cluster_id, (person_id, score) in suggestions.items():
+                    conn.execute(
+                        "UPDATE faces SET suggestion_person_id=?, suggestion_score=?"
+                        " WHERE cluster_id=?"
+                        "   AND suggestion_person_id IS NULL",
+                        (person_id, score, cluster_id),
+                    )
+                conn.commit()
+            finally:
+                conn.close()
+
+    def clear_cluster_suggestion(self, cluster_id: int) -> None:
+        """Clear suggestion (reject). The cluster returns to the unnamed list."""
+        with self._lock:
+            conn = self._conn()
+            try:
+                conn.execute(
+                    "UPDATE faces SET suggestion_person_id=NULL, suggestion_score=NULL"
+                    " WHERE cluster_id=?",
+                    (cluster_id,),
+                )
+                conn.commit()
+            finally:
+                conn.close()
+
+    def accept_cluster_suggestion(self, cluster_id: int) -> None:
+        """Confirm a pending suggestion: assign the suggested person and clear the flag."""
+        with self._lock:
+            conn = self._conn()
+            try:
+                row = conn.execute(
+                    "SELECT DISTINCT suggestion_person_id FROM faces"
+                    " WHERE cluster_id=? AND suggestion_person_id IS NOT NULL LIMIT 1",
+                    (cluster_id,),
+                ).fetchone()
+                if row is None:
+                    return
+                person_id = row[0]
+                paths = [r[0] for r in conn.execute(
+                    "SELECT DISTINCT photo_path FROM faces WHERE cluster_id=?", (cluster_id,)
+                ).fetchall()]
+                conn.execute(
+                    "UPDATE faces SET person_id=?, suggestion_person_id=NULL, suggestion_score=NULL"
+                    " WHERE cluster_id=?",
+                    (person_id, cluster_id),
+                )
+                self._dedup_in_transaction(conn, paths)
+                conn.commit()
+            finally:
+                conn.close()
+
+    def get_suggested_clusters_for_person(
+        self, person_id: int
+    ) -> "list[tuple[int, int, float]]":
+        """Returns [(cluster_id, face_count, score)] for clusters pending verification
+        for this person, ordered by score descending."""
+        with self._lock:
+            conn = self._conn()
+            try:
+                rows = conn.execute(
+                    "SELECT cluster_id, COUNT(*), MAX(suggestion_score)"
+                    " FROM faces"
+                    " WHERE suggestion_person_id=?"
+                    "   AND person_id IS NULL"
+                    "   AND ignored=0"
+                    " GROUP BY cluster_id"
+                    " ORDER BY MAX(suggestion_score) DESC",
+                    (person_id,),
+                ).fetchall()
+            finally:
+                conn.close()
+        return [(r[0], r[1], r[2] or 0.0) for r in rows]
+
+    def get_persons_pending_count(self) -> "dict[int, int]":
+        """Returns {person_id: pending_cluster_count} for all persons with suggestions."""
+        with self._lock:
+            conn = self._conn()
+            try:
+                rows = conn.execute(
+                    "SELECT suggestion_person_id, COUNT(DISTINCT cluster_id)"
+                    " FROM faces"
+                    " WHERE suggestion_person_id IS NOT NULL AND person_id IS NULL"
+                    " GROUP BY suggestion_person_id"
+                ).fetchall()
+            finally:
+                conn.close()
+        return {r[0]: r[1] for r in rows}
 
     def get_representative_face(
         self,
@@ -496,6 +609,31 @@ class FaceDatabase:
                 conn.commit()
             finally:
                 conn.close()
+
+    def get_face_by_id(self, face_id: int) -> Optional[FaceInfo]:
+        """Returns FaceInfo for a single face_id, or None if not found."""
+        with self._lock:
+            conn = self._conn()
+            try:
+                row = conn.execute(
+                    "SELECT f.id, f.photo_path, f.bbox_x, f.bbox_y, f.bbox_w, f.bbox_h,"
+                    "       f.cluster_id, f.person_id,"
+                    "       COALESCE(ip.rotation, 0)"
+                    " FROM faces f"
+                    " LEFT JOIN indexed_photos ip ON f.photo_path = ip.photo_path"
+                    " WHERE f.id=?",
+                    (face_id,),
+                ).fetchone()
+            finally:
+                conn.close()
+        if row:
+            return FaceInfo(
+                id=row[0], photo_path=row[1],
+                bbox_x=row[2], bbox_y=row[3], bbox_w=row[4], bbox_h=row[5],
+                cluster_id=row[6], person_id=row[7],
+                detected_rotation=row[8],
+            )
+        return None
 
     def get_representative_embedding(
         self,
@@ -673,12 +811,14 @@ class FaceDatabase:
                     chunk = cluster_ids[i:i + _CHUNK]
                     ph = ",".join("?" * len(chunk))
                     all_rows.extend(conn.execute(
-                        f"SELECT id, photo_path, bbox_x, bbox_y, bbox_w, bbox_h,"
-                        f"       cluster_id, person_id, is_cover,"
-                        f"       (bbox_w * bbox_h) AS area"
-                        f" FROM faces"
-                        f" WHERE cluster_id IN ({ph})"
-                        f" ORDER BY cluster_id, is_cover DESC, area DESC",
+                        f"SELECT f.id, f.photo_path, f.bbox_x, f.bbox_y, f.bbox_w, f.bbox_h,"
+                        f"       f.cluster_id, f.person_id, f.is_cover,"
+                        f"       (f.bbox_w * f.bbox_h) AS area,"
+                        f"       COALESCE(ip.rotation, 0) AS detected_rotation"
+                        f" FROM faces f"
+                        f" LEFT JOIN indexed_photos ip ON ip.photo_path = f.photo_path"
+                        f" WHERE f.cluster_id IN ({ph}) AND f.ignored = 0"
+                        f" ORDER BY f.cluster_id, f.is_cover DESC, area DESC",
                         chunk,
                     ).fetchall())
             finally:
@@ -691,6 +831,7 @@ class FaceDatabase:
                     id=row[0], photo_path=row[1],
                     bbox_x=row[2], bbox_y=row[3], bbox_w=row[4], bbox_h=row[5],
                     cluster_id=cid, person_id=row[7],
+                    detected_rotation=row[10],
                 )
         return result
 
@@ -723,12 +864,13 @@ class FaceDatabase:
         ]
 
     def get_photos_for_cluster(self, cluster_id: int) -> list[str]:
-        """Returns distinct photo paths for a cluster."""
+        """Returns distinct photo paths for a cluster (non-ignored faces only)."""
         with self._lock:
             conn = self._conn()
             try:
                 rows = conn.execute(
-                    "SELECT DISTINCT photo_path FROM faces WHERE cluster_id=?",
+                    "SELECT DISTINCT photo_path FROM faces"
+                    " WHERE cluster_id=? AND ignored=0",
                     (cluster_id,),
                 ).fetchall()
             finally:
@@ -812,14 +954,67 @@ class FaceDatabase:
 
     # ------------------------------------------------------------------ assignment
 
+    @staticmethod
+    def _dedup_in_transaction(conn, photo_paths: "list[str] | None" = None) -> None:
+        """Ignore les visages redondants (même personne, même photo) dans la transaction active.
+
+        Pour chaque (photo_path, person_id) avec plusieurs faces non-ignorées, garde celle
+        dont l'aire bbox est la plus grande (= visage le plus prominent, le plus fiable)
+        et marque les autres ignored=1.
+
+        photo_paths : si fourni, limite la dédupplication à ces photos seulement.
+        """
+        if photo_paths is not None:
+            if not photo_paths:
+                return
+            ph = ",".join("?" * len(photo_paths))
+            sql = f"""
+                UPDATE faces SET ignored=1
+                WHERE id IN (
+                    SELECT id FROM (
+                        SELECT id,
+                               ROW_NUMBER() OVER (
+                                   PARTITION BY photo_path, person_id
+                                   ORDER BY bbox_w * bbox_h DESC
+                               ) AS rn
+                        FROM faces
+                        WHERE person_id IS NOT NULL AND ignored=0
+                          AND photo_path IN ({ph})
+                    )
+                    WHERE rn > 1
+                )
+            """
+            conn.execute(sql, photo_paths)
+        else:
+            conn.execute("""
+                UPDATE faces SET ignored=1
+                WHERE id IN (
+                    SELECT id FROM (
+                        SELECT id,
+                               ROW_NUMBER() OVER (
+                                   PARTITION BY photo_path, person_id
+                                   ORDER BY bbox_w * bbox_h DESC
+                               ) AS rn
+                        FROM faces
+                        WHERE person_id IS NOT NULL AND ignored=0
+                    )
+                    WHERE rn > 1
+                )
+            """)
+
     def assign_person_to_face(self, face_id: int, person_id: int) -> None:
         """Assign a named person to a single face."""
         with self._lock:
             conn = self._conn()
             try:
+                row = conn.execute(
+                    "SELECT photo_path FROM faces WHERE id=?", (face_id,)
+                ).fetchone()
                 conn.execute(
                     "UPDATE faces SET person_id=? WHERE id=?", (person_id, face_id)
                 )
+                if row:
+                    self._dedup_in_transaction(conn, [row[0]])
                 conn.commit()
             finally:
                 conn.close()
@@ -831,10 +1026,15 @@ class FaceDatabase:
         with self._lock:
             conn = self._conn()
             try:
+                ph = ",".join("?" * len(face_ids))
+                paths = [r[0] for r in conn.execute(
+                    f"SELECT DISTINCT photo_path FROM faces WHERE id IN ({ph})", face_ids
+                ).fetchall()]
                 conn.executemany(
                     "UPDATE faces SET person_id=? WHERE id=?",
                     [(person_id, fid) for fid in face_ids],
                 )
+                self._dedup_in_transaction(conn, paths)
                 conn.commit()
             finally:
                 conn.close()
@@ -885,11 +1085,16 @@ class FaceDatabase:
                 ).fetchone()
                 min_pinned = row[0] if row and row[0] is not None else 0
                 new_cluster_id = min(min_pinned, 0) - 1
+                path_row = conn.execute(
+                    "SELECT photo_path FROM faces WHERE id=?", (face_id,)
+                ).fetchone()
                 conn.execute(
                     "UPDATE faces SET cluster_id=?, pinned=1, person_id=?"
                     " WHERE id=?",
                     (new_cluster_id, person_id, face_id),
                 )
+                if path_row:
+                    self._dedup_in_transaction(conn, [path_row[0]])
                 conn.commit()
             finally:
                 conn.close()
@@ -972,10 +1177,14 @@ class FaceDatabase:
         with self._lock:
             conn = self._conn()
             try:
+                paths = [r[0] for r in conn.execute(
+                    "SELECT DISTINCT photo_path FROM faces WHERE cluster_id=?", (cluster_id,)
+                ).fetchall()]
                 conn.execute(
                     "UPDATE faces SET person_id=? WHERE cluster_id=?",
                     (person_id, cluster_id),
                 )
+                self._dedup_in_transaction(conn, paths)
                 conn.commit()
             finally:
                 conn.close()
@@ -1035,7 +1244,7 @@ class FaceDatabase:
                     "         COALESCE(ip.rotation, 0) AS detected_rotation,"
                     "         ROW_NUMBER() OVER ("
                     "           PARTITION BY f.person_id"
-                    "           ORDER BY f.bbox_w * f.bbox_h DESC"
+                    "           ORDER BY f.is_cover DESC, f.bbox_w * f.bbox_h DESC"
                     "         ) AS rn"
                     "  FROM faces f"
                     "  LEFT JOIN indexed_photos ip ON ip.photo_path = f.photo_path"
@@ -1047,6 +1256,7 @@ class FaceDatabase:
                 ).fetchall()
             finally:
                 conn.close()
+        pending_counts = self.get_persons_pending_count()
         counts = {r[0]: r[1] for r in count_rows}
         reps = {r[0]: r[1:] for r in rep_rows}
         for p in persons:
@@ -1057,6 +1267,7 @@ class FaceDatabase:
                     p.cover_path = rep[0]
                     p.cover_bbox = (rep[1], rep[2], rep[3], rep[4])
                     p.cover_detected_rotation = int(rep[5] or 0)
+            p.pending_count = pending_counts.get(p.id, 0)
 
     # ------------------------------------------------------------------ cleanup
 
@@ -1217,17 +1428,20 @@ class FaceDatabase:
     _SYNTHETIC_CLUSTER_BASE = 10_000_000
 
     def assign_person_synthetic_clusters(self) -> int:
-        """Assigne un cluster_id synthétique (10⁷ + person_id) aux faces identifiées
-        qui n'ont pas encore de cluster_id. Permet de les afficher immédiatement dans
-        PersonClusterView sans attendre la fin du clustering HDBSCAN.
-        Ne touche pas les faces déjà dans un cluster.
+        """Migre TOUTES les faces identifiées vers un cluster_id synthétique (10⁷ + person_id).
+
+        Ceci inclut les faces qui ont déjà un cluster_id non-synthétique issu d'un
+        précédent run HDBSCAN. Sans cette migration, HDBSCAN peut réutiliser le même
+        entier pour un groupe de faces totalement différentes dans un run ultérieur,
+        provoquant une fusion incorrecte avec des faces d'une personne déjà identifiée.
         Retourne le nombre de faces mises à jour."""
         with self._lock:
             conn = self._conn()
             try:
                 n = conn.execute(
                     f"UPDATE faces SET cluster_id = {self._SYNTHETIC_CLUSTER_BASE} + person_id"
-                    " WHERE person_id IS NOT NULL AND cluster_id IS NULL"
+                    " WHERE person_id IS NOT NULL"
+                    f"   AND (cluster_id IS NULL OR cluster_id < {self._SYNTHETIC_CLUSTER_BASE})"
                 ).rowcount
                 if n:
                     conn.commit()
@@ -1235,7 +1449,7 @@ class FaceDatabase:
                 conn.close()
         if n:
             logger.info(
-                "assign_person_synthetic_clusters: %d face(s) pré-assignées", n
+                "assign_person_synthetic_clusters: %d face(s) migrées vers cluster synthétique", n
             )
         return n
 

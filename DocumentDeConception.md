@@ -388,7 +388,12 @@ La barre de recherche (`Ctrl+F`) est unifiée et accepte plusieurs syntaxes :
 
 **Affichage haute qualité** — Rendu net avec zoom fluide de 10 % à 1600 %. Navigation au clavier (flèches) et à la molette.
 
-**Diaporama** — Lancé via **Affichage › Diaporama** ou `F5`. Vitesse configurable, arrêt par Échap.
+**Diaporama** — Lancé via **Affichage › Diaporama** ou `F5`. Vitesse configurable (1–60 s), arrêt par Échap.
+Implémenté dans `src/ui/slideshow.py` (`SlideshowWindow` + `_KenBurnsWidget`).
+- **Point de départ** : visionneuse ouverte → photo affichée ; mode chronologie → photo centrale du ruban (`ThumbnailGrid.center_photo_index()`) ; sinon → plus ancienne photo.
+- **Effet Ken Burns** : `_KenBurnsWidget` anime à 30 fps un rectangle source sur le pixmap (zoom 0–8 %, pan aléatoire à dominante horizontale/diagonale). Chargement en `KeepAspectRatio` : les marges noires (letterbox/pillarbox) sont préservées, l'image n'est jamais rognée.
+- **Préchargement** : la photo suivante est chargée en arrière-plan (`_LoadThread`) pendant l'affichage de la courante.
+- **Navigation** : ←/→ manuelle, Espace pause/reprendre, overlay auto-masquant après 5 s.
 
 **Comparaison côte à côte** — Affichage de deux photos en parallèle pour comparer les versions.
 
