@@ -174,9 +174,9 @@ class _SingleFaceIconLoader(QThread):
 
 
 class _PendingBadgeDelegate(QStyledItemDelegate):
-    """Affiche un petit badge orange '?' à droite du nom des personnes avec des suggestions en attente."""
+    """Affiche un petit badge orange '?' entre la vignette et le nom."""
 
-    _R = 7   # rayon du badge en px
+    _R = 9   # rayon du badge en px
 
     def paint(self, painter, option, index) -> None:
         super().paint(painter, option, index)
@@ -186,8 +186,15 @@ class _PendingBadgeDelegate(QStyledItemDelegate):
         if getattr(person, "pending_count", 0) <= 0:
             return
 
+        from PySide6.QtWidgets import QApplication, QStyle, QStyleOptionViewItem
+        opt = QStyleOptionViewItem(option)
+        self.initStyleOption(opt, index)
+        style = QApplication.style()
+        icon_rect = style.subElementRect(QStyle.SE_ItemViewItemDecoration, opt, None)
+
         r = self._R
-        x = option.rect.right() - r * 2 - 4
+        # Juste à droite de la vignette, centré verticalement
+        x = (icon_rect.right() + 3) if icon_rect.isValid() else (option.rect.left() + 44)
         y = option.rect.center().y() - r
 
         painter.save()
@@ -200,8 +207,10 @@ class _PendingBadgeDelegate(QStyledItemDelegate):
         font.setPixelSize(r)
         font.setBold(True)
         painter.setFont(font)
+        count = getattr(person, "pending_count", 0)
+        label = str(count) if count < 100 else "99+"
         painter.setPen(QColor("#1a1a1a"))
-        painter.drawText(x, y, r * 2, r * 2, Qt.AlignCenter, "?")
+        painter.drawText(x, y, r * 2, r * 2, Qt.AlignCenter, label)
         painter.restore()
 
 
@@ -640,6 +649,15 @@ class Sidebar(QWidget):
 
     def refresh_persons(self, persons: list[PersonInfo]) -> None:
         self._persons = persons
+        # Mémoriser la personne actuellement sélectionnée pour la restaurer après rebuild
+        selected_id: int | None = None
+        selected_row: int = -1
+        cur = self._persons_list.currentItem()
+        if cur is not None:
+            p = cur.data(Qt.UserRole)
+            if isinstance(p, PersonInfo):
+                selected_id = p.id
+                selected_row = self._persons_list.row(cur)
         # Arrêter un chargement précédent et libérer le thread Qt enfant
         if self._face_loader is not None:
             try:
@@ -658,6 +676,17 @@ class Sidebar(QWidget):
             item = QListWidgetItem(label)
             item.setData(Qt.UserRole, person)
             self._persons_list.addItem(item)
+            if selected_id is not None and person.id == selected_id:
+                self._persons_list.blockSignals(True)
+                self._persons_list.setCurrentItem(item)
+                self._persons_list.blockSignals(False)
+                selected_id = None  # trouvé — pas de fallback nécessaire
+        # Personne supprimée/fusionnée : sélectionner silencieusement le voisin le plus proche
+        if selected_id is not None and self._persons_list.count() > 0:
+            fallback_row = min(selected_row, self._persons_list.count() - 1)
+            self._persons_list.blockSignals(True)
+            self._persons_list.setCurrentRow(fallback_row)
+            self._persons_list.blockSignals(False)
         # Charger les icônes de visage en arrière-plan
         if persons:
             self._face_loader = _FaceIconLoader(persons, self)
@@ -670,6 +699,52 @@ class Sidebar(QWidget):
             pix = QPixmap()
             pix.loadFromData(data)
             self._persons_list.item(index).setIcon(QIcon(pix))
+
+    def update_persons_data(self, persons: list) -> None:
+        """Met à jour compteurs et icônes des personnes sans reconstruire la liste.
+        Si l'ensemble des personnes a changé (ajout/suppression), bascule sur refresh_persons."""
+        self._persons = persons
+        new_by_id = {p.id: p for p in persons if p.id is not None}
+
+        current_by_id: dict = {}
+        for i in range(self._persons_list.count()):
+            item = self._persons_list.item(i)
+            p = item.data(Qt.UserRole)
+            if hasattr(p, "id") and p.id is not None:
+                current_by_id[p.id] = (i, p)
+
+        if set(new_by_id.keys()) != set(current_by_id.keys()):
+            self.refresh_persons(persons)
+            return
+
+        from src.core.models import FaceInfo
+        for person in persons:
+            if person.id is None:
+                continue
+            entry = current_by_id.get(person.id)
+            if entry is None:
+                continue
+            row, old_person = entry
+            item = self._persons_list.item(row)
+
+            new_label = f"{person.name}  ({person.photo_count})"
+            if item.text() != new_label:
+                item.setText(new_label)
+                item.setData(Qt.UserRole, person)
+
+            if (person.cover_path != old_person.cover_path
+                    or person.cover_bbox != old_person.cover_bbox):
+                if person.cover_path and person.cover_bbox:
+                    face = FaceInfo(
+                        photo_path=person.cover_path,
+                        bbox_x=person.cover_bbox[0], bbox_y=person.cover_bbox[1],
+                        bbox_w=person.cover_bbox[2], bbox_h=person.cover_bbox[3],
+                        detected_rotation=getattr(person, "cover_detected_rotation", 0),
+                    )
+                    loader = _SingleFaceIconLoader(row, face, self)
+                    loader.icon_ready.connect(self._on_face_icon_ready)
+                    loader.finished.connect(loader.deleteLater)
+                    loader.start()
 
     def update_person_icon(self, person_id: int, face) -> None:
         """Mise à jour immédiate de l'icône d'une personne sans reconstruire toute la liste."""
