@@ -37,6 +37,7 @@ from src.ui.face_panel import FacePanel
 from src.ui.exif_panel import ExifPanel
 from src.ui.people_panel import MergePersonsDialog, PeopleDialog
 from src.ui.settings_dialog import SettingsDialog
+from src.ui.face_backup_dialog import FaceBackupDialog
 
 logger = logging.getLogger(__name__)
 
@@ -633,6 +634,19 @@ class MainWindow(QMainWindow):
         act_picasa = QAction("Importer depuis Picasa…", self)
         act_picasa.triggered.connect(self._import_from_picasa)
         m_faces.addAction(act_picasa)
+        m_faces.addSeparator()
+        act_backup = QAction("Sauvegarder la reconnaissance…", self)
+        act_backup.setToolTip(
+            "Crée une sauvegarde de l'état actuel des visages, groupes et personnes"
+        )
+        act_backup.triggered.connect(self._backup_faces)
+        m_faces.addAction(act_backup)
+        act_manage_backups = QAction("Gérer les sauvegardes…", self)
+        act_manage_backups.setToolTip(
+            "Voir, restaurer ou supprimer les sauvegardes de reconnaissance faciale"
+        )
+        act_manage_backups.triggered.connect(self._manage_face_backups)
+        m_faces.addAction(act_manage_backups)
 
         # Aide
         m_help = mb.addMenu("Aide")
@@ -830,7 +844,7 @@ class MainWindow(QMainWindow):
         self._face_panel = FacePanel(self._face_db, self._catalog, self)
         self._face_panel.face_highlighted.connect(self._on_face_highlighted)
         self._face_panel.all_faces_toggled.connect(self._on_all_faces_toggled)
-        self._face_panel.person_assigned.connect(self._refresh_persons)
+        self._face_panel.person_assigned.connect(self._update_persons_counts)
         self._face_panel.cover_face_set.connect(self._on_cover_face_set)
         self._face_panel.person_cluster_requested.connect(
             self._on_face_panel_person_cluster_requested
@@ -873,7 +887,7 @@ class MainWindow(QMainWindow):
         self._face_cluster_grid.cluster_merged.connect(self._on_cluster_merged)
         self._face_cluster_grid.photos_requested.connect(self._on_cluster_photos_requested)
         self._face_cluster_grid.back_requested.connect(self.show_grid)
-        self._face_cluster_grid.persons_updated.connect(self._refresh_persons)
+        self._face_cluster_grid.persons_updated.connect(self._update_persons_counts)
         self._stack.addWidget(self._face_cluster_grid)
 
         # Index 3 — Vue des groupes d'une personne nommée
@@ -890,7 +904,7 @@ class MainWindow(QMainWindow):
         )
         self._person_cluster_view.cluster_named.connect(self._on_cluster_named)
         self._person_cluster_view.cluster_assigned.connect(self._on_cluster_assigned)
-        self._person_cluster_view.faces_reassigned.connect(self._refresh_persons)
+        self._person_cluster_view.faces_reassigned.connect(self._update_persons_counts)
         self._person_cluster_view.cover_face_set.connect(self._on_cover_face_set)
         self._person_cluster_view.suggestion_accepted.connect(self._on_suggestion_accepted)
         self._person_cluster_view.suggestion_rejected.connect(self._on_suggestion_rejected)
@@ -1225,6 +1239,61 @@ class MainWindow(QMainWindow):
         )
         dlg.exec()
 
+    def _backup_faces(self) -> None:
+        """Crée immédiatement une sauvegarde et affiche le résultat."""
+        from src.ui.face_backup_dialog import _BackupThread
+        from src.core.app_dirs import APP_DATA_DIR
+        from pathlib import Path
+        from PySide6.QtWidgets import QMessageBox
+
+        if hasattr(self, "_face_backup_thread") and self._face_backup_thread.isRunning():
+            return
+        self._face_backup_thread = _BackupThread(
+            Path(self._face_db._db_path),
+            Path(self._catalog._db_path),
+            APP_DATA_DIR,
+            self,
+        )
+
+        def _on_done(path):
+            self._lbl_action.setText("")
+            from src.ui.face_backup_dialog import _parse_ts
+            QMessageBox.information(
+                self, "Sauvegarde créée",
+                f"Sauvegarde enregistrée :\n{_parse_ts(path)}\n\n"
+                f"({path.name})",
+            )
+
+        def _on_err(msg):
+            self._lbl_action.setText("")
+            QMessageBox.critical(self, "Erreur de sauvegarde", msg)
+
+        self._face_backup_thread.succeeded.connect(_on_done)
+        self._face_backup_thread.failed.connect(_on_err)
+        self._face_backup_thread.finished.connect(self._face_backup_thread.deleteLater)
+        self._lbl_action.setText("Sauvegarde de la reconnaissance en cours…")
+        self._face_backup_thread.start()
+
+    def _manage_face_backups(self) -> None:
+        """Ouvre le dialogue de gestion des sauvegardes de reconnaissance."""
+        from src.core.app_dirs import APP_DATA_DIR
+        from pathlib import Path
+        dlg = FaceBackupDialog(
+            APP_DATA_DIR,
+            Path(self._face_db._db_path),
+            Path(self._catalog._db_path),
+            self,
+        )
+        dlg.restore_completed.connect(self._on_face_restore_completed)
+        dlg.exec()
+
+    @Slot()
+    def _on_face_restore_completed(self) -> None:
+        """Rafraîchit toute l'UI de reconnaissance après une restauration."""
+        self._refresh_persons()
+        if self._face_panel.isVisible():
+            self._face_panel.refresh()
+
     def _on_picasa_edits_imported(self, edited_map: dict) -> None:
         for path, edit_info in edited_map.items():
             self._grid.refresh_photo(path, edit_info)
@@ -1347,7 +1416,7 @@ class MainWindow(QMainWindow):
     @Slot(int, int)
     def _on_cluster_assigned(self, cluster_id: int, person_id: int) -> None:
         self._face_db.assign_person_to_cluster(cluster_id, person_id)
-        self._refresh_persons()
+        self._update_persons_counts()
         self._face_cluster_grid.remove_clusters([cluster_id])
         self._refresh_face_panel_if_visible()
 
@@ -1356,7 +1425,7 @@ class MainWindow(QMainWindow):
         person = self._catalog.create_person(name)
         for cid in cluster_ids:
             self._face_db.assign_person_to_cluster(cid, person.id)
-        self._refresh_persons()
+        self._refresh_persons()  # nouvelle personne créée → rebuild complet
         self._face_cluster_grid.remove_clusters(cluster_ids)
         self._refresh_face_panel_if_visible()
 
@@ -1364,7 +1433,7 @@ class MainWindow(QMainWindow):
     def _on_clusters_assigned(self, cluster_ids: list, person_id: int) -> None:
         for cid in cluster_ids:
             self._face_db.assign_person_to_cluster(cid, person_id)
-        self._refresh_persons()
+        self._update_persons_counts()
         self._face_cluster_grid.remove_clusters(cluster_ids)
         self._refresh_face_panel_if_visible()
 
@@ -1469,17 +1538,33 @@ class MainWindow(QMainWindow):
         self._sidebar.update_person_icon(person_id, face)
 
     def _refresh_persons(self) -> None:
+        """Rebuild complet de la liste (personnes ajoutées/supprimées/renommées)."""
         if self._persons_refresh_thread and self._persons_refresh_thread.isRunning():
-            return  # un refresh est déjà en cours
+            return
         if self._persons_refresh_thread is not None:
             self._persons_refresh_thread.deleteLater()
         self._persons_refresh_thread = _PersonsRefreshThread(self._catalog, self._face_db, self)
         self._persons_refresh_thread.result_ready.connect(self._on_persons_refreshed)
         self._persons_refresh_thread.start()
 
+    def _update_persons_counts(self) -> None:
+        """Mise à jour légère : seuls les compteurs/couvertures modifiés sont rafraîchis."""
+        if self._persons_refresh_thread and self._persons_refresh_thread.isRunning():
+            return
+        if self._persons_refresh_thread is not None:
+            self._persons_refresh_thread.deleteLater()
+        self._persons_refresh_thread = _PersonsRefreshThread(self._catalog, self._face_db, self)
+        self._persons_refresh_thread.result_ready.connect(self._on_persons_counts_updated)
+        self._persons_refresh_thread.start()
+
     @Slot(list, int)
     def _on_persons_refreshed(self, persons: list, count: int) -> None:
         self._sidebar.refresh_persons(persons)
+        self._sidebar.update_cluster_badge(count)
+
+    @Slot(list, int)
+    def _on_persons_counts_updated(self, persons: list, count: int) -> None:
+        self._sidebar.update_persons_data(persons)
         self._sidebar.update_cluster_badge(count)
 
     @Slot(int, str)
@@ -1884,40 +1969,39 @@ class MainWindow(QMainWindow):
     @Slot(int)
     def _on_pcv_cluster_unassigned(self, _cluster_id: int) -> None:
         """Groupe dé-associé depuis PersonClusterView (DB déjà à jour) → rafraîchir la sidebar."""
-        self._refresh_persons()
+        self._update_persons_counts()
         self._refresh_face_panel_if_visible()
 
     @Slot(int)
     def _on_suggestion_accepted(self, cluster_id: int) -> None:
-        """Suggestion confirmée : assigner le groupe à la personne suggérée."""
+        """Suggestion confirmée : déplace les vignettes sans recharger toute la grille."""
         self._face_db.accept_cluster_suggestion(cluster_id)
-        self._refresh_persons()
+        self._update_persons_counts()
         self._refresh_face_panel_if_visible()
-        self._person_cluster_view.refresh()
+        self._person_cluster_view.accept_pending_cluster(cluster_id)
 
     @Slot(int)
     def _on_suggestion_rejected(self, cluster_id: int) -> None:
-        """Suggestion refusée : le groupe retourne dans la liste à identifier."""
+        """Suggestion refusée : retire uniquement la vignette concernée."""
         self._face_db.clear_cluster_suggestion(cluster_id)
-        self._refresh_persons()
-        self._person_cluster_view.refresh()
+        self._person_cluster_view.remove_pending_cluster(cluster_id)
 
     @Slot(list)
     def _on_all_suggestions_accepted(self, cluster_ids: list) -> None:
         """Toutes les suggestions confirmées d'un coup."""
         for cid in cluster_ids:
             self._face_db.accept_cluster_suggestion(cid)
-        self._refresh_persons()
+        self._update_persons_counts()
         self._refresh_face_panel_if_visible()
-        self._person_cluster_view.refresh()
+        for cid in cluster_ids:
+            self._person_cluster_view.accept_pending_cluster(cid)
 
     @Slot(list)
     def _on_all_suggestions_rejected(self, cluster_ids: list) -> None:
         """Toutes les suggestions refusées d'un coup."""
         for cid in cluster_ids:
             self._face_db.clear_cluster_suggestion(cid)
-        self._refresh_persons()
-        self._person_cluster_view.refresh()
+        self._person_cluster_view.clear_all_pending()
 
     def show_viewer(self, photo: PhotoInfo) -> None:
         is_video = photo.media_type == "video"

@@ -662,9 +662,13 @@ class FacePanel(QWidget):
         c_emb = self._face_db.get_representative_embedding(cluster_id=face.cluster_id)
         if not c_emb:
             return None
+        person_ids = [p.id for p in persons if p.id is not None]
+        if not person_ids:
+            return None
+        person_centroids = self._face_db.get_all_person_centroids(person_ids)
         best_sim, best_id = 0.0, None
         for p in persons:
-            p_emb = self._face_db.get_representative_embedding(person_id=p.id)
+            p_emb = person_centroids.get(p.id)
             if p_emb:
                 sim = _cosine_sim(c_emb, p_emb)
                 if sim > best_sim:

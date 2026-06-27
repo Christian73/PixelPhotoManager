@@ -67,6 +67,9 @@ def _iou(a: tuple, b: tuple) -> float:
     return inter / union if union > 0 else 0.0
 
 
+_SIM_SUGGEST = 0.50  # seuil minimum pour proposer une suggestion après dé-association
+
+
 def _enc(embedding: list[float]) -> bytes:
     return struct.pack(f"{len(embedding)}f", *embedding)
 
@@ -74,6 +77,20 @@ def _enc(embedding: list[float]) -> bytes:
 def _dec(blob: bytes) -> list[float]:
     n = len(blob) // 4
     return list(struct.unpack(f"{n}f", blob))
+
+
+def _cosine_sim(a: list[float], b: list[float]) -> float:
+    try:
+        import numpy as np
+        va = np.array(a, dtype=np.float32)
+        vb = np.array(b, dtype=np.float32)
+        denom = float(np.linalg.norm(va) * np.linalg.norm(vb))
+        return float(np.dot(va, vb) / denom) if denom > 1e-8 else 0.0
+    except ImportError:
+        dot = sum(x * y for x, y in zip(a, b))
+        na = sum(x * x for x in a) ** 0.5
+        nb = sum(x * x for x in b) ** 0.5
+        return dot / (na * nb) if na > 0 and nb > 0 else 0.0
 
 
 def _centroid(embeddings: list[list[float]]) -> list[float]:
@@ -174,9 +191,11 @@ class FaceDatabase:
     # ------------------------------------------------------------------ indexing
 
     def get_paths_to_index(self, all_paths: list[str]) -> list[str]:
-        """Returns paths from all_paths that have not been indexed yet."""
+        """Returns paths from all_paths that have not been indexed yet.
+        Les fichiers vidéo sont toujours exclus (pas de détection de visages)."""
         if not all_paths:
             return []
+        from src.library.exif_reader import VIDEO_EXT
         with self._lock:
             conn = self._conn()
             try:
@@ -186,13 +205,25 @@ class FaceDatabase:
             finally:
                 conn.close()
         indexed = {r[0] for r in rows}
-        return [p for p in all_paths if os.path.normpath(p) not in indexed]
+        return [
+            p for p in all_paths
+            if os.path.normpath(p) not in indexed
+            and os.path.splitext(p)[1].lower() not in VIDEO_EXT
+        ]
+
+    # Seuils d'auto-ignorance pour les faces de mauvaise qualité.
+    # En dessous de ces valeurs, la face est sauvegardée avec ignored=1 :
+    # elle reste visible dans l'interface mais ne participe pas au clustering.
+    _AUTO_IGNORE_MIN_SIDE  = 121   # pixels — plus petite dimension de la bbox
+    _AUTO_IGNORE_MIN_SCORE = 0.65  # score de détection InsightFace (0–1)
 
     def save_faces(self, photo_path: str, detections: list[dict], rotation: int = 0) -> None:
         """
         Persist detected faces for a photo.
-        detections: list of {'bbox': (x,y,w,h), 'embedding': list[float]}
+        detections: list of {'bbox': (x,y,w,h), 'embedding': list[float], 'det_score': float}
         rotation: CW degrees applied during detection (stored to reconstruct face crops).
+        Faces with min(w,h) < _AUTO_IGNORE_MIN_SIDE or det_score < _AUTO_IGNORE_MIN_SCORE
+        are saved with ignored=1.
         """
         photo_path = os.path.normpath(photo_path)
         with self._lock:
@@ -213,11 +244,16 @@ class FaceDatabase:
                     x, y, w, h = (int(v) for v in det["bbox"])
                     emb = det.get("embedding")
                     blob = _enc(emb) if emb else None
+                    score = det.get("det_score", 1.0)
+                    low_quality = (
+                        min(w, h) < self._AUTO_IGNORE_MIN_SIDE
+                        or score < self._AUTO_IGNORE_MIN_SCORE
+                    )
                     conn.execute(
                         "INSERT INTO faces"
-                        " (photo_path, bbox_x, bbox_y, bbox_w, bbox_h, embedding)"
-                        " VALUES (?,?,?,?,?,?)",
-                        (photo_path, x, y, w, h, blob),
+                        " (photo_path, bbox_x, bbox_y, bbox_w, bbox_h, embedding, ignored)"
+                        " VALUES (?,?,?,?,?,?,?)",
+                        (photo_path, x, y, w, h, blob, 1 if low_quality else 0),
                     )
                 conn.execute(
                     "INSERT OR REPLACE INTO indexed_photos"
@@ -309,6 +345,7 @@ class FaceDatabase:
                 rows = conn.execute(
                     "SELECT id, embedding FROM faces"
                     " WHERE embedding IS NOT NULL"
+                    "   AND (ignored IS NULL OR ignored = 0)"
                     f"   AND (pinned IS NULL OR pinned = 0){extra}"
                 ).fetchall()
             finally:
@@ -618,7 +655,8 @@ class FaceDatabase:
                 row = conn.execute(
                     "SELECT f.id, f.photo_path, f.bbox_x, f.bbox_y, f.bbox_w, f.bbox_h,"
                     "       f.cluster_id, f.person_id,"
-                    "       COALESCE(ip.rotation, 0)"
+                    "       CASE WHEN f.embedding IS NULL THEN 0"
+                    "            ELSE COALESCE(ip.rotation, 0) END"
                     " FROM faces f"
                     " LEFT JOIN indexed_photos ip ON f.photo_path = ip.photo_path"
                     " WHERE f.id=?",
@@ -814,7 +852,8 @@ class FaceDatabase:
                         f"SELECT f.id, f.photo_path, f.bbox_x, f.bbox_y, f.bbox_w, f.bbox_h,"
                         f"       f.cluster_id, f.person_id, f.is_cover,"
                         f"       (f.bbox_w * f.bbox_h) AS area,"
-                        f"       COALESCE(ip.rotation, 0) AS detected_rotation"
+                        f"       CASE WHEN f.embedding IS NULL THEN 0"
+                        f"            ELSE COALESCE(ip.rotation, 0) END AS detected_rotation"
                         f" FROM faces f"
                         f" LEFT JOIN indexed_photos ip ON ip.photo_path = f.photo_path"
                         f" WHERE f.cluster_id IN ({ph}) AND f.ignored = 0"
@@ -843,7 +882,8 @@ class FaceDatabase:
                 rows = conn.execute(
                     "SELECT f.id, f.photo_path, f.bbox_x, f.bbox_y, f.bbox_w, f.bbox_h,"
                     "       f.cluster_id, f.person_id, f.ignored, f.pinned,"
-                    "       COALESCE(ip.rotation, 0)"
+                    "       CASE WHEN f.embedding IS NULL THEN 0"
+                    "            ELSE COALESCE(ip.rotation, 0) END"
                     " FROM faces f"
                     " LEFT JOIN indexed_photos ip ON f.photo_path = ip.photo_path"
                     " WHERE f.photo_path=?",
@@ -931,12 +971,43 @@ class FaceDatabase:
                 rows = conn.execute(
                     "SELECT f.id, f.photo_path, f.bbox_x, f.bbox_y, f.bbox_w, f.bbox_h,"
                     "       f.cluster_id, f.person_id, f.ignored, f.pinned,"
-                    "       COALESCE(ip.rotation, 0)"
+                    "       CASE WHEN f.embedding IS NULL THEN 0"
+                    "            ELSE COALESCE(ip.rotation, 0) END"
                     " FROM faces f"
                     " LEFT JOIN indexed_photos ip ON f.photo_path = ip.photo_path"
                     " WHERE f.person_id=?"
                     " ORDER BY f.photo_path, f.bbox_x",
                     (person_id,),
+                ).fetchall()
+            finally:
+                conn.close()
+        return [
+            FaceInfo(
+                id=r[0], photo_path=r[1],
+                bbox_x=r[2], bbox_y=r[3], bbox_w=r[4], bbox_h=r[5],
+                cluster_id=r[6], person_id=r[7],
+                ignored=bool(r[8]),
+                pinned=bool(r[9]),
+                detected_rotation=r[10],
+            )
+            for r in rows
+        ]
+
+    def get_faces_by_cluster(self, cluster_id: int) -> "list[FaceInfo]":
+        """Returns all FaceInfo for a given cluster_id."""
+        with self._lock:
+            conn = self._conn()
+            try:
+                rows = conn.execute(
+                    "SELECT f.id, f.photo_path, f.bbox_x, f.bbox_y, f.bbox_w, f.bbox_h,"
+                    "       f.cluster_id, f.person_id, f.ignored, f.pinned,"
+                    "       CASE WHEN f.embedding IS NULL THEN 0"
+                    "            ELSE COALESCE(ip.rotation, 0) END"
+                    " FROM faces f"
+                    " LEFT JOIN indexed_photos ip ON f.photo_path = ip.photo_path"
+                    " WHERE f.cluster_id=?"
+                    " ORDER BY f.photo_path, f.bbox_x",
+                    (cluster_id,),
                 ).fetchall()
             finally:
                 conn.close()
@@ -1131,6 +1202,87 @@ class FaceDatabase:
             finally:
                 conn.close()
 
+    def isolate_and_suggest(
+        self, face_ids: list[int], exclude_person_id: "int | None" = None
+    ) -> None:
+        """Isole chaque visage dans un cluster négatif unique (pinned=1, person_id=NULL)
+        et calcule une suggestion par similarité cosinus contre toutes les personnes connues,
+        en excluant optionnellement exclude_person_id (la personne qu'on vient de quitter).
+        Si le meilleur match atteint _SIM_SUGGEST, suggestion_person_id est enregistré."""
+        if not face_ids:
+            return
+
+        # 1. Isoler chaque visage et récupérer son embedding
+        face_embs: dict[int, list[float]] = {}  # new_cluster_id → embedding
+        with self._lock:
+            conn = self._conn()
+            try:
+                row = conn.execute(
+                    "SELECT MIN(cluster_id) FROM faces WHERE pinned=1"
+                ).fetchone()
+                next_cid = (min(row[0], 0) - 1) if row and row[0] is not None else -1
+
+                for face_id in face_ids:
+                    cid = next_cid
+                    next_cid -= 1
+                    conn.execute(
+                        "UPDATE faces SET cluster_id=?, pinned=1, person_id=NULL,"
+                        " suggestion_person_id=NULL, suggestion_score=NULL WHERE id=?",
+                        (cid, face_id),
+                    )
+                    emb_row = conn.execute(
+                        "SELECT embedding FROM faces WHERE id=?", (face_id,)
+                    ).fetchone()
+                    if emb_row and emb_row[0]:
+                        face_embs[cid] = _dec(emb_row[0])
+                conn.commit()
+            finally:
+                conn.close()
+
+        if not face_embs:
+            return
+
+        # 2. Récupérer les embeddings de toutes les personnes (hors exclude_person_id)
+        by_person: dict[int, list] = {}
+        with self._lock:
+            conn = self._conn()
+            try:
+                if exclude_person_id is not None:
+                    rows = conn.execute(
+                        "SELECT person_id, embedding FROM faces"
+                        " WHERE person_id IS NOT NULL AND person_id != ?"
+                        "   AND embedding IS NOT NULL",
+                        (exclude_person_id,),
+                    ).fetchall()
+                else:
+                    rows = conn.execute(
+                        "SELECT person_id, embedding FROM faces"
+                        " WHERE person_id IS NOT NULL AND embedding IS NOT NULL"
+                    ).fetchall()
+            finally:
+                conn.close()
+
+        for pid, blob in rows:
+            by_person.setdefault(pid, []).append(_dec(blob))
+
+        person_centroids = {pid: _centroid(embs) for pid, embs in by_person.items()}
+        if not person_centroids:
+            return
+
+        # 3. Pour chaque visage isolé, chercher la personne la plus similaire
+        suggestions: dict[int, tuple[int, float]] = {}
+        for cid, face_emb in face_embs.items():
+            best_sim, best_pid = 0.0, None
+            for pid, centroid in person_centroids.items():
+                sim = _cosine_sim(face_emb, centroid)
+                if sim > best_sim:
+                    best_sim, best_pid = sim, pid
+            if best_pid is not None and best_sim >= _SIM_SUGGEST:
+                suggestions[cid] = (best_pid, best_sim)
+
+        if suggestions:
+            self.set_cluster_suggestions(suggestions)
+
     def get_ignored_faces_for_photo(self, photo_path: str) -> list:
         """Return all FaceInfo with ignored=True for this photo."""
         photo_path = os.path.normpath(photo_path)
@@ -1140,7 +1292,8 @@ class FaceDatabase:
                 rows = conn.execute(
                     "SELECT f.id, f.photo_path, f.bbox_x, f.bbox_y, f.bbox_w, f.bbox_h,"
                     "       f.cluster_id, f.person_id, f.ignored, f.pinned,"
-                    "       COALESCE(ip.rotation, 0)"
+                    "       CASE WHEN f.embedding IS NULL THEN 0"
+                    "            ELSE COALESCE(ip.rotation, 0) END"
                     " FROM faces f"
                     " LEFT JOIN indexed_photos ip ON f.photo_path = ip.photo_path"
                     " WHERE f.photo_path=? AND f.ignored=1",
@@ -1241,7 +1394,8 @@ class FaceDatabase:
                 rep_rows = conn.execute(
                     "WITH ranked AS ("
                     "  SELECT f.person_id, f.photo_path, f.bbox_x, f.bbox_y, f.bbox_w, f.bbox_h,"
-                    "         COALESCE(ip.rotation, 0) AS detected_rotation,"
+                    "         CASE WHEN f.embedding IS NULL THEN 0"
+                    "              ELSE COALESCE(ip.rotation, 0) END AS detected_rotation,"
                     "         ROW_NUMBER() OVER ("
                     "           PARTITION BY f.person_id"
                     "           ORDER BY f.is_cover DESC, f.bbox_w * f.bbox_h DESC"
@@ -1312,6 +1466,46 @@ class FaceDatabase:
                     "     WHERE photo_path=? AND person_id IS NOT NULL AND embedding IS NOT NULL"
                     "   )",
                     (photo_path, photo_path),
+                )
+                # Consommer les annotations qui chevauchent spatialement une face ArcFace
+                # — couvre le cas où Picasa et InsightFace identifient le même visage
+                # physique sous des person_id différents (contacts Picasa ≠ cluster ArcFace).
+                _arcface = conn.execute(
+                    "SELECT bbox_x, bbox_y, bbox_w, bbox_h FROM faces"
+                    " WHERE photo_path=? AND embedding IS NOT NULL",
+                    (photo_path,),
+                ).fetchall()
+                if _arcface:
+                    _pending = conn.execute(
+                        "SELECT id, bbox_x, bbox_y, bbox_w, bbox_h"
+                        " FROM picasa_annotations"
+                        " WHERE photo_path=? AND consumed=0",
+                        (photo_path,),
+                    ).fetchall()
+                    for _aid, ax, ay, aw, ah in _pending:
+                        _cx_p, _cy_p = ax + aw // 2, ay + ah // 2
+                        for fx, fy, fw, fh in _arcface:
+                            try:
+                                fx, fy, fw, fh = int(fx), int(fy), int(fw), int(fh)
+                            except (TypeError, ValueError):
+                                continue
+                            _cx_f, _cy_f = fx + fw // 2, fy + fh // 2
+                            if (
+                                (ax <= _cx_f <= ax + aw and ay <= _cy_f <= ay + ah)
+                                or (fx <= _cx_p <= fx + fw and fy <= _cy_p <= fy + fh)
+                                or _iou((ax, ay, aw, ah), (fx, fy, fw, fh)) > 0.3
+                            ):
+                                conn.execute(
+                                    "UPDATE picasa_annotations SET consumed=1 WHERE id=?",
+                                    (_aid,),
+                                )
+                                break
+                # Supprimer les anciens placeholders Picasa (embedding IS NULL, non épinglés)
+                # avant d'en créer de nouveaux — évite les doublons lors d'un re-import.
+                conn.execute(
+                    "DELETE FROM faces"
+                    " WHERE photo_path=? AND embedding IS NULL AND (pinned IS NULL OR pinned=0)",
+                    (photo_path,),
                 )
                 # Insérer des placeholders (sans embedding) pour les annotations non
                 # consommées, que la photo ait été détectée ou non par InsightFace.
@@ -1422,6 +1616,95 @@ class FaceDatabase:
                 conn.commit()
             finally:
                 conn.close()
+
+    def cleanup_overlapping_placeholders(self) -> int:
+        """Supprime les faces placeholder (embedding IS NULL, non épinglées) qui chevauchent
+        spatialement une face ArcFace (embedding IS NOT NULL) sur la même photo.
+
+        Utile après un ré-import Picasa pour éliminer les doublons existants avant
+        que le critère person_id ne les ait couverts (ex. : contacts Picasa ≠ cluster ArcFace).
+        Retourne le nombre de faces supprimées."""
+        deleted = 0
+        with self._lock:
+            conn = self._conn()
+            try:
+                photos = conn.execute(
+                    "SELECT DISTINCT f1.photo_path FROM faces f1"
+                    " JOIN faces f2 ON f1.photo_path = f2.photo_path"
+                    " WHERE f1.embedding IS NOT NULL"
+                    "   AND f2.embedding IS NULL AND (f2.pinned IS NULL OR f2.pinned=0)"
+                ).fetchall()
+                for (photo_path,) in photos:
+                    af_rows = conn.execute(
+                        "SELECT bbox_x, bbox_y, bbox_w, bbox_h FROM faces"
+                        " WHERE photo_path=? AND embedding IS NOT NULL",
+                        (photo_path,),
+                    ).fetchall()
+                    ph_rows = conn.execute(
+                        "SELECT id, bbox_x, bbox_y, bbox_w, bbox_h FROM faces"
+                        " WHERE photo_path=? AND embedding IS NULL"
+                        "   AND (pinned IS NULL OR pinned=0)",
+                        (photo_path,),
+                    ).fetchall()
+                    for ph_id, ax, ay, aw, ah in ph_rows:
+                        cx_p, cy_p = ax + aw // 2, ay + ah // 2
+                        for fx, fy, fw, fh in af_rows:
+                            try:
+                                fx, fy, fw, fh = int(fx), int(fy), int(fw), int(fh)
+                            except (TypeError, ValueError):
+                                continue
+                            cx_f, cy_f = fx + fw // 2, fy + fh // 2
+                            if (
+                                (ax <= cx_f <= ax + aw and ay <= cy_f <= ay + ah)
+                                or (fx <= cx_p <= fx + fw and fy <= cy_p <= fy + fh)
+                                or _iou((ax, ay, aw, ah), (fx, fy, fw, fh)) > 0.3
+                            ):
+                                conn.execute("DELETE FROM faces WHERE id=?", (ph_id,))
+                                deleted += 1
+                                break
+                if deleted:
+                    conn.commit()
+            finally:
+                conn.close()
+        if deleted:
+            logger.info(
+                "cleanup_overlapping_placeholders: %d placeholder(s) supprimé(s)", deleted
+            )
+        return deleted
+
+    def cleanup_stale_placeholder_faces(self) -> int:
+        """Supprime les faces placeholder (embedding IS NULL, non épinglées) dont le
+        person_id ne correspond à aucune annotation Picasa actuelle pour la même photo.
+
+        Ces résidus apparaissent quand un ré-import Picasa a changé les person_id
+        (ex. : après reset du catalogue), laissant d'anciens placeholders à des
+        positions invalides. Retourne le nombre de faces supprimées."""
+        with self._lock:
+            conn = self._conn()
+            try:
+                n = conn.execute(
+                    "DELETE FROM faces"
+                    " WHERE embedding IS NULL"
+                    "   AND (pinned IS NULL OR pinned=0)"
+                    "   AND person_id IS NOT NULL"
+                    "   AND EXISTS ("
+                    "     SELECT 1 FROM picasa_annotations pa"
+                    "     WHERE pa.photo_path = faces.photo_path"
+                    "   )"
+                    "   AND person_id NOT IN ("
+                    "     SELECT pa2.person_id FROM picasa_annotations pa2"
+                    "     WHERE pa2.photo_path = faces.photo_path"
+                    "   )"
+                ).rowcount
+                if n:
+                    conn.commit()
+            finally:
+                conn.close()
+        if n:
+            logger.info(
+                "cleanup_stale_placeholder_faces: %d placeholder(s) orphelin(s) supprimé(s)", n
+            )
+        return n
 
     # Préfixe des cluster_id synthétiques pour les faces déjà identifiées.
     # Valeur choisie bien au-dessus du max réaliste d'HDBSCAN (~175 K faces max).
