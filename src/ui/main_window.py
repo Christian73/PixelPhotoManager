@@ -318,6 +318,19 @@ class _PersonsRefreshThread(QThread):
             self.result_ready.emit([], 0)
 
 
+class _ResuggestThread(QThread):
+    """Recalcule les suggestions après le rejet d'un cluster, dans un thread secondaire."""
+
+    def __init__(self, face_db, cluster_ids: list, exclude_pid, parent=None) -> None:
+        super().__init__(parent)
+        self._face_db = face_db
+        self._cluster_ids = cluster_ids
+        self._exclude_pid = exclude_pid
+
+    def run(self) -> None:
+        self._face_db.resuggest_clusters(self._cluster_ids, self._exclude_pid)
+
+
 class _ResetWorkerThread(QThread):
     """
     Attend l'arrêt des threads d'indexation/clustering en cours,
@@ -1982,9 +1995,15 @@ class MainWindow(QMainWindow):
 
     @Slot(int)
     def _on_suggestion_rejected(self, cluster_id: int) -> None:
-        """Suggestion refusée : retire uniquement la vignette concernée."""
-        self._face_db.clear_cluster_suggestion(cluster_id)
+        """Suggestion refusée : retire la vignette et recalcule la suggestion suivante."""
+        person = self._person_cluster_view.current_person
+        exclude_pid = person.id if person else None
+        # UI immédiat
         self._person_cluster_view.remove_pending_cluster(cluster_id)
+        # Vide la suggestion et recalcule la meilleure personne restante en arrière-plan
+        t = _ResuggestThread(self._face_db, [cluster_id], exclude_pid, self)
+        t.finished.connect(t.deleteLater)
+        t.start()
 
     @Slot(list)
     def _on_all_suggestions_accepted(self, cluster_ids: list) -> None:
@@ -1999,9 +2018,14 @@ class MainWindow(QMainWindow):
     @Slot(list)
     def _on_all_suggestions_rejected(self, cluster_ids: list) -> None:
         """Toutes les suggestions refusées d'un coup."""
-        for cid in cluster_ids:
-            self._face_db.clear_cluster_suggestion(cid)
+        person = self._person_cluster_view.current_person
+        exclude_pid = person.id if person else None
+        # UI immédiat
         self._person_cluster_view.clear_all_pending()
+        # Recalcule les suggestions pour toutes les autres personnes en arrière-plan
+        t = _ResuggestThread(self._face_db, list(cluster_ids), exclude_pid, self)
+        t.finished.connect(t.deleteLater)
+        t.start()
 
     def show_viewer(self, photo: PhotoInfo) -> None:
         is_video = photo.media_type == "video"

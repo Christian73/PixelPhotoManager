@@ -520,6 +520,85 @@ class FaceDatabase:
             finally:
                 conn.close()
 
+    def resuggest_clusters(
+        self, cluster_ids: "list[int]", exclude_person_id: "int | None" = None
+    ) -> None:
+        """Vide les suggestions des clusters donnés et recalcule la meilleure personne pour chacun.
+
+        Appelé après un rejet pour que les faces isolées puissent être proposées
+        à une autre personne (hors exclude_person_id).
+        """
+        if not cluster_ids:
+            return
+
+        # 1. Vider les suggestions et récupérer les embeddings par cluster
+        cid_to_embs: "dict[int, list]" = {}
+        with self._lock:
+            conn = self._conn()
+            try:
+                placeholders = ",".join("?" * len(cluster_ids))
+                conn.execute(
+                    f"UPDATE faces SET suggestion_person_id=NULL, suggestion_score=NULL"
+                    f" WHERE cluster_id IN ({placeholders})",
+                    cluster_ids,
+                )
+                conn.commit()
+                for cid in cluster_ids:
+                    rows = conn.execute(
+                        "SELECT embedding FROM faces WHERE cluster_id=? AND embedding IS NOT NULL",
+                        (cid,),
+                    ).fetchall()
+                    embs = [_dec(r[0]) for r in rows]
+                    if embs:
+                        cid_to_embs[cid] = embs
+            finally:
+                conn.close()
+
+        if not cid_to_embs:
+            return
+
+        # 2. Charger les embeddings de toutes les personnes (hors exclu)
+        by_person: "dict[int, list]" = {}
+        with self._lock:
+            conn = self._conn()
+            try:
+                if exclude_person_id is not None:
+                    pers_rows = conn.execute(
+                        "SELECT person_id, embedding FROM faces"
+                        " WHERE person_id IS NOT NULL AND person_id != ?"
+                        "   AND embedding IS NOT NULL",
+                        (exclude_person_id,),
+                    ).fetchall()
+                else:
+                    pers_rows = conn.execute(
+                        "SELECT person_id, embedding FROM faces"
+                        " WHERE person_id IS NOT NULL AND embedding IS NOT NULL"
+                    ).fetchall()
+            finally:
+                conn.close()
+
+        for pid, blob in pers_rows:
+            by_person.setdefault(pid, []).append(_dec(blob))
+
+        person_centroids = {pid: _centroid(embs) for pid, embs in by_person.items()}
+        if not person_centroids:
+            return
+
+        # 3. Pour chaque cluster, calculer le centroid et trouver la meilleure personne
+        suggestions: "dict[int, tuple[int, float]]" = {}
+        for cid, face_embs in cid_to_embs.items():
+            cluster_centroid = _centroid(face_embs)
+            best_sim, best_pid = 0.0, None
+            for pid, centroid in person_centroids.items():
+                sim = _cosine_sim(cluster_centroid, centroid)
+                if sim > best_sim:
+                    best_sim, best_pid = sim, pid
+            if best_pid is not None and best_sim >= _SIM_SUGGEST:
+                suggestions[cid] = (best_pid, best_sim)
+
+        if suggestions:
+            self.set_cluster_suggestions(suggestions)
+
     def accept_cluster_suggestion(self, cluster_id: int) -> None:
         """Confirm a pending suggestion: assign the suggested person and clear the flag."""
         with self._lock:

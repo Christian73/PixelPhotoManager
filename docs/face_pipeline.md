@@ -214,15 +214,25 @@ Ce visage est désormais **isolé** : ni le clustering ni la propagation ne le t
 ### 4c. Rejeter une suggestion
 
 ```
-Clic ✗ sur la carte de groupe
+Clic ✗ sur la vignette (ou bouton de la carte)
         │
-        ▼
-clear_cluster_suggestion(cluster_id)
-   → suggestion_person_id = NULL
-   → suggestion_score = NULL
+        ▼  (immédiat — UI)
+PersonClusterView.remove_pending_cluster(cluster_id)
+   → retire la vignette de la section « En attente »
+
+        │
+        ▼  (arrière-plan — _ResuggestThread)
+FaceDatabase.resuggest_clusters([cluster_id], exclude_person_id=personne_courante)
+   → suggestion_person_id = NULL  (rejet enregistré)
+   → charge les centroids de toutes les autres personnes
+   → calcule la similarité cosinus contre le cluster
+   → si score ≥ 0.50 → enregistre la nouvelle suggestion_person_id
+                       → apparaîtra dans « En attente » de la prochaine personne
 ```
 
-Le cluster retourne dans la liste des clusters sans nom.
+La face rejetée **n'est pas perdue** : elle est immédiatement réévaluée pour les
+autres personnes. Si la similarité est suffisante, elle apparaîtra dans les
+suggestions d'une autre personne lors de sa prochaine ouverture.
 
 ---
 
@@ -263,6 +273,8 @@ Le cluster retourne dans la liste des clusters sans nom.
 
 ## Dé-association et réallocation
 
+### Dé-association depuis la section confirmée
+
 Lorsque l'utilisateur **dé-associe** un visage d'une personne depuis `PersonClusterView` :
 
 ```
@@ -279,11 +291,34 @@ isolate_and_suggest(face_ids, exclude_person_id=personne_courante)
                   │                  → apparaît dans « En attente »
                   │                    de la personne suggérée
                   │
-                  └─ score < 0.50 → aucune suggestion
-                                    → retourne dans les clusters sans nom
+                  └─ score < 0.50 → aucune suggestion (face toujours isolée)
 ```
 
-La personne d'origine est **exclue** du calcul pour ne pas proposer immédiatement de réassigner le visage à la même personne.
+La personne d'origine est **exclue** du calcul pour ne pas proposer immédiatement
+de réassigner le visage à la même personne.
+
+### Rejet d'une suggestion en attente
+
+Lorsque l'utilisateur **rejette** une suggestion depuis la section « En attente » :
+
+```
+suggestion_rejected.emit(cluster_id)
+        │
+        ▼  (thread _ResuggestThread)
+resuggest_clusters([cluster_id], exclude_person_id=personne_courante)
+        │
+        ├─► suggestion_person_id = NULL (rejet enregistré)
+        │
+        └─► similarité cosinus vs toutes les autres personnes (hors personne courante)
+                  │
+                  ├─ score ≥ 0.50 → nouvelle suggestion_person_id
+                  │                  → visible dans la prochaine personne concernée
+                  │
+                  └─ score < 0.50 → aucune suggestion (face toujours isolée, pinned=1)
+```
+
+La face reste **isolée** (pinned=1, cluster_id < 0) dans les deux cas — seule la
+suggestion change. Elle n'est jamais perdue dans les clusters sans nom.
 
 ---
 

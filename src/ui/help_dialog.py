@@ -254,8 +254,38 @@ _TAB_FACES = _STYLE + """
 <h3>Gérer les personnes</h3>
 <ul>
   <li>Les personnes nommées apparaissent dans la barre latérale sous <b>Personnes</b>.</li>
-  <li>Cliquez sur une personne pour voir toutes ses photos.</li>
+  <li>Un badge numérique entre la photo et le nom indique le nombre de suggestions en attente.</li>
+  <li>Cliquez sur une personne pour voir toutes ses photos et ses suggestions.</li>
   <li>Dans la visionneuse, le panneau <b>Visages</b> liste les visages de la photo ouverte.</li>
+</ul>
+
+<h3>Suggestions en attente de vérification</h3>
+<p>La section <b>En attente de vérification</b> dans la vue d'une personne liste les groupes de
+visages que le système pense lui appartenir.</p>
+<ul>
+  <li>Survolez une vignette pour faire apparaître les boutons <b>✓</b> (accepter) et <b>✗</b> (rejeter).</li>
+  <li><b>Accepter</b> — assigne définitivement ces visages à la personne.</li>
+  <li><b>Rejeter</b> — retire la suggestion. Les visages sont immédiatement réévalués en
+      arrière-plan pour d'autres personnes : si la ressemblance est suffisante, ils
+      apparaîtront dans les suggestions d'une autre personne.</li>
+</ul>
+<p class="tip">Un visage rejeté n'est jamais perdu : il reste isolé et continue d'être
+candidat à une suggestion pour une autre personne.</p>
+
+<h3>Dé-associer un visage</h3>
+<ul>
+  <li>Clic droit sur un visage confirmé → <b>Dissocier</b> — retire le visage de la personne.</li>
+  <li>Le visage est isolé et immédiatement évalué pour d'autres personnes (hors personne d'origine).</li>
+  <li>Si la ressemblance est suffisante (≥ 50 %), il apparaîtra dans les suggestions
+      d'une autre personne.</li>
+</ul>
+
+<h3>Sauvegarde et restauration</h3>
+<ul>
+  <li><b>Visages › Sauvegarder la reconnaissance…</b> — crée une sauvegarde horodatée
+      de la base de données des visages.</li>
+  <li><b>Visages › Restaurer une sauvegarde…</b> — liste les sauvegardes disponibles
+      et permet d'en restaurer une (l'état courant est automatiquement sauvegardé avant).</li>
 </ul>
 
 <h3>Visages ignorés</h3>
