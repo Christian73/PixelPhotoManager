@@ -130,6 +130,10 @@ class FaceDatabase:
                     "CREATE INDEX IF NOT EXISTS idx_faces_person   ON faces(person_id)"
                 )
                 conn.execute(
+                    "CREATE INDEX IF NOT EXISTS idx_faces_cluster_person"
+                    " ON faces(cluster_id, person_id)"
+                )
+                conn.execute(
                     "CREATE INDEX IF NOT EXISTS idx_picasa_photo   ON picasa_annotations(photo_path)"
                 )
                 # Migrations : ajouter les colonnes manquantes
@@ -153,6 +157,10 @@ class FaceDatabase:
                 if "suggestion_score" not in cols:
                     conn.execute(
                         "ALTER TABLE faces ADD COLUMN suggestion_score REAL DEFAULT NULL"
+                    )
+                if "det_score" not in cols:
+                    conn.execute(
+                        "ALTER TABLE faces ADD COLUMN det_score REAL DEFAULT 1.0"
                     )
                 # Migration indexed_photos
                 ip_cols = {r[1] for r in conn.execute("PRAGMA table_info(indexed_photos)")}
@@ -214,16 +222,23 @@ class FaceDatabase:
     # Seuils d'auto-ignorance pour les faces de mauvaise qualité.
     # En dessous de ces valeurs, la face est sauvegardée avec ignored=1 :
     # elle reste visible dans l'interface mais ne participe pas au clustering.
-    _AUTO_IGNORE_MIN_SIDE  = 121   # pixels — plus petite dimension de la bbox
-    _AUTO_IGNORE_MIN_SCORE = 0.65  # score de détection InsightFace (0–1)
+    _AUTO_IGNORE_MIN_SIDE_RATIO    = 0.04  # 4 % — seuil de base (aucun visage au premier plan)
+    _AUTO_IGNORE_MIN_SIDE_FG_RATIO = 0.20  # 20 % — seuil pour qualifier un visage de "grand"
+    _AUTO_IGNORE_MIN_SIDE_ABS      = 30    # plancher absolu (px) pour les très petites images
+    _AUTO_IGNORE_MIN_SIDE          = 121   # fallback si les dimensions sont illisibles
+    _AUTO_IGNORE_MIN_SCORE         = 0.65  # score de détection InsightFace (0–1)
 
     def save_faces(self, photo_path: str, detections: list[dict], rotation: int = 0) -> None:
         """
         Persist detected faces for a photo.
         detections: list of {'bbox': (x,y,w,h), 'embedding': list[float], 'det_score': float}
         rotation: CW degrees applied during detection (stored to reconstruct face crops).
-        Faces with min(w,h) < _AUTO_IGNORE_MIN_SIDE or det_score < _AUTO_IGNORE_MIN_SCORE
-        are saved with ignored=1.
+        Faces with min(w,h) < effective threshold or det_score < _AUTO_IGNORE_MIN_SCORE
+        are saved with ignored=1. The size threshold is proportional to the image:
+        base = max(ABS, short_side * 4 %) ; fg = max(base*2, short_side * 12 %).
+        If any face reaches fg, the effective threshold is fg (small faces ignored).
+        Otherwise (all faces small — old scanned photo, distant group) base is used.
+        Fallback to _AUTO_IGNORE_MIN_SIDE if image dimensions cannot be read.
         """
         photo_path = os.path.normpath(photo_path)
         with self._lock:
@@ -240,20 +255,48 @@ class FaceDatabase:
                     "UPDATE picasa_annotations SET consumed=0 WHERE photo_path=?",
                     (photo_path,)
                 )
+                # Seuils proportionnels à la résolution de l'image.
+                # Si un visage atteint le seuil "premier plan" (12 %), on relève la
+                # barre pour tous : les petits visages sont alors ignorés.
+                # Sinon (vieille photo scannée, groupe distant…), on utilise le
+                # seuil de base (4 %) pour ne pas perdre de visages légitimes.
+                try:
+                    from PIL import Image as _PILImage
+                    with _PILImage.open(photo_path) as _img:
+                        _iw, _ih = _img.size
+                    _shortest = min(_iw, _ih)
+                    _base_threshold = max(
+                        self._AUTO_IGNORE_MIN_SIDE_ABS,
+                        int(_shortest * self._AUTO_IGNORE_MIN_SIDE_RATIO),
+                    )
+                    _fg_threshold = max(
+                        _base_threshold * 2,
+                        int(_shortest * self._AUTO_IGNORE_MIN_SIDE_FG_RATIO),
+                    )
+                except Exception:
+                    _base_threshold = self._AUTO_IGNORE_MIN_SIDE
+                    _fg_threshold   = self._AUTO_IGNORE_MIN_SIDE
+                has_foreground = any(
+                    min(int(d["bbox"][2]), int(d["bbox"][3])) >= _fg_threshold
+                    for d in detections
+                )
+                effective_min_side = _fg_threshold if has_foreground else _base_threshold
                 for det in detections:
                     x, y, w, h = (int(v) for v in det["bbox"])
                     emb = det.get("embedding")
                     blob = _enc(emb) if emb else None
                     score = det.get("det_score", 1.0)
                     low_quality = (
-                        min(w, h) < self._AUTO_IGNORE_MIN_SIDE
+                        min(w, h) < effective_min_side
                         or score < self._AUTO_IGNORE_MIN_SCORE
                     )
                     conn.execute(
                         "INSERT INTO faces"
-                        " (photo_path, bbox_x, bbox_y, bbox_w, bbox_h, embedding, ignored)"
-                        " VALUES (?,?,?,?,?,?,?)",
-                        (photo_path, x, y, w, h, blob, 1 if low_quality else 0),
+                        " (photo_path, bbox_x, bbox_y, bbox_w, bbox_h,"
+                        "  embedding, ignored, det_score)"
+                        " VALUES (?,?,?,?,?,?,?,?)",
+                        (photo_path, x, y, w, h, blob,
+                         1 if low_quality else 0, score),
                     )
                 conn.execute(
                     "INSERT OR REPLACE INTO indexed_photos"
@@ -1249,6 +1292,93 @@ class FaceDatabase:
             finally:
                 conn.close()
 
+    def recalculate_size_ignored(
+        self, progress_cb=None
+    ) -> tuple[int, int]:
+        """Re-evaluate faces auto-ignored by size using the current proportional threshold.
+
+        Only candidates with ignored=1, embedding IS NOT NULL, and det_score >= threshold
+        are reconsidered — manually-ignored faces (user ✕ action) that lack a det_score
+        or score too low are left untouched.
+        Does NOT re-run InsightFace detection.
+        Returns (unignored_count, photos_evaluated).
+        """
+        from PIL import Image as _PILImage
+
+        with self._lock:
+            conn = self._conn()
+            try:
+                rows = conn.execute(
+                    "SELECT DISTINCT photo_path FROM faces"
+                    " WHERE ignored=1 AND embedding IS NOT NULL"
+                    "   AND (det_score IS NULL OR det_score >= ?)",
+                    (self._AUTO_IGNORE_MIN_SCORE,),
+                ).fetchall()
+            finally:
+                conn.close()
+
+        photos = [r[0] for r in rows]
+        total = len(photos)
+        unignored = 0
+
+        for i, photo_path in enumerate(photos):
+            if progress_cb:
+                progress_cb(i, total)
+            if not os.path.exists(photo_path):
+                continue
+
+            # Proportional thresholds (read only the image header)
+            try:
+                with _PILImage.open(photo_path) as _img:
+                    _iw, _ih = _img.size
+                _shortest = min(_iw, _ih)
+                _base = max(
+                    self._AUTO_IGNORE_MIN_SIDE_ABS,
+                    int(_shortest * self._AUTO_IGNORE_MIN_SIDE_RATIO),
+                )
+                _fg = max(
+                    _base * 2,
+                    int(_shortest * self._AUTO_IGNORE_MIN_SIDE_FG_RATIO),
+                )
+            except Exception:
+                _base = self._AUTO_IGNORE_MIN_SIDE
+                _fg   = self._AUTO_IGNORE_MIN_SIDE
+
+            with self._lock:
+                conn = self._conn()
+                try:
+                    all_faces = conn.execute(
+                        "SELECT id, bbox_w, bbox_h, ignored, det_score, embedding"
+                        " FROM faces WHERE photo_path=?",
+                        (photo_path,),
+                    ).fetchall()
+
+                    has_foreground = any(
+                        min(r[1], r[2]) >= _fg for r in all_faces
+                    )
+                    effective = _fg if has_foreground else _base
+
+                    for fid, bw, bh, is_ignored, score, emb in all_faces:
+                        if (is_ignored == 1
+                                and emb is not None
+                                and (score is None or score >= self._AUTO_IGNORE_MIN_SCORE)
+                                and min(bw, bh) >= effective):
+                            conn.execute(
+                                "UPDATE faces SET ignored=0 WHERE id=?", (fid,)
+                            )
+                            unignored += 1
+                    conn.commit()
+                except Exception as exc:
+                    logger.warning(
+                        "recalculate_size_ignored: erreur %s : %s", photo_path, exc
+                    )
+                finally:
+                    conn.close()
+
+        if progress_cb:
+            progress_cb(total, total)
+        return unignored, total
+
     def ignore_face(self, face_id: int) -> None:
         """Mark a single face as ignored."""
         with self._lock:
@@ -1448,6 +1578,20 @@ class FaceDatabase:
                 conn.commit()
             finally:
                 conn.close()
+
+    def get_person_photo_count(self, person_id: int) -> int:
+        """Count distinct photos where person_id has a face. Fast single query."""
+        with self._lock:
+            conn = self._conn()
+            try:
+                row = conn.execute(
+                    "SELECT COUNT(DISTINCT photo_path) FROM faces"
+                    " WHERE person_id=? AND cluster_id IS NOT NULL",
+                    (person_id,),
+                ).fetchone()
+            finally:
+                conn.close()
+        return row[0] if row else 0
 
     # ------------------------------------------------------------------ enrichment
 
