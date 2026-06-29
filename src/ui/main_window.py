@@ -26,7 +26,7 @@ from src.library.folder_watcher import FolderWatcher
 from src.library.scanner import LibraryScanner
 from src.library.duplicate_detector import DuplicateDetectorThread, generate_html_report
 from src.faces.face_database import FaceDatabase
-from src.faces.face_indexer import FaceIndexThread, SingleFaceReindexThread, TFWarmUpThread, RevaluateSizeIgnoredThread
+from src.faces.face_indexer import FaceIndexThread, SingleFaceReindexThread, TFWarmUpThread, RevaluateSizeIgnoredThread, SimilaritySearchThread
 from src.faces.clusterer import ClusterThread
 from src.processing.edit_database import EditDatabase
 from src.ui.sidebar import Sidebar, _SPECIAL_ALL, _SPECIAL_FAV, _SPECIAL_VIDEOS, _SPECIAL_FILENAME
@@ -727,6 +727,11 @@ class MainWindow(QMainWindow):
         self._act_cluster_faces = QAction("Regrouper les visages…", self)
         self._act_cluster_faces.triggered.connect(self._start_clustering_with_confirm)
         m_faces.addAction(self._act_cluster_faces)
+        self._act_similarity_search = QAction(
+            "Rechercher des visages similaires aux personnes nommées…", self
+        )
+        self._act_similarity_search.triggered.connect(self._start_similarity_search)
+        m_faces.addAction(self._act_similarity_search)
         m_faces.addSeparator()
         act_identify = QAction("Identifier les personnes…", self)
         act_identify.triggered.connect(self.show_face_clusters)
@@ -898,6 +903,8 @@ class MainWindow(QMainWindow):
         self._grid.delete_requested.connect(self._on_delete_requested)
         self._grid.save_requested.connect(self._on_save_requested)
         self._grid.duplicate_clicked.connect(self._on_duplicate_badge_clicked)
+        self._grid.add_to_album_requested.connect(self._on_add_to_album)
+        self._grid.create_album_with_requested.connect(self._on_create_album_with)
 
         self._grid_nav_bar = QWidget()
         self._grid_nav_bar.setStyleSheet("background: rgba(0,0,0,200);")
@@ -1024,6 +1031,8 @@ class MainWindow(QMainWindow):
         self._person_cluster_view.suggestion_rejected.connect(self._on_suggestion_rejected)
         self._person_cluster_view.all_suggestions_accepted.connect(self._on_all_suggestions_accepted)
         self._person_cluster_view.all_suggestions_rejected.connect(self._on_all_suggestions_rejected)
+        self._person_cluster_view.add_to_album_requested.connect(self._on_add_to_album)
+        self._person_cluster_view.create_album_with_requested.connect(self._on_create_album_with)
         self._stack.addWidget(self._person_cluster_view)
 
         # Connexions sidebar
@@ -1155,11 +1164,17 @@ class MainWindow(QMainWindow):
 
         if vtype == "folder":
             path = saved.get("value", "")
-            folder_set = set(os.path.normcase(f) for f in folders)
-            if path and os.path.isdir(path) and os.path.normcase(path) in folder_set:
-                self._on_folder_selected(path)
-                self._sidebar.select_folder_item(path)
-                return
+            if path and os.path.isdir(path):
+                norm_path = os.path.normcase(path)
+                is_under_scan = any(
+                    norm_path == os.path.normcase(f)
+                    or norm_path.startswith(os.path.normcase(f) + os.sep)
+                    for f in folders
+                )
+                if is_under_scan:
+                    self._on_folder_selected(path)
+                    self._sidebar.select_folder_item(path)
+                    return
         elif vtype == "favorites":
             self._on_album_selected(_SPECIAL_FAV)
             self._sidebar.select_album_item(_SPECIAL_FAV)
@@ -1390,8 +1405,8 @@ class MainWindow(QMainWindow):
         dlg.setText("<b>Reconsidérer les visages ignorés automatiquement par taille</b>")
         dlg.setInformativeText(
             "Le seuil de taille est maintenant <b>proportionnel à la résolution</b> de chaque photo "
-            "(4 % de la plus petite dimension, plancher 30 px). "
-            "Une photo scannée de 545 px donne un seuil de ~30 px ; "
+            "(3 % de la plus petite dimension, plancher 22 px). "
+            "Une photo scannée de 545 px donne un seuil de ~22 px ; "
             "une photo moderne de 3 000 px donne ~120 px.<br><br>"
             "<b>Ce que cette option fait :</b><br>"
             "• Relit les dimensions de chaque photo ayant des visages ignorés.<br>"
@@ -1444,6 +1459,79 @@ class MainWindow(QMainWindow):
                 "Ré-évaluation terminée",
                 f"{unignored} visage(s) précédemment ignoré(s) ont été restaurés.\n\n"
                 "Lancez « Regrouper les visages… » pour les intégrer au clustering.",
+            )
+
+    def _start_similarity_search(self) -> None:
+        """Lance la recherche de visages similaires aux personnes nommées."""
+        if hasattr(self, "_similarity_thread") and self._similarity_thread.isRunning():
+            return
+
+        dlg = QMessageBox(self)
+        dlg.setWindowTitle("Rechercher des visages similaires")
+        dlg.setIcon(QMessageBox.Icon.Information)
+        dlg.setText("<b>Comparer les visages non identifiés aux personnes nommées</b>")
+        dlg.setInformativeText(
+            "<b>Ce que cette option fait :</b><br>"
+            "• Calcule le centroïde (embedding moyen) de chaque groupe de visages non identifié.<br>"
+            "• Compare chaque centroïde à ceux de toutes les personnes nommées.<br>"
+            "• Si la similarité cosinus ≥ 50 %, crée une suggestion visible dans la vue "
+            "de la personne concernée (section « En attente de vérification »).<br><br>"
+            "<b>Ce que cette option ne fait PAS :</b><br>"
+            "• Ne relance pas InsightFace — aucune nouvelle détection.<br>"
+            "• Ne confirme pas automatiquement les identités : vous restez maître de l'acceptation.<br>"
+            "• N'affecte pas les visages déjà identifiés ou déjà en attente de suggestion.<br>"
+            "• Ne traite pas les visages isolés par HDBSCAN (sans groupe)."
+        )
+        dlg.setStandardButtons(QMessageBox.StandardButton.Ok | QMessageBox.StandardButton.Cancel)
+        dlg.setDefaultButton(QMessageBox.StandardButton.Ok)
+        if dlg.exec() != QMessageBox.StandardButton.Ok:
+            return
+
+        self._act_similarity_search.setEnabled(False)
+        self._act_similarity_search.setText("Recherche en cours…")
+        self._sb_progress_bar.setRange(0, 0)
+        self._sb_progress_bar.show()
+        self._lbl_action.setText("Recherche de visages similaires…")
+        self._similarity_thread = SimilaritySearchThread(self._face_db, self)
+        self._similarity_thread.progress.connect(self._on_similarity_progress)
+        self._similarity_thread.finished.connect(self._on_similarity_finished)
+        self._similarity_thread.start()
+
+    def _on_similarity_progress(self, current: int, total: int) -> None:
+        self._sb_progress_bar.setRange(0, max(total, 1))
+        self._sb_progress_bar.setValue(current)
+        self._lbl_action.setText(f"Recherche similarité… {current} / {total} groupes")
+
+    def _on_similarity_finished(self, made: int, total: int) -> None:
+        self._sb_progress_bar.hide()
+        self._sb_progress_bar.setValue(0)
+        self._lbl_action.setText("")
+        self._act_similarity_search.setEnabled(True)
+        self._act_similarity_search.setText(
+            "Rechercher des visages similaires aux personnes nommées…"
+        )
+        self._status_bar.showMessage(
+            f"Recherche terminée : {made} suggestion(s) créée(s) sur {total} groupe(s) vérifiés.",
+            8000,
+        )
+        if made > 0:
+            # Rafraîchir la vue personne si elle est visible
+            if self._stack.currentWidget() is self._person_cluster_view:
+                self._person_cluster_view.refresh()
+            QMessageBox.information(
+                self,
+                "Recherche terminée",
+                f"{made} groupe(s) de visages ont été rapprochés d'une personne nommée.\n\n"
+                "Ouvrez chaque personne pour accepter ou rejeter les suggestions "
+                "dans la section « En attente de vérification ».",
+            )
+        else:
+            QMessageBox.information(
+                self,
+                "Recherche terminée",
+                f"Aucun groupe similaire trouvé parmi les {total} groupe(s) non identifiés.\n\n"
+                "Vous pouvez abaisser le seuil de similarité dans les paramètres, "
+                "ou lancer d'abord « Regrouper les visages… » pour former de nouveaux groupes.",
             )
 
     def _start_face_indexing(self, silent: bool = False) -> None:
@@ -2353,6 +2441,62 @@ class MainWindow(QMainWindow):
         album = self._catalog.create_album(name)
         albums = self._catalog.get_albums()
         self._sidebar.refresh_albums(albums)
+
+    def _on_add_to_album(self, photos: list) -> None:
+        albums = self._catalog.get_albums()
+        if not albums:
+            QMessageBox.information(
+                self, "Ajouter à un album",
+                "Aucun album existant.\nCréez d'abord un album via le panneau Albums."
+            )
+            return
+        dlg = QDialog(self)
+        dlg.setWindowTitle("Ajouter à un album")
+        dlg.setMinimumWidth(320)
+        layout = QVBoxLayout(dlg)
+        n = len(photos)
+        layout.addWidget(QLabel(f"Choisissez l'album pour {n} photo(s) :"))
+        lst = QListWidget(dlg)
+        for album in albums:
+            lst.addItem(f"{album.name}  ({album.photo_count} photo(s))")
+        lst.setCurrentRow(0)
+        lst.itemDoubleClicked.connect(dlg.accept)
+        btns = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        btns.accepted.connect(dlg.accept)
+        btns.rejected.connect(dlg.reject)
+        layout.addWidget(lst)
+        layout.addWidget(btns)
+        if dlg.exec() != QDialog.Accepted or lst.currentRow() < 0:
+            return
+        album = albums[lst.currentRow()]
+        added = 0
+        for photo in photos:
+            if photo.id is not None:
+                self._catalog.add_photo_to_album(album.id, photo.id)
+                added += 1
+        self._sidebar.refresh_albums(self._catalog.get_albums())
+        self.statusBar().showMessage(
+            f"{added} photo(s) ajoutée(s) à « {album.name} »", 4000
+        )
+
+    def _on_create_album_with(self, photos: list) -> None:
+        n = len(photos)
+        name, ok = QInputDialog.getText(
+            self, "Nouvel album",
+            f"Nom du nouvel album ({n} photo(s) sélectionnée(s)) :"
+        )
+        if not ok or not name.strip():
+            return
+        album = self._catalog.create_album(name.strip())
+        added = 0
+        for photo in photos:
+            if photo.id is not None:
+                self._catalog.add_photo_to_album(album.id, photo.id)
+                added += 1
+        self._sidebar.refresh_albums(self._catalog.get_albums())
+        self.statusBar().showMessage(
+            f"Album « {name.strip()} » créé avec {added} photo(s)", 4000
+        )
 
     def _on_bus_photo_selected(self, photo: PhotoInfo) -> None:
         pass

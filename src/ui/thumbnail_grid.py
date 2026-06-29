@@ -100,11 +100,16 @@ class _ThumbWorker(QRunnable):
             logger.debug(f"Erreur génération vignette {self._path}", exc_info=True)
 
 
+_DUP_BADGE_W = 22
+_DUP_BADGE_H = 16
+
+
 class ThumbnailCell(QWidget):
-    double_clicked = Signal(object)
-    right_clicked  = Signal(object, object)
-    clicked        = Signal(object, Qt.KeyboardModifier)
-    drag_started   = Signal(object)
+    double_clicked   = Signal(object)
+    right_clicked    = Signal(object, object)
+    clicked          = Signal(object, Qt.KeyboardModifier)
+    drag_started     = Signal(object)
+    duplicate_clicked = Signal(object)  # PhotoInfo — clic sur le badge de doublon
 
     def __init__(self, photo: PhotoInfo, cache: ThumbnailCache, size: int, parent=None):
         super().__init__(parent)
@@ -117,6 +122,7 @@ class ThumbnailCell(QWidget):
         self._signals = _ThumbSignals()
         self._signals.ready.connect(self._on_thumb_ready)
         self._drag_start_pos: QPoint | None = None
+        self._dup_badge_rect = None   # QRect dans les coordonnées du widget
         self._setup_ui()
 
     def _setup_ui(self) -> None:
@@ -171,7 +177,39 @@ class ThumbnailCell(QWidget):
                                Qt.KeepAspectRatio, Qt.SmoothTransformation)
         if self._photo.media_type == "video":
             scaled = self._add_video_badge(scaled)
+        if self._photo.duplicate_group_id is not None:
+            # Calculer la position du badge dans les coordonnées du widget
+            # (_img_label débute à (4,4), pixmap centré dans le label)
+            pw = scaled.width()
+            ph = scaled.height()
+            lbl_ox = (self._size - pw) // 2
+            lbl_oy = (self._size - ph) // 2
+            bx = 4 + lbl_ox + pw - _DUP_BADGE_W - 2
+            by = 4 + lbl_oy + 2
+            self._dup_badge_rect = QRect(bx - 4, by - 4,
+                                         _DUP_BADGE_W + 8, _DUP_BADGE_H + 8)
+            scaled = self._add_duplicate_badge(scaled)
+        else:
+            self._dup_badge_rect = None
         self._img_label.setPixmap(scaled)
+
+    def _add_duplicate_badge(self, pixmap: QPixmap) -> QPixmap:
+        result = QPixmap(pixmap)
+        p = QPainter(result)
+        p.setRenderHint(QPainter.Antialiasing)
+        x = result.width() - _DUP_BADGE_W - 2
+        y = 2
+        p.setBrush(QColor(255, 140, 0))
+        p.setPen(Qt.NoPen)
+        p.drawRoundedRect(x, y, _DUP_BADGE_W, _DUP_BADGE_H, 4, 4)
+        p.setPen(QColor(255, 255, 255))
+        f = QFont()
+        f.setPixelSize(10)
+        f.setBold(True)
+        p.setFont(f)
+        p.drawText(QRect(x, y, _DUP_BADGE_W, _DUP_BADGE_H), Qt.AlignCenter, "⧉")
+        p.end()
+        return result
 
     def _add_video_badge(self, pixmap: QPixmap) -> QPixmap:
         result = QPixmap(pixmap)
@@ -219,9 +257,19 @@ class ThumbnailCell(QWidget):
         if event.button() == Qt.RightButton:
             self.right_clicked.emit(self._photo, event.globalPosition().toPoint())
         elif event.button() == Qt.LeftButton:
-            self._drag_start_pos = event.position().toPoint()
+            pos = event.position().toPoint()
+            if (self._dup_badge_rect is not None
+                    and self._dup_badge_rect.contains(pos)):
+                self.duplicate_clicked.emit(self._photo)
+                return
+            self._drag_start_pos = pos
             self.clicked.emit(self._photo, QApplication.keyboardModifiers())
         super().mousePressEvent(event)
+
+    def set_duplicate_group(self, group_id) -> None:
+        self._photo.duplicate_group_id = group_id
+        if self._pixmap is not None:
+            self._set_pixmap(self._pixmap)
 
     def mouseMoveEvent(self, event) -> None:
         if (self._drag_start_pos is not None
@@ -329,11 +377,15 @@ class ThumbnailGrid(QScrollArea):
     La fin d'une rangée enchaîne au début de la rangée suivante.
     """
 
-    photo_activated   = Signal(object)
-    selection_changed = Signal(list)
-    rename_requested  = Signal(object)
-    delete_requested  = Signal(list)
-    save_requested    = Signal(object)
+    photo_activated           = Signal(object)
+    selection_changed         = Signal(list)
+    rename_requested          = Signal(object)
+    move_requested            = Signal(object)
+    delete_requested          = Signal(list)
+    save_requested            = Signal(object)
+    duplicate_clicked         = Signal(object)   # PhotoInfo — badge de doublon cliqué
+    add_to_album_requested    = Signal(list)      # list[PhotoInfo] — ajouter à album existant
+    create_album_with_requested = Signal(list)    # list[PhotoInfo] — créer nouvel album
 
     def __init__(self, cache: ThumbnailCache, parent=None):
         super().__init__(parent)
@@ -958,6 +1010,7 @@ class ThumbnailGrid(QScrollArea):
         cell.right_clicked.connect(self._on_right_click)
         cell.clicked.connect(self._on_cell_clicked)
         cell.drag_started.connect(self._on_cell_drag_started)
+        cell.duplicate_clicked.connect(self.duplicate_clicked.emit)
         return cell
 
     # ══════════════════════════════════════════════════════════════════ événements clavier/souris
@@ -1036,16 +1089,39 @@ class ThumbnailGrid(QScrollArea):
 
         drag.exec(Qt.MoveAction)
 
+    def refresh_duplicate_status(self, assignments: dict) -> None:
+        """Met à jour les badges de doublons. assignments = {path: group_id | None}."""
+        for photo in self._photos:
+            if photo.path in assignments:
+                photo.duplicate_group_id = assignments[photo.path]
+        for cell in self._materialized.values():
+            if cell.photo.path in assignments:
+                cell.set_duplicate_group(assignments[cell.photo.path])
+
     @Slot(object, object)
     def _on_right_click(self, photo: PhotoInfo, pos) -> None:
+        # Effective selection: full selection if photo is already selected, else just this photo
+        if photo.path in self._selected and len(self._selected) > 1:
+            photos = self.get_selected()
+        else:
+            photos = [photo]
+
         menu = QMenu(self)
         menu.addAction("Ouvrir", lambda: self.photo_activated.emit(photo))
         menu.addSeparator()
         fav_label = "Retirer des favoris" if photo.is_favorite else "Marquer comme favori"
         menu.addAction(fav_label)
         menu.addAction("Renommer l'image", lambda: self.rename_requested.emit(photo))
+        menu.addAction("Déplacer vers…", lambda: self.move_requested.emit(photo))
         menu.addAction("Enregistrer l'image traitée sur le disque",
                        lambda: self.save_requested.emit(photo))
+        menu.addSeparator()
+        n = len(photos)
+        lbl = f"les {n} photos sélectionnées" if n > 1 else "cette photo"
+        menu.addAction(f"Ajouter {lbl} à un album…",
+                       lambda p=photos: self.add_to_album_requested.emit(p))
+        menu.addAction(f"Créer un nouvel album avec {lbl}…",
+                       lambda p=photos: self.create_album_with_requested.emit(p))
         menu.addSeparator()
         menu.addAction("Révéler dans l'Explorateur",
                        lambda: __import__('os').startfile(
