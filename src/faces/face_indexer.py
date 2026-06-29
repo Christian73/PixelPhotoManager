@@ -376,3 +376,29 @@ class SingleFaceReindexThread(QThread):
         )
         self.finished.emit(self._photo_path, len(detections))
         self.cluster_requested.emit()
+
+
+class RevaluateSizeIgnoredThread(QThread):
+    """Réévalue les visages auto-ignorés par taille avec le seuil proportionnel actuel.
+
+    Ne relance pas InsightFace : met simplement à jour le flag ignored=0 pour les
+    faces dont la taille passe maintenant le seuil (recalculé à partir des dimensions
+    réelles de chaque photo).
+    """
+
+    progress = Signal(int, int)   # (current, total_photos)
+    finished = Signal(int, int)   # (unignored_count, total_photos)
+
+    def __init__(self, face_db: FaceDatabase, parent=None) -> None:
+        super().__init__(parent)
+        self._face_db = face_db
+
+    def run(self) -> None:
+        try:
+            unignored, total = self._face_db.recalculate_size_ignored(
+                progress_cb=lambda i, t: self.progress.emit(i, t)
+            )
+            self.finished.emit(unignored, total)
+        except Exception as exc:
+            logger.error("RevaluateSizeIgnoredThread: %s", exc)
+            self.finished.emit(0, 0)
