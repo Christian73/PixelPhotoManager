@@ -245,6 +245,8 @@ class PersonClusterView(QWidget):
     suggestion_rejected      = Signal(int)   # cluster_id refusé
     all_suggestions_accepted = Signal(list)  # tous les cluster_ids confirmés d'un coup
     all_suggestions_rejected = Signal(list)  # tous les cluster_ids refusés d'un coup
+    add_to_album_requested    = Signal(list)  # list[PhotoInfo] — ajouter à album existant
+    create_album_with_requested = Signal(list)  # list[PhotoInfo] — créer nouvel album
 
     def __init__(self, face_db: FaceDatabase, catalog, parent=None) -> None:
         super().__init__(parent)
@@ -731,12 +733,23 @@ class PersonClusterView(QWidget):
         n = len(self._selection)
         s = "s" if n > 1 else ""
 
+        # Photos uniques pour la sélection courante (dédoublonnage par chemin)
+        selected_paths = {
+            self._flat_cards[fid]._photo_path
+            for fid in self._selection if fid in self._flat_cards
+        }
+        np = len(selected_paths)
+        lbl_photos = f"les {np} photo(s)" if np > 1 else "cette photo"
+
         menu = QMenu(self)
         menu.setStyleSheet(_MENU_STYLE)
         act_reassign = menu.addAction(f"Réassigner {n} visage{s} à une autre personne…")
         act_unassign = menu.addAction(f"Dé-associer {n} visage{s} de la personne")
         menu.addSeparator()
         act_cover = menu.addAction("Utiliser ce visage comme vignette principale")
+        menu.addSeparator()
+        act_add_album = menu.addAction(f"Ajouter {lbl_photos} à un album…")
+        act_new_album = menu.addAction(f"Créer un nouvel album avec {lbl_photos}…")
 
         chosen = menu.exec(pos)
         if chosen == act_reassign:
@@ -745,6 +758,14 @@ class PersonClusterView(QWidget):
             self._flat_unassign(list(self._selection))
         elif chosen == act_cover:
             self._set_cover_face(face_id)
+        elif chosen in (act_add_album, act_new_album):
+            photos = [self._catalog.get_photo_by_path(p) for p in selected_paths]
+            photos = [p for p in photos if p is not None]
+            if photos:
+                if chosen == act_add_album:
+                    self.add_to_album_requested.emit(photos)
+                else:
+                    self.create_album_with_requested.emit(photos)
 
     def _start_flat_reassign(self, face_ids: list[int]) -> None:
         if self._persons_loader is not None:

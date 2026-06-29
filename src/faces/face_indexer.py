@@ -402,3 +402,32 @@ class RevaluateSizeIgnoredThread(QThread):
         except Exception as exc:
             logger.error("RevaluateSizeIgnoredThread: %s", exc)
             self.finished.emit(0, 0)
+
+
+class SimilaritySearchThread(QThread):
+    """Compare les clusters non identifiés aux centroïdes des personnes nommées.
+
+    Ne relance pas InsightFace : compare uniquement les embeddings existants.
+
+    Signals
+    -------
+    progress(current, total)    — avancement (par cluster vérifié)
+    finished(suggestions, total) — nombre de suggestions créées / clusters vérifiés
+    """
+
+    progress = Signal(int, int)
+    finished = Signal(int, int)
+
+    def __init__(self, face_db: FaceDatabase, parent=None) -> None:
+        super().__init__(parent)
+        self._face_db = face_db
+
+    def run(self) -> None:
+        try:
+            made, total = self._face_db.find_similar_to_persons(
+                progress_cb=lambda i, t: self.progress.emit(i, t)
+            )
+            self.finished.emit(made, total)
+        except Exception as exc:
+            logger.error("SimilaritySearchThread: %s", exc)
+            self.finished.emit(0, 0)

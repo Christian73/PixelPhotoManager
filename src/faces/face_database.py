@@ -222,9 +222,9 @@ class FaceDatabase:
     # Seuils d'auto-ignorance pour les faces de mauvaise qualité.
     # En dessous de ces valeurs, la face est sauvegardée avec ignored=1 :
     # elle reste visible dans l'interface mais ne participe pas au clustering.
-    _AUTO_IGNORE_MIN_SIDE_RATIO    = 0.04  # 4 % — seuil de base (aucun visage au premier plan)
+    _AUTO_IGNORE_MIN_SIDE_RATIO    = 0.03  # 3 % — seuil de base (aucun visage au premier plan)
     _AUTO_IGNORE_MIN_SIDE_FG_RATIO = 0.20  # 20 % — seuil pour qualifier un visage de "grand"
-    _AUTO_IGNORE_MIN_SIDE_ABS      = 30    # plancher absolu (px) pour les très petites images
+    _AUTO_IGNORE_MIN_SIDE_ABS      = 22    # plancher absolu (px) pour les très petites images
     _AUTO_IGNORE_MIN_SIDE          = 121   # fallback si les dimensions sont illisibles
     _AUTO_IGNORE_MIN_SCORE         = 0.65  # score de détection InsightFace (0–1)
 
@@ -235,7 +235,7 @@ class FaceDatabase:
         rotation: CW degrees applied during detection (stored to reconstruct face crops).
         Faces with min(w,h) < effective threshold or det_score < _AUTO_IGNORE_MIN_SCORE
         are saved with ignored=1. The size threshold is proportional to the image:
-        base = max(ABS, short_side * 4 %) ; fg = max(base*2, short_side * 12 %).
+        base = max(ABS, short_side * 3 %) ; fg = max(base*2, short_side * 20 %).
         If any face reaches fg, the effective threshold is fg (small faces ignored).
         Otherwise (all faces small — old scanned photo, distant group) base is used.
         Fallback to _AUTO_IGNORE_MIN_SIDE if image dimensions cannot be read.
@@ -259,7 +259,7 @@ class FaceDatabase:
                 # Si un visage atteint le seuil "premier plan" (12 %), on relève la
                 # barre pour tous : les petits visages sont alors ignorés.
                 # Sinon (vieille photo scannée, groupe distant…), on utilise le
-                # seuil de base (4 %) pour ne pas perdre de visages légitimes.
+                # seuil de base (3 %) pour ne pas perdre de visages légitimes.
                 try:
                     from PIL import Image as _PILImage
                     with _PILImage.open(photo_path) as _img:
@@ -1378,6 +1378,79 @@ class FaceDatabase:
         if progress_cb:
             progress_cb(total, total)
         return unignored, total
+
+    def find_similar_to_persons(
+        self, progress_cb: "Callable[[int, int], None] | None" = None
+    ) -> tuple[int, int]:
+        """Compare chaque cluster non identifié aux centroïdes des personnes nommées.
+
+        Pour chaque cluster sans person_id ni suggestion existante, calcule son centroïde
+        et le compare à tous les centroïdes de personnes nommées. Si la similarité cosinus
+        atteint _SIM_SUGGEST (0.50), une suggestion est créée et apparaîtra dans la section
+        « En attente » de la vue de la personne concernée.
+
+        Retourne (suggestions_créées, clusters_vérifiés).
+        """
+        # 1. Tous les embeddings de clusters non identifiés sans suggestion existante
+        with self._lock:
+            conn = self._conn()
+            try:
+                rows = conn.execute(
+                    "SELECT cluster_id, embedding FROM faces"
+                    " WHERE cluster_id IS NOT NULL"
+                    "   AND person_id IS NULL"
+                    "   AND suggestion_person_id IS NULL"
+                    "   AND ignored = 0"
+                    "   AND embedding IS NOT NULL"
+                ).fetchall()
+            finally:
+                conn.close()
+
+        if not rows:
+            return 0, 0
+
+        cid_to_embs: "dict[int, list]" = {}
+        for cid, blob in rows:
+            cid_to_embs.setdefault(cid, []).append(_dec(blob))
+
+        total = len(cid_to_embs)
+
+        # 2. Centroïdes de toutes les personnes nommées
+        with self._lock:
+            conn = self._conn()
+            try:
+                pers_rows = conn.execute(
+                    "SELECT person_id, embedding FROM faces"
+                    " WHERE person_id IS NOT NULL AND embedding IS NOT NULL"
+                ).fetchall()
+            finally:
+                conn.close()
+
+        by_person: "dict[int, list]" = {}
+        for pid, blob in pers_rows:
+            by_person.setdefault(pid, []).append(_dec(blob))
+        person_centroids = {pid: _centroid(embs) for pid, embs in by_person.items()}
+        if not person_centroids:
+            return 0, total
+
+        # 3. Pour chaque cluster, trouver la meilleure personne
+        suggestions: "dict[int, tuple[int, float]]" = {}
+        for i, (cid, face_embs) in enumerate(cid_to_embs.items()):
+            if progress_cb:
+                progress_cb(i + 1, total)
+            centroid = _centroid(face_embs)
+            best_sim, best_pid = 0.0, None
+            for pid, pc in person_centroids.items():
+                sim = _cosine_sim(centroid, pc)
+                if sim > best_sim:
+                    best_sim, best_pid = sim, pid
+            if best_pid is not None and best_sim >= _SIM_SUGGEST:
+                suggestions[cid] = (best_pid, best_sim)
+
+        if suggestions:
+            self.set_cluster_suggestions(suggestions)
+
+        return len(suggestions), total
 
     def ignore_face(self, face_id: int) -> None:
         """Mark a single face as ignored."""
