@@ -3,10 +3,10 @@ import logging
 import shutil
 import subprocess
 
-from PySide6.QtCore import Signal, Qt, QRect, QSize, QUrl, QThread, Slot
-from PySide6.QtGui import QColor, QFont, QIcon, QPainter, QPixmap
+from PySide6.QtCore import Signal, Qt, QRect, QSize, QUrl, QThread, QTimer, Slot
+from PySide6.QtGui import QColor, QFont, QIcon, QPainter, QPalette, QPixmap
 from PySide6.QtWidgets import (
-    QStyledItemDelegate,
+    QApplication, QStyle, QStyleOptionViewItem, QStyledItemDelegate,
     QWidget, QVBoxLayout, QHBoxLayout, QSplitter,
     QTreeWidget, QTreeWidgetItem, QListWidget, QListWidgetItem,
     QPushButton, QLabel, QLineEdit, QMenu, QInputDialog, QMessageBox, QFileDialog,
@@ -174,43 +174,63 @@ class _SingleFaceIconLoader(QThread):
 
 
 class _PendingBadgeDelegate(QStyledItemDelegate):
-    """Affiche un petit badge orange '?' entre la vignette et le nom."""
+    """Affiche un badge orange avec le nombre de suggestions entre la vignette et le nom."""
 
     _R = 9   # rayon du badge en px
 
     def paint(self, painter, option, index) -> None:
-        super().paint(painter, option, index)
         person = index.data(Qt.UserRole)
-        if not isinstance(person, PersonInfo):
-            return
-        if getattr(person, "pending_count", 0) <= 0:
+        pending = isinstance(person, PersonInfo) and getattr(person, "pending_count", 0) > 0
+
+        if not pending:
+            super().paint(painter, option, index)
             return
 
-        from PySide6.QtWidgets import QApplication, QStyle, QStyleOptionViewItem
         opt = QStyleOptionViewItem(option)
         self.initStyleOption(opt, index)
-        style = QApplication.style()
+        widget = self.parent()
+        style = widget.style() if widget else QApplication.style()
+
+        # 1. Fond (sélection, survol…)
+        style.drawPrimitive(QStyle.PE_PanelItemViewItem, opt, painter, widget)
+
+        # 2. Icône
         icon_rect = style.subElementRect(QStyle.SE_ItemViewItemDecoration, opt, None)
+        if not opt.icon.isNull() and icon_rect.isValid():
+            mode = QIcon.Selected if (opt.state & QStyle.State_Selected) else QIcon.Normal
+            opt.icon.paint(painter, icon_rect, Qt.AlignCenter, mode)
 
+        # 3. Position du badge (juste après l'icône)
         r = self._R
-        # Juste à droite de la vignette, centré verticalement
-        x = (icon_rect.right() + 3) if icon_rect.isValid() else (option.rect.left() + 44)
-        y = option.rect.center().y() - r
+        bx = (icon_rect.right() + 3) if icon_rect.isValid() else (opt.rect.left() + 44)
+        by = opt.rect.center().y() - r
 
+        # 4. Texte décalé après le badge
+        text_rect = style.subElementRect(QStyle.SE_ItemViewItemText, opt, None)
+        text_rect.setLeft(bx + r * 2 + 5)
+        color = (opt.palette.color(QPalette.HighlightedText)
+                 if (opt.state & QStyle.State_Selected)
+                 else opt.palette.color(QPalette.Text))
+        painter.save()
+        painter.setPen(color)
+        elided = opt.fontMetrics.elidedText(opt.text, opt.textElideMode, text_rect.width())
+        painter.drawText(text_rect, Qt.AlignVCenter | Qt.AlignLeft, elided)
+        painter.restore()
+
+        # 5. Badge
         painter.save()
         painter.setRenderHint(QPainter.Antialiasing, True)
         painter.setBrush(QColor("#e8a040"))
         painter.setPen(Qt.NoPen)
-        painter.drawEllipse(x, y, r * 2, r * 2)
-
+        painter.drawEllipse(bx, by, r * 2, r * 2)
+        count = person.pending_count
+        label = str(count) if count < 100 else "99+"
         font = QFont()
         font.setPixelSize(r)
         font.setBold(True)
         painter.setFont(font)
-        count = getattr(person, "pending_count", 0)
-        label = str(count) if count < 100 else "99+"
         painter.setPen(QColor("#1a1a1a"))
-        painter.drawText(x, y, r * 2, r * 2, Qt.AlignCenter, label)
+        painter.drawText(bx, by, r * 2, r * 2, Qt.AlignCenter, label)
         painter.restore()
 
 
@@ -221,6 +241,7 @@ class Sidebar(QWidget):
     folder_removed     = Signal(str)
     folder_created     = Signal(str)      # chemin du nouveau sous-dossier créé
     folder_moved       = Signal(str, str) # (ancien_chemin, nouveau_chemin)
+    folder_deleted     = Signal(str)      # dossier supprimé du disque
     photos_dropped     = Signal(list, str) # (file_paths, dest_folder_path)
     person_selected        = Signal(object)   # PersonInfo
     identify_requested     = Signal()         # ouvrir PeopleDialog
@@ -234,6 +255,7 @@ class Sidebar(QWidget):
         self._expanded_paths: set[str] = set()
         self._restoring: bool = False
         self._face_loader: _FaceIconLoader | None = None
+        self._pending_person_id: int | None = None
         self._setup_ui()
 
     def _setup_ui(self) -> None:
@@ -256,11 +278,21 @@ class Sidebar(QWidget):
         fw_layout.setContentsMargins(0, 0, 0, 0)
         fw_layout.setSpacing(0)
 
-        folder_header = QLabel("  Dossiers")
-        folder_header.setStyleSheet(
-            "background: #2a2a2a; color: #ccc; padding: 4px; font-weight: bold;"
-        )
-        fw_layout.addWidget(folder_header)
+        folder_header_bar = QHBoxLayout()
+        folder_header_bar.setContentsMargins(8, 3, 4, 3)
+        folder_header_bar.setSpacing(4)
+        self._folder_arrow = QLabel("▾")
+        self._folder_arrow.setStyleSheet("color: #888;")
+        self._folder_arrow.setFixedWidth(10)
+        folder_header_bar.addWidget(self._folder_arrow)
+        _lbl = QLabel("Dossiers")
+        _lbl.setStyleSheet("color: #ccc; font-weight: bold;")
+        folder_header_bar.addWidget(_lbl)
+        folder_header_bar.addStretch()
+        folder_header_container = QWidget()
+        folder_header_container.setStyleSheet("background: #2a2a2a;")
+        folder_header_container.setLayout(folder_header_bar)
+        fw_layout.addWidget(folder_header_container)
 
         self._folder_tree = _FolderTree()
         self._folder_tree.setHeaderHidden(True)
@@ -281,9 +313,15 @@ class Sidebar(QWidget):
         aw_layout.setSpacing(0)
 
         album_header_bar = QHBoxLayout()
-        album_header = QLabel("  Albums")
-        album_header.setStyleSheet("color: #ccc; font-weight: bold;")
-        album_header_bar.addWidget(album_header)
+        album_header_bar.setContentsMargins(8, 3, 4, 3)
+        album_header_bar.setSpacing(4)
+        self._album_arrow = QLabel("▾")
+        self._album_arrow.setStyleSheet("color: #888;")
+        self._album_arrow.setFixedWidth(10)
+        album_header_bar.addWidget(self._album_arrow)
+        _lbl = QLabel("Albums")
+        _lbl.setStyleSheet("color: #ccc; font-weight: bold;")
+        album_header_bar.addWidget(_lbl)
         album_header_bar.addStretch()
         btn_new_album = QPushButton("+")
         btn_new_album.setFixedWidth(24)
@@ -291,10 +329,10 @@ class Sidebar(QWidget):
         btn_new_album.clicked.connect(self._create_album)
         album_header_bar.addWidget(btn_new_album)
 
-        header_container = QWidget()
-        header_container.setStyleSheet("background: #2a2a2a;")
-        header_container.setLayout(album_header_bar)
-        aw_layout.addWidget(header_container)
+        album_header_container = QWidget()
+        album_header_container.setStyleSheet("background: #2a2a2a;")
+        album_header_container.setLayout(album_header_bar)
+        aw_layout.addWidget(album_header_container)
 
         self._albums_list = QListWidget()
         self._albums_list.itemClicked.connect(self._on_album_clicked)
@@ -309,9 +347,15 @@ class Sidebar(QWidget):
         pw_layout.setSpacing(0)
 
         persons_header_bar = QHBoxLayout()
-        persons_header = QLabel("  Personnes")
-        persons_header.setStyleSheet("color: #ccc; font-weight: bold;")
-        persons_header_bar.addWidget(persons_header)
+        persons_header_bar.setContentsMargins(8, 3, 4, 3)
+        persons_header_bar.setSpacing(4)
+        self._persons_arrow = QLabel("▾")
+        self._persons_arrow.setStyleSheet("color: #888;")
+        self._persons_arrow.setFixedWidth(10)
+        persons_header_bar.addWidget(self._persons_arrow)
+        _lbl = QLabel("Personnes")
+        _lbl.setStyleSheet("color: #ccc; font-weight: bold;")
+        persons_header_bar.addWidget(_lbl)
         persons_header_bar.addStretch()
         self._btn_identify = _BadgeButton("Identifier…")
         self._btn_identify.setToolTip("Nommer les groupes de visages détectés")
@@ -336,6 +380,12 @@ class Sidebar(QWidget):
         self._splitter.setStretchFactor(0, 3)
         self._splitter.setStretchFactor(1, 1)
         self._splitter.setStretchFactor(2, 1)
+        for i in range(3):
+            self._splitter.setCollapsible(i, False)
+        folder_widget.setMinimumHeight(26)
+        album_widget.setMinimumHeight(26)
+        persons_widget.setMinimumHeight(26)
+        self._splitter.splitterMoved.connect(self._update_section_arrows)
 
         layout.addWidget(self._splitter)
 
@@ -355,6 +405,13 @@ class Sidebar(QWidget):
         from PySide6.QtCore import QByteArray
         if state_b64:
             self._splitter.restoreState(QByteArray(base64.b64decode(state_b64)))
+        QTimer.singleShot(0, self._update_section_arrows)
+
+    def _update_section_arrows(self) -> None:
+        sizes = self._splitter.sizes()
+        for i, arrow_lbl in enumerate((self._folder_arrow, self._album_arrow, self._persons_arrow)):
+            if i < len(sizes):
+                arrow_lbl.setText("▸" if sizes[i] < 50 else "▾")
 
     def _add_special_albums(self) -> None:
         item_all = QListWidgetItem("★ Chronologie de toutes les photos")
@@ -546,6 +603,42 @@ class Sidebar(QWidget):
             item.setData(Qt.UserRole, album)
             self._albums_list.addItem(item)
 
+    def select_album_item(self, data) -> None:
+        """Sélectionne silencieusement un album dans la liste (sans émettre de signal)."""
+        for i in range(self._albums_list.count()):
+            item = self._albums_list.item(i)
+            item_data = item.data(Qt.UserRole)
+            match = (item_data == data) if isinstance(data, str) else (
+                isinstance(item_data, AlbumInfo) and isinstance(data, AlbumInfo)
+                and item_data.id == data.id
+            )
+            if match:
+                self._folder_tree.clearSelection()
+                self._persons_list.clearSelection()
+                self._albums_list.blockSignals(True)
+                self._albums_list.setCurrentItem(item)
+                self._albums_list.blockSignals(False)
+                return
+
+    def select_folder_item(self, path: str) -> None:
+        """Sélectionne silencieusement un dossier dans l'arbre (sans émettre de signal)."""
+        def _search(item: QTreeWidgetItem) -> bool:
+            if item.data(0, Qt.UserRole) == path:
+                self._albums_list.clearSelection()
+                self._persons_list.clearSelection()
+                self._folder_tree.blockSignals(True)
+                self._folder_tree.setCurrentItem(item)
+                self._folder_tree.blockSignals(False)
+                return True
+            for i in range(item.childCount()):
+                if _search(item.child(i)):
+                    return True
+            return False
+
+        for i in range(self._folder_tree.topLevelItemCount()):
+            if _search(self._folder_tree.topLevelItem(i)):
+                return
+
     def _on_folder_clicked(self, item: QTreeWidgetItem, _col: int) -> None:
         self._albums_list.clearSelection()
         self._persons_list.clearSelection()
@@ -579,6 +672,9 @@ class Sidebar(QWidget):
         menu.addSeparator()
         menu.addAction("Ouvrir dans l'Explorateur",
                        lambda: subprocess.Popen(f'explorer "{path}"'))
+        menu.addSeparator()
+        menu.addAction("Effacer le dossier…",
+                       lambda: self._delete_folder(path))
         menu.exec(self._folder_tree.mapToGlobal(pos))
 
     def _create_subfolder(self, parent_path: str) -> None:
@@ -640,6 +736,28 @@ class Sidebar(QWidget):
             return
         self.folder_moved.emit(path, new_path)
 
+    def _delete_folder(self, path: str) -> None:
+        folder_name = os.path.basename(path)
+        box = QMessageBox(
+            QMessageBox.Warning,
+            "Confirmer la suppression",
+            f"Supprimer définitivement le dossier « {folder_name} » et tout son contenu ?\n\n"
+            f"Cette action est irréversible. Tous les fichiers seront supprimés du disque.",
+            QMessageBox.Yes | QMessageBox.Cancel,
+            self,
+        )
+        box.setDefaultButton(QMessageBox.Cancel)
+        box.button(QMessageBox.Yes).setText("Supprimer")
+        if box.exec() != QMessageBox.Yes:
+            return
+        try:
+            shutil.rmtree(path)
+        except Exception as e:
+            QMessageBox.critical(self, "Erreur",
+                                 f"Impossible de supprimer le dossier :\n{e}")
+            return
+        self.folder_deleted.emit(path)
+
     def _create_album(self) -> None:
         name, ok = QInputDialog.getText(self, "Nouvel album", "Nom de l'album :")
         if ok and name.strip():
@@ -647,17 +765,36 @@ class Sidebar(QWidget):
 
     # ------------------------------------------------------------------ persons
 
+    def set_pending_person_id(self, person_id: int | None) -> None:
+        """Définit la personne à sélectionner/scroller lors du prochain refresh_persons."""
+        self._pending_person_id = person_id
+
+    def get_selected_person_id(self) -> int | None:
+        """Retourne l'id de la personne actuellement sélectionnée, ou None."""
+        cur = self._persons_list.currentItem()
+        if cur is not None:
+            p = cur.data(Qt.UserRole)
+            if isinstance(p, PersonInfo):
+                return p.id
+        return None
+
     def refresh_persons(self, persons: list[PersonInfo]) -> None:
         self._persons = persons
         # Mémoriser la personne actuellement sélectionnée pour la restaurer après rebuild
         selected_id: int | None = None
         selected_row: int = -1
+        scroll_to_selected: bool = False
         cur = self._persons_list.currentItem()
         if cur is not None:
             p = cur.data(Qt.UserRole)
             if isinstance(p, PersonInfo):
                 selected_id = p.id
                 selected_row = self._persons_list.row(cur)
+        elif self._pending_person_id is not None:
+            # Restauration au démarrage depuis la config
+            selected_id = self._pending_person_id
+            scroll_to_selected = True
+        self._pending_person_id = None  # consommé dans tous les cas
         # Arrêter un chargement précédent et libérer le thread Qt enfant
         if self._face_loader is not None:
             try:
@@ -679,10 +816,13 @@ class Sidebar(QWidget):
             if selected_id is not None and person.id == selected_id:
                 self._persons_list.blockSignals(True)
                 self._persons_list.setCurrentItem(item)
+                if scroll_to_selected:
+                    self._persons_list.scrollToItem(item)
                 self._persons_list.blockSignals(False)
                 selected_id = None  # trouvé — pas de fallback nécessaire
         # Personne supprimée/fusionnée : sélectionner silencieusement le voisin le plus proche
-        if selected_id is not None and self._persons_list.count() > 0:
+        # (ne s'applique pas à la restauration depuis la config — on préfère ne rien sélectionner)
+        if selected_id is not None and not scroll_to_selected and self._persons_list.count() > 0:
             fallback_row = min(selected_row, self._persons_list.count() - 1)
             self._persons_list.blockSignals(True)
             self._persons_list.setCurrentRow(fallback_row)
@@ -745,6 +885,40 @@ class Sidebar(QWidget):
                     loader.icon_ready.connect(self._on_face_icon_ready)
                     loader.finished.connect(loader.deleteLater)
                     loader.start()
+
+    def apply_person_merge(self, source_id: int, target_id: int, new_count: int) -> None:
+        """Remove source from list and update target count after a merge. No icon reload."""
+        self._persons = [p for p in self._persons if p.id != source_id]
+        for p in self._persons:
+            if p.id == target_id:
+                p.photo_count = new_count
+
+        source_was_selected = False
+        cur = self._persons_list.currentItem()
+        if cur is not None:
+            p = cur.data(Qt.UserRole)
+            if isinstance(p, PersonInfo) and p.id == source_id:
+                source_was_selected = True
+
+        for i in range(self._persons_list.count()):
+            item = self._persons_list.item(i)
+            p = item.data(Qt.UserRole)
+            if isinstance(p, PersonInfo) and p.id == source_id:
+                self._persons_list.takeItem(i)
+                break
+
+        for i in range(self._persons_list.count()):
+            item = self._persons_list.item(i)
+            p = item.data(Qt.UserRole)
+            if isinstance(p, PersonInfo) and p.id == target_id:
+                p.photo_count = new_count
+                item.setText(f"{p.name}  ({new_count})")
+                item.setData(Qt.UserRole, p)
+                if source_was_selected:
+                    self._persons_list.blockSignals(True)
+                    self._persons_list.setCurrentItem(item)
+                    self._persons_list.blockSignals(False)
+                break
 
     def update_person_icon(self, person_id: int, face) -> None:
         """Mise à jour immédiate de l'icône d'une personne sans reconstruire toute la liste."""
