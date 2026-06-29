@@ -55,11 +55,13 @@ Toutes les retouches sont stockées séparément — l'original n'est jamais mod
 <h2>Où sont stockées vos données</h2>
 <p>Toutes les données se trouvent dans <b>%LOCALAPPDATA%\PixelPhotoManager\</b></p>
 <table>
-  <tr><th>Fichier</th><th>Contenu</th></tr>
+  <tr><th>Fichier / Dossier</th><th>Contenu</th></tr>
   <tr><td><code>catalog.db</code></td><td>Index photos/vidéos (chemins, EXIF, métadonnées)</td></tr>
   <tr><td><code>thumbnails.db</code></td><td>Cache des vignettes générées</td></tr>
   <tr><td><code>edits.db</code></td><td>Toutes les retouches et leur historique</td></tr>
+  <tr><td><code>faces.db</code></td><td>Visages détectés, embeddings, clusters et personnes identifiées</td></tr>
   <tr><td><code>config.json</code></td><td>Dossiers surveillés et préférences</td></tr>
+  <tr><td><code>faces_backups\</code></td><td>Sauvegardes horodatées de la reconnaissance faciale (<code>visages_AAAAMMJJ_HHMMSS.zip</code>)</td></tr>
 </table>
 <p class="tip">Vos fichiers originaux ne sont <b>jamais modifiés</b>. Supprimer <code>edits.db</code>
 efface toutes les retouches ; supprimer <code>catalog.db</code> force une réindexation complète.</p>
@@ -72,23 +74,56 @@ _TAB_NAVIGATION = _STYLE + """
 <ul>
   <li>Cliquez sur un dossier pour afficher son contenu dans la grille.</li>
   <li>Cliquez sur la flèche <b>▶</b> pour développer les sous-dossiers.</li>
-  <li><b>Clic droit</b> sur un dossier : Scanner, Supprimer, Renommer, Déplacer, Ouvrir dans l'Explorateur.</li>
   <li><b>Outils › Dossiers…</b> — gestion avancée : statut, nombre de fichiers, re-scan forcé.</li>
 </ul>
+<p><b>Clic droit</b> sur un dossier :</p>
+<table>
+  <tr><th>Action</th><th>Effet</th></tr>
+  <tr><td><b>Scanner maintenant</b></td><td>Force un re-scan pour détecter les nouveaux fichiers</td></tr>
+  <tr><td><b>Supprimer des dossiers surveillés</b></td><td>Retire le dossier de la bibliothèque (les fichiers restent sur le disque)</td></tr>
+  <tr><td><b>Créer un sous-dossier…</b></td><td>Crée un sous-dossier sur le disque</td></tr>
+  <tr><td><b>Renommer…</b></td><td>Renomme le dossier sur le disque et met à jour le catalogue</td></tr>
+  <tr><td><b>Déplacer vers…</b></td><td>Déplace le dossier entier vers un autre emplacement</td></tr>
+  <tr><td><b>Ouvrir dans l'Explorateur</b></td><td>Révèle le dossier dans l'Explorateur Windows</td></tr>
+  <tr><td><b>Effacer le dossier…</b></td><td>Supprime le dossier et tout son contenu du disque (<b>irréversible</b>)</td></tr>
+</table>
 
 <h3>Barre latérale — Albums</h3>
+<p>Albums spéciaux (intégrés, non modifiables) :</p>
+<table>
+  <tr><th>Album</th><th>Contenu</th></tr>
+  <tr><td><b>★ Chronologie</b></td><td>Toutes les photos en mode ruban chronologique</td></tr>
+  <tr><td><b>♡ Favoris</b></td><td>Photos marquées d'une étoile dans la visionneuse (<kbd>F</kbd>)</td></tr>
+  <tr><td><b>▶ Vidéos</b></td><td>Toutes les vidéos de la bibliothèque</td></tr>
+  <tr><td><b>🔍 Par nom de fichier</b></td><td>Photos dont le nom contient le texte saisi dans la zone de filtre de la sidebar</td></tr>
+</table>
 <ul>
-  <li><b>Toutes les photos</b> — vue globale en mode chronologie.</li>
-  <li><b>♡ Favoris</b> — photos marquées d'une étoile dans la visionneuse.</li>
-  <li><b>Vidéos</b> — toutes les vidéos de la bibliothèque.</li>
   <li>Albums personnels — créés via le bouton <b>+</b> dans l'en-tête Albums.</li>
+  <li>Cliquez sur un album pour en afficher le contenu dans la grille.</li>
+</ul>
+
+<h3>Barre latérale — Filtrage</h3>
+<ul>
+  <li>La zone de saisie en haut de la sidebar filtre simultanément les <b>dossiers</b>
+      et les <b>personnes</b> en temps réel.</li>
+  <li>L'album <b>🔍 Par nom de fichier</b> utilise ce même texte pour afficher dans la grille
+      toutes les photos dont le nom de fichier correspond — saisissez un mot dans la zone,
+      puis cliquez sur cet album.</li>
 </ul>
 
 <h3>Barre latérale — Personnes</h3>
 <ul>
   <li>Affiche les personnes identifiées par l'analyse des visages.</li>
-  <li>Cliquez sur une personne pour voir toutes ses photos.</li>
+  <li>Un badge orange entre la vignette et le nom indique le nombre de suggestions en attente.</li>
+  <li>Cliquez sur une personne pour voir ses visages confirmés et ses suggestions.</li>
 </ul>
+<p><b>Clic droit</b> sur une personne :</p>
+<table>
+  <tr><th>Action</th><th>Effet</th></tr>
+  <tr><td><b>Renommer…</b></td><td>Modifie le nom dans toute la bibliothèque</td></tr>
+  <tr><td><b>Fusionner avec…</b></td><td>Fusionne les visages de cette personne avec ceux d'une autre</td></tr>
+  <tr><td><b>Effacer le nom…</b></td><td>Retire le nom — les visages redeviennent des groupes anonymes</td></tr>
+</table>
 
 <h3>Recherche</h3>
 <ul>
@@ -113,6 +148,20 @@ _TAB_NAVIGATION = _STYLE + """
   <li><kbd>Échap</kbd> ou <b>✕</b> : retour à la grille.</li>
   <li><kbd>F11</kbd> : plein écran.</li>
 </ul>
+
+<h3>Menu contextuel de la grille (clic droit sur une photo)</h3>
+<table>
+  <tr><th>Action</th><th>Effet</th></tr>
+  <tr><td><b>Ouvrir</b></td><td>Ouvre la photo dans la visionneuse</td></tr>
+  <tr><td><b>Marquer / Retirer des favoris</b></td><td>Ajoute ou retire la photo de l'album ♡ Favoris</td></tr>
+  <tr><td><b>Renommer l'image</b></td><td>Renomme le fichier sur le disque (catalogue mis à jour automatiquement)</td></tr>
+  <tr><td><b>Déplacer vers…</b></td><td>Déplace le fichier dans un autre dossier surveillé</td></tr>
+  <tr><td><b>Enregistrer l'image traitée sur le disque</b></td><td>Exporte une copie avec toutes les retouches appliquées</td></tr>
+  <tr><td><b>Révéler dans l'Explorateur</b></td><td>Ouvre le dossier contenant la photo dans l'Explorateur</td></tr>
+  <tr><td><b>Effacer le fichier…</b></td><td>Supprime le fichier du disque (<b>irréversible</b>, confirmation demandée)</td></tr>
+</table>
+<p class="tip"><b>Astuce :</b> Pour déplacer une ou plusieurs photos, vous pouvez aussi les
+glisser-déposer directement vers un dossier dans la barre latérale.</p>
 
 <h3>Supprimer des fichiers</h3>
 <ul>
@@ -189,10 +238,8 @@ une base SQLite séparée et appliqués à la volée à l'affichage et à l'expo
   <tr><th>Correction</th><th>Plage</th><th>Description</th></tr>
   <tr><td><b>Luminosité</b></td><td>−1,00 à +1,00</td><td>Éclaircit ou assombrit l'image globalement</td></tr>
   <tr><td><b>Contraste</b></td><td>−1,00 à +1,00</td><td>Élargit ou réduit la plage tonale</td></tr>
-  <tr><td><b>Saturation</b></td><td>−1,00 à +1,00</td><td>Renforce ou atténue les couleurs (−1 = N&B)</td></tr>
+  <tr><td><b>Saturation</b></td><td>−1,00 à +1,00</td><td>Renforce ou atténue les couleurs (−1 = N&amp;B)</td></tr>
   <tr><td><b>Gamma</b></td><td>0,10 à 3,00</td><td>Courbe de luminosité (1,0 = neutre)</td></tr>
-  <tr><td><b>Netteté</b></td><td>0,00 à 1,00</td><td>Accentue les contours</td></tr>
-  <tr><td><b>Débruitage</b></td><td>0,00 à 1,00</td><td>Lisse le bruit numérique</td></tr>
 </table>
 
 <h3>Couleurs (Noir &amp; Blanc avec mixage de canaux)</h3>
@@ -200,6 +247,21 @@ une base SQLite séparée et appliqués à la volée à l'affichage et à l'expo
   <li>Cochez <b>Noir &amp; Blanc</b> et dosez les contributions Rouge/Vert/Bleu (−1 à +1).</li>
   <li>Exemple : Rouge +1, Bleu −1 → ciel foncé et peaux claires (filtre rouge argentique).</li>
 </ul>
+
+<h3>Vignette</h3>
+<ul>
+  <li>Ajoute un assombrissement (ou éclaircissement) progressif sur les bords de l'image.</li>
+  <li><b>Intensité</b> — de 0,00 (aucun effet) à 1,00 (effet maximum).</li>
+  <li><b>Couleur</b> — Noir (fondu sombre, style argentique) ou Blanc (fondu clair, style rétro).</li>
+  <li>La forme et la position de la vignette sont réglables directement sur la photo :</li>
+</ul>
+<table>
+  <tr><th>Poignée</th><th>Effet</th></tr>
+  <tr><td>Cercle intérieur (pointillés)</td><td>Début du fondu</td></tr>
+  <tr><td>Cercle extérieur</td><td>Fin du fondu</td></tr>
+  <tr><td>Poignée ronde au sommet</td><td>Rotation de l'ellipse</td></tr>
+  <tr><td>Croix centrale</td><td>Déplacer le centre de la vignette</td></tr>
+</table>
 
 <h3>Géométrie</h3>
 <ul>
@@ -221,9 +283,22 @@ une base SQLite séparée et appliqués à la volée à l'affichage et à l'expo
 </ul>
 
 <h3>Export</h3>
-<ul>
-  <li><b>Enregistrer une copie</b> — exporte l'image avec les retouches dans un nouveau fichier.</li>
-</ul>
+<p><b>Enregistrer une copie</b> — exporte l'image avec les retouches appliquées dans un nouveau
+fichier JPEG. Quatre préréglages de taille sont proposés :</p>
+<table>
+  <tr><th>Préréglage</th><th>Résolution max.</th><th>Poids estimé</th><th>Usage typique</th></tr>
+  <tr><td><b>Taille maximale</b></td><td>Résolution originale</td><td>variable</td>
+      <td>Archivage, impression grand format, retouche externe</td></tr>
+  <tr><td><b>Grande (~4 Mpx)</b></td><td>≈ 2 600 × 1 500 px</td><td>600–1 600 Ko</td>
+      <td>Impression A4/A3, partage haute qualité</td></tr>
+  <tr><td><b>Moyenne (~2 Mpx)</b></td><td>≈ 1 800 × 1 100 px</td><td>320–800 Ko</td>
+      <td>Affichage écran, diaporamas, pièce jointe mail légère</td></tr>
+  <tr><td><b>Petite (~500 kpx)</b></td><td>≈ 900 × 560 px</td><td>75–300 Ko</td>
+      <td>Réseaux sociaux, aperçu web, messagerie mobile</td></tr>
+</table>
+<p class="tip"><b>Conseil :</b> Pour envoyer une photo par e-mail ou la poster sur un réseau
+social, préférez <b>Moyenne</b> ou <b>Petite</b> — une photo en taille maximale peut dépasser
+5 Mo et être refusée ou ralentir l'envoi. L'original sur le disque n'est jamais modifié.</p>
 
 <h3>EXIF</h3>
 <ul>
@@ -248,44 +323,68 @@ _TAB_FACES = _STYLE + """
   <li><b>Visages › Identifier les personnes…</b> — ouvre la vue des groupes de visages.</li>
   <li>Cliquez sur un groupe pour lui attribuer un nom.</li>
   <li>Les suggestions de noms (en bleu) indiquent une ressemblance avec une personne déjà nommée.</li>
-  <li>Attribuer le même nom à plusieurs groupes les fusionne automatiquement.</li>
+  <li>Attribuer le même nom à plusieurs groupes les fusionne automatiquement dans la même personne.</li>
 </ul>
 
-<h3>Gérer les personnes</h3>
+<h3>Vue des visages d'une personne</h3>
+<p>Cliquez sur une personne dans la sidebar pour ouvrir sa vue détaillée.
+Elle affiche deux sections :</p>
 <ul>
-  <li>Les personnes nommées apparaissent dans la barre latérale sous <b>Personnes</b>.</li>
-  <li>Un badge numérique entre la photo et le nom indique le nombre de suggestions en attente.</li>
-  <li>Cliquez sur une personne pour voir toutes ses photos et ses suggestions.</li>
-  <li>Dans la visionneuse, le panneau <b>Visages</b> liste les visages de la photo ouverte.</li>
+  <li><b>Visages confirmés</b> — visages déjà associés à cette personne.
+    <ul>
+      <li>Simple clic : sélectionner un visage.</li>
+      <li><kbd>Ctrl</kbd>+clic : multi-sélection. <kbd>Shift</kbd>+clic : sélection en plage.</li>
+      <li>Double-clic : ouvrir la photo correspondante dans la visionneuse.</li>
+    </ul>
+  </li>
 </ul>
-
-<h3>Suggestions en attente de vérification</h3>
-<p>La section <b>En attente de vérification</b> dans la vue d'une personne liste les groupes de
-visages que le système pense lui appartenir.</p>
+<p><b>Clic droit</b> sur un visage confirmé :</p>
+<table>
+  <tr><th>Action</th><th>Effet</th></tr>
+  <tr><td><b>Réassigner</b></td><td>Déplace le ou les visages sélectionnés vers une autre personne</td></tr>
+  <tr><td><b>Dé-associer</b></td><td>Retire le visage de la personne ; il est réévalué pour d'autres personnes</td></tr>
+  <tr><td><b>Définir comme vignette principale</b></td><td>Utilise ce visage comme avatar dans la sidebar</td></tr>
+</table>
 <ul>
-  <li>Survolez une vignette pour faire apparaître les boutons <b>✓</b> (accepter) et <b>✗</b> (rejeter).</li>
-  <li><b>Accepter</b> — assigne définitivement ces visages à la personne.</li>
-  <li><b>Rejeter</b> — retire la suggestion. Les visages sont immédiatement réévalués en
-      arrière-plan pour d'autres personnes : si la ressemblance est suffisante, ils
-      apparaîtront dans les suggestions d'une autre personne.</li>
+  <li><b>En attente de vérification</b> — groupes que le système suggère d'associer à cette personne.
+    <ul>
+      <li>Survolez une vignette pour faire apparaître <b>✓</b> (accepter) et <b>✗</b> (rejeter).</li>
+      <li><b>Clic droit</b> : accepter ou rejeter le groupe entier.</li>
+      <li>Boutons <b>Accepter toutes</b> / <b>Rejeter toutes</b> en en-tête de la section.</li>
+    </ul>
+  </li>
 </ul>
 <p class="tip">Un visage rejeté n'est jamais perdu : il reste isolé et continue d'être
-candidat à une suggestion pour une autre personne.</p>
+candidat à une suggestion pour d'autres personnes.</p>
 
-<h3>Dé-associer un visage</h3>
+<h3>Gérer les personnes (sidebar)</h3>
 <ul>
-  <li>Clic droit sur un visage confirmé → <b>Dissocier</b> — retire le visage de la personne.</li>
-  <li>Le visage est isolé et immédiatement évalué pour d'autres personnes (hors personne d'origine).</li>
-  <li>Si la ressemblance est suffisante (≥ 50 %), il apparaîtra dans les suggestions
-      d'une autre personne.</li>
+  <li>Les personnes nommées apparaissent dans la barre latérale sous <b>Personnes</b>.</li>
+  <li>Un badge orange entre la vignette et le nom indique le nombre de suggestions en attente.</li>
+  <li>Dans la visionneuse, le panneau <b>Visages</b> liste les visages de la photo ouverte.</li>
+</ul>
+<p><b>Clic droit</b> sur une personne dans la sidebar :</p>
+<table>
+  <tr><th>Action</th><th>Effet</th></tr>
+  <tr><td><b>Renommer…</b></td><td>Modifie le nom dans toute la bibliothèque</td></tr>
+  <tr><td><b>Fusionner avec…</b></td><td>Fusionne tous les visages de cette personne avec ceux d'une autre</td></tr>
+  <tr><td><b>Effacer le nom…</b></td><td>Retire le nom — les visages redeviennent des groupes anonymes</td></tr>
+</table>
+
+<h3>Regroupement et réinitialisation</h3>
+<ul>
+  <li><b>Visages › Regrouper les visages…</b> — relance le clustering sur les visages déjà
+      analysés (rapide, sans réanalyse des photos). Utile après avoir ajusté la tolérance
+      dans les Paramètres.</li>
+  <li><b>Visages › Réinitialiser et réindexer…</b> — efface tous les visages et relance
+      la détection depuis zéro. Toutes les associations sont perdues.</li>
 </ul>
 
 <h3>Sauvegarde et restauration</h3>
 <ul>
-  <li><b>Visages › Sauvegarder la reconnaissance…</b> — crée une sauvegarde horodatée
-      de la base de données des visages.</li>
-  <li><b>Visages › Restaurer une sauvegarde…</b> — liste les sauvegardes disponibles
-      et permet d'en restaurer une (l'état courant est automatiquement sauvegardé avant).</li>
+  <li><b>Visages › Sauvegarder la reconnaissance…</b> — crée une sauvegarde horodatée.</li>
+  <li><b>Visages › Gérer les sauvegardes…</b> — liste et restaure une sauvegarde
+      (l'état courant est automatiquement sauvegardé avant la restauration).</li>
 </ul>
 
 <h3>Visages ignorés</h3>
@@ -298,8 +397,12 @@ candidat à une suggestion pour une autre personne.</p>
 <ul>
   <li><b>Visages › Importer depuis Picasa…</b> — importe les annotations de visages
       depuis les fichiers <code>.picasa.ini</code> de Google Picasa.</li>
-  <li>Les noms et régions existants sont associés automatiquement.</li>
+  <li>Les noms et régions existants sont associés automatiquement aux personnes existantes.</li>
 </ul>
+<p class="tip"><b>À ne faire qu'une seule fois.</b> Un nouvel import ré-insère tous les noms
+et annotations Picasa déjà connus, ce qui peut créer des doublons ou réintroduire
+des associations que vous avez supprimées. Un avertissement vous sera affiché si vous
+tentez de relancer l'import.</p>
 """
 
 _TAB_SHORTCUTS = _STYLE + """
@@ -366,13 +469,85 @@ _TAB_SHORTCUTS = _STYLE + """
 </table>
 """
 
+_TAB_DUPES = _STYLE + """
+<h2>Détection de doublons</h2>
+<p>PixelPhotoManager repère les photos visuellement similaires même lorsqu'elles ont
+été redimensionnées, légèrement retouchées ou recadrées.</p>
+
+<h3>Lancer la détection</h3>
+<ul>
+  <li><b>Outils › Détecter les doublons…</b> — lance l'analyse en arrière-plan.</li>
+  <li>La durée dépend de la taille de la bibliothèque ; l'application reste utilisable.</li>
+</ul>
+
+<h3>Comment ça marche — deux passes</h3>
+<table>
+  <tr><th>Passe</th><th>Technique</th><th>Cas couverts</th></tr>
+  <tr><td><b>1 — pHash</b></td><td>Empreinte perceptuelle (Hamming)</td>
+      <td>Doublons exacts, redimensionnés, légèrement retouchés (couleur, luminosité)</td></tr>
+  <tr><td><b>2 — ORB + RANSAC</b></td><td>Correspondance de points-clés</td>
+      <td>Doublons recadrés (jusqu'à ~60 % de surface rognée) — uniquement pour les photos
+          non groupées par la passe 1</td></tr>
+</table>
+<p class="tip"><b>Note :</b> Les vidéos ne sont pas analysées pour les doublons.</p>
+
+<h3>Badge de doublon</h3>
+<ul>
+  <li>Les vignettes appartenant à un groupe de doublons affichent un badge <b>⧉</b>.</li>
+  <li>Cliquer sur ce badge ouvre une vue listant toutes les photos du groupe côte à côte.</li>
+</ul>
+
+<h3>Workflow recommandé</h3>
+<ul>
+  <li>Lancez la détection via <b>Outils › Détecter les doublons…</b>.</li>
+  <li>Quand l'analyse est terminée, les badges <b>⧉</b> apparaissent sur les vignettes concernées.</li>
+  <li>Cliquez sur un badge pour examiner le groupe de photos similaires.</li>
+  <li>Sélectionnez les exemplaires à conserver / supprimer, puis appuyez sur <kbd>Suppr</kbd>.</li>
+</ul>
+<p class="tip">La suppression d'un doublon est <b>définitive</b> (pas de corbeille).
+Vérifiez bien les photos avant de confirmer.</p>
+"""
+
+_TAB_SETTINGS = _STYLE + """
+<h2>Paramètres</h2>
+<p>Accédez aux paramètres via <b>Outils › Paramètres</b>.</p>
+
+<h3>Reconnaissance de visages — Tolérance de similarité</h3>
+<p>Contrôle à quel point deux visages doivent se ressembler pour être placés dans le
+même groupe lors du clustering. Plage : 25 % à 70 %. Valeur par défaut : <b>60 %</b>.</p>
+<table>
+  <tr><th>Plage</th><th>Comportement</th></tr>
+  <tr><td>25–30 %</td><td>Groupes très stricts — peu d'erreurs de mélange, mais une même
+      personne sous des angles ou éclairages très différents peut former plusieurs groupes</td></tr>
+  <tr><td>31–40 %</td><td>Groupes équilibrés</td></tr>
+  <tr><td>41–55 %</td><td>Groupes plus larges — regroupe davantage de variantes du même visage</td></tr>
+  <tr><td>56–70 %</td><td>Groupes très larges — risque de mélanger des personnes différentes</td></tr>
+</table>
+<p class="tip">Si vous modifiez ce réglage, les groupes sont recalculés automatiquement
+à la fermeture du dialogue. Les associations de personnes déjà nommées ne sont pas affectées.</p>
+
+<h3>Lecteur vidéo</h3>
+<p>Choisissez le lecteur utilisé par le bouton <b>▶ Ouvrir la vidéo</b> dans la visionneuse.</p>
+<table>
+  <tr><th>Option</th><th>Comportement</th></tr>
+  <tr><td><b>Lecteur par défaut du système</b></td><td>Utilise l'application associée aux fichiers
+      vidéo dans Windows (ex. Films &amp; TV)</td></tr>
+  <tr><td><b>Lecteur personnalisé</b></td><td>Spécifiez le chemin vers un exécutable.
+      Cliquez <b>Parcourir…</b> pour naviguer jusqu'à l'exécutable.
+      Exemples : <code>C:\Program Files\VLC\vlc.exe</code>,
+      <code>C:\Program Files\MPC-HC\mpc-hc64.exe</code></td></tr>
+</table>
+"""
+
 _TABS = [
     ("Vue d'ensemble",  _TAB_OVERVIEW),
     ("Navigation",      _TAB_NAVIGATION),
     ("Diaporama",       _TAB_SLIDESHOW),
     ("Retouches",       _TAB_EDITING),
     ("Visages",         _TAB_FACES),
+    ("Doublons",        _TAB_DUPES),
     ("Raccourcis",      _TAB_SHORTCUTS),
+    ("Paramètres",      _TAB_SETTINGS),
 ]
 
 _BROWSER_STYLE = """
@@ -380,6 +555,32 @@ QTextBrowser {
     background: #2b2b2b;
     border: none;
     padding: 8px;
+}
+"""
+
+_TABWIDGET_STYLE = """
+QTabWidget::pane {
+    border: 1px solid #444;
+    background: #2b2b2b;
+}
+QTabBar::tab {
+    background: #2a2a2a;
+    color: #bbb;
+    padding: 5px 12px;
+    border: 1px solid #444;
+    border-bottom: none;
+    margin-right: 2px;
+}
+QTabBar::tab:selected {
+    background: #2a5a9a;
+    color: #ffffff;
+    font-weight: bold;
+    border-color: #3a6ab0;
+    border-bottom: 1px solid #2a5a9a;
+}
+QTabBar::tab:hover:!selected {
+    background: #333;
+    color: #eee;
 }
 """
 
@@ -395,6 +596,7 @@ class HelpDialog(QDialog):
         layout.setSpacing(6)
 
         tabs = QTabWidget()
+        tabs.setStyleSheet(_TABWIDGET_STYLE)
         for title, html in _TABS:
             browser = QTextBrowser()
             browser.setOpenExternalLinks(False)
