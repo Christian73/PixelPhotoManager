@@ -28,6 +28,19 @@ logger = logging.getLogger(__name__)
 _PREVIEW_MAX_PX = 1024
 
 
+def _to_rgb(img):
+    """Convertit une image PIL en RGB pour l'enregistrement JPEG.
+    RGBA est aplati sur fond blanc ; les autres modes (CMYK, P…) sont convertis directement."""
+    if img.mode == "RGBA":
+        from PIL import Image as _Image
+        bg = _Image.new("RGB", img.size, (255, 255, 255))
+        bg.paste(img, mask=img.split()[3])
+        return bg
+    if img.mode != "RGB":
+        return img.convert("RGB")
+    return img
+
+
 def _build_pixmap(photo: PhotoInfo, edit: EditInfo | None) -> "tuple[QPixmap, int, int] | None":
     """Retourne (pixmap, orig_w, orig_h) — dimensions de l'image EXIF-corrigée avant
     tout edit, à utiliser pour mapper les bbox de détection faciale."""
@@ -48,8 +61,7 @@ def _build_pixmap(photo: PhotoInfo, edit: EditInfo | None) -> "tuple[QPixmap, in
                 )
             if edit and edit.is_modified():
                 img = ImageAdjuster.apply_all(img, edit)
-            if img.mode not in ("RGB", "RGBA"):
-                img = img.convert("RGB")
+            img = _to_rgb(img)
             buf = io.BytesIO()
             img.save(buf, format="JPEG", quality=92)
             pixmap = QPixmap()
@@ -123,8 +135,7 @@ def _build_base_image(photo: PhotoInfo) -> "tuple[bytes, int, int] | None":
                 img = img.resize(
                     (round(orig_w * scale), round(orig_h * scale)), Image.LANCZOS
                 )
-            if img.mode not in ("RGB", "RGBA"):
-                img = img.convert("RGB")
+            img = _to_rgb(img)
             buf = io.BytesIO()
             img.save(buf, format="JPEG", quality=95)
             return buf.getvalue(), orig_w, orig_h
@@ -143,8 +154,7 @@ def _apply_edit_to_base(base_bytes: bytes, edit: "EditInfo | None") -> "QPixmap 
         img = Image.open(io.BytesIO(base_bytes))
         if edit and edit.is_modified():
             img = ImageAdjuster.apply_all(img, edit)
-        if img.mode not in ("RGB", "RGBA"):
-            img = img.convert("RGB")
+        img = _to_rgb(img)
         buf = io.BytesIO()
         img.save(buf, format="JPEG", quality=92)
         pixmap = QPixmap()
