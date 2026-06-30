@@ -8,3 +8,9 @@ build/
 *.db
 *.db-shm
 *.db-wal
+
+# Artefacts installeur WiX (générés par build_msi.ps1)
+installer/obj/
+installer/harvested_*.wxs
+installer/*.msi
+installer/*.wixpdb
