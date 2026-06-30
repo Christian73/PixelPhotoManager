@@ -492,6 +492,10 @@ def main() -> None:
 
 
 if __name__ == "__main__":
+    # CRITIQUE : doit être le premier appel dans __main__ pour les EXE PyInstaller.
+    # Sans cela, chaque sous-processus worker re-lance l'application entière sur Windows
+    # (spawn), provoquant une boucle infinie qui sature le CPU.
+    multiprocessing.freeze_support()
     try:
         logger.info("Démarrage de PixelPhotoManager")
         main()
