@@ -1,3 +1,5 @@
+﻿# Copyright 2026 Christian Guyot
+# SPDX-License-Identifier: Apache-2.0
 from abc import abstractmethod
 from PIL import Image
 from .base_plugin import BasePlugin

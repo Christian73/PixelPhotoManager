@@ -1,3 +1,5 @@
+﻿# Copyright 2026 Christian Guyot
+# SPDX-License-Identifier: Apache-2.0
 """
 FaceClusterGrid — grille des groupes de visages non identifiés.
 
@@ -233,6 +235,7 @@ class _ClusterCard(QFrame):
     merge_requested      = Signal(int)
     ignore_requested     = Signal(int)
     quick_accept_requested = Signal(int, int)   # cluster_id, person_id
+    quick_assign_requested = Signal(int)        # cluster_id
     quick_ignore_requested = Signal(int)        # cluster_id
     eject_from_section_requested = Signal(int)  # cluster_id
 
@@ -328,6 +331,11 @@ class _ClusterCard(QFrame):
                 " color: #ba5d5d; font-size: 11px; font-weight: bold; padding: 0; }"
                 "QPushButton:hover { background: #5a2a2a; }"
             )
+            _bs_assign = (
+                "QPushButton { background: #1a2a3a; border: 1px solid #2a5a7a; border-radius: 3px;"
+                " color: #7ab4d4; font-size: 10px; font-weight: bold; padding: 0 2px; }"
+                "QPushButton:hover { background: #1a3a5a; }"
+            )
             btn_accept = QPushButton("✓")
             btn_accept.setFixedHeight(20)
             btn_accept.setStyleSheet(_bs_accept)
@@ -337,6 +345,13 @@ class _ClusterCard(QFrame):
                     self._cluster_id, self._suggested_person_id
                 )
             )
+            btn_assign = QPushButton("→")
+            btn_assign.setFixedHeight(20)
+            btn_assign.setStyleSheet(_bs_assign)
+            btn_assign.setToolTip("Associer à une autre personne…")
+            btn_assign.clicked.connect(
+                lambda: self.quick_assign_requested.emit(self._cluster_id)
+            )
             btn_ignore = QPushButton("✕")
             btn_ignore.setFixedHeight(20)
             btn_ignore.setStyleSheet(_bs_ignore)
@@ -345,6 +360,7 @@ class _ClusterCard(QFrame):
                 lambda: self.quick_ignore_requested.emit(self._cluster_id)
             )
             qr.addWidget(btn_accept)
+            qr.addWidget(btn_assign)
             qr.addWidget(btn_ignore)
             col.addWidget(self._quick_row)
             self._quick_row.setVisible(suggested_person_id is not None)
@@ -622,15 +638,15 @@ class _SectionWidget(QFrame):
                     )
                 )
                 hdr_row.addWidget(btn_accept)
-            else:
-                btn_assign = QPushButton("Associer à…")
-                btn_assign.setFixedHeight(22)
-                btn_assign.setStyleSheet(_bs)
-                btn_assign.setToolTip("Assigner tous les groupes à une personne")
-                btn_assign.clicked.connect(
-                    lambda: self.assign_requested.emit([c for c, _ in self._entries])
-                )
-                hdr_row.addWidget(btn_assign)
+
+            btn_assign = QPushButton("Associer à…")
+            btn_assign.setFixedHeight(22)
+            btn_assign.setStyleSheet(_bs)
+            btn_assign.setToolTip("Assigner tous les groupes à une autre personne")
+            btn_assign.clicked.connect(
+                lambda: self.assign_requested.emit([c for c, _ in self._entries])
+            )
+            hdr_row.addWidget(btn_assign)
 
             btn_ignore = QPushButton("Ignorer")
             btn_ignore.setFixedHeight(22)
@@ -1625,6 +1641,7 @@ class FaceClusterGrid(QWidget):
             card.merge_requested.connect(self._on_card_merge_requested)
             card.ignore_requested.connect(self._on_card_ignore_requested)
             card.quick_accept_requested.connect(self._on_card_quick_accept)
+            card.quick_assign_requested.connect(self._on_card_quick_assign)
             card.quick_ignore_requested.connect(self._on_card_quick_ignore)
             card.eject_from_section_requested.connect(self._on_card_eject_from_section)
             target.add_card(cluster_id, card)
@@ -1797,6 +1814,9 @@ class FaceClusterGrid(QWidget):
         self._anchor_id = None
         self.remove_clusters([cluster_id])
 
+    def _on_card_quick_assign(self, cluster_id: int) -> None:
+        self._start_assign_for_clusters([cluster_id])
+
     def _on_card_eject_from_section(self, cluster_id: int) -> None:
         """Retire le cluster de sa section de suggestion et le place dans les groupes isolés."""
         self._face_db.clear_cluster_suggestion(cluster_id)
@@ -1868,6 +1888,7 @@ class FaceClusterGrid(QWidget):
             new_card.merge_requested.connect(self._on_card_merge_requested)
             new_card.ignore_requested.connect(self._on_card_ignore_requested)
             new_card.quick_accept_requested.connect(self._on_card_quick_accept)
+            new_card.quick_assign_requested.connect(self._on_card_quick_assign)
             new_card.quick_ignore_requested.connect(self._on_card_quick_ignore)
             flat.add_card(cluster_id, new_card)
             self._cards[cluster_id] = new_card
@@ -2033,6 +2054,7 @@ class FaceClusterGrid(QWidget):
             card.merge_requested.connect(self._on_card_merge_requested)
             card.ignore_requested.connect(self._on_card_ignore_requested)
             card.quick_accept_requested.connect(self._on_card_quick_accept)
+            card.quick_assign_requested.connect(self._on_card_quick_assign)
             card.quick_ignore_requested.connect(self._on_card_quick_ignore)
             card.eject_from_section_requested.connect(self._on_card_eject_from_section)
             target.add_card(cluster_id, card)

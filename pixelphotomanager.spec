@@ -1,12 +1,15 @@
-# -*- mode: python ; coding: utf-8 -*-
+﻿# -*- mode: python ; coding: utf-8 -*-
+# Copyright 2026 Christian Guyot
+# SPDX-License-Identifier: Apache-2.0
 """
 Spec PyInstaller — PixelPhotoManager
 Build : .venv\Scripts\pyinstaller.exe pixelphotomanager.spec --clean
 Sortie : dist\PixelPhotoManager\PixelPhotoManager.exe  (one-dir)
 """
 from PyInstaller.utils.hooks import collect_all
+from pathlib import Path
 
-block_cipher = None
+ROOT = Path(SPECPATH)
 
 # Packages avec ressources intégrées (templates, polices, plugins)
 _with_data = ["PIL", "folium", "reportlab"]
@@ -19,10 +22,12 @@ for pkg in _with_data:
     hiddenimports += h
 
 a = Analysis(
-    ["main.py"],
-    pathex=["."],
+    [str(ROOT / "main.py")],
+    pathex=[str(ROOT)],
     binaries=binaries,
-    datas=datas,
+    datas=datas + [
+        (str(ROOT / "assets"), "assets"),
+    ],
     hiddenimports=hiddenimports + [
         # Pillow — plugins image chargés dynamiquement
         "PIL.Image", "PIL.ImageOps", "PIL.ImageFilter", "PIL.ImageDraw",
@@ -67,11 +72,10 @@ a = Analysis(
         "debugpy",
         "pytest",
     ],
-    cipher=block_cipher,
     noarchive=False,
 )
 
-pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
+pyz = PYZ(a.pure)
 
 exe = EXE(
     pyz,
@@ -89,13 +93,12 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon="assets/lutin_camera_icon_download.ico",
+    icon=str(ROOT / "assets" / "app_icon.ico"),
 )
 
 coll = COLLECT(
     exe,
     a.binaries,
-    a.zipfiles,
     a.datas,
     strip=False,
     upx=False,

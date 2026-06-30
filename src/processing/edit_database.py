@@ -1,3 +1,5 @@
+﻿# Copyright 2026 Christian Guyot
+# SPDX-License-Identifier: Apache-2.0
 import json
 import logging
 import os
@@ -54,6 +56,22 @@ _MIGRATE_COLOR_CHANNELS = [
 _MIGRATE_RED_EYE = (
     "ALTER TABLE photo_edits ADD COLUMN red_eye_regions TEXT DEFAULT NULL"
 )
+_MIGRATE_VIGNETTE = [
+    "ALTER TABLE photo_edits ADD COLUMN vignette_strength REAL DEFAULT 0.0",
+    "ALTER TABLE photo_edits ADD COLUMN vignette_radius   REAL DEFAULT 0.75",
+    "ALTER TABLE photo_edits ADD COLUMN vignette_feather  REAL DEFAULT 0.5",
+    "ALTER TABLE photo_edits ADD COLUMN vignette_color    TEXT DEFAULT 'black'",
+    "ALTER TABLE photo_edits ADD COLUMN vignette_shape    TEXT DEFAULT 'ellipse'",
+]
+_MIGRATE_VIGNETTE_V2 = [
+    "ALTER TABLE photo_edits ADD COLUMN vignette_cx    REAL DEFAULT 0.5",
+    "ALTER TABLE photo_edits ADD COLUMN vignette_cy    REAL DEFAULT 0.5",
+    "ALTER TABLE photo_edits ADD COLUMN vignette_rx1   REAL DEFAULT 0.4",
+    "ALTER TABLE photo_edits ADD COLUMN vignette_ry1   REAL DEFAULT 0.4",
+    "ALTER TABLE photo_edits ADD COLUMN vignette_rx2   REAL DEFAULT 0.8",
+    "ALTER TABLE photo_edits ADD COLUMN vignette_ry2   REAL DEFAULT 0.8",
+    "ALTER TABLE photo_edits ADD COLUMN vignette_angle REAL DEFAULT 0.0",
+]
 
 _CREATE_HISTORY = """
 CREATE TABLE IF NOT EXISTS edit_history (
@@ -110,6 +128,16 @@ class EditDatabase:
                 conn.execute(_MIGRATE_RED_EYE)
             except sqlite3.OperationalError:
                 pass
+            for _sql in _MIGRATE_VIGNETTE:
+                try:
+                    conn.execute(_sql)
+                except sqlite3.OperationalError:
+                    pass
+            for _sql in _MIGRATE_VIGNETTE_V2:
+                try:
+                    conn.execute(_sql)
+                except sqlite3.OperationalError:
+                    pass
             self._migrate_normalize_paths(conn)
             conn.commit()
 
@@ -175,6 +203,15 @@ class EditDatabase:
                         [tuple(r) for r in json.loads(row["red_eye_regions"])]
                         if row["red_eye_regions"] else []
                     ),
+                    vignette_strength=float(row["vignette_strength"] or 0.0),
+                    vignette_color=str(row["vignette_color"] or "black"),
+                    vignette_cx=float(row["vignette_cx"] if row["vignette_cx"] is not None else 0.5),
+                    vignette_cy=float(row["vignette_cy"] if row["vignette_cy"] is not None else 0.5),
+                    vignette_rx1=float(row["vignette_rx1"] if row["vignette_rx1"] is not None else 0.4),
+                    vignette_ry1=float(row["vignette_ry1"] if row["vignette_ry1"] is not None else 0.4),
+                    vignette_rx2=float(row["vignette_rx2"] if row["vignette_rx2"] is not None else 0.8),
+                    vignette_ry2=float(row["vignette_ry2"] if row["vignette_ry2"] is not None else 0.8),
+                    vignette_angle=float(row["vignette_angle"] if row["vignette_angle"] is not None else 0.0),
                 )
             except Exception as e:
                 logger.error(f"Erreur lecture retouches {photo_path}: {e}")
@@ -200,9 +237,14 @@ class EditDatabase:
                                  sharpness, noise_reduction, rotation, straighten,
                                  flip_h, flip_v, crop, bw, bw_red, bw_green, bw_blue,
                                  color_red, color_green, color_blue, red_eye_regions,
+                                 vignette_strength, vignette_color,
+                                 vignette_cx, vignette_cy,
+                                 vignette_rx1, vignette_ry1,
+                                 vignette_rx2, vignette_ry2,
+                                 vignette_angle,
                                  modified_at)
                             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                                    ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                                    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
                             """,
                             (
                                 photo_path,
@@ -218,6 +260,11 @@ class EditDatabase:
                                 edit.bw_red, edit.bw_green, edit.bw_blue,
                                 edit.color_red, edit.color_green, edit.color_blue,
                                 json.dumps([list(r) for r in edit.red_eye_regions]) if edit.red_eye_regions else None,
+                                edit.vignette_strength, edit.vignette_color,
+                                edit.vignette_cx, edit.vignette_cy,
+                                edit.vignette_rx1, edit.vignette_ry1,
+                                edit.vignette_rx2, edit.vignette_ry2,
+                                edit.vignette_angle,
                             ),
                         )
                     conn.execute(
@@ -289,6 +336,37 @@ class EditDatabase:
                     conn.commit()
             except Exception as e:
                 logger.error(f"Erreur renommage retouches {old_path} → {new_path}: {e}")
+
+    def push_history(self, photo_path: str, edit: EditInfo, operation: str = "checkpoint") -> None:
+        """Insère un état dans edit_history sans modifier photo_edits.
+
+        Utilisé pour sauvegarder l'état PRÉ-opération, afin que l'undo soit
+        possible après redémarrage de l'application (undo cross-session).
+        """
+        photo_path = os.path.normpath(photo_path)
+        with self._lock:
+            try:
+                with self._connect() as conn:
+                    conn.execute(
+                        "INSERT INTO edit_history (photo_path, state_json, operation) VALUES (?, ?, ?)",
+                        (photo_path, json.dumps(edit.to_dict()), operation),
+                    )
+                    conn.execute(
+                        """
+                        DELETE FROM edit_history
+                        WHERE photo_path = ?
+                          AND id NOT IN (
+                              SELECT id FROM edit_history
+                              WHERE photo_path = ?
+                              ORDER BY id DESC
+                              LIMIT ?
+                          )
+                        """,
+                        (photo_path, photo_path, _HISTORY_LIMIT),
+                    )
+                    conn.commit()
+            except Exception as e:
+                logger.error("Erreur push_history %s: %s", photo_path, e)
 
     def get_history(self, photo_path: str, limit: int = 20) -> list[tuple]:
         """Retourne les états précédents du plus ancien au plus récent (pour undo persistant).

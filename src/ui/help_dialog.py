@@ -1,3 +1,5 @@
+﻿# Copyright 2026 Christian Guyot
+# SPDX-License-Identifier: Apache-2.0
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QTabWidget, QTextBrowser, QDialogButtonBox,
@@ -416,7 +418,7 @@ candidat à une suggestion pour d'autres personnes.</p>
 <p><b>Ce que ça fait :</b> Reconsidère les visages marqués «&nbsp;ignoré&nbsp;» car leur taille
 était inférieure au seuil minimal au moment de la détection. Relit les dimensions
 de chaque photo et recalcule un seuil <u>proportionnel</u> à la résolution
-(4 % de la plus petite dimension, plancher 30 px). Les visages qui passent maintenant
+(3 % de la plus petite dimension, plancher 22 px). Les visages qui passent maintenant
 ce seuil sont restaurés (flag <code>ignored=0</code>).</p>
 <p><b>Ce que ça ne fait PAS :</b></p>
 <ul>
@@ -628,6 +630,35 @@ même groupe lors du clustering. Plage : 25 % à 70 %. Valeur par défaut : <b>6
 </table>
 """
 
+_TAB_ABOUT = _STYLE + """
+<h2>Pixel Photo Manager</h2>
+<p style="color:#aaa;">Version 1.0 &nbsp;·&nbsp; Windows x64</p>
+<p>Copyright 2026 Christian Guyot<br>
+Distribué sous les termes de l'<b>Apache License, Version 2.0</b>.<br>
+<a href="http://www.apache.org/licenses/LICENSE-2.0" style="color:#6aacf0;">
+www.apache.org/licenses/LICENSE-2.0</a></p>
+
+<h2>Composants tiers</h2>
+<table>
+  <tr><th>Composant</th><th>Licence</th></tr>
+  <tr><td><b>PySide6</b> (Qt for Python)</td><td>LGPLv3 / GPLv2</td></tr>
+  <tr><td><b>Pillow</b></td><td>HPND</td></tr>
+  <tr><td><b>OpenCV</b> (opencv-python)</td><td>Apache 2.0</td></tr>
+  <tr><td><b>InsightFace</b></td><td>MIT</td></tr>
+  <tr><td><b>ONNX Runtime</b></td><td>MIT</td></tr>
+  <tr><td><b>scikit-learn</b></td><td>BSD 3-Clause</td></tr>
+  <tr><td><b>HDBSCAN</b></td><td>BSD 3-Clause</td></tr>
+  <tr><td><b>imagehash</b></td><td>BSD 2-Clause</td></tr>
+  <tr><td><b>folium</b></td><td>MIT</td></tr>
+  <tr><td><b>ReportLab</b></td><td>BSD</td></tr>
+  <tr><td><b>psutil</b></td><td>BSD 3-Clause</td></tr>
+  <tr><td><b>piexif</b></td><td>MIT</td></tr>
+</table>
+<p style="color:#888; font-size:12px; margin-top:12px;">
+Le texte complet des licences tierces est disponible dans le fichier NOTICE
+distribué avec le code source.</p>
+"""
+
 _TABS = [
     ("Vue d'ensemble",  _TAB_OVERVIEW),
     ("Navigation",      _TAB_NAVIGATION),
@@ -637,6 +668,7 @@ _TABS = [
     ("Doublons",        _TAB_DUPES),
     ("Raccourcis",      _TAB_SHORTCUTS),
     ("Paramètres",      _TAB_SETTINGS),
+    ("À propos",        _TAB_ABOUT),
 ]
 
 _BROWSER_STYLE = """
@@ -675,7 +707,7 @@ QTabBar::tab:hover:!selected {
 
 
 class HelpDialog(QDialog):
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, tab: str | None = None):
         super().__init__(parent)
         self.setWindowTitle("Aide — PixelPhotoManager")
         self.resize(760, 560)
@@ -688,11 +720,18 @@ class HelpDialog(QDialog):
         tabs.setStyleSheet(_TABWIDGET_STYLE)
         for title, html in _TABS:
             browser = QTextBrowser()
-            browser.setOpenExternalLinks(False)
+            browser.setOpenExternalLinks(True)
             browser.setStyleSheet(_BROWSER_STYLE)
             browser.setHtml(html)
             browser.verticalScrollBar().setValue(0)
             tabs.addTab(browser, title)
+
+        if tab is not None:
+            for i, (title, _) in enumerate(_TABS):
+                if title == tab:
+                    tabs.setCurrentIndex(i)
+                    break
+
         layout.addWidget(tabs)
 
         btn_box = QDialogButtonBox(QDialogButtonBox.Close)

@@ -1,16 +1,19 @@
+﻿# Copyright 2026 Christian Guyot
+# SPDX-License-Identifier: Apache-2.0
+import copy
 import io
 import logging
 import math
 import os
 
-from PySide6.QtCore import Qt, QThread, QTimer, QUrl, Signal, Slot, QPoint, QRectF, QPointF, QSize
+from PySide6.QtCore import Qt, QThread, QTimer, QUrl, Signal, Slot, QPoint, QRectF, QPointF, QSize, QFileInfo
 from PySide6.QtGui import (
     QDesktopServices, QPixmap, QPainter, QKeyEvent, QWheelEvent,
     QMouseEvent, QPen, QColor, QPainterPath, QPolygonF, QIcon,
 )
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
-    QLabel, QSizePolicy, QToolButton, QButtonGroup, QMenu,
+    QLabel, QSizePolicy, QToolButton, QButtonGroup, QMenu, QFileIconProvider,
 )
 
 from src.core.models import PhotoInfo, EditInfo
@@ -272,6 +275,7 @@ class _Canvas(QWidget):
     red_eye_point_added         = Signal(float, float)  # cx_norm, cy_norm (0-1)
     pixel_sampled               = Signal(int, int, int)  # R, G, B — pipette balance des blancs
     face_context_menu_requested = Signal(object, object) # (FaceInfo, QPoint global)
+    vignette_changed            = Signal(object) # EditInfo (géométrie mise à jour par drag)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -303,6 +307,12 @@ class _Canvas(QWidget):
         self._red_eye_mouse: QPointF | None = None
         # Mode pipette balance des blancs
         self._wb_pick_mode: bool = False
+        # Mode vignette interactive
+        self._vignette_mode: bool = False
+        self._vignette_edit = None           # EditInfo courant de la vignette
+        self._vignette_drag: str | None = None
+        self._vignette_drag_start: "QPointF | None" = None
+        self._vignette_edit_start = None     # copie de EditInfo au début du drag
         self.setMouseTracking(True)
         self.setFocusPolicy(Qt.NoFocus)
 
@@ -747,6 +757,192 @@ class _Canvas(QWidget):
         """Edit courant à prendre en compte pour le mapping bbox → écran."""
         self._current_edit = edit
 
+    # ------------------------------------------------------------------ vignette interactive
+
+    def enter_vignette_mode(self, edit) -> None:
+        self._vignette_mode = True
+        self._vignette_edit = copy.copy(edit)
+        self._vignette_drag = None
+        self.update()
+
+    def exit_vignette_mode(self) -> None:
+        self._vignette_mode = False
+        self._vignette_edit = None
+        self._vignette_drag = None
+        self.update()
+
+    def update_vignette(self, edit) -> None:
+        if self._vignette_mode:
+            self._vignette_edit = copy.copy(edit)
+            self.update()
+
+    def _vignette_handle_positions(self) -> dict:
+        if not self._vignette_edit or not self._pixmap:
+            return {}
+        ir = self._img_rect()
+        if ir.width() <= 0 or ir.height() <= 0:
+            return {}
+        e = self._vignette_edit
+        cx_s  = ir.x() + e.vignette_cx * ir.width()
+        cy_s  = ir.y() + e.vignette_cy * ir.height()
+        rx1_s = e.vignette_rx1 * ir.width()  / 2.0
+        ry1_s = e.vignette_ry1 * ir.height() / 2.0
+        rx2_s = e.vignette_rx2 * ir.width()  / 2.0
+        ry2_s = e.vignette_ry2 * ir.height() / 2.0
+        rad   = math.radians(e.vignette_angle)
+        cos_a = math.cos(rad)
+        sin_a = math.sin(rad)
+
+        def rot(ldx, ldy):
+            return (ldx * cos_a - ldy * sin_a, ldx * sin_a + ldy * cos_a)
+
+        def s(ldx, ldy):
+            rdx, rdy = rot(ldx, ldy)
+            return QPointF(cx_s + rdx, cy_s + rdy)
+
+        return {
+            'center':  QPointF(cx_s, cy_s),
+            'inner_n': s(0,      -ry1_s),
+            'inner_s': s(0,      +ry1_s),
+            'inner_e': s(+rx1_s, 0),
+            'inner_w': s(-rx1_s, 0),
+            'outer_n': s(0,      -ry2_s),
+            'outer_s': s(0,      +ry2_s),
+            'outer_e': s(+rx2_s, 0),
+            'outer_w': s(-rx2_s, 0),
+            'rotate':  s(0,      -(ry2_s + 28)),
+        }
+
+    def _vignette_hit_test(self, pos: QPointF) -> "str | None":
+        HIT_R = 12
+        for name, hpos in self._vignette_handle_positions().items():
+            if math.hypot(pos.x() - hpos.x(), pos.y() - hpos.y()) <= HIT_R:
+                return name
+        return None
+
+    def _vignette_update_drag(self, pos: QPointF) -> None:
+        if not self._vignette_drag or not self._vignette_edit_start or not self._vignette_drag_start:
+            return
+        ir = self._img_rect()
+        if ir.width() <= 0 or ir.height() <= 0:
+            return
+
+        e0  = self._vignette_edit_start
+        dx  = pos.x() - self._vignette_drag_start.x()
+        dy  = pos.y() - self._vignette_drag_start.y()
+        rad = math.radians(e0.vignette_angle)
+        cos_a = math.cos(rad)
+        sin_a = math.sin(rad)
+        handle = self._vignette_drag
+        e = copy.copy(e0)
+
+        if handle == 'center':
+            e.vignette_cx = max(0.0, min(1.0, e0.vignette_cx + dx / ir.width()))
+            e.vignette_cy = max(0.0, min(1.0, e0.vignette_cy + dy / ir.height()))
+        elif handle == 'inner_n':
+            proj = dx * sin_a + dy * (-cos_a)
+            e.vignette_ry1 = max(0.05, e0.vignette_ry1 + proj / (ir.height() / 2.0))
+        elif handle == 'inner_s':
+            proj = dx * (-sin_a) + dy * cos_a
+            e.vignette_ry1 = max(0.05, e0.vignette_ry1 + proj / (ir.height() / 2.0))
+        elif handle == 'inner_e':
+            proj = dx * cos_a + dy * sin_a
+            e.vignette_rx1 = max(0.05, e0.vignette_rx1 + proj / (ir.width() / 2.0))
+        elif handle == 'inner_w':
+            proj = dx * (-cos_a) + dy * (-sin_a)
+            e.vignette_rx1 = max(0.05, e0.vignette_rx1 + proj / (ir.width() / 2.0))
+        elif handle == 'outer_n':
+            proj = dx * sin_a + dy * (-cos_a)
+            e.vignette_ry2 = max(0.05, e0.vignette_ry2 + proj / (ir.height() / 2.0))
+        elif handle == 'outer_s':
+            proj = dx * (-sin_a) + dy * cos_a
+            e.vignette_ry2 = max(0.05, e0.vignette_ry2 + proj / (ir.height() / 2.0))
+        elif handle == 'outer_e':
+            proj = dx * cos_a + dy * sin_a
+            e.vignette_rx2 = max(0.05, e0.vignette_rx2 + proj / (ir.width() / 2.0))
+        elif handle == 'outer_w':
+            proj = dx * (-cos_a) + dy * (-sin_a)
+            e.vignette_rx2 = max(0.05, e0.vignette_rx2 + proj / (ir.width() / 2.0))
+        elif handle == 'rotate':
+            cx_s = ir.x() + e0.vignette_cx * ir.width()
+            cy_s = ir.y() + e0.vignette_cy * ir.height()
+            a0 = math.degrees(math.atan2(
+                self._vignette_drag_start.y() - cy_s,
+                self._vignette_drag_start.x() - cx_s))
+            ac = math.degrees(math.atan2(pos.y() - cy_s, pos.x() - cx_s))
+            e.vignette_angle = (e0.vignette_angle + ac - a0) % 360.0
+
+        self._vignette_edit = e
+        self.vignette_changed.emit(copy.copy(e))
+        self.update()
+
+    def _draw_vignette_overlay(self, p: QPainter) -> None:
+        if not self._vignette_edit or not self._pixmap:
+            return
+        ir = self._img_rect()
+        if ir.width() <= 0 or ir.height() <= 0:
+            return
+        e = self._vignette_edit
+        cx_s  = ir.x() + e.vignette_cx * ir.width()
+        cy_s  = ir.y() + e.vignette_cy * ir.height()
+        rx1_s = e.vignette_rx1 * ir.width()  / 2.0
+        ry1_s = e.vignette_ry1 * ir.height() / 2.0
+        rx2_s = e.vignette_rx2 * ir.width()  / 2.0
+        ry2_s = e.vignette_ry2 * ir.height() / 2.0
+
+        # Ellipse interne — pointillés jaunes
+        p.save()
+        p.translate(cx_s, cy_s)
+        p.rotate(e.vignette_angle)
+        p.setPen(QPen(QColor(255, 200, 0, 210), 1.5, Qt.DashLine))
+        p.setBrush(Qt.NoBrush)
+        p.drawEllipse(QPointF(0, 0), rx1_s, ry1_s)
+        p.restore()
+
+        # Ellipse externe — trait continu jaune
+        p.save()
+        p.translate(cx_s, cy_s)
+        p.rotate(e.vignette_angle)
+        p.setPen(QPen(QColor(255, 200, 0, 210), 1.5))
+        p.setBrush(Qt.NoBrush)
+        p.drawEllipse(QPointF(0, 0), rx2_s, ry2_s)
+        p.restore()
+
+        handles = self._vignette_handle_positions()
+
+        # Tige de rotation (outer_n → rotate)
+        outer_n = handles.get('outer_n')
+        rot_h   = handles.get('rotate')
+        if outer_n and rot_h:
+            p.setPen(QPen(QColor(255, 200, 0, 130), 1, Qt.DotLine))
+            p.drawLine(outer_n, rot_h)
+
+        HS = 6
+        for name, hpos in handles.items():
+            active = (name == self._vignette_drag)
+            fill   = QColor(255, 200, 0, 230 if active else 160)
+            border = QPen(QColor(160, 120, 0, 230), 1.5)
+
+            if name == 'center':
+                p.setPen(QPen(QColor(255, 200, 0, 210), 1.5))
+                p.setBrush(Qt.NoBrush)
+                arm = 10
+                p.drawLine(QPointF(hpos.x()-arm, hpos.y()), QPointF(hpos.x()+arm, hpos.y()))
+                p.drawLine(QPointF(hpos.x(), hpos.y()-arm), QPointF(hpos.x(), hpos.y()+arm))
+                p.drawEllipse(hpos, 4.0, 4.0)
+            elif name == 'rotate':
+                p.setPen(border)
+                p.setBrush(fill)
+                p.drawEllipse(hpos, HS + 1, HS + 1)
+            elif name.startswith('inner_'):
+                p.setPen(border)
+                p.setBrush(fill)
+                p.drawEllipse(hpos, HS, HS)
+            else:  # outer_n/s/e/w
+                p.setPen(border)
+                p.setBrush(fill)
+                p.drawRect(QRectF(hpos.x()-HS, hpos.y()-HS, HS*2, HS*2))
+
     # ------------------------------------------------------------------ red-eye mode
 
     def enter_red_eye_mode(self, radius: float = 0.03) -> None:
@@ -899,6 +1095,8 @@ class _Canvas(QWidget):
                 self._draw_grid(p)
             if self._crop_mode:
                 self._draw_crop_overlay(p)
+            if self._vignette_mode:
+                self._draw_vignette_overlay(p)
 
     def _draw_crop_overlay(self, p: QPainter) -> None:
         ir = self._img_rect()
@@ -999,6 +1197,16 @@ class _Canvas(QWidget):
             self.wheel_navigate.emit(1 if delta > 0 else -1)
 
     def mousePressEvent(self, event: QMouseEvent) -> None:
+        if self._vignette_mode:
+            if event.button() == Qt.LeftButton:
+                pos = event.position()
+                hit = self._vignette_hit_test(pos)
+                if hit:
+                    self._vignette_drag       = hit
+                    self._vignette_drag_start = QPointF(pos)
+                    self._vignette_edit_start = copy.copy(self._vignette_edit)
+                    self.setCursor(Qt.ClosedHandCursor)
+            return
         if self._wb_pick_mode:
             if event.button() == Qt.LeftButton and self._pixmap:
                 pos = event.position()
@@ -1075,6 +1283,14 @@ class _Canvas(QWidget):
 
     def mouseMoveEvent(self, event: QMouseEvent) -> None:
         pos = event.position()
+        if self._vignette_mode:
+            if self._vignette_drag:
+                self._vignette_update_drag(pos)
+            else:
+                # Mettre à jour le curseur selon la proximité des poignées
+                hit = self._vignette_hit_test(pos)
+                self.setCursor(Qt.PointingHandCursor if hit else Qt.ArrowCursor)
+            return
         if self._red_eye_mode:
             self._red_eye_mouse = pos
             self.update()
@@ -1127,6 +1343,15 @@ class _Canvas(QWidget):
                 self.update()
 
     def mouseReleaseEvent(self, event: QMouseEvent) -> None:
+        if self._vignette_mode:
+            if event.button() == Qt.LeftButton and self._vignette_drag:
+                self._vignette_drag       = None
+                self._vignette_drag_start = None
+                self._vignette_edit_start = None
+                pos = event.position()
+                hit = self._vignette_hit_test(pos)
+                self.setCursor(Qt.PointingHandCursor if hit else Qt.ArrowCursor)
+            return
         if self._crop_mode:
             if event.button() == Qt.LeftButton:
                 self._drag_start       = None
@@ -1184,10 +1409,13 @@ class PhotoViewer(QWidget):
     crop_ready           = Signal(object)  # tuple 8 coords relatives (x0,y0,…,x3,y3)
     save_requested       = Signal(object)  # PhotoInfo
     rename_requested     = Signal(object)  # PhotoInfo
+    move_requested       = Signal(object)  # PhotoInfo
     delete_requested            = Signal(list)    # list[PhotoInfo]
+    dup_badge_clicked    = Signal(object)  # PhotoInfo — badge de doublon cliqué
     red_eye_point_added         = Signal(float, float)  # cx_norm, cy_norm (0-1)
     pixel_sampled               = Signal(int, int, int)  # R, G, B — pipette balance des blancs
     face_context_menu_requested = Signal(object, object)  # (FaceInfo, QPoint global)
+    vignette_changed            = Signal(object)  # EditInfo (géométrie après drag)
 
     def __init__(self, config=None, parent=None):
         super().__init__(parent)
@@ -1209,6 +1437,7 @@ class PhotoViewer(QWidget):
         self._preview_timer.setInterval(60)
         self._preview_timer.timeout.connect(self._reload_pixmap)
         self._setup_ui()
+        self.refresh_external_apps()
         self.setFocusPolicy(Qt.StrongFocus)
 
     def _setup_ui(self) -> None:
@@ -1243,6 +1472,14 @@ class PhotoViewer(QWidget):
         self._btn_fav.clicked.connect(self._toggle_favorite)
         tb_layout.addWidget(self._btn_fav)
 
+        # Conteneur des boutons d'applications externes (reconstruit par refresh_external_apps)
+        self._ext_apps_container = QWidget()
+        self._ext_apps_container.setStyleSheet("background: transparent;")
+        self._ext_apps_layout = QHBoxLayout(self._ext_apps_container)
+        self._ext_apps_layout.setContentsMargins(4, 0, 4, 0)
+        self._ext_apps_layout.setSpacing(4)
+        tb_layout.addWidget(self._ext_apps_container)
+
         self._btn_fit = QPushButton("⊡")
         self._btn_fit.setToolTip("Ajuster à la fenêtre  (0)")
         self._btn_fit.setFixedWidth(32)
@@ -1273,6 +1510,7 @@ class PhotoViewer(QWidget):
         self._canvas.red_eye_point_added.connect(self.red_eye_point_added)
         self._canvas.pixel_sampled.connect(self.pixel_sampled)
         self._canvas.face_context_menu_requested.connect(self.face_context_menu_requested)
+        self._canvas.vignette_changed.connect(self.vignette_changed)
         layout.addWidget(self._canvas, stretch=1)
 
         # ---- Pied de page ----
@@ -1353,6 +1591,24 @@ class PhotoViewer(QWidget):
 
         layout.addWidget(self._navbar)
 
+        # ---- Badge doublons (flottant sur le canvas) ----
+        self._dup_badge = QPushButton("⧉ Doublons", self)
+        self._dup_badge.setToolTip("Cette photo a des doublons — cliquer pour voir")
+        self._dup_badge.setStyleSheet(
+            "QPushButton{"
+            "  background:rgba(255,140,0,210);color:white;border:none;"
+            "  border-radius:5px;padding:3px 10px;"
+            "  font-size:11px;font-weight:bold"
+            "}"
+            "QPushButton:hover{background:rgba(255,160,40,240)}"
+        )
+        self._dup_badge.setCursor(Qt.PointingHandCursor)
+        self._dup_badge.setFixedHeight(24)
+        self._dup_badge.hide()
+        self._dup_badge.clicked.connect(
+            lambda: self.dup_badge_clicked.emit(self._photo)
+        )
+
     # ------------------------------------------------------------------ photo
 
     def current_photo(self) -> "PhotoInfo | None":
@@ -1373,7 +1629,29 @@ class PhotoViewer(QWidget):
         self._btn_fav.setChecked(photo.is_favorite)
         self._btn_play_video.setVisible(is_video)
         self._canvas.set_highlighted_face(None)
+        self._update_dup_badge()
         self._reload_pixmap()
+
+    def _update_dup_badge(self) -> None:
+        if self._photo and self._photo.duplicate_group_id is not None:
+            self._dup_badge.show()
+            self._dup_badge.raise_()
+            self._reposition_dup_badge()
+        else:
+            self._dup_badge.hide()
+
+    def _reposition_dup_badge(self) -> None:
+        self._dup_badge.adjustSize()
+        margin = 12
+        toolbar_h = self._toolbar.height()
+        x = self.width() - self._dup_badge.width() - margin
+        y = toolbar_h + margin
+        self._dup_badge.move(x, y)
+
+    def resizeEvent(self, event) -> None:
+        super().resizeEvent(event)
+        if self._dup_badge.isVisible():
+            self._reposition_dup_badge()
 
     def highlight_face(self, face) -> None:
         """Encadre un visage unique sur la photo (appelé depuis main_window)."""
@@ -1509,6 +1787,17 @@ class PhotoViewer(QWidget):
     def set_red_eye_radius(self, radius: float) -> None:
         self._canvas.set_red_eye_radius(radius)
 
+    # ------------------------------------------------------------------ vignette interactive
+
+    def enter_vignette_mode(self, edit) -> None:
+        self._canvas.enter_vignette_mode(edit)
+
+    def exit_vignette_mode(self) -> None:
+        self._canvas.exit_vignette_mode()
+
+    def update_vignette(self, edit) -> None:
+        self._canvas.update_vignette(edit)
+
     # ------------------------------------------------------------------ pipette couleur (balance des blancs)
 
     def start_color_pick(self) -> None:
@@ -1519,6 +1808,44 @@ class PhotoViewer(QWidget):
         self._canvas.stop_color_pick()
 
     # ------------------------------------------------------------------ misc
+
+    def refresh_external_apps(self) -> None:
+        """Reconstruit les boutons d'applications externes dans la toolbar depuis la config."""
+        while self._ext_apps_layout.count():
+            item = self._ext_apps_layout.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+
+        if not self._config:
+            return
+
+        _icon_provider = QFileIconProvider()
+        for app in self._config.get("tools.external_apps", []):
+            name = app.get("name", "")
+            path = app.get("path", "")
+            if not path or not os.path.isfile(path):
+                continue
+            btn = QToolButton()
+            btn.setToolTip(f"Ouvrir avec {name}")
+            btn.setFixedSize(32, 32)
+            btn.setIcon(_icon_provider.icon(QFileInfo(path)))
+            btn.setIconSize(QSize(22, 22))
+            btn.setStyleSheet(
+                "QToolButton { background: white; border: none; border-radius: 4px; }"
+                "QToolButton:hover { background: #e0e8ff; }"
+                "QToolButton:pressed { background: #c0d0ff; }"
+            )
+            btn.clicked.connect(lambda _checked=False, p=path: self._open_with(p))
+            self._ext_apps_layout.addWidget(btn)
+
+    def _open_with(self, app_path: str) -> None:
+        if not self._photo:
+            return
+        import subprocess
+        try:
+            subprocess.Popen([app_path, self._photo.path])
+        except Exception as exc:
+            logger.warning("Impossible de lancer '%s' : %s", app_path, exc)
 
     def _open_in_player(self) -> None:
         if not self._photo:
@@ -1542,6 +1869,7 @@ class PhotoViewer(QWidget):
         fav_label = "Retirer des favoris" if photo.is_favorite else "Marquer comme favori"
         menu.addAction(fav_label, self._toggle_fav_from_menu)
         menu.addAction("Renommer…", lambda: self.rename_requested.emit(photo))
+        menu.addAction("Déplacer vers…", lambda: self.move_requested.emit(photo))
         menu.addAction("Enregistrer l'image traitée sur le disque",
                        lambda: self.save_requested.emit(photo))
         menu.addSeparator()

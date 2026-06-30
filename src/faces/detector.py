@@ -1,3 +1,5 @@
+﻿# Copyright 2026 Christian Guyot
+# SPDX-License-Identifier: Apache-2.0
 """
 Face detection and embedding via InsightFace (buffalo_l).
 
@@ -251,15 +253,17 @@ def warmup_worker_cpu() -> None:
 
 
 def detect_and_embed_auto(image_path: str) -> "tuple[list[dict], int]":
-    """Essaie les 4 rotations (0°, 90°, 180°, 270°) et retourne celle qui détecte
-    le plus de visages.  En cas d'égalité, la plus petite rotation est préférée.
+    """Essaie les rotations nécessaires et retourne celle qui détecte le plus de visages.
 
-    Contrairement à la stratégie "stop au premier résultat", ceci évite de
-    s'arrêter sur une rotation partielle (ex. : un seul visage couché détecté à 0°
-    alors que 3 visages droits sont disponibles à 90°).
+    Stratégie : on essaie 0° en premier.  Si des visages sont trouvés, on s'arrête
+    immédiatement (cas nominal : ~95 % des photos sont correctement orientées).
+    On ne tente 90°/180°/270° que si 0° ne détecte rien.
     """
+    result_0 = detect_and_embed(image_path, rotation=0)
+    if result_0:
+        return result_0, 0
     best_result, best_rotation = [], 0
-    for rotation in (0, 90, 180, 270):
+    for rotation in (90, 180, 270):
         result = detect_and_embed(image_path, rotation=rotation)
         if len(result) > len(best_result):
             best_result, best_rotation = result, rotation
@@ -333,5 +337,6 @@ def detect_and_embed(image_path: str, rotation: int = 0) -> list[dict]:
         result.append({
             "bbox":      (x1, y1, w, h),
             "embedding": face.embedding.tolist(),
+            "det_score": float(face.det_score),
         })
     return result

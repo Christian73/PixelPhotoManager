@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Edit(*)",
+      "Write(*)",
+      "Bash(powershell *)",
+      "Bash(pwsh *)",
+      "Bash(*.ps1)",
+      "Bash(*.bat)",
+      "Bash(*.cmd)"
+    ]
+  }
+}

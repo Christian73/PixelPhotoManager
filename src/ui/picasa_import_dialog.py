@@ -1,3 +1,5 @@
+﻿# Copyright 2026 Christian Guyot
+# SPDX-License-Identifier: Apache-2.0
 """
 Dialogue d'import des données Picasa (visages + personnes).
 Peut être déclenché au démarrage ou manuellement depuis le menu Visages.

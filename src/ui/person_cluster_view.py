@@ -1,3 +1,5 @@
+﻿# Copyright 2026 Christian Guyot
+# SPDX-License-Identifier: Apache-2.0
 """
 PersonClusterView — vignettes des visages associés à une personne nommée.
 

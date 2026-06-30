@@ -1,3 +1,5 @@
+﻿# Copyright 2026 Christian Guyot
+# SPDX-License-Identifier: Apache-2.0
 """
 Genere assets/app_icon.ico depuis l'image source PNG.
 - Separation fond/sujet par GrabCut (OpenCV)

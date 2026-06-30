@@ -1,3 +1,5 @@
+﻿# Copyright 2026 Christian Guyot
+# SPDX-License-Identifier: Apache-2.0
 import math
 
 from PIL import Image, ImageEnhance, ImageFilter
@@ -36,6 +38,19 @@ class ImageAdjuster:
             image = ImageAdjuster.apply_noise_reduction(image, edit.noise_reduction)
         if edit.red_eye_regions:
             image = ImageAdjuster.apply_red_eye_correction(image, edit.red_eye_regions)
+        if edit.vignette_strength > 0.0:
+            image = ImageAdjuster.apply_vignette(
+                image,
+                edit.vignette_strength,
+                edit.vignette_cx,
+                edit.vignette_cy,
+                edit.vignette_rx1,
+                edit.vignette_ry1,
+                edit.vignette_rx2,
+                edit.vignette_ry2,
+                edit.vignette_angle,
+                edit.vignette_color,
+            )
 
         return image
 
@@ -195,6 +210,78 @@ class ImageAdjuster:
             lum = ((g_ch + b_ch) / 2.0).clip(0, 255)
             arr[:, :, 0] = np.where(red_mask, lum.astype(np.int16), arr[:, :, 0])
         return Image.fromarray(arr.clip(0, 255).astype(np.uint8))
+
+    @staticmethod
+    def apply_vignette(
+        image: Image.Image,
+        strength: float,
+        cx: float,
+        cy: float,
+        rx1: float,
+        ry1: float,
+        rx2: float,
+        ry2: float,
+        angle: float,
+        color: str,
+    ) -> Image.Image:
+        """Vignette à double ellipse interactive avec dégradé entre ellipse interne et externe.
+
+        strength : 0–1 — intensité maximale de la vignette
+        cx, cy   : 0–1 — centre normalisé (0-1 des dimensions de l'image)
+        rx1, ry1 : rayons de l'ellipse interne (1.0 = demi-dimension de l'image)
+        rx2, ry2 : rayons de l'ellipse externe
+        angle    : rotation en degrés
+        color    : "black" ou "white"
+        """
+        import numpy as np
+
+        img = image.convert("RGB")
+        arr = np.array(img, dtype=np.float32)
+        h, w = arr.shape[:2]
+
+        px_cx  = cx * w
+        px_cy  = cy * h
+        px_rx1 = rx1 * (w / 2.0)
+        px_ry1 = ry1 * (h / 2.0)
+        px_rx2 = rx2 * (w / 2.0)
+        px_ry2 = ry2 * (h / 2.0)
+
+        Y, X = np.ogrid[:h, :w]
+        dx = (X - px_cx).astype(np.float32)
+        dy = (Y - px_cy).astype(np.float32)
+
+        # Rotation inverse pour aligner avec les axes de l'ellipse
+        rad = math.radians(angle)
+        cos_a = math.cos(-rad)
+        sin_a = math.sin(-rad)
+        dx_rot = dx * cos_a - dy * sin_a
+        dy_rot = dx * sin_a + dy * cos_a
+
+        eps = 1e-6
+        theta = np.arctan2(dy_rot, dx_rot)
+        cos_t = np.cos(theta)
+        sin_t = np.sin(theta)
+
+        # Distance du pixel au centre (dans l'espace tourné)
+        r_pix = np.sqrt(dx_rot ** 2 + dy_rot ** 2)
+
+        # Rayon de l'ellipse dans la direction de chaque pixel (intersection rayon-ellipse)
+        r_inner = (px_rx1 * px_ry1) / np.sqrt(
+            (px_ry1 * cos_t) ** 2 + (px_rx1 * sin_t) ** 2 + eps)
+        r_outer = (px_rx2 * px_ry2) / np.sqrt(
+            (px_ry2 * cos_t) ** 2 + (px_rx2 * sin_t) ** 2 + eps)
+
+        gap = np.maximum(r_outer - r_inner, eps)
+        t = np.clip((r_pix - r_inner) / gap, 0.0, 1.0)
+
+        # Smoothstep pour une courbe en S naturelle
+        alpha = t * t * (3.0 - 2.0 * t)
+        alpha = (alpha * strength)[:, :, np.newaxis]
+
+        target = np.array([255.0, 255.0, 255.0]) if color == "white" else np.array([0.0, 0.0, 0.0])
+        result = arr * (1.0 - alpha) + target * alpha
+
+        return Image.fromarray(np.clip(result, 0, 255).astype(np.uint8))
 
     @staticmethod
     def apply_bw(image: Image.Image, red: float, green: float, blue: float) -> Image.Image:

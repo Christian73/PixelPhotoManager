@@ -1,3 +1,5 @@
+﻿# Copyright 2026 Christian Guyot
+# SPDX-License-Identifier: Apache-2.0
 import logging
 import multiprocessing
 import time
@@ -11,6 +13,10 @@ logger = logging.getLogger(__name__)
 
 _PCA_DIMS        = 32    # ball_tree efficace sous ~30 dims ; 32 conserve >90 % variance ArcFace
 _CLUSTER_TIMEOUT = 1800  # secondes max (30 min) avant abandon
+
+# Sentinelle : N de visages non-identifiés au dernier clustering réussi.
+# Permet de sauter le reclustering si rien n'a changé.
+_last_clustered_n: int = -1
 
 _NB_SP = " "  # espace fine insécable utilisée comme séparateur de milliers
 
@@ -107,6 +113,8 @@ def _run_clustering(
     Returns number of distinct clusters (singletons exclus).
     Raises RuntimeError if deps missing.
     """
+    global _last_clustered_n
+
     try:
         import numpy as np
     except ImportError as exc:
@@ -121,6 +129,12 @@ def _run_clustering(
 
     if n == 0:
         logger.debug("Clustering: aucun visage (tous déjà identifiés)")
+        return 0
+
+    # Skip si aucun changement depuis le dernier clustering réussi :
+    # même N de visages non-identifiés ET aucune assignation synthétique nouvelle.
+    if n == _last_clustered_n and n_synthetic == 0:
+        logger.debug("Clustering: %d visages inchangés — skip", n)
         return 0
 
     logger.info("Clustering HDBSCAN: %d visages non identifiés", n)
@@ -235,6 +249,7 @@ def _run_clustering(
 
     face_db.update_clusters(face_ids, result_labels, progress_cb=progress_cb)
 
+    _last_clustered_n = n
     logger.info("Clustering: %d groupe(s), %d singleton(s)", n_clusters, n_singletons)
     return n_clusters
 

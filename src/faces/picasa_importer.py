@@ -1,3 +1,5 @@
+﻿# Copyright 2026 Christian Guyot
+# SPDX-License-Identifier: Apache-2.0
 """
 Import face and person data from Picasa (picasa.ini + contacts.xml).
 
@@ -70,6 +72,35 @@ def _decode_rect64(hex_str: str) -> tuple[float, float, float, float]:
     right  = ((val >> 16) & 0xFFFF) / 65535.0
     bottom = (val         & 0xFFFF) / 65535.0
     return left, top, right, bottom
+
+
+def _bbox_raw_to_exif(rx: int, ry: int, rw: int, rh: int,
+                      raw_W: int, raw_H: int,
+                      orientation: int) -> tuple[int, int, int, int]:
+    """
+    Transforme une bbox du repère image brute (stockée) vers le repère
+    EXIF-corrigé (affiché), selon l'orientation EXIF (tag 274).
+
+    Picasa stocke les rect64 en coordonnées de l'image brute sur disque.
+    Tout le reste du système travaille en coordonnées EXIF-corrigées.
+    """
+    if orientation in (None, 1):
+        return rx, ry, rw, rh
+    if orientation == 2:   # flip horizontal
+        return raw_W - rx - rw, ry, rw, rh
+    if orientation == 3:   # rotate 180°
+        return raw_W - rx - rw, raw_H - ry - rh, rw, rh
+    if orientation == 4:   # flip vertical
+        return rx, raw_H - ry - rh, rw, rh
+    if orientation == 5:   # transpose (flip along main diagonal)
+        return ry, rx, rh, rw
+    if orientation == 6:   # rotate 90° CW → PIL ROTATE_270 (90° CW), out = H×W
+        return raw_H - ry - rh, rx, rh, rw
+    if orientation == 7:   # transverse transpose
+        return raw_H - ry - rh, raw_W - rx - rw, rh, rw
+    if orientation == 8:   # rotate 270° CW (= 90° CCW) → PIL ROTATE_90, out = H×W
+        return ry, raw_W - rx - rw, rh, rw
+    return rx, ry, rw, rh
 
 
 def _parse_filters(filters_str: str) -> dict[str, list[float]]:
@@ -425,8 +456,11 @@ def _run_import(
             try:
                 from PIL import Image, ImageOps
                 with Image.open(str(photo_path)) as img:
-                    img = ImageOps.exif_transpose(img)
-                    img_w, img_h = img.size
+                    raw_w, raw_h = img.size
+                    exif_ori = img.getexif().get(274, 1)
+                    # Dimensions après correction EXIF (repère de travail du système)
+                    corr = ImageOps.exif_transpose(img)
+                    img_w, img_h = corr.size
             except Exception:
                 continue
 
@@ -434,10 +468,13 @@ def _run_import(
             for rect_hex, person_hash in entries:
                 try:
                     lf, tf, rf, bf = _decode_rect64(rect_hex)
-                    x = int(lf * img_w)
-                    y = int(tf * img_h)
-                    w = int((rf - lf) * img_w)
-                    h = int((bf - tf) * img_h)
+                    # Picasa stocke les rect64 en coordonnées de l'image brute
+                    rx = int(lf * raw_w)
+                    ry = int(tf * raw_h)
+                    rw = int((rf - lf) * raw_w)
+                    rh = int((bf - tf) * raw_h)
+                    # Transformer vers l'espace EXIF-corrigé
+                    x, y, w, h = _bbox_raw_to_exif(rx, ry, rw, rh, raw_w, raw_h, exif_ori)
                     if w < 10 or h < 10:
                         continue
                     pid = hash_to_person_id.get(person_hash)
@@ -472,6 +509,15 @@ def _run_import(
                         edit_db.save(path_str, step_edit, operation=op_name)
                     result.edits_imported += 1
                     result.edited_map[path_str] = steps[-1][1]
+
+    # Nettoyage 1 : placeholders qui chevauchent une face ArcFace (même région,
+    # person_id différents — contacts Picasa ≠ cluster ArcFace).
+    n_dupes = face_db.cleanup_overlapping_placeholders()
+    if n_dupes:
+        result.faces_imported = max(0, result.faces_imported - n_dupes)
+    # Nettoyage 2 : placeholders orphelins dont le person_id n'apparaît plus dans
+    # aucune annotation Picasa courante (résidus d'anciens imports avec IDs différents).
+    face_db.cleanup_stale_placeholder_faces()
 
     logger.info(
         "Picasa import terminé : %d personnes créées, %d visages, %d photos, %d retouches",

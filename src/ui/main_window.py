@@ -1,3 +1,5 @@
+﻿# Copyright 2026 Christian Guyot
+# SPDX-License-Identifier: Apache-2.0
 import ctypes
 import logging
 import os
@@ -715,6 +717,13 @@ class MainWindow(QMainWindow):
         act_journal.triggered.connect(self._open_thread_journal)
         m_tools.addAction(act_journal)
         m_tools.addSeparator()
+        act_ext_apps = QAction("Applications externes…", self)
+        act_ext_apps.setToolTip(
+            "Configurer les applications tierces disponibles depuis la visionneuse"
+        )
+        act_ext_apps.triggered.connect(self._open_external_apps_dialog)
+        m_tools.addAction(act_ext_apps)
+        m_tools.addSeparator()
         act_settings = QAction("Paramètres", self)
         act_settings.triggered.connect(self._open_settings)
         m_tools.addAction(act_settings)
@@ -1309,6 +1318,68 @@ class MainWindow(QMainWindow):
         dlg = SettingsDialog(self._config, self)
         dlg.recluster_needed.connect(self._run_clustering)
         dlg.exec()
+
+    def _open_external_apps_dialog(self) -> None:
+        """Dialogue de configuration des applications externes accessibles depuis le viewer."""
+        apps: list = list(self._config.get("tools.external_apps", []))
+
+        dlg = QDialog(self)
+        dlg.setWindowTitle("Applications externes")
+        dlg.setMinimumWidth(520)
+        root = QVBoxLayout(dlg)
+
+        root.addWidget(QLabel(
+            "Applications disponibles via leur icône dans la barre de la visionneuse :"
+        ))
+
+        lst = QListWidget(dlg)
+        for app in apps:
+            lst.addItem(f"{app['name']}   —   {app['path']}")
+
+        btn_row = QHBoxLayout()
+        btn_add = QPushButton("Ajouter…")
+        btn_del = QPushButton("Supprimer")
+        btn_row.addWidget(btn_add)
+        btn_row.addWidget(btn_del)
+        btn_row.addStretch()
+        root.addWidget(lst)
+        root.addLayout(btn_row)
+
+        btns = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        btns.accepted.connect(dlg.accept)
+        btns.rejected.connect(dlg.reject)
+        root.addWidget(btns)
+
+        def _add() -> None:
+            path, _ = QFileDialog.getOpenFileName(
+                dlg, "Choisir une application", "",
+                "Exécutables (*.exe);;Tous les fichiers (*)"
+            )
+            if not path:
+                return
+            default_name = os.path.splitext(os.path.basename(path))[0]
+            name, ok = QInputDialog.getText(
+                dlg, "Nom de l'application",
+                "Nom affiché dans l'infobulle :", text=default_name
+            )
+            if ok and name.strip():
+                apps.append({"name": name.strip(), "path": path})
+                lst.addItem(f"{name.strip()}   —   {path}")
+
+        def _del() -> None:
+            row = lst.currentRow()
+            if row >= 0:
+                apps.pop(row)
+                lst.takeItem(row)
+
+        btn_add.clicked.connect(_add)
+        btn_del.clicked.connect(_del)
+
+        if dlg.exec() != QDialog.Accepted:
+            return
+
+        self._config.set("tools.external_apps", apps)
+        self._viewer.refresh_external_apps()
 
     def _open_exif_date_sync(self) -> None:
         from src.ui.exif_date_sync_dialog import ExifDateSyncDialog
@@ -2714,11 +2785,9 @@ class MainWindow(QMainWindow):
         dlg.exec()
 
     def _show_about(self) -> None:
-        QMessageBox.about(
-            self,
-            "À propos de PixelPhotoManager",
-            "PixelPhotoManager v1.0\n\nGestionnaire de photos non destructif.\nPySide6 · Pillow · SQLite",
-        )
+        from src.ui.help_dialog import HelpDialog
+        dlg = HelpDialog(self, tab="À propos")
+        dlg.exec()
 
     @Slot(str, object)
     def _on_photo_saved(self, photo_path: str, edit) -> None:

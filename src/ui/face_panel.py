@@ -1,3 +1,5 @@
+﻿# Copyright 2026 Christian Guyot
+# SPDX-License-Identifier: Apache-2.0
 """
 FacePanel — barre latérale affichant les visages identifiés d'une photo.
 
@@ -387,6 +389,7 @@ class FacePanel(QWidget):
         self._cluster_persons: dict[int, int]       = {}   # cluster_id → person_id
         self._loader:          _FacePanelLoader | None = None
         self._data_loader:     _FacesDataLoader | None = None
+        self._dying_threads:   list = []   # threads being stopped — keep ref until finished
         self._current_photo:   str = ""
         self._selected_face_id: int | None = None
         self._undo_stack:      list[tuple[str, object]] = []
@@ -456,20 +459,25 @@ class FacePanel(QWidget):
         self._stop_loader()
         self._clear()
 
-        # Toujours déconnecter et libérer l'ancien loader pour éviter l'accumulation
-        # de threads orphelins en tant qu'enfants Qt (zombies C++).
-        if self._data_loader is not None:
-            try:
-                self._data_loader.data_ready.disconnect()
-            except RuntimeError:
-                pass
-            if self._data_loader.isRunning():
-                self._data_loader.finished.connect(self._data_loader.deleteLater)
-            else:
-                self._data_loader.deleteLater()
+        # Sauvegarder l'ancien loader avant de le remplacer, pour éviter que la
+        # réaffectation de self._data_loader fasse tomber le refcount Python à 0
+        # pendant que le thread C++ tourne (crash QThread destroyed while running).
+        old_dl = self._data_loader
         self._data_loader = _FacesDataLoader(self._face_db, self._catalog, photo_path, self)
         self._data_loader.data_ready.connect(self._on_faces_data_ready)
         self._data_loader.start()
+
+        if old_dl is not None:
+            try:
+                old_dl.data_ready.disconnect()
+            except RuntimeError:
+                pass
+            if old_dl.isRunning():
+                self._dying_threads.append(old_dl)
+                old_dl.finished.connect(old_dl.deleteLater)
+                old_dl.finished.connect(self._reap_dying_threads)
+            else:
+                old_dl.deleteLater()
 
     # ------------------------------------------------------------------ undo
 
@@ -838,13 +846,23 @@ class FacePanel(QWidget):
 
     def _stop_loader(self) -> None:
         if self._loader is not None:
-            self._loader.stop()
-            if self._loader.isRunning():
+            old = self._loader
+            self._loader = None
+            old.stop()
+            if old.isRunning():
                 try:
-                    self._loader.ready.disconnect(self._on_face_ready)
+                    old.ready.disconnect(self._on_face_ready)
                 except RuntimeError:
                     pass
-                self._loader.finished.connect(self._loader.deleteLater)
+                # Garder une référence Python jusqu'à la fin du thread pour éviter
+                # que Shiboken détruise le C++ QThread pendant qu'il tourne encore.
+                self._dying_threads.append(old)
+                old.finished.connect(old.deleteLater)
+                old.finished.connect(self._reap_dying_threads)
             else:
-                self._loader.deleteLater()
-            self._loader = None
+                old.deleteLater()
+
+    @Slot()
+    def _reap_dying_threads(self) -> None:
+        """Retire de la liste les threads qui ont terminé (libère leurs références Python)."""
+        self._dying_threads = [t for t in self._dying_threads if t.isRunning()]

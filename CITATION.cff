@@ -1,0 +1,24 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it using the metadata below."
+type: software
+title: "Pixel Photo Manager"
+abstract: >
+  Pixel Photo Manager is a desktop photo management application for Windows.
+  It features non-destructive editing, facial recognition and clustering,
+  Picasa contact sheet import, duplicate detection, and video support,
+  built with Python and PySide6.
+authors:
+  - family-names: Guyot
+    given-names: Christian
+    email: guyot.christian@gmail.com
+version: "1.0.0"
+date-released: "2026-06-30"
+license: Apache-2.0
+repository-code: "https://github.com/Christian73/PixelPhotoManager"
+keywords:
+  - photo management
+  - facial recognition
+  - image processing
+  - PySide6
+  - Python
+  - Windows

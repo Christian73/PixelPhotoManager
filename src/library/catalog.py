@@ -1,3 +1,5 @@
+﻿# Copyright 2026 Christian Guyot
+# SPDX-License-Identifier: Apache-2.0
 import os
 import sqlite3
 import threading
@@ -38,7 +40,8 @@ CREATE TABLE IF NOT EXISTS photos (
     tags TEXT,
     indexed_at TEXT DEFAULT CURRENT_TIMESTAMP,
     media_type TEXT DEFAULT 'image',
-    duration REAL DEFAULT 0.0
+    duration REAL DEFAULT 0.0,
+    duplicate_group_id INTEGER
 )
 """
 
@@ -74,8 +77,9 @@ def _photo_from_row(row) -> PhotoInfo:
         file_size, file_mtime, camera_make, camera_model, lens_model,
         iso, exposure_time, aperture, focal_length,
         has_gps, gps_lat, gps_lon, is_favorite, tags, _indexed_at,
-        media_type, duration,
+        media_type, duration, *rest
     ) = row
+    duplicate_group_id = rest[0] if rest else None
 
     dt = None
     if date_taken:
@@ -108,6 +112,7 @@ def _photo_from_row(row) -> PhotoInfo:
         id=id_,
         media_type=media_type or "image",
         duration=float(duration or 0.0),
+        duplicate_group_id=duplicate_group_id,
     )
 
 
@@ -129,8 +134,12 @@ class Catalog:
                 conn.execute(_CREATE_ALBUMS)
                 conn.execute(_CREATE_ALBUM_PHOTOS)
                 conn.execute(_CREATE_PERSONS)
+                conn.execute(
+                    "CREATE INDEX IF NOT EXISTS idx_photos_directory ON photos(directory)"
+                )
                 self._migrate_normalize_paths(conn)
                 self._migrate_video_fields(conn)
+                self._migrate_duplicate_fields(conn)
                 conn.commit()
             finally:
                 conn.close()
@@ -156,6 +165,12 @@ class Catalog:
             f"UPDATE photos SET media_type='video' WHERE media_type='image' AND ({like_clauses})"
         )
         conn.commit()
+
+    def _migrate_duplicate_fields(self, conn) -> None:
+        try:
+            conn.execute("ALTER TABLE photos ADD COLUMN duplicate_group_id INTEGER")
+        except Exception:
+            pass  # colonne déjà présente
 
     def _migrate_normalize_paths(self, conn) -> None:
         """Normalise les séparateurs de chemin dans les données existantes.
@@ -562,6 +577,59 @@ class Catalog:
                 conn.commit()
             finally:
                 conn.close()
+
+    # ------------------------------------------------------------------ doublons
+
+    def set_duplicate_groups(self, assignments: dict) -> None:
+        """Enregistre les groupes de doublons détectés. assignments = {path: group_id}."""
+        if not assignments:
+            return
+        with self._lock:
+            conn = self._conn()
+            try:
+                conn.executemany(
+                    "UPDATE photos SET duplicate_group_id=? WHERE path=?",
+                    [(gid, path) for path, gid in assignments.items()],
+                )
+                conn.commit()
+            finally:
+                conn.close()
+
+    def clear_duplicate_groups(self) -> None:
+        """Efface tous les marqueurs de doublons."""
+        with self._lock:
+            conn = self._conn()
+            try:
+                conn.execute("UPDATE photos SET duplicate_group_id=NULL")
+                conn.commit()
+            finally:
+                conn.close()
+
+    def get_duplicates_for_group(self, group_id: int) -> list:
+        """Retourne toutes les photos du groupe de doublons donné."""
+        with self._lock:
+            conn = self._conn()
+            try:
+                rows = conn.execute(
+                    "SELECT * FROM photos WHERE duplicate_group_id=? "
+                    "ORDER BY COALESCE(date_taken, datetime(file_mtime, 'unixepoch')), filename",
+                    (group_id,),
+                ).fetchall()
+            finally:
+                conn.close()
+        return [_photo_from_row(r) for r in rows]
+
+    def get_all_photo_paths_for_dedup(self) -> list:
+        """Retourne la liste de tous les chemins de photos pour la détection de doublons."""
+        with self._lock:
+            conn = self._conn()
+            try:
+                rows = conn.execute(
+                    "SELECT path FROM photos ORDER BY path"
+                ).fetchall()
+            finally:
+                conn.close()
+        return [r[0] for r in rows]
 
     def get_photos_by_paths(self, paths: list[str]) -> list[PhotoInfo]:
         """Returns PhotoInfo objects for the given paths (in catalog order)."""

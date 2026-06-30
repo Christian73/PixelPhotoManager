@@ -1,3 +1,5 @@
+﻿# Copyright 2026 Christian Guyot
+# SPDX-License-Identifier: Apache-2.0
 #!/usr/bin/env python3
 """
 Migration : isole les visages dé-associés (person_id=NULL, pinned=0, cluster_id>0)
