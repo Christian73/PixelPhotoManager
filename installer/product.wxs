@@ -26,7 +26,8 @@
     <Property Id="ARPPRODUCTICON" Value="AppIcon" />
 
     <!-- Interface d'installation -->
-    <UIRef Id="WixUI_Minimal" />
+    <Property Id="WIXUI_INSTALLDIR" Value="INSTALLFOLDER" />
+    <UIRef Id="WixUI_InstallDir" />
     <WixVariable Id="WixUILicenseRtf" Value="installer\License.rtf" />
     <WixVariable Id="WixUIBannerBmp"  Value="installer\banner.bmp" />
     <WixVariable Id="WixUIDialogBmp"  Value="installer\dialog.bmp" />
