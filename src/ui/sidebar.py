@@ -673,7 +673,7 @@ class Sidebar(QWidget):
                        lambda: self._move_folder(path))
         menu.addSeparator()
         menu.addAction("Ouvrir dans l'Explorateur",
-                       lambda: subprocess.Popen(f'explorer "{path}"'))
+                       lambda p=path: subprocess.Popen(["explorer", p]))
         menu.addSeparator()
         menu.addAction("Effacer le dossier…",
                        lambda: self._delete_folder(path))
