@@ -8,11 +8,12 @@ Sortie : dist\PixelPhotoManager\PixelPhotoManager.exe  (one-dir)
 """
 from PyInstaller.utils.hooks import collect_all
 from pathlib import Path
+import insightface
 
 ROOT = Path(SPECPATH)
 
 # Packages avec ressources intégrées (templates, polices, plugins)
-_with_data = ["PIL", "folium", "reportlab"]
+_with_data = ["PIL", "folium", "reportlab", "insightface"]
 
 datas, binaries, hiddenimports = [], [], []
 for pkg in _with_data:
@@ -20,6 +21,19 @@ for pkg in _with_data:
     datas += d
     binaries += b
     hiddenimports += h
+
+# insightface.data.get_object() (pickle_object.py) résout ses ressources
+# différemment en mode figé : en mode "frozen", il lit
+# sys._MEIPASS/objects/<name>.pkl — un dossier "objects" À LA RACINE du
+# bundle — et NON insightface/data/objects/ (l'arborescence normale du
+# package, que collect_all() ci-dessus préserve). Sans cette copie
+# supplémentaire, get_object('meanshape_68.pkl') renvoie None en silence
+# (juste un print(), invisible en console=False), et le modèle
+# landmark_3d_68 (estimation de pose) plante avec
+# 'NoneType' object has no attribute 'shape' dans
+# transform.estimate_affine_matrix_3d23d() — pour CHAQUE visage détecté.
+_insightface_objects_dir = Path(insightface.__file__).parent / "data" / "objects"
+datas += [(str(_insightface_objects_dir), "objects")]
 
 a = Analysis(
     [str(ROOT / "main.py")],

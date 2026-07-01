@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 import json
 import logging
+import os
 from pathlib import Path
 
 from .app_dirs import APP_DATA_DIR
@@ -92,9 +93,13 @@ class Config:
         self.save()
 
     def get_scan_folders(self) -> list[str]:
-        return list(self._data.get("scan_folders", []))
+        # normpath() : les dossiers peuvent avoir été enregistrés avec des
+        # séparateurs "/" (QFileDialog) — on normalise à la lecture pour que
+        # les comparaisons de chemin (ex. remove_scan_folder) restent fiables.
+        return [os.path.normpath(p) for p in self._data.get("scan_folders", [])]
 
     def add_scan_folder(self, path: str) -> None:
+        path = os.path.normpath(path)
         folders = self.get_scan_folders()
         if path not in folders:
             folders.append(path)
@@ -102,6 +107,7 @@ class Config:
             self.save()
 
     def remove_scan_folder(self, path: str) -> None:
+        path = os.path.normpath(path)
         folders = self.get_scan_folders()
         if path in folders:
             folders.remove(path)

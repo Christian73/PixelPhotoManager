@@ -541,6 +541,405 @@
             <Component Id="cmpE75A51580E3764DA07A99A0DAE0845EA" Directory="dir5BFFDA793418F7E56A48CEC8B970CF1F" Guid="*">
                 <File Id="fil46F76C781DFD215C931FA273E44DD40D" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\hdbscan\_prediction_utils.cp311-win_amd64.pyd" />
             </Component>
+            <Component Id="cmp6B1E5851F5529FD48BCDCB2EFDD03FFC" Directory="dirBF570795F4EDABDC0C35C54392FDCA43" Guid="*">
+                <File Id="filD0A7C18C490F0B88B12DD37178FABC30" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\insightface\__init__.py" />
+            </Component>
+            <Component Id="cmp9F5B08FC8A6BCC13F776A9F9D3B507EE" Directory="dir22214B8C1FA4D485C394BD83439E2126" Guid="*">
+                <File Id="fil4E181C0522BF4E83DAB9BF6226B5B431" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\insightface\app\common.py" />
+            </Component>
+            <Component Id="cmp385B737278A93BEE9220B00A5919DDAA" Directory="dir22214B8C1FA4D485C394BD83439E2126" Guid="*">
+                <File Id="fil7BD98534EFA0853202D04726BA394279" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\insightface\app\face_analysis.py" />
+            </Component>
+            <Component Id="cmp1F459C89FD0AF65A62659AA9F662F2CD" Directory="dir22214B8C1FA4D485C394BD83439E2126" Guid="*">
+                <File Id="fil986714837935619D187801E490F63FC2" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\insightface\app\mask_renderer.py" />
+            </Component>
+            <Component Id="cmpC6A0CB7C41C4A37D7C08441B526977FD" Directory="dir22214B8C1FA4D485C394BD83439E2126" Guid="*">
+                <File Id="fil7A46AA253DE2E63819F4A3B2CFE18695" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\insightface\app\__init__.py" />
+            </Component>
+            <Component Id="cmp1C0F3A364D6A3F561A80B3A48B05262A" Directory="dir712BC5C7377E66F5BC0AC6E556AD2BD9" Guid="*">
+                <File Id="fil9048BAF5078FD70E1A19E3769AF1809D" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\insightface\commands\insightface_cli.py" />
+            </Component>
+            <Component Id="cmp03B7B56C08F0150B4ABA8BE880FABC10" Directory="dir712BC5C7377E66F5BC0AC6E556AD2BD9" Guid="*">
+                <File Id="filC6D44126D3168A3048C82256E0F61FE1" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\insightface\commands\model_download.py" />
+            </Component>
+            <Component Id="cmp9CFB71442B617AF31B1E86758C063374" Directory="dir712BC5C7377E66F5BC0AC6E556AD2BD9" Guid="*">
+                <File Id="fil04DC4645DC0FA2E409EF042385854205" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\insightface\commands\rec_add_mask_param.py" />
+            </Component>
+            <Component Id="cmpD61D068FF63CEAC584293B8D0ACCC741" Directory="dir712BC5C7377E66F5BC0AC6E556AD2BD9" Guid="*">
+                <File Id="fil53EEC227882C88D6D8C3F64DDA3116D4" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\insightface\commands\__init__.py" />
+            </Component>
+            <Component Id="cmp77FC8659EBC78B1E83E20B1E1B3E3090" Directory="dir5797EF48CC72139BF8B83501109350D0" Guid="*">
+                <File Id="fil5B78BC3E102B474F2E73A7C0DA0DEABF" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\insightface\data\image.py" />
+            </Component>
+            <Component Id="cmp44C46695CAA182562E3F7096DFE8E938" Directory="dir5797EF48CC72139BF8B83501109350D0" Guid="*">
+                <File Id="filDE5A7B956BC23C879CE3F32B6A3907B6" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\insightface\data\pickle_object.py" />
+            </Component>
+            <Component Id="cmpD07DAA99BA1A90A9CB44A5E3417AFC72" Directory="dir5797EF48CC72139BF8B83501109350D0" Guid="*">
+                <File Id="filF5906AA6008E08B1C5E1B7980275AC7E" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\insightface\data\rec_builder.py" />
+            </Component>
+            <Component Id="cmp88F17B7E200C4B5DADDCC19600FB848C" Directory="dir5797EF48CC72139BF8B83501109350D0" Guid="*">
+                <File Id="fil8C0538902FA5EA776B304DD12D9BEF85" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\insightface\data\__init__.py" />
+            </Component>
+            <Component Id="cmpF143D34EB94C3A7734BAB6D801156C23" Directory="dirCB3E14A1868585739AD223B918B0E3DC" Guid="*">
+                <File Id="filFF10C4D8B65296E777E17C2C638482C3" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\insightface\data\images\mask_black.jpg" />
+            </Component>
+            <Component Id="cmp35F28A623C9A4F4AB07C804208E3AC36" Directory="dirCB3E14A1868585739AD223B918B0E3DC" Guid="*">
+                <File Id="filF031E4E84242AC779205EA27515EE395" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\insightface\data\images\mask_blue.jpg" />
+            </Component>
+            <Component Id="cmpCFAEDF3C6AAF56FFE41DB0495E1896AF" Directory="dirCB3E14A1868585739AD223B918B0E3DC" Guid="*">
+                <File Id="fil1C39CF18B3E11E23AB9F42665AB0780A" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\insightface\data\images\mask_green.jpg" />
+            </Component>
+            <Component Id="cmp1FF0F46AE75039F5CF5842127637AB74" Directory="dirCB3E14A1868585739AD223B918B0E3DC" Guid="*">
+                <File Id="filA25CFEEC037F955703E42232E8A742D0" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\insightface\data\images\mask_white.jpg" />
+            </Component>
+            <Component Id="cmp542607412B302AAC4CE560847DFD8C1D" Directory="dirCB3E14A1868585739AD223B918B0E3DC" Guid="*">
+                <File Id="fil0933DA48B43B3FD2AC95868087217661" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\insightface\data\images\t1.jpg" />
+            </Component>
+            <Component Id="cmp07AA471069FB37CD539FB490F8C8AB25" Directory="dirCB3E14A1868585739AD223B918B0E3DC" Guid="*">
+                <File Id="fil03421AE7A980122423A890FF65B22EAB" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\insightface\data\images\Tom_Hanks_54745.png" />
+            </Component>
+            <Component Id="cmp2BE7F6D742A5C230F33D70A67E5B29C9" Directory="dirFEC2B27A6F3FAAEF15977C2E44B7E317" Guid="*">
+                <File Id="filF93243D08D5686F481B2B99055A12459" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\insightface\data\objects\meanshape_68.pkl" />
+            </Component>
+            <Component Id="cmp8E60194DD0BF02284C2D407D5F68C254" Directory="dir9C44F7B5B1AE1AFCA170EC058D41F73B" Guid="*">
+                <File Id="fil99F0AD24D331E143A910DB7AD135587F" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\insightface\gui\app.py" />
+            </Component>
+            <Component Id="cmp01FBE7D221D23906DBA7C0CF65C8D623" Directory="dir9C44F7B5B1AE1AFCA170EC058D41F73B" Guid="*">
+                <File Id="filC528E96B7462DF0309A2ADE3CC260A31" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\insightface\gui\main_window.py" />
+            </Component>
+            <Component Id="cmp5CF43CE848B3B0635858FC05FC2174AC" Directory="dir9C44F7B5B1AE1AFCA170EC058D41F73B" Guid="*">
+                <File Id="filAF51427AE4BEF8E2BB51245FD2CF555B" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\insightface\gui\page_registry.py" />
+            </Component>
+            <Component Id="cmp2B9AD3A866D7F9F6BEAD6737934BFF51" Directory="dir9C44F7B5B1AE1AFCA170EC058D41F73B" Guid="*">
+                <File Id="fil595BA15CA7E5A26F36753C7F688C4F6C" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\insightface\gui\resources.py" />
+            </Component>
+            <Component Id="cmp48D5BEA01E239F362F3811A27FC59C23" Directory="dir9C44F7B5B1AE1AFCA170EC058D41F73B" Guid="*">
+                <File Id="fil5ADC619F87BCB658E1CD965EC84ABAE7" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\insightface\gui\__init__.py" />
+            </Component>
+            <Component Id="cmp55C9C8F343DFCF2F2319C960E4E360FA" Directory="dir9C44F7B5B1AE1AFCA170EC058D41F73B" Guid="*">
+                <File Id="fil165C163E7B49D4DEC05A6994EB1036E8" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\insightface\gui\__main__.py" />
+            </Component>
+            <Component Id="cmp0048059401871429F5B4C6B3F50AB39B" Directory="dirBA25BF016F0DDE7221AD2E031D5B822D" Guid="*">
+                <File Id="fil1AEFF32F21B068ABC25B98F147E59B4A" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\insightface\gui\assets\app_icon.icns" />
+            </Component>
+            <Component Id="cmpD659EE06365C23A9EF0ED4A656C232FE" Directory="dirBA25BF016F0DDE7221AD2E031D5B822D" Guid="*">
+                <File Id="filDF4F5214D4C812E607C259AF32FBC978" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\insightface\gui\assets\app_icon.ico" />
+            </Component>
+            <Component Id="cmp7629177D488D111BEEA956D5CC473106" Directory="dirBA25BF016F0DDE7221AD2E031D5B822D" Guid="*">
+                <File Id="fil418F86B8948B7C95C449341CA5D2A1BA" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\insightface\gui\assets\app_icon.png" />
+            </Component>
+            <Component Id="cmp142F29695945357A05120EABCA150221" Directory="dirE7D6A0511A28FDD8DA0523C42B5D6710" Guid="*">
+                <File Id="filAA22E8F991C1FB399620A0D7394EB5EC" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\insightface\gui\core\camera.py" />
+            </Component>
+            <Component Id="cmp38ABD060D0D8589B97981969D036F8F6" Directory="dirE7D6A0511A28FDD8DA0523C42B5D6710" Guid="*">
+                <File Id="fil3C998CBEE9F1988ECD2B5400EEC24BC6" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\insightface\gui\core\clustering.py" />
+            </Component>
+            <Component Id="cmpC77F47284FF8FA7A639BDD9EA8D40AF8" Directory="dirE7D6A0511A28FDD8DA0523C42B5D6710" Guid="*">
+                <File Id="filD1CF652C8C59815574E1B9BC30E36B26" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\insightface\gui\core\config.py" />
+            </Component>
+            <Component Id="cmp67AF3DAA311A17933D6FD664F82F10D2" Directory="dirE7D6A0511A28FDD8DA0523C42B5D6710" Guid="*">
+                <File Id="fil6D66EC83E72E55C3FA9D09AB060C1EA6" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\insightface\gui\core\constants.py" />
+            </Component>
+            <Component Id="cmpEA30A1C57E0B65E3E01D1D59185CE86D" Directory="dirE7D6A0511A28FDD8DA0523C42B5D6710" Guid="*">
+                <File Id="filB2F920F614C4EBDB73404858F985A27D" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\insightface\gui\core\evaluation.py" />
+            </Component>
+            <Component Id="cmpADE2DD77778F74EC84FCE2480F15ED93" Directory="dirE7D6A0511A28FDD8DA0523C42B5D6710" Guid="*">
+                <File Id="fil408E8D6239E56023BFDB19081EEAE0FB" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\insightface\gui\core\exporters.py" />
+            </Component>
+            <Component Id="cmp2D59865E727BE1FDD1CB0953DE9B7BA0" Directory="dirE7D6A0511A28FDD8DA0523C42B5D6710" Guid="*">
+                <File Id="fil8F3E7B8C38B5938CBE0B0B07DEB1CDAB" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\insightface\gui\core\face_engine.py" />
+            </Component>
+            <Component Id="cmp0F8CA0C1CA49C9259EAACAD15C23E865" Directory="dirE7D6A0511A28FDD8DA0523C42B5D6710" Guid="*">
+                <File Id="fil4ED6E7F254C8C9B95CFD70A11A613A6C" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\insightface\gui\core\i18n.py" />
+            </Component>
+            <Component Id="cmp269FE435FC5A09909399C54E3CC7D3B8" Directory="dirE7D6A0511A28FDD8DA0523C42B5D6710" Guid="*">
+                <File Id="fil12CF8E3116CE893683B78A46F0094516" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\insightface\gui\core\licensing.py" />
+            </Component>
+            <Component Id="cmp40F31D52F563AB1532BE563201C59AB2" Directory="dirE7D6A0511A28FDD8DA0523C42B5D6710" Guid="*">
+                <File Id="filD5930F00FE59604D3022EBA1F1C179F7" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\insightface\gui\core\links.py" />
+            </Component>
+            <Component Id="cmpEEE37D7D8C2DB45FBC6ADE2DFAE51005" Directory="dirE7D6A0511A28FDD8DA0523C42B5D6710" Guid="*">
+                <File Id="fil975DED25F4712F95F10BB16FB83CCFBD" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\insightface\gui\core\logging.py" />
+            </Component>
+            <Component Id="cmpB80C53150FADA264FA36E4F9CFC4F8CF" Directory="dirE7D6A0511A28FDD8DA0523C42B5D6710" Guid="*">
+                <File Id="filFB5296083A6EC3CFFCAF2003E8A1CEB0" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\insightface\gui\core\models.py" />
+            </Component>
+            <Component Id="cmpCBD75D2BCC44653C04529EA24D8099C1" Directory="dirE7D6A0511A28FDD8DA0523C42B5D6710" Guid="*">
+                <File Id="fil062640B05BCE86E50621AC8CCD552613" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\insightface\gui\core\model_downloads.py" />
+            </Component>
+            <Component Id="cmp31A4DC8BABA4B98B1A29626200B032F8" Directory="dirE7D6A0511A28FDD8DA0523C42B5D6710" Guid="*">
+                <File Id="filC043C8DBB9B54E9489DE625866BDE843" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\insightface\gui\core\navigation.py" />
+            </Component>
+            <Component Id="cmpDB78ECB9FB98E3FE82CC41A888554C54" Directory="dirE7D6A0511A28FDD8DA0523C42B5D6710" Guid="*">
+                <File Id="fil474A3BF79A9F0CB559C8573BF5968DB1" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\insightface\gui\core\paths.py" />
+            </Component>
+            <Component Id="cmp1BF1ABD8A0F60AE1EF0A31A36F4B006C" Directory="dirE7D6A0511A28FDD8DA0523C42B5D6710" Guid="*">
+                <File Id="filBDD002F3FAC66FABBAA64735973EF2DA" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\insightface\gui\core\quality.py" />
+            </Component>
+            <Component Id="cmp761C4FD254091FECC43A94D3B11710FB" Directory="dirE7D6A0511A28FDD8DA0523C42B5D6710" Guid="*">
+                <File Id="filFBB41733130134658022FB4246A84B62" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\insightface\gui\core\recognition.py" />
+            </Component>
+            <Component Id="cmp55F3A215D6478BCDE761DA8BA1AB67D9" Directory="dirE7D6A0511A28FDD8DA0523C42B5D6710" Guid="*">
+                <File Id="fil420DBC0F8252CD58BCC791A9DFB32493" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\insightface\gui\core\reporting.py" />
+            </Component>
+            <Component Id="cmp26833966F44DA0121BCE9C7FB7DA8EEA" Directory="dirE7D6A0511A28FDD8DA0523C42B5D6710" Guid="*">
+                <File Id="filAACFCA49BAE9C131011436497CF178B5" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\insightface\gui\core\storage.py" />
+            </Component>
+            <Component Id="cmp0969A340C16B059441DF657CA5BAB9C5" Directory="dirE7D6A0511A28FDD8DA0523C42B5D6710" Guid="*">
+                <File Id="filAD6EA74FF12A02D5C79E43DF8CA5834D" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\insightface\gui\core\swap.py" />
+            </Component>
+            <Component Id="cmpD74B82DE9BDB280083C113C9830AE81D" Directory="dirE7D6A0511A28FDD8DA0523C42B5D6710" Guid="*">
+                <File Id="fil8859B160620D5C3774320165C4EB851D" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\insightface\gui\core\theme.py" />
+            </Component>
+            <Component Id="cmpCC48FC7AB148C7273E0C60E140DA8275" Directory="dirE7D6A0511A28FDD8DA0523C42B5D6710" Guid="*">
+                <File Id="fil794F8AAF2ED2F587DCB6CAD064E74CAF" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\insightface\gui\core\tooltips.py" />
+            </Component>
+            <Component Id="cmpFE0E5B9E793E2D5BD5DBA1E0F2B1C786" Directory="dirE7D6A0511A28FDD8DA0523C42B5D6710" Guid="*">
+                <File Id="fil8137F009CABA414536BE4A4AA910D8D6" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\insightface\gui\core\utils.py" />
+            </Component>
+            <Component Id="cmp121F8F048002A8DF3D495282449FDA43" Directory="dirE7D6A0511A28FDD8DA0523C42B5D6710" Guid="*">
+                <File Id="filF411E4F47C18BA7F9081C83D7D98B9FF" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\insightface\gui\core\video.py" />
+            </Component>
+            <Component Id="cmp7B2FDA118F76641BD65917E20703D626" Directory="dirE7D6A0511A28FDD8DA0523C42B5D6710" Guid="*">
+                <File Id="fil8102BA3A8406E0EC7E1D78F2432A550B" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\insightface\gui\core\__init__.py" />
+            </Component>
+            <Component Id="cmp47198C0691CE784D8319A01DBD42DA46" Directory="dir8E24D21CB032541501D562316D59A543" Guid="*">
+                <File Id="fil95013C61288EEF4354F6D711491F83BF" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\insightface\gui\dialogs\license_dialog.py" />
+            </Component>
+            <Component Id="cmp8010AB16F1A441F2378AAF79EB853FB7" Directory="dir8E24D21CB032541501D562316D59A543" Guid="*">
+                <File Id="fil62A80B6CDBBB88DD5AFBBE9D2F01CB99" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\insightface\gui\dialogs\model_manager_dialog.py" />
+            </Component>
+            <Component Id="cmp48985DA7CCFD8E0D22FC63103B88E23A" Directory="dir8E24D21CB032541501D562316D59A543" Guid="*">
+                <File Id="filAB611539CAB871BA40CD1127FDC49AE4" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\insightface\gui\dialogs\settings_dialog.py" />
+            </Component>
+            <Component Id="cmpF25A4CD95F12DC7F13279BD0B563D089" Directory="dir8E24D21CB032541501D562316D59A543" Guid="*">
+                <File Id="fil9D6BFF75B96DD5A3C156CE8D5483FBFB" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\insightface\gui\dialogs\__init__.py" />
+            </Component>
+            <Component Id="cmp400468D495EB2E1F960414F1464FF15E" Directory="dir54E378801A0B98A8E5CFA0518EBD9F1D" Guid="*">
+                <File Id="fil42D79164B8E8A1EBB15747D27FF3BBC0" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\insightface\gui\pages\album_page.py" />
+            </Component>
+            <Component Id="cmpFD3434EA7637B862A48AADE208D99F5C" Directory="dir54E378801A0B98A8E5CFA0518EBD9F1D" Guid="*">
+                <File Id="fil25D7622979DBB0541EBF679966D430C5" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\insightface\gui\pages\album_people_page.py" />
+            </Component>
+            <Component Id="cmp582D292FD8AE1550E536689354671389" Directory="dir54E378801A0B98A8E5CFA0518EBD9F1D" Guid="*">
+                <File Id="fil97DE73A43CCDA536DC8A7DF5DACC530A" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\insightface\gui\pages\base.py" />
+            </Component>
+            <Component Id="cmpF5BDF46449489BD945D65CC65BDE4EB9" Directory="dir54E378801A0B98A8E5CFA0518EBD9F1D" Guid="*">
+                <File Id="fil561667096A62F070B0C0AEDA75C4CC09" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\insightface\gui\pages\batch_processing_page.py" />
+            </Component>
+            <Component Id="cmp86CD4542182497433DEA736E31E29990" Directory="dir54E378801A0B98A8E5CFA0518EBD9F1D" Guid="*">
+                <File Id="filFB90DC72F4779EC5A8BAF5FB090EA73B" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\insightface\gui\pages\camera_recognition_page.py" />
+            </Component>
+            <Component Id="cmpA90D87171AAA485FB98BFF04F846C8E3" Directory="dir54E378801A0B98A8E5CFA0518EBD9F1D" Guid="*">
+                <File Id="filF1656B8C71CF73FED73D45E08AA2EFE6" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\insightface\gui\pages\compare_page.py" />
+            </Component>
+            <Component Id="cmpF32FBF6CFC4380FF7A58A2851E2B376B" Directory="dir54E378801A0B98A8E5CFA0518EBD9F1D" Guid="*">
+                <File Id="fil55B5B25117002DFCF766740AA330ACC5" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\insightface\gui\pages\dashboard_page.py" />
+            </Component>
+            <Component Id="cmpB23D171354872EC9071302107FC04F55" Directory="dir54E378801A0B98A8E5CFA0518EBD9F1D" Guid="*">
+                <File Id="fil4127D1C2A613CD69E03E7524A90067BB" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\insightface\gui\pages\enterprise_eval_page.py" />
+            </Component>
+            <Component Id="cmpAFC514A82DFA28125ABB7F87D1F38D8B" Directory="dir54E378801A0B98A8E5CFA0518EBD9F1D" Guid="*">
+                <File Id="fil71CC04FE6271B0F387ABC9D841E52D57" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\insightface\gui\pages\face_search_page.py" />
+            </Component>
+            <Component Id="cmpD3642EE9E0A2F2173CB3BF746BD79A5C" Directory="dir54E378801A0B98A8E5CFA0518EBD9F1D" Guid="*">
+                <File Id="fil810FC052468A9BE06ED9DC095482EA64" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\insightface\gui\pages\face_swap_page.py" />
+            </Component>
+            <Component Id="cmpD0C3357E2013996E34C881C2E80355FF" Directory="dir54E378801A0B98A8E5CFA0518EBD9F1D" Guid="*">
+                <File Id="fil7CB0723A680EFBAFBE892AC7772BC25E" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\insightface\gui\pages\license_center_page.py" />
+            </Component>
+            <Component Id="cmpA92B083729CD059ACA4E8AAED8F81087" Directory="dir54E378801A0B98A8E5CFA0518EBD9F1D" Guid="*">
+                <File Id="fil6978C32962236891E6CF1C8BA94C5401" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\insightface\gui\pages\model_download_page.py" />
+            </Component>
+            <Component Id="cmpFF919C6B56A052A68290E9CEE3333584" Directory="dir54E378801A0B98A8E5CFA0518EBD9F1D" Guid="*">
+                <File Id="fil6CBE558926B9677D1782176853F6F3E9" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\insightface\gui\pages\model_settings_page.py" />
+            </Component>
+            <Component Id="cmp795305B86C17AA7E54CD6E4F95639E99" Directory="dir54E378801A0B98A8E5CFA0518EBD9F1D" Guid="*">
+                <File Id="filD7D4FAFDF2CAF8B314AB2E7CA7C80D66" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\insightface\gui\pages\mode_dashboards.py" />
+            </Component>
+            <Component Id="cmpFC4C5EA8AE62B5B6D6CA8BC2DABCF66A" Directory="dir54E378801A0B98A8E5CFA0518EBD9F1D" Guid="*">
+                <File Id="fil47DBB52BF5ED07F34C65A692768A0D36" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\insightface\gui\pages\multiface_photo_page.py" />
+            </Component>
+            <Component Id="cmp80C5105CB48A127DAA1B7089CFD2D994" Directory="dir54E378801A0B98A8E5CFA0518EBD9F1D" Guid="*">
+                <File Id="fil04ACAFC393FA28CDDC6DFB29E720BF0D" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\insightface\gui\pages\people_library_page.py" />
+            </Component>
+            <Component Id="cmp766E2E2047A484C48AF0C3B9CFF31603" Directory="dir54E378801A0B98A8E5CFA0518EBD9F1D" Guid="*">
+                <File Id="filAF2A07EEACF8A562D48CB7F1C2EE7297" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\insightface\gui\pages\placeholder_page.py" />
+            </Component>
+            <Component Id="cmp5BDE3C296C330DA880665EB7B3FAA08B" Directory="dir54E378801A0B98A8E5CFA0518EBD9F1D" Guid="*">
+                <File Id="fil77A5EBC86916A26C0D53A995B6A7C03A" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\insightface\gui\pages\reports_page.py" />
+            </Component>
+            <Component Id="cmp83CFB8DB7B1095A7F541C7FEADF65C4D" Directory="dir54E378801A0B98A8E5CFA0518EBD9F1D" Guid="*">
+                <File Id="fil977B6B09D75148C9F61E44262B912EA1" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\insightface\gui\pages\settings_page.py" />
+            </Component>
+            <Component Id="cmp424BB7AEA515E61019597394B7196EFB" Directory="dir54E378801A0B98A8E5CFA0518EBD9F1D" Guid="*">
+                <File Id="fil4C1B990F7F00B773D015C9B9E49D4134" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\insightface\gui\pages\verification_page.py" />
+            </Component>
+            <Component Id="cmp37BD5CC2AF94A27149AD9662CE995D65" Directory="dir54E378801A0B98A8E5CFA0518EBD9F1D" Guid="*">
+                <File Id="fil6EE6FE1E12EF85D1C09669A9BF896439" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\insightface\gui\pages\video_search_page.py" />
+            </Component>
+            <Component Id="cmp088381396C2512D7501DF93DADAF5647" Directory="dir54E378801A0B98A8E5CFA0518EBD9F1D" Guid="*">
+                <File Id="filBAD1BEB2EDBFBB1986EB2F1A9A309841" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\insightface\gui\pages\__init__.py" />
+            </Component>
+            <Component Id="cmp47D7D38DD774BCF853C517C99CA03E14" Directory="dir83C8DB6D49F2461DCFBEFE99FDEA59C0" Guid="*">
+                <File Id="fil60F40A3804F6808424D8E9D19953144D" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\insightface\gui\widgets\drop_input.py" />
+            </Component>
+            <Component Id="cmp8748172FEA4C9AD11A93A5101BE34B47" Directory="dir83C8DB6D49F2461DCFBEFE99FDEA59C0" Guid="*">
+                <File Id="filFDF8046B64901AF673A3313BF4DA2988" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\insightface\gui\widgets\face_overlay.py" />
+            </Component>
+            <Component Id="cmpD75607F40CCA0472599FFF7EDCF854CF" Directory="dir83C8DB6D49F2461DCFBEFE99FDEA59C0" Guid="*">
+                <File Id="fil33058A28710768D3F9D6200003145947" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\insightface\gui\widgets\face_table.py" />
+            </Component>
+            <Component Id="cmp7F916D50DC01014F934D2C4957A229C0" Directory="dir83C8DB6D49F2461DCFBEFE99FDEA59C0" Guid="*">
+                <File Id="fil2EE7FE29840FDDEEB0637E4B698EA0E0" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\insightface\gui\widgets\image_viewer.py" />
+            </Component>
+            <Component Id="cmp886A1C6275836059E1DB70415DBBD547" Directory="dir83C8DB6D49F2461DCFBEFE99FDEA59C0" Guid="*">
+                <File Id="filE88EBD849ACDB194F56A8AD17B92B166" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\insightface\gui\widgets\metric_card.py" />
+            </Component>
+            <Component Id="cmp6228E33732022347547D807339F6D648" Directory="dir83C8DB6D49F2461DCFBEFE99FDEA59C0" Guid="*">
+                <File Id="fil845001FD7EE13B662F5C38A863CEA0F9" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\insightface\gui\widgets\person_card.py" />
+            </Component>
+            <Component Id="cmp486E4774AAD3B45C1851D8AF368C47E7" Directory="dir83C8DB6D49F2461DCFBEFE99FDEA59C0" Guid="*">
+                <File Id="fil692D06B520657CF9F4E6804E7E6F6475" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\insightface\gui\widgets\progress_dialog.py" />
+            </Component>
+            <Component Id="cmpE22385C226A3078AEF1A8E35A660C320" Directory="dir83C8DB6D49F2461DCFBEFE99FDEA59C0" Guid="*">
+                <File Id="fil5E8C4DDBCE8715B3C4B3124276B99D02" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\insightface\gui\widgets\table_utils.py" />
+            </Component>
+            <Component Id="cmpAFB2A518E44C74720839BBA96E56DD68" Directory="dir83C8DB6D49F2461DCFBEFE99FDEA59C0" Guid="*">
+                <File Id="fil4F3ADF698283536443070ED3A3726198" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\insightface\gui\widgets\threshold_slider.py" />
+            </Component>
+            <Component Id="cmp6F1AA57C4D4688D6FCE8D824F67C297B" Directory="dir83C8DB6D49F2461DCFBEFE99FDEA59C0" Guid="*">
+                <File Id="filC77C5D58E04188A82D924B8399330A7D" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\insightface\gui\widgets\upload_preview.py" />
+            </Component>
+            <Component Id="cmp6CDFDAB08D3E716668521B4714AE4115" Directory="dir83C8DB6D49F2461DCFBEFE99FDEA59C0" Guid="*">
+                <File Id="filBB7661E8804DB9072D39E93402EA331E" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\insightface\gui\widgets\__init__.py" />
+            </Component>
+            <Component Id="cmp810BBB18628FC05C83D8153AADF62FE5" Directory="dir741CA305D35C32C2D0612BB5880AE632" Guid="*">
+                <File Id="filEE7864D833CD1911CDDAE3C3D8CC8BA4" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\insightface\model_zoo\arcface_onnx.py" />
+            </Component>
+            <Component Id="cmp250D5763B88993E196BC8A7FD343154A" Directory="dir741CA305D35C32C2D0612BB5880AE632" Guid="*">
+                <File Id="fil872FADF0FD409A60A07E94EFFD01CD06" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\insightface\model_zoo\attribute.py" />
+            </Component>
+            <Component Id="cmp7978154DBCFB960121B5C0EC3C137D36" Directory="dir741CA305D35C32C2D0612BB5880AE632" Guid="*">
+                <File Id="fil1ED65BC7D579F02ABFD4E0F2BD7D4AF7" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\insightface\model_zoo\inswapper.py" />
+            </Component>
+            <Component Id="cmp88A8248E4EE313405D6373AF66C4EF9F" Directory="dir741CA305D35C32C2D0612BB5880AE632" Guid="*">
+                <File Id="fil4A490B535EE6F7F07762438CCC9BC3EB" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\insightface\model_zoo\landmark.py" />
+            </Component>
+            <Component Id="cmpDE777D3127ACECADF8117FD3EC9E6A5A" Directory="dir741CA305D35C32C2D0612BB5880AE632" Guid="*">
+                <File Id="fil3A061A667ED035750DCBFC62CAF3109F" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\insightface\model_zoo\model_store.py" />
+            </Component>
+            <Component Id="cmpA36F293AE78197E6E6B819FFFCDC2BA0" Directory="dir741CA305D35C32C2D0612BB5880AE632" Guid="*">
+                <File Id="fil0C71B1CAFD2495E16FE38B8B400B9131" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\insightface\model_zoo\model_zoo.py" />
+            </Component>
+            <Component Id="cmp9F3D13F8452D31ACD2D32D82FAC3D0B5" Directory="dir741CA305D35C32C2D0612BB5880AE632" Guid="*">
+                <File Id="filF533EE665E4B1DF2737BC6C68F083B3F" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\insightface\model_zoo\retinaface.py" />
+            </Component>
+            <Component Id="cmp9FA0DD01DBD54B873CCC3536E637FADB" Directory="dir741CA305D35C32C2D0612BB5880AE632" Guid="*">
+                <File Id="filB863FD675183FCA78BB3BA224C5F307D" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\insightface\model_zoo\scrfd.py" />
+            </Component>
+            <Component Id="cmpB4610573C5D9F8EA1096BF59D7F9135D" Directory="dir741CA305D35C32C2D0612BB5880AE632" Guid="*">
+                <File Id="fil5F05500D66461314B8687EDD0E392BE5" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\insightface\model_zoo\__init__.py" />
+            </Component>
+            <Component Id="cmp1248F8548D7B60A205660FF3502D94AD" Directory="dirCE39FEF16D492ED7E71998079F63FE4C" Guid="*">
+                <File Id="filA16B3967AD99DEF6BEED9ECCBC26232A" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\insightface\thirdparty\__init__.py" />
+            </Component>
+            <Component Id="cmpF05B0DBEF26D1251C30CAE5907CB3513" Directory="dir6F7C4EFB930BDC4D12FD4BAEA2BA33EA" Guid="*">
+                <File Id="fil8AF119D712C96660FEF63E0B78E0AC61" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\insightface\thirdparty\face3d\__init__.py" />
+            </Component>
+            <Component Id="cmp2C85F9DD8BBD212CEF9EF884DA6F5E36" Directory="dir585978BB6F4F0DBD0DBC93F1A22B64FB" Guid="*">
+                <File Id="fil80057E80224E0DBDFE9E30D049A66169" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\insightface\thirdparty\face3d\mesh\io.py" />
+            </Component>
+            <Component Id="cmpAF20509CED45C96443E19170112EFE33" Directory="dir585978BB6F4F0DBD0DBC93F1A22B64FB" Guid="*">
+                <File Id="fil270B2595B70E2DC356F55361262410ED" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\insightface\thirdparty\face3d\mesh\light.py" />
+            </Component>
+            <Component Id="cmp7392E460E4633D69CD3C7F687C1CF503" Directory="dir585978BB6F4F0DBD0DBC93F1A22B64FB" Guid="*">
+                <File Id="fil8E8DDB214CC43D71F76E86B6EEBA43E3" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\insightface\thirdparty\face3d\mesh\render.py" />
+            </Component>
+            <Component Id="cmp6AD3BBD1DCFC057A1E28CC404572FFAF" Directory="dir585978BB6F4F0DBD0DBC93F1A22B64FB" Guid="*">
+                <File Id="fil5EC4778C874F6B984C13A9D84DC81F99" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\insightface\thirdparty\face3d\mesh\transform.py" />
+            </Component>
+            <Component Id="cmp7DC33F89512EDADDA0215381632BB7ED" Directory="dir585978BB6F4F0DBD0DBC93F1A22B64FB" Guid="*">
+                <File Id="fil0D8406C2FEAC8D14DA2B8D1E04D779BF" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\insightface\thirdparty\face3d\mesh\vis.py" />
+            </Component>
+            <Component Id="cmp2A53D94BDB7E0B5F5CA94802743798CE" Directory="dir585978BB6F4F0DBD0DBC93F1A22B64FB" Guid="*">
+                <File Id="filED609E7671A6BD75636206F0585B1956" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\insightface\thirdparty\face3d\mesh\__init__.py" />
+            </Component>
+            <Component Id="cmp14F1319C6CFA30FC51A0BEAC558B286E" Directory="dirBDF5E6B3A395A5C773FEB4093A746F35" Guid="*">
+                <File Id="fil9DA0DB853692C60ED021E4A5F33C6C01" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\insightface\thirdparty\face3d\mesh_numpy\io.py" />
+            </Component>
+            <Component Id="cmpDC15A3799AD2C4AC2AF3AA4098FF8856" Directory="dirBDF5E6B3A395A5C773FEB4093A746F35" Guid="*">
+                <File Id="fil2B85EA703CBD749EA7D1F86D290B5ED9" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\insightface\thirdparty\face3d\mesh_numpy\light.py" />
+            </Component>
+            <Component Id="cmp19F0003FB65DA5EF7E5B9BA206BEED9E" Directory="dirBDF5E6B3A395A5C773FEB4093A746F35" Guid="*">
+                <File Id="fil34B64057395E0C9F2A1123847CDC9423" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\insightface\thirdparty\face3d\mesh_numpy\render.py" />
+            </Component>
+            <Component Id="cmp1096949E521A929D108752FBA59C7E87" Directory="dirBDF5E6B3A395A5C773FEB4093A746F35" Guid="*">
+                <File Id="fil41F21347264C7DB3D2554661E2B62741" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\insightface\thirdparty\face3d\mesh_numpy\transform.py" />
+            </Component>
+            <Component Id="cmp19554DB697F806A948ABBB6A099D1E92" Directory="dirBDF5E6B3A395A5C773FEB4093A746F35" Guid="*">
+                <File Id="fil1296AA32143039C50ADA98F7DAF270C2" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\insightface\thirdparty\face3d\mesh_numpy\vis.py" />
+            </Component>
+            <Component Id="cmp394A3E546F83D1ABB6C982498775EB6C" Directory="dirBDF5E6B3A395A5C773FEB4093A746F35" Guid="*">
+                <File Id="fil624AD1AA41B3471C4FFB171FF497A030" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\insightface\thirdparty\face3d\mesh_numpy\__init__.py" />
+            </Component>
+            <Component Id="cmp4DA8C0815DA40D43B326531ED0C3F7D2" Directory="dir4FC65524603A9C4D017763C5D8D49584" Guid="*">
+                <File Id="fil3B0A82E32CC416FDD229F86A49BE057A" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\insightface\thirdparty\face3d\morphable_model\fit.py" />
+            </Component>
+            <Component Id="cmpB7495CDCCF26C2BDA179DA45679DB1A5" Directory="dir4FC65524603A9C4D017763C5D8D49584" Guid="*">
+                <File Id="filA2978E1FFFE0B045413BE384302C861B" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\insightface\thirdparty\face3d\morphable_model\load.py" />
+            </Component>
+            <Component Id="cmp5059DD82D150F251BC8662889E3FD275" Directory="dir4FC65524603A9C4D017763C5D8D49584" Guid="*">
+                <File Id="fil1BF572A5694D63C93AD414453CAC8F5D" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\insightface\thirdparty\face3d\morphable_model\morphabel_model.py" />
+            </Component>
+            <Component Id="cmp4DEC60676B80A7F1923D425D29E295ED" Directory="dir4FC65524603A9C4D017763C5D8D49584" Guid="*">
+                <File Id="fil6C9CDCBE91C346D3384CDE38D50921F5" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\insightface\thirdparty\face3d\morphable_model\__init__.py" />
+            </Component>
+            <Component Id="cmp1D622C0CE69EAD0905C98720D68354DD" Directory="dirB2841A76AD340828BB917A2F83B116CE" Guid="*">
+                <File Id="filC48700814427ED1645043B55D7CCD21C" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\insightface\utils\constant.py" />
+            </Component>
+            <Component Id="cmp87CED5CE4C9643FDB3C278AE66A7601F" Directory="dirB2841A76AD340828BB917A2F83B116CE" Guid="*">
+                <File Id="fil0146F2772AA365D21DBE14EA16C77D06" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\insightface\utils\download.py" />
+            </Component>
+            <Component Id="cmp6F5BDAB8CC1F37AAE170AF99A012EE2F" Directory="dirB2841A76AD340828BB917A2F83B116CE" Guid="*">
+                <File Id="fil2435DA4FCD23770179EF7755928AEF5E" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\insightface\utils\face_align.py" />
+            </Component>
+            <Component Id="cmpECBD6C27C260F59DAF39965287089D73" Directory="dirB2841A76AD340828BB917A2F83B116CE" Guid="*">
+                <File Id="filBB42D2586CDFCFDFFDA8FE440FD6E4F3" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\insightface\utils\filesystem.py" />
+            </Component>
+            <Component Id="cmp8ABE3698DA2FDC661FB99D1FBCFAC2ED" Directory="dirB2841A76AD340828BB917A2F83B116CE" Guid="*">
+                <File Id="fil6B7D3A66967B3E91607B28A4E6675688" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\insightface\utils\storage.py" />
+            </Component>
+            <Component Id="cmp2C17E090B2203133B05D829588DE9851" Directory="dirB2841A76AD340828BB917A2F83B116CE" Guid="*">
+                <File Id="filEC19B3607168C3EE78FF6011BEFE6BEE" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\insightface\utils\transform.py" />
+            </Component>
+            <Component Id="cmp0689FCEEBF7DDA7419E10B714D4C7CB0" Directory="dirB2841A76AD340828BB917A2F83B116CE" Guid="*">
+                <File Id="fil6491B84E082CDABBB2C076F6267CE776" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\insightface\utils\__init__.py" />
+            </Component>
+            <Component Id="cmp3D6648BADE0904A6443EACA1B8A82C90" Directory="dir33F7BFB921A1B42C9FEC086F01F87FAD" Guid="*">
+                <File Id="filE3FD91D255A7493319351683749A3427" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\insightface-1.0.1.dist-info\entry_points.txt" />
+            </Component>
+            <Component Id="cmpB030515BF91DC6C6B5E7A8C0744A5AC4" Directory="dir33F7BFB921A1B42C9FEC086F01F87FAD" Guid="*">
+                <File Id="fil183C76652318A1B95CB5CFC62D3C50F2" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\insightface-1.0.1.dist-info\INSTALLER" />
+            </Component>
+            <Component Id="cmpB5A5B9E3E9BEB0CC0551B831D4548CCF" Directory="dir33F7BFB921A1B42C9FEC086F01F87FAD" Guid="*">
+                <File Id="fil300959A28AE07813C778FE5A6E45FCF9" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\insightface-1.0.1.dist-info\METADATA" />
+            </Component>
+            <Component Id="cmp4115327E3CACB05242E46060B480C060" Directory="dir33F7BFB921A1B42C9FEC086F01F87FAD" Guid="*">
+                <File Id="fil3190266D68C6AB701E09D84B35974DF5" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\insightface-1.0.1.dist-info\RECORD" />
+            </Component>
+            <Component Id="cmp04D7556B4A3375E144FFEAD5C9A8BF19" Directory="dir33F7BFB921A1B42C9FEC086F01F87FAD" Guid="*">
+                <File Id="fil8C7131DF903E3315FAE79962A71561EB" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\insightface-1.0.1.dist-info\REQUESTED" />
+            </Component>
+            <Component Id="cmp5942FA6F277DE19E237C419313BE2F53" Directory="dir33F7BFB921A1B42C9FEC086F01F87FAD" Guid="*">
+                <File Id="filA0A8A9804E267B0BD6B2B0FB91CEAA10" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\insightface-1.0.1.dist-info\top_level.txt" />
+            </Component>
+            <Component Id="cmp4BA6FF42CB4DCB642613A152BD6D161E" Directory="dir33F7BFB921A1B42C9FEC086F01F87FAD" Guid="*">
+                <File Id="filC7A764FEF06BAD9ACEDDAAA8D52EB4B0" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\insightface-1.0.1.dist-info\WHEEL" />
+            </Component>
+            <Component Id="cmp805C8703D97BB31C2CF4EAF017256D82" Directory="dir33F7BFB921A1B42C9FEC086F01F87FAD" Guid="*">
+                <File Id="fil45DB8CC9BADA8A0BB16B6D9FC32A0BE2" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\insightface-1.0.1.dist-info\zip-safe" />
+            </Component>
             <Component Id="cmp0BFAF949DDEDEC3075C60554AAA9402A" Directory="dir70C3F8B48E5B28B152415D68640BB0FC" Guid="*">
                 <File Id="fil1C4ABEBC313DD9EEBB11E5F190DF447B" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\lz4\_version.cp311-win_amd64.pyd" />
             </Component>
@@ -702,6 +1101,9 @@
             </Component>
             <Component Id="cmp441AD505A55B6150E82A719D95141B21" Directory="dirC88C5115BA2921766D8135EAE6F11E32" Guid="*">
                 <File Id="filBF2042DD126E9DA726816732D49F21C2" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\numpy.libs\msvcp140-a4c2229bdc2a2a630acdc095b4d86008.dll" />
+            </Component>
+            <Component Id="cmp6DB4EF621FCEC0F6DFE14F1CC8E50019" Directory="dir7FDB1EB4C4E7D8A78E58643F121BD295" Guid="*">
+                <File Id="fil1FF20D30DCFC1647D6D4D673CAFCE969" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\objects\meanshape_68.pkl" />
             </Component>
             <Component Id="cmp0764051DC886C4653DA6A8CCA475E931" Directory="dir2B09CD259D106A92E83739B23ADB716F" Guid="*">
                 <File Id="filE43DEE9039F1BAA7986985512A37E620" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\onnx\onnx_cpp2py_export.cp311-win_amd64.pyd" />
@@ -6050,6 +6452,11 @@
         </DirectoryRef>
     </Fragment>
     <Fragment>
+        <DirectoryRef Id="dirBF570795F4EDABDC0C35C54392FDCA43">
+            <Directory Id="dir22214B8C1FA4D485C394BD83439E2126" Name="app" />
+        </DirectoryRef>
+    </Fragment>
+    <Fragment>
         <DirectoryRef Id="dir3794F06778E1BD60DCFF09BA534E174A">
             <Directory Id="dir23AE221CE335BDD835EF0E12968E55ED" Name="misc" />
         </DirectoryRef>
@@ -6127,6 +6534,11 @@
     <Fragment>
         <DirectoryRef Id="dir447B9D09362EF8AD353D29A0D30B678B">
             <Directory Id="dir33D96536589988B9A6084186B376ABC5" Name="charts" />
+        </DirectoryRef>
+    </Fragment>
+    <Fragment>
+        <DirectoryRef Id="dirB262A3C1EC64B1E8AB54055F45CD67B0">
+            <Directory Id="dir33F7BFB921A1B42C9FEC086F01F87FAD" Name="insightface-1.0.1.dist-info" />
         </DirectoryRef>
     </Fragment>
     <Fragment>
@@ -6230,6 +6642,11 @@
         </DirectoryRef>
     </Fragment>
     <Fragment>
+        <DirectoryRef Id="dir6F7C4EFB930BDC4D12FD4BAEA2BA33EA">
+            <Directory Id="dir4FC65524603A9C4D017763C5D8D49584" Name="morphable_model" />
+        </DirectoryRef>
+    </Fragment>
+    <Fragment>
         <DirectoryRef Id="dirD61A7964C18951677D1F22B2ADDE24B3">
             <Directory Id="dir50AC5B32C2033D41FC677330F47ADEBC" Name="metrics" />
         </DirectoryRef>
@@ -6260,13 +6677,28 @@
         </DirectoryRef>
     </Fragment>
     <Fragment>
+        <DirectoryRef Id="dir9C44F7B5B1AE1AFCA170EC058D41F73B">
+            <Directory Id="dir54E378801A0B98A8E5CFA0518EBD9F1D" Name="pages" />
+        </DirectoryRef>
+    </Fragment>
+    <Fragment>
         <DirectoryRef Id="dir8D4E4D05306976EEA8A7DA751C628701">
             <Directory Id="dir5547D4538533809B0E57AFB147636A93" Name="sfc64" />
         </DirectoryRef>
     </Fragment>
     <Fragment>
+        <DirectoryRef Id="dirBF570795F4EDABDC0C35C54392FDCA43">
+            <Directory Id="dir5797EF48CC72139BF8B83501109350D0" Name="data" />
+        </DirectoryRef>
+    </Fragment>
+    <Fragment>
         <DirectoryRef Id="dirB262A3C1EC64B1E8AB54055F45CD67B0">
             <Directory Id="dir5810A859F62292D8D81B90460BB820D7" Name="PySide6" />
+        </DirectoryRef>
+    </Fragment>
+    <Fragment>
+        <DirectoryRef Id="dir6F7C4EFB930BDC4D12FD4BAEA2BA33EA">
+            <Directory Id="dir585978BB6F4F0DBD0DBC93F1A22B64FB" Name="mesh" />
         </DirectoryRef>
     </Fragment>
     <Fragment>
@@ -6415,8 +6847,18 @@
         </DirectoryRef>
     </Fragment>
     <Fragment>
+        <DirectoryRef Id="dirCE39FEF16D492ED7E71998079F63FE4C">
+            <Directory Id="dir6F7C4EFB930BDC4D12FD4BAEA2BA33EA" Name="face3d" />
+        </DirectoryRef>
+    </Fragment>
+    <Fragment>
         <DirectoryRef Id="dirB262A3C1EC64B1E8AB54055F45CD67B0">
             <Directory Id="dir70C3F8B48E5B28B152415D68640BB0FC" Name="lz4" />
+        </DirectoryRef>
+    </Fragment>
+    <Fragment>
+        <DirectoryRef Id="dirBF570795F4EDABDC0C35C54392FDCA43">
+            <Directory Id="dir712BC5C7377E66F5BC0AC6E556AD2BD9" Name="commands" />
         </DirectoryRef>
     </Fragment>
     <Fragment>
@@ -6437,6 +6879,11 @@
     <Fragment>
         <DirectoryRef Id="dir8A734F9A86C237B178F114CBD33B79E8">
             <Directory Id="dir741203734731B858EF46BD078EA0B50B" Name="Africa" />
+        </DirectoryRef>
+    </Fragment>
+    <Fragment>
+        <DirectoryRef Id="dirBF570795F4EDABDC0C35C54392FDCA43">
+            <Directory Id="dir741CA305D35C32C2D0612BB5880AE632" Name="model_zoo" />
         </DirectoryRef>
     </Fragment>
     <Fragment>
@@ -6475,6 +6922,11 @@
         </DirectoryRef>
     </Fragment>
     <Fragment>
+        <DirectoryRef Id="dirB262A3C1EC64B1E8AB54055F45CD67B0">
+            <Directory Id="dir7FDB1EB4C4E7D8A78E58643F121BD295" Name="objects" />
+        </DirectoryRef>
+    </Fragment>
+    <Fragment>
         <DirectoryRef Id="dir8A734F9A86C237B178F114CBD33B79E8">
             <Directory Id="dir7FEB7811AF015CBEDD7475C9D355310D" Name="Asia" />
         </DirectoryRef>
@@ -6497,6 +6949,11 @@
     <Fragment>
         <DirectoryRef Id="dir5EB427D48CCADC721230AE2C7FA0C408">
             <Directory Id="dir82E7332B64C899730B1E396ABF8F8AF3" Name="generic" />
+        </DirectoryRef>
+    </Fragment>
+    <Fragment>
+        <DirectoryRef Id="dir9C44F7B5B1AE1AFCA170EC058D41F73B">
+            <Directory Id="dir83C8DB6D49F2461DCFBEFE99FDEA59C0" Name="widgets" />
         </DirectoryRef>
     </Fragment>
     <Fragment>
@@ -6565,6 +7022,11 @@
         </DirectoryRef>
     </Fragment>
     <Fragment>
+        <DirectoryRef Id="dir9C44F7B5B1AE1AFCA170EC058D41F73B">
+            <Directory Id="dir8E24D21CB032541501D562316D59A543" Name="dialogs" />
+        </DirectoryRef>
+    </Fragment>
+    <Fragment>
         <DirectoryRef Id="dirBF45163EA89A77D01A66FCDA5E045647">
             <Directory Id="dir8F63E38FA7E0C6D9A44739E033B05A98" Name="_pairwise_distances_reduction" />
         </DirectoryRef>
@@ -6627,6 +7089,11 @@
     <Fragment>
         <DirectoryRef Id="dir71857B942A7398EA4E7034B09C4712BB">
             <Directory Id="dir9A9C5B78308BA07BC47795114FA300AF" Name="_utils" />
+        </DirectoryRef>
+    </Fragment>
+    <Fragment>
+        <DirectoryRef Id="dirBF570795F4EDABDC0C35C54392FDCA43">
+            <Directory Id="dir9C44F7B5B1AE1AFCA170EC058D41F73B" Name="gui" />
         </DirectoryRef>
     </Fragment>
     <Fragment>
@@ -6740,6 +7207,11 @@
         </DirectoryRef>
     </Fragment>
     <Fragment>
+        <DirectoryRef Id="dirBF570795F4EDABDC0C35C54392FDCA43">
+            <Directory Id="dirB2841A76AD340828BB917A2F83B116CE" Name="utils" />
+        </DirectoryRef>
+    </Fragment>
+    <Fragment>
         <DirectoryRef Id="dirAE7826762C80C54B7C0DA3AB870C8AD9">
             <Directory Id="dirB30BB53B949ECE5540140AD23C4C586A" Name="cluster" />
         </DirectoryRef>
@@ -6770,6 +7242,11 @@
         </DirectoryRef>
     </Fragment>
     <Fragment>
+        <DirectoryRef Id="dir9C44F7B5B1AE1AFCA170EC058D41F73B">
+            <Directory Id="dirBA25BF016F0DDE7221AD2E031D5B822D" Name="assets" />
+        </DirectoryRef>
+    </Fragment>
+    <Fragment>
         <DirectoryRef Id="dirA90E246EDA2DADE98B96AF66208D7023">
             <Directory Id="dirBCF5300018AE60618F834643CCD0677A" Name="_rcont" />
         </DirectoryRef>
@@ -6777,6 +7254,11 @@
     <Fragment>
         <DirectoryRef Id="dirB262A3C1EC64B1E8AB54055F45CD67B0">
             <Directory Id="dirBD389F9A06D9454B40BFB247862116F5" Name="reportlab" />
+        </DirectoryRef>
+    </Fragment>
+    <Fragment>
+        <DirectoryRef Id="dir6F7C4EFB930BDC4D12FD4BAEA2BA33EA">
+            <Directory Id="dirBDF5E6B3A395A5C773FEB4093A746F35" Name="mesh_numpy" />
         </DirectoryRef>
     </Fragment>
     <Fragment>
@@ -6792,6 +7274,11 @@
     <Fragment>
         <DirectoryRef Id="dirAE7826762C80C54B7C0DA3AB870C8AD9">
             <Directory Id="dirBF45163EA89A77D01A66FCDA5E045647" Name="metrics" />
+        </DirectoryRef>
+    </Fragment>
+    <Fragment>
+        <DirectoryRef Id="dirB262A3C1EC64B1E8AB54055F45CD67B0">
+            <Directory Id="dirBF570795F4EDABDC0C35C54392FDCA43" Name="insightface" />
         </DirectoryRef>
     </Fragment>
     <Fragment>
@@ -6830,6 +7317,11 @@
         </DirectoryRef>
     </Fragment>
     <Fragment>
+        <DirectoryRef Id="dir5797EF48CC72139BF8B83501109350D0">
+            <Directory Id="dirCB3E14A1868585739AD223B918B0E3DC" Name="images" />
+        </DirectoryRef>
+    </Fragment>
+    <Fragment>
         <DirectoryRef Id="dirD61A7964C18951677D1F22B2ADDE24B3">
             <Directory Id="dirCC055332A38B325B10DE721AE80FB569" Name="restoration" />
         </DirectoryRef>
@@ -6847,6 +7339,11 @@
     <Fragment>
         <DirectoryRef Id="dir5EB427D48CCADC721230AE2C7FA0C408">
             <Directory Id="dirCDEADB73687660687148963AF8049154" Name="platforminputcontexts" />
+        </DirectoryRef>
+    </Fragment>
+    <Fragment>
+        <DirectoryRef Id="dirBF570795F4EDABDC0C35C54392FDCA43">
+            <Directory Id="dirCE39FEF16D492ED7E71998079F63FE4C" Name="thirdparty" />
         </DirectoryRef>
     </Fragment>
     <Fragment>
@@ -6980,6 +7477,11 @@
         </DirectoryRef>
     </Fragment>
     <Fragment>
+        <DirectoryRef Id="dir9C44F7B5B1AE1AFCA170EC058D41F73B">
+            <Directory Id="dirE7D6A0511A28FDD8DA0523C42B5D6710" Name="core" />
+        </DirectoryRef>
+    </Fragment>
+    <Fragment>
         <DirectoryRef Id="dirB262A3C1EC64B1E8AB54055F45CD67B0">
             <Directory Id="dirE80074BC27383C57CFDEA6B63A648678" Name="google" />
         </DirectoryRef>
@@ -7087,6 +7589,11 @@
     <Fragment>
         <DirectoryRef Id="dir8A734F9A86C237B178F114CBD33B79E8">
             <Directory Id="dirFE9E7EF714A8D72CFD9301C76FE714F7" Name="Mexico" />
+        </DirectoryRef>
+    </Fragment>
+    <Fragment>
+        <DirectoryRef Id="dir5797EF48CC72139BF8B83501109350D0">
+            <Directory Id="dirFEC2B27A6F3FAAEF15977C2E44B7E317" Name="objects" />
         </DirectoryRef>
     </Fragment>
     <Fragment>

@@ -239,6 +239,7 @@ class _PendingBadgeDelegate(QStyledItemDelegate):
 class Sidebar(QWidget):
     folder_selected    = Signal(str)
     album_selected     = Signal(object)   # AlbumInfo | str (special key)
+    album_delete_requested = Signal(object)  # AlbumInfo à supprimer
     scan_requested     = Signal(str)
     folder_removed     = Signal(str)
     folder_created     = Signal(str)      # chemin du nouveau sous-dossier créé
@@ -338,6 +339,8 @@ class Sidebar(QWidget):
 
         self._albums_list = QListWidget()
         self._albums_list.itemClicked.connect(self._on_album_clicked)
+        self._albums_list.setContextMenuPolicy(Qt.CustomContextMenu)
+        self._albums_list.customContextMenuRequested.connect(self._album_context_menu)
         aw_layout.addWidget(self._albums_list)
 
         self._splitter.addWidget(album_widget)
@@ -654,6 +657,18 @@ class Sidebar(QWidget):
         self._persons_list.clearSelection()
         data = item.data(Qt.UserRole)
         self.album_selected.emit(data)
+
+    def _album_context_menu(self, pos) -> None:
+        item = self._albums_list.itemAt(pos)
+        if not item:
+            return
+        album = item.data(Qt.UserRole)
+        if not isinstance(album, AlbumInfo):
+            return   # albums spéciaux (Chronologie, Favoris, Vidéos…) : non supprimables
+        menu = QMenu(self)
+        menu.addAction("Supprimer l'album…",
+                       lambda: self.album_delete_requested.emit(album))
+        menu.exec(self._albums_list.mapToGlobal(pos))
 
     def _folder_context_menu(self, pos) -> None:
         item = self._folder_tree.itemAt(pos)

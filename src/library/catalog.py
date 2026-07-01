@@ -429,6 +429,18 @@ class Catalog:
                 conn.close()
         return AlbumInfo(name=name, id=album_id)
 
+    def delete_album(self, album_id: int) -> None:
+        """Supprime un album et son contenu (album_photos). Les photos elles-mêmes
+        ne sont pas affectées : seule l'association à l'album est retirée."""
+        with self._lock:
+            conn = self._conn()
+            try:
+                conn.execute("DELETE FROM album_photos WHERE album_id = ?", (album_id,))
+                conn.execute("DELETE FROM albums WHERE id = ?", (album_id,))
+                conn.commit()
+            finally:
+                conn.close()
+
     def add_photo_to_album(self, album_id: int, photo_id: int) -> None:
         with self._lock:
             conn = self._conn()

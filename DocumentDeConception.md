@@ -107,6 +107,7 @@ La sidebar contient trois sections séparées par des séparateurs glissables :
 - Liste des albums virtuels créés par l'utilisateur
 - Icône + pour créer un nouvel album
 - Albums spéciaux automatiques : Récemment ajoutées, Favoris, Sans album
+- Clic droit sur un album créé par l'utilisateur = suppression (après confirmation) ; les albums spéciaux ne sont pas supprimables. Les photos elles-mêmes ne sont jamais affectées.
 
 **Section Personnes** (visible si reconnaissance faciale activée) :
 - Vignette ronde + nom pour chaque personne reconnue

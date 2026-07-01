@@ -302,11 +302,10 @@ def detect_and_embed(image_path: str, rotation: int = 0) -> list[dict]:
                 if img is None:
                     logger.warning("cv2.imread a retourné None pour %s", image_path)
                     return []
-                detect_h, detect_w = img.shape[:2]
                 app = _get_insight_app()
                 faces = app.get(img)
     except Exception as exc:
-        logger.warning("InsightFace.get() a échoué pour %s : %s", image_path, exc)
+        logger.warning("InsightFace.get() a échoué pour %s : %s", image_path, exc, exc_info=True)
         return []
 
     if not faces:
@@ -314,9 +313,6 @@ def detect_and_embed(image_path: str, rotation: int = 0) -> list[dict]:
 
     result = []
     inv = 1.0 / scale if scale != 1.0 else 1.0
-    # Aire de l'image affichée (après correction EXIF et rotation) en pixels²
-    displayed_area = detect_w * inv * detect_h * inv
-    _MIN_AREA_RATIO = 0.001   # 0.1 % — seuil en dessous duquel le visage est ignoré
 
     for face in faces:
         if face.det_score < 0.5:
@@ -332,8 +328,6 @@ def detect_and_embed(image_path: str, rotation: int = 0) -> list[dict]:
             y1 = int(y1 * inv)
             w  = int(w  * inv)
             h  = int(h  * inv)
-        if displayed_area > 0 and w * h < displayed_area * _MIN_AREA_RATIO:
-            continue
         result.append({
             "bbox":      (x1, y1, w, h),
             "embedding": face.embedding.tolist(),

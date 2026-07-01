@@ -730,32 +730,30 @@ class MainWindow(QMainWindow):
 
         # Visages
         m_faces = mb.addMenu("Visages")
+        act_picasa = QAction("Importer depuis Picasa…", self)
+        act_picasa.triggered.connect(self._import_from_picasa)
+        m_faces.addAction(act_picasa)
+        m_faces.addSeparator()
+        act_reindex = QAction("Réinitialiser et réindexer…", self)
+        act_reindex.triggered.connect(self._reset_and_reindex_faces)
+        m_faces.addAction(act_reindex)
         self._act_index_faces = QAction("Analyser les visages", self)
         self._act_index_faces.triggered.connect(self._start_face_indexing)
         m_faces.addAction(self._act_index_faces)
         self._act_cluster_faces = QAction("Regrouper les visages…", self)
         self._act_cluster_faces.triggered.connect(self._start_clustering_with_confirm)
         m_faces.addAction(self._act_cluster_faces)
+        act_identify = QAction("Identifier les personnes…", self)
+        act_identify.triggered.connect(self.show_face_clusters)
+        m_faces.addAction(act_identify)
         self._act_similarity_search = QAction(
             "Rechercher des visages similaires aux personnes nommées…", self
         )
         self._act_similarity_search.triggered.connect(self._start_similarity_search)
         m_faces.addAction(self._act_similarity_search)
-        m_faces.addSeparator()
-        act_identify = QAction("Identifier les personnes…", self)
-        act_identify.triggered.connect(self.show_face_clusters)
-        m_faces.addAction(act_identify)
-        m_faces.addSeparator()
-        act_reindex = QAction("Réinitialiser et réindexer…", self)
-        act_reindex.triggered.connect(self._reset_and_reindex_faces)
-        m_faces.addAction(act_reindex)
         self._act_reeval_ignored = QAction("Ré-évaluer les visages ignorés par taille…", self)
         self._act_reeval_ignored.triggered.connect(self._reeval_size_ignored)
         m_faces.addAction(self._act_reeval_ignored)
-        m_faces.addSeparator()
-        act_picasa = QAction("Importer depuis Picasa…", self)
-        act_picasa.triggered.connect(self._import_from_picasa)
-        m_faces.addAction(act_picasa)
         m_faces.addSeparator()
         act_backup = QAction("Sauvegarder la reconnaissance…", self)
         act_backup.setToolTip(
@@ -1047,6 +1045,7 @@ class MainWindow(QMainWindow):
         # Connexions sidebar
         self._sidebar.folder_selected.connect(self._on_folder_selected)
         self._sidebar.album_selected.connect(self._on_album_selected)
+        self._sidebar.album_delete_requested.connect(self._on_album_delete_requested)
         self._sidebar.scan_requested.connect(self._on_scan_requested)
         self._sidebar.folder_removed.connect(self._on_folder_removed)
         self._sidebar.folder_created.connect(self._on_folder_created)
@@ -2533,6 +2532,24 @@ class MainWindow(QMainWindow):
         album = self._catalog.create_album(name)
         albums = self._catalog.get_albums()
         self._sidebar.refresh_albums(albums)
+
+    @Slot(object)
+    def _on_album_delete_requested(self, album: AlbumInfo) -> None:
+        reply = QMessageBox.question(
+            self, "Supprimer l'album",
+            f"Supprimer l'album «{album.name}» ({album.photo_count} photo(s)) ?\n\n"
+            "Les photos restent intactes dans le catalogue et sur le disque ; "
+            "seul l'album est supprimé.",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No,
+        )
+        if reply != QMessageBox.Yes:
+            return
+        self._catalog.delete_album(album.id)
+        if self._current_context == album.name:
+            self._sidebar.select_album_item(_SPECIAL_ALL)
+            self._show_all_photos()
+        self._sidebar.refresh_albums(self._catalog.get_albums())
 
     def _on_add_to_album(self, photos: list) -> None:
         albums = self._catalog.get_albums()
