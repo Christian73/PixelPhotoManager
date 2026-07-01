@@ -9,6 +9,17 @@ import traceback
 from pathlib import Path
 import multiprocessing
 
+# En exe "windowed" (console=False), sys.stdout/sys.stderr valent None : toute
+# bibliothèque qui y écrit (ex. tqdm, utilisé par insightface pendant le
+# téléchargement du pack de modèles buffalo_l) plante avec
+# AttributeError: 'NoneType' object has no attribute 'write'. Ce crash
+# interrompait le téléchargement avant l'écriture du modèle sur le disque,
+# donc le modèle n'était jamais mis en cache et chaque photo retentait un
+# téléchargement complet. Étend aussi aux sous-processus workers (spawn).
+if sys.stdout is None:
+    sys.stdout = open(os.devnull, "w")
+if sys.stderr is None:
+    sys.stderr = open(os.devnull, "w")
 
 # ProcessPoolExecutor sur Windows utilise spawn : le sous-processus worker importe
 # ce module AVANT d'exécuter la tâche.  On limite au strict minimum ce qui s'exécute

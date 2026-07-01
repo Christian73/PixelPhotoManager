@@ -35,6 +35,23 @@ for pkg in _with_data:
 _insightface_objects_dir = Path(insightface.__file__).parent / "data" / "objects"
 datas += [(str(_insightface_objects_dir), "objects")]
 
+# Pack de modèles buffalo_l (détection + embedding) embarqué dans l'exe pour
+# éviter le téléchargement (~340 Mo) depuis GitHub au 1er lancement — sur un
+# poste sans accès Internet (ou pare-feu bloquant github.com), la détection
+# de visages était sinon totalement inopérante. Placé à la racine du bundle
+# sous "insightface_root/models/buffalo_l" ; src/faces/detector.py pointe
+# explicitement FaceAnalysis(root=...) dessus en mode figé (sys._MEIPASS).
+# Nécessite d'avoir lancé l'appli au moins une fois en mode dev pour que le
+# pack soit présent dans le cache utilisateur (~/.insightface/models/buffalo_l).
+_buffalo_l_dir = Path.home() / ".insightface" / "models" / "buffalo_l"
+if not _buffalo_l_dir.is_dir():
+    raise FileNotFoundError(
+        f"Pack de modèles buffalo_l introuvable : {_buffalo_l_dir}\n"
+        "Lancez l'appli une fois en mode dev (avec accès Internet) pour "
+        "déclencher le téléchargement automatique, puis relancez le build."
+    )
+datas += [(str(_buffalo_l_dir), "insightface_root/models/buffalo_l")]
+
 a = Analysis(
     [str(ROOT / "main.py")],
     pathex=[str(ROOT)],

@@ -940,6 +940,21 @@
             <Component Id="cmp805C8703D97BB31C2CF4EAF017256D82" Directory="dir33F7BFB921A1B42C9FEC086F01F87FAD" Guid="*">
                 <File Id="fil45DB8CC9BADA8A0BB16B6D9FC32A0BE2" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\insightface-1.0.1.dist-info\zip-safe" />
             </Component>
+            <Component Id="cmpA477F525D8EA6BBE9C1EAFEB6DB59724" Directory="dir2AD063FD61C196C18623D8EF5AC3E393" Guid="*">
+                <File Id="fil5757506818BC5FD05762497881BF1D8F" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\insightface_root\models\buffalo_l\1k3d68.onnx" />
+            </Component>
+            <Component Id="cmp7212EDB84CD81785BE8BC4D04DA3176E" Directory="dir2AD063FD61C196C18623D8EF5AC3E393" Guid="*">
+                <File Id="fil44ED2FA46550337A2BA62618458247D0" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\insightface_root\models\buffalo_l\2d106det.onnx" />
+            </Component>
+            <Component Id="cmpC954CFAA6F1AE0E0A8AD4B3E4D6A6F48" Directory="dir2AD063FD61C196C18623D8EF5AC3E393" Guid="*">
+                <File Id="fil8C97B6AFA7872525590C3B71338F4257" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\insightface_root\models\buffalo_l\det_10g.onnx" />
+            </Component>
+            <Component Id="cmp1E6D0146B6C66BEBF6B7B4A1700BDB79" Directory="dir2AD063FD61C196C18623D8EF5AC3E393" Guid="*">
+                <File Id="filD120EAA35CD5AF28C90CF8D13629C026" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\insightface_root\models\buffalo_l\genderage.onnx" />
+            </Component>
+            <Component Id="cmpE86250E064F48DCE6D6BF311E3FF8BF1" Directory="dir2AD063FD61C196C18623D8EF5AC3E393" Guid="*">
+                <File Id="fil37D542A807C18B849847D494674A4ECB" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\insightface_root\models\buffalo_l\w600k_r50.onnx" />
+            </Component>
             <Component Id="cmp0BFAF949DDEDEC3075C60554AAA9402A" Directory="dir70C3F8B48E5B28B152415D68640BB0FC" Guid="*">
                 <File Id="fil1C4ABEBC313DD9EEBB11E5F190DF447B" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\lz4\_version.cp311-win_amd64.pyd" />
             </Component>
@@ -6487,6 +6502,11 @@
         </DirectoryRef>
     </Fragment>
     <Fragment>
+        <DirectoryRef Id="dir88D0AEE898D7CDE6DC4390DEF58785EC">
+            <Directory Id="dir2AD063FD61C196C18623D8EF5AC3E393" Name="buffalo_l" />
+        </DirectoryRef>
+    </Fragment>
+    <Fragment>
         <DirectoryRef Id="dirB262A3C1EC64B1E8AB54055F45CD67B0">
             <Directory Id="dir2B09CD259D106A92E83739B23ADB716F" Name="onnx" />
         </DirectoryRef>
@@ -6972,6 +6992,11 @@
         </DirectoryRef>
     </Fragment>
     <Fragment>
+        <DirectoryRef Id="dirBD0A983EC57B08444B8A9E3A62A51AA0">
+            <Directory Id="dir88D0AEE898D7CDE6DC4390DEF58785EC" Name="models" />
+        </DirectoryRef>
+    </Fragment>
+    <Fragment>
         <DirectoryRef Id="dirAE7826762C80C54B7C0DA3AB870C8AD9">
             <Directory Id="dir88EC01F475ACE81FFD9C3B7DA44B4685" Name="neighbors" />
         </DirectoryRef>
@@ -7249,6 +7274,11 @@
     <Fragment>
         <DirectoryRef Id="dirA90E246EDA2DADE98B96AF66208D7023">
             <Directory Id="dirBCF5300018AE60618F834643CCD0677A" Name="_rcont" />
+        </DirectoryRef>
+    </Fragment>
+    <Fragment>
+        <DirectoryRef Id="dirB262A3C1EC64B1E8AB54055F45CD67B0">
+            <Directory Id="dirBD0A983EC57B08444B8A9E3A62A51AA0" Name="insightface_root" />
         </DirectoryRef>
     </Fragment>
     <Fragment>

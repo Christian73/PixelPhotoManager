@@ -64,6 +64,23 @@ def _register_nvidia_dll_dirs() -> None:
         logger.debug("_register_nvidia_dll_dirs : %s", exc)
 
 
+def _insightface_root() -> str:
+    """Racine à passer à FaceAnalysis(root=...) pour trouver le pack buffalo_l.
+
+    En mode figé (PyInstaller), le pack est embarqué dans le bundle
+    (cf. pixelphotomanager.spec) sous sys._MEIPASS/insightface_root/models/
+    buffalo_l, pour éviter tout téléchargement au 1er lancement (impossible
+    sans accès Internet à github.com). En mode dev, on garde le cache
+    utilisateur par défaut d'insightface (~/.insightface).
+    """
+    import sys
+    if getattr(sys, "frozen", False):
+        bundled = os.path.join(getattr(sys, "_MEIPASS", ""), "insightface_root")
+        if os.path.isdir(os.path.join(bundled, "models", "buffalo_l")):
+            return bundled
+    return os.path.expanduser("~/.insightface")
+
+
 def _get_insight_app():
     """Retourne (et initialise si besoin) le singleton FaceAnalysis.
 
@@ -76,6 +93,7 @@ def _get_insight_app():
         from insightface.app import FaceAnalysis
         _insight_app = FaceAnalysis(
             name="buffalo_l",
+            root=_insightface_root(),
             providers=["CUDAExecutionProvider", "CPUExecutionProvider"],
         )
         _insight_app.prepare(ctx_id=0, det_size=(640, 640))
@@ -247,7 +265,9 @@ def warmup_worker_cpu() -> None:
     global _insight_app
     _insight_app = None  # reset tout singleton GPU partiel
     from insightface.app import FaceAnalysis
-    _insight_app = FaceAnalysis(name="buffalo_l", providers=["CPUExecutionProvider"])
+    _insight_app = FaceAnalysis(
+        name="buffalo_l", root=_insightface_root(), providers=["CPUExecutionProvider"],
+    )
     _insight_app.prepare(ctx_id=-1, det_size=(640, 640))
     logger.info("InsightFace warmup OK (buffalo_l, CPU forcé)")
 
