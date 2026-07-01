@@ -372,7 +372,7 @@ La barre de recherche (`Ctrl+F`) est unifiée et accepte plusieurs syntaxes :
 
 **Support vidéo** — Les fichiers vidéo (`.mp4`, `.mov`, `.avi`, `.mkv`, `.wmv`, `.webm`, `.m4v`, `.3gp`, `.flv`, `.ts`, `.mts`, `.mpg`, `.mpeg`) sont indexés au même titre que les photos. Leurs vignettes sont extraites automatiquement via OpenCV. La lecture se fait dans le lecteur système via `QDesktopServices`.
 
-**Gestionnaire de dossiers** — Le dialogue **Outils › Dossiers…** liste les dossiers surveillés avec leur statut, le nombre de fichiers indexés, et les sous-dossiers exclus du scan. Permet d'ajouter, retirer, ou forcer un re-scan complet de n'importe quel dossier.
+**Gestionnaire de dossiers** — Le dialogue **Outils › Dossiers…** liste les dossiers surveillés avec leur statut, le nombre de fichiers indexés, et les sous-dossiers exclus du scan. Permet d'ajouter, retirer, ou forcer un re-scan complet de n'importe quel dossier. Le retrait d'un dossier surveillé (bouton ou menu contextuel « Supprimer des dossiers surveillés ») purge aussi le catalogue, les vignettes et les visages associés à ce dossier, après confirmation indiquant le nombre de photos concernées — les fichiers restent intacts sur le disque.
 
 **Navigation par dossiers** — Arborescence fidèle à la structure du disque. L'utilisateur retrouve ses photos exactement comme dans l'explorateur Windows.
 

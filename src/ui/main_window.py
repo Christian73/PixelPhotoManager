@@ -2253,6 +2253,22 @@ class MainWindow(QMainWindow):
 
     @Slot(str)
     def _on_folder_removed(self, folder: str) -> None:
+        folder = os.path.normpath(folder)
+        count = self._catalog.count_photos_in_folder(folder)
+        if count:
+            reply = QMessageBox.question(
+                self, "Retirer le dossier",
+                f"Retirer «{folder}» de la surveillance ?\n\n"
+                f"<b>{count:,}</b> photo(s) seront supprimées du catalogue, ainsi que "
+                "les vignettes et les visages associés. Les fichiers restent intacts sur le disque.",
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.No,
+            )
+            if reply != QMessageBox.Yes:
+                return
+            self._purge_catalog_for_folder(folder)
+            self._grid.set_photos(self._current_photos)
+
         self._config.remove_scan_folder(folder)
         remaining = self._config.get_scan_folders()
         self._sidebar.refresh_folders(remaining)
@@ -2464,11 +2480,10 @@ class MainWindow(QMainWindow):
             self._grid.select_photo(path),
         ))
 
-    @Slot(str)
-    def _on_folder_deleted(self, folder: str) -> None:
-        """Dossier supprimé du disque : nettoyer catalogue, caches et UI."""
-        folder = os.path.normpath(folder)
-        # Récupérer toutes les photos du dossier (et sous-dossiers) avant nettoyage
+    def _purge_catalog_for_folder(self, folder: str) -> list[str]:
+        """Supprime du catalogue, du cache de vignettes et de la base de visages
+        toutes les photos d'un dossier (et de ses sous-dossiers).
+        Retourne les chemins supprimés."""
         photos = self._catalog.get_photos_in_folder(folder)
         # Inclure les sous-dossiers via le catalogue
         all_paths = [p.path for p in photos
@@ -2481,16 +2496,22 @@ class MainWindow(QMainWindow):
                 self._thumb_cache.invalidate(path)
                 self._face_db.delete_for_path(path)
 
+            deleted_set = set(all_paths)
+            self._current_photos = [p for p in self._current_photos
+                                     if p.path not in deleted_set]
+            self._current_paths -= deleted_set
+        return all_paths
+
+    @Slot(str)
+    def _on_folder_deleted(self, folder: str) -> None:
+        """Dossier supprimé du disque : nettoyer catalogue, caches et UI."""
+        folder = os.path.normpath(folder)
+        self._purge_catalog_for_folder(folder)
+
         # Retirer de la config si c'était un dossier surveillé
         for watched in list(self._config.get_scan_folders()):
             if watched == folder or watched.startswith(folder + os.sep):
                 self._config.remove_scan_folder(watched)
-
-        # Mettre à jour les photos en mémoire et la grille
-        deleted_set = set(all_paths)
-        self._current_photos = [p for p in self._current_photos
-                                 if p.path not in deleted_set]
-        self._current_paths -= deleted_set
 
         # Si le contexte actif était dans le dossier supprimé, revenir à la grille vide
         if self._current_context and (

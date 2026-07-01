@@ -312,16 +312,10 @@ class FolderManagerDialog(QDialog):
         )
 
     def _on_remove(self, folder: str) -> None:
-        reply = QMessageBox.question(
-            self, "Retirer le dossier",
-            f"Retirer «{folder}» de la surveillance ?\n\n"
-            "Les photos déjà indexées restent dans le catalogue ; seul le scan futur est désactivé.",
-            QMessageBox.Yes | QMessageBox.No,
-            QMessageBox.No,
-        )
-        if reply == QMessageBox.Yes:
-            self.folder_removed.emit(folder)
-            self._refresh()
+        # La confirmation (avec le nombre de photos concernées) est gérée
+        # côté MainWindow._on_folder_removed, qui effectue aussi la purge.
+        self.folder_removed.emit(folder)
+        self._refresh()
 
     def _on_add(self) -> None:
         folder = QFileDialog.getExistingDirectory(

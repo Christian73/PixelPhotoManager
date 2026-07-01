@@ -61,10 +61,11 @@ a = Analysis(
     runtime_hooks=[],
     excludes=[
         # Dépendances IA lourdes — non utilisées dans le build de base
+        # (sklearn/scikit_learn NE PAS exclure : requis par hdbscan pour le
+        # clustering des visages, cf. src/faces/clusterer.py)
         "deepface", "retinaface",
         "torch", "torchvision", "torchaudio",
         "tensorflow", "tensorboard", "keras",
-        "sklearn", "scikit_learn",
         # Inutiles en production
         "tkinter",
         "matplotlib",

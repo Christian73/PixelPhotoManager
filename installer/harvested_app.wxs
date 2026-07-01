@@ -2620,6 +2620,9 @@
             <Component Id="cmpF1C4DA475588048E62297B3E1A97B4DE" Directory="dirB8F9A988E78BD9D92EE60D52EB8F02D3" Guid="*">
                 <File Id="filCCEF3CC671C3E37624C4AB02A63CC2D5" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\shiboken6\shiboken6.abi3.dll" />
             </Component>
+            <Component Id="cmp043102F451A0EF935B2B80A59AEF7A39" Directory="dirB8F9A988E78BD9D92EE60D52EB8F02D3" Guid="*">
+                <File Id="fil4201829D81F76477250CB1F9BC6C051B" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\shiboken6\VCOMP140.DLL" />
+            </Component>
             <Component Id="cmpC2A4C37C6AB104EBDD9A86D15678CA42" Directory="dirB8F9A988E78BD9D92EE60D52EB8F02D3" Guid="*">
                 <File Id="fil3978139B582A07BA79A7C550DCF6B7A1" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\shiboken6\VCRUNTIME140.dll" />
             </Component>
@@ -2821,6 +2824,1179 @@
             <Component Id="cmp1098E5C8B91270D555844A8ED94DF557" Directory="dirF0E229DADE649AF8E7786713165393A9" Guid="*">
                 <File Id="fil37FCF7430044FD124AEF2C53ECD61FA6" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\skimage\_shared\transform.cp311-win_amd64.pyd" />
             </Component>
+            <Component Id="cmpE00C654C4EE29D2A583D8F45B0C7D3CB" Directory="dirAE7826762C80C54B7C0DA3AB870C8AD9" Guid="*">
+                <File Id="filC13A56493659295A59518B5654F4F1F6" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\meson.build" />
+            </Component>
+            <Component Id="cmpC73CBB0D815F67F322EB233E31C0E5EC" Directory="dirAE7826762C80C54B7C0DA3AB870C8AD9" Guid="*">
+                <File Id="fil3C2E492BD7BD644D2E0C7EC544710FC4" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\_cyutility.cp311-win_amd64.lib" />
+            </Component>
+            <Component Id="cmpB23534C91F788B81C37747AF1425E6ED" Directory="dirAE7826762C80C54B7C0DA3AB870C8AD9" Guid="*">
+                <File Id="filEA571AB3E70E5FAF0E12ED83A3BAC479" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\_cyutility.cp311-win_amd64.pyd" />
+            </Component>
+            <Component Id="cmp9AE1B7345CEBC678E8DBCA30D1E4301A" Directory="dirAE7826762C80C54B7C0DA3AB870C8AD9" Guid="*">
+                <File Id="fil0D3066DF7C8092E8AB0A35957E753912" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\_isotonic.cp311-win_amd64.lib" />
+            </Component>
+            <Component Id="cmpD1743E344E4E14FEAB136972DEF53A03" Directory="dirAE7826762C80C54B7C0DA3AB870C8AD9" Guid="*">
+                <File Id="filDC0D80499C7C1777B202EB895C8C2B03" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\_isotonic.cp311-win_amd64.pyd" />
+            </Component>
+            <Component Id="cmp4DB057E6589742CDCD5845EDF532F26E" Directory="dirAE7826762C80C54B7C0DA3AB870C8AD9" Guid="*">
+                <File Id="fil2748EFF8A2F4414705037A2C3A4E13F9" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\_isotonic.pyx" />
+            </Component>
+            <Component Id="cmp0601568869AB9CC153B11324EA6E9166" Directory="dir43B382EAC6322DB481414D64F9802119" Guid="*">
+                <File Id="filC3E95D38691F431431EF8EBBDFAE3F0F" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\.libs\msvcp140.dll" />
+            </Component>
+            <Component Id="cmp2B2DDA4C0A09EF48E53234B92D99C19E" Directory="dir43B382EAC6322DB481414D64F9802119" Guid="*">
+                <File Id="filE2582A73A4886F4648B5C7392915DB87" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\.libs\vcomp140.dll" />
+            </Component>
+            <Component Id="cmp48A3C2A8A64DE0B6FEDBBB252DC87ECB" Directory="dirB30BB53B949ECE5540140AD23C4C586A" Guid="*">
+                <File Id="filD1C79CF8A83AE428256DC8A29F3A946D" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\cluster\meson.build" />
+            </Component>
+            <Component Id="cmpC47237B0B4BB35AC6300F8A6A8B7D57B" Directory="dirB30BB53B949ECE5540140AD23C4C586A" Guid="*">
+                <File Id="filB7E5DBC9D3269548BE27840FC5259C25" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\cluster\_dbscan_inner.cp311-win_amd64.lib" />
+            </Component>
+            <Component Id="cmpDCD75B5D46EE4FCCCFB10E23E57704C7" Directory="dirB30BB53B949ECE5540140AD23C4C586A" Guid="*">
+                <File Id="fil1DE5A22DC145ABD0F51C307EABD6C2CF" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\cluster\_dbscan_inner.cp311-win_amd64.pyd" />
+            </Component>
+            <Component Id="cmp16BE45DB3ECCE61996107FF63BEB2BF0" Directory="dirB30BB53B949ECE5540140AD23C4C586A" Guid="*">
+                <File Id="fil99D23D316A85DEFC8C11AAF44F419445" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\cluster\_dbscan_inner.pyx" />
+            </Component>
+            <Component Id="cmp2640E40E0AB21B6DA4F5F91A762F187F" Directory="dirB30BB53B949ECE5540140AD23C4C586A" Guid="*">
+                <File Id="fil19DB130735958493FB580B9CD1DA1CD1" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\cluster\_hierarchical_fast.cp311-win_amd64.lib" />
+            </Component>
+            <Component Id="cmp3628CF7AD2C4B85038970A76F51BEC68" Directory="dirB30BB53B949ECE5540140AD23C4C586A" Guid="*">
+                <File Id="fil8A93158B7538AC0DF53A30FCE312FC31" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\cluster\_hierarchical_fast.cp311-win_amd64.pyd" />
+            </Component>
+            <Component Id="cmpD98E5804BF57D0849AC0C981D0E13197" Directory="dirB30BB53B949ECE5540140AD23C4C586A" Guid="*">
+                <File Id="fil4945E231176410E825700AA1F185811F" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\cluster\_hierarchical_fast.pxd" />
+            </Component>
+            <Component Id="cmp15F2B5A507D4A892DB4ECF55B43970E5" Directory="dirB30BB53B949ECE5540140AD23C4C586A" Guid="*">
+                <File Id="filF78E41919BCF45DC648237DA9EEEC593" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\cluster\_hierarchical_fast.pyx" />
+            </Component>
+            <Component Id="cmpB409BA89E199470A34795CDCCCDD03A0" Directory="dirB30BB53B949ECE5540140AD23C4C586A" Guid="*">
+                <File Id="filCAC10646F917E896E6C878787C4F745D" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\cluster\_k_means_common.cp311-win_amd64.lib" />
+            </Component>
+            <Component Id="cmp23C1FF0C1D0A4796865A9A4E345A450E" Directory="dirB30BB53B949ECE5540140AD23C4C586A" Guid="*">
+                <File Id="fil394005F3944BD620F449417D85159555" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\cluster\_k_means_common.cp311-win_amd64.pyd" />
+            </Component>
+            <Component Id="cmp367CB87EFB289148DBF2A17D89179E30" Directory="dirB30BB53B949ECE5540140AD23C4C586A" Guid="*">
+                <File Id="fil540284C4B518E6332361C7E922CD318F" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\cluster\_k_means_common.pxd" />
+            </Component>
+            <Component Id="cmp317A1FD120DE96B726FECBAF5A84B6EE" Directory="dirB30BB53B949ECE5540140AD23C4C586A" Guid="*">
+                <File Id="fil22D83A90A5B1F262CD096451004CE634" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\cluster\_k_means_common.pyx" />
+            </Component>
+            <Component Id="cmpFC7798310F50D01D4D8E677B0624BCFE" Directory="dirB30BB53B949ECE5540140AD23C4C586A" Guid="*">
+                <File Id="fil7D2681FB2274E7BE609A46E295F3A409" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\cluster\_k_means_elkan.cp311-win_amd64.lib" />
+            </Component>
+            <Component Id="cmp7F8F11EB7FED47B2C8654D9C926D543A" Directory="dirB30BB53B949ECE5540140AD23C4C586A" Guid="*">
+                <File Id="filBB0326E24628B3BD1D3377DC7961BCBA" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\cluster\_k_means_elkan.cp311-win_amd64.pyd" />
+            </Component>
+            <Component Id="cmp0356E0D9EE68058B1404AFC9951C4BCE" Directory="dirB30BB53B949ECE5540140AD23C4C586A" Guid="*">
+                <File Id="fil7CBC97A601D206A04402B313E0B1D3B6" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\cluster\_k_means_elkan.pyx" />
+            </Component>
+            <Component Id="cmp231E1D960D4DD60D333997A89BC1E41C" Directory="dirB30BB53B949ECE5540140AD23C4C586A" Guid="*">
+                <File Id="fil44C8F31E276093297DC7E5588E3B63CC" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\cluster\_k_means_lloyd.cp311-win_amd64.lib" />
+            </Component>
+            <Component Id="cmpF90E297161A1C6FD2F75C5546EC418CB" Directory="dirB30BB53B949ECE5540140AD23C4C586A" Guid="*">
+                <File Id="fil8575DB385AE2357D4E77D9F36EE218E9" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\cluster\_k_means_lloyd.cp311-win_amd64.pyd" />
+            </Component>
+            <Component Id="cmp1E383283919FB65D7BB031EF8BB10439" Directory="dirB30BB53B949ECE5540140AD23C4C586A" Guid="*">
+                <File Id="fil3380632E5E83C594C8C41FC7A075FA85" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\cluster\_k_means_lloyd.pyx" />
+            </Component>
+            <Component Id="cmp5F0000FA003ECC271EB379397265CD16" Directory="dirB30BB53B949ECE5540140AD23C4C586A" Guid="*">
+                <File Id="fil2EB66B8A940DCBC5BE8A8BC1884F44D9" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\cluster\_k_means_minibatch.cp311-win_amd64.lib" />
+            </Component>
+            <Component Id="cmpC642D8A9FBF41B223812611E13A89322" Directory="dirB30BB53B949ECE5540140AD23C4C586A" Guid="*">
+                <File Id="filA7A1DC66B080A8F4E717F65CD31475A2" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\cluster\_k_means_minibatch.cp311-win_amd64.pyd" />
+            </Component>
+            <Component Id="cmp1DED4FC5E3E660C3494E56666B07F570" Directory="dirB30BB53B949ECE5540140AD23C4C586A" Guid="*">
+                <File Id="filAB3D47474FAFBC06F7B8F4BDBCCA7201" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\cluster\_k_means_minibatch.pyx" />
+            </Component>
+            <Component Id="cmpBA2BCDD328DF1C169C72F8744E3D96EB" Directory="dir340DBEA22880AECB0F8E5393A6B3F580" Guid="*">
+                <File Id="filC1B5D8ACCC2A73D46451B9D52EEF69C2" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\cluster\_hdbscan\meson.build" />
+            </Component>
+            <Component Id="cmpDAA0103DEE0293AC69D504BBF4484CD0" Directory="dir340DBEA22880AECB0F8E5393A6B3F580" Guid="*">
+                <File Id="fil0CCEBEEB9286EC125667B345C7762EC1" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\cluster\_hdbscan\_linkage.cp311-win_amd64.lib" />
+            </Component>
+            <Component Id="cmp295A5BADB9FEEC4920969522087E9D6B" Directory="dir340DBEA22880AECB0F8E5393A6B3F580" Guid="*">
+                <File Id="filF5458A6BFB9CA6B8816AA3F29FEC2C2A" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\cluster\_hdbscan\_linkage.cp311-win_amd64.pyd" />
+            </Component>
+            <Component Id="cmp1AB13783594B6BDE95D8696683310575" Directory="dir340DBEA22880AECB0F8E5393A6B3F580" Guid="*">
+                <File Id="fil9C032550C126FD60D66EF4BCEA144FC8" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\cluster\_hdbscan\_linkage.pyx" />
+            </Component>
+            <Component Id="cmp25D966CD3B5CE19301155D0AB31099D6" Directory="dir340DBEA22880AECB0F8E5393A6B3F580" Guid="*">
+                <File Id="filB883E08B29F05E3744DEFBC8669BC63F" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\cluster\_hdbscan\_reachability.cp311-win_amd64.lib" />
+            </Component>
+            <Component Id="cmpDA6CACE5E2DF49333CA2D1F4A44CFCDB" Directory="dir340DBEA22880AECB0F8E5393A6B3F580" Guid="*">
+                <File Id="fil63F69E3E0D3A74F6AAB96BFA6FB16190" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\cluster\_hdbscan\_reachability.cp311-win_amd64.pyd" />
+            </Component>
+            <Component Id="cmpC66BC0E50E6D8572E49B1682BA114430" Directory="dir340DBEA22880AECB0F8E5393A6B3F580" Guid="*">
+                <File Id="fil10AA42B4EE173202EC63FAFD364604F0" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\cluster\_hdbscan\_reachability.pyx" />
+            </Component>
+            <Component Id="cmpF4909886E415039CF49C5CD3DCB04EF2" Directory="dir340DBEA22880AECB0F8E5393A6B3F580" Guid="*">
+                <File Id="fil6F9A594F4CCC259FF857A922AAA78598" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\cluster\_hdbscan\_tree.cp311-win_amd64.lib" />
+            </Component>
+            <Component Id="cmp00F9D7F653DE4815A256C86DDACC42C7" Directory="dir340DBEA22880AECB0F8E5393A6B3F580" Guid="*">
+                <File Id="filB065A8903CE4C75B0E5D69B5FFB6009C" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\cluster\_hdbscan\_tree.cp311-win_amd64.pyd" />
+            </Component>
+            <Component Id="cmpDB06BAAD7C5CA28FB08CF08978703024" Directory="dir340DBEA22880AECB0F8E5393A6B3F580" Guid="*">
+                <File Id="fil6C5932410DB8B62EA7FB5952A1EDB628" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\cluster\_hdbscan\_tree.pxd" />
+            </Component>
+            <Component Id="cmp1E240E10AA4BB20DA791914806766E44" Directory="dir340DBEA22880AECB0F8E5393A6B3F580" Guid="*">
+                <File Id="filA30D2BBAA8BB11D7C451C1FA9047318B" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\cluster\_hdbscan\_tree.pyx" />
+            </Component>
+            <Component Id="cmpEFE2ADEF2CEBFE52911D3E3E7EE27B71" Directory="dirCF910620CFBDAC73620F2C74558C2BE1" Guid="*">
+                <File Id="fil1CDE88F4075D60F9EC760491A7915EB8" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\datasets\meson.build" />
+            </Component>
+            <Component Id="cmp27279FF5BA8DA718A47155F564535320" Directory="dirCF910620CFBDAC73620F2C74558C2BE1" Guid="*">
+                <File Id="filA6FA378C3B3DDB777FF0DB798680B7B6" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\datasets\_svmlight_format_fast.cp311-win_amd64.lib" />
+            </Component>
+            <Component Id="cmpED51F8B91580862E74517540F04DFC0F" Directory="dirCF910620CFBDAC73620F2C74558C2BE1" Guid="*">
+                <File Id="filDCD08BCF8E4A2D52FC627A2FE6628CBE" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\datasets\_svmlight_format_fast.pyx" />
+            </Component>
+            <Component Id="cmpF8DFD6E1FB3C8913AFC4A89808B7F845" Directory="dir91324D7A031A25F3B3B053335CEAF222" Guid="*">
+                <File Id="fil8D1E42E939BD51FF5AF77628175405C8" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\datasets\data\breast_cancer.csv" />
+            </Component>
+            <Component Id="cmp38BC6C7DDFA8354CF73B1E5DFECC4FE8" Directory="dir91324D7A031A25F3B3B053335CEAF222" Guid="*">
+                <File Id="filF6E62EB6A095C003FCF373E7654C5F9C" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\datasets\data\diabetes_data_raw.csv.gz" />
+            </Component>
+            <Component Id="cmpCC025D546A6672900E874711A98C3E31" Directory="dir91324D7A031A25F3B3B053335CEAF222" Guid="*">
+                <File Id="fil4D9BB033091238E0EEE260346DACEB89" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\datasets\data\diabetes_target.csv.gz" />
+            </Component>
+            <Component Id="cmp9868919253B613BEF836A7475EC95E66" Directory="dir91324D7A031A25F3B3B053335CEAF222" Guid="*">
+                <File Id="fil73B8AF4D50FFAA1AD3C2CE93B4DEF4CA" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\datasets\data\digits.csv.gz" />
+            </Component>
+            <Component Id="cmp0E8B1A11F7D335C3343C56FDB8550E33" Directory="dir91324D7A031A25F3B3B053335CEAF222" Guid="*">
+                <File Id="fil1A7A615DE5E43A09303C25F00259B0B4" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\datasets\data\iris.csv" />
+            </Component>
+            <Component Id="cmp56D91B4C54DD3ABE331C0850EA8A3D93" Directory="dir91324D7A031A25F3B3B053335CEAF222" Guid="*">
+                <File Id="fil26751369897893E2BE12B772F14F0F0E" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\datasets\data\linnerud_exercise.csv" />
+            </Component>
+            <Component Id="cmp526CFBFEE4C226753FBDD0640017AA72" Directory="dir91324D7A031A25F3B3B053335CEAF222" Guid="*">
+                <File Id="fil86DB4D65F8F8E26865E15918EB3D5A65" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\datasets\data\linnerud_physiological.csv" />
+            </Component>
+            <Component Id="cmp9FB8462302E0017C770867D0EEA5FC2B" Directory="dir91324D7A031A25F3B3B053335CEAF222" Guid="*">
+                <File Id="filBF0FEE8821B8E53F511A7F70F9F3BF5D" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\datasets\data\wine_data.csv" />
+            </Component>
+            <Component Id="cmp95F73601244AC140236C83831C1E4A05" Directory="dir54722283E085B892D15D9A0954CEE74A" Guid="*">
+                <File Id="filE55807BBC7E3977FE979C7A306A95F80" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\datasets\descr\breast_cancer.rst" />
+            </Component>
+            <Component Id="cmpDD26D8200FC659856D434885BBB32D64" Directory="dir54722283E085B892D15D9A0954CEE74A" Guid="*">
+                <File Id="fil98AAD5284BEDE12AD67EE0D22FF0E520" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\datasets\descr\california_housing.rst" />
+            </Component>
+            <Component Id="cmpB4041B2C25643CCAD29269AD8902E9B8" Directory="dir54722283E085B892D15D9A0954CEE74A" Guid="*">
+                <File Id="fil19E8335102C497C93ACE31F4A9BAF480" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\datasets\descr\covtype.rst" />
+            </Component>
+            <Component Id="cmpC84850EEF1D2B6A66D3B4CEE4D632107" Directory="dir54722283E085B892D15D9A0954CEE74A" Guid="*">
+                <File Id="fil837CB718FB277A308CAA0DDD5321E405" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\datasets\descr\diabetes.rst" />
+            </Component>
+            <Component Id="cmpE2DCFD03E2B3EF474B58BE4AEE9AE668" Directory="dir54722283E085B892D15D9A0954CEE74A" Guid="*">
+                <File Id="filFA6123808486B3B57ED793D81EE91E87" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\datasets\descr\digits.rst" />
+            </Component>
+            <Component Id="cmpFA46C9E6A43090DEDB2F4882181D2DAE" Directory="dir54722283E085B892D15D9A0954CEE74A" Guid="*">
+                <File Id="fil40E8402643AA10ADF1D7E8284CC2F868" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\datasets\descr\iris.rst" />
+            </Component>
+            <Component Id="cmp4090FF279574D2D29D16A39E115CF7DC" Directory="dir54722283E085B892D15D9A0954CEE74A" Guid="*">
+                <File Id="fil9B482168327E16E164FC3C8476AFF877" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\datasets\descr\kddcup99.rst" />
+            </Component>
+            <Component Id="cmp83E208C5AD17BC0B72C6BA5B5DCE7567" Directory="dir54722283E085B892D15D9A0954CEE74A" Guid="*">
+                <File Id="filF640D8035306E5F4B315F642F49E02F4" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\datasets\descr\lfw.rst" />
+            </Component>
+            <Component Id="cmp2E9AE8AFD4F6365888B66F69E4CA61E0" Directory="dir54722283E085B892D15D9A0954CEE74A" Guid="*">
+                <File Id="fil84BB94DAACC49A7EDCA7EA8B632BC39A" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\datasets\descr\linnerud.rst" />
+            </Component>
+            <Component Id="cmp38661FA6E8C939FEE26D245061775806" Directory="dir54722283E085B892D15D9A0954CEE74A" Guid="*">
+                <File Id="fil72D7F5DE920CDB130D71959AA4EF549E" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\datasets\descr\olivetti_faces.rst" />
+            </Component>
+            <Component Id="cmpC92DA998574F7017B632577A40D0339E" Directory="dir54722283E085B892D15D9A0954CEE74A" Guid="*">
+                <File Id="fil2B770BE982BBDB4BBF557C31489DF9EC" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\datasets\descr\rcv1.rst" />
+            </Component>
+            <Component Id="cmpE4340FE5EE9C024DEDA1520D1D69A928" Directory="dir54722283E085B892D15D9A0954CEE74A" Guid="*">
+                <File Id="fil91B903A18CAE7A8CA541CE3E27ACB2A0" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\datasets\descr\species_distributions.rst" />
+            </Component>
+            <Component Id="cmp96E853135C06537FE580134906FB10D6" Directory="dir54722283E085B892D15D9A0954CEE74A" Guid="*">
+                <File Id="fil065BC5231A2FA09F89A3BE95EA7F4524" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\datasets\descr\twenty_newsgroups.rst" />
+            </Component>
+            <Component Id="cmpD59081126EFCBD1BA28F22F66862F6D1" Directory="dir54722283E085B892D15D9A0954CEE74A" Guid="*">
+                <File Id="fil03936A8EE8A4328BF4359B7D9CFE656D" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\datasets\descr\wine_data.rst" />
+            </Component>
+            <Component Id="cmp07E848F0E268FCC722A502197FF4B5E2" Directory="dirEF4A3DD8EA37BC4C6052D3EC9316A53D" Guid="*">
+                <File Id="fil4CFBCE0EA037B73040EC5D9376132B48" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\datasets\images\china.jpg" />
+            </Component>
+            <Component Id="cmpD3900141C0668CF9EA35EF8FBD11C674" Directory="dirEF4A3DD8EA37BC4C6052D3EC9316A53D" Guid="*">
+                <File Id="fil6B00A2670CBC20C24A5B547A788A1D0B" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\datasets\images\flower.jpg" />
+            </Component>
+            <Component Id="cmp859A07152ECFC2CE3C3E9C65270A00F5" Directory="dirEF4A3DD8EA37BC4C6052D3EC9316A53D" Guid="*">
+                <File Id="fil4354CB2B87735FDEE5ADB682B78C8E85" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\datasets\images\README.txt" />
+            </Component>
+            <Component Id="cmp76007EA5A782B50EC1CCB5B35FB41DB2" Directory="dir05746DD81E2A4AB59468C48823477445" Guid="*">
+                <File Id="fil00BC047B3777600B02488B886AA9F393" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\datasets\tests\data\svmlight_classification.txt" />
+            </Component>
+            <Component Id="cmpAC03B11A59205624A9528AA490E9C6FF" Directory="dir05746DD81E2A4AB59468C48823477445" Guid="*">
+                <File Id="filF27D0F0A0F366C2DAD029E8ECFE03A26" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\datasets\tests\data\svmlight_invalid.txt" />
+            </Component>
+            <Component Id="cmp1250282377887E38E0D944E35CD3D6E1" Directory="dir05746DD81E2A4AB59468C48823477445" Guid="*">
+                <File Id="fil43275B64DF5E59CCA0DA314FBF3E1823" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\datasets\tests\data\svmlight_invalid_order.txt" />
+            </Component>
+            <Component Id="cmp3150943FB55EC9D58272F0E296761908" Directory="dir05746DD81E2A4AB59468C48823477445" Guid="*">
+                <File Id="fil88AEBD4DCFF41623FF3F3C4FA5E240D8" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\datasets\tests\data\svmlight_multilabel.txt" />
+            </Component>
+            <Component Id="cmp1A4C81C9700D8CD684AD0122D80309B4" Directory="dirAAF517A93F8306295C33094BFEC1FE5E" Guid="*">
+                <File Id="fil95EC0E43F78978FFAA3073DAF2C3A1A6" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\datasets\tests\data\openml\id_1\api-v1-jd-1.json.gz" />
+            </Component>
+            <Component Id="cmpB950EEA36B4AADDDA82CD802329F04F9" Directory="dirAAF517A93F8306295C33094BFEC1FE5E" Guid="*">
+                <File Id="fil12E79B4F35C08801AFD021A3E57A61AB" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\datasets\tests\data\openml\id_1\api-v1-jdf-1.json.gz" />
+            </Component>
+            <Component Id="cmp61D5FAF866524864B0BB90DBD897F6B6" Directory="dirAAF517A93F8306295C33094BFEC1FE5E" Guid="*">
+                <File Id="fil7705E311935804093B793C5D2FCC3AB2" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\datasets\tests\data\openml\id_1\api-v1-jdq-1.json.gz" />
+            </Component>
+            <Component Id="cmpAE8D1DF9F4BC4E648C86E9745A3CC185" Directory="dirAAF517A93F8306295C33094BFEC1FE5E" Guid="*">
+                <File Id="fil3E670EEE9200737941CB908A24A54FD9" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\datasets\tests\data\openml\id_1\data-v1-dl-1.arff.gz" />
+            </Component>
+            <Component Id="cmpFE418D53162207CCB87EC861E7B04A55" Directory="dirBFACEBFF4051C97EFA6B8E9C9D2AA0DD" Guid="*">
+                <File Id="filE8B212F452232D1C70BC7C70B1B9F171" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\datasets\tests\data\openml\id_1119\api-v1-jd-1119.json.gz" />
+            </Component>
+            <Component Id="cmpFD438E0CF86C577370092C094502E318" Directory="dirBFACEBFF4051C97EFA6B8E9C9D2AA0DD" Guid="*">
+                <File Id="fil306DF2205C260FCFE5DF1EF05FEDF1B3" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\datasets\tests\data\openml\id_1119\api-v1-jdf-1119.json.gz" />
+            </Component>
+            <Component Id="cmp22E76341311C3CF7B29F63B8D49DECAA" Directory="dirBFACEBFF4051C97EFA6B8E9C9D2AA0DD" Guid="*">
+                <File Id="fil14CDC07697F649E421201F921E0F5FBE" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\datasets\tests\data\openml\id_1119\api-v1-jdl-dn-adult-census-l-2-dv-1.json.gz" />
+            </Component>
+            <Component Id="cmp99F7658FE1FFAA04877A1878AD3943B8" Directory="dirBFACEBFF4051C97EFA6B8E9C9D2AA0DD" Guid="*">
+                <File Id="fil0B98D2E3F10E9BD68F25E77DEDF67EC0" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\datasets\tests\data\openml\id_1119\api-v1-jdl-dn-adult-census-l-2-s-act-.json.gz" />
+            </Component>
+            <Component Id="cmp873E11E227641109C5CFCB5F72A01D8D" Directory="dirBFACEBFF4051C97EFA6B8E9C9D2AA0DD" Guid="*">
+                <File Id="fil8D67164C95348C2ACAAB575B09383B8B" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\datasets\tests\data\openml\id_1119\api-v1-jdq-1119.json.gz" />
+            </Component>
+            <Component Id="cmpC862492208101D481D314C90FDA92FD0" Directory="dirBFACEBFF4051C97EFA6B8E9C9D2AA0DD" Guid="*">
+                <File Id="filFB049D31A1716FB2E8650D8D2CC06D01" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\datasets\tests\data\openml\id_1119\data-v1-dl-54002.arff.gz" />
+            </Component>
+            <Component Id="cmpBD5A87049FCCCD736DBD38A0B0C87E85" Directory="dirF488D03348076558E8ADADA4DED43868" Guid="*">
+                <File Id="filA2C22DAB834F06009AC67E183A674CF0" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\datasets\tests\data\openml\id_1590\api-v1-jd-1590.json.gz" />
+            </Component>
+            <Component Id="cmp08F233F73A246F51DD441F3DC6E7EE49" Directory="dirF488D03348076558E8ADADA4DED43868" Guid="*">
+                <File Id="filC647A91B5BEEA8DCBBBA777C7F736098" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\datasets\tests\data\openml\id_1590\api-v1-jdf-1590.json.gz" />
+            </Component>
+            <Component Id="cmp8C4E62B260794EC48CB0B36B4F3F825E" Directory="dirF488D03348076558E8ADADA4DED43868" Guid="*">
+                <File Id="fil0991711401D4D88A73480111D9E33953" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\datasets\tests\data\openml\id_1590\api-v1-jdq-1590.json.gz" />
+            </Component>
+            <Component Id="cmp3C89BD5734CFC012A90B1423E50F171B" Directory="dirF488D03348076558E8ADADA4DED43868" Guid="*">
+                <File Id="filEB0374F2CD40573F4F6C2C193F9BA7F4" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\datasets\tests\data\openml\id_1590\data-v1-dl-1595261.arff.gz" />
+            </Component>
+            <Component Id="cmp039F069F41DA78449EE2B79B07A5D71D" Directory="dir3E6D50B8EC321A64A6435882F6A3FB7D" Guid="*">
+                <File Id="fil611C575786EEA8DA9F51E5812D17EFBB" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\datasets\tests\data\openml\id_2\api-v1-jd-2.json.gz" />
+            </Component>
+            <Component Id="cmpCE076C2D2DD2920B902BBA44E22F35D6" Directory="dir3E6D50B8EC321A64A6435882F6A3FB7D" Guid="*">
+                <File Id="fil207C203F0EAE6BD74CE0EDC59B61D95B" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\datasets\tests\data\openml\id_2\api-v1-jdf-2.json.gz" />
+            </Component>
+            <Component Id="cmpAC00F8E8D6603F5152BD6CB6BAFB2696" Directory="dir3E6D50B8EC321A64A6435882F6A3FB7D" Guid="*">
+                <File Id="filD1DACE80EC7DE51B92FF7C5802DC9E98" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\datasets\tests\data\openml\id_2\api-v1-jdl-dn-anneal-l-2-dv-1.json.gz" />
+            </Component>
+            <Component Id="cmpC739D965F07CCD8A3E6244204D60EC61" Directory="dir3E6D50B8EC321A64A6435882F6A3FB7D" Guid="*">
+                <File Id="fil56C14BE7EC4BF8D30BA4CF9E114CE58B" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\datasets\tests\data\openml\id_2\api-v1-jdl-dn-anneal-l-2-s-act-.json.gz" />
+            </Component>
+            <Component Id="cmp8F3A00416E4BB55905667BA8B9161461" Directory="dir3E6D50B8EC321A64A6435882F6A3FB7D" Guid="*">
+                <File Id="filF2B47EBD3A8B142DF8C750A90419F997" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\datasets\tests\data\openml\id_2\api-v1-jdq-2.json.gz" />
+            </Component>
+            <Component Id="cmpB64983D912083515762D3F62DE52D3E9" Directory="dir3E6D50B8EC321A64A6435882F6A3FB7D" Guid="*">
+                <File Id="fil9BD107DF88E524C17DFBC30CCCF84243" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\datasets\tests\data\openml\id_2\data-v1-dl-1666876.arff.gz" />
+            </Component>
+            <Component Id="cmpA22396510E77B98F5EF82D1678BD6A8C" Directory="dir4564B4F6743393AE67A8C73AE533DACB" Guid="*">
+                <File Id="filDD7D43845BEEE478EAB70BFF7E369FAB" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\datasets\tests\data\openml\id_292\api-v1-jd-292.json.gz" />
+            </Component>
+            <Component Id="cmp555A9D4CD7B2FC1A816CACC5B4A9013A" Directory="dir4564B4F6743393AE67A8C73AE533DACB" Guid="*">
+                <File Id="filE2809DBF275D96580AF15C00D4CB6E70" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\datasets\tests\data\openml\id_292\api-v1-jd-40981.json.gz" />
+            </Component>
+            <Component Id="cmp5BCFD2643DE837B8C421EBE0F977109F" Directory="dir4564B4F6743393AE67A8C73AE533DACB" Guid="*">
+                <File Id="filCD6C4EA4BD57921C5C6EF0CF7FB8F8E5" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\datasets\tests\data\openml\id_292\api-v1-jdf-292.json.gz" />
+            </Component>
+            <Component Id="cmp87735A6DA622768FAE0765C4E987788B" Directory="dir4564B4F6743393AE67A8C73AE533DACB" Guid="*">
+                <File Id="fil009E807124C84927A1207AACF18B20E7" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\datasets\tests\data\openml\id_292\api-v1-jdf-40981.json.gz" />
+            </Component>
+            <Component Id="cmp58FF0E2D4A3699359FD5B50C110E303F" Directory="dir4564B4F6743393AE67A8C73AE533DACB" Guid="*">
+                <File Id="filC220D811DCCA19F89300CFF524898B62" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\datasets\tests\data\openml\id_292\api-v1-jdl-dn-australian-l-2-dv-1-s-dact.json.gz" />
+            </Component>
+            <Component Id="cmpAC5D73B729AC836A147DEFC0269F1541" Directory="dir4564B4F6743393AE67A8C73AE533DACB" Guid="*">
+                <File Id="filF605836C31F59AB8448FBC466A0F631E" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\datasets\tests\data\openml\id_292\api-v1-jdl-dn-australian-l-2-dv-1.json.gz" />
+            </Component>
+            <Component Id="cmp82FA0E3D047E24272D2F10FF721CA398" Directory="dir4564B4F6743393AE67A8C73AE533DACB" Guid="*">
+                <File Id="fil67CE3BF78D79A437149FE87027829B98" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\datasets\tests\data\openml\id_292\api-v1-jdl-dn-australian-l-2-s-act-.json.gz" />
+            </Component>
+            <Component Id="cmp5356C1B17E60C58A71BC85E31840F114" Directory="dir4564B4F6743393AE67A8C73AE533DACB" Guid="*">
+                <File Id="fil8D86ADDC330B2D5CC90A604EE3EE3D58" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\datasets\tests\data\openml\id_292\data-v1-dl-49822.arff.gz" />
+            </Component>
+            <Component Id="cmpE2871D02B425BF9F18416A003C333D7B" Directory="dir11C97A545AADC6AC42014CDD3FA2F135" Guid="*">
+                <File Id="filE26CDE87A0D9303D5382548B6B0DEF48" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\datasets\tests\data\openml\id_3\api-v1-jd-3.json.gz" />
+            </Component>
+            <Component Id="cmp0AD41EDDF8E215B51B7888F5294F910A" Directory="dir11C97A545AADC6AC42014CDD3FA2F135" Guid="*">
+                <File Id="fil82802212E2EEB553ED3CFFFA44970680" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\datasets\tests\data\openml\id_3\api-v1-jdf-3.json.gz" />
+            </Component>
+            <Component Id="cmp534C295CBFD21A88D9D92E935E01CD90" Directory="dir11C97A545AADC6AC42014CDD3FA2F135" Guid="*">
+                <File Id="fil881612C5F110EE66700A7CE7D13C0804" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\datasets\tests\data\openml\id_3\api-v1-jdq-3.json.gz" />
+            </Component>
+            <Component Id="cmp6E0460E6F15498B2B062E691862C7F71" Directory="dir11C97A545AADC6AC42014CDD3FA2F135" Guid="*">
+                <File Id="fil824FC48202C94B74C0A740E2DAA561DE" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\datasets\tests\data\openml\id_3\data-v1-dl-3.arff.gz" />
+            </Component>
+            <Component Id="cmp8C905C99B22868363798427ABDB4A0F4" Directory="dir801E507AD2B9508CC34733A613194514" Guid="*">
+                <File Id="filA196C8D3127FBEDB68878A872C5D9975" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\datasets\tests\data\openml\id_40589\api-v1-jd-40589.json.gz" />
+            </Component>
+            <Component Id="cmpCF6294F8F15E47E5A0657D750E38EE56" Directory="dir801E507AD2B9508CC34733A613194514" Guid="*">
+                <File Id="filD05183D82B21438F70DC3C8134551E41" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\datasets\tests\data\openml\id_40589\api-v1-jdf-40589.json.gz" />
+            </Component>
+            <Component Id="cmpB79C0D8B5257BAEF6532506789FCB5D9" Directory="dir801E507AD2B9508CC34733A613194514" Guid="*">
+                <File Id="fil747E8868C611B805376A11A7B81B9F97" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\datasets\tests\data\openml\id_40589\api-v1-jdl-dn-emotions-l-2-dv-3.json.gz" />
+            </Component>
+            <Component Id="cmpC9E07F656C85B3223E057E41444A13A3" Directory="dir801E507AD2B9508CC34733A613194514" Guid="*">
+                <File Id="fil9FFD137E43B8EDFB20A8CF025BA51864" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\datasets\tests\data\openml\id_40589\api-v1-jdl-dn-emotions-l-2-s-act-.json.gz" />
+            </Component>
+            <Component Id="cmpA6E5A4424C53C17C443A1B5C2467B93A" Directory="dir801E507AD2B9508CC34733A613194514" Guid="*">
+                <File Id="filBB73DF330F85D940513B8823FC3D9BC9" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\datasets\tests\data\openml\id_40589\api-v1-jdq-40589.json.gz" />
+            </Component>
+            <Component Id="cmp89955DEF2F983A8D0E2B21A0AE2566B8" Directory="dir801E507AD2B9508CC34733A613194514" Guid="*">
+                <File Id="filC9B002FF3E1D845585AD5306C059D105" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\datasets\tests\data\openml\id_40589\data-v1-dl-4644182.arff.gz" />
+            </Component>
+            <Component Id="cmpE137951860B39DB02DE17EB42D94A3DF" Directory="dir92254104477E87561221DAD8EDB24BAB" Guid="*">
+                <File Id="filE7214F83C9A93055F4AE2BE3551BD5C9" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\datasets\tests\data\openml\id_40675\api-v1-jd-40675.json.gz" />
+            </Component>
+            <Component Id="cmpEE4EF9B3274A45A9DCB387A5368BEE7B" Directory="dir92254104477E87561221DAD8EDB24BAB" Guid="*">
+                <File Id="fil69F24B058BF4B36B66CFBAE58706570C" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\datasets\tests\data\openml\id_40675\api-v1-jdf-40675.json.gz" />
+            </Component>
+            <Component Id="cmpD223D67ADDFB96CBDCFB3DC9FFF59923" Directory="dir92254104477E87561221DAD8EDB24BAB" Guid="*">
+                <File Id="fil9A0B20E334F414947DED5EA1C842A5C3" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\datasets\tests\data\openml\id_40675\api-v1-jdl-dn-glass2-l-2-dv-1-s-dact.json.gz" />
+            </Component>
+            <Component Id="cmp90302ED7EB0FA6DA5C9FDBAB792F4F3E" Directory="dir92254104477E87561221DAD8EDB24BAB" Guid="*">
+                <File Id="fil776BFB01C80F0FB6DFD72AD2D083C1F2" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\datasets\tests\data\openml\id_40675\api-v1-jdl-dn-glass2-l-2-dv-1.json.gz" />
+            </Component>
+            <Component Id="cmp28AB7569C1F0B1223387039E0A93E942" Directory="dir92254104477E87561221DAD8EDB24BAB" Guid="*">
+                <File Id="filBF0E7F06DE35DDE412B6B1A3DBD13067" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\datasets\tests\data\openml\id_40675\api-v1-jdl-dn-glass2-l-2-s-act-.json.gz" />
+            </Component>
+            <Component Id="cmpFF37C6BE84B3EE2D07C266E993CD85FD" Directory="dir92254104477E87561221DAD8EDB24BAB" Guid="*">
+                <File Id="filAFE612B359DEDE4AD72A7AD44C812D1B" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\datasets\tests\data\openml\id_40675\api-v1-jdq-40675.json.gz" />
+            </Component>
+            <Component Id="cmp30A8EED2949D5A2E38B14305EF6B81B5" Directory="dir92254104477E87561221DAD8EDB24BAB" Guid="*">
+                <File Id="fil0BCD8942C34B74087976EEB11A3D3EC4" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\datasets\tests\data\openml\id_40675\data-v1-dl-4965250.arff.gz" />
+            </Component>
+            <Component Id="cmp42F72A1A724632221BF93DEEB40FEC79" Directory="dirC3F6CDC14EF20B345FF85154338B4CC2" Guid="*">
+                <File Id="filB8D72356467B69F7A32574AAA9111BA7" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\datasets\tests\data\openml\id_40945\api-v1-jd-40945.json.gz" />
+            </Component>
+            <Component Id="cmp49A08DE60C6A35DDD1760B0907E87B2F" Directory="dirC3F6CDC14EF20B345FF85154338B4CC2" Guid="*">
+                <File Id="fil8039879816E0040D5BE92D05DD2B55A5" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\datasets\tests\data\openml\id_40945\api-v1-jdf-40945.json.gz" />
+            </Component>
+            <Component Id="cmp91150BCA1907EE1795A3D5A7ED4CD60E" Directory="dirC3F6CDC14EF20B345FF85154338B4CC2" Guid="*">
+                <File Id="fil016A676FB6988A09AD9E86D1B26FA4AC" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\datasets\tests\data\openml\id_40945\api-v1-jdq-40945.json.gz" />
+            </Component>
+            <Component Id="cmp796B98FDEF5D49037E47CCC41EF3A809" Directory="dirC3F6CDC14EF20B345FF85154338B4CC2" Guid="*">
+                <File Id="fil10DE33BF1736F3AE035ECBD84674CADF" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\datasets\tests\data\openml\id_40945\data-v1-dl-16826755.arff.gz" />
+            </Component>
+            <Component Id="cmp9C9627F275ECBF333BE89AC6E8DDCB3A" Directory="dirF324C841DBDE4CA77DBB647175C68752" Guid="*">
+                <File Id="filDFFEAA7D7A6478501E141791346902FB" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\datasets\tests\data\openml\id_40966\api-v1-jd-40966.json.gz" />
+            </Component>
+            <Component Id="cmpB2DEA5D85F5E17FE53FDF140A8CE4510" Directory="dirF324C841DBDE4CA77DBB647175C68752" Guid="*">
+                <File Id="filFDF98C8FA171689C19D3BB354857A04F" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\datasets\tests\data\openml\id_40966\api-v1-jdf-40966.json.gz" />
+            </Component>
+            <Component Id="cmp7EBDF82988A410A5079BAB5C8536583C" Directory="dirF324C841DBDE4CA77DBB647175C68752" Guid="*">
+                <File Id="fil64D69D347EADB757DD159DB9FB51E77A" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\datasets\tests\data\openml\id_40966\api-v1-jdl-dn-miceprotein-l-2-dv-4.json.gz" />
+            </Component>
+            <Component Id="cmp01009E325317F1C76A4CDA136CC7543F" Directory="dirF324C841DBDE4CA77DBB647175C68752" Guid="*">
+                <File Id="fil32E8AC6917F9621FACBA70B970CE576B" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\datasets\tests\data\openml\id_40966\api-v1-jdl-dn-miceprotein-l-2-s-act-.json.gz" />
+            </Component>
+            <Component Id="cmp686EF427060D1903658BB0A4CAC7F349" Directory="dirF324C841DBDE4CA77DBB647175C68752" Guid="*">
+                <File Id="fil50C1451964CAC07B4B15E9F0C1394EAF" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\datasets\tests\data\openml\id_40966\api-v1-jdq-40966.json.gz" />
+            </Component>
+            <Component Id="cmpB824570A4FBD5008CCEEAF8DEDFFBF42" Directory="dirF324C841DBDE4CA77DBB647175C68752" Guid="*">
+                <File Id="fil4737240C0F4B6A9AE5D52A2D8B7D9418" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\datasets\tests\data\openml\id_40966\data-v1-dl-17928620.arff.gz" />
+            </Component>
+            <Component Id="cmp91C5D8C52AFEF76B19C137B1CE86A48E" Directory="dir48380F976F020B4324DB6DEBD7661461" Guid="*">
+                <File Id="filA6B73FC2D0CEF49EAC6C40E4863434F4" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\datasets\tests\data\openml\id_42074\api-v1-jd-42074.json.gz" />
+            </Component>
+            <Component Id="cmp3E6706A644EC0B8805551BF8928FA3D4" Directory="dir48380F976F020B4324DB6DEBD7661461" Guid="*">
+                <File Id="filEE445381B1001234931A64A466D574E9" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\datasets\tests\data\openml\id_42074\api-v1-jdf-42074.json.gz" />
+            </Component>
+            <Component Id="cmpE1829F9CF0D8766F06DBF38336E4FE7A" Directory="dir48380F976F020B4324DB6DEBD7661461" Guid="*">
+                <File Id="fil8CB32CBCC02EB665BE321E3CD64F5138" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\datasets\tests\data\openml\id_42074\api-v1-jdq-42074.json.gz" />
+            </Component>
+            <Component Id="cmp541570BBD8DF94153D370611B00F628C" Directory="dir48380F976F020B4324DB6DEBD7661461" Guid="*">
+                <File Id="filB303A28EBC252DAE5169C7AC4D7A26D5" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\datasets\tests\data\openml\id_42074\data-v1-dl-21552912.arff.gz" />
+            </Component>
+            <Component Id="cmp5255DBD887038ABE5A34F75D60CFB9AE" Directory="dir31AB82C6C58AAFB09845BAA28982CC8D" Guid="*">
+                <File Id="filC9EB5CBE6AAAFF3CDB7EFC31B8CB396D" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\datasets\tests\data\openml\id_42585\api-v1-jd-42585.json.gz" />
+            </Component>
+            <Component Id="cmp15464707090F8626BF5404E779F6A819" Directory="dir31AB82C6C58AAFB09845BAA28982CC8D" Guid="*">
+                <File Id="fil9424A83C082F04AFDB3FC636B046CC3C" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\datasets\tests\data\openml\id_42585\api-v1-jdf-42585.json.gz" />
+            </Component>
+            <Component Id="cmp04CA7DE0454DC302B83974B9153291C9" Directory="dir31AB82C6C58AAFB09845BAA28982CC8D" Guid="*">
+                <File Id="fil250BF996E8B600AECCCF2B498CAA79E4" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\datasets\tests\data\openml\id_42585\api-v1-jdq-42585.json.gz" />
+            </Component>
+            <Component Id="cmp9187B317786531C5AF073EBB9FAB05B1" Directory="dir31AB82C6C58AAFB09845BAA28982CC8D" Guid="*">
+                <File Id="filA5A2D06DB46EFBA67A97E1BCEC7F7C97" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\datasets\tests\data\openml\id_42585\data-v1-dl-21854866.arff.gz" />
+            </Component>
+            <Component Id="cmp092D230F9069B40646AF810A63469412" Directory="dir7CE9CC9FC27098C35A9F2D0B15DBF7E2" Guid="*">
+                <File Id="fil42C567F3E4BF15D1C792A1A01B9574C2" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\datasets\tests\data\openml\id_561\api-v1-jd-561.json.gz" />
+            </Component>
+            <Component Id="cmpEA159388C4EDAE5AE6D07DDDB086DEA9" Directory="dir7CE9CC9FC27098C35A9F2D0B15DBF7E2" Guid="*">
+                <File Id="filC110C16F61317AB6F997CCC080DBD149" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\datasets\tests\data\openml\id_561\api-v1-jdf-561.json.gz" />
+            </Component>
+            <Component Id="cmp06D34BDCB9DD9DBA541D841CF79E63A1" Directory="dir7CE9CC9FC27098C35A9F2D0B15DBF7E2" Guid="*">
+                <File Id="fil0507E4FCD2FBF9B2FF614220F42F6A19" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\datasets\tests\data\openml\id_561\api-v1-jdl-dn-cpu-l-2-dv-1.json.gz" />
+            </Component>
+            <Component Id="cmp7987CE21638D62005349CE4DA2624F33" Directory="dir7CE9CC9FC27098C35A9F2D0B15DBF7E2" Guid="*">
+                <File Id="fil6CA64EB9F44309F902103A68A3CE65E2" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\datasets\tests\data\openml\id_561\api-v1-jdl-dn-cpu-l-2-s-act-.json.gz" />
+            </Component>
+            <Component Id="cmpF9C8B4FECB8DB7C669A34EAD067642D6" Directory="dir7CE9CC9FC27098C35A9F2D0B15DBF7E2" Guid="*">
+                <File Id="fil84D6AED8DC1235A6839AC3B532FA4505" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\datasets\tests\data\openml\id_561\api-v1-jdq-561.json.gz" />
+            </Component>
+            <Component Id="cmp17B5188DF41B7BAD4BBC4E1E725005EF" Directory="dir7CE9CC9FC27098C35A9F2D0B15DBF7E2" Guid="*">
+                <File Id="fil6168186CE2EB5D9BCD81339BA8D93CBB" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\datasets\tests\data\openml\id_561\data-v1-dl-52739.arff.gz" />
+            </Component>
+            <Component Id="cmpF538630F0A5857F210D945102FB5F1FE" Directory="dir1C5ECF734F3C638A4A888A260A61F050" Guid="*">
+                <File Id="fil686E868F521FB4183F5860E8B6363D5F" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\datasets\tests\data\openml\id_61\api-v1-jd-61.json.gz" />
+            </Component>
+            <Component Id="cmpA4569AE65A59840B16C6990D4F35838C" Directory="dir1C5ECF734F3C638A4A888A260A61F050" Guid="*">
+                <File Id="fil3B93B6273F9931F94F93A1EE37FC76A6" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\datasets\tests\data\openml\id_61\api-v1-jdf-61.json.gz" />
+            </Component>
+            <Component Id="cmp6B12508BF768850F05B8AE3238292482" Directory="dir1C5ECF734F3C638A4A888A260A61F050" Guid="*">
+                <File Id="fil74DBBDC51107650D3243819869759538" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\datasets\tests\data\openml\id_61\api-v1-jdl-dn-iris-l-2-dv-1.json.gz" />
+            </Component>
+            <Component Id="cmp501BF81C346CEEDDAB99FB315A949922" Directory="dir1C5ECF734F3C638A4A888A260A61F050" Guid="*">
+                <File Id="fil59E716956F6DCCBE0AFF777A8B4438DB" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\datasets\tests\data\openml\id_61\api-v1-jdl-dn-iris-l-2-s-act-.json.gz" />
+            </Component>
+            <Component Id="cmp3CAE96FBDEF93D41815ED851ABC8F4BA" Directory="dir1C5ECF734F3C638A4A888A260A61F050" Guid="*">
+                <File Id="fil0F775C997E2F1543228B1DDB84D6788A" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\datasets\tests\data\openml\id_61\api-v1-jdq-61.json.gz" />
+            </Component>
+            <Component Id="cmp8B92402FDD6D65D6F54C39D020076D2A" Directory="dir1C5ECF734F3C638A4A888A260A61F050" Guid="*">
+                <File Id="fil85B49E618D31AA49A8CE8A37246E9101" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\datasets\tests\data\openml\id_61\data-v1-dl-61.arff.gz" />
+            </Component>
+            <Component Id="cmpA960B118382B630130EB9404C7D22239" Directory="dir6162ADD26BC3FB723D94DB54004EC2AB" Guid="*">
+                <File Id="fil45CA0B95901C2BBD80ADA9461F99BE33" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\datasets\tests\data\openml\id_62\api-v1-jd-62.json.gz" />
+            </Component>
+            <Component Id="cmp8AB010ED0F5B42856CB27474D504BA98" Directory="dir6162ADD26BC3FB723D94DB54004EC2AB" Guid="*">
+                <File Id="filABA22390113027294E443389BC83164F" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\datasets\tests\data\openml\id_62\api-v1-jdf-62.json.gz" />
+            </Component>
+            <Component Id="cmpF037E0EC7F969BE27BC85608002B4BC1" Directory="dir6162ADD26BC3FB723D94DB54004EC2AB" Guid="*">
+                <File Id="fil8E29F94118DD86AE17BB12AED8859B37" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\datasets\tests\data\openml\id_62\api-v1-jdq-62.json.gz" />
+            </Component>
+            <Component Id="cmp9A005748A95574638D68DCE3949DFCE9" Directory="dir6162ADD26BC3FB723D94DB54004EC2AB" Guid="*">
+                <File Id="fil6EE6286B2771B1229A2E6A7E90841F11" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\datasets\tests\data\openml\id_62\data-v1-dl-52352.arff.gz" />
+            </Component>
+            <Component Id="cmp28678BDCCE6BF046FA3811C2F5199953" Directory="dir0DCC319F50393B388C9CFA057D5BC81E" Guid="*">
+                <File Id="filAD1553E0E48EC236FEC9AB418AFEF833" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\decomposition\meson.build" />
+            </Component>
+            <Component Id="cmpE7C12D3873DA6D307147419327ADABC8" Directory="dir0DCC319F50393B388C9CFA057D5BC81E" Guid="*">
+                <File Id="fil57B100BEEF2FADCD1C269A1AD656F37A" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\decomposition\_cdnmf_fast.cp311-win_amd64.lib" />
+            </Component>
+            <Component Id="cmp79859469F64D2E4C2161CBEA9F6FD997" Directory="dir0DCC319F50393B388C9CFA057D5BC81E" Guid="*">
+                <File Id="filF0C6C67CBD9DABC03EE861C38831A199" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\decomposition\_cdnmf_fast.cp311-win_amd64.pyd" />
+            </Component>
+            <Component Id="cmp4648A242F8950FFF546E210B399F4724" Directory="dir0DCC319F50393B388C9CFA057D5BC81E" Guid="*">
+                <File Id="fil28B6B46BF1C86CA63FDC27D10EBD07F6" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\decomposition\_cdnmf_fast.pyx" />
+            </Component>
+            <Component Id="cmp69E5121203018FA2DFF19AB2F2FCE608" Directory="dir0DCC319F50393B388C9CFA057D5BC81E" Guid="*">
+                <File Id="fil31BDF3193AE03CCDB2319DA2C9636AAD" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\decomposition\_online_lda_fast.cp311-win_amd64.lib" />
+            </Component>
+            <Component Id="cmpE93C897CB02F1A0AD1DABB7C67ABE057" Directory="dir0DCC319F50393B388C9CFA057D5BC81E" Guid="*">
+                <File Id="filF5AC966F7DDD752C416144856A54A0C9" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\decomposition\_online_lda_fast.cp311-win_amd64.pyd" />
+            </Component>
+            <Component Id="cmp373E693AD1613F3EF0972168251602D8" Directory="dir0DCC319F50393B388C9CFA057D5BC81E" Guid="*">
+                <File Id="filA1B8BBC1FEB677D69E87F06C95CD1DA0" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\decomposition\_online_lda_fast.pyx" />
+            </Component>
+            <Component Id="cmp5C4A0B8DF14FAC29B3FDC55CAB4F38E1" Directory="dir63D70D8D3862349E4EC7642BB7219009" Guid="*">
+                <File Id="fil533D81DE475B1A793E062FE4954B8C81" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\ensemble\meson.build" />
+            </Component>
+            <Component Id="cmp356FF4B141927381BB14ABDD41F9A287" Directory="dir63D70D8D3862349E4EC7642BB7219009" Guid="*">
+                <File Id="filD96E7C53291D1563ADA160CE0FAF5906" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\ensemble\_gradient_boosting.cp311-win_amd64.lib" />
+            </Component>
+            <Component Id="cmp804CA16E3F7268FE010DC7FD745E2A08" Directory="dir63D70D8D3862349E4EC7642BB7219009" Guid="*">
+                <File Id="fil4C1F04CA6F033AEB6EFF90900DF0B3A4" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\ensemble\_gradient_boosting.pyx" />
+            </Component>
+            <Component Id="cmp678D3165CD423A7762E8C4DB7C246777" Directory="dir1A263E56E77C9BC4C838FBBE992982C1" Guid="*">
+                <File Id="fil232C7771D15E698707B94A26038C8432" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\ensemble\_hist_gradient_boosting\common.cp311-win_amd64.lib" />
+            </Component>
+            <Component Id="cmp99A10D160A65DEE5A336CF12E74BBBEE" Directory="dir1A263E56E77C9BC4C838FBBE992982C1" Guid="*">
+                <File Id="fil56A7186431DBF1FDACDD7CDE21B4BD4E" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\ensemble\_hist_gradient_boosting\common.pxd" />
+            </Component>
+            <Component Id="cmpDACAF3CDEB1738670789A8244C8B77A6" Directory="dir1A263E56E77C9BC4C838FBBE992982C1" Guid="*">
+                <File Id="filBCA7FAFAD22BBE1EEDE6F21E68820818" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\ensemble\_hist_gradient_boosting\common.pyx" />
+            </Component>
+            <Component Id="cmp88DBEDE77934EA672BA87684EF18A245" Directory="dir1A263E56E77C9BC4C838FBBE992982C1" Guid="*">
+                <File Id="fil94EB6DDDBB9F00C2336D5C4DC7B99C55" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\ensemble\_hist_gradient_boosting\histogram.cp311-win_amd64.lib" />
+            </Component>
+            <Component Id="cmp315BA84DCEA92C7A79393A76E5F98C08" Directory="dir1A263E56E77C9BC4C838FBBE992982C1" Guid="*">
+                <File Id="fil5F7DB8EAD01CD79458F1B4673A93A95B" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\ensemble\_hist_gradient_boosting\histogram.pyx" />
+            </Component>
+            <Component Id="cmpD78041A9FE3A9E7DAB4D64C83862707A" Directory="dir1A263E56E77C9BC4C838FBBE992982C1" Guid="*">
+                <File Id="fil4603BF60D7A3BDD65F8D597A8F09DA87" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\ensemble\_hist_gradient_boosting\meson.build" />
+            </Component>
+            <Component Id="cmp9A0392D31768856691F1F1C1E40EB6E0" Directory="dir1A263E56E77C9BC4C838FBBE992982C1" Guid="*">
+                <File Id="fil84654AFC0E298B504E0985FCE897D18C" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\ensemble\_hist_gradient_boosting\splitting.cp311-win_amd64.lib" />
+            </Component>
+            <Component Id="cmpD1D771DEB06A8B3AE51E0DAC4271FE62" Directory="dir1A263E56E77C9BC4C838FBBE992982C1" Guid="*">
+                <File Id="fil8E8A40B7B8E19F508DE09F8415977897" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\ensemble\_hist_gradient_boosting\splitting.pyx" />
+            </Component>
+            <Component Id="cmp722231C71F265B87451529E975581E4A" Directory="dir1A263E56E77C9BC4C838FBBE992982C1" Guid="*">
+                <File Id="fil397EE25ADD6ECE80EB2C3E5FF2FB8D5C" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\ensemble\_hist_gradient_boosting\_binning.cp311-win_amd64.lib" />
+            </Component>
+            <Component Id="cmp86ABEE76CE420D5B1EE0BF81ACB3ED59" Directory="dir1A263E56E77C9BC4C838FBBE992982C1" Guid="*">
+                <File Id="filE347955520A0A526C432CAD50565CE19" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\ensemble\_hist_gradient_boosting\_binning.pyx" />
+            </Component>
+            <Component Id="cmpE709AEE86DE82D5865C23BF12A6CEA2A" Directory="dir1A263E56E77C9BC4C838FBBE992982C1" Guid="*">
+                <File Id="filE8F68B27C34B6141C172631AC0113B3B" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\ensemble\_hist_gradient_boosting\_gradient_boosting.cp311-win_amd64.lib" />
+            </Component>
+            <Component Id="cmp1DC087405F214C824BEECB938AFC0B3D" Directory="dir1A263E56E77C9BC4C838FBBE992982C1" Guid="*">
+                <File Id="fil7FBB4C0576EE585F5E00F72A4100A626" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\ensemble\_hist_gradient_boosting\_gradient_boosting.pyx" />
+            </Component>
+            <Component Id="cmp57A796DA4DEF860BAC6A0F4030A59F23" Directory="dir1A263E56E77C9BC4C838FBBE992982C1" Guid="*">
+                <File Id="filB7D3658028D0A0BD049E8E0E09C6E8B0" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\ensemble\_hist_gradient_boosting\_predictor.cp311-win_amd64.lib" />
+            </Component>
+            <Component Id="cmp537B9016E943CECE738554CC490EACD4" Directory="dir1A263E56E77C9BC4C838FBBE992982C1" Guid="*">
+                <File Id="fil05195758E209D81D7C5FFEEEF302ED68" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\ensemble\_hist_gradient_boosting\_predictor.pyx" />
+            </Component>
+            <Component Id="cmpCB0276E0FF206E3438136F62C88E1226" Directory="dir1000B98E024A0C54DF2254CCAD0C6C2F" Guid="*">
+                <File Id="fil6E57FA23B7DD03BCEFAE5CCD3C6A9D4B" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\externals\README" />
+            </Component>
+            <Component Id="cmp6E64A589525B5DF74163A203474AA721" Directory="dir6941D13A6FC14D557B12C5CCA95C9D8F" Guid="*">
+                <File Id="fil72B0ADB6DB2DD8CAFAA59F2C3DD44488" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\externals\array_api_compat\LICENSE" />
+            </Component>
+            <Component Id="cmp08D3B45E3937F6119E15F4D8FDD8CAF8" Directory="dir6941D13A6FC14D557B12C5CCA95C9D8F" Guid="*">
+                <File Id="fil5E2E9BCE9241887FA8ECEB5942D39753" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\externals\array_api_compat\py.typed" />
+            </Component>
+            <Component Id="cmpAE5C49A7D9BBC1D55920CB7249B7324A" Directory="dir6941D13A6FC14D557B12C5CCA95C9D8F" Guid="*">
+                <File Id="filD0EE2F13530F813660572DC6D6D4D57D" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\externals\array_api_compat\README.md" />
+            </Component>
+            <Component Id="cmp6A4E7EFC97CAB9A9BF073E6AF21B508D" Directory="dir42989986FF09102D6DF851B556EC47A2" Guid="*">
+                <File Id="filA9C20FBD4B960E2B9233D4D72CF661F7" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\externals\array_api_extra\LICENSE" />
+            </Component>
+            <Component Id="cmp86F49CF28CB6FE461AE05335EBBF2CCF" Directory="dir42989986FF09102D6DF851B556EC47A2" Guid="*">
+                <File Id="fil6A3D4F68725320F360876D10084AD7A0" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\externals\array_api_extra\py.typed" />
+            </Component>
+            <Component Id="cmpDBDD2972E392B3C151119157FD36B5E8" Directory="dir42989986FF09102D6DF851B556EC47A2" Guid="*">
+                <File Id="fil53931F31649973C0DA2DD3B11ED96A75" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\externals\array_api_extra\README.md" />
+            </Component>
+            <Component Id="cmpF4085A99AA21EAF4D993D6C07F34584F" Directory="dir9A9C5B78308BA07BC47795114FA300AF" Guid="*">
+                <File Id="filA4A0B52D126219E0D149D947D87E652F" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\externals\array_api_extra\_lib\_utils\_compat.pyi" />
+            </Component>
+            <Component Id="cmp25BD00834C2A3C4D99C9D9DF33124E4F" Directory="dir9A9C5B78308BA07BC47795114FA300AF" Guid="*">
+                <File Id="filB0572307C767AA4F642D096F3EEFC3C9" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\externals\array_api_extra\_lib\_utils\_typing.pyi" />
+            </Component>
+            <Component Id="cmp95ADA454ED3B18AC871B14983F2DAF30" Directory="dir02139638D20F8E63904240E5CFAC1231" Guid="*">
+                <File Id="fil02ED994E48DAFC1FC20A1FA76E40B69D" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\feature_extraction\meson.build" />
+            </Component>
+            <Component Id="cmp2B7102690AA6716E4F744813026F0445" Directory="dir02139638D20F8E63904240E5CFAC1231" Guid="*">
+                <File Id="fil3C402DB83454AEF15F19021B3E66D74F" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\feature_extraction\_hashing_fast.cp311-win_amd64.lib" />
+            </Component>
+            <Component Id="cmp8A3631F22A5F2C4847CA3C7F9D23CEC7" Directory="dir02139638D20F8E63904240E5CFAC1231" Guid="*">
+                <File Id="fil2CF5D41DB1FD50848E5D75C110FE3335" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\feature_extraction\_hashing_fast.pyx" />
+            </Component>
+            <Component Id="cmp5702F9D86DCE768AED838B5D42EF51C7" Directory="dirE6CD63743CB1235FBEB0CF9413E604F9" Guid="*">
+                <File Id="fil002733360B835DC6DDD0C47542B0D544" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\linear_model\meson.build" />
+            </Component>
+            <Component Id="cmpA1EB5C432AA2A60889CBC8996F1946E8" Directory="dirE6CD63743CB1235FBEB0CF9413E604F9" Guid="*">
+                <File Id="filEE68A5047BE17523FCAA06C6FF8BFC31" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\linear_model\_cd_fast.cp311-win_amd64.lib" />
+            </Component>
+            <Component Id="cmp88FBB9B8874F067DF5B987274099B0DB" Directory="dirE6CD63743CB1235FBEB0CF9413E604F9" Guid="*">
+                <File Id="fil0B30B39CD4BC4FA28AEB23E9DD8739B7" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\linear_model\_cd_fast.cp311-win_amd64.pyd" />
+            </Component>
+            <Component Id="cmp0DC805BD397EFDF90B017BE27E329C29" Directory="dirE6CD63743CB1235FBEB0CF9413E604F9" Guid="*">
+                <File Id="fil896B7D3575FB8E0F49402AD923B30B57" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\linear_model\_cd_fast.pyx" />
+            </Component>
+            <Component Id="cmp5FBF9FB603A95139BFF56AFA31070F21" Directory="dirE6CD63743CB1235FBEB0CF9413E604F9" Guid="*">
+                <File Id="fil1209757E5B2653312B0C8DB583B93F9A" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\linear_model\_sag_fast.cp311-win_amd64.lib" />
+            </Component>
+            <Component Id="cmp6136CA7D9C5C8BDA6097EAA269B974E4" Directory="dirE6CD63743CB1235FBEB0CF9413E604F9" Guid="*">
+                <File Id="filC9E509A70C0371E179591475B4B31F74" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\linear_model\_sag_fast.cp311-win_amd64.pyd" />
+            </Component>
+            <Component Id="cmpB8FDA44433B60C8EECF6159AA71E02E4" Directory="dirE6CD63743CB1235FBEB0CF9413E604F9" Guid="*">
+                <File Id="fil40F90C79E6CA62AFD2261299BE1FCF29" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\linear_model\_sag_fast.pyx.tp" />
+            </Component>
+            <Component Id="cmp061769E8C065E08E026889138DA5E369" Directory="dirE6CD63743CB1235FBEB0CF9413E604F9" Guid="*">
+                <File Id="filDCFE7EEB4C4A697E36C45F0B58228056" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\linear_model\_sgd_fast.cp311-win_amd64.lib" />
+            </Component>
+            <Component Id="cmpC100517EDCFDC7250DD0F51823843122" Directory="dirE6CD63743CB1235FBEB0CF9413E604F9" Guid="*">
+                <File Id="fil05A060F9B34198624E02EC1349632524" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\linear_model\_sgd_fast.cp311-win_amd64.pyd" />
+            </Component>
+            <Component Id="cmp895DE340D0796C31731D0773C44EB926" Directory="dirE6CD63743CB1235FBEB0CF9413E604F9" Guid="*">
+                <File Id="filEF5ECF5C84BE193289243C6327B38AE2" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\linear_model\_sgd_fast.pyx.tp" />
+            </Component>
+            <Component Id="cmp3721EF4A2215ACA7D338008A7EEB14B0" Directory="dir50BE57397164FF5A4C91F456B6E44D29" Guid="*">
+                <File Id="fil7CAAA04AC27B451B7C3413E39D06E419" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\manifold\meson.build" />
+            </Component>
+            <Component Id="cmp400857EA8C5B37504634AC626F114CA6" Directory="dir50BE57397164FF5A4C91F456B6E44D29" Guid="*">
+                <File Id="filB7FDBB8F4587A5F373C3F23B58402B3A" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\manifold\_barnes_hut_tsne.cp311-win_amd64.lib" />
+            </Component>
+            <Component Id="cmp2825DB9DE8B211DE287681070A6FF7AF" Directory="dir50BE57397164FF5A4C91F456B6E44D29" Guid="*">
+                <File Id="fil98562F126F653BB5B603A9221F9B08E0" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\manifold\_barnes_hut_tsne.cp311-win_amd64.pyd" />
+            </Component>
+            <Component Id="cmp5738DFC7AC09CEA86854D92650E60EF6" Directory="dir50BE57397164FF5A4C91F456B6E44D29" Guid="*">
+                <File Id="fil02FA6679FD6880B20DC9FD9F489D779E" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\manifold\_barnes_hut_tsne.pyx" />
+            </Component>
+            <Component Id="cmp792161A038FAD1857F69260E01D877E6" Directory="dir50BE57397164FF5A4C91F456B6E44D29" Guid="*">
+                <File Id="fil031CCC68C39CC5497716E54B19E0828C" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\manifold\_utils.cp311-win_amd64.lib" />
+            </Component>
+            <Component Id="cmpEBD47DBF33D709BE3D112FD74921DCA9" Directory="dir50BE57397164FF5A4C91F456B6E44D29" Guid="*">
+                <File Id="filA08D5BB1A1FDD6117E4DB9D5B433AE76" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\manifold\_utils.cp311-win_amd64.pyd" />
+            </Component>
+            <Component Id="cmp7F34216E147E8F34EFBB273F51E8E344" Directory="dir50BE57397164FF5A4C91F456B6E44D29" Guid="*">
+                <File Id="fil1826E7710B8A236F38C89B91EDCC96D2" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\manifold\_utils.pyx" />
+            </Component>
+            <Component Id="cmp5AEDFBE89D9FC9AA70B38D61333A0123" Directory="dirBF45163EA89A77D01A66FCDA5E045647" Guid="*">
+                <File Id="fil5D1A1671A6CF8740AB195BB0C0BEFD00" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\metrics\meson.build" />
+            </Component>
+            <Component Id="cmp0F03DDF7CB86AF61D5170A68D506C9F3" Directory="dirBF45163EA89A77D01A66FCDA5E045647" Guid="*">
+                <File Id="fil06D9259B913752F8193CDF0C95FA2F06" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\metrics\_dist_metrics.cp311-win_amd64.lib" />
+            </Component>
+            <Component Id="cmpECC910EC0995638CDBD1770F83A85FA5" Directory="dirBF45163EA89A77D01A66FCDA5E045647" Guid="*">
+                <File Id="fil72BA94A834F5D5581386B589C79C802F" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\metrics\_dist_metrics.cp311-win_amd64.pyd" />
+            </Component>
+            <Component Id="cmpECB101E7CDA9261C855B04180965956D" Directory="dirBF45163EA89A77D01A66FCDA5E045647" Guid="*">
+                <File Id="filFA56E1928DC90E64245E0CD3F7328938" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\metrics\_dist_metrics.pxd" />
+            </Component>
+            <Component Id="cmpDB4A879119E31252D2770AB57CC6C816" Directory="dirBF45163EA89A77D01A66FCDA5E045647" Guid="*">
+                <File Id="fil3FD8799D570FBF6620403C97ADDAB045" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\metrics\_dist_metrics.pxd.tp" />
+            </Component>
+            <Component Id="cmpBD4C464A6EEE556ED6FC5770958AE0FA" Directory="dirBF45163EA89A77D01A66FCDA5E045647" Guid="*">
+                <File Id="fil28792BF56B08A309FFF5EFEC3D9BA074" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\metrics\_dist_metrics.pyx.tp" />
+            </Component>
+            <Component Id="cmpBBEAA2293545847796B82939F130347C" Directory="dirBF45163EA89A77D01A66FCDA5E045647" Guid="*">
+                <File Id="fil2B5AF99FF37AC9139E663CD64B54A791" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\metrics\_pairwise_fast.cp311-win_amd64.lib" />
+            </Component>
+            <Component Id="cmp55B85343BA661B72AC9850C436113674" Directory="dirBF45163EA89A77D01A66FCDA5E045647" Guid="*">
+                <File Id="fil52BDE918DB3B0FC7F76F93E88A5211C9" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\metrics\_pairwise_fast.cp311-win_amd64.pyd" />
+            </Component>
+            <Component Id="cmp6C4EEB34B63D2766045A51699693921E" Directory="dirBF45163EA89A77D01A66FCDA5E045647" Guid="*">
+                <File Id="filB340AC7FF424307DEA463BAC847961DE" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\metrics\_pairwise_fast.pyx" />
+            </Component>
+            <Component Id="cmp30482D89F345572A5E2425B53A46F49B" Directory="dir8AD5F245A791C6099EFA02402658D22A" Guid="*">
+                <File Id="fil871A796AEA3C4B913F3C267EA6E905D8" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\metrics\cluster\meson.build" />
+            </Component>
+            <Component Id="cmpD334AEE330BD1DFD47BC7AD4D617CBF4" Directory="dir8AD5F245A791C6099EFA02402658D22A" Guid="*">
+                <File Id="fil9570C4577B6C0925BC759AEA060471B6" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\metrics\cluster\_expected_mutual_info_fast.cp311-win_amd64.lib" />
+            </Component>
+            <Component Id="cmpA0D789D29413AA392B0F016C1685DFCE" Directory="dir8AD5F245A791C6099EFA02402658D22A" Guid="*">
+                <File Id="filB56EA49980653D5FC45A80DBD4BA26ED" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\metrics\cluster\_expected_mutual_info_fast.cp311-win_amd64.pyd" />
+            </Component>
+            <Component Id="cmp1DB36CDD99CD27FA665BCD504D1EB394" Directory="dir8AD5F245A791C6099EFA02402658D22A" Guid="*">
+                <File Id="fil464A3F4EE86C7ED472731E47367FA8A3" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\metrics\cluster\_expected_mutual_info_fast.pyx" />
+            </Component>
+            <Component Id="cmp9C5ED13944692C851BE4117574E09F54" Directory="dir8F63E38FA7E0C6D9A44739E033B05A98" Guid="*">
+                <File Id="filFBB6EA6BD557AD48A024710B9CFBCCA7" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\metrics\_pairwise_distances_reduction\meson.build" />
+            </Component>
+            <Component Id="cmpBE0AE58F0E718113D2DB4CA757F26242" Directory="dir8F63E38FA7E0C6D9A44739E033B05A98" Guid="*">
+                <File Id="fil4BFD0CD9703F0A2A6F98563A733730DF" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\metrics\_pairwise_distances_reduction\_argkmin.cp311-win_amd64.lib" />
+            </Component>
+            <Component Id="cmp6F7DB76233E44E1BD13F2499CFACB85B" Directory="dir8F63E38FA7E0C6D9A44739E033B05A98" Guid="*">
+                <File Id="fil67095FC8C5C4BD155ED4436C6DF553ED" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\metrics\_pairwise_distances_reduction\_argkmin.cp311-win_amd64.pyd" />
+            </Component>
+            <Component Id="cmpC0D358F4DEC5E5CA56898C44779CAA7D" Directory="dir8F63E38FA7E0C6D9A44739E033B05A98" Guid="*">
+                <File Id="fil46D076B1AA008C5B8C4117D5A86FDCD6" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\metrics\_pairwise_distances_reduction\_argkmin.pxd.tp" />
+            </Component>
+            <Component Id="cmp970707AB0871D8A10858C2961F0F3615" Directory="dir8F63E38FA7E0C6D9A44739E033B05A98" Guid="*">
+                <File Id="fil97DB0911743AFCB66D9AE8BEB3DAA5F1" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\metrics\_pairwise_distances_reduction\_argkmin.pyx.tp" />
+            </Component>
+            <Component Id="cmpFA8DEEB298144DFEDA88AF28431E7932" Directory="dir8F63E38FA7E0C6D9A44739E033B05A98" Guid="*">
+                <File Id="filD28627346841C139CBD9D2E4B41469CD" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\metrics\_pairwise_distances_reduction\_argkmin_classmode.cp311-win_amd64.lib" />
+            </Component>
+            <Component Id="cmp335D9032982E7E6030F5DD8ED601A445" Directory="dir8F63E38FA7E0C6D9A44739E033B05A98" Guid="*">
+                <File Id="fil55D06DC143B2130EE7AB898A265BB652" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\metrics\_pairwise_distances_reduction\_argkmin_classmode.cp311-win_amd64.pyd" />
+            </Component>
+            <Component Id="cmp9494BE0D8781B95D53399B3B4686063D" Directory="dir8F63E38FA7E0C6D9A44739E033B05A98" Guid="*">
+                <File Id="fil90E085E64004A58ABC10969ABE8E28AB" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\metrics\_pairwise_distances_reduction\_argkmin_classmode.pyx.tp" />
+            </Component>
+            <Component Id="cmp1F28DBF994A81F1DC717D8493553E2E7" Directory="dir8F63E38FA7E0C6D9A44739E033B05A98" Guid="*">
+                <File Id="fil58300A9C57B395DF4A3A061D2FECEC74" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\metrics\_pairwise_distances_reduction\_base.cp311-win_amd64.lib" />
+            </Component>
+            <Component Id="cmpCEB13F5FD0A1186A5F04BA633E76AC30" Directory="dir8F63E38FA7E0C6D9A44739E033B05A98" Guid="*">
+                <File Id="fil4FA8B6C6DBA38725051B58B681AECC75" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\metrics\_pairwise_distances_reduction\_base.cp311-win_amd64.pyd" />
+            </Component>
+            <Component Id="cmp7D667A08C9B55C04CA932EDACF424A44" Directory="dir8F63E38FA7E0C6D9A44739E033B05A98" Guid="*">
+                <File Id="fil565E98A9FC59655BF0B055FDFED97757" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\metrics\_pairwise_distances_reduction\_base.pxd.tp" />
+            </Component>
+            <Component Id="cmpB51AFB84C6960E3B07A0B88EB2449E3B" Directory="dir8F63E38FA7E0C6D9A44739E033B05A98" Guid="*">
+                <File Id="fil8CCE422C320705073563A7C715582810" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\metrics\_pairwise_distances_reduction\_base.pyx.tp" />
+            </Component>
+            <Component Id="cmp1CB4277862F84D386FA52862E3C5DB37" Directory="dir8F63E38FA7E0C6D9A44739E033B05A98" Guid="*">
+                <File Id="fil29E6652567E30BC84F8C8039E1EB1FE7" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\metrics\_pairwise_distances_reduction\_classmode.pxd" />
+            </Component>
+            <Component Id="cmp2C0440B62EE2A575AC91147F67497DFA" Directory="dir8F63E38FA7E0C6D9A44739E033B05A98" Guid="*">
+                <File Id="filA3E9C579C1018AC5DEE277C82E68A533" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\metrics\_pairwise_distances_reduction\_datasets_pair.cp311-win_amd64.lib" />
+            </Component>
+            <Component Id="cmpA556119F912C8CC22B7D13C304AD255E" Directory="dir8F63E38FA7E0C6D9A44739E033B05A98" Guid="*">
+                <File Id="fil55D76C1A0549E1E5E0DB7DFD2F50357C" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\metrics\_pairwise_distances_reduction\_datasets_pair.cp311-win_amd64.pyd" />
+            </Component>
+            <Component Id="cmpDB6AC4ACC3C9BB4026775A485DA2E171" Directory="dir8F63E38FA7E0C6D9A44739E033B05A98" Guid="*">
+                <File Id="filBE01984D07E0828B92CC8F26773935B7" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\metrics\_pairwise_distances_reduction\_datasets_pair.pxd.tp" />
+            </Component>
+            <Component Id="cmp44BAB91EA44137CEC63A2F0F567734C3" Directory="dir8F63E38FA7E0C6D9A44739E033B05A98" Guid="*">
+                <File Id="fil6A5C306775881E9A861905AF71DB1473" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\metrics\_pairwise_distances_reduction\_datasets_pair.pyx.tp" />
+            </Component>
+            <Component Id="cmp746C2A8A8F3A30FD367948067B98E93C" Directory="dir8F63E38FA7E0C6D9A44739E033B05A98" Guid="*">
+                <File Id="fil62DED7148F27D2CA089A8DCE1B0729B3" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\metrics\_pairwise_distances_reduction\_middle_term_computer.cp311-win_amd64.lib" />
+            </Component>
+            <Component Id="cmpF321E2898099B1A709B44B2065E6B0F1" Directory="dir8F63E38FA7E0C6D9A44739E033B05A98" Guid="*">
+                <File Id="filC197EABF0A59FEDA799004660624E9DA" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\metrics\_pairwise_distances_reduction\_middle_term_computer.cp311-win_amd64.pyd" />
+            </Component>
+            <Component Id="cmpC1A5D058C2AF82EF33676FA459CAA7EC" Directory="dir8F63E38FA7E0C6D9A44739E033B05A98" Guid="*">
+                <File Id="filB60D9E77DF2F22312E20950CB43ED1E0" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\metrics\_pairwise_distances_reduction\_middle_term_computer.pxd.tp" />
+            </Component>
+            <Component Id="cmp74FA4B323CF360873BF474C48AE034F2" Directory="dir8F63E38FA7E0C6D9A44739E033B05A98" Guid="*">
+                <File Id="fil7E647EA4CE7EE149B6872212C18D05D7" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\metrics\_pairwise_distances_reduction\_middle_term_computer.pyx.tp" />
+            </Component>
+            <Component Id="cmp629EE526E70F91156F1679EEDA9150C2" Directory="dir8F63E38FA7E0C6D9A44739E033B05A98" Guid="*">
+                <File Id="fil186EFA680F56AE0A9D6CF9230E0C7FA8" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\metrics\_pairwise_distances_reduction\_radius_neighbors.cp311-win_amd64.lib" />
+            </Component>
+            <Component Id="cmp7EABC97B25F34562A2868B7A06CD7C11" Directory="dir8F63E38FA7E0C6D9A44739E033B05A98" Guid="*">
+                <File Id="filAA431BD718909E2499AE52778CA84F6A" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\metrics\_pairwise_distances_reduction\_radius_neighbors.cp311-win_amd64.pyd" />
+            </Component>
+            <Component Id="cmpE19BDC93A6ECAA58400DBB600BFF29E8" Directory="dir8F63E38FA7E0C6D9A44739E033B05A98" Guid="*">
+                <File Id="filE4553E214CDE87AA75524BE94E8DDD17" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\metrics\_pairwise_distances_reduction\_radius_neighbors.pxd.tp" />
+            </Component>
+            <Component Id="cmpDAF936C5315C4441F9AB26E9D1B41D58" Directory="dir8F63E38FA7E0C6D9A44739E033B05A98" Guid="*">
+                <File Id="filE6EC8952A7F85706E844087EE533AECA" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\metrics\_pairwise_distances_reduction\_radius_neighbors.pyx.tp" />
+            </Component>
+            <Component Id="cmp1282A1C0379F38FC573533503371F90D" Directory="dir8F63E38FA7E0C6D9A44739E033B05A98" Guid="*">
+                <File Id="filB36806D04CB2C035F2DA8EEA82E72531" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\metrics\_pairwise_distances_reduction\_radius_neighbors_classmode.cp311-win_amd64.lib" />
+            </Component>
+            <Component Id="cmpAABB2528AB7B3E27A287114BE20D1B4D" Directory="dir8F63E38FA7E0C6D9A44739E033B05A98" Guid="*">
+                <File Id="filDEE28FC2BF8E3275ABB48CD8AB3FB51C" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\metrics\_pairwise_distances_reduction\_radius_neighbors_classmode.cp311-win_amd64.pyd" />
+            </Component>
+            <Component Id="cmpA0D200E7F6E6F6775D9521442CCE1E5A" Directory="dir8F63E38FA7E0C6D9A44739E033B05A98" Guid="*">
+                <File Id="filC2DC475BC0261603831E7C53114F26BF" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\metrics\_pairwise_distances_reduction\_radius_neighbors_classmode.pyx.tp" />
+            </Component>
+            <Component Id="cmpB3FF19CFB19D98A82726C0F14D1A7240" Directory="dir88EC01F475ACE81FFD9C3B7DA44B4685" Guid="*">
+                <File Id="fil9E186D5E48C62A5A0D632E1AD7C267A0" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\neighbors\meson.build" />
+            </Component>
+            <Component Id="cmpF08D3F1302236954EDC8DE11326A511C" Directory="dir88EC01F475ACE81FFD9C3B7DA44B4685" Guid="*">
+                <File Id="filD1F8FB8691A5FD87CB93132B91F3AAE5" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\neighbors\_ball_tree.cp311-win_amd64.lib" />
+            </Component>
+            <Component Id="cmp318AA40DA4D9CBF9BA8E173C42AE94AA" Directory="dir88EC01F475ACE81FFD9C3B7DA44B4685" Guid="*">
+                <File Id="filEDC3CCDFE0F9F2765584FE2509D59373" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\neighbors\_ball_tree.cp311-win_amd64.pyd" />
+            </Component>
+            <Component Id="cmpA51CE795CF15EE25D093AADC07801978" Directory="dir88EC01F475ACE81FFD9C3B7DA44B4685" Guid="*">
+                <File Id="fil1C9F51EC6A3264945CBE1D72085393DD" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\neighbors\_ball_tree.pyx.tp" />
+            </Component>
+            <Component Id="cmpEF8EBFC6DA9FD5588E942709D05B1019" Directory="dir88EC01F475ACE81FFD9C3B7DA44B4685" Guid="*">
+                <File Id="filEFEA030E3337B94F568DAB05120FE8F0" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\neighbors\_binary_tree.pxi.tp" />
+            </Component>
+            <Component Id="cmp323EB32771272E2CE06F8A4D8D221AE6" Directory="dir88EC01F475ACE81FFD9C3B7DA44B4685" Guid="*">
+                <File Id="fil1C30015730BA4745419F7210DB45698F" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\neighbors\_kd_tree.cp311-win_amd64.lib" />
+            </Component>
+            <Component Id="cmpE74038A8BDB9D17DC23365669744D77F" Directory="dir88EC01F475ACE81FFD9C3B7DA44B4685" Guid="*">
+                <File Id="fil82C1ADC7F4AA22F6998FA64A8134600D" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\neighbors\_kd_tree.cp311-win_amd64.pyd" />
+            </Component>
+            <Component Id="cmp682B449FBFB3690E86680839F097E312" Directory="dir88EC01F475ACE81FFD9C3B7DA44B4685" Guid="*">
+                <File Id="fil99C0F0B410D2CDFA3D65D5BDB5CBF0B5" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\neighbors\_kd_tree.pyx.tp" />
+            </Component>
+            <Component Id="cmp9F680391921882D6FCC51017A01E7AD1" Directory="dir88EC01F475ACE81FFD9C3B7DA44B4685" Guid="*">
+                <File Id="fil6A160D0EBC450FF9B53FB7B30B7E0EF6" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\neighbors\_partition_nodes.cp311-win_amd64.lib" />
+            </Component>
+            <Component Id="cmp9890D6C5BD9DE9A3C8914CC49D70915F" Directory="dir88EC01F475ACE81FFD9C3B7DA44B4685" Guid="*">
+                <File Id="fil46FAF5679C2820D69F234F4C75C87CD9" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\neighbors\_partition_nodes.cp311-win_amd64.pyd" />
+            </Component>
+            <Component Id="cmpDA6026A7B64E9D9929D15B7F0B7A0E78" Directory="dir88EC01F475ACE81FFD9C3B7DA44B4685" Guid="*">
+                <File Id="fil616C90E2DA2E45F85A7117122AAFD199" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\neighbors\_partition_nodes.pxd" />
+            </Component>
+            <Component Id="cmp1C65BEAE071E5E88C7371E4641CB392C" Directory="dir88EC01F475ACE81FFD9C3B7DA44B4685" Guid="*">
+                <File Id="filE52F0ED4FF7585F8CFF555B2C3C0A42A" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\neighbors\_partition_nodes.pyx" />
+            </Component>
+            <Component Id="cmp5854E439C4980C88338D038DA9A29B91" Directory="dir88EC01F475ACE81FFD9C3B7DA44B4685" Guid="*">
+                <File Id="fil7F62C68C2C5C16C2704110DE7574F4D3" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\neighbors\_quad_tree.cp311-win_amd64.lib" />
+            </Component>
+            <Component Id="cmp2587C0C01FFB73EEDF4BEA07F0AC8A02" Directory="dir88EC01F475ACE81FFD9C3B7DA44B4685" Guid="*">
+                <File Id="fil2E33BF1E2C9EB055E6BAC0C85B81EDD3" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\neighbors\_quad_tree.cp311-win_amd64.pyd" />
+            </Component>
+            <Component Id="cmp807C67E4F0C9D304015164D447AF8555" Directory="dir88EC01F475ACE81FFD9C3B7DA44B4685" Guid="*">
+                <File Id="filAB26A0E87A98991D0C1A1DBA526A89C0" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\neighbors\_quad_tree.pxd" />
+            </Component>
+            <Component Id="cmpFF227A547E97D189FBC186F07F6FB427" Directory="dir88EC01F475ACE81FFD9C3B7DA44B4685" Guid="*">
+                <File Id="filE70D758BBD4780A265915B063C2432A4" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\neighbors\_quad_tree.pyx" />
+            </Component>
+            <Component Id="cmpE9775B7E70CDB0F4EAC59DCC2C810C9D" Directory="dir66C22E7D652C36D021AE7995B99D268E" Guid="*">
+                <File Id="fil987C4A597323898DACE2E6B4A81EB529" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\preprocessing\meson.build" />
+            </Component>
+            <Component Id="cmpC740E46F9571D4BE977807899113A9D6" Directory="dir66C22E7D652C36D021AE7995B99D268E" Guid="*">
+                <File Id="filB5BEEE0F41565A99BE8C8A13E5BAE996" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\preprocessing\_csr_polynomial_expansion.cp311-win_amd64.lib" />
+            </Component>
+            <Component Id="cmpCFAE1B3B1B97467AD31C105E2F9F0740" Directory="dir66C22E7D652C36D021AE7995B99D268E" Guid="*">
+                <File Id="fil0A2C04E69D9EFABCB2F26D72FEFF3052" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\preprocessing\_csr_polynomial_expansion.cp311-win_amd64.pyd" />
+            </Component>
+            <Component Id="cmp2CA4398ACDB2480A5A1E272AC2221788" Directory="dir66C22E7D652C36D021AE7995B99D268E" Guid="*">
+                <File Id="fil7D76F3DFAFBDB4ED6557E1DA146783EA" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\preprocessing\_csr_polynomial_expansion.pyx" />
+            </Component>
+            <Component Id="cmp033D9FD566773AA851946F297F4E01B2" Directory="dir66C22E7D652C36D021AE7995B99D268E" Guid="*">
+                <File Id="fil662D0B6702AC54EF71E730D24310AC91" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\preprocessing\_target_encoder_fast.cp311-win_amd64.lib" />
+            </Component>
+            <Component Id="cmp9DFBC12D6C1B323E70687F51250A8D39" Directory="dir66C22E7D652C36D021AE7995B99D268E" Guid="*">
+                <File Id="fil71D0A143635E6CDF743F0582F7627036" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\preprocessing\_target_encoder_fast.cp311-win_amd64.pyd" />
+            </Component>
+            <Component Id="cmp3851245328349FC297DC1465503466E4" Directory="dir66C22E7D652C36D021AE7995B99D268E" Guid="*">
+                <File Id="filD5A495B84608C624A83B62430161F5FB" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\preprocessing\_target_encoder_fast.pyx" />
+            </Component>
+            <Component Id="cmp514D2B684BE5D2125FBDBE99D90061DE" Directory="dirC81472410AF6DE7BD87028D08CE4362F" Guid="*">
+                <File Id="fil1F3DCC4B161529FAA8DAECAB4DB9FE87" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\svm\meson.build" />
+            </Component>
+            <Component Id="cmpB319E4F8F749BFF9B8B86DCF1BAE1AEB" Directory="dirC81472410AF6DE7BD87028D08CE4362F" Guid="*">
+                <File Id="filD80F653B44228B3FA2DB84ACA97F5207" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\svm\_liblinear.cp311-win_amd64.lib" />
+            </Component>
+            <Component Id="cmpE2FD547F3784BDA833242DCA4ED9A459" Directory="dirC81472410AF6DE7BD87028D08CE4362F" Guid="*">
+                <File Id="fil63928542BD2277EF444830DC669177F8" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\svm\_liblinear.cp311-win_amd64.pyd" />
+            </Component>
+            <Component Id="cmp30F3002EBE9BB0355FB1ECA733004656" Directory="dirC81472410AF6DE7BD87028D08CE4362F" Guid="*">
+                <File Id="fil7E86FEBA2CE9BE53A25C8747E7D27317" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\svm\_liblinear.pxi" />
+            </Component>
+            <Component Id="cmp9FB7613758A4C6C9550E1CE86E170B6A" Directory="dirC81472410AF6DE7BD87028D08CE4362F" Guid="*">
+                <File Id="filB3C6CCCB1029CB3D844A39B422B03CA3" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\svm\_liblinear.pyx" />
+            </Component>
+            <Component Id="cmp67449EB21E3F04512096D960D856C542" Directory="dirC81472410AF6DE7BD87028D08CE4362F" Guid="*">
+                <File Id="filD64B01943A57B57675CFC52CDB5F6843" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\svm\_libsvm.cp311-win_amd64.lib" />
+            </Component>
+            <Component Id="cmp56C118373ECAAC6986BA50B69508062B" Directory="dirC81472410AF6DE7BD87028D08CE4362F" Guid="*">
+                <File Id="fil42515B4FC9594A6DCF6586EF0F88A19D" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\svm\_libsvm.cp311-win_amd64.pyd" />
+            </Component>
+            <Component Id="cmp737996F00A5A687A6FE2A6349E85BE64" Directory="dirC81472410AF6DE7BD87028D08CE4362F" Guid="*">
+                <File Id="fil14B867BE036AC4936DFC20CDB412EF5E" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\svm\_libsvm.pxi" />
+            </Component>
+            <Component Id="cmp682EE09EF9F8A80CDF4FDC04E52E3B7F" Directory="dirC81472410AF6DE7BD87028D08CE4362F" Guid="*">
+                <File Id="fil401CD05902A862A7A700800623AB5906" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\svm\_libsvm.pyx" />
+            </Component>
+            <Component Id="cmp040CC73623CB025B9F20AE939CB78249" Directory="dirC81472410AF6DE7BD87028D08CE4362F" Guid="*">
+                <File Id="filE865C513EFAADD17348007D4353EFD3E" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\svm\_libsvm_sparse.cp311-win_amd64.lib" />
+            </Component>
+            <Component Id="cmp4CC1936B08D6A07A8C64EEED516C2BA3" Directory="dirC81472410AF6DE7BD87028D08CE4362F" Guid="*">
+                <File Id="filDDB6E8AE2858BCEFF76580348521C421" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\svm\_libsvm_sparse.cp311-win_amd64.pyd" />
+            </Component>
+            <Component Id="cmp2DE9E5453D3589235F9E76B77013ABC9" Directory="dirC81472410AF6DE7BD87028D08CE4362F" Guid="*">
+                <File Id="fil2CE3106C195A406C15C58EAC23B0FF51" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\svm\_libsvm_sparse.pyx" />
+            </Component>
+            <Component Id="cmp04904457DEA8340809A0C66D30547E48" Directory="dirC81472410AF6DE7BD87028D08CE4362F" Guid="*">
+                <File Id="fil03E9C09D3142B3C3A2D28B8A18F5759F" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\svm\_newrand.cp311-win_amd64.lib" />
+            </Component>
+            <Component Id="cmp00A5A508273E2E4FE60655D0CD86DF61" Directory="dirC81472410AF6DE7BD87028D08CE4362F" Guid="*">
+                <File Id="fil2D5D7872591BD6AF87062B1EEDE1945D" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\svm\_newrand.pyx" />
+            </Component>
+            <Component Id="cmpE3A5F391794A433F1E6D721B3E3860A4" Directory="dir5F9909820C7360E6A8BA748FCA8EB3EF" Guid="*">
+                <File Id="filD0926DA111E186E63F6EABD0844193E0" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\svm\src\liblinear\COPYRIGHT" />
+            </Component>
+            <Component Id="cmpA7199FC6DC2B40B21E5C0FCF89702790" Directory="dir5F9909820C7360E6A8BA748FCA8EB3EF" Guid="*">
+                <File Id="fil76040F2F1EEB5D66116DA7E86B2E3BF4" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\svm\src\liblinear\liblinear_helper.c" />
+            </Component>
+            <Component Id="cmp966E03C3D3950BE9A281B00086A1A5CC" Directory="dir5F9909820C7360E6A8BA748FCA8EB3EF" Guid="*">
+                <File Id="fil7D735900070E32FEAA6D9F1776A735DA" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\svm\src\liblinear\linear.cpp" />
+            </Component>
+            <Component Id="cmp62E2876B0EA6D67246FC59D8F1917CB6" Directory="dir5F9909820C7360E6A8BA748FCA8EB3EF" Guid="*">
+                <File Id="fil90340ADEE531883F4C40FC66AE03604B" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\svm\src\liblinear\linear.h" />
+            </Component>
+            <Component Id="cmp57C6050FBCF4786072C6B144B9DE0D84" Directory="dir5F9909820C7360E6A8BA748FCA8EB3EF" Guid="*">
+                <File Id="fil4D38C7D24121C3F8E05E2A4B6E22E6CB" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\svm\src\liblinear\tron.cpp" />
+            </Component>
+            <Component Id="cmp4409BFC83D8D64C86B75E33173A4F35E" Directory="dir5F9909820C7360E6A8BA748FCA8EB3EF" Guid="*">
+                <File Id="fil9FEB7B7C7484EA74B63D03B78BC967B6" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\svm\src\liblinear\tron.h" />
+            </Component>
+            <Component Id="cmpB14C089ECF7EFB6CC3F6FC25F4BD9C2D" Directory="dir5F9909820C7360E6A8BA748FCA8EB3EF" Guid="*">
+                <File Id="fil1CFEA39AFA5FAD890D4B4E9FCE396D7A" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\svm\src\liblinear\_cython_blas_helpers.h" />
+            </Component>
+            <Component Id="cmpA677D8370B25055C9F0BF7A19937EA51" Directory="dirD281D7AE2BFC2935AADA08DE8221D617" Guid="*">
+                <File Id="fil2C2290A812D679DF28FA15272F1BE08A" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\svm\src\libsvm\LIBSVM_CHANGES" />
+            </Component>
+            <Component Id="cmp02B5127CE97F77B4AF5D97B089B09B4E" Directory="dirD281D7AE2BFC2935AADA08DE8221D617" Guid="*">
+                <File Id="fil5BA1C63B66DF54A78589CB8FF30948A6" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\svm\src\libsvm\libsvm_helper.c" />
+            </Component>
+            <Component Id="cmp72FD5A15D652BDCE767CFF20243C9651" Directory="dirD281D7AE2BFC2935AADA08DE8221D617" Guid="*">
+                <File Id="fil1E0870C228458A88ABDD647646A7855D" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\svm\src\libsvm\libsvm_sparse_helper.c" />
+            </Component>
+            <Component Id="cmpCB233996E72F8C05FB7A2891918CE604" Directory="dirD281D7AE2BFC2935AADA08DE8221D617" Guid="*">
+                <File Id="fil47B2B62AC65716AD23C4179AD791697E" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\svm\src\libsvm\libsvm_template.cpp" />
+            </Component>
+            <Component Id="cmpC7BDCBCAA62D50C97C66747A9FDA7CA7" Directory="dirD281D7AE2BFC2935AADA08DE8221D617" Guid="*">
+                <File Id="filB3D847C8E757CACD2C1D3B472509B968" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\svm\src\libsvm\svm.cpp" />
+            </Component>
+            <Component Id="cmpDC020AA0F63921E4FC0F7BC7D1789195" Directory="dirD281D7AE2BFC2935AADA08DE8221D617" Guid="*">
+                <File Id="filE777C4365600B602285F1C596C434411" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\svm\src\libsvm\svm.h" />
+            </Component>
+            <Component Id="cmp8E55CD3BF7753AB320B4C5D46BCFF092" Directory="dirD281D7AE2BFC2935AADA08DE8221D617" Guid="*">
+                <File Id="filDBBEB2FD091F1DA7CB7368A3F79DFA0C" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\svm\src\libsvm\_svm_cython_blas_helpers.h" />
+            </Component>
+            <Component Id="cmp82F2897F9BC047C6DEFD4B66085FEA0D" Directory="dirE22F95C1CA81CA1EACD014D686F5C79F" Guid="*">
+                <File Id="filE28FF3E6C7B0DC148784401CAE35F487" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\svm\src\newrand\newrand.h" />
+            </Component>
+            <Component Id="cmp7EE8D7E4419FC9DC5BA36131DF8F872B" Directory="dir6A7C92765711A3550C1400A50DF8AD38" Guid="*">
+                <File Id="fil1AB42EFC6ADD643C9E2D05BC1509EE1A" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\tree\meson.build" />
+            </Component>
+            <Component Id="cmp3481329D9BEDC1AE1D92DE47F33AE832" Directory="dir6A7C92765711A3550C1400A50DF8AD38" Guid="*">
+                <File Id="fil89406AC4A77BBB54CC95C8E777BCFD1D" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\tree\_criterion.cp311-win_amd64.lib" />
+            </Component>
+            <Component Id="cmp0C75402F29362EF2CD6427869D8FC99A" Directory="dir6A7C92765711A3550C1400A50DF8AD38" Guid="*">
+                <File Id="filA07699F3FB25318DFCEB7DB9B9A8CE8B" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\tree\_criterion.cp311-win_amd64.pyd" />
+            </Component>
+            <Component Id="cmp3D39F3B0D44220939E2A019090C8802B" Directory="dir6A7C92765711A3550C1400A50DF8AD38" Guid="*">
+                <File Id="fil93ECF2358BB0400686E5AE425B8E3075" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\tree\_criterion.pxd" />
+            </Component>
+            <Component Id="cmp2343ABCF7DAD2AB8189C40A8E0593290" Directory="dir6A7C92765711A3550C1400A50DF8AD38" Guid="*">
+                <File Id="filBC4ACA8FCD915A04CE6A72C5B307C2D2" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\tree\_criterion.pyx" />
+            </Component>
+            <Component Id="cmp46A7D9603946977C97062773EEAD5BD6" Directory="dir6A7C92765711A3550C1400A50DF8AD38" Guid="*">
+                <File Id="fil891F880DFAE7C8436ACC8F6C5B36BD85" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\tree\_partitioner.cp311-win_amd64.lib" />
+            </Component>
+            <Component Id="cmp43617293DB4F681A1F7D961C564D7E3F" Directory="dir6A7C92765711A3550C1400A50DF8AD38" Guid="*">
+                <File Id="fil8C4F250ABCC772986A105B4C126271A5" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\tree\_partitioner.cp311-win_amd64.pyd" />
+            </Component>
+            <Component Id="cmpFAA88DEE38AE36C7344667F66EDC64E8" Directory="dir6A7C92765711A3550C1400A50DF8AD38" Guid="*">
+                <File Id="fil1E02A201F8679BA02655BD3E67298795" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\tree\_partitioner.pxd" />
+            </Component>
+            <Component Id="cmpB6615CEC8DA622688EC9DD049C71E36F" Directory="dir6A7C92765711A3550C1400A50DF8AD38" Guid="*">
+                <File Id="fil53EFFDAB46B9DC1F9DEE8F0420ED67D2" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\tree\_partitioner.pyx" />
+            </Component>
+            <Component Id="cmp0E6A2495792540A036875A795FA808B7" Directory="dir6A7C92765711A3550C1400A50DF8AD38" Guid="*">
+                <File Id="fil346A596C665BA32E79A517C483369169" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\tree\_splitter.cp311-win_amd64.lib" />
+            </Component>
+            <Component Id="cmpE348388E2D49EA1C1681F1BC3869A74A" Directory="dir6A7C92765711A3550C1400A50DF8AD38" Guid="*">
+                <File Id="filFB798E81C7B0E5CA7A109AB80BAA7190" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\tree\_splitter.cp311-win_amd64.pyd" />
+            </Component>
+            <Component Id="cmp65B915582857791F17B7A55F8F209781" Directory="dir6A7C92765711A3550C1400A50DF8AD38" Guid="*">
+                <File Id="fil0F1771B1FAC451E1CDCC9A8D9EFAF904" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\tree\_splitter.pxd" />
+            </Component>
+            <Component Id="cmp85B31DAADDFC73B94B1B4D61D3E98A69" Directory="dir6A7C92765711A3550C1400A50DF8AD38" Guid="*">
+                <File Id="fil51B0E7535B321AA89926561A62C80BED" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\tree\_splitter.pyx" />
+            </Component>
+            <Component Id="cmp737739BCC79F10CB0CD2610038A8AFB1" Directory="dir6A7C92765711A3550C1400A50DF8AD38" Guid="*">
+                <File Id="filD4A9BB5015887F484DA60AE94D21B313" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\tree\_tree.cp311-win_amd64.lib" />
+            </Component>
+            <Component Id="cmp71AF182A48D7805868A58C87B9339F3E" Directory="dir6A7C92765711A3550C1400A50DF8AD38" Guid="*">
+                <File Id="filA05DA5A48DCD1EC4E979DCC2C07CA4E4" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\tree\_tree.cp311-win_amd64.pyd" />
+            </Component>
+            <Component Id="cmp354A5EBDA112B3D5228BD3C598A4408D" Directory="dir6A7C92765711A3550C1400A50DF8AD38" Guid="*">
+                <File Id="filF2174AED1E805BC43D018532B61C8015" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\tree\_tree.pxd" />
+            </Component>
+            <Component Id="cmp8807023E3679C90F59FA357587EF52E0" Directory="dir6A7C92765711A3550C1400A50DF8AD38" Guid="*">
+                <File Id="filBB447FB00C859848248D9B7F5F1C337E" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\tree\_tree.pyx" />
+            </Component>
+            <Component Id="cmp7E1D39933C6FE32890CAFA8683D2F30A" Directory="dir6A7C92765711A3550C1400A50DF8AD38" Guid="*">
+                <File Id="filD4BB6ED924643D3415C2C99040810432" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\tree\_utils.cp311-win_amd64.lib" />
+            </Component>
+            <Component Id="cmpB719730AC4FE788BC2E70F03F49EC856" Directory="dir6A7C92765711A3550C1400A50DF8AD38" Guid="*">
+                <File Id="filA3EDDA03765393F05AAD2E3626A18C92" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\tree\_utils.cp311-win_amd64.pyd" />
+            </Component>
+            <Component Id="cmp96505844E37E021547258BDCA4D1EEB0" Directory="dir6A7C92765711A3550C1400A50DF8AD38" Guid="*">
+                <File Id="fil8886C297D3EEEF98DFD6F77480D1E950" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\tree\_utils.pxd" />
+            </Component>
+            <Component Id="cmpD24E86382E82A9F49E5912B22771FE97" Directory="dir6A7C92765711A3550C1400A50DF8AD38" Guid="*">
+                <File Id="fil0AD9CB413D6F9D1FF4FFA38142FC6859" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\tree\_utils.pyx" />
+            </Component>
+            <Component Id="cmpDD6DAD3794E48AEB11FACB637E186748" Directory="dir87DC6B703FC7602466DFA9798DCF3D35" Guid="*">
+                <File Id="fil4F13092A174D8D2FE6D983FE557408E7" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\utils\arrayfuncs.cp311-win_amd64.lib" />
+            </Component>
+            <Component Id="cmpE121DE75EB849334E60A73D6752E3127" Directory="dir87DC6B703FC7602466DFA9798DCF3D35" Guid="*">
+                <File Id="filAC30AFEF83708686090052BCC50D0556" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\utils\arrayfuncs.cp311-win_amd64.pyd" />
+            </Component>
+            <Component Id="cmpA6F7AC5C46FF7071CEAD8943525EEA15" Directory="dir87DC6B703FC7602466DFA9798DCF3D35" Guid="*">
+                <File Id="filB79EF4EAF3B08212EF1E98F812F5DA08" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\utils\arrayfuncs.pyx" />
+            </Component>
+            <Component Id="cmp8BA36A8DE48115477430C8D5ABD46A87" Directory="dir87DC6B703FC7602466DFA9798DCF3D35" Guid="*">
+                <File Id="filCF5B683024C25D9758AA734D028C350B" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\utils\meson.build" />
+            </Component>
+            <Component Id="cmp8051E101D4BEE26E3E5FE3AFCD5DF548" Directory="dir87DC6B703FC7602466DFA9798DCF3D35" Guid="*">
+                <File Id="fil5F49310A841945F6BCB31A5BFA0C9084" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\utils\murmurhash.cp311-win_amd64.lib" />
+            </Component>
+            <Component Id="cmpD40499A2AF561AC12CFD7D1088907C76" Directory="dir87DC6B703FC7602466DFA9798DCF3D35" Guid="*">
+                <File Id="fil347FD37C9811983A5372D8C8815C3DE1" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\utils\murmurhash.cp311-win_amd64.pyd" />
+            </Component>
+            <Component Id="cmpBDA57793DF3D5F3F4C4CA046623D4F5C" Directory="dir87DC6B703FC7602466DFA9798DCF3D35" Guid="*">
+                <File Id="filE12E5CCAD694DF84370C6E2FC09CE011" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\utils\murmurhash.pxd" />
+            </Component>
+            <Component Id="cmpC860D6E316AA6C95B4809C6C7C4F056E" Directory="dir87DC6B703FC7602466DFA9798DCF3D35" Guid="*">
+                <File Id="fil6400AC62D320A63421864D02F87FAF3D" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\utils\murmurhash.pyx" />
+            </Component>
+            <Component Id="cmpC52DBD5BC1CAED30DDE396558C483C58" Directory="dir87DC6B703FC7602466DFA9798DCF3D35" Guid="*">
+                <File Id="fil497C6901A320E2E1CA82E8B8866C9F95" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\utils\sparsefuncs_fast.cp311-win_amd64.lib" />
+            </Component>
+            <Component Id="cmp0BDBC8125CDAF9DF92956C5F42553FCA" Directory="dir87DC6B703FC7602466DFA9798DCF3D35" Guid="*">
+                <File Id="fil0DFFFB70C705EF818106159E9109D042" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\utils\sparsefuncs_fast.cp311-win_amd64.pyd" />
+            </Component>
+            <Component Id="cmp4DC1DA29588780050685C36637FD3770" Directory="dir87DC6B703FC7602466DFA9798DCF3D35" Guid="*">
+                <File Id="fil12E1F5C7A976D9644105197A7A15C96C" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\utils\sparsefuncs_fast.pyx" />
+            </Component>
+            <Component Id="cmp5C46DE11A9EAA9188270B56EAED3C914" Directory="dir87DC6B703FC7602466DFA9798DCF3D35" Guid="*">
+                <File Id="filD4ADB8C230E6E1F63DAEC37D4D0264DF" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\utils\_bitset.cp311-win_amd64.lib" />
+            </Component>
+            <Component Id="cmp1283BA8D3CFCBD87BA85940AA0B2A50D" Directory="dir87DC6B703FC7602466DFA9798DCF3D35" Guid="*">
+                <File Id="fil1F644354DCFF16CACA428BB1CD00F514" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\utils\_bitset.pxd" />
+            </Component>
+            <Component Id="cmp13CCED106EC093A1654C11DD431938D1" Directory="dir87DC6B703FC7602466DFA9798DCF3D35" Guid="*">
+                <File Id="fil3EE7D679E740D3FA2EFCAAA76F2DD4D3" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\utils\_bitset.pyx" />
+            </Component>
+            <Component Id="cmpF361F9A6341B999F7E6C58FC861A5364" Directory="dir87DC6B703FC7602466DFA9798DCF3D35" Guid="*">
+                <File Id="fil09695F8645D9B5F00F65C5AA60CE9673" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\utils\_blas_int.pxi.in" />
+            </Component>
+            <Component Id="cmpF35ECABA3D9910A143EDD12A3CEF4903" Directory="dir87DC6B703FC7602466DFA9798DCF3D35" Guid="*">
+                <File Id="fil9AF5E8A2D0F0F574005391CAF7C56326" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\utils\_cython_blas.cp311-win_amd64.lib" />
+            </Component>
+            <Component Id="cmpE0E319A1681302E0D67A34F6BF9A079C" Directory="dir87DC6B703FC7602466DFA9798DCF3D35" Guid="*">
+                <File Id="filE559F0CF33C488867C5973966C294A85" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\utils\_cython_blas.cp311-win_amd64.pyd" />
+            </Component>
+            <Component Id="cmpFA1E55167FC4035CC2A41DF8D9DD5210" Directory="dir87DC6B703FC7602466DFA9798DCF3D35" Guid="*">
+                <File Id="fil4EED8D22FC38112CE808163A7D2E1766" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\utils\_cython_blas.pxd" />
+            </Component>
+            <Component Id="cmpE881F3294219F7679F4EE76B04B1F95C" Directory="dir87DC6B703FC7602466DFA9798DCF3D35" Guid="*">
+                <File Id="filB6ED8FFA5D33EF8BCE1EE5A258779B90" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\utils\_cython_blas.pyx" />
+            </Component>
+            <Component Id="cmp37DD4D8CE712FBA0AFB0C97E255383F0" Directory="dir87DC6B703FC7602466DFA9798DCF3D35" Guid="*">
+                <File Id="fil1E06C4819F9B29CD722E8010E0CF596B" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\utils\_fast_dict.cp311-win_amd64.lib" />
+            </Component>
+            <Component Id="cmp0D6E0B1749E24B3AF949625FDB3608D4" Directory="dir87DC6B703FC7602466DFA9798DCF3D35" Guid="*">
+                <File Id="fil20C5B4CC014C2310CC7B97E5AA617925" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\utils\_fast_dict.cp311-win_amd64.pyd" />
+            </Component>
+            <Component Id="cmpA1674F1F8B8B5D8168F41E4381F7DE49" Directory="dir87DC6B703FC7602466DFA9798DCF3D35" Guid="*">
+                <File Id="fil05B852B2AFC3B4303D6BC6730B8F3096" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\utils\_fast_dict.pxd" />
+            </Component>
+            <Component Id="cmpB408F7C17429C577D684B01E1EA2B783" Directory="dir87DC6B703FC7602466DFA9798DCF3D35" Guid="*">
+                <File Id="fil0028962278DF1EDC2DFA17CB9DDAA17C" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\utils\_fast_dict.pyx" />
+            </Component>
+            <Component Id="cmp8C2A106B097FC048E90AF9C36C63E99F" Directory="dir87DC6B703FC7602466DFA9798DCF3D35" Guid="*">
+                <File Id="fil2C81990A4980589882892F030E61D7EF" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\utils\_heap.cp311-win_amd64.lib" />
+            </Component>
+            <Component Id="cmp5F12CCF8DAF24E78B0A852B09BAFB3BB" Directory="dir87DC6B703FC7602466DFA9798DCF3D35" Guid="*">
+                <File Id="fil111CB7E5EECA27AB26AB9812AB38FF98" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\utils\_heap.cp311-win_amd64.pyd" />
+            </Component>
+            <Component Id="cmp0535BC601EA9282C4290925DC9196450" Directory="dir87DC6B703FC7602466DFA9798DCF3D35" Guid="*">
+                <File Id="fil30E6C1C049CC2C80FD36EC06C95E4BE7" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\utils\_heap.pxd" />
+            </Component>
+            <Component Id="cmp34853B0EF296A3355FE27A57A1248122" Directory="dir87DC6B703FC7602466DFA9798DCF3D35" Guid="*">
+                <File Id="fil7CC9993AF54342079FAC878506049712" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\utils\_heap.pyx" />
+            </Component>
+            <Component Id="cmp4041AD0B8E46980FEEE1072A6D6709C4" Directory="dir87DC6B703FC7602466DFA9798DCF3D35" Guid="*">
+                <File Id="filED045EEDFEB29D9D022FB774A23E7A7D" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\utils\_isfinite.cp311-win_amd64.lib" />
+            </Component>
+            <Component Id="cmp909A22B631DCD0609EC49F975C60BC39" Directory="dir87DC6B703FC7602466DFA9798DCF3D35" Guid="*">
+                <File Id="fil5C3909ABBD4C10AA7FA5F0E8476FD653" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\utils\_isfinite.cp311-win_amd64.pyd" />
+            </Component>
+            <Component Id="cmpBF7F95B65B061BAF93AFBB9347223EF2" Directory="dir87DC6B703FC7602466DFA9798DCF3D35" Guid="*">
+                <File Id="filB3749E71C1C621194CA03FAF90DD3857" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\utils\_isfinite.pyx" />
+            </Component>
+            <Component Id="cmpABA9F3BB95E057B14238986A6E864658" Directory="dir87DC6B703FC7602466DFA9798DCF3D35" Guid="*">
+                <File Id="fil02BA967484C46EC3AF59AD018CA15EAD" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\utils\_openmp_helpers.cp311-win_amd64.lib" />
+            </Component>
+            <Component Id="cmp92570EE8BA268DA601B428FF3C28687A" Directory="dir87DC6B703FC7602466DFA9798DCF3D35" Guid="*">
+                <File Id="filACD843A9AE9A127A000249BFBF7CF1D4" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\utils\_openmp_helpers.cp311-win_amd64.pyd" />
+            </Component>
+            <Component Id="cmp41B7886856C155D56943762958FB131E" Directory="dir87DC6B703FC7602466DFA9798DCF3D35" Guid="*">
+                <File Id="fil9505F860074E7A4D2D42E7DF2C32919D" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\utils\_openmp_helpers.pxd" />
+            </Component>
+            <Component Id="cmp3280A60D8BD6D9DB62F39EC4BB88D2CD" Directory="dir87DC6B703FC7602466DFA9798DCF3D35" Guid="*">
+                <File Id="filABBF95C834F48123BEEF543207DCCB85" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\utils\_openmp_helpers.pyx" />
+            </Component>
+            <Component Id="cmpE530C69731225B8F9F149955BFBEC39A" Directory="dir87DC6B703FC7602466DFA9798DCF3D35" Guid="*">
+                <File Id="fil83674D0287EA99F704DE57E6CDCF26B5" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\utils\_random.cp311-win_amd64.lib" />
+            </Component>
+            <Component Id="cmp29460BB67C9690CDCB5486F695B9D7B5" Directory="dir87DC6B703FC7602466DFA9798DCF3D35" Guid="*">
+                <File Id="fil5FC1C323BABE0B4AB5C73661A7390A0C" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\utils\_random.cp311-win_amd64.pyd" />
+            </Component>
+            <Component Id="cmp41DFD5A4802A887A260312A205E2B0F4" Directory="dir87DC6B703FC7602466DFA9798DCF3D35" Guid="*">
+                <File Id="fil39955784B29E3DC7D590FCBBBCE4C9D9" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\utils\_random.pxd" />
+            </Component>
+            <Component Id="cmpED03616E78C55F3E8516A8A35B9BBA81" Directory="dir87DC6B703FC7602466DFA9798DCF3D35" Guid="*">
+                <File Id="fil78C3C1E8F5B66908D8FB15A4B3F22214" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\utils\_random.pyx" />
+            </Component>
+            <Component Id="cmp62AB4A3ECC9755AEF07964FD96E5E67A" Directory="dir87DC6B703FC7602466DFA9798DCF3D35" Guid="*">
+                <File Id="fil00D5F429DC1CEB2CF01D39B4EBE10E8C" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\utils\_seq_dataset.cp311-win_amd64.lib" />
+            </Component>
+            <Component Id="cmp0441361AE46620DB66109E57767C7DD3" Directory="dir87DC6B703FC7602466DFA9798DCF3D35" Guid="*">
+                <File Id="filED06A032B80A35A3536AC486AB626B4B" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\utils\_seq_dataset.cp311-win_amd64.pyd" />
+            </Component>
+            <Component Id="cmp949693671EEB9626BACB298CE502BE9C" Directory="dir87DC6B703FC7602466DFA9798DCF3D35" Guid="*">
+                <File Id="fil38A8FEB20A616A147DAD2990E8E6619B" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\utils\_seq_dataset.pxd.tp" />
+            </Component>
+            <Component Id="cmp79BDCADD4336054CFDFFC382F61F6AD0" Directory="dir87DC6B703FC7602466DFA9798DCF3D35" Guid="*">
+                <File Id="fil317B5B5CE98A5150D290F84BBC0AEFD9" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\utils\_seq_dataset.pyx.tp" />
+            </Component>
+            <Component Id="cmpC24CD61B94518065B79FBFE115C1BA4B" Directory="dir87DC6B703FC7602466DFA9798DCF3D35" Guid="*">
+                <File Id="fil3E8353277E0EAA6EB8E9D94B54BBE00A" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\utils\_sorting.cp311-win_amd64.lib" />
+            </Component>
+            <Component Id="cmp7A07897A1BB03239567E810FC987DCC6" Directory="dir87DC6B703FC7602466DFA9798DCF3D35" Guid="*">
+                <File Id="fil7B625BC8D14214D1051DD74BF25C1EF0" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\utils\_sorting.cp311-win_amd64.pyd" />
+            </Component>
+            <Component Id="cmpEB2F9A0C4B6C4148B75A7043140D19EC" Directory="dir87DC6B703FC7602466DFA9798DCF3D35" Guid="*">
+                <File Id="filFC36CFC8FCE753518EB4B6BC3E0369DA" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\utils\_sorting.pxd" />
+            </Component>
+            <Component Id="cmpAA95784B5336901C6A31B4ABD849928C" Directory="dir87DC6B703FC7602466DFA9798DCF3D35" Guid="*">
+                <File Id="fil000A6B2E6B48A6D87FC29330C0E8A146" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\utils\_sorting.pyx" />
+            </Component>
+            <Component Id="cmp2557AA4DF4EFFD664AEB24D040F27003" Directory="dir87DC6B703FC7602466DFA9798DCF3D35" Guid="*">
+                <File Id="fil92DECEAB16995BB50F96490F017B35E5" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\utils\_typedefs.cp311-win_amd64.lib" />
+            </Component>
+            <Component Id="cmpB1403AF5306196BD449B18DCCC2071AF" Directory="dir87DC6B703FC7602466DFA9798DCF3D35" Guid="*">
+                <File Id="filCD9888091899F4643139E60D0C5010F1" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\utils\_typedefs.cp311-win_amd64.pyd" />
+            </Component>
+            <Component Id="cmpA1458B0D111B6D85DB7FC1E99359681A" Directory="dir87DC6B703FC7602466DFA9798DCF3D35" Guid="*">
+                <File Id="fil587D3D6548194C9D389B2320103774C9" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\utils\_typedefs.pxd" />
+            </Component>
+            <Component Id="cmpC848A3E539F88AA86960B5653A958125" Directory="dir87DC6B703FC7602466DFA9798DCF3D35" Guid="*">
+                <File Id="fil73302C574DA15070D6A77725BCF3CA52" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\utils\_typedefs.pyx" />
+            </Component>
+            <Component Id="cmp08FEBE4200D33478F3862FE56436FECF" Directory="dir87DC6B703FC7602466DFA9798DCF3D35" Guid="*">
+                <File Id="filA0E222CC9FFBAC1411F1FA0AFE64E551" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\utils\_vector_sentinel.cp311-win_amd64.lib" />
+            </Component>
+            <Component Id="cmp21C61C865AEFACCDFA5355214F67F3CB" Directory="dir87DC6B703FC7602466DFA9798DCF3D35" Guid="*">
+                <File Id="fil21590A4D2109F218DE61A0D41052549B" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\utils\_vector_sentinel.cp311-win_amd64.pyd" />
+            </Component>
+            <Component Id="cmp227C9956ECB2235D8376D1489556A7AA" Directory="dir87DC6B703FC7602466DFA9798DCF3D35" Guid="*">
+                <File Id="filB5F3B870734E9AE3336C5D739063D828" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\utils\_vector_sentinel.pxd" />
+            </Component>
+            <Component Id="cmp1A33FB3986FB83C72064878B6D6720F5" Directory="dir87DC6B703FC7602466DFA9798DCF3D35" Guid="*">
+                <File Id="fil05A1CD975C4AF17C9E1492FEDDE8B0B3" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\utils\_vector_sentinel.pyx" />
+            </Component>
+            <Component Id="cmp53C2E845C845C827DD3344D4EF7E78C9" Directory="dir87DC6B703FC7602466DFA9798DCF3D35" Guid="*">
+                <File Id="fil519BFC54A9EC395F31EEABBD28893E42" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\utils\_weight_vector.cp311-win_amd64.lib" />
+            </Component>
+            <Component Id="cmp9BDEE280135C60AB3DC40B7B8E3C014F" Directory="dir87DC6B703FC7602466DFA9798DCF3D35" Guid="*">
+                <File Id="filE4C0E7F61074979247527272B86EF951" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\utils\_weight_vector.cp311-win_amd64.pyd" />
+            </Component>
+            <Component Id="cmp02BC16E7A9FAE8504701DD5699BDE57A" Directory="dir87DC6B703FC7602466DFA9798DCF3D35" Guid="*">
+                <File Id="fil9C5880206A11B2714B4A2148002B6D77" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\utils\_weight_vector.pxd.tp" />
+            </Component>
+            <Component Id="cmp0EC6A8CED4B73FEDBACF2B37664C303E" Directory="dir87DC6B703FC7602466DFA9798DCF3D35" Guid="*">
+                <File Id="fil6E51BE676D2B24EFB6835CD7166A4DA2" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\utils\_weight_vector.pyx.tp" />
+            </Component>
+            <Component Id="cmpA2779CF98F7A50DB022982274CCF40F0" Directory="dir7E201386784C065258F5DDAD7FB95B12" Guid="*">
+                <File Id="fil6EEA71BA7C157A812347AE0C4B98327E" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\utils\src\MurmurHash3.cpp" />
+            </Component>
+            <Component Id="cmp728523378717794C97634FA5C08E9C95" Directory="dir7E201386784C065258F5DDAD7FB95B12" Guid="*">
+                <File Id="fil714406961ACDD41F101B45A5B95375D0" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\utils\src\MurmurHash3.h" />
+            </Component>
+            <Component Id="cmp7C4BD2101FA1003970E979399438EB07" Directory="dir18DBC89795DBE17CD3157BDB792B5ECD" Guid="*">
+                <File Id="fil92C3740975884D87EDF2690843F58C8E" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\utils\_repr_html\estimator.css" />
+            </Component>
+            <Component Id="cmp838A4C0A2227F175D0C1BA5FCBF8018B" Directory="dir18DBC89795DBE17CD3157BDB792B5ECD" Guid="*">
+                <File Id="fil004168DE6A08C5287AF430D2B966DD98" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\utils\_repr_html\estimator.js" />
+            </Component>
+            <Component Id="cmp0C0061B16B6D03A8779806686A16D0AF" Directory="dir18DBC89795DBE17CD3157BDB792B5ECD" Guid="*">
+                <File Id="filCD7B500B2A54DDD17B2ECD4DF0D0FA77" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\utils\_repr_html\features.css" />
+            </Component>
+            <Component Id="cmpD838796187A27F7BA8A2D39978D802F2" Directory="dir18DBC89795DBE17CD3157BDB792B5ECD" Guid="*">
+                <File Id="fil09C18B0DA8181C18F69D989F8394F55E" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\utils\_repr_html\params.css" />
+            </Component>
+            <Component Id="cmp495FE6B46F71B89AAA41EA2ADD88AB1C" Directory="dirDE37A3FFA39388FD3160C3A4502A1D74" Guid="*">
+                <File Id="filFBFC6984AD76EAA207590640E8C48EC2" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\_loss\meson.build" />
+            </Component>
+            <Component Id="cmp111F0E3CE6B94F0AB9E6124367C194CF" Directory="dirDE37A3FFA39388FD3160C3A4502A1D74" Guid="*">
+                <File Id="fil77B4554323BB79C71E6AACBD16F00FC1" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\_loss\_loss.cp311-win_amd64.lib" />
+            </Component>
+            <Component Id="cmpB673B94AEF9B4EFE70B484FEA27A4D8E" Directory="dirDE37A3FFA39388FD3160C3A4502A1D74" Guid="*">
+                <File Id="fil47D6A9BE560596EE2AD0C5C14838E43E" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\_loss\_loss.cp311-win_amd64.pyd" />
+            </Component>
+            <Component Id="cmp19C00A5CC153A7FEAEF97D49013302FA" Directory="dirDE37A3FFA39388FD3160C3A4502A1D74" Guid="*">
+                <File Id="filDD4D040E9C57054E23599B4992B24D43" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\_loss\_loss.pxd" />
+            </Component>
+            <Component Id="cmpD08878430144405F7F2B79CB450EE8BA" Directory="dirDE37A3FFA39388FD3160C3A4502A1D74" Guid="*">
+                <File Id="filB718AB9E518156EF669A55D66BDB9E93" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\_loss\_loss.pyx.tp" />
+            </Component>
+            <Component Id="cmp5A78290F8A30CCB37E146BF3D809D1AF" Directory="dirFA7E24EB747CC2EA895057540560FBFA" Guid="*">
+                <File Id="fil8AE56056E81C47CCE8BB8E03E184EF82" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\__check_build\meson.build" />
+            </Component>
+            <Component Id="cmp7148DF6A69F8306001E4E29AD505D09F" Directory="dirFA7E24EB747CC2EA895057540560FBFA" Guid="*">
+                <File Id="filE3AC2E3A612C3846D10B0D7EDE0B09F5" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\__check_build\_check_build.cp311-win_amd64.lib" />
+            </Component>
+            <Component Id="cmp44AE4D2B1D9F2E1C3664941E26EE0101" Directory="dirFA7E24EB747CC2EA895057540560FBFA" Guid="*">
+                <File Id="fil98FCC5BFD019291C42AEF265E2CD1972" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\__check_build\_check_build.cp311-win_amd64.pyd" />
+            </Component>
+            <Component Id="cmpB9A77C7E1D91C82B9A14B311CB144B9F" Directory="dirFA7E24EB747CC2EA895057540560FBFA" Guid="*">
+                <File Id="fil49197FC4967ADB156DF11230053C890C" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\sklearn\__check_build\_check_build.pyx" />
+            </Component>
             <Component Id="cmpC6FF85B7CE1FA7A5C362A2A796E9537D" Directory="dirB1DD5CECA55570D1ACA4261178074F06" Guid="*">
                 <File Id="fil1D625D6C051D1C81F4AA08D9CEE9CFF8" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\tqdm-4.67.3.dist-info\entry_points.txt" />
             </Component>
@@ -2841,6 +4017,21 @@
             </Component>
             <Component Id="cmp63618A49A904094A059FC8C4D8264948" Directory="dir942E67D9E19722166A60B431DFAF20A6" Guid="*">
                 <File Id="fil7BC4B6A0BD5C62503F2E10D8BFEEB350" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\tqdm-4.67.3.dist-info\licenses\LICENCE" />
+            </Component>
+            <Component Id="cmp4903A6C3298E796B142108ADE83CBA41" Directory="dirCC575192DB4742BF171BE88848EE6473" Guid="*">
+                <File Id="fil5112CEE70FE09E39D49EE1F22F9F0BBF" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\typing_extensions-4.15.0.dist-info\INSTALLER" />
+            </Component>
+            <Component Id="cmpA4BC35D97FF88F2BE0C2193E4A18E616" Directory="dirCC575192DB4742BF171BE88848EE6473" Guid="*">
+                <File Id="fil2883EB5FC2D4E892A287346E2BF3026C" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\typing_extensions-4.15.0.dist-info\METADATA" />
+            </Component>
+            <Component Id="cmpED9CD89BF77FFE06D0B324E5237497A7" Directory="dirCC575192DB4742BF171BE88848EE6473" Guid="*">
+                <File Id="filF4D484828A1D9D2901241F25D18EFBD8" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\typing_extensions-4.15.0.dist-info\RECORD" />
+            </Component>
+            <Component Id="cmp323423658F99C4AF56BCB93B2EB380AE" Directory="dirCC575192DB4742BF171BE88848EE6473" Guid="*">
+                <File Id="filE542CABF37DC72EEF2AB0CF2A77D3A0F" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\typing_extensions-4.15.0.dist-info\WHEEL" />
+            </Component>
+            <Component Id="cmpD088CB35D3EF3880B60F4B39122787D3" Directory="dirF3BAC2D09BCFCB8CF06BB855345B1D39" Guid="*">
+                <File Id="filBC29FD374E5BD2F7A7127BDBA10F8EF1" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\typing_extensions-4.15.0.dist-info\licenses\LICENSE" />
             </Component>
             <Component Id="cmp9111915C44FC2C537948ED3BF7E85121" Directory="dir2D0A3B37FADF210D44A76B11EA842DCB" Guid="*">
                 <File Id="fil346BCEE3853FD61DD2F27D7E5CA20E8A" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\tzdata\zones" />
@@ -4699,6 +5890,11 @@
         </ComponentGroup>
     </Fragment>
     <Fragment>
+        <DirectoryRef Id="dirAE7826762C80C54B7C0DA3AB870C8AD9">
+            <Directory Id="dir02139638D20F8E63904240E5CFAC1231" Name="feature_extraction" />
+        </DirectoryRef>
+    </Fragment>
+    <Fragment>
         <DirectoryRef Id="dirDA6E3FE4C88D8E6C85064EDFAE841063">
             <Directory Id="dir039339C4F7AD3B7C8BDF4AD5DCEDB69E" Name="_core" />
         </DirectoryRef>
@@ -4724,6 +5920,11 @@
         </DirectoryRef>
     </Fragment>
     <Fragment>
+        <DirectoryRef Id="dir0A79269EC16F8960DF9971D4F12DB908">
+            <Directory Id="dir05746DD81E2A4AB59468C48823477445" Name="data" />
+        </DirectoryRef>
+    </Fragment>
+    <Fragment>
         <DirectoryRef Id="dirB262A3C1EC64B1E8AB54055F45CD67B0">
             <Directory Id="dir059743CE687E834933EEABA8E77393C0" Name="folium-0.20.0.dist-info" />
         </DirectoryRef>
@@ -4731,6 +5932,11 @@
     <Fragment>
         <DirectoryRef Id="dir24A3CEF250D33D2091671D82B7A86072">
             <Directory Id="dir078E3572F1301339985F578DD1ED9F76" Name="numpy" />
+        </DirectoryRef>
+    </Fragment>
+    <Fragment>
+        <DirectoryRef Id="dirCF910620CFBDAC73620F2C74558C2BE1">
+            <Directory Id="dir0A79269EC16F8960DF9971D4F12DB908" Name="tests" />
         </DirectoryRef>
     </Fragment>
     <Fragment>
@@ -4744,6 +5950,16 @@
         </DirectoryRef>
     </Fragment>
     <Fragment>
+        <DirectoryRef Id="dirAE7826762C80C54B7C0DA3AB870C8AD9">
+            <Directory Id="dir0DCC319F50393B388C9CFA057D5BC81E" Name="decomposition" />
+        </DirectoryRef>
+    </Fragment>
+    <Fragment>
+        <DirectoryRef Id="dirAE7826762C80C54B7C0DA3AB870C8AD9">
+            <Directory Id="dir1000B98E024A0C54DF2254CCAD0C6C2F" Name="externals" />
+        </DirectoryRef>
+    </Fragment>
+    <Fragment>
         <DirectoryRef Id="dirB262A3C1EC64B1E8AB54055F45CD67B0">
             <Directory Id="dir1156A9E668048D570A0CF2894E07061C" Name="psutil" />
         </DirectoryRef>
@@ -4754,8 +5970,18 @@
         </DirectoryRef>
     </Fragment>
     <Fragment>
+        <DirectoryRef Id="dir2DCE27839FBB8BC8095E91EB121425E5">
+            <Directory Id="dir11C97A545AADC6AC42014CDD3FA2F135" Name="id_3" />
+        </DirectoryRef>
+    </Fragment>
+    <Fragment>
         <DirectoryRef Id="dirB262A3C1EC64B1E8AB54055F45CD67B0">
             <Directory Id="dir12E6C35EC4E1DA0A147ED55B9BFF5811" Name="scipy.libs" />
+        </DirectoryRef>
+    </Fragment>
+    <Fragment>
+        <DirectoryRef Id="dir87DC6B703FC7602466DFA9798DCF3D35">
+            <Directory Id="dir18DBC89795DBE17CD3157BDB792B5ECD" Name="_repr_html" />
         </DirectoryRef>
     </Fragment>
     <Fragment>
@@ -4769,6 +5995,11 @@
         </DirectoryRef>
     </Fragment>
     <Fragment>
+        <DirectoryRef Id="dir63D70D8D3862349E4EC7642BB7219009">
+            <Directory Id="dir1A263E56E77C9BC4C838FBBE992982C1" Name="_hist_gradient_boosting" />
+        </DirectoryRef>
+    </Fragment>
+    <Fragment>
         <DirectoryRef Id="dir8A734F9A86C237B178F114CBD33B79E8">
             <Directory Id="dir1BA1439718E3D03B7AFD79379DD32A6D" Name="Indian" />
         </DirectoryRef>
@@ -4776,6 +6007,11 @@
     <Fragment>
         <DirectoryRef Id="dirB033C6C6F9E3143DDE440F3C07ECDEF1">
             <Directory Id="dir1BD0D6F907BCA7838868138F56FCAC2D" Name="_core" />
+        </DirectoryRef>
+    </Fragment>
+    <Fragment>
+        <DirectoryRef Id="dir2DCE27839FBB8BC8095E91EB121425E5">
+            <Directory Id="dir1C5ECF734F3C638A4A888A260A61F050" Name="id_61" />
         </DirectoryRef>
     </Fragment>
     <Fragment>
@@ -4874,13 +6110,28 @@
         </DirectoryRef>
     </Fragment>
     <Fragment>
+        <DirectoryRef Id="dir05746DD81E2A4AB59468C48823477445">
+            <Directory Id="dir2DCE27839FBB8BC8095E91EB121425E5" Name="openml" />
+        </DirectoryRef>
+    </Fragment>
+    <Fragment>
         <DirectoryRef Id="dir059743CE687E834933EEABA8E77393C0">
             <Directory Id="dir3126DD921E46451F610EBDB9CBA939EA" Name="licenses" />
         </DirectoryRef>
     </Fragment>
     <Fragment>
+        <DirectoryRef Id="dir2DCE27839FBB8BC8095E91EB121425E5">
+            <Directory Id="dir31AB82C6C58AAFB09845BAA28982CC8D" Name="id_42585" />
+        </DirectoryRef>
+    </Fragment>
+    <Fragment>
         <DirectoryRef Id="dir447B9D09362EF8AD353D29A0D30B678B">
             <Directory Id="dir33D96536589988B9A6084186B376ABC5" Name="charts" />
+        </DirectoryRef>
+    </Fragment>
+    <Fragment>
+        <DirectoryRef Id="dirB30BB53B949ECE5540140AD23C4C586A">
+            <Directory Id="dir340DBEA22880AECB0F8E5393A6B3F580" Name="_hdbscan" />
         </DirectoryRef>
     </Fragment>
     <Fragment>
@@ -4919,6 +6170,11 @@
         </DirectoryRef>
     </Fragment>
     <Fragment>
+        <DirectoryRef Id="dir2DCE27839FBB8BC8095E91EB121425E5">
+            <Directory Id="dir3E6D50B8EC321A64A6435882F6A3FB7D" Name="id_2" />
+        </DirectoryRef>
+    </Fragment>
+    <Fragment>
         <DirectoryRef Id="dir875EB1378ED3ECDD7136265014FC5F1B">
             <Directory Id="dir41D07EE824671542A2CDE0B7D23F7617" Name="optimize" />
         </DirectoryRef>
@@ -4926,6 +6182,16 @@
     <Fragment>
         <DirectoryRef Id="dir5EB427D48CCADC721230AE2C7FA0C408">
             <Directory Id="dir422A28CF1C143753B498DF86A69BCA42" Name="platforms" />
+        </DirectoryRef>
+    </Fragment>
+    <Fragment>
+        <DirectoryRef Id="dir1000B98E024A0C54DF2254CCAD0C6C2F">
+            <Directory Id="dir42989986FF09102D6DF851B556EC47A2" Name="array_api_extra" />
+        </DirectoryRef>
+    </Fragment>
+    <Fragment>
+        <DirectoryRef Id="dirAE7826762C80C54B7C0DA3AB870C8AD9">
+            <Directory Id="dir43B382EAC6322DB481414D64F9802119" Name=".libs" />
         </DirectoryRef>
     </Fragment>
     <Fragment>
@@ -4939,8 +6205,18 @@
         </DirectoryRef>
     </Fragment>
     <Fragment>
+        <DirectoryRef Id="dir2DCE27839FBB8BC8095E91EB121425E5">
+            <Directory Id="dir4564B4F6743393AE67A8C73AE533DACB" Name="id_292" />
+        </DirectoryRef>
+    </Fragment>
+    <Fragment>
         <DirectoryRef Id="dir8DF73E482C66B6B7B2E8DB1FCBFB48A5">
             <Directory Id="dir46B38FEAB84340A0C69226D2E89CAF1D" Name="templates" />
+        </DirectoryRef>
+    </Fragment>
+    <Fragment>
+        <DirectoryRef Id="dir2DCE27839FBB8BC8095E91EB121425E5">
+            <Directory Id="dir48380F976F020B4324DB6DEBD7661461" Name="id_42074" />
         </DirectoryRef>
     </Fragment>
     <Fragment>
@@ -4959,6 +6235,11 @@
         </DirectoryRef>
     </Fragment>
     <Fragment>
+        <DirectoryRef Id="dirAE7826762C80C54B7C0DA3AB870C8AD9">
+            <Directory Id="dir50BE57397164FF5A4C91F456B6E44D29" Name="manifold" />
+        </DirectoryRef>
+    </Fragment>
+    <Fragment>
         <DirectoryRef Id="dirB262A3C1EC64B1E8AB54055F45CD67B0">
             <Directory Id="dir50D954C35AE4EAB5574DECE6A380427C" Name="ml_dtypes" />
         </DirectoryRef>
@@ -4971,6 +6252,11 @@
     <Fragment>
         <DirectoryRef Id="dirDBB2C41BDA2CA11EDCA638ECC93C62C8">
             <Directory Id="dir52B0491950C425394FA192206059CAD3" Name="arpack" />
+        </DirectoryRef>
+    </Fragment>
+    <Fragment>
+        <DirectoryRef Id="dirCF910620CFBDAC73620F2C74558C2BE1">
+            <Directory Id="dir54722283E085B892D15D9A0954CEE74A" Name="descr" />
         </DirectoryRef>
     </Fragment>
     <Fragment>
@@ -5039,8 +6325,23 @@
         </DirectoryRef>
     </Fragment>
     <Fragment>
+        <DirectoryRef Id="dirD61E28ABE2C93C0F2DCBA70033FC2237">
+            <Directory Id="dir5F9909820C7360E6A8BA748FCA8EB3EF" Name="liblinear" />
+        </DirectoryRef>
+    </Fragment>
+    <Fragment>
         <DirectoryRef Id="dir875EB1378ED3ECDD7136265014FC5F1B">
             <Directory Id="dir5FA65A9CA50ADC566371D8A4F6359289" Name="special" />
+        </DirectoryRef>
+    </Fragment>
+    <Fragment>
+        <DirectoryRef Id="dir2DCE27839FBB8BC8095E91EB121425E5">
+            <Directory Id="dir6162ADD26BC3FB723D94DB54004EC2AB" Name="id_62" />
+        </DirectoryRef>
+    </Fragment>
+    <Fragment>
+        <DirectoryRef Id="dirAE7826762C80C54B7C0DA3AB870C8AD9">
+            <Directory Id="dir63D70D8D3862349E4EC7642BB7219009" Name="ensemble" />
         </DirectoryRef>
     </Fragment>
     <Fragment>
@@ -5054,6 +6355,11 @@
         </DirectoryRef>
     </Fragment>
     <Fragment>
+        <DirectoryRef Id="dirAE7826762C80C54B7C0DA3AB870C8AD9">
+            <Directory Id="dir66C22E7D652C36D021AE7995B99D268E" Name="preprocessing" />
+        </DirectoryRef>
+    </Fragment>
+    <Fragment>
         <DirectoryRef Id="dirB262A3C1EC64B1E8AB54055F45CD67B0">
             <Directory Id="dir66C4821A9B2A6387C1FE8D4D6D18BEED" Name="numpy-2.4.6.dist-info" />
         </DirectoryRef>
@@ -5064,6 +6370,11 @@
         </DirectoryRef>
     </Fragment>
     <Fragment>
+        <DirectoryRef Id="dir1000B98E024A0C54DF2254CCAD0C6C2F">
+            <Directory Id="dir6941D13A6FC14D557B12C5CCA95C9D8F" Name="array_api_compat" />
+        </DirectoryRef>
+    </Fragment>
+    <Fragment>
         <DirectoryRef Id="dir8A734F9A86C237B178F114CBD33B79E8">
             <Directory Id="dir6A23E4C117780A0A3EEA46F5C70DB564" Name="Chile" />
         </DirectoryRef>
@@ -5071,6 +6382,11 @@
     <Fragment>
         <DirectoryRef Id="dir8D4E4D05306976EEA8A7DA751C628701">
             <Directory Id="dir6A6215E0CE54C72BCA8B639EB6902DC7" Name="mt19937" />
+        </DirectoryRef>
+    </Fragment>
+    <Fragment>
+        <DirectoryRef Id="dirAE7826762C80C54B7C0DA3AB870C8AD9">
+            <Directory Id="dir6A7C92765711A3550C1400A50DF8AD38" Name="tree" />
         </DirectoryRef>
     </Fragment>
     <Fragment>
@@ -5101,6 +6417,11 @@
     <Fragment>
         <DirectoryRef Id="dirB262A3C1EC64B1E8AB54055F45CD67B0">
             <Directory Id="dir70C3F8B48E5B28B152415D68640BB0FC" Name="lz4" />
+        </DirectoryRef>
+    </Fragment>
+    <Fragment>
+        <DirectoryRef Id="dir42989986FF09102D6DF851B556EC47A2">
+            <Directory Id="dir71857B942A7398EA4E7034B09C4712BB" Name="_lib" />
         </DirectoryRef>
     </Fragment>
     <Fragment>
@@ -5139,6 +6460,16 @@
         </DirectoryRef>
     </Fragment>
     <Fragment>
+        <DirectoryRef Id="dir2DCE27839FBB8BC8095E91EB121425E5">
+            <Directory Id="dir7CE9CC9FC27098C35A9F2D0B15DBF7E2" Name="id_561" />
+        </DirectoryRef>
+    </Fragment>
+    <Fragment>
+        <DirectoryRef Id="dir87DC6B703FC7602466DFA9798DCF3D35">
+            <Directory Id="dir7E201386784C065258F5DDAD7FB95B12" Name="src" />
+        </DirectoryRef>
+    </Fragment>
+    <Fragment>
         <DirectoryRef Id="dirB262A3C1EC64B1E8AB54055F45CD67B0">
             <Directory Id="dir7E6B3850567117EB3DA9031EF801B015" Name="certifi" />
         </DirectoryRef>
@@ -5146,6 +6477,11 @@
     <Fragment>
         <DirectoryRef Id="dir8A734F9A86C237B178F114CBD33B79E8">
             <Directory Id="dir7FEB7811AF015CBEDD7475C9D355310D" Name="Asia" />
+        </DirectoryRef>
+    </Fragment>
+    <Fragment>
+        <DirectoryRef Id="dir2DCE27839FBB8BC8095E91EB121425E5">
+            <Directory Id="dir801E507AD2B9508CC34733A613194514" Name="id_40589" />
         </DirectoryRef>
     </Fragment>
     <Fragment>
@@ -5174,6 +6510,16 @@
         </DirectoryRef>
     </Fragment>
     <Fragment>
+        <DirectoryRef Id="dirAE7826762C80C54B7C0DA3AB870C8AD9">
+            <Directory Id="dir87DC6B703FC7602466DFA9798DCF3D35" Name="utils" />
+        </DirectoryRef>
+    </Fragment>
+    <Fragment>
+        <DirectoryRef Id="dirAE7826762C80C54B7C0DA3AB870C8AD9">
+            <Directory Id="dir88EC01F475ACE81FFD9C3B7DA44B4685" Name="neighbors" />
+        </DirectoryRef>
+    </Fragment>
+    <Fragment>
         <DirectoryRef Id="dir0C4834B478159BBCFFCDE3B7C4039025">
             <Directory Id="dir899F616CF241956B60A5D99164D4A1CF" Name="licenses" />
         </DirectoryRef>
@@ -5186,6 +6532,11 @@
     <Fragment>
         <DirectoryRef Id="dirB262A3C1EC64B1E8AB54055F45CD67B0">
             <Directory Id="dir8AA40D9455B7FD1DF4BF5C3494CED80E" Name="assets" />
+        </DirectoryRef>
+    </Fragment>
+    <Fragment>
+        <DirectoryRef Id="dirBF45163EA89A77D01A66FCDA5E045647">
+            <Directory Id="dir8AD5F245A791C6099EFA02402658D22A" Name="cluster" />
         </DirectoryRef>
     </Fragment>
     <Fragment>
@@ -5211,6 +6562,21 @@
     <Fragment>
         <DirectoryRef Id="dirB5FD69916DE7F0B0B47E753E97FBC16F">
             <Directory Id="dir8DF73E482C66B6B7B2E8DB1FCBFB48A5" Name="formats" />
+        </DirectoryRef>
+    </Fragment>
+    <Fragment>
+        <DirectoryRef Id="dirBF45163EA89A77D01A66FCDA5E045647">
+            <Directory Id="dir8F63E38FA7E0C6D9A44739E033B05A98" Name="_pairwise_distances_reduction" />
+        </DirectoryRef>
+    </Fragment>
+    <Fragment>
+        <DirectoryRef Id="dirCF910620CFBDAC73620F2C74558C2BE1">
+            <Directory Id="dir91324D7A031A25F3B3B053335CEAF222" Name="data" />
+        </DirectoryRef>
+    </Fragment>
+    <Fragment>
+        <DirectoryRef Id="dir2DCE27839FBB8BC8095E91EB121425E5">
+            <Directory Id="dir92254104477E87561221DAD8EDB24BAB" Name="id_40675" />
         </DirectoryRef>
     </Fragment>
     <Fragment>
@@ -5256,6 +6622,11 @@
     <Fragment>
         <DirectoryRef Id="dir875EB1378ED3ECDD7136265014FC5F1B">
             <Directory Id="dir98EC9880D7C230D3AB8BC2F6CB249D43" Name="signal" />
+        </DirectoryRef>
+    </Fragment>
+    <Fragment>
+        <DirectoryRef Id="dir71857B942A7398EA4E7034B09C4712BB">
+            <Directory Id="dir9A9C5B78308BA07BC47795114FA300AF" Name="_utils" />
         </DirectoryRef>
     </Fragment>
     <Fragment>
@@ -5329,6 +6700,11 @@
         </DirectoryRef>
     </Fragment>
     <Fragment>
+        <DirectoryRef Id="dir2DCE27839FBB8BC8095E91EB121425E5">
+            <Directory Id="dirAAF517A93F8306295C33094BFEC1FE5E" Name="id_1" />
+        </DirectoryRef>
+    </Fragment>
+    <Fragment>
         <DirectoryRef Id="dirBD389F9A06D9454B40BFB247862116F5">
             <Directory Id="dirABE873E7BCD3B49D60D5AE50DAF79F86" Name="pdfbase" />
         </DirectoryRef>
@@ -5344,6 +6720,11 @@
         </DirectoryRef>
     </Fragment>
     <Fragment>
+        <DirectoryRef Id="dirB262A3C1EC64B1E8AB54055F45CD67B0">
+            <Directory Id="dirAE7826762C80C54B7C0DA3AB870C8AD9" Name="sklearn" />
+        </DirectoryRef>
+    </Fragment>
+    <Fragment>
         <DirectoryRef Id="dir8A734F9A86C237B178F114CBD33B79E8">
             <Directory Id="dirAFA313A7B1C039E13797EB7F45E63492" Name="Australia" />
         </DirectoryRef>
@@ -5356,6 +6737,11 @@
     <Fragment>
         <DirectoryRef Id="dirB262A3C1EC64B1E8AB54055F45CD67B0">
             <Directory Id="dirB1DD5CECA55570D1ACA4261178074F06" Name="tqdm-4.67.3.dist-info" />
+        </DirectoryRef>
+    </Fragment>
+    <Fragment>
+        <DirectoryRef Id="dirAE7826762C80C54B7C0DA3AB870C8AD9">
+            <Directory Id="dirB30BB53B949ECE5540140AD23C4C586A" Name="cluster" />
         </DirectoryRef>
     </Fragment>
     <Fragment>
@@ -5404,6 +6790,16 @@
         </DirectoryRef>
     </Fragment>
     <Fragment>
+        <DirectoryRef Id="dirAE7826762C80C54B7C0DA3AB870C8AD9">
+            <Directory Id="dirBF45163EA89A77D01A66FCDA5E045647" Name="metrics" />
+        </DirectoryRef>
+    </Fragment>
+    <Fragment>
+        <DirectoryRef Id="dir2DCE27839FBB8BC8095E91EB121425E5">
+            <Directory Id="dirBFACEBFF4051C97EFA6B8E9C9D2AA0DD" Name="id_1119" />
+        </DirectoryRef>
+    </Fragment>
+    <Fragment>
         <DirectoryRef Id="dir8D4E4D05306976EEA8A7DA751C628701">
             <Directory Id="dirC22A98F5EF1F3E2CF729ACD3C5CCB6BF" Name="philox" />
         </DirectoryRef>
@@ -5414,8 +6810,18 @@
         </DirectoryRef>
     </Fragment>
     <Fragment>
+        <DirectoryRef Id="dir2DCE27839FBB8BC8095E91EB121425E5">
+            <Directory Id="dirC3F6CDC14EF20B345FF85154338B4CC2" Name="id_40945" />
+        </DirectoryRef>
+    </Fragment>
+    <Fragment>
         <DirectoryRef Id="dirEA09B68A48CAD14309E73ACA977734EA">
             <Directory Id="dirC6640462B7EABECEB54AFBBE8C24F5C2" Name="_dsolve" />
+        </DirectoryRef>
+    </Fragment>
+    <Fragment>
+        <DirectoryRef Id="dirAE7826762C80C54B7C0DA3AB870C8AD9">
+            <Directory Id="dirC81472410AF6DE7BD87028D08CE4362F" Name="svm" />
         </DirectoryRef>
     </Fragment>
     <Fragment>
@@ -5429,6 +6835,11 @@
         </DirectoryRef>
     </Fragment>
     <Fragment>
+        <DirectoryRef Id="dirB262A3C1EC64B1E8AB54055F45CD67B0">
+            <Directory Id="dirCC575192DB4742BF171BE88848EE6473" Name="typing_extensions-4.15.0.dist-info" />
+        </DirectoryRef>
+    </Fragment>
+    <Fragment>
         <DirectoryRef Id="dir875EB1378ED3ECDD7136265014FC5F1B">
             <Directory Id="dirCD7840BF0AC5F2D097F1B7420AE6F3CD" Name="_lib" />
         </DirectoryRef>
@@ -5439,8 +6850,18 @@
         </DirectoryRef>
     </Fragment>
     <Fragment>
+        <DirectoryRef Id="dirAE7826762C80C54B7C0DA3AB870C8AD9">
+            <Directory Id="dirCF910620CFBDAC73620F2C74558C2BE1" Name="datasets" />
+        </DirectoryRef>
+    </Fragment>
+    <Fragment>
         <DirectoryRef Id="dir5BBACA578BD35BC30D26276443EAAFCE">
             <Directory Id="dirD12C86680CA2BACA1C25C6824083F720" Name="umath" />
+        </DirectoryRef>
+    </Fragment>
+    <Fragment>
+        <DirectoryRef Id="dirD61E28ABE2C93C0F2DCBA70033FC2237">
+            <Directory Id="dirD281D7AE2BFC2935AADA08DE8221D617" Name="libsvm" />
         </DirectoryRef>
     </Fragment>
     <Fragment>
@@ -5456,6 +6877,11 @@
     <Fragment>
         <DirectoryRef Id="dirB262A3C1EC64B1E8AB54055F45CD67B0">
             <Directory Id="dirD61A7964C18951677D1F22B2ADDE24B3" Name="skimage" />
+        </DirectoryRef>
+    </Fragment>
+    <Fragment>
+        <DirectoryRef Id="dirC81472410AF6DE7BD87028D08CE4362F">
+            <Directory Id="dirD61E28ABE2C93C0F2DCBA70033FC2237" Name="src" />
         </DirectoryRef>
     </Fragment>
     <Fragment>
@@ -5489,6 +6915,11 @@
         </DirectoryRef>
     </Fragment>
     <Fragment>
+        <DirectoryRef Id="dirAE7826762C80C54B7C0DA3AB870C8AD9">
+            <Directory Id="dirDE37A3FFA39388FD3160C3A4502A1D74" Name="_loss" />
+        </DirectoryRef>
+    </Fragment>
+    <Fragment>
         <DirectoryRef Id="dirB033C6C6F9E3143DDE440F3C07ECDEF1">
             <Directory Id="dirE0A294F33D4CF051EA07E1264EE1F1F2" Name="fft" />
         </DirectoryRef>
@@ -5496,6 +6927,11 @@
     <Fragment>
         <DirectoryRef Id="dir41D07EE824671542A2CDE0B7D23F7617">
             <Directory Id="dirE1EE8943EF83F68705C008D01BD83F8D" Name="_trlib" />
+        </DirectoryRef>
+    </Fragment>
+    <Fragment>
+        <DirectoryRef Id="dirD61E28ABE2C93C0F2DCBA70033FC2237">
+            <Directory Id="dirE22F95C1CA81CA1EACD014D686F5C79F" Name="newrand" />
         </DirectoryRef>
     </Fragment>
     <Fragment>
@@ -5531,6 +6967,11 @@
     <Fragment>
         <DirectoryRef Id="dirEAC23A88F6E79F77C5A132F425E164BE">
             <Directory Id="dirE6107084A23644FD18B49438668FCED9" Name="pythoncapi-compat" />
+        </DirectoryRef>
+    </Fragment>
+    <Fragment>
+        <DirectoryRef Id="dirAE7826762C80C54B7C0DA3AB870C8AD9">
+            <Directory Id="dirE6CD63743CB1235FBEB0CF9413E604F9" Name="linear_model" />
         </DirectoryRef>
     </Fragment>
     <Fragment>
@@ -5574,6 +7015,11 @@
         </DirectoryRef>
     </Fragment>
     <Fragment>
+        <DirectoryRef Id="dirCF910620CFBDAC73620F2C74558C2BE1">
+            <Directory Id="dirEF4A3DD8EA37BC4C6052D3EC9316A53D" Name="images" />
+        </DirectoryRef>
+    </Fragment>
+    <Fragment>
         <DirectoryRef Id="dir8C18B5DA07498630297EE8E6E92CD1C4">
             <Directory Id="dirEFAA37EC0D0C064D1C6A5DB5D4796DDE" Name="lapack_lite" />
         </DirectoryRef>
@@ -5594,8 +7040,28 @@
         </DirectoryRef>
     </Fragment>
     <Fragment>
+        <DirectoryRef Id="dir2DCE27839FBB8BC8095E91EB121425E5">
+            <Directory Id="dirF324C841DBDE4CA77DBB647175C68752" Name="id_40966" />
+        </DirectoryRef>
+    </Fragment>
+    <Fragment>
+        <DirectoryRef Id="dirCC575192DB4742BF171BE88848EE6473">
+            <Directory Id="dirF3BAC2D09BCFCB8CF06BB855345B1D39" Name="licenses" />
+        </DirectoryRef>
+    </Fragment>
+    <Fragment>
+        <DirectoryRef Id="dir2DCE27839FBB8BC8095E91EB121425E5">
+            <Directory Id="dirF488D03348076558E8ADADA4DED43868" Name="id_1590" />
+        </DirectoryRef>
+    </Fragment>
+    <Fragment>
         <DirectoryRef Id="dirBD389F9A06D9454B40BFB247862116F5">
             <Directory Id="dirF74EFBF9F624C141FA0069817E303D39" Name="platypus" />
+        </DirectoryRef>
+    </Fragment>
+    <Fragment>
+        <DirectoryRef Id="dirAE7826762C80C54B7C0DA3AB870C8AD9">
+            <Directory Id="dirFA7E24EB747CC2EA895057540560FBFA" Name="__check_build" />
         </DirectoryRef>
     </Fragment>
     <Fragment>

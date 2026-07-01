@@ -97,6 +97,7 @@ Pour les vidéos, `generate()` délègue à `_generate_video_thumb()` : `cv2.Vid
 - Affiche tous les dossiers surveillés avec statut (✓/✗), nombre de fichiers, sous-dossiers ignorés (cachés, Originals).
 - Signaux : `rescan_requested(str)`, `folder_removed(str)`, `folder_added(str)`.
 - Le re-scan forcé passe par `LibraryScanner.scan(folders, force=True)` → `ScanThread(force=True)` → `known = {}` (bypass du cache mtime).
+- `folder_removed` est traité par `MainWindow._on_folder_removed()` : confirmation (nombre de photos affecté) puis `_purge_catalog_for_folder()` supprime les photos du catalogue, les vignettes (`ThumbnailCache.invalidate`) et les visages/`indexed_photos` (`FaceDatabase.delete_for_path`) pour ce dossier. Les fichiers restent intacts sur le disque.
 
 ### Règle de performance : l'UI ne bloque jamais
 
@@ -142,3 +143,5 @@ SQLite embarqué, zéro configuration. Le catalogue est dans `%LOCALAPPDATA%\Pix
 | reportlab | Export PDF |
 
 Les dépendances IA (PyTorch, DeepFace, Real-ESRGAN…) sont **optionnelles** et commentées dans `requirements.txt`. Ne pas les imposer au cœur de l'application — les isoler dans des plugins.
+
+`scikit-learn` et `hdbscan` (clustering des visages, `src/faces/clusterer.py`) sont en revanche des dépendances **non optionnelles** du cœur de l'application : ne jamais les ajouter à `excludes` dans `pixelphotomanager.spec`, sous peine de `ModuleNotFoundError: sklearn` uniquement dans l'exécutable packagé (le mode Python dev n'est pas affecté).
