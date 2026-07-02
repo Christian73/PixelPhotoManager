@@ -225,11 +225,16 @@ class FaceIndexThread(QThread):
                     logger.error("FaceIndexThread: timeout %ds sur %s",
                                  _DETECT_TIMEOUT, os.path.basename(path))
                     journal.step("FaceIndexThread", f"TIMEOUT {os.path.basename(path)}", t0)
+                    # Ne PAS appeler save_faces() ici : la photo resterait marquée
+                    # "traitée" (indexed_photos, 0 visage) alors qu'elle n'a jamais
+                    # été réellement analysée. À la place, on l'enregistre dans
+                    # face_index_errors : elle ne sera plus retentée automatiquement
+                    # (évite de repayer 60s à chaque scan), seulement via le menu
+                    # contextuel "Retenter l'identification des visages".
+                    self._face_db.mark_index_error(path, "timeout")
                     in_flight.popleft()
-                    self._face_db.save_faces(path, [])
                     # Les autres futures en vol sont aussi invalides après kill
                     for f, p, _ in in_flight:
-                        self._face_db.save_faces(p, [])
                         processed += 1
                         self.progress.emit(processed, total)
                     in_flight.clear()
@@ -248,10 +253,11 @@ class FaceIndexThread(QThread):
                     logger.error("FaceIndexThread: subprocess crashé sur %s",
                                  os.path.basename(path))
                     journal.step("FaceIndexThread", f"CRASH {os.path.basename(path)}", t0)
+                    # Ne PAS appeler save_faces() ici, pour la même raison qu'au timeout
+                    # ci-dessus : éviter de marquer une photo jamais analysée comme faite.
+                    self._face_db.mark_index_error(path, "crash")
                     in_flight.popleft()
-                    self._face_db.save_faces(path, [])
                     for f, p, _ in in_flight:
-                        self._face_db.save_faces(p, [])
                         processed += 1
                         self.progress.emit(processed, total)
                     in_flight.clear()
@@ -377,6 +383,96 @@ class SingleFaceReindexThread(QThread):
             len(detections), os.path.basename(self._photo_path), self._rotation,
         )
         self.finished.emit(self._photo_path, len(detections))
+        self.cluster_requested.emit()
+
+
+class RetryFaceIndexThread(QThread):
+    """
+    Retente l'identification des visages d'une seule photo précédemment en erreur
+    (timeout ou nouveau crash du subprocess) — protection anti-blocage identique à
+    FaceIndexThread (subprocess + timeout), contrairement à SingleFaceReindexThread
+    qui appelle detect_and_embed() directement et pourrait bloquer indéfiniment sur
+    un fichier ayant déjà causé un timeout.
+
+    En cas de nouvel échec, la photo reste enregistrée dans face_index_errors
+    (mark_index_error) pour proposer à l'utilisateur de la supprimer ou de
+    l'exclure définitivement (voir MainWindow._on_retry_face_index_finished).
+
+    Signals
+    -------
+    finished(photo_path, success, face_count)
+    cluster_requested()
+    """
+
+    finished          = Signal(str, bool, int)
+    cluster_requested = Signal()
+
+    def __init__(self, face_db: FaceDatabase, photo_path: str, parent=None) -> None:
+        super().__init__(parent)
+        self._face_db    = face_db
+        self._photo_path = photo_path
+
+    def run(self) -> None:
+        path = self._photo_path
+        from src.faces.detector import _register_nvidia_dll_dirs
+        _register_nvidia_dll_dirs()
+        executor = concurrent.futures.ProcessPoolExecutor(max_workers=1)
+        success = False
+        unavailable = False
+        detections: list = []
+        det_rotation = 0
+        try:
+            try:
+                executor.submit(warmup_worker).result(timeout=_WARMUP_TIMEOUT)
+            except Exception as exc:
+                logger.warning("RetryFaceIndexThread: warmup échoué sur %s (%s)",
+                               os.path.basename(path), exc)
+                self._face_db.mark_index_error(path, "timeout")
+            else:
+                try:
+                    detections, det_rotation = executor.submit(
+                        detect_and_embed_auto, path
+                    ).result(timeout=_DETECT_TIMEOUT)
+                except concurrent.futures.TimeoutError:
+                    logger.error("RetryFaceIndexThread: nouveau timeout sur %s",
+                                 os.path.basename(path))
+                    self._face_db.mark_index_error(path, "timeout")
+                except concurrent.futures.BrokenExecutor as exc:
+                    logger.error("RetryFaceIndexThread: nouveau crash sur %s (%s)",
+                                 os.path.basename(path), exc)
+                    self._face_db.mark_index_error(path, "crash")
+                except RuntimeError:
+                    unavailable = True  # insightface non installé
+                except Exception as exc:
+                    logger.error("RetryFaceIndexThread erreur %s: %s", path, exc)
+                    self._face_db.mark_index_error(path, "crash")
+                else:
+                    if det_rotation != 0 and _fix_exif_orientation(path, det_rotation):
+                        try:
+                            detections = executor.submit(
+                                detect_and_embed, path, 0
+                            ).result(timeout=_DETECT_TIMEOUT)
+                            det_rotation = 0
+                        except Exception as exc:
+                            logger.warning(
+                                "RetryFaceIndexThread: ré-détection post-EXIF échouée pour %s : %s",
+                                os.path.basename(path), exc,
+                            )
+                    success = True
+        finally:
+            _kill_executor(executor)
+
+        if unavailable:
+            return
+
+        if not success:
+            self.finished.emit(path, False, 0)
+            return
+
+        self._face_db.save_faces(path, detections, rotation=det_rotation)
+        logger.info("RetryFaceIndexThread: %d visage(s) détecté(s) dans %s",
+                    len(detections), os.path.basename(path))
+        self.finished.emit(path, True, len(detections))
         self.cluster_requested.emit()
 
 

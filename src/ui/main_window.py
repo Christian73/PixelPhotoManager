@@ -28,7 +28,7 @@ from src.library.folder_watcher import FolderWatcher
 from src.library.scanner import LibraryScanner
 from src.library.duplicate_detector import DuplicateDetectorThread, generate_html_report
 from src.faces.face_database import FaceDatabase
-from src.faces.face_indexer import FaceIndexThread, SingleFaceReindexThread, TFWarmUpThread, RevaluateSizeIgnoredThread, SimilaritySearchThread
+from src.faces.face_indexer import FaceIndexThread, SingleFaceReindexThread, RetryFaceIndexThread, TFWarmUpThread, SimilaritySearchThread
 from src.faces.clusterer import ClusterThread
 from src.processing.edit_database import EditDatabase
 from src.ui.sidebar import Sidebar, _SPECIAL_ALL, _SPECIAL_FAV, _SPECIAL_VIDEOS, _SPECIAL_FILENAME
@@ -590,6 +590,7 @@ class MainWindow(QMainWindow):
         self._edit_db = EditDatabase()
         self._face_indexer: FaceIndexThread | None = None
         self._reindex_thread: SingleFaceReindexThread | None = None
+        self._retry_face_thread: RetryFaceIndexThread | None = None
         self._cluster_thread: ClusterThread | None = None
         self._cluster_start_time: float | None = None
         self._warmup_thread = None          # TFWarmUpThread — pré-charge TF au démarrage
@@ -730,30 +731,22 @@ class MainWindow(QMainWindow):
 
         # Visages
         m_faces = mb.addMenu("Visages")
-        act_picasa = QAction("Importer depuis Picasa…", self)
-        act_picasa.triggered.connect(self._import_from_picasa)
-        m_faces.addAction(act_picasa)
+        self._act_picasa = QAction("Importer depuis Picasa…", self)
+        self._act_picasa.setEnabled(not self._config.get("picasa.import_done", False))
+        self._act_picasa.triggered.connect(self._import_from_picasa)
+        m_faces.addAction(self._act_picasa)
         m_faces.addSeparator()
         act_reindex = QAction("Réinitialiser et réindexer…", self)
         act_reindex.triggered.connect(self._reset_and_reindex_faces)
         m_faces.addAction(act_reindex)
-        self._act_index_faces = QAction("Analyser les visages", self)
-        self._act_index_faces.triggered.connect(self._start_face_indexing)
-        m_faces.addAction(self._act_index_faces)
         self._act_cluster_faces = QAction("Regrouper les visages…", self)
         self._act_cluster_faces.triggered.connect(self._start_clustering_with_confirm)
         m_faces.addAction(self._act_cluster_faces)
-        act_identify = QAction("Identifier les personnes…", self)
-        act_identify.triggered.connect(self.show_face_clusters)
-        m_faces.addAction(act_identify)
         self._act_similarity_search = QAction(
             "Rechercher des visages similaires aux personnes nommées…", self
         )
         self._act_similarity_search.triggered.connect(self._start_similarity_search)
         m_faces.addAction(self._act_similarity_search)
-        self._act_reeval_ignored = QAction("Ré-évaluer les visages ignorés par taille…", self)
-        self._act_reeval_ignored.triggered.connect(self._reeval_size_ignored)
-        m_faces.addAction(self._act_reeval_ignored)
         m_faces.addSeparator()
         act_backup = QAction("Sauvegarder la reconnaissance…", self)
         act_backup.setToolTip(
@@ -767,6 +760,10 @@ class MainWindow(QMainWindow):
         )
         act_manage_backups.triggered.connect(self._manage_face_backups)
         m_faces.addAction(act_manage_backups)
+        m_faces.addSeparator()
+        act_face_counters = QAction("Compteurs…", self)
+        act_face_counters.triggered.connect(self._show_face_counters)
+        m_faces.addAction(act_face_counters)
 
         # Aide
         m_help = mb.addMenu("Aide")
@@ -912,6 +909,7 @@ class MainWindow(QMainWindow):
         self._grid.duplicate_clicked.connect(self._on_duplicate_badge_clicked)
         self._grid.add_to_album_requested.connect(self._on_add_to_album)
         self._grid.create_album_with_requested.connect(self._on_create_album_with)
+        self._grid.retry_face_index_requested.connect(self._on_retry_face_index_requested)
 
         self._grid_nav_bar = QWidget()
         self._grid_nav_bar.setStyleSheet("background: rgba(0,0,0,200);")
@@ -1154,6 +1152,9 @@ class MainWindow(QMainWindow):
                 self._config.get("ui.folder_tree_expanded", [])
             )
             self._sidebar.refresh_folders(folders)
+            error_paths = self._face_db.get_error_paths()
+            self._sidebar.refresh_index_errors(error_paths)
+            self._grid.set_index_error_paths(error_paths)
             self._restore_last_view(albums, folders)
             # Pré-charger InsightFace en parallèle du scan
             self._warmup_thread = TFWarmUpThread(self)
@@ -1294,7 +1295,7 @@ class MainWindow(QMainWindow):
             self._lbl_action.setText("Initialisation de la reconnaissance faciale…")
             self._face_index_pending = True
         else:
-            self._start_face_indexing(silent=True)
+            self._start_face_indexing()
 
     @Slot()
     def _on_warmup_done(self) -> None:
@@ -1304,7 +1305,7 @@ class MainWindow(QMainWindow):
         if self._face_index_pending:
             self._face_index_pending = False
             self._lbl_action.setText("")
-            self._start_face_indexing(silent=True)
+            self._start_face_indexing()
 
     # ------------------------------------------------------------------ settings
 
@@ -1402,6 +1403,53 @@ class MainWindow(QMainWindow):
         self._sidebar.refresh_folders(all_folders)
         self._start_scan([folder])
         self._folder_watcher.set_folders(all_folders)
+        self._maybe_prompt_picasa_for_new_folder(folder)
+
+    def _maybe_prompt_picasa_for_new_folder(self, folder: str) -> None:
+        """Propose l'import Picasa scopé si le nouveau dossier contient des .picasa.ini."""
+        from src.faces.picasa_importer import scan, PicasaImportThread
+
+        n_contacts, n_photos, n_edits = scan([folder])
+        if n_photos == 0 and n_edits == 0:
+            return
+
+        parts = []
+        if n_photos:
+            parts.append(f"{n_photos} photo(s) avec des visages identifiés")
+        if n_edits:
+            parts.append(f"{n_edits} photo(s) avec des retouches")
+        details = " et ".join(parts)
+
+        reply = QMessageBox.question(
+            self, "Données Picasa détectées",
+            f"Le dossier ajouté contient des données Picasa :\n{details}.\n\n"
+            "Voulez-vous les importer pour ce dossier ?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.Yes,
+        )
+        if reply != QMessageBox.StandardButton.Yes:
+            return
+
+        self._folder_picasa_thread = PicasaImportThread(
+            self._catalog, self._face_db, [folder], self._edit_db, self,
+        )
+        self._folder_picasa_thread.finished.connect(self._on_folder_picasa_import_finished)
+        self._lbl_action.setText("Import Picasa du nouveau dossier en cours…")
+        self._folder_picasa_thread.start()
+
+    def _on_folder_picasa_import_finished(self, result) -> None:
+        self._lbl_action.setText("")
+        if result.edited_map:
+            self._on_picasa_edits_imported(result.edited_map)
+        parts = [
+            f"{result.persons_created} personne(s) créée(s)",
+            f"{result.faces_imported} annotation(s) de visage dans {result.photos_processed} photo(s)",
+        ]
+        if result.edits_imported:
+            parts.append(f"{result.edits_imported} retouche(s) importée(s)")
+        QMessageBox.information(
+            self, "Import Picasa terminé", ", ".join(parts) + ".",
+        )
 
     # ------------------------------------------------------------------ faces
 
@@ -1426,8 +1474,6 @@ class MainWindow(QMainWindow):
             threads_to_wait.append(self._cluster_thread)
 
         # ── Mise à jour UI immédiate ─────────────────────────────────────────
-        self._act_index_faces.setEnabled(False)
-        self._act_index_faces.setText("Réinitialisation en cours…")
         msg = "Arrêt des analyses en cours…" if threads_to_wait else "Réinitialisation en cours…"
         self._lbl_action.setText(msg)
 
@@ -1444,6 +1490,13 @@ class MainWindow(QMainWindow):
         self._face_cluster_grid.refresh()
         self._lbl_action.setText("")
 
+        if choice != _ResetFacesDialog.RESET_CLUSTERING:
+            # reset_index() a aussi vidé face_index_errors : les avertissements
+            # de timeout/crash n'ont plus lieu d'être tant que le nouveau
+            # passage d'indexation n'a pas eu lieu.
+            self._sidebar.refresh_index_errors([])
+            self._grid.set_index_error_paths([])
+
         if choice == _ResetFacesDialog.RESET_CLUSTERING:
             msg = (
                 "La réinitialisation des groupes est terminée.\n\n"
@@ -1458,78 +1511,9 @@ class MainWindow(QMainWindow):
         QMessageBox.information(self, "Réinitialisation terminée", msg)
 
         if choice == _ResetFacesDialog.RESET_CLUSTERING:
-            self._act_index_faces.setText("Analyser les visages")
-            self._act_index_faces.setEnabled(True)
             self._run_clustering()
         else:
-            self._start_face_indexing(silent=True)
-
-    def _reeval_size_ignored(self) -> None:
-        """Réévalue les visages auto-ignorés par taille avec le seuil proportionnel."""
-        if hasattr(self, "_reeval_thread") and self._reeval_thread.isRunning():
-            return
-
-        dlg = QMessageBox(self)
-        dlg.setWindowTitle("Ré-évaluer les visages ignorés par taille")
-        dlg.setIcon(QMessageBox.Icon.Information)
-        dlg.setText("<b>Reconsidérer les visages ignorés automatiquement par taille</b>")
-        dlg.setInformativeText(
-            "Le seuil de taille est maintenant <b>proportionnel à la résolution</b> de chaque photo "
-            "(3 % de la plus petite dimension, plancher 22 px). "
-            "Une photo scannée de 545 px donne un seuil de ~22 px ; "
-            "une photo moderne de 3 000 px donne ~120 px.<br><br>"
-            "<b>Ce que cette option fait :</b><br>"
-            "• Relit les dimensions de chaque photo ayant des visages ignorés.<br>"
-            "• Passe <i>ignoré=non</i> pour les visages qui passent maintenant le seuil.<br>"
-            "• N'entraîne <b>aucune</b> ré-exécution d'InsightFace (très rapide).<br><br>"
-            "<b>Ce que cette option ne fait PAS :</b><br>"
-            "• Ne récupère <b>pas</b> les visages ignorés manuellement (bouton ✕).<br>"
-            "• Ne récupère <b>pas</b> les visages avec un score de confiance &lt; 0,65 "
-            "(embedding peu fiable, nuirait au clustering).<br>"
-            "• Ne regroupe <b>pas</b> les visages restaurés — lancez ensuite "
-            "<i>Regrouper les visages…</i>."
-        )
-        dlg.setStandardButtons(
-            QMessageBox.StandardButton.Ok | QMessageBox.StandardButton.Cancel
-        )
-        dlg.setDefaultButton(QMessageBox.StandardButton.Ok)
-        if dlg.exec() != QMessageBox.StandardButton.Ok:
-            return
-
-        self._act_reeval_ignored.setEnabled(False)
-        self._act_reeval_ignored.setText("Ré-évaluation en cours…")
-        self._sb_progress_bar.setRange(0, 0)   # mode indéterminé jusqu'au 1er signal
-        self._sb_progress_bar.show()
-        self._lbl_action.setText("Ré-évaluation des visages ignorés par taille…")
-        self._reeval_thread = RevaluateSizeIgnoredThread(self._face_db, self)
-        self._reeval_thread.progress.connect(self._on_reeval_progress)
-        self._reeval_thread.finished.connect(self._on_reeval_finished)
-        self._reeval_thread.start()
-
-    def _on_reeval_progress(self, current: int, total: int) -> None:
-        self._sb_progress_bar.setRange(0, max(total, 1))
-        self._sb_progress_bar.setValue(current)
-        self._lbl_action.setText(
-            f"Ré-évaluation visages ignorés… {current} / {total} photos"
-        )
-
-    def _on_reeval_finished(self, unignored: int, total: int) -> None:
-        self._sb_progress_bar.hide()
-        self._sb_progress_bar.setValue(0)
-        self._lbl_action.setText("")
-        self._act_reeval_ignored.setEnabled(True)
-        self._act_reeval_ignored.setText("Ré-évaluer les visages ignorés par taille…")
-        self._status_bar.showMessage(
-            f"Ré-évaluation terminée : {unignored} visage(s) restauré(s) sur {total} photo(s).",
-            8000,
-        )
-        if unignored > 0:
-            QMessageBox.information(
-                self,
-                "Ré-évaluation terminée",
-                f"{unignored} visage(s) précédemment ignoré(s) ont été restaurés.\n\n"
-                "Lancez « Regrouper les visages… » pour les intégrer au clustering.",
-            )
+            self._start_face_indexing()
 
     def _start_similarity_search(self) -> None:
         """Lance la recherche de visages similaires aux personnes nommées."""
@@ -1580,7 +1564,7 @@ class MainWindow(QMainWindow):
         self._act_similarity_search.setText(
             "Rechercher des visages similaires aux personnes nommées…"
         )
-        self._status_bar.showMessage(
+        self.statusBar().showMessage(
             f"Recherche terminée : {made} suggestion(s) créée(s) sur {total} groupe(s) vérifiés.",
             8000,
         )
@@ -1604,37 +1588,9 @@ class MainWindow(QMainWindow):
                 "ou lancer d'abord « Regrouper les visages… » pour former de nouveaux groupes.",
             )
 
-    def _start_face_indexing(self, silent: bool = False) -> None:
+    def _start_face_indexing(self) -> None:
         if self._face_indexer and self._face_indexer.isRunning():
             return
-        if not silent:
-            n_todo = len(self._face_db.get_paths_to_index(
-                self._catalog.get_all_photo_paths()
-            ))
-            dlg = QMessageBox(self)
-            dlg.setWindowTitle("Analyser les visages")
-            dlg.setIcon(QMessageBox.Icon.Information)
-            dlg.setText("<b>Détecter les visages sur les nouvelles photos</b>")
-            dlg.setInformativeText(
-                f"<b>{n_todo:,}</b> photo(s) non encore analysée(s) dans la bibliothèque.<br><br>"
-                "<b>Ce que cette option fait :</b><br>"
-                "• Lance InsightFace (buffalo_l) sur les nouvelles photos uniquement.<br>"
-                "• Calcule un embedding ArcFace 512D par visage détecté.<br>"
-                "• Lance le regroupement automatiquement à la fin.<br><br>"
-                "<b>Ce que cette option ne fait PAS :</b><br>"
-                "• Ne re-traite pas les photos déjà analysées.<br>"
-                "• Ne récupère pas les visages ignorés par taille — utilisez<br>"
-                "&nbsp;&nbsp;<i>Ré-évaluer les visages ignorés par taille…</i> pour cela.<br>"
-                "• Pour tout ré-analyser depuis zéro — utilisez<br>"
-                "&nbsp;&nbsp;<i>Réinitialiser et réindexer…</i>.<br><br>"
-                "<i>Durée : de quelques secondes à plusieurs heures selon le volume.</i>"
-            )
-            dlg.setStandardButtons(
-                QMessageBox.StandardButton.Ok | QMessageBox.StandardButton.Cancel
-            )
-            dlg.setDefaultButton(QMessageBox.StandardButton.Ok)
-            if dlg.exec() != QMessageBox.StandardButton.Ok:
-                return
         if self._face_indexer is not None:
             self._face_indexer.deleteLater()
         self._face_indexer = FaceIndexThread(self._face_db, self._catalog, self)
@@ -1642,60 +1598,41 @@ class MainWindow(QMainWindow):
         self._face_indexer.cluster_requested.connect(self._run_clustering)
         self._face_indexer.finished.connect(self._on_face_indexing_finished)
         self._face_indexer.unavailable.connect(self._on_face_unavailable)
-        self._face_indexer.error.connect(
-            lambda path, msg: logger.warning("Visage non indexé %s: %s", path, msg)
-        )
-        self._act_index_faces.setText("Analyse en cours…")
-        self._act_index_faces.setEnabled(False)
+        self._face_indexer.error.connect(self._on_face_index_error)
         self._face_indexer.start()
 
     def _import_from_picasa(self) -> None:
         from src.ui.picasa_import_dialog import PicasaImportDialog
 
-        already_done = self._config.get("picasa.import_done", False)
-        if already_done:
-            ret = QMessageBox.warning(
-                self,
-                "Import Picasa — avertissement",
-                "Un import Picasa a déjà été effectué.\n\n"
-                "Relancer l'import va ré-insérer tous les noms et annotations "
-                "Picasa déjà connus, ce qui peut créer des doublons ou "
-                "réintroduire des associations que vous avez supprimées.\n\n"
-                "Voulez-vous continuer ?",
-                QMessageBox.Yes | QMessageBox.Cancel,
-                QMessageBox.Cancel,
-            )
-            if ret != QMessageBox.Yes:
-                return
-        else:
-            dlg = QMessageBox(self)
-            dlg.setWindowTitle("Importer depuis Picasa")
-            dlg.setIcon(QMessageBox.Icon.Information)
-            dlg.setText("<b>Import des annotations de visages depuis Google Picasa</b>")
-            dlg.setInformativeText(
-                "<b>Ce que cette option fait :</b><br>"
-                "• Parcourt les fichiers <code>.picasa.ini</code> de vos dossiers photos.<br>"
-                "• Importe les noms et régions de visages annotés dans Picasa.<br>"
-                "• Crée ou enrichit les personnes correspondantes dans PixelPhotoManager.<br><br>"
-                "<b>Limitations et précautions :</b><br>"
-                "• <b>À ne faire qu'une seule fois.</b> Un second import ré-insère toutes "
-                "les annotations déjà connues, ce qui peut créer des doublons.<br>"
-                "• N'écrase pas les associations que vous avez faites manuellement.<br>"
-                "• Les visages Picasa non appariés à une détection InsightFace créent "
-                "des entrées sans embedding (non utilisables pour le clustering)."
-            )
-            dlg.setStandardButtons(
-                QMessageBox.StandardButton.Ok | QMessageBox.StandardButton.Cancel
-            )
-            dlg.setDefaultButton(QMessageBox.StandardButton.Ok)
-            if dlg.exec() != QMessageBox.StandardButton.Ok:
-                return
+        dlg = QMessageBox(self)
+        dlg.setWindowTitle("Importer depuis Picasa")
+        dlg.setIcon(QMessageBox.Icon.Information)
+        dlg.setText("<b>Import des annotations de visages depuis Google Picasa</b>")
+        dlg.setInformativeText(
+            "<b>Ce que cette option fait :</b><br>"
+            "• Parcourt les fichiers <code>.picasa.ini</code> de vos dossiers photos.<br>"
+            "• Importe les noms et régions de visages annotés dans Picasa.<br>"
+            "• Crée ou enrichit les personnes correspondantes dans PixelPhotoManager.<br><br>"
+            "<b>Limitations et précautions :</b><br>"
+            "• <b>À ne faire qu'une seule fois</b> — l'option sera grisée une fois "
+            "l'import terminé.<br>"
+            "• N'écrase pas les associations que vous avez faites manuellement.<br>"
+            "• Les visages Picasa non appariés à une détection InsightFace créent "
+            "des entrées sans embedding (non utilisables pour le clustering)."
+        )
+        dlg.setStandardButtons(
+            QMessageBox.StandardButton.Ok | QMessageBox.StandardButton.Cancel
+        )
+        dlg.setDefaultButton(QMessageBox.StandardButton.Ok)
+        if dlg.exec() != QMessageBox.StandardButton.Ok:
+            return
 
         dlg = PicasaImportDialog(
             self._config, self._catalog, self._face_db, self._edit_db, self,
             on_edits_imported=self._on_picasa_edits_imported,
         )
         dlg.exec()
+        self._act_picasa.setEnabled(not self._config.get("picasa.import_done", False))
 
     def _backup_faces(self) -> None:
         """Crée immédiatement une sauvegarde et affiche le résultat."""
@@ -1756,6 +1693,11 @@ class MainWindow(QMainWindow):
         for path, edit_info in edited_map.items():
             self._grid.refresh_photo(path, edit_info)
 
+    def _show_face_counters(self) -> None:
+        from src.ui.face_counters_dialog import FaceCountersDialog
+        dlg = FaceCountersDialog(self._face_db, self._catalog, self)
+        dlg.exec()
+
     @Slot(int, int)
     def _on_face_progress(self, current: int, total: int) -> None:
         if current == 0:
@@ -1766,10 +1708,16 @@ class MainWindow(QMainWindow):
     @Slot(int, int)
     def _on_face_indexing_finished(self, indexed: int, faces: int) -> None:
         self._lbl_action.setText("")
-        self._act_index_faces.setText("Analyser les visages")
-        self._act_index_faces.setEnabled(True)
         if faces > 0:
             self._run_clustering()
+
+    def _on_face_index_error(self, path: str, msg: str) -> None:
+        """Timeout/crash pendant l'analyse automatique : la photo est déjà
+        enregistrée dans face_index_errors (FaceIndexThread.mark_index_error) —
+        on met simplement à jour l'avertissement visuel en direct."""
+        logger.warning("Visage non indexé %s: %s", path, msg)
+        self._sidebar.add_index_error_path(path)
+        self._grid.set_index_error_paths(self._face_db.get_error_paths())
 
     def _start_clustering_with_confirm(self) -> None:
         """Affiche une explication du clustering, puis le lance si l'utilisateur confirme."""
@@ -1844,8 +1792,6 @@ class MainWindow(QMainWindow):
     @Slot()
     def _on_face_unavailable(self) -> None:
         self._lbl_action.setText("")
-        self._act_index_faces.setText("Analyser les visages")
-        self._act_index_faces.setEnabled(True)
         QMessageBox.information(
             self,
             "Reconnaissance faciale indisponible",
@@ -2867,6 +2813,64 @@ class MainWindow(QMainWindow):
     def _on_single_reindex_finished(self, photo_path: str, _face_count: int) -> None:
         if self._face_panel.isVisible():
             self._face_panel.set_photo(photo_path)
+
+    def _on_retry_face_index_requested(self, photo: PhotoInfo) -> None:
+        """Menu contextuel "Retenter l'identification des visages" sur un fichier
+        précédemment en erreur (timeout/crash)."""
+        if self._retry_face_thread and self._retry_face_thread.isRunning():
+            QMessageBox.information(
+                self, "Tentative en cours",
+                "Une autre tentative d'identification est déjà en cours.",
+            )
+            return
+        if self._retry_face_thread is not None:
+            self._retry_face_thread.deleteLater()
+        self._retry_face_thread = RetryFaceIndexThread(self._face_db, photo.path, self)
+        self._retry_face_thread.finished.connect(self._on_retry_face_index_finished)
+        self._retry_face_thread.cluster_requested.connect(self._run_clustering)
+        self._lbl_action.setText(f"Nouvelle tentative d'identification : {photo.filename}…")
+        self._retry_face_thread.start()
+
+    def _on_retry_face_index_finished(self, photo_path: str, success: bool, face_count: int) -> None:
+        self._lbl_action.setText("")
+        filename = os.path.basename(photo_path)
+
+        if success:
+            self._sidebar.refresh_index_errors(self._face_db.get_error_paths())
+            self._grid.set_index_error_paths(self._face_db.get_error_paths())
+            if self._face_panel.isVisible():
+                self._face_panel.set_photo(photo_path)
+            QMessageBox.information(
+                self, "Identification réussie",
+                f"« {filename} » : {face_count} visage(s) détecté(s).",
+            )
+            return
+
+        box = QMessageBox(self)
+        box.setIcon(QMessageBox.Warning)
+        box.setWindowTitle("Échec de l'identification")
+        box.setText(
+            f"L'identification des visages a de nouveau échoué pour « {filename} »."
+        )
+        box.setInformativeText(
+            "Voulez-vous supprimer ce fichier, ou l'exclure définitivement du scan "
+            "et de la reconnaissance faciale (il restera dans la photothèque) ?"
+        )
+        btn_delete  = box.addButton("Supprimer le fichier…", QMessageBox.DestructiveRole)
+        btn_exclude = box.addButton("Exclure définitivement", QMessageBox.ActionRole)
+        box.addButton("Laisser en erreur", QMessageBox.RejectRole)
+        box.exec()
+
+        clicked = box.clickedButton()
+        if clicked is btn_delete:
+            photo = next((p for p in self._current_photos if p.path == photo_path), None)
+            if photo is None:
+                photo = PhotoInfo(path=photo_path, filename=filename)
+            self._on_delete_requested([photo])
+        elif clicked is btn_exclude:
+            self._face_db.set_index_excluded(photo_path, True)
+            self._sidebar.refresh_index_errors(self._face_db.get_error_paths())
+            self._grid.set_index_error_paths(self._face_db.get_error_paths())
 
     @Slot(list)
     def _on_delete_requested(self, photos: list) -> None:

@@ -5,8 +5,8 @@ import logging
 import shutil
 import subprocess
 
-from PySide6.QtCore import Signal, Qt, QRect, QSize, QUrl, QThread, QTimer, Slot
-from PySide6.QtGui import QColor, QFont, QIcon, QPainter, QPalette, QPixmap
+from PySide6.QtCore import Signal, Qt, QPoint, QRect, QSize, QUrl, QThread, QTimer, Slot
+from PySide6.QtGui import QColor, QFont, QIcon, QPainter, QPalette, QPixmap, QPolygon
 from PySide6.QtWidgets import (
     QApplication, QStyle, QStyleOptionViewItem, QStyledItemDelegate,
     QWidget, QVBoxLayout, QHBoxLayout, QSplitter,
@@ -35,6 +35,10 @@ class _FolderTree(QTreeWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setAcceptDrops(True)
+        # Chemins de dossiers (normcase+normpath) contenant, ou ayant pour descendant,
+        # une photo en erreur d'indexation faciale (timeout/crash) — voir
+        # _FolderWarningDelegate. Peuplé par Sidebar.refresh_index_errors().
+        self._error_folders: set[str] = set()
 
     def dragEnterEvent(self, event) -> None:
         if event.mimeData().hasFormat(_MIME_PHOTOS):
@@ -236,6 +240,49 @@ class _PendingBadgeDelegate(QStyledItemDelegate):
         painter.restore()
 
 
+class _FolderWarningDelegate(QStyledItemDelegate):
+    """Affiche un triangle d'avertissement orange sur les dossiers contenant
+    (directement ou dans un sous-dossier) une photo en erreur d'indexation
+    faciale (timeout/crash) — visible même si l'arborescence est repliée."""
+
+    _SIZE = 10
+
+    def paint(self, painter, option, index) -> None:
+        super().paint(painter, option, index)
+
+        tree = self.parent()
+        error_folders = getattr(tree, "_error_folders", None)
+        path = index.data(Qt.UserRole)
+        if not path or not error_folders:
+            return
+        if os.path.normcase(os.path.normpath(path)) not in error_folders:
+            return
+
+        s = self._SIZE
+        rect = option.rect
+        cx = rect.right() - 4 - s // 2
+        cy = rect.center().y()
+
+        painter.save()
+        painter.setRenderHint(QPainter.Antialiasing, True)
+        triangle = QPolygon([
+            QPoint(cx, cy - s // 2),
+            QPoint(cx - s // 2, cy + s // 2),
+            QPoint(cx + s // 2, cy + s // 2),
+        ])
+        painter.setPen(Qt.NoPen)
+        painter.setBrush(QColor("#e8a040"))
+        painter.drawPolygon(triangle)
+        painter.setPen(QColor("#1a1a1a"))
+        font = QFont()
+        font.setPixelSize(s - 2)
+        font.setBold(True)
+        painter.setFont(font)
+        painter.drawText(QRect(cx - s // 2, cy - s // 2 + 1, s, s),
+                         Qt.AlignHCenter | Qt.AlignTop, "!")
+        painter.restore()
+
+
 class Sidebar(QWidget):
     folder_selected    = Signal(str)
     album_selected     = Signal(object)   # AlbumInfo | str (special key)
@@ -299,6 +346,7 @@ class Sidebar(QWidget):
 
         self._folder_tree = _FolderTree()
         self._folder_tree.setHeaderHidden(True)
+        self._folder_tree.setItemDelegate(_FolderWarningDelegate(self._folder_tree))
         self._folder_tree.setContextMenuPolicy(Qt.CustomContextMenu)
         self._folder_tree.customContextMenuRequested.connect(self._folder_context_menu)
         self._folder_tree.itemClicked.connect(self._on_folder_clicked)
@@ -502,6 +550,36 @@ class Sidebar(QWidget):
                     self._restore_expand(path)
             finally:
                 self._restoring = False
+
+    # ── avertissements d'erreurs d'indexation faciale (timeout/crash) ──────
+
+    @staticmethod
+    def _error_ancestors(photo_paths) -> set[str]:
+        """Calcule l'ensemble des dossiers (normcase+normpath) contenant, ou
+        ayant pour descendant, l'un des fichiers de photo_paths. Utilisé pour
+        propager le triangle d'avertissement jusqu'aux dossiers racines."""
+        result: set[str] = set()
+        for p in photo_paths:
+            d = os.path.normcase(os.path.dirname(os.path.normpath(p)))
+            while d and d not in result:
+                result.add(d)
+                parent = os.path.normcase(os.path.dirname(d))
+                if parent == d:
+                    break
+                d = parent
+        return result
+
+    def refresh_index_errors(self, error_paths: list[str]) -> None:
+        """Reconstruit entièrement l'ensemble des dossiers à avertir depuis la
+        liste (complète) des photos en erreur d'indexation faciale."""
+        self._folder_tree._error_folders = self._error_ancestors(error_paths)
+        self._folder_tree.viewport().update()
+
+    def add_index_error_path(self, photo_path: str) -> None:
+        """Ajoute une photo en erreur sans tout recalculer (mise à jour live
+        pendant une analyse en cours)."""
+        self._folder_tree._error_folders |= self._error_ancestors([photo_path])
+        self._folder_tree.viewport().update()
 
     def _has_subdirs(self, folder_path: str) -> bool:
         """Retourne True si folder_path contient au moins un sous-dossier visible."""
@@ -887,7 +965,7 @@ class Sidebar(QWidget):
             new_label = f"{person.name}  ({person.photo_count})"
             if item.text() != new_label:
                 item.setText(new_label)
-                item.setData(Qt.UserRole, person)
+            item.setData(Qt.UserRole, person)
 
             if (person.cover_path != old_person.cover_path
                     or person.cover_bbox != old_person.cover_bbox):

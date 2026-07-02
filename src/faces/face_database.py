@@ -53,6 +53,15 @@ CREATE TABLE IF NOT EXISTS picasa_annotations (
 )
 """
 
+_CREATE_INDEX_ERRORS = """
+CREATE TABLE IF NOT EXISTS face_index_errors (
+    photo_path   TEXT PRIMARY KEY,
+    error_type   TEXT NOT NULL,
+    last_attempt REAL NOT NULL,
+    excluded     INTEGER DEFAULT 0
+)
+"""
+
 _IOU_THRESHOLD = 0.30   # recouvrement minimum pour associer un visage Picasa à un visage détecté
 
 
@@ -122,6 +131,7 @@ class FaceDatabase:
                 conn.execute(_CREATE_INDEXED)
                 conn.execute(_CREATE_FACES)
                 conn.execute(_CREATE_PICASA_ANNOTATIONS)
+                conn.execute(_CREATE_INDEX_ERRORS)
                 conn.execute(
                     "CREATE INDEX IF NOT EXISTS idx_faces_photo    ON faces(photo_path)"
                 )
@@ -202,7 +212,10 @@ class FaceDatabase:
 
     def get_paths_to_index(self, all_paths: list[str]) -> list[str]:
         """Returns paths from all_paths that have not been indexed yet.
-        Les fichiers vidéo sont toujours exclus (pas de détection de visages)."""
+        Les fichiers vidéo sont toujours exclus (pas de détection de visages).
+        Les fichiers ayant échoué (timeout/crash, table face_index_errors) sont
+        aussi exclus : ils ne sont plus retentés automatiquement à chaque scan,
+        seulement via le menu contextuel "Retenter l'identification des visages"."""
         if not all_paths:
             return []
         from src.library.exif_reader import VIDEO_EXT
@@ -212,14 +225,114 @@ class FaceDatabase:
                 rows = conn.execute(
                     "SELECT photo_path FROM indexed_photos"
                 ).fetchall()
+                error_rows = conn.execute(
+                    "SELECT photo_path FROM face_index_errors"
+                ).fetchall()
             finally:
                 conn.close()
-        indexed = {r[0] for r in rows}
+        indexed = {r[0] for r in rows} | {r[0] for r in error_rows}
         return [
             p for p in all_paths
             if os.path.normpath(p) not in indexed
             and os.path.splitext(p)[1].lower() not in VIDEO_EXT
         ]
+
+    # ------------------------------------------------------------------ erreurs d'indexation
+
+    def mark_index_error(self, photo_path: str, error_type: str) -> None:
+        """Enregistre un échec de détection (timeout ou crash du subprocess) pour
+        photo_path. Tant qu'une erreur est enregistrée ici, get_paths_to_index()
+        exclut ce fichier des scans automatiques."""
+        photo_path = os.path.normpath(photo_path)
+        with self._lock:
+            conn = self._conn()
+            try:
+                cur = conn.execute(
+                    "UPDATE face_index_errors SET error_type=?, last_attempt=?"
+                    " WHERE photo_path=?",
+                    (error_type, time.time(), photo_path),
+                )
+                if cur.rowcount == 0:
+                    conn.execute(
+                        "INSERT INTO face_index_errors"
+                        " (photo_path, error_type, last_attempt, excluded)"
+                        " VALUES (?,?,?,0)",
+                        (photo_path, error_type, time.time()),
+                    )
+                conn.commit()
+            finally:
+                conn.close()
+
+    def clear_index_error(self, photo_path: str) -> None:
+        photo_path = os.path.normpath(photo_path)
+        with self._lock:
+            conn = self._conn()
+            try:
+                conn.execute(
+                    "DELETE FROM face_index_errors WHERE photo_path=?", (photo_path,)
+                )
+                conn.commit()
+            finally:
+                conn.close()
+
+    def get_index_error(self, photo_path: str) -> Optional[dict]:
+        photo_path = os.path.normpath(photo_path)
+        with self._lock:
+            conn = self._conn()
+            try:
+                row = conn.execute(
+                    "SELECT error_type, last_attempt, excluded"
+                    " FROM face_index_errors WHERE photo_path=?",
+                    (photo_path,),
+                ).fetchone()
+            finally:
+                conn.close()
+        if not row:
+            return None
+        return {"error_type": row[0], "last_attempt": row[1], "excluded": bool(row[2])}
+
+    def get_error_paths(self, include_excluded: bool = False) -> list[str]:
+        """Chemins ayant échoué à l'indexation faciale (timeout/crash).
+        Par défaut, n'inclut pas les fichiers marqués comme définitivement exclus :
+        l'utilisateur a déjà tranché pour eux, plus besoin d'attirer son attention."""
+        with self._lock:
+            conn = self._conn()
+            try:
+                if include_excluded:
+                    rows = conn.execute(
+                        "SELECT photo_path FROM face_index_errors"
+                    ).fetchall()
+                else:
+                    rows = conn.execute(
+                        "SELECT photo_path FROM face_index_errors WHERE excluded=0"
+                    ).fetchall()
+            finally:
+                conn.close()
+        return [r[0] for r in rows]
+
+    def set_index_excluded(self, photo_path: str, excluded: bool = True) -> None:
+        """Exclut définitivement (ou réintègre) une photo du scan et de la
+        reconnaissance faciale. Contrairement au filtre auto-ignore (faces.ignored,
+        proportionnel à la taille), c'est une décision explicite de l'utilisateur
+        suite à des échecs répétés — jamais automatique."""
+        photo_path = os.path.normpath(photo_path)
+        with self._lock:
+            conn = self._conn()
+            try:
+                cur = conn.execute(
+                    "UPDATE face_index_errors SET excluded=? WHERE photo_path=?",
+                    (1 if excluded else 0, photo_path),
+                )
+                if cur.rowcount == 0 and excluded:
+                    conn.execute(
+                        "INSERT INTO face_index_errors"
+                        " (photo_path, error_type, last_attempt, excluded)"
+                        " VALUES (?,?,?,1)",
+                        (photo_path, "excluded", time.time()),
+                    )
+                conn.commit()
+            finally:
+                conn.close()
 
     # Seuils d'auto-ignorance pour les faces de mauvaise qualité.
     # En dessous de ces valeurs, la face est sauvegardée avec ignored=1 :
@@ -248,6 +361,11 @@ class FaceDatabase:
             try:
                 conn.execute(
                     "DELETE FROM faces WHERE photo_path=?", (photo_path,)
+                )
+                # Un succès efface toute erreur précédente (timeout/crash) : la photo
+                # a été réellement analysée, elle n'a plus besoin d'attention.
+                conn.execute(
+                    "DELETE FROM face_index_errors WHERE photo_path=?", (photo_path,)
                 )
                 # Remettre les annotations Picasa à consumed=0 pour qu'elles soient
                 # ré-appliquées aux nouvelles détections ci-dessous.
@@ -2080,6 +2198,7 @@ class FaceDatabase:
             try:
                 conn.execute("DELETE FROM faces")
                 conn.execute("DELETE FROM indexed_photos")
+                conn.execute("DELETE FROM face_index_errors")
                 conn.execute("UPDATE picasa_annotations SET consumed=0")
                 conn.commit()
             finally:
@@ -2097,6 +2216,9 @@ class FaceDatabase:
                 )
                 conn.execute(
                     "DELETE FROM picasa_annotations WHERE photo_path=?", (photo_path,)
+                )
+                conn.execute(
+                    "DELETE FROM face_index_errors WHERE photo_path=?", (photo_path,)
                 )
                 conn.commit()
             finally:
@@ -2121,6 +2243,10 @@ class FaceDatabase:
                     "UPDATE picasa_annotations SET photo_path=? WHERE photo_path=?",
                     (new_path, old_path),
                 )
+                conn.execute(
+                    "UPDATE face_index_errors SET photo_path=? WHERE photo_path=?",
+                    (new_path, old_path),
+                )
                 conn.commit()
             finally:
                 conn.close()
@@ -2135,7 +2261,7 @@ class FaceDatabase:
         with self._lock:
             conn = self._conn()
             try:
-                for table in ("faces", "indexed_photos"):
+                for table in ("faces", "indexed_photos", "face_index_errors"):
                     conn.execute(
                         f"UPDATE {table}"
                         "  SET photo_path = ? || substr(photo_path, ?)"
@@ -2171,4 +2297,66 @@ class FaceDatabase:
             "total_faces": faces,
             "named_persons": persons,
             "clusters": clusters,
+        }
+
+    def get_recognition_counters(self) -> dict:
+        """Compteurs détaillés pour le menu Visages › Compteurs…
+
+        - identified_faces  : visages avec person_id assigné (Picasa ou ArcFace), non ignorés
+        - recognized_faces  : sous-ensemble de identified_faces effectivement reconnus par
+                              l'analyse faciale (embedding non NULL)
+        - pending_faces     : visages avec une suggestion de personne non confirmée
+        - unknown_faces     : visages détectés, non ignorés, sans personne ni suggestion
+        - picasa_*          : suivi des annotations importées depuis Picasa
+        """
+        with self._lock:
+            conn = self._conn()
+            try:
+                def scalar(query: str) -> int:
+                    return conn.execute(query).fetchone()[0]
+
+                total_faces = scalar("SELECT COUNT(*) FROM faces")
+                ignored_faces = scalar("SELECT COUNT(*) FROM faces WHERE ignored=1")
+                identified_faces = scalar(
+                    "SELECT COUNT(*) FROM faces"
+                    " WHERE person_id IS NOT NULL AND ignored=0"
+                )
+                recognized_faces = scalar(
+                    "SELECT COUNT(*) FROM faces"
+                    " WHERE person_id IS NOT NULL AND embedding IS NOT NULL AND ignored=0"
+                )
+                pending_faces = scalar(
+                    "SELECT COUNT(*) FROM faces"
+                    " WHERE suggestion_person_id IS NOT NULL"
+                    "   AND person_id IS NULL AND ignored=0"
+                )
+                unknown_faces = scalar(
+                    "SELECT COUNT(*) FROM faces"
+                    " WHERE person_id IS NULL AND suggestion_person_id IS NULL"
+                    "   AND embedding IS NOT NULL AND ignored=0"
+                )
+                clusters = scalar(
+                    "SELECT COUNT(DISTINCT cluster_id) FROM faces"
+                    " WHERE cluster_id IS NOT NULL"
+                )
+                picasa_total = scalar("SELECT COUNT(*) FROM picasa_annotations")
+                picasa_merged = scalar(
+                    "SELECT COUNT(*) FROM picasa_annotations WHERE consumed=1"
+                )
+                picasa_placeholder = scalar(
+                    "SELECT COUNT(*) FROM picasa_annotations WHERE consumed=0"
+                )
+            finally:
+                conn.close()
+        return {
+            "total_faces": total_faces,
+            "ignored_faces": ignored_faces,
+            "identified_faces": identified_faces,
+            "recognized_faces": recognized_faces,
+            "pending_faces": pending_faces,
+            "unknown_faces": unknown_faces,
+            "clusters": clusters,
+            "picasa_total": picasa_total,
+            "picasa_merged": picasa_merged,
+            "picasa_placeholder": picasa_placeholder,
         }

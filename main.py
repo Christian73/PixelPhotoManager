@@ -302,6 +302,11 @@ def main() -> None:
         QMenu::item:selected {
             background: #3a5a8a;
         }
+        QMenu::separator {
+            height: 1px;
+            background: #6a6a6a;
+            margin: 6px 8px;
+        }
         QToolBar {
             background: #252525;
             border: none;

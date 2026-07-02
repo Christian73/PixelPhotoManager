@@ -1389,7 +1389,7 @@ class EditPanel(QWidget):
             self.grid_visibility_changed.emit(True)
 
         if dlg.exec() == QDialog.Accepted:
-            self._checkpoint()
+            self._checkpoint(title)
             self._push_undo(title)
             new_edit = dlg.get_edit()
             for _, attr, *_ in sliders_def:
@@ -1420,7 +1420,7 @@ class EditPanel(QWidget):
         dlg.wb_pick_requested.connect(self.wb_pick_requested)
 
         def _on_accepted() -> None:
-            self._checkpoint()
+            self._checkpoint("Couleurs")
             self._push_undo("Couleurs")
             new_edit = dlg.get_edit()
             for attr in ("saturation", "color_red", "color_green", "color_blue"):
@@ -1460,7 +1460,7 @@ class EditPanel(QWidget):
         dlg._panel = self
 
         if dlg.exec() == QDialog.Accepted:
-            self._checkpoint()
+            self._checkpoint("Luminosité")
             self._push_undo("Luminosité")
             new_edit = dlg.get_edit()
             self._edit.brightness = new_edit.brightness
@@ -1492,7 +1492,7 @@ class EditPanel(QWidget):
                 # déjà été modifié par on_vignette_changed pendant le glissement.
                 # Aussi sauvegarder dans la DB pour l'undo cross-session.
                 if self._photo:
-                    self._db.push_history(self._photo.path, original, "checkpoint")
+                    self._db.push_history(self._photo.path, original, "Vignette")
                 self._undo_stack.append((original, "Vignette"))
                 if len(self._undo_stack) > _UNDO_MAX:
                     self._undo_stack.pop(0)
@@ -1592,14 +1592,14 @@ class EditPanel(QWidget):
             self._db.save(self._photo.path, self._edit, operation=operation)
             self.photo_saved.emit(self._photo.path, copy.copy(self._edit))
 
-    def _checkpoint(self) -> None:
+    def _checkpoint(self, op_label: str) -> None:
         """Sauvegarde l'état courant dans l'historique DB avant une opération.
 
         Permet l'undo cross-session : au prochain démarrage, cet état sera
         disponible dans la pile même si la session précédente n'a pas fait d'undo.
         """
         if self._photo:
-            self._db.push_history(self._photo.path, self._edit, "checkpoint")
+            self._db.push_history(self._photo.path, self._edit, op_label)
 
     def _push_undo(self, op_label: str) -> None:
         self._undo_stack.append((copy.copy(self._edit), op_label))
@@ -1649,7 +1649,7 @@ class EditPanel(QWidget):
         self.photo_saved.emit(self._photo.path, copy.copy(self._edit))
 
     def _rotate_cw(self) -> None:
-        self._checkpoint()
+        self._checkpoint("Rotation +90°")
         self._push_undo("Rotation +90°")
         self._edit.rotation = (self._edit.rotation + 90) % 360
         self.edits_changed.emit(copy.copy(self._edit))
@@ -1658,7 +1658,7 @@ class EditPanel(QWidget):
             self.rotation_stepped.emit(self._photo.path, self._edit.rotation)
 
     def _rotate_ccw(self) -> None:
-        self._checkpoint()
+        self._checkpoint("Rotation −90°")
         self._push_undo("Rotation −90°")
         self._edit.rotation = (self._edit.rotation - 90) % 360
         self.edits_changed.emit(copy.copy(self._edit))
@@ -1667,21 +1667,21 @@ class EditPanel(QWidget):
             self.rotation_stepped.emit(self._photo.path, self._edit.rotation)
 
     def _flip_h(self) -> None:
-        self._checkpoint()
+        self._checkpoint("Miroir H")
         self._push_undo("Miroir H")
         self._edit.flip_h = not self._edit.flip_h
         self.edits_changed.emit(copy.copy(self._edit))
         self._save("flip_h")
 
     def _flip_v(self) -> None:
-        self._checkpoint()
+        self._checkpoint("Miroir V")
         self._push_undo("Miroir V")
         self._edit.flip_v = not self._edit.flip_v
         self.edits_changed.emit(copy.copy(self._edit))
         self._save("flip_v")
 
     def apply_crop(self, quad: tuple) -> None:
-        self._checkpoint()
+        self._checkpoint("Recadrage")
         self._push_undo("Recadrage")
         self._edit.crop = quad
         self.edits_changed.emit(copy.copy(self._edit))
@@ -1710,7 +1710,7 @@ class EditPanel(QWidget):
     def _clear_red_eye(self) -> None:
         if not self._edit.red_eye_regions:
             return
-        self._checkpoint()
+        self._checkpoint("Effacer yeux rouges")
         self._push_undo("Effacer yeux rouges")
         self._edit.red_eye_regions = []
         self.edits_changed.emit(copy.copy(self._edit))
@@ -1722,7 +1722,7 @@ class EditPanel(QWidget):
 
     def on_red_eye_added(self, cx: float, cy: float) -> None:
         """Reçu depuis le canvas quand l'utilisateur clique sur un œil rouge."""
-        self._checkpoint()
+        self._checkpoint("Yeux rouges")
         self._push_undo("Yeux rouges")
         radius = self._red_eye_slider.value() / 1000.0
         self._edit.red_eye_regions = list(self._edit.red_eye_regions)

@@ -148,7 +148,6 @@ class PicasaImportDialog(QDialog):
     # ------------------------------------------------------------------ handlers
 
     def _on_skip(self) -> None:
-        self._config.set("picasa.import_done", True)
         self.reject()
 
     def _on_import(self) -> None:
@@ -222,4 +221,6 @@ def check_and_prompt(config, catalog, face_db, edit_db=None, parent=None,
     dlg = PicasaImportDialog(config, catalog, face_db, edit_db, parent,
                              on_edits_imported=on_edits_imported)
     dlg.exec()
+    if hasattr(parent, "_act_picasa"):
+        parent._act_picasa.setEnabled(not config.get("picasa.import_done", False))
     return True

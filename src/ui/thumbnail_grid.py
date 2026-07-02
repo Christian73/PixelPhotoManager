@@ -1,6 +1,7 @@
 ﻿# Copyright 2026 Christian Guyot
 # SPDX-License-Identifier: Apache-2.0
 import logging
+import os
 import weakref
 from datetime import datetime as _dt
 from pathlib import Path
@@ -388,6 +389,7 @@ class ThumbnailGrid(QScrollArea):
     duplicate_clicked         = Signal(object)   # PhotoInfo — badge de doublon cliqué
     add_to_album_requested    = Signal(list)      # list[PhotoInfo] — ajouter à album existant
     create_album_with_requested = Signal(list)    # list[PhotoInfo] — créer nouvel album
+    retry_face_index_requested = Signal(object)   # PhotoInfo — retenter l'identification des visages
 
     def __init__(self, cache: ThumbnailCache, parent=None):
         super().__init__(parent)
@@ -396,6 +398,10 @@ class ThumbnailGrid(QScrollArea):
         self._photos: list[PhotoInfo] = []
         self._selected: set[str] = set()
         self._materialized: dict[int, ThumbnailCell] = {}
+        # Chemins (normpath) des photos en erreur d'indexation faciale (timeout/crash,
+        # non exclues) — pilote l'affichage de "Retenter l'identification des visages"
+        # dans le menu contextuel. Mis à jour par MainWindow.set_index_error_paths().
+        self._index_error_paths: set[str] = set()
 
         # ── Mode ruban ──
         self._ribbon_mode   = False
@@ -1091,6 +1097,12 @@ class ThumbnailGrid(QScrollArea):
 
         drag.exec(Qt.MoveAction)
 
+    def set_index_error_paths(self, paths) -> None:
+        """Met à jour l'ensemble des photos en erreur d'indexation faciale
+        (timeout/crash) — pilote l'action "Retenter l'identification des visages"
+        du menu contextuel."""
+        self._index_error_paths = {os.path.normpath(p) for p in paths}
+
     def refresh_duplicate_status(self, assignments: dict) -> None:
         """Met à jour les badges de doublons. assignments = {path: group_id | None}."""
         for photo in self._photos:
@@ -1128,6 +1140,10 @@ class ThumbnailGrid(QScrollArea):
         menu.addAction("Révéler dans l'Explorateur",
                        lambda: __import__('os').startfile(
                            __import__('os.path').path.dirname(photo.path)))
+        if os.path.normpath(photo.path) in self._index_error_paths:
+            menu.addSeparator()
+            menu.addAction("Retenter l'identification des visages",
+                           lambda: self.retry_face_index_requested.emit(photo))
         menu.addSeparator()
         menu.addAction("Effacer le fichier…",
                        lambda: self.delete_requested.emit([photo]))
