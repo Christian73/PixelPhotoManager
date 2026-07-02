@@ -358,6 +358,12 @@ identifiés (person_id assigné). Les associations validées sont conservées in
 <p class="tip">Durée : 15 à 30 minutes selon la taille de la bibliothèque.
 À relancer après avoir ajusté la tolérance de similarité dans les Paramètres,
 ou après une <i>Ré-évaluation des visages ignorés</i>.</p>
+<p class="tip">Dès que de nouveaux groupes sont formés, l'application compare
+automatiquement le centroïde (embedding moyen) de chacun aux personnes déjà nommées.
+Au-delà de 50&nbsp;% de similarité cosinus, une suggestion apparaît dans la vue de la
+personne concernée, section «&nbsp;En attente de vérification&nbsp;» — voir l'étape
+③ ci-dessous. Cette comparaison est silencieuse, ne relance jamais InsightFace et
+n'associe jamais un visage sans validation de votre part.</p>
 
 <hr/>
 

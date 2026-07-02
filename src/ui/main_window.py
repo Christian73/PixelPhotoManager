@@ -742,11 +742,6 @@ class MainWindow(QMainWindow):
         self._act_cluster_faces = QAction("Regrouper les visages…", self)
         self._act_cluster_faces.triggered.connect(self._start_clustering_with_confirm)
         m_faces.addAction(self._act_cluster_faces)
-        self._act_similarity_search = QAction(
-            "Rechercher des visages similaires aux personnes nommées…", self
-        )
-        self._act_similarity_search.triggered.connect(self._start_similarity_search)
-        m_faces.addAction(self._act_similarity_search)
         m_faces.addSeparator()
         act_backup = QAction("Sauvegarder la reconnaissance…", self)
         act_backup.setToolTip(
@@ -1516,33 +1511,15 @@ class MainWindow(QMainWindow):
             self._start_face_indexing()
 
     def _start_similarity_search(self) -> None:
-        """Lance la recherche de visages similaires aux personnes nommées."""
+        """Compare les centroïdes des groupes non identifiés aux personnes nommées.
+
+        Déclenché automatiquement par _on_clustering_finished() juste après
+        qu'un regroupement a formé de nouveaux groupes — aucune interaction
+        utilisateur, juste un message dans la barre de statut à la fin.
+        """
         if hasattr(self, "_similarity_thread") and self._similarity_thread.isRunning():
             return
 
-        dlg = QMessageBox(self)
-        dlg.setWindowTitle("Rechercher des visages similaires")
-        dlg.setIcon(QMessageBox.Icon.Information)
-        dlg.setText("<b>Comparer les visages non identifiés aux personnes nommées</b>")
-        dlg.setInformativeText(
-            "<b>Ce que cette option fait :</b><br>"
-            "• Calcule le centroïde (embedding moyen) de chaque groupe de visages non identifié.<br>"
-            "• Compare chaque centroïde à ceux de toutes les personnes nommées.<br>"
-            "• Si la similarité cosinus ≥ 50 %, crée une suggestion visible dans la vue "
-            "de la personne concernée (section « En attente de vérification »).<br><br>"
-            "<b>Ce que cette option ne fait PAS :</b><br>"
-            "• Ne relance pas InsightFace — aucune nouvelle détection.<br>"
-            "• Ne confirme pas automatiquement les identités : vous restez maître de l'acceptation.<br>"
-            "• N'affecte pas les visages déjà identifiés ou déjà en attente de suggestion.<br>"
-            "• Ne traite pas les visages isolés par HDBSCAN (sans groupe)."
-        )
-        dlg.setStandardButtons(QMessageBox.StandardButton.Ok | QMessageBox.StandardButton.Cancel)
-        dlg.setDefaultButton(QMessageBox.StandardButton.Ok)
-        if dlg.exec() != QMessageBox.StandardButton.Ok:
-            return
-
-        self._act_similarity_search.setEnabled(False)
-        self._act_similarity_search.setText("Recherche en cours…")
         self._sb_progress_bar.setRange(0, 0)
         self._sb_progress_bar.show()
         self._lbl_action.setText("Recherche de visages similaires…")
@@ -1560,33 +1537,12 @@ class MainWindow(QMainWindow):
         self._sb_progress_bar.hide()
         self._sb_progress_bar.setValue(0)
         self._lbl_action.setText("")
-        self._act_similarity_search.setEnabled(True)
-        self._act_similarity_search.setText(
-            "Rechercher des visages similaires aux personnes nommées…"
-        )
         self.statusBar().showMessage(
             f"Recherche terminée : {made} suggestion(s) créée(s) sur {total} groupe(s) vérifiés.",
             8000,
         )
-        if made > 0:
-            # Rafraîchir la vue personne si elle est visible
-            if self._stack.currentWidget() is self._person_cluster_view:
-                self._person_cluster_view.refresh()
-            QMessageBox.information(
-                self,
-                "Recherche terminée",
-                f"{made} groupe(s) de visages ont été rapprochés d'une personne nommée.\n\n"
-                "Ouvrez chaque personne pour accepter ou rejeter les suggestions "
-                "dans la section « En attente de vérification ».",
-            )
-        else:
-            QMessageBox.information(
-                self,
-                "Recherche terminée",
-                f"Aucun groupe similaire trouvé parmi les {total} groupe(s) non identifiés.\n\n"
-                "Vous pouvez abaisser le seuil de similarité dans les paramètres, "
-                "ou lancer d'abord « Regrouper les visages… » pour former de nouveaux groupes.",
-            )
+        if made > 0 and self._stack.currentWidget() is self._person_cluster_view:
+            self._person_cluster_view.refresh()
 
     def _start_face_indexing(self) -> None:
         if self._face_indexer and self._face_indexer.isRunning():
@@ -1781,13 +1737,16 @@ class MainWindow(QMainWindow):
         self._cluster_start_time = None
         self._act_cluster_faces.setText("Regrouper les visages…")
         self._act_cluster_faces.setEnabled(True)
-        if n_clusters > 0:
-            self._lbl_action.setText(f"{n_clusters} groupe(s) de visages détecté(s)")
-            QTimer.singleShot(4000, lambda: self._lbl_action.setText(""))
         self._refresh_persons()
         self._face_cluster_grid.refresh()
         if self._face_panel.isVisible():
             self._face_panel_refresh_timer.start()
+        if n_clusters > 0:
+            # De nouveaux groupes viennent d'être formés : on compare aussitôt
+            # leurs centroïdes aux personnes nommées, sans interaction utilisateur.
+            self._start_similarity_search()
+        else:
+            self._lbl_action.setText("")
 
     @Slot()
     def _on_face_unavailable(self) -> None:
