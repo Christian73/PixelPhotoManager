@@ -28,7 +28,7 @@ from src.library.folder_watcher import FolderWatcher
 from src.library.scanner import LibraryScanner
 from src.library.duplicate_detector import DuplicateDetectorThread, generate_html_report
 from src.faces.face_database import FaceDatabase
-from src.faces.face_indexer import FaceIndexThread, SingleFaceReindexThread, RetryFaceIndexThread, TFWarmUpThread, SimilaritySearchThread
+from src.faces.face_indexer import FaceIndexThread, SingleFaceReindexThread, RetryFaceIndexThread, ForceRedetectThread, TFWarmUpThread, SimilaritySearchThread
 from src.faces.clusterer import ClusterThread
 from src.processing.edit_database import EditDatabase
 from src.ui.sidebar import Sidebar, _SPECIAL_ALL, _SPECIAL_FAV, _SPECIAL_VIDEOS, _SPECIAL_FILENAME
@@ -591,6 +591,7 @@ class MainWindow(QMainWindow):
         self._face_indexer: FaceIndexThread | None = None
         self._reindex_thread: SingleFaceReindexThread | None = None
         self._retry_face_thread: RetryFaceIndexThread | None = None
+        self._force_redetect_thread: ForceRedetectThread | None = None
         self._cluster_thread: ClusterThread | None = None
         self._cluster_start_time: float | None = None
         self._warmup_thread = None          # TFWarmUpThread — pré-charge TF au démarrage
@@ -948,6 +949,7 @@ class MainWindow(QMainWindow):
         self._viewer.rename_requested.connect(self._on_rename_requested)
         self._viewer.move_requested.connect(self._on_move_requested)
         self._viewer.delete_requested.connect(self._on_delete_requested)
+        self._viewer.force_redetect_requested.connect(self._on_force_redetect_requested)
         self._viewer.dup_badge_clicked.connect(self._on_duplicate_badge_clicked)
         self._edit_panel.edits_changed.connect(self._viewer.update_edit)
         self._edit_panel.crop_mode_requested.connect(self._viewer.enter_crop_mode)
@@ -971,7 +973,10 @@ class MainWindow(QMainWindow):
             self._on_face_panel_person_cluster_requested
         )
         self._face_panel.undo_stack_changed.connect(self._on_face_undo_stack_changed)
+        self._face_panel.add_face_mode_requested.connect(self._on_add_face_mode_requested)
         self._viewer.face_context_menu_requested.connect(self._on_face_context_menu)
+        self._viewer.face_bbox_ready.connect(self._face_panel.on_face_bbox_ready)
+        self._viewer.face_add_mode_ended.connect(self._face_panel.reset_add_face_button)
         self._face_panel_refresh_timer.timeout.connect(self._face_panel.refresh)
         self._face_panel.hide()
         self._exif_panel = ExifPanel(self)
@@ -1964,6 +1969,15 @@ class MainWindow(QMainWindow):
         self._face_panel.show_face_context_menu(face, gpos)
 
     @Slot(bool)
+    def _on_add_face_mode_requested(self, enter: bool) -> None:
+        """Bouton 'Ajouter une personne' du FacePanel — bascule le mode dessin
+        de bboxe dans la visionneuse."""
+        if enter:
+            self._viewer.enter_face_add_mode()
+        else:
+            self._viewer.cancel_face_add_mode()
+
+    @Slot(bool)
     def _on_face_undo_stack_changed(self, can_undo: bool) -> None:
         self._btn_undo.setEnabled(can_undo)
         if can_undo and self._face_panel._undo_stack:
@@ -2830,6 +2844,38 @@ class MainWindow(QMainWindow):
             self._face_db.set_index_excluded(photo_path, True)
             self._sidebar.refresh_index_errors(self._face_db.get_error_paths())
             self._grid.set_index_error_paths(self._face_db.get_error_paths())
+
+    def _on_force_redetect_requested(self, photo: PhotoInfo) -> None:
+        """Menu contextuel de la visionneuse "Forcer une nouvelle détection sans
+        limite de taille" : re-détecte les visages de la photo affichée sans le
+        filtrage souple par taille (aucune face ne ressort ignored=1), en
+        conservant les identifications déjà faites sur cette photo."""
+        from src.faces.detector import is_available
+        if not is_available():
+            return
+        if self._force_redetect_thread and self._force_redetect_thread.isRunning():
+            QMessageBox.information(
+                self, "Détection en cours",
+                "Une nouvelle détection est déjà en cours sur cette photo.",
+            )
+            return
+        if self._force_redetect_thread is not None:
+            self._force_redetect_thread.deleteLater()
+        self._force_redetect_thread = ForceRedetectThread(self._face_db, photo.path, self)
+        self._force_redetect_thread.finished.connect(self._on_force_redetect_finished)
+        self._force_redetect_thread.cluster_requested.connect(self._run_clustering)
+        self._lbl_action.setText(f"Nouvelle détection sans limite de taille : {photo.filename}…")
+        self._force_redetect_thread.start()
+
+    def _on_force_redetect_finished(self, photo_path: str, face_count: int) -> None:
+        self._lbl_action.setText("")
+        if self._face_panel.isVisible():
+            self._face_panel.set_photo(photo_path)
+        QMessageBox.information(
+            self, "Détection terminée",
+            f"« {os.path.basename(photo_path)} » : {face_count} visage(s) détecté(s), "
+            "aucun ignoré par taille.",
+        )
 
     @Slot(list)
     def _on_delete_requested(self, photos: list) -> None:

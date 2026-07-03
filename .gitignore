@@ -14,3 +14,7 @@ installer/obj/
 installer/harvested_*.wxs
 installer/*.msi
 installer/*.wixpdb
+installer/*.log
+
+# 
+.VSCodeCounter

@@ -386,6 +386,61 @@ class SingleFaceReindexThread(QThread):
         self.cluster_requested.emit()
 
 
+class ForceRedetectThread(QThread):
+    """
+    Menu contextuel "Forcer une nouvelle détection sans limite de taille" de la
+    visionneuse : re-détecte les visages d'une seule photo en court-circuitant le
+    seuil d'auto-ignorance par taille (FaceDatabase.save_faces(force_no_limit=True))
+    — plus aucun visage n'est marqué ignored=1 sur cette photo. Les visages
+    précédemment identifiés (person_id) sont réassociés à la nouvelle détection la
+    plus proche (IoU) par save_faces() lui-même ; les visages ajoutés manuellement
+    (jamais vus par InsightFace) ne sont pas touchés.
+
+    Réutilise la rotation de la dernière indexation réussie (FaceDatabase.
+    get_indexed_rotation) : la photo a déjà été indexée avec succès par le passé,
+    inutile de retenter les 4 rotations comme le fait RetryFaceIndexThread pour un
+    fichier en échec.
+
+    Signals
+    -------
+    finished(photo_path, face_count)
+    cluster_requested()
+    error(photo_path, message)
+    """
+
+    finished          = Signal(str, int)
+    cluster_requested = Signal()
+    error             = Signal(str, str)
+
+    def __init__(self, face_db: FaceDatabase, photo_path: str, parent=None) -> None:
+        super().__init__(parent)
+        self._face_db    = face_db
+        self._photo_path = photo_path
+
+    def run(self) -> None:
+        from src.library.exif_reader import VIDEO_EXT
+        if os.path.splitext(self._photo_path)[1].lower() in VIDEO_EXT:
+            return
+        rotation = self._face_db.get_indexed_rotation(self._photo_path)
+        try:
+            detections = detect_and_embed(self._photo_path, rotation=rotation)
+        except RuntimeError:
+            return   # insightface non installé
+        except Exception as exc:
+            logger.error("ForceRedetectThread erreur %s: %s", self._photo_path, exc)
+            self.error.emit(self._photo_path, str(exc))
+            return
+        self._face_db.save_faces(
+            self._photo_path, detections, rotation=rotation, force_no_limit=True
+        )
+        logger.info(
+            "ForceRedetectThread: %d visage(s) détecté(s) sans limite de taille dans %s",
+            len(detections), os.path.basename(self._photo_path),
+        )
+        self.finished.emit(self._photo_path, len(detections))
+        self.cluster_requested.emit()
+
+
 class RetryFaceIndexThread(QThread):
     """
     Retente l'identification des visages d'une seule photo précédemment en erreur

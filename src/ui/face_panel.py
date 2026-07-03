@@ -374,6 +374,7 @@ class FacePanel(QWidget):
     cover_face_set           = Signal(int, object)  # person_id, FaceInfo — vignette principale changée
     person_cluster_requested = Signal(int)     # person_id — double-clic sur un visage nommé
     undo_stack_changed       = Signal(bool)    # True = can undo
+    add_face_mode_requested  = Signal(bool)    # True = entrer en mode ajout, False = annuler
 
     def __init__(
         self,
@@ -435,6 +436,19 @@ class FacePanel(QWidget):
         scroll.setStyleSheet("border: none;")
         root.addWidget(scroll)
 
+        self._btn_add_face = QPushButton("➕  Ajouter une personne")
+        self._btn_add_face.setCheckable(True)
+        self._btn_add_face.setFixedHeight(28)
+        self._btn_add_face.setStyleSheet(
+            _BOTTOM_BTN_STYLE + "QPushButton:checked { background: #2a6a2a; color: white; }"
+        )
+        self._btn_add_face.setToolTip(
+            "Dessiner une bboxe pour une personne non détectée automatiquement"
+        )
+        self._btn_add_face.toggled.connect(self._on_add_face_toggled)
+        self._btn_add_face.setEnabled(False)
+        root.addWidget(self._btn_add_face)
+
         self._btn_ignored = QPushButton("Visages ignorés…")
         self._btn_ignored.setFixedHeight(28)
         self._btn_ignored.setStyleSheet(_BOTTOM_BTN_STYLE)
@@ -456,6 +470,7 @@ class FacePanel(QWidget):
             self._undo_stack.clear()
             self.undo_stack_changed.emit(False)
         self._current_photo = photo_path
+        self._btn_add_face.setEnabled(bool(photo_path))
         self._stop_loader()
         self._clear()
 
@@ -660,6 +675,53 @@ class FacePanel(QWidget):
             self._selected_face_id = face_id
             self._items[face_id].set_selected(True)
             self.face_highlighted.emit(self._faces.get(face_id))
+
+    # ------------------------------------------------------------------ ajout manuel
+
+    def _on_add_face_toggled(self, checked: bool) -> None:
+        self.add_face_mode_requested.emit(checked)
+
+    def reset_add_face_button(self) -> None:
+        """Décoche le bouton sans réémettre add_face_mode_requested (appelé par
+        main_window quand le mode se termine côté visionneuse : validation ou Echap)."""
+        self._btn_add_face.blockSignals(True)
+        self._btn_add_face.setChecked(False)
+        self._btn_add_face.blockSignals(False)
+
+    def on_face_bbox_ready(self, bbox: tuple) -> None:
+        """Reçoit la bboxe positionnée manuellement dans la visionneuse et demande
+        le nom de la personne avant de créer le visage en base."""
+        if not self._current_photo:
+            return
+        persons = self._catalog.get_persons()
+        self._face_db.enrich_persons(persons)
+
+        dlg = _AssignDialog(0, persons, suggested_person_id=None, show_ignore=False, parent=self)
+        dlg.setWindowTitle("Nommer ce visage")
+        if dlg.exec() != QDialog.Accepted:
+            return
+
+        if dlg.is_new_person():
+            name = dlg.new_name()
+            if not name:
+                return
+            person = self._catalog.create_person(name)
+            person_id = person.id
+        else:
+            person_id = dlg.existing_person_id()
+            if person_id is None:
+                return
+
+        face_id = self._face_db.add_manual_face(self._current_photo, bbox, person_id)
+
+        def _undo(fid=face_id):
+            self._face_db.delete_face(fid)
+            self.person_assigned.emit()
+            self.set_photo(self._current_photo)
+        self._push_undo("Ajouter un visage", _undo)
+
+        self.person_assigned.emit()
+        self.set_photo(self._current_photo)
 
     # ------------------------------------------------------------------ context menu handlers
 

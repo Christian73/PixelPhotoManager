@@ -334,6 +334,21 @@ class FaceDatabase:
             finally:
                 conn.close()
 
+    def get_indexed_rotation(self, photo_path: str) -> int:
+        """Rotation (degrés CW) utilisée lors de la dernière indexation réussie
+        de cette photo, 0 si jamais indexée."""
+        photo_path = os.path.normpath(photo_path)
+        with self._lock:
+            conn = self._conn()
+            try:
+                row = conn.execute(
+                    "SELECT rotation FROM indexed_photos WHERE photo_path=?",
+                    (photo_path,),
+                ).fetchone()
+            finally:
+                conn.close()
+        return row[0] if row and row[0] is not None else 0
+
     # Seuils d'auto-ignorance pour les faces de mauvaise qualité.
     # En dessous de ces valeurs, la face est sauvegardée avec ignored=1 :
     # elle reste visible dans l'interface mais ne participe pas au clustering.
@@ -343,7 +358,13 @@ class FaceDatabase:
     _AUTO_IGNORE_MIN_SIDE          = 121   # fallback si les dimensions sont illisibles
     _AUTO_IGNORE_MIN_SCORE         = 0.65  # score de détection InsightFace (0–1)
 
-    def save_faces(self, photo_path: str, detections: list[dict], rotation: int = 0) -> None:
+    def save_faces(
+        self,
+        photo_path: str,
+        detections: list[dict],
+        rotation: int = 0,
+        force_no_limit: bool = False,
+    ) -> None:
         """
         Persist detected faces for a photo.
         detections: list of {'bbox': (x,y,w,h), 'embedding': list[float], 'det_score': float}
@@ -354,14 +375,36 @@ class FaceDatabase:
         If any face reaches fg, the effective threshold is fg (small faces ignored).
         Otherwise (all faces small — old scanned photo, distant group) base is used.
         Fallback to _AUTO_IGNORE_MIN_SIDE if image dimensions cannot be read.
+
+        force_no_limit=True ("Forcer une nouvelle détection sans limite de taille") :
+        - le seuil d'auto-ignorance (ci-dessus) est entièrement court-circuité, aucune
+          face ne ressort avec ignored=1 (le filtre dur de detector.py::detect_and_embed
+          reste, lui, inchangé — CLAUDE.md interdit d'y toucher) ;
+        - les visages ajoutés manuellement (embedding NULL, pinned=1, cf. add_manual_face)
+          ne sont jamais supprimés : ils n'ont jamais été vus par InsightFace, une
+          nouvelle détection ne peut donc pas les retrouver ;
+        - les visages auto-détectés déjà identifiés (person_id non NULL) sont, eux,
+          effacés puis réinsérés comme les autres détections ; leur identification est
+          reportée sur la nouvelle face dont la bboxe recouvre le mieux l'ancienne
+          (IoU > _IOU_THRESHOLD), pour respecter "les visages identifiés le restent".
         """
         photo_path = os.path.normpath(photo_path)
         with self._lock:
             conn = self._conn()
             try:
-                conn.execute(
-                    "DELETE FROM faces WHERE photo_path=?", (photo_path,)
-                )
+                preserved_ids = []
+                if force_no_limit:
+                    preserved_ids = conn.execute(
+                        "SELECT bbox_x, bbox_y, bbox_w, bbox_h, person_id, pinned"
+                        " FROM faces"
+                        " WHERE photo_path=? AND person_id IS NOT NULL"
+                        "   AND NOT (embedding IS NULL AND pinned=1)",
+                        (photo_path,),
+                    ).fetchall()
+                delete_sql = "DELETE FROM faces WHERE photo_path=?"
+                if force_no_limit:
+                    delete_sql += " AND NOT (embedding IS NULL AND pinned=1)"
+                conn.execute(delete_sql, (photo_path,))
                 # Un succès efface toute erreur précédente (timeout/crash) : la photo
                 # a été réellement analysée, elle n'a plus besoin d'attention.
                 conn.execute(
@@ -401,16 +444,20 @@ class FaceDatabase:
                     for d in detections
                 )
                 effective_min_side = _fg_threshold if has_foreground else _base_threshold
+                new_faces = []  # (face_id, x, y, w, h) — pour ré-association person_id ci-dessous
                 for det in detections:
                     x, y, w, h = (int(v) for v in det["bbox"])
                     emb = det.get("embedding")
                     blob = _enc(emb) if emb else None
                     score = det.get("det_score", 1.0)
                     low_quality = (
-                        min(w, h) < effective_min_side
-                        or score < self._AUTO_IGNORE_MIN_SCORE
+                        not force_no_limit
+                        and (
+                            min(w, h) < effective_min_side
+                            or score < self._AUTO_IGNORE_MIN_SCORE
+                        )
                     )
-                    conn.execute(
+                    cur = conn.execute(
                         "INSERT INTO faces"
                         " (photo_path, bbox_x, bbox_y, bbox_w, bbox_h,"
                         "  embedding, ignored, det_score)"
@@ -418,6 +465,21 @@ class FaceDatabase:
                         (photo_path, x, y, w, h, blob,
                          1 if low_quality else 0, score),
                     )
+                    if force_no_limit:
+                        new_faces.append((cur.lastrowid, x, y, w, h))
+                if force_no_limit and preserved_ids:
+                    for pbx, pby, pbw, pbh, pid, ppinned in preserved_ids:
+                        best_id, best_iou = None, 0.0
+                        for face_id, x, y, w, h in new_faces:
+                            score = _iou((pbx, pby, pbw, pbh), (x, y, w, h))
+                            if score > best_iou:
+                                best_id, best_iou = face_id, score
+                        if best_id is not None and best_iou > _IOU_THRESHOLD:
+                            conn.execute(
+                                "UPDATE faces SET person_id=?, pinned=? WHERE id=?",
+                                (pid, ppinned, best_id),
+                            )
+                            new_faces = [f for f in new_faces if f[0] != best_id]
                 conn.execute(
                     "INSERT OR REPLACE INTO indexed_photos"
                     " (photo_path, indexed_at, face_count, rotation) VALUES (?,?,?,?)",
@@ -1408,6 +1470,58 @@ class FaceDatabase:
                 )
                 if path_row:
                     self._dedup_in_transaction(conn, [path_row[0]])
+                conn.commit()
+            finally:
+                conn.close()
+
+    def add_manual_face(self, photo_path: str, bbox: tuple, person_id: int) -> int:
+        """Insère un visage positionné manuellement (bboxe dessinée par l'utilisateur,
+        jamais passée par InsightFace) et l'assigne aussitôt à person_id.
+
+        embedding=NULL par construction : garantit que detected_rotation résoudra
+        toujours à 0 à la relecture (cf. get_faces_for_photo), donc que la bbox
+        est réinterprétée exactement dans l'espace EXIF-corrigé où elle a été
+        positionnée (cf. _Canvas._bbox_from_screen_rect côté UI). pinned=1 et un
+        cluster_id négatif unique l'isolent définitivement du (re)clustering,
+        comme pour isolate_and_assign_face().
+        Retourne l'id du visage créé.
+        """
+        photo_path = os.path.normpath(photo_path)
+        bx, by, bw, bh = (int(v) for v in bbox)
+        with self._lock:
+            conn = self._conn()
+            try:
+                row = conn.execute(
+                    "SELECT MIN(cluster_id) FROM faces WHERE pinned=1"
+                ).fetchone()
+                min_pinned = row[0] if row and row[0] is not None else 0
+                new_cluster_id = min(min_pinned, 0) - 1
+                cur = conn.execute(
+                    "INSERT INTO faces"
+                    " (photo_path, bbox_x, bbox_y, bbox_w, bbox_h,"
+                    "  embedding, cluster_id, person_id, ignored, pinned, det_score)"
+                    " VALUES (?,?,?,?,?,NULL,?,?,0,1,1.0)",
+                    (photo_path, bx, by, bw, bh, new_cluster_id, person_id),
+                )
+                face_id = cur.lastrowid
+                self._dedup_in_transaction(conn, [photo_path])
+                conn.commit()
+                return face_id
+            finally:
+                conn.close()
+
+    def delete_face(self, face_id: int) -> None:
+        """Supprime définitivement un visage (hard delete).
+
+        Réservé à l'annulation d'un ajout manuel récent (add_manual_face) : un
+        visage détecté par InsightFace ne doit jamais être supprimé de la sorte,
+        utiliser unassign_face()/isolate_face() pour le conserver et le rendre
+        récupérable.
+        """
+        with self._lock:
+            conn = self._conn()
+            try:
+                conn.execute("DELETE FROM faces WHERE id=?", (face_id,))
                 conn.commit()
             finally:
                 conn.close()

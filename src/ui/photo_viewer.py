@@ -286,6 +286,7 @@ class _Canvas(QWidget):
     pixel_sampled               = Signal(int, int, int)  # R, G, B — pipette balance des blancs
     face_context_menu_requested = Signal(object, object) # (FaceInfo, QPoint global)
     vignette_changed            = Signal(object) # EditInfo (géométrie mise à jour par drag)
+    face_add_confirmed          = Signal(object) # tuple (bbox_x,bbox_y,bbox_w,bbox_h) int
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -323,6 +324,14 @@ class _Canvas(QWidget):
         self._vignette_drag: str | None = None
         self._vignette_drag_start: "QPointF | None" = None
         self._vignette_edit_start = None     # copie de EditInfo au début du drag
+        # Mode ajout manuel d'un visage (bbox non détectée par InsightFace)
+        self._face_add_mode: bool = False
+        self._face_add_rect: "QRectF | None" = None     # écran, rectangle axis-aligned
+        self._face_add_action: "str | None" = None      # None | 'DRAWING' | 'MOVING' | 'RESIZING'
+        self._face_add_handle: "int | None" = None       # index coin actif (0=TL,1=TR,2=BR,3=BL)
+        self._face_add_draw_start: "QPointF | None" = None
+        self._face_add_mouse_start: "QPointF | None" = None
+        self._face_add_rect_start: "QRectF | None" = None
         self.setMouseTracking(True)
         self.setFocusPolicy(Qt.NoFocus)
 
@@ -767,6 +776,143 @@ class _Canvas(QWidget):
         """Edit courant à prendre en compte pour le mapping bbox → écran."""
         self._current_edit = edit
 
+    # ------------------------------------------------------------------ ajout manuel de visage
+
+    def enter_face_add_mode(self) -> None:
+        self._face_add_mode   = True
+        self._face_add_rect   = None
+        self._face_add_action = None
+        self._face_add_handle = None
+        self.setCursor(Qt.CrossCursor)
+        self.update()
+
+    def cancel_face_add_mode(self) -> None:
+        self._face_add_mode   = False
+        self._face_add_rect   = None
+        self._face_add_action = None
+        self._face_add_handle = None
+        self.unsetCursor()
+        self.update()
+
+    def confirm_face_add(self) -> None:
+        rect = self._face_add_rect
+        self.cancel_face_add_mode()
+        if rect is None or rect.width() < 8 or rect.height() < 8:
+            return
+        bbox = self._bbox_from_screen_rect(rect)
+        if bbox is not None:
+            self.face_add_confirmed.emit(bbox)
+
+    def _face_add_handle_positions(self, rect: QRectF) -> dict[int, QPointF]:
+        return {
+            0: rect.topLeft(), 1: rect.topRight(),
+            2: rect.bottomRight(), 3: rect.bottomLeft(),
+        }
+
+    def _face_add_hit_handle(self, pos: QPointF) -> "int | None":
+        if self._face_add_rect is None:
+            return None
+        for idx, hpos in self._face_add_handle_positions(self._face_add_rect).items():
+            if (abs(pos.x() - hpos.x()) <= _HANDLE_HIT and
+                    abs(pos.y() - hpos.y()) <= _HANDLE_HIT):
+                return idx
+        return None
+
+    def _apply_face_add_resize(self, pos: QPointF) -> None:
+        if self._face_add_rect_start is None or self._face_add_handle is None:
+            return
+        r = self._face_add_rect_start
+        ir = self._img_rect()
+        x = max(ir.left(), min(ir.right(), pos.x()))
+        y = max(ir.top(), min(ir.bottom(), pos.y()))
+        if self._face_add_handle == 0:      # TL
+            rect = QRectF(QPointF(x, y), r.bottomRight())
+        elif self._face_add_handle == 1:    # TR
+            rect = QRectF(QPointF(r.left(), y), QPointF(x, r.bottom()))
+        elif self._face_add_handle == 2:    # BR
+            rect = QRectF(r.topLeft(), QPointF(x, y))
+        else:                               # BL
+            rect = QRectF(QPointF(x, r.top()), QPointF(r.right(), y))
+        self._face_add_rect = rect.normalized()
+
+    def _apply_face_add_move(self, pos: QPointF) -> None:
+        if self._face_add_rect_start is None or self._face_add_mouse_start is None:
+            return
+        ir = self._img_rect()
+        r  = self._face_add_rect_start
+        dx = pos.x() - self._face_add_mouse_start.x()
+        dy = pos.y() - self._face_add_mouse_start.y()
+        nx = max(ir.left(), min(ir.right()  - r.width(),  r.x() + dx))
+        ny = max(ir.top(),  min(ir.bottom() - r.height(), r.y() + dy))
+        self._face_add_rect = QRectF(nx, ny, r.width(), r.height())
+
+    def _bbox_from_screen_rect(self, rect: QRectF) -> "tuple[int, int, int, int] | None":
+        """Inverse de _face_screen_rect() pour detected_rotation=0 — le seul cas
+        pertinent pour un visage ajouté manuellement (embedding=NULL garantit que
+        detected_rotation résoudra à 0 à la relecture, cf. add_manual_face)."""
+        if self._pixmap is None or self._orig_w == 0 or self._orig_h == 0:
+            return None
+        dw0, dh0 = float(self._orig_w), float(self._orig_h)
+
+        # Dimensions après rotation puis crop de l'edit courant (même logique
+        # géométrique que _face_screen_rect, mais uniquement les tailles ici).
+        dw_postrot, dh_postrot = dw0, dh0
+        edit = self._current_edit
+        rot = 0
+        cx_rel, cy_rel, cw_rel, ch_rel = 0.0, 0.0, 1.0, 1.0
+        if edit is not None:
+            rot = int(round(getattr(edit, "rotation", 0.0))) % 360
+            if rot in (90, 270):
+                dw_postrot, dh_postrot = dh0, dw0
+            crop = getattr(edit, "crop", None)
+            if crop and len(crop) == 4:
+                cx_rel, cy_rel, cw_rel, ch_rel = crop
+            elif crop and len(crop) == 8:
+                xs = [crop[i] for i in range(0, 8, 2)]
+                ys = [crop[i] for i in range(1, 8, 2)]
+                cx_rel, cy_rel = min(xs), min(ys)
+                cw_rel, ch_rel = max(xs) - cx_rel, max(ys) - cy_rel
+
+        dw_crop = cw_rel * dw_postrot
+        dh_crop = ch_rel * dh_postrot
+        if dw_crop <= 0 or dh_crop <= 0 or self._zoom <= 0:
+            return None
+
+        # 1) écran → espace pixmap (post-rotation, post-crop)
+        sx = self._pixmap.width()  / dw_crop
+        sy = self._pixmap.height() / dh_crop
+        if sx <= 0 or sy <= 0:
+            return None
+        bx = (rect.x() - self._offset.x()) / (sx * self._zoom)
+        by = (rect.y() - self._offset.y()) / (sy * self._zoom)
+        bw = rect.width()  / (sx * self._zoom)
+        bh = rect.height() / (sy * self._zoom)
+
+        # 2) undo crop → espace post-rotation
+        bx += cx_rel * dw_postrot
+        by += cy_rel * dh_postrot
+
+        # 3) undo flip (toujours en espace post-rotation)
+        if edit is not None:
+            if getattr(edit, "flip_h", False):
+                bx = dw_postrot - bx - bw
+            if getattr(edit, "flip_v", False):
+                by = dh_postrot - by - bh
+
+        # 4) undo rotation edit → espace EXIF-corrigé d'origine (dw0, dh0)
+        if rot == 90:
+            bx, by, bw, bh = by, dh0 - bx - bw, bh, bw
+        elif rot == 180:
+            bx, by, bw, bh = dw0 - bx - bw, dh0 - by - bh, bw, bh
+        elif rot == 270:
+            bx, by, bw, bh = dw0 - by - bh, bx, bh, bw
+
+        bx = max(0.0, min(bx, dw0 - 1))
+        by = max(0.0, min(by, dh0 - 1))
+        bw = max(1.0, min(bw, dw0 - bx))
+        bh = max(1.0, min(bh, dh0 - by))
+        return int(round(bx)), int(round(by)), int(round(bw)), int(round(bh))
+
     # ------------------------------------------------------------------ vignette interactive
 
     def enter_vignette_mode(self, edit) -> None:
@@ -1107,6 +1253,24 @@ class _Canvas(QWidget):
                 self._draw_crop_overlay(p)
             if self._vignette_mode:
                 self._draw_vignette_overlay(p)
+            if self._face_add_mode:
+                self._draw_face_add_overlay(p)
+
+    def _draw_face_add_overlay(self, p: QPainter) -> None:
+        ir = self._img_rect()
+        p.setPen(QPen(QColor(255, 200, 60, 160), 2))
+        p.setBrush(Qt.NoBrush)
+        p.drawRect(ir)
+        if self._face_add_rect is None:
+            return
+        rect = self._face_add_rect
+        p.setPen(QPen(QColor(255, 200, 60), 2, Qt.DashLine))
+        p.drawRect(rect)
+        hs = 8
+        p.setBrush(QColor(255, 200, 60))
+        p.setPen(Qt.NoPen)
+        for pt in (rect.topLeft(), rect.topRight(), rect.bottomRight(), rect.bottomLeft()):
+            p.drawRect(QRectF(pt.x() - hs / 2, pt.y() - hs / 2, hs, hs))
 
     def _draw_crop_overlay(self, p: QPainter) -> None:
         ir = self._img_rect()
@@ -1184,7 +1348,7 @@ class _Canvas(QWidget):
 
     def wheelEvent(self, event: QWheelEvent) -> None:
         delta = event.angleDelta().y()
-        if self._red_eye_mode:
+        if self._red_eye_mode or self._face_add_mode:
             return
         if self._crop_mode:
             # Zoom centré sur le milieu, en préservant le quadrilatère de crop
@@ -1239,6 +1403,27 @@ class _Canvas(QWidget):
                     cx = (pos.x() - ir.x()) / ir.width()
                     cy = (pos.y() - ir.y()) / ir.height()
                     self.red_eye_point_added.emit(cx, cy)
+            return
+        if self._face_add_mode:
+            if event.button() != Qt.LeftButton:
+                return
+            pos = event.position()
+            ir  = self._img_rect()
+            hid = self._face_add_hit_handle(pos) if self._face_add_rect is not None else None
+            if hid is not None:
+                self._face_add_action      = 'RESIZING'
+                self._face_add_handle      = hid
+                self._face_add_mouse_start = pos
+                self._face_add_rect_start  = QRectF(self._face_add_rect)
+            elif self._face_add_rect is not None and self._face_add_rect.contains(pos):
+                self._face_add_action      = 'MOVING'
+                self._face_add_mouse_start = pos
+                self._face_add_rect_start  = QRectF(self._face_add_rect)
+            elif ir.contains(pos):
+                self._face_add_action     = 'DRAWING'
+                self._face_add_draw_start = QPointF(pos)
+                self._face_add_rect       = QRectF(pos, pos)
+            self.update()
             return
         if self._crop_mode:
             if event.button() != Qt.LeftButton:
@@ -1305,6 +1490,33 @@ class _Canvas(QWidget):
             self._red_eye_mouse = pos
             self.update()
             return
+        if self._face_add_mode:
+            if self._face_add_action == 'DRAWING':
+                ir = self._img_rect()
+                s  = self._face_add_draw_start
+                raw_x = max(ir.left(), min(ir.right(),  pos.x()))
+                raw_y = max(ir.top(),  min(ir.bottom(), pos.y()))
+                self._face_add_rect = QRectF(
+                    QPointF(min(s.x(), raw_x), min(s.y(), raw_y)),
+                    QPointF(max(s.x(), raw_x), max(s.y(), raw_y)),
+                )
+                self.update()
+            elif self._face_add_action == 'RESIZING':
+                self._apply_face_add_resize(pos)
+                self.update()
+            elif self._face_add_action == 'MOVING':
+                self._apply_face_add_move(pos)
+                self.update()
+            else:
+                hid = self._face_add_hit_handle(pos) if self._face_add_rect is not None else None
+                if hid is not None:
+                    self.setCursor([Qt.SizeFDiagCursor, Qt.SizeBDiagCursor,
+                                     Qt.SizeFDiagCursor, Qt.SizeBDiagCursor][hid])
+                elif self._face_add_rect is not None and self._face_add_rect.contains(pos):
+                    self.setCursor(Qt.SizeAllCursor)
+                else:
+                    self.setCursor(Qt.CrossCursor)
+            return
         if self._crop_mode:
             if self._crop_action == 'DRAWING':
                 ir = self._img_rect()
@@ -1362,6 +1574,14 @@ class _Canvas(QWidget):
                 hit = self._vignette_hit_test(pos)
                 self.setCursor(Qt.PointingHandCursor if hit else Qt.ArrowCursor)
             return
+        if self._face_add_mode:
+            if event.button() == Qt.LeftButton:
+                self._face_add_action      = None
+                self._face_add_handle      = None
+                self._face_add_mouse_start = None
+                self._face_add_rect_start  = None
+                self._face_add_draw_start  = None
+            return
         if self._crop_mode:
             if event.button() == Qt.LeftButton:
                 self._drag_start       = None
@@ -1376,7 +1596,7 @@ class _Canvas(QWidget):
             self._drag_start = None
 
     def contextMenuEvent(self, event) -> None:
-        if not self._crop_mode and not self._red_eye_mode:
+        if not self._crop_mode and not self._red_eye_mode and not self._face_add_mode:
             faces = self._highlighted_faces or (
                 [self._highlighted_face] if self._highlighted_face is not None else []
             )
@@ -1394,6 +1614,10 @@ class _Canvas(QWidget):
             self.zoom_fit()
             if crop_rel:
                 self._crop_from_rel(crop_rel)
+            if self._face_add_mode:
+                # Le rectangle écran ne survit pas à un changement de zoom/offset.
+                self._face_add_rect   = None
+                self._face_add_action = None
 
 
 class _BaseLoader(QThread):
@@ -1426,6 +1650,9 @@ class PhotoViewer(QWidget):
     pixel_sampled               = Signal(int, int, int)  # R, G, B — pipette balance des blancs
     face_context_menu_requested = Signal(object, object)  # (FaceInfo, QPoint global)
     vignette_changed            = Signal(object)  # EditInfo (géométrie après drag)
+    face_bbox_ready             = Signal(object)  # tuple (bbox_x,bbox_y,bbox_w,bbox_h) int
+    face_add_mode_ended         = Signal()  # mode ajout de visage terminé (validé ou annulé)
+    force_redetect_requested    = Signal(object)  # PhotoInfo — menu contextuel
 
     def __init__(self, config=None, parent=None):
         super().__init__(parent)
@@ -1521,6 +1748,7 @@ class PhotoViewer(QWidget):
         self._canvas.pixel_sampled.connect(self.pixel_sampled)
         self._canvas.face_context_menu_requested.connect(self.face_context_menu_requested)
         self._canvas.vignette_changed.connect(self.vignette_changed)
+        self._canvas.face_add_confirmed.connect(self._on_face_add_confirmed)
         layout.addWidget(self._canvas, stretch=1)
 
         # ---- Pied de page ----
@@ -1591,6 +1819,22 @@ class PhotoViewer(QWidget):
         self._btn_crop_cancel.clicked.connect(self.cancel_crop)
         self._btn_crop_cancel.hide()
         nav_layout.addWidget(self._btn_crop_cancel)
+
+        self._btn_face_confirm = QPushButton("✓  Valider la position")
+        self._btn_face_confirm.setToolTip("Valider la position du visage  (Entrée)")
+        self._btn_face_confirm.setFixedHeight(36)
+        self._btn_face_confirm.setStyleSheet("background: #2a6a2a; color: white;")
+        self._btn_face_confirm.clicked.connect(self.confirm_face_add)
+        self._btn_face_confirm.hide()
+        nav_layout.addWidget(self._btn_face_confirm)
+
+        self._btn_face_cancel = QPushButton("✕  Annuler")
+        self._btn_face_cancel.setToolTip("Annuler l'ajout du visage  (Echap)")
+        self._btn_face_cancel.setFixedHeight(36)
+        self._btn_face_cancel.setStyleSheet("background: #6a2a2a; color: white;")
+        self._btn_face_cancel.clicked.connect(self.cancel_face_add_mode)
+        self._btn_face_cancel.hide()
+        nav_layout.addWidget(self._btn_face_cancel)
 
         nav_layout.addStretch()
 
@@ -1786,6 +2030,34 @@ class PhotoViewer(QWidget):
         self._btn_next.show()
         self.crop_ready.emit(quad)
 
+    # ------------------------------------------------------------------ ajout manuel de visage
+
+    def enter_face_add_mode(self) -> None:
+        self._canvas.enter_face_add_mode()
+        self._btn_prev.hide()
+        self._btn_next.hide()
+        self._btn_face_confirm.show()
+        self._btn_face_cancel.show()
+
+    def confirm_face_add(self) -> None:
+        self._canvas.confirm_face_add()   # émet face_add_confirmed → _on_face_add_confirmed si valide
+        self._btn_face_confirm.hide()
+        self._btn_face_cancel.hide()
+        self._btn_prev.show()
+        self._btn_next.show()
+        self.face_add_mode_ended.emit()
+
+    def cancel_face_add_mode(self) -> None:
+        self._canvas.cancel_face_add_mode()
+        self._btn_face_confirm.hide()
+        self._btn_face_cancel.hide()
+        self._btn_prev.show()
+        self._btn_next.show()
+        self.face_add_mode_ended.emit()
+
+    def _on_face_add_confirmed(self, bbox: tuple) -> None:
+        self.face_bbox_ready.emit(bbox)
+
     # ------------------------------------------------------------------ red-eye mode
 
     def enter_red_eye_mode(self, radius: float = 0.03) -> None:
@@ -1899,6 +2171,9 @@ class PhotoViewer(QWidget):
             )
 
         menu.addSeparator()
+        menu.addAction("Forcer une nouvelle détection sans limite de taille",
+                       lambda: self.force_redetect_requested.emit(photo))
+        menu.addSeparator()
         menu.addAction("Effacer le fichier…", lambda: self.delete_requested.emit([photo]))
 
         menu.exec(pos)
@@ -1936,6 +2211,8 @@ class PhotoViewer(QWidget):
         if key == Qt.Key_Escape:
             if self._canvas._crop_mode:
                 self.cancel_crop()
+            elif self._canvas._face_add_mode:
+                self.cancel_face_add_mode()
             elif self._canvas._red_eye_mode:
                 self.exit_red_eye_mode()
             else:
@@ -1943,15 +2220,20 @@ class PhotoViewer(QWidget):
         elif key == Qt.Key_Return or key == Qt.Key_Enter:
             if self._canvas._crop_mode:
                 self.confirm_crop()
+            elif self._canvas._face_add_mode:
+                self.confirm_face_add()
         elif key in (Qt.Key_Right, Qt.Key_Up):
-            if not self._canvas._crop_mode and not self._canvas._red_eye_mode:
+            if not self._canvas._crop_mode and not self._canvas._red_eye_mode \
+                    and not self._canvas._face_add_mode:
                 self.navigate.emit(-1)   # plus récente (droite/haut = vers le haut de la liste)
         elif key in (Qt.Key_Left, Qt.Key_Down):
-            if not self._canvas._crop_mode and not self._canvas._red_eye_mode:
+            if not self._canvas._crop_mode and not self._canvas._red_eye_mode \
+                    and not self._canvas._face_add_mode:
                 self.navigate.emit(1)    # plus ancienne (gauche/bas = vers le bas de la liste)
         elif key == Qt.Key_Delete:
             photo = self.current_photo()
-            if photo and not self._canvas._crop_mode and not self._canvas._red_eye_mode:
+            if photo and not self._canvas._crop_mode and not self._canvas._red_eye_mode \
+                    and not self._canvas._face_add_mode:
                 self.delete_requested.emit([photo])
         elif key == Qt.Key_0:
             self.zoom_fit()
