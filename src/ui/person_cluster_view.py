@@ -341,16 +341,8 @@ class PersonClusterView(QWidget):
         content_vbox.setSpacing(16)
         content_vbox.setAlignment(Qt.AlignTop)
 
-        # Section confirmée
-        self._confirmed_area = QWidget()
-        self._confirmed_area.setStyleSheet("background: transparent;")
-        self._flow = QGridLayout(self._confirmed_area)
-        self._flow.setContentsMargins(0, 0, 0, 0)
-        self._flow.setSpacing(_THUMB_GAP)
-        self._flow.setAlignment(Qt.AlignTop | Qt.AlignLeft)
-        content_vbox.addWidget(self._confirmed_area)
-
-        # Section en attente de vérification
+        # Section en attente de vérification (affichée en premier, au-dessus des
+        # visages déjà confirmés : ce sont les suggestions à traiter en priorité)
         self._pending_section = QWidget()
         self._pending_section.setStyleSheet("background: transparent;")
         self._pending_section.setVisible(False)
@@ -406,6 +398,16 @@ class PersonClusterView(QWidget):
         pending_vbox.addWidget(self._pending_area)
 
         content_vbox.addWidget(self._pending_section)
+
+        # Section confirmée
+        self._confirmed_area = QWidget()
+        self._confirmed_area.setStyleSheet("background: transparent;")
+        self._flow = QGridLayout(self._confirmed_area)
+        self._flow.setContentsMargins(0, 0, 0, 0)
+        self._flow.setSpacing(_THUMB_GAP)
+        self._flow.setAlignment(Qt.AlignTop | Qt.AlignLeft)
+        content_vbox.addWidget(self._confirmed_area)
+
         content_vbox.addStretch(1)
 
         self._scroll.setWidget(self._content)
