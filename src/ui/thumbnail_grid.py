@@ -168,7 +168,12 @@ class ThumbnailCell(QWidget):
         utilisateur : les requêtes d'affichage les plus anciennes doivent être
         abandonnées quand elles s'accumulent)."""
         if self._worker is not None and self._worker_pool is not None:
-            self._worker_pool.tryTake(self._worker)
+            try:
+                self._worker_pool.tryTake(self._worker)
+            except RuntimeError:
+                # Le worker a AutoDelete=True : s'il a déjà démarré/terminé, Qt a
+                # détruit l'objet C++ sous-jacent avant qu'on ait pu le retirer.
+                pass
         self._worker = None
         self._worker_pool = None
 
