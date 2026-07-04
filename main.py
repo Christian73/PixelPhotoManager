@@ -302,6 +302,12 @@ def main() -> None:
         QMenu::item:selected {
             background: #3a5a8a;
         }
+        QMenu::item:disabled {
+            color: #6a6a6a;
+        }
+        QMenu::item:disabled:selected {
+            background: transparent;
+        }
         QMenu::separator {
             height: 1px;
             background: #6a6a6a;

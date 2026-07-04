@@ -312,33 +312,59 @@ social, préférez <b>Moyenne</b> ou <b>Petite</b> — une photo en taille maxim
 _TAB_FACES = _STYLE + """
 <h2>Détection et reconnaissance des visages</h2>
 
-<p>Le pipeline de reconnaissance se déroule en trois étapes <b>indépendantes</b>,
-accessibles depuis le menu <b>Visages</b> :</p>
+<p>Le pipeline de reconnaissance se déroule en trois étapes :</p>
 <p style="text-align:center; font-size:13px;">
-  <b>① Analyser</b> &nbsp;→&nbsp; <b>② Regrouper</b> &nbsp;→&nbsp; <b>③ Identifier</b>
+  <b>① Analyser</b> (automatique) &nbsp;→&nbsp; <b>② Regrouper</b> &nbsp;→&nbsp; <b>③ Identifier</b>
 </p>
-<p>Chaque option agit sur un périmètre précis. Lisez les descriptions ci-dessous
-avant d'utiliser une option : certaines sont longues ou irréversibles.</p>
+<p>Seules les étapes ② et ③ demandent une action de votre part.
+Les options ci-dessous sont présentées dans l'ordre où elles apparaissent dans le
+menu <b>Visages</b>. Lisez les descriptions avant d'en utiliser une : certaines sont longues.</p>
 
 <hr/>
 
-<h3>① Analyser les visages &nbsp;<span style="font-weight:normal;color:#888;">(Visages › Analyser les visages)</span></h3>
-<p><b>Ce que ça fait :</b> Lance InsightFace (modèle buffalo_l) en arrière-plan pour détecter
-les visages et calculer un vecteur ArcFace 512D par visage.
-À la fin, le regroupement démarre automatiquement.</p>
+<h3>① Analyser les visages &nbsp;<span style="font-weight:normal;color:#888;">(automatique, aucune action requise)</span></h3>
+<p><b>Ce que ça fait :</b> Dès qu'un scan de la bibliothèque détecte de nouvelles photos,
+l'analyse démarre automatiquement en arrière-plan : InsightFace (modèle buffalo_l) détecte
+les visages et calcule un vecteur ArcFace 512D par visage. À la fin, le regroupement
+démarre lui aussi automatiquement. La progression s'affiche dans la barre de statut.</p>
 <p><b>Périmètre :</b> Uniquement les photos <u>jamais encore analysées</u> (nouvelles photos
 ajoutées à la bibliothèque). Les photos déjà traitées sont ignorées, même si elles
 contiennent des visages marqués «&nbsp;ignoré&nbsp;».</p>
-<p><b>Ce que ça ne fait PAS :</b></p>
-<ul>
-  <li>Ne re-traite pas les photos déjà présentes dans l'index.</li>
-  <li>Ne récupère pas les visages ignorés par taille → utilisez
-      <i>Ré-évaluer les visages ignorés par taille…</i> pour ça.</li>
-  <li>Ne regroupe pas les visages → le regroupement démarre automatiquement en fin d'analyse,
-      ou lancez-le manuellement.</li>
-</ul>
 <p class="tip">Durée : de quelques secondes (nouvelle photo) à plusieurs heures
 (première analyse d'une grande bibliothèque). L'application reste utilisable pendant ce temps.</p>
+
+<hr/>
+
+<h3>Import Picasa &nbsp;<span style="font-weight:normal;color:#888;">(Visages › Importer depuis Picasa…)</span></h3>
+<ul>
+  <li>Importe les annotations de visages depuis les fichiers <code>.picasa.ini</code>
+      de Google Picasa : noms et régions de visages.</li>
+  <li>Les noms sont associés automatiquement aux personnes existantes ou créent
+      de nouvelles personnes.</li>
+</ul>
+<p class="tip"><b>À ne faire qu'une seule fois.</b> Un nouvel import ré-insère tous les noms
+et annotations Picasa déjà connus, ce qui peut créer des doublons ou réintroduire
+des associations supprimées. Un avertissement s'affiche si vous tentez de relancer l'import.</p>
+
+<hr/>
+
+<h3>Réinitialiser et réindexer &nbsp;<span style="font-weight:normal;color:#888;">(Visages › Réinitialiser et réindexer…)</span></h3>
+<p>Deux options au choix, à utiliser avec précaution :</p>
+<table>
+  <tr><th>Option</th><th>Ce qui est effacé</th><th>Ce qui est conservé</th></tr>
+  <tr>
+    <td><b>Reset clustering</b></td>
+    <td>Groupes HDBSCAN uniquement</td>
+    <td>Embeddings, noms et associations personne ↔ visage</td>
+  </tr>
+  <tr>
+    <td><b>Réindexation complète</b></td>
+    <td>Tout (embeddings, groupes, noms, associations)</td>
+    <td>— (table rase)</td>
+  </tr>
+</table>
+<p class="tip"><b>La réindexation complète prend plusieurs heures</b> selon la taille
+de la bibliothèque. Faites une sauvegarde avant.</p>
 
 <hr/>
 
@@ -352,12 +378,10 @@ identifiés (person_id assigné). Les associations validées sont conservées in
 <ul>
   <li>Ne relance pas la détection InsightFace.</li>
   <li>N'efface pas les noms ou associations déjà confirmés.</li>
-  <li>Ne traite pas les visages marqués «&nbsp;ignoré&nbsp;» — lancez d'abord
-      <i>Ré-évaluer…</i> si vous venez de changer le seuil de taille.</li>
+  <li>Ne traite pas les visages marqués «&nbsp;ignoré&nbsp;».</li>
 </ul>
 <p class="tip">Durée : 15 à 30 minutes selon la taille de la bibliothèque.
-À relancer après avoir ajusté la tolérance de similarité dans les Paramètres,
-ou après une <i>Ré-évaluation des visages ignorés</i>.</p>
+À relancer après avoir ajusté la tolérance de similarité dans les Paramètres.</p>
 <p class="tip">Dès que de nouveaux groupes sont formés, l'application compare
 automatiquement le centroïde (embedding moyen) de chacun aux personnes déjà nommées.
 Au-delà de 50&nbsp;% de similarité cosinus, une suggestion apparaît dans la vue de la
@@ -367,9 +391,41 @@ n'associe jamais un visage sans validation de votre part.</p>
 
 <hr/>
 
-<h3>③ Identifier les personnes &nbsp;<span style="font-weight:normal;color:#888;">(Visages › Identifier les personnes…)</span></h3>
-<p>Ouvre la vue des groupes anonymes pour les nommer. Les suggestions de noms
-(en bleu) indiquent une forte ressemblance avec une personne déjà nommée.
+<h3>Visualisation des erreurs &nbsp;<span style="font-weight:normal;color:#888;">(Visages › Visualisation des erreurs…)</span></h3>
+<p><b>Ce que ça fait :</b> Liste les photos pour lesquelles l'étape ① (analyse) a échoué
+— timeout ou crash du sous-processus de détection — avec vignette, nom de fichier et
+type d'erreur. Le bouton <b>⟳ Réessayer</b> relance l'analyse pour ce seul fichier ;
+la ligne disparaît de la liste dès que le traitement réussit.</p>
+<p><b>Périmètre :</b> Uniquement les photos en erreur. Tant qu'une photo reste en erreur,
+elle est exclue des analyses automatiques suivantes (elle n'est pas retentée à chaque scan).</p>
+<p class="tip">Ces photos sont aussi repérables directement dans la grille : un clic droit
+sur une vignette en erreur propose l'option « Retenter l'identification des visages »
+dans le menu contextuel.</p>
+
+<hr/>
+
+<h3>Sauvegarde et restauration</h3>
+<ul>
+  <li><b>Visages › Sauvegarder la reconnaissance…</b> — crée une sauvegarde horodatée
+      de l'intégralité de <code>faces.db</code> (embeddings, groupes, personnes, annotations).</li>
+  <li><b>Visages › Gérer les sauvegardes…</b> — liste, restaure ou supprime les sauvegardes.
+      L'état courant est automatiquement sauvegardé avant toute restauration.</li>
+</ul>
+
+<hr/>
+
+<h3>Compteurs &nbsp;<span style="font-weight:normal;color:#888;">(Visages › Compteurs…)</span></h3>
+<p>Affiche un résumé chiffré de la reconnaissance faciale : nombre de personnes
+identifiées, de visages identifiés / reconnus / en attente de confirmation / inconnus,
+ainsi que les compteurs liés à l'import Picasa. Aucun traitement n'est lancé —
+c'est un simple état des lieux.</p>
+
+<hr/>
+
+<h3>③ Identifier les personnes &nbsp;<span style="font-weight:normal;color:#888;">(bouton « Identifier… » dans la sidebar)</span></h3>
+<p>Le bouton <b>Identifier…</b> de la barre latérale (avec un badge indiquant le nombre
+de groupes en attente) ouvre la vue des groupes anonymes pour les nommer. Les suggestions
+de noms (en bleu) indiquent une forte ressemblance avec une personne déjà nommée.
 Attribuer le même nom à plusieurs groupes les fusionne dans la même personne.</p>
 <p>Aucun traitement n'est lancé — c'est une navigation pure.</p>
 
@@ -420,61 +476,6 @@ candidat à une suggestion pour d'autres personnes.</p>
 
 <hr/>
 
-<h3>Ré-évaluer les visages ignorés par taille &nbsp;<span style="font-weight:normal;color:#888;">(Visages › Ré-évaluer les visages ignorés par taille…)</span></h3>
-<p><b>Ce que ça fait :</b> Reconsidère les visages marqués «&nbsp;ignoré&nbsp;» car leur taille
-était inférieure au seuil minimal au moment de la détection. Relit les dimensions
-de chaque photo et recalcule un seuil <u>proportionnel</u> à la résolution
-(3 % de la plus petite dimension, plancher 22 px). Les visages qui passent maintenant
-ce seuil sont restaurés (flag <code>ignored=0</code>).</p>
-<p><b>Ce que ça ne fait PAS :</b></p>
-<ul>
-  <li><b>Ne relance pas InsightFace</b> — les embeddings existants sont conservés tels quels.
-      L'opération est donc très rapide (quelques secondes).</li>
-  <li>Ne récupère <b>pas</b> les visages que vous avez ignorés manuellement (bouton ✕ dans
-      le panneau Visages).</li>
-  <li>Ne récupère <b>pas</b> les visages dont le score de confiance InsightFace était trop bas
-      (&lt; 0,65) — leur embedding est peu fiable et nuirait au clustering.</li>
-  <li>Ne regroupe <b>pas</b> les visages restaurés — lancez ensuite
-      <b>Regrouper les visages…</b> pour les intégrer aux clusters.</li>
-</ul>
-<p><b>Cas d'usage typique :</b> après avoir changé le seuil de taille dans le code,
-ou pour récupérer des visages dans de vieilles photos scannées en basse résolution
-où toutes les têtes sont petites.</p>
-<p class="tip">Après la ré-évaluation, enchaînez avec <b>Visages › Regrouper les visages…</b>
-pour que les visages restaurés rejoignent les bons clusters.</p>
-
-<hr/>
-
-<h3>Réinitialiser et réindexer &nbsp;<span style="font-weight:normal;color:#888;">(Visages › Réinitialiser et réindexer…)</span></h3>
-<p>Deux options au choix, à utiliser avec précaution :</p>
-<table>
-  <tr><th>Option</th><th>Ce qui est effacé</th><th>Ce qui est conservé</th></tr>
-  <tr>
-    <td><b>Reset clustering</b></td>
-    <td>Groupes HDBSCAN uniquement</td>
-    <td>Embeddings, noms et associations personne ↔ visage</td>
-  </tr>
-  <tr>
-    <td><b>Réindexation complète</b></td>
-    <td>Tout (embeddings, groupes, noms, associations)</td>
-    <td>— (table rase)</td>
-  </tr>
-</table>
-<p class="tip"><b>La réindexation complète prend plusieurs heures</b> selon la taille
-de la bibliothèque. Faites une sauvegarde avant.</p>
-
-<hr/>
-
-<h3>Sauvegarde et restauration</h3>
-<ul>
-  <li><b>Visages › Sauvegarder la reconnaissance…</b> — crée une sauvegarde horodatée
-      de l'intégralité de <code>faces.db</code> (embeddings, groupes, personnes, annotations).</li>
-  <li><b>Visages › Gérer les sauvegardes…</b> — liste, restaure ou supprime les sauvegardes.
-      L'état courant est automatiquement sauvegardé avant toute restauration.</li>
-</ul>
-
-<hr/>
-
 <h3>Visages ignorés</h3>
 <p>Un visage peut être ignoré de deux façons :</p>
 <ul>
@@ -484,22 +485,9 @@ de la bibliothèque. Faites une sauvegarde avant.</p>
       arrière-plan). Cette action est annulable.</li>
 </ul>
 <p>Le bouton <b>Visages ignorés…</b> en bas du panneau Visages permet de voir et restaurer
-les visages ignorés photo par photo.
-Pour restaurer en masse les visages auto-ignorés par taille, utilisez
-<b>Visages › Ré-évaluer les visages ignorés par taille…</b>.</p>
+les visages ignorés photo par photo.</p>
 
 <hr/>
-
-<h3>Import Picasa &nbsp;<span style="font-weight:normal;color:#888;">(Visages › Importer depuis Picasa…)</span></h3>
-<ul>
-  <li>Importe les annotations de visages depuis les fichiers <code>.picasa.ini</code>
-      de Google Picasa : noms et régions de visages.</li>
-  <li>Les noms sont associés automatiquement aux personnes existantes ou créent
-      de nouvelles personnes.</li>
-</ul>
-<p class="tip"><b>À ne faire qu'une seule fois.</b> Un nouvel import ré-insère tous les noms
-et annotations Picasa déjà connus, ce qui peut créer des doublons ou réintroduire
-des associations supprimées. Un avertissement s'affiche si vous tentez de relancer l'import.</p>
 """
 
 _TAB_SHORTCUTS = _STYLE + """

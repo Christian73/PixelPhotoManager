@@ -353,7 +353,9 @@ class FaceDatabase:
     # En dessous de ces valeurs, la face est sauvegardée avec ignored=1 :
     # elle reste visible dans l'interface mais ne participe pas au clustering.
     _AUTO_IGNORE_MIN_SIDE_RATIO    = 0.03  # 3 % — seuil de base (aucun visage au premier plan)
-    _AUTO_IGNORE_MIN_SIDE_FG_RATIO = 0.20  # 20 % — seuil pour qualifier un visage de "grand"
+    _AUTO_IGNORE_MIN_SIDE_FG_RATIO = 0.20  # 20 % — seuil pour qualifier un visage de "premier plan"
+    _AUTO_IGNORE_FG_FRACTION       = 0.25  # une fois un premier plan qualifié, on ignore les
+                                            # visages < 1/4 du plus petit visage premier plan
     _AUTO_IGNORE_MIN_SIDE_ABS      = 22    # plancher absolu (px) pour les très petites images
     _AUTO_IGNORE_MIN_SIDE          = 121   # fallback si les dimensions sont illisibles
     _AUTO_IGNORE_MIN_SCORE         = 0.65  # score de détection InsightFace (0–1)
@@ -371,8 +373,10 @@ class FaceDatabase:
         rotation: CW degrees applied during detection (stored to reconstruct face crops).
         Faces with min(w,h) < effective threshold or det_score < _AUTO_IGNORE_MIN_SCORE
         are saved with ignored=1. The size threshold is proportional to the image:
-        base = max(ABS, short_side * 3 %) ; fg = max(base*2, short_side * 20 %).
-        If any face reaches fg, the effective threshold is fg (small faces ignored).
+        base = max(ABS, short_side * 3 %) ; fg_qualify = max(base*2, short_side * 20 %).
+        A face qualifies as "foreground" when min(w,h) >= fg_qualify. If at least one
+        foreground face is present, the effective threshold becomes 1/4 of the smallest
+        foreground face's min(w,h) — faces smaller than that are ignored.
         Otherwise (all faces small — old scanned photo, distant group) base is used.
         Fallback to _AUTO_IGNORE_MIN_SIDE if image dimensions cannot be read.
 
@@ -419,8 +423,10 @@ class FaceDatabase:
                     (photo_path,)
                 )
                 # Seuils proportionnels à la résolution de l'image.
-                # Si un visage atteint le seuil "premier plan" (12 %), on relève la
-                # barre pour tous : les petits visages sont alors ignorés.
+                # Un visage qualifie la photo de "premier plan" s'il atteint _fg_qualify
+                # (20 % du plus petit côté). Si c'est le cas, on ignore tout visage plus
+                # petit que 1/4 du plus petit visage premier plan (les autres visages,
+                # même premier plan, ne sont jamais eux-mêmes ignorés par ce critère).
                 # Sinon (vieille photo scannée, groupe distant…), on utilise le
                 # seuil de base (3 %) pour ne pas perdre de visages légitimes.
                 try:
@@ -432,18 +438,22 @@ class FaceDatabase:
                         self._AUTO_IGNORE_MIN_SIDE_ABS,
                         int(_shortest * self._AUTO_IGNORE_MIN_SIDE_RATIO),
                     )
-                    _fg_threshold = max(
+                    _fg_qualify = max(
                         _base_threshold * 2,
                         int(_shortest * self._AUTO_IGNORE_MIN_SIDE_FG_RATIO),
                     )
                 except Exception:
                     _base_threshold = self._AUTO_IGNORE_MIN_SIDE
-                    _fg_threshold   = self._AUTO_IGNORE_MIN_SIDE
-                has_foreground = any(
-                    min(int(d["bbox"][2]), int(d["bbox"][3])) >= _fg_threshold
+                    _fg_qualify     = self._AUTO_IGNORE_MIN_SIDE
+                _foreground_sides = [
+                    min(int(d["bbox"][2]), int(d["bbox"][3]))
                     for d in detections
+                    if min(int(d["bbox"][2]), int(d["bbox"][3])) >= _fg_qualify
+                ]
+                effective_min_side = (
+                    min(_foreground_sides) * self._AUTO_IGNORE_FG_FRACTION
+                    if _foreground_sides else _base_threshold
                 )
-                effective_min_side = _fg_threshold if has_foreground else _base_threshold
                 new_faces = []  # (face_id, x, y, w, h) — pour ré-association person_id ci-dessous
                 for det in detections:
                     x, y, w, h = (int(v) for v in det["bbox"])
@@ -1570,13 +1580,13 @@ class FaceDatabase:
                     self._AUTO_IGNORE_MIN_SIDE_ABS,
                     int(_shortest * self._AUTO_IGNORE_MIN_SIDE_RATIO),
                 )
-                _fg = max(
+                _fg_qualify = max(
                     _base * 2,
                     int(_shortest * self._AUTO_IGNORE_MIN_SIDE_FG_RATIO),
                 )
             except Exception:
-                _base = self._AUTO_IGNORE_MIN_SIDE
-                _fg   = self._AUTO_IGNORE_MIN_SIDE
+                _base       = self._AUTO_IGNORE_MIN_SIDE
+                _fg_qualify = self._AUTO_IGNORE_MIN_SIDE
 
             with self._lock:
                 conn = self._conn()
@@ -1587,10 +1597,13 @@ class FaceDatabase:
                         (photo_path,),
                     ).fetchall()
 
-                    has_foreground = any(
-                        min(r[1], r[2]) >= _fg for r in all_faces
+                    foreground_sides = [
+                        min(r[1], r[2]) for r in all_faces if min(r[1], r[2]) >= _fg_qualify
+                    ]
+                    effective = (
+                        min(foreground_sides) * self._AUTO_IGNORE_FG_FRACTION
+                        if foreground_sides else _base
                     )
-                    effective = _fg if has_foreground else _base
 
                     for fid, bw, bh, is_ignored, score, emb in all_faces:
                         if (is_ignored == 1

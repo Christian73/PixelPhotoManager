@@ -21,40 +21,6 @@ _DETECT_TIMEOUT       = 60    # secondes max par photo avant de tuer le subproce
 _WARMUP_TIMEOUT       = 120   # secondes max pour le warmup initial (GPU peut être lent)
 _MAX_CONSECUTIVE_FAIL = 5     # échecs consécutifs avant abandon définitif
 
-# Mapping rotation (degrés CW) → valeur EXIF Orientation
-_ROT_TO_EXIF_ORI = {90: 6, 180: 3, 270: 8}
-
-
-def _fix_exif_orientation(photo_path: str, rotation: int) -> bool:
-    """Écrit le tag EXIF Orientation dans le JPEG losslessly via piexif.
-
-    Seulement pour les JPEG dont l'orientation EXIF est absente ou neutre (=1).
-    Retourne True si le tag a été écrit avec succès, False sinon.
-    """
-    if rotation not in _ROT_TO_EXIF_ORI:
-        return False
-    ext = os.path.splitext(photo_path)[1].lower()
-    if ext not in ('.jpg', '.jpeg'):
-        return False
-    try:
-        import piexif
-        try:
-            exif_dict = piexif.load(photo_path)
-        except Exception:
-            exif_dict = {"0th": {}, "Exif": {}, "GPS": {}, "1st": {}, "thumbnail": None}
-        current_ori = exif_dict.get("0th", {}).get(piexif.ImageIFD.Orientation, 1)
-        if current_ori not in (None, 1):
-            # Orientation non-triviale déjà présente — ne pas composer
-            return False
-        exif_dict.setdefault("0th", {})[piexif.ImageIFD.Orientation] = _ROT_TO_EXIF_ORI[rotation]
-        piexif.insert(piexif.dump(exif_dict), photo_path)
-        logger.info("EXIF orientation corrigée (%d°) : %s", rotation, os.path.basename(photo_path))
-        return True
-    except Exception as exc:
-        logger.debug("_fix_exif_orientation %s : %s", os.path.basename(photo_path), exc)
-        return False
-
-
 def _kill_executor(executor: concurrent.futures.ProcessPoolExecutor) -> None:
     """Tue de force tous les subprocesses de l'executor (nécessaire sur Windows :
     shutdown(wait=False) ne tue PAS les processus en cours d'exécution)."""
@@ -288,24 +254,6 @@ class FaceIndexThread(QThread):
                 in_flight.popleft()
                 consecutive_fails = 0
 
-                # Correction EXIF lossless : si les visages ont été trouvés avec
-                # une rotation non nulle, on inscrit le tag EXIF Orientation dans le
-                # fichier JPEG pour que les visionneuses l'affichent à l'endroit.
-                # On ré-exécute ensuite la détection à rotation=0 afin que les
-                # coordonnées bbox soient cohérentes avec la nouvelle orientation.
-                if det_rotation != 0 and _fix_exif_orientation(path, det_rotation):
-                    try:
-                        redetect_fut = executor.submit(detect_and_embed, path, 0)
-                        detections   = redetect_fut.result(timeout=_DETECT_TIMEOUT)
-                        det_rotation = 0
-                    except Exception as exc:
-                        logger.warning(
-                            "FaceIndexThread: ré-détection post-EXIF échouée pour %s : %s",
-                            os.path.basename(path), exc,
-                        )
-                        detections   = []
-                        det_rotation = 0
-
                 self._face_db.save_faces(path, detections, rotation=det_rotation)
                 faces_found += len(detections)
                 indexed += 1
@@ -502,17 +450,6 @@ class RetryFaceIndexThread(QThread):
                     logger.error("RetryFaceIndexThread erreur %s: %s", path, exc)
                     self._face_db.mark_index_error(path, "crash")
                 else:
-                    if det_rotation != 0 and _fix_exif_orientation(path, det_rotation):
-                        try:
-                            detections = executor.submit(
-                                detect_and_embed, path, 0
-                            ).result(timeout=_DETECT_TIMEOUT)
-                            det_rotation = 0
-                        except Exception as exc:
-                            logger.warning(
-                                "RetryFaceIndexThread: ré-détection post-EXIF échouée pour %s : %s",
-                                os.path.basename(path), exc,
-                            )
                     success = True
         finally:
             _kill_executor(executor)

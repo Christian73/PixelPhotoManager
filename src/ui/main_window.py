@@ -267,8 +267,8 @@ class _CatalogLoadThread(QThread):
 
     batch_ready = Signal(list)  # list[PhotoInfo]
 
-    def __init__(self, catalog: "Catalog", batch_size: int = 300):
-        super().__init__()
+    def __init__(self, catalog: "Catalog", batch_size: int = 300, parent=None):
+        super().__init__(parent)
         self._catalog = catalog
         self._batch_size = batch_size
         self._stop = False
@@ -591,6 +591,7 @@ class MainWindow(QMainWindow):
         self._face_indexer: FaceIndexThread | None = None
         self._reindex_thread: SingleFaceReindexThread | None = None
         self._retry_face_thread: RetryFaceIndexThread | None = None
+        self._index_errors_dialog = None    # IndexErrorsDialog ouverte (ou None)
         self._force_redetect_thread: ForceRedetectThread | None = None
         self._cluster_thread: ClusterThread | None = None
         self._cluster_start_time: float | None = None
@@ -743,6 +744,14 @@ class MainWindow(QMainWindow):
         self._act_cluster_faces = QAction("Regrouper les visages…", self)
         self._act_cluster_faces.triggered.connect(self._start_clustering_with_confirm)
         m_faces.addAction(self._act_cluster_faces)
+        m_faces.addSeparator()
+        act_index_errors = QAction("Visualisation des erreurs…", self)
+        act_index_errors.setToolTip(
+            "Afficher les photos dont l'identification des visages a échoué "
+            "(timeout/crash) et relancer le traitement fichier par fichier"
+        )
+        act_index_errors.triggered.connect(self._open_index_errors_dialog)
+        m_faces.addAction(act_index_errors)
         m_faces.addSeparator()
         act_backup = QAction("Sauvegarder la reconnaissance…", self)
         act_backup.setToolTip(
@@ -1153,7 +1162,6 @@ class MainWindow(QMainWindow):
             )
             self._sidebar.refresh_folders(folders)
             error_paths = self._face_db.get_error_paths()
-            self._sidebar.refresh_index_errors(error_paths)
             self._grid.set_index_error_paths(error_paths)
             self._restore_last_view(albums, folders)
             # Pré-charger InsightFace en parallèle du scan
@@ -1206,12 +1214,30 @@ class MainWindow(QMainWindow):
         self._show_all_photos()
         self._sidebar.select_album_item(_SPECIAL_ALL)
 
-    def _show_all_photos(self) -> None:
-        # Annule un chargement précédent si toujours actif.
+    def _cancel_grid_display_ops(self) -> None:
+        """Annule tout chargement de photos pour la grille encore en vol.
+        À appeler avant de démarrer un nouvel affichage (dossier/album/Toutes les
+        photos) : sans ça, une requête précédente encore en cours peut se terminer
+        après coup et écraser la vue actuelle avec des photos qui ne correspondent
+        plus au contexte affiché."""
         if self._catalog_loader is not None:
             self._catalog_loader.stop()
-            self._catalog_loader.wait()
+            if self._catalog_loader.isRunning():
+                self._catalog_loader.batch_ready.disconnect()
+                self._catalog_loader.finished.connect(self._catalog_loader.deleteLater)
+            else:
+                self._catalog_loader.deleteLater()
             self._catalog_loader = None
+        if self._photo_query_thread is not None:
+            if self._photo_query_thread.isRunning():
+                self._photo_query_thread.photos_ready.disconnect()
+                self._photo_query_thread.finished.connect(self._photo_query_thread.deleteLater)
+            else:
+                self._photo_query_thread.deleteLater()
+            self._photo_query_thread = None
+
+    def _show_all_photos(self) -> None:
+        self._cancel_grid_display_ops()
 
         self._current_photos = []
         self._current_paths = set()
@@ -1223,7 +1249,7 @@ class MainWindow(QMainWindow):
         self.show_grid()
         self._update_status()
 
-        loader = _CatalogLoadThread(self._catalog)
+        loader = _CatalogLoadThread(self._catalog, parent=self)
         loader.batch_ready.connect(self._on_catalog_batch)
         self._catalog_loader = loader
         loader.start()
@@ -1259,7 +1285,11 @@ class MainWindow(QMainWindow):
                 self._current_photos.append(photo)
                 self._current_paths.add(photo.path)
         if visible_new:
-            self._grid.add_photos_batch(visible_new)
+            # Les photos découvertes pendant le scan arrivent dans l'ordre du
+            # système de fichiers, pas par date : on re-trie pour garder
+            # "plus récent en haut" pendant le scan (pas seulement à la fin).
+            self._current_photos.sort(key=_photo_sort_key, reverse=True)
+            self._grid.set_photos(self._current_photos)
             self._update_status()
 
     @Slot(list)
@@ -1394,6 +1424,27 @@ class MainWindow(QMainWindow):
         dlg.folder_added.connect(self._on_folder_added_from_manager)
         dlg.exec()
 
+    def _open_index_errors_dialog(self) -> None:
+        if self._index_errors_dialog is not None:
+            self._index_errors_dialog.raise_()
+            self._index_errors_dialog.activateWindow()
+            return
+        from src.ui.index_errors_dialog import IndexErrorsDialog
+        dlg = IndexErrorsDialog(self._face_db, self._thumb_cache, self)
+        dlg.retry_requested.connect(self._on_index_error_dialog_retry)
+        dlg.finished.connect(self._on_index_errors_dialog_closed)
+        self._index_errors_dialog = dlg
+        dlg.show()
+
+    def _on_index_errors_dialog_closed(self) -> None:
+        self._index_errors_dialog = None
+
+    def _on_index_error_dialog_retry(self, photo_path: str) -> None:
+        photo = next((p for p in self._current_photos if p.path == photo_path), None)
+        if photo is None:
+            photo = PhotoInfo(path=photo_path, filename=os.path.basename(photo_path))
+        self._on_retry_face_index_requested(photo)
+
     def _on_folder_rescan_requested(self, folder: str) -> None:
         self._start_scan([folder], force=True)
 
@@ -1491,10 +1542,9 @@ class MainWindow(QMainWindow):
         self._lbl_action.setText("")
 
         if choice != _ResetFacesDialog.RESET_CLUSTERING:
-            # reset_index() a aussi vidé face_index_errors : les avertissements
+            # reset_index() a aussi vidé face_index_errors : les erreurs
             # de timeout/crash n'ont plus lieu d'être tant que le nouveau
             # passage d'indexation n'a pas eu lieu.
-            self._sidebar.refresh_index_errors([])
             self._grid.set_index_error_paths([])
 
         if choice == _ResetFacesDialog.RESET_CLUSTERING:
@@ -1674,11 +1724,11 @@ class MainWindow(QMainWindow):
 
     def _on_face_index_error(self, path: str, msg: str) -> None:
         """Timeout/crash pendant l'analyse automatique : la photo est déjà
-        enregistrée dans face_index_errors (FaceIndexThread.mark_index_error) —
-        on met simplement à jour l'avertissement visuel en direct."""
+        enregistrée dans face_index_errors (FaceIndexThread.mark_index_error)."""
         logger.warning("Visage non indexé %s: %s", path, msg)
-        self._sidebar.add_index_error_path(path)
         self._grid.set_index_error_paths(self._face_db.get_error_paths())
+        if self._index_errors_dialog is not None:
+            self._index_errors_dialog.refresh()
 
     def _start_clustering_with_confirm(self) -> None:
         """Affiche une explication du clustering, puis le lance si l'utilisateur confirme."""
@@ -2091,12 +2141,7 @@ class MainWindow(QMainWindow):
 
     def _start_photo_query(self, fn, context_key: str) -> None:
         """Lance une requête photo en arrière-plan et met à jour la grille à l'arrivée."""
-        if self._photo_query_thread is not None:
-            if self._photo_query_thread.isRunning():
-                self._photo_query_thread.photos_ready.disconnect()
-                self._photo_query_thread.finished.connect(self._photo_query_thread.deleteLater)
-            else:
-                self._photo_query_thread.deleteLater()
+        self._cancel_grid_display_ops()
         self._photo_query_thread = _PhotoQueryThread(fn, context_key, self)
         self._photo_query_thread.photos_ready.connect(self._on_photo_query_ready)
         self._photo_query_thread.start()
@@ -2809,8 +2854,9 @@ class MainWindow(QMainWindow):
         filename = os.path.basename(photo_path)
 
         if success:
-            self._sidebar.refresh_index_errors(self._face_db.get_error_paths())
             self._grid.set_index_error_paths(self._face_db.get_error_paths())
+            if self._index_errors_dialog is not None:
+                self._index_errors_dialog.refresh()
             if self._face_panel.isVisible():
                 self._face_panel.set_photo(photo_path)
             QMessageBox.information(
@@ -2842,8 +2888,10 @@ class MainWindow(QMainWindow):
             self._on_delete_requested([photo])
         elif clicked is btn_exclude:
             self._face_db.set_index_excluded(photo_path, True)
-            self._sidebar.refresh_index_errors(self._face_db.get_error_paths())
             self._grid.set_index_error_paths(self._face_db.get_error_paths())
+
+        if self._index_errors_dialog is not None:
+            self._index_errors_dialog.refresh()
 
     def _on_force_redetect_requested(self, photo: PhotoInfo) -> None:
         """Menu contextuel de la visionneuse "Forcer une nouvelle détection sans

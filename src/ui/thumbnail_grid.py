@@ -43,8 +43,6 @@ def _get_video_thumb_pool() -> QThreadPool:
         _video_thumb_pool.setMaxThreadCount(2)
     return _video_thumb_pool
 
-_BUFFER_ROWS = 2
-
 _FR_MONTHS = [
     "Janvier", "Février", "Mars", "Avril", "Mai", "Juin",
     "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre",
@@ -126,6 +124,8 @@ class ThumbnailCell(QWidget):
         self._signals.ready.connect(self._on_thumb_ready)
         self._drag_start_pos: QPoint | None = None
         self._dup_badge_rect = None   # QRect dans les coordonnées du widget
+        self._worker: "_ThumbWorker | None" = None
+        self._worker_pool: "QThreadPool | None" = None
         self._setup_ui()
 
     def _setup_ui(self) -> None:
@@ -156,7 +156,21 @@ class ThumbnailCell(QWidget):
             pool = (_get_video_thumb_pool()
                     if _P(self._photo.path).suffix.lower() in _VE
                     else _get_thumb_pool())
+            self._worker = worker
+            self._worker_pool = pool
             pool.start(worker, priority)
+
+    def cancel_pending_load(self) -> None:
+        """Retire le worker de la file du pool s'il n'a pas encore démarré.
+        À appeler quand la cellule sort du champ (scroll) avant sa suppression :
+        sans ça, le worker décode quand même la vignette pour une photo devenue
+        invisible, au détriment des photos réellement affichées (cf. demande
+        utilisateur : les requêtes d'affichage les plus anciennes doivent être
+        abandonnées quand elles s'accumulent)."""
+        if self._worker is not None and self._worker_pool is not None:
+            self._worker_pool.tryTake(self._worker)
+        self._worker = None
+        self._worker_pool = None
 
     def reload_with_edit(self, edit) -> None:
         self._cache.invalidate(self._photo.path)
@@ -369,8 +383,11 @@ class ThumbnailGrid(QScrollArea):
 
     Mode scroll (par défaut)
     ───────────────────────
-    Grille uniforme défilante. Seules les cellules visibles ± _BUFFER_ROWS
-    sont instanciées. Supporte 100 000+ photos.
+    Grille uniforme défilante. Au premier affichage, seule la partie visible est
+    instanciée (départ rapide). Dès le premier déplacement dans la grille, une
+    marge d'un écran plein est maintenue au-dessus et en dessous de la zone
+    visible (cf. _visible_range/_buffer_active) pour anticiper la suite du
+    défilement. Supporte 100 000+ photos.
 
     Mode ruban (set_ribbon_mode(True))
     ───────────────────────────────────
@@ -398,6 +415,10 @@ class ThumbnailGrid(QScrollArea):
         self._photos: list[PhotoInfo] = []
         self._selected: set[str] = set()
         self._materialized: dict[int, ThumbnailCell] = {}
+        # False tant qu'aucun scroll n'a eu lieu depuis le dernier affichage : seule
+        # la partie visible est alors préparée. Passe à True au 1er _on_scroll(),
+        # ce qui active la marge d'un écran au-dessus/en dessous (cf. _visible_range).
+        self._buffer_active = False
         # Chemins (normpath) des photos en erreur d'indexation faciale (timeout/crash,
         # non exclues) — pilote l'affichage de "Retenter l'identification des visages"
         # dans le menu contextuel. Mis à jour par MainWindow.set_index_error_paths().
@@ -475,6 +496,7 @@ class ThumbnailGrid(QScrollArea):
         self._selected.clear()
         self._cancel_pending_workers()
         self._dematerialize_all()
+        self._buffer_active = False
         self._photos = list(photos)
         if self._ribbon_mode:
             self._ribbon_offset = 0
@@ -536,6 +558,7 @@ class ThumbnailGrid(QScrollArea):
         self._selected.clear()
         self._cancel_pending_workers()
         self._dematerialize_all()
+        self._buffer_active = False
         self._photos.clear()
         if not self._ribbon_mode:
             self._container.set_total(0)
@@ -578,6 +601,7 @@ class ThumbnailGrid(QScrollArea):
             return          # taille déterminée par viewport, pas par ce réglage
         self._cancel_pending_workers()
         self._dematerialize_all()
+        self._buffer_active = False
         self._container.configure(len(self._photos), size + 8, size + 8)
         QTimer.singleShot(0, self._update_materialized)
 
@@ -780,7 +804,9 @@ class ThumbnailGrid(QScrollArea):
         # Supprimer les cellules obsolètes
         for idx in list(self._materialized.keys()):
             if idx not in target:
-                self._materialized.pop(idx).setParent(None)
+                cell = self._materialized.pop(idx)
+                cell.cancel_pending_load()
+                cell.setParent(None)
 
         # Mettre à jour ou créer les cellules
         for photo_idx, (rect, ts) in target.items():
@@ -812,8 +838,19 @@ class ThumbnailGrid(QScrollArea):
         cols     = self._container.cols
         row_h    = self._thumb_size + 8 + spacing
 
-        first_row = max(0, (scroll_y - spacing) // row_h - _BUFFER_ROWS)
-        last_row  = (scroll_y + vp_h - spacing) // row_h + _BUFFER_ROWS
+        first_visible_row = max(0, (scroll_y - spacing) // row_h)
+        last_visible_row  = (scroll_y + vp_h - spacing) // row_h
+
+        if self._buffer_active:
+            # Marge d'un écran plein au-dessus/en dessous, activée seulement après
+            # le 1er déplacement dans la grille (cf. _on_scroll) — le tout premier
+            # affichage ne prépare que la partie visible pour un rendu immédiat.
+            buffer_rows = max(1, -(-vp_h // row_h))  # ceil(vp_h / row_h)
+            first_row = max(0, first_visible_row - buffer_rows)
+            last_row  = last_visible_row + buffer_rows
+        else:
+            first_row = first_visible_row
+            last_row  = last_visible_row
 
         first_idx = first_row * cols
         last_idx  = min(len(self._photos) - 1, (last_row + 1) * cols - 1)
@@ -822,6 +859,7 @@ class ThumbnailGrid(QScrollArea):
     def _on_scroll(self) -> None:
         if self._ribbon_mode:
             return
+        self._buffer_active = True
         self._update_date_overlay()
         if not self._placeholder_timer.isActive():
             self._placeholder_timer.start()
@@ -835,7 +873,9 @@ class ThumbnailGrid(QScrollArea):
 
         for i in list(self._materialized.keys()):
             if i not in needed:
-                self._materialized.pop(i).setParent(None)
+                cell = self._materialized.pop(i)
+                cell.cancel_pending_load()
+                cell.setParent(None)
 
         for i in needed:
             if i >= len(self._photos):
@@ -863,7 +903,9 @@ class ThumbnailGrid(QScrollArea):
 
         for i in list(self._materialized.keys()):
             if i not in needed:
-                self._materialized.pop(i).setParent(None)
+                cell = self._materialized.pop(i)
+                cell.cancel_pending_load()
+                cell.setParent(None)
 
         for i in needed:
             if i >= len(self._photos):
@@ -894,6 +936,7 @@ class ThumbnailGrid(QScrollArea):
 
     def _dematerialize_all(self) -> None:
         for cell in self._materialized.values():
+            cell.cancel_pending_load()
             cell.setParent(None)
         self._materialized.clear()
 
