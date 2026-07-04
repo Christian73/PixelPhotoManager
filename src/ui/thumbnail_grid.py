@@ -501,13 +501,23 @@ class ThumbnailGrid(QScrollArea):
         self._selected.clear()
         self._cancel_pending_workers()
         self._dematerialize_all()
-        self._buffer_active = False
         self._photos = list(photos)
         if self._ribbon_mode:
+            self._buffer_active = False
             self._ribbon_offset = 0
             QTimer.singleShot(0, self._ribbon_full_update)
         else:
+            # configure() peut réduire la hauteur du conteneur et forcer un
+            # clampage de la scrollbar (ancienne position invalide dans la
+            # nouvelle liste, plus courte) : cela émettrait valueChanged →
+            # _on_scroll() → réactiverait la marge tampon avant même le 1er
+            # affichage. On bloque le signal le temps du redimensionnement
+            # pour garantir un rendu "visible uniquement" au premier affichage.
+            vbar = self.verticalScrollBar()
+            blocked = vbar.blockSignals(True)
             self._container.configure(len(photos), self._thumb_size + 8, self._thumb_size + 8)
+            vbar.blockSignals(blocked)
+            self._buffer_active = False
             QTimer.singleShot(0, self._update_materialized)
 
     def add_photo(self, photo: PhotoInfo) -> None:
@@ -606,8 +616,11 @@ class ThumbnailGrid(QScrollArea):
             return          # taille déterminée par viewport, pas par ce réglage
         self._cancel_pending_workers()
         self._dematerialize_all()
-        self._buffer_active = False
+        vbar = self.verticalScrollBar()
+        blocked = vbar.blockSignals(True)
         self._container.configure(len(self._photos), size + 8, size + 8)
+        vbar.blockSignals(blocked)
+        self._buffer_active = False
         QTimer.singleShot(0, self._update_materialized)
 
     def bind_ribbon_nav_bar(self, bar: QScrollBar) -> None:
