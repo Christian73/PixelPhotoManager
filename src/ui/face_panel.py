@@ -141,6 +141,49 @@ class _FacesDataLoader(QThread):
             self.data_ready.emit(self._photo_path, [], [], [])
 
 
+class _AssignPrepLoader(QThread):
+    """Prépare la popup d'assignation de nom hors du thread UI.
+
+    get_persons + enrich_persons_photo_count + calcul de la personne suggérée
+    (comparaison de centroïdes) impliquent des requêtes sur ~60k visages ; les
+    lancer sur le thread UI faisait apparaître la popup avec plusieurs secondes
+    de retard (voire figeait la fenêtre le temps du calcul)."""
+
+    ready = Signal(list, object)   # persons: list[PersonInfo], suggested_person_id | None
+
+    def __init__(
+        self, catalog, face_db: "FaceDatabase", face: "FaceInfo | None", parent=None
+    ) -> None:
+        super().__init__(parent)
+        self._catalog = catalog
+        self._face_db = face_db
+        self._face    = face
+
+    def run(self) -> None:
+        try:
+            persons = self._catalog.get_persons()
+            self._face_db.enrich_persons_photo_count(persons)
+            suggested_id = None
+            face = self._face
+            if face is not None and face.cluster_id is not None and face.cluster_id >= 0:
+                c_emb = self._face_db.get_representative_embedding(cluster_id=face.cluster_id)
+                person_ids = [p.id for p in persons if p.id is not None]
+                if c_emb and person_ids:
+                    person_centroids = self._face_db.get_all_person_centroids(person_ids)
+                    best_sim, best_id = 0.0, None
+                    for p in persons:
+                        p_emb = person_centroids.get(p.id)
+                        if p_emb:
+                            sim = _cosine_sim(c_emb, p_emb)
+                            if sim > best_sim:
+                                best_sim, best_id = sim, p.id
+                    suggested_id = best_id if best_sim >= _SIM_WEAK else None
+            self.ready.emit(persons, suggested_id)
+        except Exception:
+            logger.exception("[AssignPrepLoader] exception during load")
+            self.ready.emit([], None)
+
+
 # ------------------------------------------------------------------ face item
 
 _BTN_IGNORE_SZ = 20   # diamètre du bouton ✕
@@ -693,9 +736,14 @@ class FacePanel(QWidget):
         le nom de la personne avant de créer le visage en base."""
         if not self._current_photo:
             return
-        persons = self._catalog.get_persons()
-        self._face_db.enrich_persons(persons)
+        t = _AssignPrepLoader(self._catalog, self._face_db, None, self)
+        t.ready.connect(
+            lambda persons, _sugg, bbox=bbox: self._continue_bbox_ready(bbox, persons)
+        )
+        t.finished.connect(t.deleteLater)
+        t.start()
 
+    def _continue_bbox_ready(self, bbox: tuple, persons: list) -> None:
         dlg = _AssignDialog(0, persons, suggested_person_id=None, show_ignore=False, parent=self)
         dlg.setWindowTitle("Nommer ce visage")
         if dlg.exec() != QDialog.Accepted:
@@ -725,35 +773,22 @@ class FacePanel(QWidget):
 
     # ------------------------------------------------------------------ context menu handlers
 
-    def _suggested_person_id(self, face: FaceInfo, persons: list) -> "int | None":
-        """Calcule la personne la plus probable pour un visage via similarité cosinus."""
-        if face.cluster_id is None or face.cluster_id < 0:
-            return None
-        c_emb = self._face_db.get_representative_embedding(cluster_id=face.cluster_id)
-        if not c_emb:
-            return None
-        person_ids = [p.id for p in persons if p.id is not None]
-        if not person_ids:
-            return None
-        person_centroids = self._face_db.get_all_person_centroids(person_ids)
-        best_sim, best_id = 0.0, None
-        for p in persons:
-            p_emb = person_centroids.get(p.id)
-            if p_emb:
-                sim = _cosine_sim(c_emb, p_emb)
-                if sim > best_sim:
-                    best_sim, best_id = sim, p.id
-        return best_id if best_sim >= _SIM_WEAK else None
-
     def _on_identify_face_requested(self, face_id: int) -> None:
         """Sépare ce visage de son groupe et l'attache à une personne nommée."""
         face = self._faces.get(face_id)
         if face is None:
             return
-        persons = self._catalog.get_persons()
-        self._face_db.enrich_persons(persons)
-        suggested_id = self._suggested_person_id(face, persons)
+        t = _AssignPrepLoader(self._catalog, self._face_db, face, self)
+        t.ready.connect(
+            lambda persons, suggested_id, face_id=face_id:
+                self._continue_identify_face(face_id, persons, suggested_id)
+        )
+        t.finished.connect(t.deleteLater)
+        t.start()
 
+    def _continue_identify_face(
+        self, face_id: int, persons: list, suggested_id: "int | None"
+    ) -> None:
         dlg = _AssignDialog(
             face_id, persons,
             suggested_person_id=suggested_id,
@@ -791,10 +826,17 @@ class FacePanel(QWidget):
 
     def _on_assign_requested(self, face_id: int) -> None:
         face = self._faces.get(face_id)
-        persons = self._catalog.get_persons()
-        self._face_db.enrich_persons(persons)
-        suggested_id = self._suggested_person_id(face, persons) if face else None
+        t = _AssignPrepLoader(self._catalog, self._face_db, face, self)
+        t.ready.connect(
+            lambda persons, suggested_id, face_id=face_id, face=face:
+                self._continue_assign_requested(face_id, face, persons, suggested_id)
+        )
+        t.finished.connect(t.deleteLater)
+        t.start()
 
+    def _continue_assign_requested(
+        self, face_id: int, face: "FaceInfo | None", persons: list, suggested_id: "int | None"
+    ) -> None:
         dlg = _AssignDialog(
             face_id, persons,
             suggested_person_id=suggested_id,
@@ -927,4 +969,15 @@ class FacePanel(QWidget):
     @Slot()
     def _reap_dying_threads(self) -> None:
         """Retire de la liste les threads qui ont terminé (libère leurs références Python)."""
-        self._dying_threads = [t for t in self._dying_threads if t.isRunning()]
+        still_running = []
+        for t in self._dying_threads:
+            try:
+                if t.isRunning():
+                    still_running.append(t)
+            except RuntimeError:
+                # deleteLater() a déjà détruit l'objet C++ sous-jacent (un autre
+                # thread mourant a pu terminer et vider la file d'événements
+                # avant qu'on ait pu retirer celui-ci de la liste) : on le
+                # considère simplement comme déjà nettoyé.
+                pass
+        self._dying_threads = still_running

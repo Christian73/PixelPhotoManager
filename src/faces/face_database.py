@@ -120,6 +120,13 @@ class FaceDatabase:
         self._lock = threading.Lock()
         Path(self._db_path).parent.mkdir(parents=True, exist_ok=True)
         self._init_db()
+        # Cache du centroïde de chaque personne (utilisé pour les suggestions de
+        # reconnaissance, ex. face_panel._AssignPrepLoader). Invalidé dès que le
+        # fingerprint (COUNT + SUM des person_id assignés) change — beaucoup moins
+        # cher (index idx_faces_person, quelques ms) que le recalcul complet, qui
+        # doit décoder tous les embeddings (~60k sur une grosse bibliothèque, >5 s).
+        self._person_centroid_cache: "dict[int, list[float]] | None" = None
+        self._person_centroid_cache_fp = None
 
     def _conn(self) -> sqlite3.Connection:
         return sqlite3.connect(self._db_path, check_same_thread=False)
@@ -1070,27 +1077,49 @@ class FaceDatabase:
     def get_all_person_centroids(
         self, person_ids: list[int]
     ) -> dict[int, list[float]]:
-        """Retourne {person_id: centroïde} pour toutes les personnes demandées."""
+        """Retourne {person_id: centroïde} pour toutes les personnes demandées.
+
+        Le résultat complet (toutes personnes confondues) est mis en cache en
+        mémoire et réutilisé tant que le fingerprint (COUNT + SUM des person_id
+        assignés, lecture indexée en quelques ms) n'a pas changé — évite de
+        redécoder ~60k embeddings (plusieurs secondes) à chaque appel, ce qui
+        rendait la popup d'identification de visage très lente à s'ouvrir."""
         if not person_ids:
             return {}
-        _CHUNK = 500
-        by_person: dict[int, list] = {}
         with self._lock:
             conn = self._conn()
             try:
-                for i in range(0, len(person_ids), _CHUNK):
-                    chunk = person_ids[i:i + _CHUNK]
-                    ph = ",".join("?" * len(chunk))
+                fp = conn.execute(
+                    "SELECT COUNT(*), IFNULL(SUM(person_id), 0) FROM faces"
+                    " WHERE person_id IS NOT NULL"
+                ).fetchone()
+                if self._person_centroid_cache is not None and fp == self._person_centroid_cache_fp:
+                    cache = self._person_centroid_cache
+                else:
                     rows = conn.execute(
-                        f"SELECT person_id, embedding FROM faces"
-                        f" WHERE person_id IN ({ph}) AND embedding IS NOT NULL",
-                        chunk,
+                        "SELECT person_id, embedding FROM faces"
+                        " WHERE person_id IS NOT NULL AND embedding IS NOT NULL"
                     ).fetchall()
+                    sums: dict[int, "np.ndarray"] = {}
+                    counts: dict[int, int] = {}
+                    import numpy as np
                     for pid, blob in rows:
-                        by_person.setdefault(pid, []).append(_dec(blob))
+                        vec = np.frombuffer(blob, dtype=np.float32)
+                        if pid in sums:
+                            sums[pid] += vec
+                            counts[pid] += 1
+                        else:
+                            sums[pid] = vec.copy()
+                            counts[pid] = 1
+                    cache = {
+                        pid: (sums[pid] / counts[pid]).tolist() for pid in sums
+                    }
+                    self._person_centroid_cache = cache
+                    self._person_centroid_cache_fp = fp
             finally:
                 conn.close()
-        return {pid: _centroid(embs) for pid, embs in by_person.items()}
+        wanted = set(person_ids)
+        return {pid: emb for pid, emb in cache.items() if pid in wanted}
 
     def get_all_person_cluster_centroids(
         self, person_ids: list[int]
@@ -1981,6 +2010,33 @@ class FaceDatabase:
         return row[0] if row else 0
 
     # ------------------------------------------------------------------ enrichment
+
+    def enrich_persons_photo_count(self, persons: list[PersonInfo]) -> None:
+        """Fill uniquement photo_count in-place (pas cover_path/cover_bbox/pending_count).
+
+        Variante allégée de enrich_persons() pour les cas qui n'affichent que le
+        nombre de photos (ex. popup d'assignation de nom) : évite la CTE avec
+        fenêtrage sur toute la table faces (calcul de la photo de couverture) et
+        la requête get_persons_pending_count(), qui à elles deux dominaient le
+        temps d'ouverture de la popup (~0.7s sur une base de ~370 personnes)
+        alors que ce résultat n'y est jamais affiché."""
+        if not persons:
+            return
+        with self._lock:
+            conn = self._conn()
+            try:
+                count_rows = conn.execute(
+                    "SELECT person_id, COUNT(DISTINCT photo_path)"
+                    " FROM faces"
+                    " WHERE person_id IS NOT NULL AND cluster_id IS NOT NULL"
+                    " GROUP BY person_id"
+                ).fetchall()
+            finally:
+                conn.close()
+        counts = {r[0]: r[1] for r in count_rows}
+        for p in persons:
+            if p.id in counts:
+                p.photo_count = counts[p.id]
 
     def enrich_persons(self, persons: list[PersonInfo]) -> None:
         """Fill photo_count and cover_path/cover_bbox in-place from face data."""
