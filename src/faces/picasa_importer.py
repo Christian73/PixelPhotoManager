@@ -156,13 +156,20 @@ def _parse_section_edits(cp: configparser.RawConfigParser, section: str) -> dict
     return raw
 
 
-def _picasa_to_edit_steps(raw: dict) -> list[tuple[str, EditInfo]]:
+def _picasa_to_edit_steps(
+    raw: dict, corrected_size: tuple[int, int] | None = None,
+) -> list[tuple[str, EditInfo]]:
     """
     Convertit un dict de retouches Picasa en une liste de (label, EditInfo cumulé),
     une entrée par filtre Picasa dans l'ordre du pipeline.
     Chaque EditInfo est l'état *accumulé* après application du filtre courant.
     Enregistrer chaque étape dans edit_history permet un undo filtre par filtre.
     Retourne [] si aucune retouche n'est trouvée.
+
+    `corrected_size` (largeur, hauteur EXIF-corrigées) n'est nécessaire que pour
+    le format de crop alternatif stocké dans la chaîne `filters=` (coordonnées
+    pixel absolues, contrairement au `crop`/`crop64` top-level qui encode des
+    fractions 0-1 via rect64) ; sans lui ce format alternatif est ignoré.
     """
     steps: list[tuple[str, EditInfo]] = []
     edit = EditInfo()
@@ -175,6 +182,8 @@ def _picasa_to_edit_steps(raw: dict) -> list[tuple[str, EditInfo]]:
             edit.rotation = deg
             steps.append(("picasa_rotate", copy.copy(edit)))
 
+    filters = raw.get("filters", {})
+
     if "crop" in raw:
         left, top, right, bottom = raw["crop"]
         if right > left and bottom > top:
@@ -182,8 +191,22 @@ def _picasa_to_edit_steps(raw: dict) -> list[tuple[str, EditInfo]]:
             edit = copy.copy(edit)
             edit.crop = (left, top, right - left, bottom - top)
             steps.append(("picasa_crop", copy.copy(edit)))
-
-    filters = raw.get("filters", {})
+    elif "crop" in filters and corrected_size:
+        # crop=enabled,left,top,right,bottom en pixels absolus, déjà dans le
+        # repère EXIF-corrigé (confirmé empiriquement : contrairement au rect64,
+        # ces coordonnées dépassent les dimensions brutes sur les photos avec
+        # orientation EXIF non triviale mais tiennent dans les dimensions
+        # corrigées).
+        p = filters["crop"]
+        cw, ch = corrected_size
+        if p and p[0] >= 1 and len(p) >= 5 and cw > 0 and ch > 0:
+            left_px, top_px, right_px, bottom_px = p[1], p[2], p[3], p[4]
+            if right_px > left_px and bottom_px > top_px:
+                left, top = left_px / cw, top_px / ch
+                right, bottom = right_px / cw, bottom_px / ch
+                edit = copy.copy(edit)
+                edit.crop = (left, top, right - left, bottom - top)
+                steps.append(("picasa_crop", copy.copy(edit)))
 
     if "bw" in filters and filters["bw"] and filters["bw"][0] >= 1:
         edit = copy.copy(edit)
@@ -507,7 +530,17 @@ def _run_import(
                 path_str = os.path.normpath(str(photo_path))
                 if edit_db.has_edits(path_str):
                     continue  # ne pas écraser les retouches existantes
-                steps = _picasa_to_edit_steps(raw)
+
+                corrected_size = None
+                if "crop" not in raw and "crop" in raw.get("filters", {}):
+                    try:
+                        from PIL import Image, ImageOps
+                        with Image.open(str(photo_path)) as img:
+                            corrected_size = ImageOps.exif_transpose(img).size
+                    except Exception:
+                        corrected_size = None
+
+                steps = _picasa_to_edit_steps(raw, corrected_size)
                 if steps:
                     # État vierge = point de départ pour undo complet
                     edit_db.save(path_str, EditInfo(), operation="picasa_before")
