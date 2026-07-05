@@ -204,6 +204,16 @@ class FaceDatabase:
                         "et marquées pour re-indexation",
                         len(bad_paths),
                     )
+                # Migration : rattraper les annotations Picasa restées consumed=0
+                # alors que la personne a en fait été identifiée après coup (suggestion
+                # acceptée, identification manuelle...) sur un visage qui chevauche
+                # l'annotation — chemins qui ne mettaient pas à jour consumed avant
+                # l'ajout de _consume_matching_picasa_annotations().
+                stale_paths = [r[0] for r in conn.execute(
+                    "SELECT DISTINCT photo_path FROM picasa_annotations WHERE consumed=0"
+                ).fetchall()]
+                if stale_paths:
+                    self._consume_matching_picasa_annotations(conn, stale_paths)
                 conn.commit()
             finally:
                 conn.close()
@@ -626,6 +636,13 @@ class FaceDatabase:
                 # Nettoyer les faces ArcFace qui sont devenues bruit (cluster_id=NULL)
                 # mais conservent un person_id résiduel d'un clustering précédent.
                 # Les faces sans embedding (placeholders Picasa) sont préservées.
+                orphaned = conn.execute(
+                    "SELECT DISTINCT photo_path, person_id FROM faces"
+                    " WHERE (pinned IS NULL OR pinned=0)"
+                    "   AND cluster_id IS NULL"
+                    "   AND person_id IS NOT NULL"
+                    "   AND embedding IS NOT NULL"
+                ).fetchall()
                 conn.execute(
                     "UPDATE faces SET person_id=NULL"
                     " WHERE (pinned IS NULL OR pinned=0)"
@@ -633,6 +650,8 @@ class FaceDatabase:
                     "   AND person_id IS NOT NULL"
                     "   AND embedding IS NOT NULL"
                 )
+                for photo_path, person_id in orphaned:
+                    self._release_picasa_annotation(conn, photo_path, person_id)
                 # Propager le person_id aux faces sans person_id dans un cluster déjà nommé.
                 # Couvre le cas d'une nouvelle face ajoutée par reclustering à un cluster
                 # dont d'autres faces ont déjà un person_id (assignation antérieure).
@@ -856,6 +875,7 @@ class FaceDatabase:
                     (person_id, cluster_id),
                 )
                 self._dedup_in_transaction(conn, paths)
+                self._consume_matching_picasa_annotations(conn, paths)
                 conn.commit()
             finally:
                 conn.close()
@@ -1255,11 +1275,18 @@ class FaceDatabase:
         with self._lock:
             conn = self._conn()
             try:
+                paths = [r[0] for r in conn.execute(
+                    "SELECT DISTINCT photo_path FROM faces"
+                    " WHERE person_id = ? AND cluster_id = ?",
+                    (person_id, cluster_id),
+                ).fetchall()]
                 conn.execute(
                     "UPDATE faces SET person_id = NULL"
                     " WHERE person_id = ? AND cluster_id = ?",
                     (person_id, cluster_id),
                 )
+                for photo_path in paths:
+                    self._release_picasa_annotation(conn, photo_path, person_id)
                 conn.commit()
             finally:
                 conn.close()
@@ -1400,6 +1427,7 @@ class FaceDatabase:
                 )
                 if row:
                     self._dedup_in_transaction(conn, [row[0]])
+                    self._consume_matching_picasa_annotations(conn, [row[0]])
                 conn.commit()
             finally:
                 conn.close()
@@ -1420,6 +1448,7 @@ class FaceDatabase:
                     [(person_id, fid) for fid in face_ids],
                 )
                 self._dedup_in_transaction(conn, paths)
+                self._consume_matching_picasa_annotations(conn, paths)
                 conn.commit()
             finally:
                 conn.close()
@@ -1430,11 +1459,16 @@ class FaceDatabase:
         with self._lock:
             conn = self._conn()
             try:
+                row = conn.execute(
+                    "SELECT photo_path, person_id FROM faces WHERE id=?", (face_id,)
+                ).fetchone()
                 conn.execute(
                     "UPDATE faces SET person_id=NULL, cluster_id=NULL, pinned=0"
                     " WHERE id=?",
                     (face_id,),
                 )
+                if row and row[1] is not None:
+                    self._release_picasa_annotation(conn, row[0], row[1])
                 conn.commit()
             finally:
                 conn.close()
@@ -1450,11 +1484,16 @@ class FaceDatabase:
                 ).fetchone()
                 min_pinned = row[0] if row and row[0] is not None else 0
                 new_cluster_id = min(min_pinned, 0) - 1   # -1, -2, -3, ...
+                face_row = conn.execute(
+                    "SELECT photo_path, person_id FROM faces WHERE id=?", (face_id,)
+                ).fetchone()
                 conn.execute(
                     "UPDATE faces SET cluster_id=?, pinned=1, person_id=NULL"
                     " WHERE id=?",
                     (new_cluster_id, face_id),
                 )
+                if face_row and face_row[1] is not None:
+                    self._release_picasa_annotation(conn, face_row[0], face_row[1])
                 conn.commit()
             finally:
                 conn.close()
@@ -1726,7 +1765,12 @@ class FaceDatabase:
         with self._lock:
             conn = self._conn()
             try:
+                row = conn.execute(
+                    "SELECT photo_path, person_id FROM faces WHERE id=?", (face_id,)
+                ).fetchone()
                 conn.execute("UPDATE faces SET person_id=NULL WHERE id=?", (face_id,))
+                if row and row[1] is not None:
+                    self._release_picasa_annotation(conn, row[0], row[1])
                 conn.commit()
             finally:
                 conn.close()
@@ -1754,11 +1798,16 @@ class FaceDatabase:
                 for face_id in face_ids:
                     cid = next_cid
                     next_cid -= 1
+                    prior = conn.execute(
+                        "SELECT photo_path, person_id FROM faces WHERE id=?", (face_id,)
+                    ).fetchone()
                     conn.execute(
                         "UPDATE faces SET cluster_id=?, pinned=1, person_id=NULL,"
                         " suggestion_person_id=NULL, suggestion_score=NULL WHERE id=?",
                         (cid, face_id),
                     )
+                    if prior and prior[1] is not None:
+                        self._release_picasa_annotation(conn, prior[0], prior[1])
                     emb_row = conn.execute(
                         "SELECT embedding FROM faces WHERE id=?", (face_id,)
                     ).fetchone()
@@ -1867,6 +1916,7 @@ class FaceDatabase:
                     (person_id, cluster_id),
                 )
                 self._dedup_in_transaction(conn, paths)
+                self._consume_matching_picasa_annotations(conn, paths)
                 conn.commit()
             finally:
                 conn.close()
@@ -1876,9 +1926,14 @@ class FaceDatabase:
         with self._lock:
             conn = self._conn()
             try:
+                paths = [r[0] for r in conn.execute(
+                    "SELECT DISTINCT photo_path FROM faces WHERE person_id=?", (person_id,)
+                ).fetchall()]
                 conn.execute(
                     "UPDATE faces SET person_id=NULL WHERE person_id=?", (person_id,)
                 )
+                for photo_path in paths:
+                    self._release_picasa_annotation(conn, photo_path, person_id)
                 conn.commit()
             finally:
                 conn.close()
@@ -1887,12 +1942,24 @@ class FaceDatabase:
         """
         Reassign all faces of remove_id to keep_id.
         The caller is responsible for deleting remove_id from catalog.persons.
+
+        Réassigne aussi picasa_annotations.person_id : sans ça, remove_id est
+        supprimé de catalog.persons juste après cet appel, et toute annotation
+        Picasa encore liée à remove_id (consommée ou non) devient orpheline
+        pour toujours — plus aucune trace ne permet de savoir qu'elle
+        correspondait en fait à keep_id (bug découvert le 2026-07-04 : person_id
+        154 fusionné dans 512 avait laissé des annotations orphelines détruites
+        ensuite par cleanup_orphan_person_ids).
         """
         with self._lock:
             conn = self._conn()
             try:
                 conn.execute(
                     "UPDATE faces SET person_id=? WHERE person_id=?",
+                    (keep_id, remove_id),
+                )
+                conn.execute(
+                    "UPDATE picasa_annotations SET person_id=? WHERE person_id=?",
                     (keep_id, remove_id),
                 )
                 conn.commit()
@@ -2074,6 +2141,21 @@ class FaceDatabase:
             finally:
                 conn.close()
 
+    def _release_picasa_annotation(self, conn, photo_path: str, person_id: "int | None") -> None:
+        """Quand une identification est retirée d'un visage, remet consumed=0 sur
+        l'annotation Picasa correspondante (même photo, même personne) si elle est
+        marquée consumed=1. Sans ça, l'annotation reste bloquée indéfiniment : elle
+        n'est plus jamais retentée par _apply_picasa_annotations(), même si un visage
+        libre et compatible existe ensuite sur la photo — l'identification Picasa
+        d'origine est alors perdue silencieusement et pour toujours."""
+        if person_id is None:
+            return
+        conn.execute(
+            "UPDATE picasa_annotations SET consumed=0"
+            " WHERE photo_path=? AND person_id=? AND consumed=1",
+            (photo_path, person_id),
+        )
+
     def _apply_picasa_annotations(self, conn, photo_path: str) -> None:
         """
         Associe les annotations Picasa non consommées aux visages détectés
@@ -2143,6 +2225,50 @@ class FaceDatabase:
                     best_face, person_id, best_score, os.path.basename(photo_path),
                 )
 
+    def _consume_matching_picasa_annotations(self, conn, photo_paths: "list[str]") -> None:
+        """Marque consumed=1 les annotations Picasa dont la personne vient d'être
+        identifiée a posteriori (suggestion acceptée, identification manuelle,
+        assignation de cluster) sur un visage qui chevauche spatialement
+        l'annotation. Sans ça, le compteur "en attente de reconnaissance" reste
+        indéfiniment faux pour ces cas : la reconnaissance a bien eu lieu, seul
+        le flag de suivi Picasa n'a jamais été mis à jour — ces chemins
+        d'identification ne passent pas par _apply_picasa_annotations() (qui ne
+        matche que les visages sans person_id), donc rien ne les synchronise
+        sinon."""
+        for photo_path in set(photo_paths):
+            pending = conn.execute(
+                "SELECT id, bbox_x, bbox_y, bbox_w, bbox_h, person_id"
+                " FROM picasa_annotations WHERE photo_path=? AND consumed=0",
+                (photo_path,),
+            ).fetchall()
+            if not pending:
+                continue
+            faces = conn.execute(
+                "SELECT bbox_x, bbox_y, bbox_w, bbox_h, person_id FROM faces"
+                " WHERE photo_path=? AND person_id IS NOT NULL AND embedding IS NOT NULL",
+                (photo_path,),
+            ).fetchall()
+            if not faces:
+                continue
+            for ann_id, ax, ay, aw, ah, pid in pending:
+                for fx, fy, fw, fh, fpid in faces:
+                    if fpid != pid:
+                        continue
+                    fx, fy, fw, fh = int(fx), int(fy), int(fw), int(fh)
+                    cx_f, cy_f = fx + fw // 2, fy + fh // 2
+                    cx_p, cy_p = ax + aw // 2, ay + ah // 2
+                    in_picasa = ax <= cx_f <= ax + aw and ay <= cy_f <= ay + ah
+                    in_face = fx <= cx_p <= fx + fw and fy <= cy_p <= fy + fh
+                    if (
+                        in_picasa or in_face
+                        or _iou((ax, ay, aw, ah), (fx, fy, fw, fh)) > _IOU_THRESHOLD
+                    ):
+                        conn.execute(
+                            "UPDATE picasa_annotations SET consumed=1 WHERE id=?",
+                            (ann_id,),
+                        )
+                        break
+
     def reset_clustering(self) -> None:
         """Efface les cluster_id HDBSCAN des faces non identifiées.
         Les faces avec person_id conservent leur cluster synthétique (10M+) :
@@ -2166,8 +2292,16 @@ class FaceDatabase:
 
         Utile après un ré-import Picasa pour éliminer les doublons existants avant
         que le critère person_id ne les ait couverts (ex. : contacts Picasa ≠ cluster ArcFace).
+
+        Avant de supprimer, transfère le person_id du placeholder vers le vrai visage
+        si celui-ci n'est pas encore identifié — sinon l'identification Picasa portée par
+        le placeholder est perdue silencieusement (bug découvert le 2026-07-04 : ~1067
+        identifications auraient été détruites par un appel naïf). Si les deux visages
+        portent des person_id différents (vrai désaccord), ne supprime rien et journalise
+        le conflit pour revue manuelle.
         Retourne le nombre de faces supprimées."""
         deleted = 0
+        conflicts = 0
         with self._lock:
             conn = self._conn()
             try:
@@ -2179,19 +2313,19 @@ class FaceDatabase:
                 ).fetchall()
                 for (photo_path,) in photos:
                     af_rows = conn.execute(
-                        "SELECT bbox_x, bbox_y, bbox_w, bbox_h FROM faces"
+                        "SELECT id, bbox_x, bbox_y, bbox_w, bbox_h, person_id FROM faces"
                         " WHERE photo_path=? AND embedding IS NOT NULL",
                         (photo_path,),
                     ).fetchall()
                     ph_rows = conn.execute(
-                        "SELECT id, bbox_x, bbox_y, bbox_w, bbox_h FROM faces"
+                        "SELECT id, bbox_x, bbox_y, bbox_w, bbox_h, person_id FROM faces"
                         " WHERE photo_path=? AND embedding IS NULL"
                         "   AND (pinned IS NULL OR pinned=0)",
                         (photo_path,),
                     ).fetchall()
-                    for ph_id, ax, ay, aw, ah in ph_rows:
+                    for ph_id, ax, ay, aw, ah, ph_pid in ph_rows:
                         cx_p, cy_p = ax + aw // 2, ay + ah // 2
-                        for fx, fy, fw, fh in af_rows:
+                        for f_id, fx, fy, fw, fh, f_pid in af_rows:
                             try:
                                 fx, fy, fw, fh = int(fx), int(fy), int(fw), int(fh)
                             except (TypeError, ValueError):
@@ -2202,10 +2336,23 @@ class FaceDatabase:
                                 or (fx <= cx_p <= fx + fw and fy <= cy_p <= fy + fh)
                                 or _iou((ax, ay, aw, ah), (fx, fy, fw, fh)) > 0.3
                             ):
+                                if ph_pid is not None and f_pid is not None and f_pid != ph_pid:
+                                    conflicts += 1
+                                    logger.warning(
+                                        "cleanup_overlapping_placeholders: conflit non résolu"
+                                        " (placeholder %d person=%s vs face %d person=%s) sur %s",
+                                        ph_id, ph_pid, f_id, f_pid, photo_path,
+                                    )
+                                    break
+                                if ph_pid is not None and f_pid is None:
+                                    conn.execute(
+                                        "UPDATE faces SET person_id=? WHERE id=?",
+                                        (ph_pid, f_id),
+                                    )
                                 conn.execute("DELETE FROM faces WHERE id=?", (ph_id,))
                                 deleted += 1
                                 break
-                if deleted:
+                if deleted or conflicts:
                     conn.commit()
             finally:
                 conn.close()
@@ -2213,7 +2360,57 @@ class FaceDatabase:
             logger.info(
                 "cleanup_overlapping_placeholders: %d placeholder(s) supprimé(s)", deleted
             )
+        if conflicts:
+            logger.warning(
+                "cleanup_overlapping_placeholders: %d conflit(s) non résolu(s), laissés en l'état",
+                conflicts,
+            )
+        if deleted:
+            self.restore_orphaned_ignored_faces()
         return deleted
+
+    def restore_orphaned_ignored_faces(self) -> int:
+        """Réactive (ignored=0) le visage de plus grande aire de chaque groupe
+        (photo_path, person_id) qui n'a plus aucun visage visible (tous ignored=1).
+
+        Se produit quand _dedup_in_transaction() avait préféré un doublon plus grand
+        (typiquement un placeholder Picasa) et mis ce visage en ignored=1, puis que ce
+        doublon a ensuite été supprimé (ex. par cleanup_overlapping_placeholders) sans
+        réévaluer l'invariant — laissant l'identification orpheline et invisible dans
+        l'UI alors que person_id reste correct (bug découvert le 2026-07-04, cas Jean
+        Cirre : 10 364 groupes affectés en base). Retourne le nombre de visages réactivés."""
+        with self._lock:
+            conn = self._conn()
+            try:
+                n = conn.execute(
+                    """
+                    UPDATE faces SET ignored=0
+                    WHERE ignored=1
+                      AND person_id IS NOT NULL
+                      AND NOT EXISTS (
+                          SELECT 1 FROM faces f2
+                          WHERE f2.photo_path=faces.photo_path
+                            AND f2.person_id=faces.person_id
+                            AND f2.ignored=0
+                      )
+                      AND id = (
+                          SELECT f3.id FROM faces f3
+                          WHERE f3.photo_path=faces.photo_path
+                            AND f3.person_id=faces.person_id
+                          ORDER BY f3.bbox_w * f3.bbox_h DESC, f3.id ASC
+                          LIMIT 1
+                      )
+                    """
+                ).rowcount
+                if n:
+                    conn.commit()
+            finally:
+                conn.close()
+        if n:
+            logger.info(
+                "restore_orphaned_ignored_faces: %d visage(s) réactivé(s) (identification orpheline)", n
+            )
+        return n
 
     def cleanup_stale_placeholder_faces(self) -> int:
         """Supprime les faces placeholder (embedding IS NULL, non épinglées) dont le
