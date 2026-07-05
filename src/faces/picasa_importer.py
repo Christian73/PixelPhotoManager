@@ -364,19 +364,25 @@ def scan(folders: list[str]) -> tuple[int, int, int]:
 
     Returns
     -------
-    (n_global_contacts, n_photos_with_faces, n_photos_with_edits)
+    (n_contacts, n_photos_with_faces, n_photos_with_edits)
     """
-    n_contacts = 0
+    # Doit refléter exactement le comptage de _run_import() (contacts globaux
+    # + contacts locaux par picasa.ini, dédupliqués par nom puisque
+    # _run_import() crée une personne par nom distinct, pas par hash).
+    all_contacts: dict[str, str] = {}
     cx = find_contacts_xml()
     if cx:
-        n_contacts = len(parse_contacts_xml(cx))
+        all_contacts.update(parse_contacts_xml(cx))
 
     n_photos = 0
     n_edits = 0
     for ini_path in find_ini_files(folders):
-        _, faces, edits = _parse_ini(ini_path)
+        local_contacts, faces, edits = _parse_ini(ini_path)
+        all_contacts.update(local_contacts)
         n_photos += len(faces)
         n_edits += len(edits)
+
+    n_contacts = len(set(all_contacts.values()))
 
     return n_contacts, n_photos, n_edits
 
