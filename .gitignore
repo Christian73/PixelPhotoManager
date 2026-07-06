@@ -8,6 +8,7 @@ build/
 *.db
 *.db-shm
 *.db-wal
+*.pdf
 
 # Artefacts installeur WiX (générés par build_msi.ps1)
 installer/obj/
