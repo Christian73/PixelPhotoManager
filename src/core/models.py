@@ -1,3 +1,5 @@
+﻿# Copyright 2026 Christian Guyot
+# SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -30,6 +32,7 @@ class PhotoInfo:
     id: Optional[int] = None
     media_type: str = "image"   # "image" or "video"
     duration: float = 0.0       # durée en secondes (vidéos uniquement)
+    duplicate_group_id: Optional[int] = None  # groupe de doublons (None = unique)
 
     def __post_init__(self):
         if self.path:
@@ -65,6 +68,15 @@ class EditInfo:
     color_green: float = 0.0
     color_blue: float = 0.0
     red_eye_regions: list = field(default_factory=list)  # [(cx, cy, r), ...] normalisés 0-1
+    vignette_strength: float = 0.0    # 0 = aucune, 1 = maximale
+    vignette_color: str = "black"     # "black" ou "white"
+    vignette_cx: float = 0.5          # centre X normalisé (0-1)
+    vignette_cy: float = 0.5          # centre Y normalisé (0-1)
+    vignette_rx1: float = 0.40        # rayon X interne (1.0 = demi-largeur image)
+    vignette_ry1: float = 0.40        # rayon Y interne (1.0 = demi-hauteur image)
+    vignette_rx2: float = 0.80        # rayon X externe (1.0 = demi-largeur image)
+    vignette_ry2: float = 0.80        # rayon Y externe (1.0 = demi-hauteur image)
+    vignette_angle: float = 0.0       # rotation en degrés
 
     def is_modified(self) -> bool:
         return (
@@ -85,7 +97,9 @@ class EditInfo:
             or self.color_green != 0.0
             or self.color_blue != 0.0
             or bool(self.red_eye_regions)
+            or self.vignette_strength > 0.0
         )
+
 
     def to_dict(self) -> dict:
         return {
@@ -110,6 +124,15 @@ class EditInfo:
             "color_green": self.color_green,
             "color_blue": self.color_blue,
             "red_eye_regions": [list(r) for r in self.red_eye_regions],
+            "vignette_strength": self.vignette_strength,
+            "vignette_color":    self.vignette_color,
+            "vignette_cx":       self.vignette_cx,
+            "vignette_cy":       self.vignette_cy,
+            "vignette_rx1":      self.vignette_rx1,
+            "vignette_ry1":      self.vignette_ry1,
+            "vignette_rx2":      self.vignette_rx2,
+            "vignette_ry2":      self.vignette_ry2,
+            "vignette_angle":    self.vignette_angle,
         }
 
     @classmethod
@@ -142,6 +165,15 @@ class EditInfo:
             red_eye_regions=[
                 tuple(r) for r in data.get("red_eye_regions", [])
             ],
+            vignette_strength=float(data.get("vignette_strength", 0.0)),
+            vignette_color=str(data.get("vignette_color", "black")),
+            vignette_cx=float(data.get("vignette_cx", 0.5)),
+            vignette_cy=float(data.get("vignette_cy", 0.5)),
+            vignette_rx1=float(data.get("vignette_rx1", 0.40)),
+            vignette_ry1=float(data.get("vignette_ry1", 0.40)),
+            vignette_rx2=float(data.get("vignette_rx2", 0.80)),
+            vignette_ry2=float(data.get("vignette_ry2", 0.80)),
+            vignette_angle=float(data.get("vignette_angle", 0.0)),
         )
 
 

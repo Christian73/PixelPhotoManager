@@ -1,3 +1,5 @@
+﻿# Copyright 2026 Christian Guyot
+# SPDX-License-Identifier: Apache-2.0
 import copy
 import logging
 import math
@@ -6,7 +8,7 @@ import os
 from PySide6.QtCore import Qt, Signal, Slot, QSize, QPoint, QTimer
 from PySide6.QtGui import (
     QPixmap, QPainter, QColor, QFont, QPen, QIcon,
-    QPolygon, QBrush, QLinearGradient, QPainterPath, QKeySequence,
+    QPolygon, QBrush, QLinearGradient, QRadialGradient, QPainterPath, QKeySequence,
 )
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QSlider,
@@ -136,51 +138,6 @@ def _icon_gamma(size: int = _ICON_SIZE) -> QPixmap:
     return px
 
 
-def _icon_sharpness(size: int = _ICON_SIZE) -> QPixmap:
-    px, p = _base_pixmap(size)
-    mid = size // 2
-    # Gauche : flou (cercles doux)
-    p.setPen(Qt.NoPen)
-    for cx, cy, r in [(mid // 2, mid // 2, 6), (mid // 3, mid * 3 // 4, 5),
-                      (mid * 2 // 3, mid * 2 // 3, 4)]:
-        p.setBrush(QColor(120, 120, 120, 80))
-        p.drawEllipse(cx - r, cy - r, r * 2, r * 2)
-    # Droite : net (traits vifs)
-    p.setPen(QPen(QColor(210, 210, 210), 1))
-    for dy in range(0, size, size // 5):
-        p.drawLine(mid + 4, dy, size - 4, dy)
-    p.drawLine(mid + 4, 0, mid + 4, size)
-    # Ligne de séparation
-    p.setPen(QPen(QColor(100, 130, 255), 1))
-    p.drawLine(mid, 2, mid, size - 2)
-    p.end()
-    return px
-
-
-def _icon_noise(size: int = _ICON_SIZE) -> QPixmap:
-    import random
-    px, p = _base_pixmap(size)
-    mid = size // 2
-    rng = random.Random(7)
-    p.setPen(QColor(0, 0, 0, 0))  # no pen
-    # Gauche : bruit
-    for _ in range(80):
-        x = rng.randint(2, mid - 2)
-        y = rng.randint(2, size - 2)
-        v = rng.randint(40, 210)
-        p.setPen(QColor(v, v, v))
-        p.drawPoint(x, y)
-    # Droite : lissé
-    p.setPen(Qt.NoPen)
-    for x in range(mid + 1, size - 1):
-        p.setBrush(QColor(150, 150, 150, 160))
-        p.drawRect(x, 2, 1, size - 4)
-    # Séparation
-    p.setPen(QPen(QColor(100, 220, 100), 1))
-    p.drawLine(mid, 2, mid, size - 2)
-    p.end()
-    return px
-
 
 def _icon_straighten(size: int = _ICON_SIZE) -> QPixmap:
     """Cadre légèrement incliné + ligne d'horizon horizontale."""
@@ -285,6 +242,37 @@ def _icon_flip_v(size: int = _ICON_SIZE) -> QPixmap:
     # Axe central
     p.setPen(QPen(QColor(255, 255, 255), 2))
     p.drawLine(pad, c, size - pad, c)
+    p.end()
+    return px
+
+
+def _icon_vignette(size: int = _ICON_SIZE) -> QPixmap:
+    """Carré gris avec dégradé radial sombre aux coins — effet vignette."""
+    px, p = _base_pixmap(size)
+    pad = size // 8
+    c = size // 2
+    bw = size - 2 * pad
+    bh = size - 2 * pad
+
+    # Photo de fond gris moyen
+    p.setBrush(QColor(130, 130, 130))
+    p.setPen(Qt.NoPen)
+    p.drawRect(pad, pad, bw, bh)
+
+    # Vignette sombre via dégradé radial
+    grad = QRadialGradient(c, c, int(size * 0.62))
+    grad.setColorAt(0.35, QColor(0, 0, 0, 0))
+    grad.setColorAt(1.00, QColor(0, 0, 0, 210))
+    p.setBrush(grad)
+    p.drawRect(pad, pad, bw, bh)
+
+    # Reflet clair au centre
+    grad2 = QRadialGradient(c, c, size // 7)
+    grad2.setColorAt(0.0, QColor(220, 220, 220, 120))
+    grad2.setColorAt(1.0, QColor(220, 220, 220, 0))
+    p.setBrush(grad2)
+    p.drawRect(pad, pad, bw, bh)
+
     p.end()
     return px
 
@@ -1000,15 +988,114 @@ def _icon_red_eye(size: int = _ICON_SIZE) -> QPixmap:
     return px
 
 
+# ------------------------------------------------------------------ dialogue vignette
+
+_TOGGLE_BTN_STYLE = """
+    QPushButton {{
+        background: #2e2e2e; color: #aaa;
+        border: 1px solid #555; border-radius: 4px;
+        padding: 4px 8px; font-size: 11px;
+    }}
+    QPushButton:hover   {{ background: #3a3a3a; color: #ddd; }}
+    QPushButton:checked {{ background: #1a3a5a; color: #7ab; border-color: #4a9fd4; font-weight: bold; }}
+"""
+
+
+class VignetteTreatmentDialog(QDialog):
+    preview = Signal(object)   # EditInfo en temps réel
+
+    def __init__(self, edit: EditInfo, parent=None) -> None:
+        super().__init__(parent)
+        self._edit = copy.copy(edit)
+        self._panel = None
+        self.setWindowTitle("Vignette")
+        self.setWindowFlags(Qt.Tool | Qt.WindowStaysOnTopHint)
+        self.setMinimumWidth(380)
+        self._setup_ui()
+
+    def _setup_ui(self) -> None:
+        layout = QVBoxLayout(self)
+        layout.setSpacing(10)
+        layout.setContentsMargins(14, 14, 14, 10)
+
+        # ---- Intensité ----
+        self._sl_strength = EditSlider("Intensité", 0.0, 1.0, self._edit.vignette_strength, 2)
+        self._sl_strength.value_changed.connect(lambda v: self._on_changed("vignette_strength", v))
+        layout.addWidget(self._sl_strength)
+
+        # ---- Couleur ----
+        color_grp = QGroupBox("Couleur")
+        color_row = QHBoxLayout(color_grp)
+        color_row.setSpacing(6)
+
+        self._btn_black = QPushButton("Noir")
+        self._btn_white = QPushButton("Blanc")
+        for btn in (self._btn_black, self._btn_white):
+            btn.setCheckable(True)
+            btn.setStyleSheet(_TOGGLE_BTN_STYLE)
+            btn.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+            color_row.addWidget(btn)
+
+        self._btn_black.setChecked(self._edit.vignette_color == "black")
+        self._btn_white.setChecked(self._edit.vignette_color == "white")
+        self._btn_black.clicked.connect(lambda: self._set_color("black"))
+        self._btn_white.clicked.connect(lambda: self._set_color("white"))
+        layout.addWidget(color_grp)
+
+        # ---- Instructions ----
+        hint = QLabel(
+            "Faites glisser les poignées sur l'image :\n"
+            "• Cercle intérieur (pointillés) — début du fondu\n"
+            "• Cercle extérieur — fin du fondu\n"
+            "• Poignée ronde au sommet — rotation\n"
+            "• Croix centrale — déplacer"
+        )
+        hint.setStyleSheet("color: #999; font-size: 10px;")
+        hint.setWordWrap(True)
+        layout.addWidget(hint)
+
+        # ---- Boutons OK / Annuler ----
+        btn_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        btn_box.button(QDialogButtonBox.Ok).setText("Valider")
+        btn_box.button(QDialogButtonBox.Cancel).setText("Annuler")
+        btn_box.accepted.connect(self.accept)
+        btn_box.rejected.connect(self.reject)
+        layout.addWidget(btn_box)
+
+    def showEvent(self, event) -> None:
+        super().showEvent(event)
+        if self._panel is not None:
+            pos = self._panel._compute_dialog_pos(self.width(), self.height())
+            QTimer.singleShot(0, lambda: self.move(pos))
+
+    def _on_changed(self, attr: str, value: float) -> None:
+        setattr(self._edit, attr, value)
+        self.preview.emit(copy.copy(self._edit))
+
+    def _set_color(self, color: str) -> None:
+        self._edit.vignette_color = color
+        self._btn_black.setChecked(color == "black")
+        self._btn_white.setChecked(color == "white")
+        self.preview.emit(copy.copy(self._edit))
+
+    def update_from_edit(self, edit: EditInfo) -> None:
+        self._edit = copy.copy(edit)
+        self._sl_strength.set_value(edit.vignette_strength)
+        self._btn_black.setChecked(edit.vignette_color == "black")
+        self._btn_white.setChecked(edit.vignette_color == "white")
+
+    def get_edit(self) -> EditInfo:
+        return self._edit
+
+
 # ------------------------------------------------------------------ panneau principal
 
 # (label, icône_fn, sliders_def)
 _TREATMENTS: list[tuple] = [
-    ("Luminosité",  _icon_brightness, [("Luminosité",  "brightness",      -1.0, 1.0, 2)]),
-    ("Contraste",   _icon_contrast,   [("Contraste",   "contrast",        -1.0, 1.0, 2)]),
-    ("Couleurs",    _icon_saturation, [("Saturation",  "saturation",      -1.0, 1.0, 2)]),
-    ("Netteté",     _icon_sharpness,  [("Netteté",     "sharpness",        0.0, 1.0, 2)]),
-    ("Débruitage",  _icon_noise,      [("Débruitage",  "noise_reduction",  0.0, 1.0, 2)]),
+    ("Luminosité", _icon_brightness, [("Luminosité", "brightness", -1.0, 1.0, 2)]),
+    ("Contraste",  _icon_contrast,   [("Contraste",  "contrast",   -1.0, 1.0, 2)]),
+    ("Couleurs",   _icon_saturation, [("Saturation", "saturation", -1.0, 1.0, 2)]),
+    ("Vignette",   _icon_vignette,   []),   # dialogue dédié — sliders_def ignoré
 ]
 
 
@@ -1020,6 +1107,7 @@ class EditPanel(QWidget):
     rotation_stepped        = Signal(str, int)     # (photo_path, new_rotation_degrees) — émis uniquement pour les rotations 90°
     red_eye_mode_requested  = Signal(bool, float)  # (active, radius) — bascule le mode yeux rouges dans le canvas
     wb_pick_requested       = Signal(bool)         # True = démarrer la pipette, False = annuler
+    vignette_edit_mode      = Signal(bool, object) # (active: bool, edit: EditInfo)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -1030,6 +1118,7 @@ class EditPanel(QWidget):
         self._db = EditDatabase()
         self._red_eye_active = False
         self._active_color_dlg: "CouleursTreatmentDialog | None" = None
+        self._active_vignette_dlg: "VignetteTreatmentDialog | None" = None
         self._setup_ui()
 
     def _setup_ui(self) -> None:
@@ -1059,13 +1148,9 @@ class EditPanel(QWidget):
         grid.setSpacing(4)
         for idx, (name, icon_fn, sliders_def) in enumerate(_TREATMENTS):
             btn = self._make_treatment_button(name, icon_fn(), sliders_def)
-            # (1,1) est réservé à Yeux rouges → Netteté et Débruitage passent en ligne 2
-            if idx < 3:
-                grid.addWidget(btn, idx // 2, idx % 2)
-            else:
-                grid.addWidget(btn, 2, idx - 3)
+            grid.addWidget(btn, idx // 2, idx % 2)
 
-        # Bouton Yeux rouges — même ligne que Couleurs (ligne 1, colonne 1)
+        # Bouton Yeux rouges — ligne 2 (ligne 1 = Couleurs | Vignette)
         self._btn_red_eye = QToolButton()
         self._btn_red_eye.setText("Yeux rouges")
         self._btn_red_eye.setIcon(QIcon(_icon_red_eye()))
@@ -1076,7 +1161,7 @@ class EditPanel(QWidget):
         self._btn_red_eye.setToolTip("Corriger les yeux rouges — cliquez sur chaque œil")
         self._btn_red_eye.setCheckable(True)
         self._btn_red_eye.clicked.connect(self._toggle_red_eye_mode)
-        grid.addWidget(self._btn_red_eye, 1, 1)
+        grid.addWidget(self._btn_red_eye, 2, 0)
         inner_layout.addLayout(grid)
 
         # Panneau de contrôle yeux rouges (masqué hors mode)
@@ -1130,6 +1215,21 @@ class EditPanel(QWidget):
         self._btn_redo.clicked.connect(self.redo)
         undo_row.addWidget(self._btn_redo)
         inner_layout.addLayout(undo_row)
+
+        # Réinitialiser toutes les retouches
+        self._btn_reset = QPushButton("Réinitialiser toutes les retouches")
+        self._btn_reset.setEnabled(False)
+        self._btn_reset.setToolTip(
+            "Supprime toutes les retouches et l'historique pour cette photo.\n"
+            "Le fichier original sur disque n'est pas modifié."
+        )
+        self._btn_reset.setStyleSheet(
+            "QPushButton { color: #c07070; }"
+            "QPushButton:hover { color: #e08080; }"
+            "QPushButton:disabled { color: #555; }"
+        )
+        self._btn_reset.clicked.connect(self.reset_all)
+        inner_layout.addWidget(self._btn_reset)
 
         # Géométrie (boutons directs)
         grp_geo = QGroupBox("Géométrie")
@@ -1275,6 +1375,9 @@ class EditPanel(QWidget):
         if title == "Couleurs":
             self._open_couleurs_treatment()
             return
+        if title == "Vignette":
+            self._open_vignette_treatment()
+            return
 
         original = copy.copy(self._edit)
         dlg = TreatmentDialog(title, sliders_def, self._edit, parent=self)
@@ -1286,6 +1389,7 @@ class EditPanel(QWidget):
             self.grid_visibility_changed.emit(True)
 
         if dlg.exec() == QDialog.Accepted:
+            self._checkpoint(title)
             self._push_undo(title)
             new_edit = dlg.get_edit()
             for _, attr, *_ in sliders_def:
@@ -1316,6 +1420,7 @@ class EditPanel(QWidget):
         dlg.wb_pick_requested.connect(self.wb_pick_requested)
 
         def _on_accepted() -> None:
+            self._checkpoint("Couleurs")
             self._push_undo("Couleurs")
             new_edit = dlg.get_edit()
             for attr in ("saturation", "color_red", "color_green", "color_blue"):
@@ -1355,6 +1460,7 @@ class EditPanel(QWidget):
         dlg._panel = self
 
         if dlg.exec() == QDialog.Accepted:
+            self._checkpoint("Luminosité")
             self._push_undo("Luminosité")
             new_edit = dlg.get_edit()
             self._edit.brightness = new_edit.brightness
@@ -1367,6 +1473,70 @@ class EditPanel(QWidget):
             self._edit = original
             self.edits_changed.emit(copy.copy(self._edit))
 
+    def _open_vignette_treatment(self) -> None:
+        if self._active_vignette_dlg is not None:
+            self._active_vignette_dlg.raise_()
+            self._active_vignette_dlg.activateWindow()
+            return
+
+        original = copy.copy(self._edit)
+        dlg = VignetteTreatmentDialog(self._edit, parent=self)
+        dlg.preview.connect(self._on_vignette_preview)
+        dlg._panel = self
+        self._active_vignette_dlg = dlg
+
+        def _finish(accepted: bool) -> None:
+            self._active_vignette_dlg = None
+            if accepted:
+                # Pousser l'état AVANT ouverture (original), pas self._edit qui a
+                # déjà été modifié par on_vignette_changed pendant le glissement.
+                # Aussi sauvegarder dans la DB pour l'undo cross-session.
+                if self._photo:
+                    self._db.push_history(self._photo.path, original, "Vignette")
+                self._undo_stack.append((original, "Vignette"))
+                if len(self._undo_stack) > _UNDO_MAX:
+                    self._undo_stack.pop(0)
+                self._redo_stack.clear()
+                self._update_undo_buttons()
+                # La géométrie (cx/cy/rx/ry/angle) est déjà dans self._edit
+                # via on_vignette_changed ; seuls force et couleur viennent du dialogue.
+                new_edit = dlg.get_edit()
+                self._edit.vignette_strength = new_edit.vignette_strength
+                self._edit.vignette_color    = new_edit.vignette_color
+                self.edits_changed.emit(copy.copy(self._edit))
+                self._save("Vignette")
+            else:
+                self._edit = original
+                self.edits_changed.emit(copy.copy(self._edit))
+            self.vignette_edit_mode.emit(False, copy.copy(self._edit))
+
+        dlg.accepted.connect(lambda: _finish(True))
+        dlg.rejected.connect(lambda: _finish(False))
+
+        self.vignette_edit_mode.emit(True, copy.copy(self._edit))
+        dlg.show()
+        dlg.raise_()
+
+    def _on_vignette_preview(self, edit: EditInfo) -> None:
+        """Mise à jour depuis le slider d'intensité ou bouton couleur du dialogue."""
+        self._edit.vignette_strength = edit.vignette_strength
+        self._edit.vignette_color    = edit.vignette_color
+        self.edits_changed.emit(copy.copy(self._edit))
+
+    @Slot(object)
+    def on_vignette_changed(self, edit: EditInfo) -> None:
+        """Appelé par main_window quand l'utilisateur a manipulé les poignées sur la visionneuse."""
+        self._edit.vignette_cx    = edit.vignette_cx
+        self._edit.vignette_cy    = edit.vignette_cy
+        self._edit.vignette_rx1   = edit.vignette_rx1
+        self._edit.vignette_ry1   = edit.vignette_ry1
+        self._edit.vignette_rx2   = edit.vignette_rx2
+        self._edit.vignette_ry2   = edit.vignette_ry2
+        self._edit.vignette_angle = edit.vignette_angle
+        if self._active_vignette_dlg is not None:
+            self._active_vignette_dlg.update_from_edit(self._edit)
+        self.edits_changed.emit(copy.copy(self._edit))
+
     def _on_preview(self, edit: EditInfo) -> None:
         self.edits_changed.emit(edit)
 
@@ -1377,7 +1547,9 @@ class EditPanel(QWidget):
             self._btn_red_eye.setChecked(False)
             self._toggle_red_eye_mode(False)
         if self._active_color_dlg is not None:
-            self._active_color_dlg.reject()   # ferme le dialogue, déclenche _cleanup
+            self._active_color_dlg.reject()
+        if self._active_vignette_dlg is not None:
+            self._active_vignette_dlg.reject()
         self._photo = photo
         self._edit = self._db.load(photo.path)
         # get_history retourne aussi l'état courant (dernier enregistrement).
@@ -1420,6 +1592,15 @@ class EditPanel(QWidget):
             self._db.save(self._photo.path, self._edit, operation=operation)
             self.photo_saved.emit(self._photo.path, copy.copy(self._edit))
 
+    def _checkpoint(self, op_label: str) -> None:
+        """Sauvegarde l'état courant dans l'historique DB avant une opération.
+
+        Permet l'undo cross-session : au prochain démarrage, cet état sera
+        disponible dans la pile même si la session précédente n'a pas fait d'undo.
+        """
+        if self._photo:
+            self._db.push_history(self._photo.path, self._edit, op_label)
+
     def _push_undo(self, op_label: str) -> None:
         self._undo_stack.append((copy.copy(self._edit), op_label))
         if len(self._undo_stack) > _UNDO_MAX:
@@ -1442,8 +1623,33 @@ class EditPanel(QWidget):
         else:
             self._btn_redo.setText("Rétablir")
             self._btn_redo.setEnabled(False)
+        self._btn_reset.setEnabled(self._edit.is_modified())
+
+    def reset_all(self) -> None:
+        """Supprime toutes les retouches et l'historique pour la photo courante."""
+        if not self._photo:
+            return
+        from PySide6.QtWidgets import QMessageBox
+        reply = QMessageBox.question(
+            self,
+            "Réinitialiser les retouches",
+            f"Supprimer toutes les retouches de cette photo ?\n\n"
+            "Le fichier original sur disque n'est pas modifié.",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No,
+        )
+        if reply != QMessageBox.Yes:
+            return
+        self._db.delete(self._photo.path)
+        self._edit = EditInfo()
+        self._undo_stack.clear()
+        self._redo_stack.clear()
+        self._update_undo_buttons()
+        self.edits_changed.emit(copy.copy(self._edit))
+        self.photo_saved.emit(self._photo.path, copy.copy(self._edit))
 
     def _rotate_cw(self) -> None:
+        self._checkpoint("Rotation +90°")
         self._push_undo("Rotation +90°")
         self._edit.rotation = (self._edit.rotation + 90) % 360
         self.edits_changed.emit(copy.copy(self._edit))
@@ -1452,6 +1658,7 @@ class EditPanel(QWidget):
             self.rotation_stepped.emit(self._photo.path, self._edit.rotation)
 
     def _rotate_ccw(self) -> None:
+        self._checkpoint("Rotation −90°")
         self._push_undo("Rotation −90°")
         self._edit.rotation = (self._edit.rotation - 90) % 360
         self.edits_changed.emit(copy.copy(self._edit))
@@ -1460,18 +1667,21 @@ class EditPanel(QWidget):
             self.rotation_stepped.emit(self._photo.path, self._edit.rotation)
 
     def _flip_h(self) -> None:
+        self._checkpoint("Miroir H")
         self._push_undo("Miroir H")
         self._edit.flip_h = not self._edit.flip_h
         self.edits_changed.emit(copy.copy(self._edit))
         self._save("flip_h")
 
     def _flip_v(self) -> None:
+        self._checkpoint("Miroir V")
         self._push_undo("Miroir V")
         self._edit.flip_v = not self._edit.flip_v
         self.edits_changed.emit(copy.copy(self._edit))
         self._save("flip_v")
 
     def apply_crop(self, quad: tuple) -> None:
+        self._checkpoint("Recadrage")
         self._push_undo("Recadrage")
         self._edit.crop = quad
         self.edits_changed.emit(copy.copy(self._edit))
@@ -1500,6 +1710,7 @@ class EditPanel(QWidget):
     def _clear_red_eye(self) -> None:
         if not self._edit.red_eye_regions:
             return
+        self._checkpoint("Effacer yeux rouges")
         self._push_undo("Effacer yeux rouges")
         self._edit.red_eye_regions = []
         self.edits_changed.emit(copy.copy(self._edit))
@@ -1511,6 +1722,7 @@ class EditPanel(QWidget):
 
     def on_red_eye_added(self, cx: float, cy: float) -> None:
         """Reçu depuis le canvas quand l'utilisateur clique sur un œil rouge."""
+        self._checkpoint("Yeux rouges")
         self._push_undo("Yeux rouges")
         radius = self._red_eye_slider.value() / 1000.0
         self._edit.red_eye_regions = list(self._edit.red_eye_regions)

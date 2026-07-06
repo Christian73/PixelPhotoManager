@@ -1,3 +1,5 @@
+﻿# Copyright 2026 Christian Guyot
+# SPDX-License-Identifier: Apache-2.0
 """
 FacePanel — barre latérale affichant les visages identifiés d'une photo.
 
@@ -137,6 +139,49 @@ class _FacesDataLoader(QThread):
         except Exception:
             logger.exception("[FacesDataLoader] exception during load")
             self.data_ready.emit(self._photo_path, [], [], [])
+
+
+class _AssignPrepLoader(QThread):
+    """Prépare la popup d'assignation de nom hors du thread UI.
+
+    get_persons + enrich_persons_photo_count + calcul de la personne suggérée
+    (comparaison de centroïdes) impliquent des requêtes sur ~60k visages ; les
+    lancer sur le thread UI faisait apparaître la popup avec plusieurs secondes
+    de retard (voire figeait la fenêtre le temps du calcul)."""
+
+    ready = Signal(list, object)   # persons: list[PersonInfo], suggested_person_id | None
+
+    def __init__(
+        self, catalog, face_db: "FaceDatabase", face: "FaceInfo | None", parent=None
+    ) -> None:
+        super().__init__(parent)
+        self._catalog = catalog
+        self._face_db = face_db
+        self._face    = face
+
+    def run(self) -> None:
+        try:
+            persons = self._catalog.get_persons()
+            self._face_db.enrich_persons_photo_count(persons)
+            suggested_id = None
+            face = self._face
+            if face is not None and face.cluster_id is not None and face.cluster_id >= 0:
+                c_emb = self._face_db.get_representative_embedding(cluster_id=face.cluster_id)
+                person_ids = [p.id for p in persons if p.id is not None]
+                if c_emb and person_ids:
+                    person_centroids = self._face_db.get_all_person_centroids(person_ids)
+                    best_sim, best_id = 0.0, None
+                    for p in persons:
+                        p_emb = person_centroids.get(p.id)
+                        if p_emb:
+                            sim = _cosine_sim(c_emb, p_emb)
+                            if sim > best_sim:
+                                best_sim, best_id = sim, p.id
+                    suggested_id = best_id if best_sim >= _SIM_WEAK else None
+            self.ready.emit(persons, suggested_id)
+        except Exception:
+            logger.exception("[AssignPrepLoader] exception during load")
+            self.ready.emit([], None)
 
 
 # ------------------------------------------------------------------ face item
@@ -372,6 +417,7 @@ class FacePanel(QWidget):
     cover_face_set           = Signal(int, object)  # person_id, FaceInfo — vignette principale changée
     person_cluster_requested = Signal(int)     # person_id — double-clic sur un visage nommé
     undo_stack_changed       = Signal(bool)    # True = can undo
+    add_face_mode_requested  = Signal(bool)    # True = entrer en mode ajout, False = annuler
 
     def __init__(
         self,
@@ -387,6 +433,7 @@ class FacePanel(QWidget):
         self._cluster_persons: dict[int, int]       = {}   # cluster_id → person_id
         self._loader:          _FacePanelLoader | None = None
         self._data_loader:     _FacesDataLoader | None = None
+        self._dying_threads:   list = []   # threads being stopped — keep ref until finished
         self._current_photo:   str = ""
         self._selected_face_id: int | None = None
         self._undo_stack:      list[tuple[str, object]] = []
@@ -432,6 +479,19 @@ class FacePanel(QWidget):
         scroll.setStyleSheet("border: none;")
         root.addWidget(scroll)
 
+        self._btn_add_face = QPushButton("➕  Ajouter une personne")
+        self._btn_add_face.setCheckable(True)
+        self._btn_add_face.setFixedHeight(28)
+        self._btn_add_face.setStyleSheet(
+            _BOTTOM_BTN_STYLE + "QPushButton:checked { background: #2a6a2a; color: white; }"
+        )
+        self._btn_add_face.setToolTip(
+            "Dessiner une bboxe pour une personne non détectée automatiquement"
+        )
+        self._btn_add_face.toggled.connect(self._on_add_face_toggled)
+        self._btn_add_face.setEnabled(False)
+        root.addWidget(self._btn_add_face)
+
         self._btn_ignored = QPushButton("Visages ignorés…")
         self._btn_ignored.setFixedHeight(28)
         self._btn_ignored.setStyleSheet(_BOTTOM_BTN_STYLE)
@@ -453,23 +513,29 @@ class FacePanel(QWidget):
             self._undo_stack.clear()
             self.undo_stack_changed.emit(False)
         self._current_photo = photo_path
+        self._btn_add_face.setEnabled(bool(photo_path))
         self._stop_loader()
         self._clear()
 
-        # Toujours déconnecter et libérer l'ancien loader pour éviter l'accumulation
-        # de threads orphelins en tant qu'enfants Qt (zombies C++).
-        if self._data_loader is not None:
-            try:
-                self._data_loader.data_ready.disconnect()
-            except RuntimeError:
-                pass
-            if self._data_loader.isRunning():
-                self._data_loader.finished.connect(self._data_loader.deleteLater)
-            else:
-                self._data_loader.deleteLater()
+        # Sauvegarder l'ancien loader avant de le remplacer, pour éviter que la
+        # réaffectation de self._data_loader fasse tomber le refcount Python à 0
+        # pendant que le thread C++ tourne (crash QThread destroyed while running).
+        old_dl = self._data_loader
         self._data_loader = _FacesDataLoader(self._face_db, self._catalog, photo_path, self)
         self._data_loader.data_ready.connect(self._on_faces_data_ready)
         self._data_loader.start()
+
+        if old_dl is not None:
+            try:
+                old_dl.data_ready.disconnect()
+            except RuntimeError:
+                pass
+            if old_dl.isRunning():
+                self._dying_threads.append(old_dl)
+                old_dl.finished.connect(old_dl.deleteLater)
+                old_dl.finished.connect(self._reap_dying_threads)
+            else:
+                old_dl.deleteLater()
 
     # ------------------------------------------------------------------ undo
 
@@ -653,37 +719,76 @@ class FacePanel(QWidget):
             self._items[face_id].set_selected(True)
             self.face_highlighted.emit(self._faces.get(face_id))
 
-    # ------------------------------------------------------------------ context menu handlers
+    # ------------------------------------------------------------------ ajout manuel
 
-    def _suggested_person_id(self, face: FaceInfo, persons: list) -> "int | None":
-        """Calcule la personne la plus probable pour un visage via similarité cosinus."""
-        if face.cluster_id is None or face.cluster_id < 0:
-            return None
-        c_emb = self._face_db.get_representative_embedding(cluster_id=face.cluster_id)
-        if not c_emb:
-            return None
-        person_ids = [p.id for p in persons if p.id is not None]
-        if not person_ids:
-            return None
-        person_centroids = self._face_db.get_all_person_centroids(person_ids)
-        best_sim, best_id = 0.0, None
-        for p in persons:
-            p_emb = person_centroids.get(p.id)
-            if p_emb:
-                sim = _cosine_sim(c_emb, p_emb)
-                if sim > best_sim:
-                    best_sim, best_id = sim, p.id
-        return best_id if best_sim >= _SIM_WEAK else None
+    def _on_add_face_toggled(self, checked: bool) -> None:
+        self.add_face_mode_requested.emit(checked)
+
+    def reset_add_face_button(self) -> None:
+        """Décoche le bouton sans réémettre add_face_mode_requested (appelé par
+        main_window quand le mode se termine côté visionneuse : validation ou Echap)."""
+        self._btn_add_face.blockSignals(True)
+        self._btn_add_face.setChecked(False)
+        self._btn_add_face.blockSignals(False)
+
+    def on_face_bbox_ready(self, bbox: tuple) -> None:
+        """Reçoit la bboxe positionnée manuellement dans la visionneuse et demande
+        le nom de la personne avant de créer le visage en base."""
+        if not self._current_photo:
+            return
+        t = _AssignPrepLoader(self._catalog, self._face_db, None, self)
+        t.ready.connect(
+            lambda persons, _sugg, bbox=bbox: self._continue_bbox_ready(bbox, persons)
+        )
+        t.finished.connect(t.deleteLater)
+        t.start()
+
+    def _continue_bbox_ready(self, bbox: tuple, persons: list) -> None:
+        dlg = _AssignDialog(0, persons, suggested_person_id=None, show_ignore=False, parent=self)
+        dlg.setWindowTitle("Nommer ce visage")
+        if dlg.exec() != QDialog.Accepted:
+            return
+
+        if dlg.is_new_person():
+            name = dlg.new_name()
+            if not name:
+                return
+            person = self._catalog.create_person(name)
+            person_id = person.id
+        else:
+            person_id = dlg.existing_person_id()
+            if person_id is None:
+                return
+
+        face_id = self._face_db.add_manual_face(self._current_photo, bbox, person_id)
+
+        def _undo(fid=face_id):
+            self._face_db.delete_face(fid)
+            self.person_assigned.emit()
+            self.set_photo(self._current_photo)
+        self._push_undo("Ajouter un visage", _undo)
+
+        self.person_assigned.emit()
+        self.set_photo(self._current_photo)
+
+    # ------------------------------------------------------------------ context menu handlers
 
     def _on_identify_face_requested(self, face_id: int) -> None:
         """Sépare ce visage de son groupe et l'attache à une personne nommée."""
         face = self._faces.get(face_id)
         if face is None:
             return
-        persons = self._catalog.get_persons()
-        self._face_db.enrich_persons(persons)
-        suggested_id = self._suggested_person_id(face, persons)
+        t = _AssignPrepLoader(self._catalog, self._face_db, face, self)
+        t.ready.connect(
+            lambda persons, suggested_id, face_id=face_id:
+                self._continue_identify_face(face_id, persons, suggested_id)
+        )
+        t.finished.connect(t.deleteLater)
+        t.start()
 
+    def _continue_identify_face(
+        self, face_id: int, persons: list, suggested_id: "int | None"
+    ) -> None:
         dlg = _AssignDialog(
             face_id, persons,
             suggested_person_id=suggested_id,
@@ -721,10 +826,17 @@ class FacePanel(QWidget):
 
     def _on_assign_requested(self, face_id: int) -> None:
         face = self._faces.get(face_id)
-        persons = self._catalog.get_persons()
-        self._face_db.enrich_persons(persons)
-        suggested_id = self._suggested_person_id(face, persons) if face else None
+        t = _AssignPrepLoader(self._catalog, self._face_db, face, self)
+        t.ready.connect(
+            lambda persons, suggested_id, face_id=face_id, face=face:
+                self._continue_assign_requested(face_id, face, persons, suggested_id)
+        )
+        t.finished.connect(t.deleteLater)
+        t.start()
 
+    def _continue_assign_requested(
+        self, face_id: int, face: "FaceInfo | None", persons: list, suggested_id: "int | None"
+    ) -> None:
         dlg = _AssignDialog(
             face_id, persons,
             suggested_person_id=suggested_id,
@@ -838,13 +950,34 @@ class FacePanel(QWidget):
 
     def _stop_loader(self) -> None:
         if self._loader is not None:
-            self._loader.stop()
-            if self._loader.isRunning():
+            old = self._loader
+            self._loader = None
+            old.stop()
+            if old.isRunning():
                 try:
-                    self._loader.ready.disconnect(self._on_face_ready)
+                    old.ready.disconnect(self._on_face_ready)
                 except RuntimeError:
                     pass
-                self._loader.finished.connect(self._loader.deleteLater)
+                # Garder une référence Python jusqu'à la fin du thread pour éviter
+                # que Shiboken détruise le C++ QThread pendant qu'il tourne encore.
+                self._dying_threads.append(old)
+                old.finished.connect(old.deleteLater)
+                old.finished.connect(self._reap_dying_threads)
             else:
-                self._loader.deleteLater()
-            self._loader = None
+                old.deleteLater()
+
+    @Slot()
+    def _reap_dying_threads(self) -> None:
+        """Retire de la liste les threads qui ont terminé (libère leurs références Python)."""
+        still_running = []
+        for t in self._dying_threads:
+            try:
+                if t.isRunning():
+                    still_running.append(t)
+            except RuntimeError:
+                # deleteLater() a déjà détruit l'objet C++ sous-jacent (un autre
+                # thread mourant a pu terminer et vider la file d'événements
+                # avant qu'on ait pu retirer celui-ci de la liste) : on le
+                # considère simplement comme déjà nettoyé.
+                pass
+        self._dying_threads = still_running

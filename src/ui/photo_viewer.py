@@ -1,16 +1,19 @@
+﻿# Copyright 2026 Christian Guyot
+# SPDX-License-Identifier: Apache-2.0
+import copy
 import io
 import logging
 import math
 import os
 
-from PySide6.QtCore import Qt, QThread, QTimer, QUrl, Signal, Slot, QPoint, QRectF, QPointF, QSize
+from PySide6.QtCore import Qt, QThread, QTimer, QUrl, Signal, Slot, QPoint, QRectF, QPointF, QSize, QFileInfo
 from PySide6.QtGui import (
     QDesktopServices, QPixmap, QPainter, QKeyEvent, QWheelEvent,
     QMouseEvent, QPen, QColor, QPainterPath, QPolygonF, QIcon,
 )
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
-    QLabel, QSizePolicy, QToolButton, QButtonGroup, QMenu,
+    QLabel, QSizePolicy, QToolButton, QButtonGroup, QMenu, QFileIconProvider,
 )
 
 from src.core.models import PhotoInfo, EditInfo
@@ -23,6 +26,19 @@ logger = logging.getLogger(__name__)
 # Les retouches (rotation, recadrage, etc.) s'appliquent sur cette copie réduite.
 # L'image originale pleine résolution n'est utilisée que pour l'export final.
 _PREVIEW_MAX_PX = 1024
+
+
+def _to_rgb(img):
+    """Convertit une image PIL en RGB pour l'enregistrement JPEG.
+    RGBA est aplati sur fond blanc ; les autres modes (CMYK, P…) sont convertis directement."""
+    if img.mode == "RGBA":
+        from PIL import Image as _Image
+        bg = _Image.new("RGB", img.size, (255, 255, 255))
+        bg.paste(img, mask=img.split()[3])
+        return bg
+    if img.mode != "RGB":
+        return img.convert("RGB")
+    return img
 
 
 def _build_pixmap(photo: PhotoInfo, edit: EditInfo | None) -> "tuple[QPixmap, int, int] | None":
@@ -45,8 +61,7 @@ def _build_pixmap(photo: PhotoInfo, edit: EditInfo | None) -> "tuple[QPixmap, in
                 )
             if edit and edit.is_modified():
                 img = ImageAdjuster.apply_all(img, edit)
-            if img.mode not in ("RGB", "RGBA"):
-                img = img.convert("RGB")
+            img = _to_rgb(img)
             buf = io.BytesIO()
             img.save(buf, format="JPEG", quality=92)
             pixmap = QPixmap()
@@ -120,8 +135,7 @@ def _build_base_image(photo: PhotoInfo) -> "tuple[bytes, int, int] | None":
                 img = img.resize(
                     (round(orig_w * scale), round(orig_h * scale)), Image.LANCZOS
                 )
-            if img.mode not in ("RGB", "RGBA"):
-                img = img.convert("RGB")
+            img = _to_rgb(img)
             buf = io.BytesIO()
             img.save(buf, format="JPEG", quality=95)
             return buf.getvalue(), orig_w, orig_h
@@ -140,8 +154,7 @@ def _apply_edit_to_base(base_bytes: bytes, edit: "EditInfo | None") -> "QPixmap 
         img = Image.open(io.BytesIO(base_bytes))
         if edit and edit.is_modified():
             img = ImageAdjuster.apply_all(img, edit)
-        if img.mode not in ("RGB", "RGBA"):
-            img = img.convert("RGB")
+        img = _to_rgb(img)
         buf = io.BytesIO()
         img.save(buf, format="JPEG", quality=92)
         pixmap = QPixmap()
@@ -272,6 +285,8 @@ class _Canvas(QWidget):
     red_eye_point_added         = Signal(float, float)  # cx_norm, cy_norm (0-1)
     pixel_sampled               = Signal(int, int, int)  # R, G, B — pipette balance des blancs
     face_context_menu_requested = Signal(object, object) # (FaceInfo, QPoint global)
+    vignette_changed            = Signal(object) # EditInfo (géométrie mise à jour par drag)
+    face_add_confirmed          = Signal(object) # tuple (bbox_x,bbox_y,bbox_w,bbox_h) int
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -303,6 +318,20 @@ class _Canvas(QWidget):
         self._red_eye_mouse: QPointF | None = None
         # Mode pipette balance des blancs
         self._wb_pick_mode: bool = False
+        # Mode vignette interactive
+        self._vignette_mode: bool = False
+        self._vignette_edit = None           # EditInfo courant de la vignette
+        self._vignette_drag: str | None = None
+        self._vignette_drag_start: "QPointF | None" = None
+        self._vignette_edit_start = None     # copie de EditInfo au début du drag
+        # Mode ajout manuel d'un visage (bbox non détectée par InsightFace)
+        self._face_add_mode: bool = False
+        self._face_add_rect: "QRectF | None" = None     # écran, rectangle axis-aligned
+        self._face_add_action: "str | None" = None      # None | 'DRAWING' | 'MOVING' | 'RESIZING'
+        self._face_add_handle: "int | None" = None       # index coin actif (0=TL,1=TR,2=BR,3=BL)
+        self._face_add_draw_start: "QPointF | None" = None
+        self._face_add_mouse_start: "QPointF | None" = None
+        self._face_add_rect_start: "QRectF | None" = None
         self.setMouseTracking(True)
         self.setFocusPolicy(Qt.NoFocus)
 
@@ -747,6 +776,329 @@ class _Canvas(QWidget):
         """Edit courant à prendre en compte pour le mapping bbox → écran."""
         self._current_edit = edit
 
+    # ------------------------------------------------------------------ ajout manuel de visage
+
+    def enter_face_add_mode(self) -> None:
+        self._face_add_mode   = True
+        self._face_add_rect   = None
+        self._face_add_action = None
+        self._face_add_handle = None
+        self.setCursor(Qt.CrossCursor)
+        self.update()
+
+    def cancel_face_add_mode(self) -> None:
+        self._face_add_mode   = False
+        self._face_add_rect   = None
+        self._face_add_action = None
+        self._face_add_handle = None
+        self.unsetCursor()
+        self.update()
+
+    def confirm_face_add(self) -> None:
+        rect = self._face_add_rect
+        self.cancel_face_add_mode()
+        if rect is None or rect.width() < 8 or rect.height() < 8:
+            return
+        bbox = self._bbox_from_screen_rect(rect)
+        if bbox is not None:
+            self.face_add_confirmed.emit(bbox)
+
+    def _face_add_handle_positions(self, rect: QRectF) -> dict[int, QPointF]:
+        return {
+            0: rect.topLeft(), 1: rect.topRight(),
+            2: rect.bottomRight(), 3: rect.bottomLeft(),
+        }
+
+    def _face_add_hit_handle(self, pos: QPointF) -> "int | None":
+        if self._face_add_rect is None:
+            return None
+        for idx, hpos in self._face_add_handle_positions(self._face_add_rect).items():
+            if (abs(pos.x() - hpos.x()) <= _HANDLE_HIT and
+                    abs(pos.y() - hpos.y()) <= _HANDLE_HIT):
+                return idx
+        return None
+
+    def _apply_face_add_resize(self, pos: QPointF) -> None:
+        if self._face_add_rect_start is None or self._face_add_handle is None:
+            return
+        r = self._face_add_rect_start
+        ir = self._img_rect()
+        x = max(ir.left(), min(ir.right(), pos.x()))
+        y = max(ir.top(), min(ir.bottom(), pos.y()))
+        if self._face_add_handle == 0:      # TL
+            rect = QRectF(QPointF(x, y), r.bottomRight())
+        elif self._face_add_handle == 1:    # TR
+            rect = QRectF(QPointF(r.left(), y), QPointF(x, r.bottom()))
+        elif self._face_add_handle == 2:    # BR
+            rect = QRectF(r.topLeft(), QPointF(x, y))
+        else:                               # BL
+            rect = QRectF(QPointF(x, r.top()), QPointF(r.right(), y))
+        self._face_add_rect = rect.normalized()
+
+    def _apply_face_add_move(self, pos: QPointF) -> None:
+        if self._face_add_rect_start is None or self._face_add_mouse_start is None:
+            return
+        ir = self._img_rect()
+        r  = self._face_add_rect_start
+        dx = pos.x() - self._face_add_mouse_start.x()
+        dy = pos.y() - self._face_add_mouse_start.y()
+        nx = max(ir.left(), min(ir.right()  - r.width(),  r.x() + dx))
+        ny = max(ir.top(),  min(ir.bottom() - r.height(), r.y() + dy))
+        self._face_add_rect = QRectF(nx, ny, r.width(), r.height())
+
+    def _bbox_from_screen_rect(self, rect: QRectF) -> "tuple[int, int, int, int] | None":
+        """Inverse de _face_screen_rect() pour detected_rotation=0 — le seul cas
+        pertinent pour un visage ajouté manuellement (embedding=NULL garantit que
+        detected_rotation résoudra à 0 à la relecture, cf. add_manual_face)."""
+        if self._pixmap is None or self._orig_w == 0 or self._orig_h == 0:
+            return None
+        dw0, dh0 = float(self._orig_w), float(self._orig_h)
+
+        # Dimensions après rotation puis crop de l'edit courant (même logique
+        # géométrique que _face_screen_rect, mais uniquement les tailles ici).
+        dw_postrot, dh_postrot = dw0, dh0
+        edit = self._current_edit
+        rot = 0
+        cx_rel, cy_rel, cw_rel, ch_rel = 0.0, 0.0, 1.0, 1.0
+        if edit is not None:
+            rot = int(round(getattr(edit, "rotation", 0.0))) % 360
+            if rot in (90, 270):
+                dw_postrot, dh_postrot = dh0, dw0
+            crop = getattr(edit, "crop", None)
+            if crop and len(crop) == 4:
+                cx_rel, cy_rel, cw_rel, ch_rel = crop
+            elif crop and len(crop) == 8:
+                xs = [crop[i] for i in range(0, 8, 2)]
+                ys = [crop[i] for i in range(1, 8, 2)]
+                cx_rel, cy_rel = min(xs), min(ys)
+                cw_rel, ch_rel = max(xs) - cx_rel, max(ys) - cy_rel
+
+        dw_crop = cw_rel * dw_postrot
+        dh_crop = ch_rel * dh_postrot
+        if dw_crop <= 0 or dh_crop <= 0 or self._zoom <= 0:
+            return None
+
+        # 1) écran → espace pixmap (post-rotation, post-crop)
+        sx = self._pixmap.width()  / dw_crop
+        sy = self._pixmap.height() / dh_crop
+        if sx <= 0 or sy <= 0:
+            return None
+        bx = (rect.x() - self._offset.x()) / (sx * self._zoom)
+        by = (rect.y() - self._offset.y()) / (sy * self._zoom)
+        bw = rect.width()  / (sx * self._zoom)
+        bh = rect.height() / (sy * self._zoom)
+
+        # 2) undo crop → espace post-rotation
+        bx += cx_rel * dw_postrot
+        by += cy_rel * dh_postrot
+
+        # 3) undo flip (toujours en espace post-rotation)
+        if edit is not None:
+            if getattr(edit, "flip_h", False):
+                bx = dw_postrot - bx - bw
+            if getattr(edit, "flip_v", False):
+                by = dh_postrot - by - bh
+
+        # 4) undo rotation edit → espace EXIF-corrigé d'origine (dw0, dh0)
+        if rot == 90:
+            bx, by, bw, bh = by, dh0 - bx - bw, bh, bw
+        elif rot == 180:
+            bx, by, bw, bh = dw0 - bx - bw, dh0 - by - bh, bw, bh
+        elif rot == 270:
+            bx, by, bw, bh = dw0 - by - bh, bx, bh, bw
+
+        bx = max(0.0, min(bx, dw0 - 1))
+        by = max(0.0, min(by, dh0 - 1))
+        bw = max(1.0, min(bw, dw0 - bx))
+        bh = max(1.0, min(bh, dh0 - by))
+        return int(round(bx)), int(round(by)), int(round(bw)), int(round(bh))
+
+    # ------------------------------------------------------------------ vignette interactive
+
+    def enter_vignette_mode(self, edit) -> None:
+        self._vignette_mode = True
+        self._vignette_edit = copy.copy(edit)
+        self._vignette_drag = None
+        self.update()
+
+    def exit_vignette_mode(self) -> None:
+        self._vignette_mode = False
+        self._vignette_edit = None
+        self._vignette_drag = None
+        self.update()
+
+    def update_vignette(self, edit) -> None:
+        if self._vignette_mode:
+            self._vignette_edit = copy.copy(edit)
+            self.update()
+
+    def _vignette_handle_positions(self) -> dict:
+        if not self._vignette_edit or not self._pixmap:
+            return {}
+        ir = self._img_rect()
+        if ir.width() <= 0 or ir.height() <= 0:
+            return {}
+        e = self._vignette_edit
+        cx_s  = ir.x() + e.vignette_cx * ir.width()
+        cy_s  = ir.y() + e.vignette_cy * ir.height()
+        rx1_s = e.vignette_rx1 * ir.width()  / 2.0
+        ry1_s = e.vignette_ry1 * ir.height() / 2.0
+        rx2_s = e.vignette_rx2 * ir.width()  / 2.0
+        ry2_s = e.vignette_ry2 * ir.height() / 2.0
+        rad   = math.radians(e.vignette_angle)
+        cos_a = math.cos(rad)
+        sin_a = math.sin(rad)
+
+        def rot(ldx, ldy):
+            return (ldx * cos_a - ldy * sin_a, ldx * sin_a + ldy * cos_a)
+
+        def s(ldx, ldy):
+            rdx, rdy = rot(ldx, ldy)
+            return QPointF(cx_s + rdx, cy_s + rdy)
+
+        return {
+            'center':  QPointF(cx_s, cy_s),
+            'inner_n': s(0,      -ry1_s),
+            'inner_s': s(0,      +ry1_s),
+            'inner_e': s(+rx1_s, 0),
+            'inner_w': s(-rx1_s, 0),
+            'outer_n': s(0,      -ry2_s),
+            'outer_s': s(0,      +ry2_s),
+            'outer_e': s(+rx2_s, 0),
+            'outer_w': s(-rx2_s, 0),
+            'rotate':  s(0,      -(ry2_s + 28)),
+        }
+
+    def _vignette_hit_test(self, pos: QPointF) -> "str | None":
+        HIT_R = 12
+        for name, hpos in self._vignette_handle_positions().items():
+            if math.hypot(pos.x() - hpos.x(), pos.y() - hpos.y()) <= HIT_R:
+                return name
+        return None
+
+    def _vignette_update_drag(self, pos: QPointF) -> None:
+        if not self._vignette_drag or not self._vignette_edit_start or not self._vignette_drag_start:
+            return
+        ir = self._img_rect()
+        if ir.width() <= 0 or ir.height() <= 0:
+            return
+
+        e0  = self._vignette_edit_start
+        dx  = pos.x() - self._vignette_drag_start.x()
+        dy  = pos.y() - self._vignette_drag_start.y()
+        rad = math.radians(e0.vignette_angle)
+        cos_a = math.cos(rad)
+        sin_a = math.sin(rad)
+        handle = self._vignette_drag
+        e = copy.copy(e0)
+
+        if handle == 'center':
+            e.vignette_cx = max(0.0, min(1.0, e0.vignette_cx + dx / ir.width()))
+            e.vignette_cy = max(0.0, min(1.0, e0.vignette_cy + dy / ir.height()))
+        elif handle == 'inner_n':
+            proj = dx * sin_a + dy * (-cos_a)
+            e.vignette_ry1 = max(0.05, e0.vignette_ry1 + proj / (ir.height() / 2.0))
+        elif handle == 'inner_s':
+            proj = dx * (-sin_a) + dy * cos_a
+            e.vignette_ry1 = max(0.05, e0.vignette_ry1 + proj / (ir.height() / 2.0))
+        elif handle == 'inner_e':
+            proj = dx * cos_a + dy * sin_a
+            e.vignette_rx1 = max(0.05, e0.vignette_rx1 + proj / (ir.width() / 2.0))
+        elif handle == 'inner_w':
+            proj = dx * (-cos_a) + dy * (-sin_a)
+            e.vignette_rx1 = max(0.05, e0.vignette_rx1 + proj / (ir.width() / 2.0))
+        elif handle == 'outer_n':
+            proj = dx * sin_a + dy * (-cos_a)
+            e.vignette_ry2 = max(0.05, e0.vignette_ry2 + proj / (ir.height() / 2.0))
+        elif handle == 'outer_s':
+            proj = dx * (-sin_a) + dy * cos_a
+            e.vignette_ry2 = max(0.05, e0.vignette_ry2 + proj / (ir.height() / 2.0))
+        elif handle == 'outer_e':
+            proj = dx * cos_a + dy * sin_a
+            e.vignette_rx2 = max(0.05, e0.vignette_rx2 + proj / (ir.width() / 2.0))
+        elif handle == 'outer_w':
+            proj = dx * (-cos_a) + dy * (-sin_a)
+            e.vignette_rx2 = max(0.05, e0.vignette_rx2 + proj / (ir.width() / 2.0))
+        elif handle == 'rotate':
+            cx_s = ir.x() + e0.vignette_cx * ir.width()
+            cy_s = ir.y() + e0.vignette_cy * ir.height()
+            a0 = math.degrees(math.atan2(
+                self._vignette_drag_start.y() - cy_s,
+                self._vignette_drag_start.x() - cx_s))
+            ac = math.degrees(math.atan2(pos.y() - cy_s, pos.x() - cx_s))
+            e.vignette_angle = (e0.vignette_angle + ac - a0) % 360.0
+
+        self._vignette_edit = e
+        self.vignette_changed.emit(copy.copy(e))
+        self.update()
+
+    def _draw_vignette_overlay(self, p: QPainter) -> None:
+        if not self._vignette_edit or not self._pixmap:
+            return
+        ir = self._img_rect()
+        if ir.width() <= 0 or ir.height() <= 0:
+            return
+        e = self._vignette_edit
+        cx_s  = ir.x() + e.vignette_cx * ir.width()
+        cy_s  = ir.y() + e.vignette_cy * ir.height()
+        rx1_s = e.vignette_rx1 * ir.width()  / 2.0
+        ry1_s = e.vignette_ry1 * ir.height() / 2.0
+        rx2_s = e.vignette_rx2 * ir.width()  / 2.0
+        ry2_s = e.vignette_ry2 * ir.height() / 2.0
+
+        # Ellipse interne — pointillés jaunes
+        p.save()
+        p.translate(cx_s, cy_s)
+        p.rotate(e.vignette_angle)
+        p.setPen(QPen(QColor(255, 200, 0, 210), 1.5, Qt.DashLine))
+        p.setBrush(Qt.NoBrush)
+        p.drawEllipse(QPointF(0, 0), rx1_s, ry1_s)
+        p.restore()
+
+        # Ellipse externe — trait continu jaune
+        p.save()
+        p.translate(cx_s, cy_s)
+        p.rotate(e.vignette_angle)
+        p.setPen(QPen(QColor(255, 200, 0, 210), 1.5))
+        p.setBrush(Qt.NoBrush)
+        p.drawEllipse(QPointF(0, 0), rx2_s, ry2_s)
+        p.restore()
+
+        handles = self._vignette_handle_positions()
+
+        # Tige de rotation (outer_n → rotate)
+        outer_n = handles.get('outer_n')
+        rot_h   = handles.get('rotate')
+        if outer_n and rot_h:
+            p.setPen(QPen(QColor(255, 200, 0, 130), 1, Qt.DotLine))
+            p.drawLine(outer_n, rot_h)
+
+        HS = 6
+        for name, hpos in handles.items():
+            active = (name == self._vignette_drag)
+            fill   = QColor(255, 200, 0, 230 if active else 160)
+            border = QPen(QColor(160, 120, 0, 230), 1.5)
+
+            if name == 'center':
+                p.setPen(QPen(QColor(255, 200, 0, 210), 1.5))
+                p.setBrush(Qt.NoBrush)
+                arm = 10
+                p.drawLine(QPointF(hpos.x()-arm, hpos.y()), QPointF(hpos.x()+arm, hpos.y()))
+                p.drawLine(QPointF(hpos.x(), hpos.y()-arm), QPointF(hpos.x(), hpos.y()+arm))
+                p.drawEllipse(hpos, 4.0, 4.0)
+            elif name == 'rotate':
+                p.setPen(border)
+                p.setBrush(fill)
+                p.drawEllipse(hpos, HS + 1, HS + 1)
+            elif name.startswith('inner_'):
+                p.setPen(border)
+                p.setBrush(fill)
+                p.drawEllipse(hpos, HS, HS)
+            else:  # outer_n/s/e/w
+                p.setPen(border)
+                p.setBrush(fill)
+                p.drawRect(QRectF(hpos.x()-HS, hpos.y()-HS, HS*2, HS*2))
+
     # ------------------------------------------------------------------ red-eye mode
 
     def enter_red_eye_mode(self, radius: float = 0.03) -> None:
@@ -899,6 +1251,26 @@ class _Canvas(QWidget):
                 self._draw_grid(p)
             if self._crop_mode:
                 self._draw_crop_overlay(p)
+            if self._vignette_mode:
+                self._draw_vignette_overlay(p)
+            if self._face_add_mode:
+                self._draw_face_add_overlay(p)
+
+    def _draw_face_add_overlay(self, p: QPainter) -> None:
+        ir = self._img_rect()
+        p.setPen(QPen(QColor(255, 200, 60, 160), 2))
+        p.setBrush(Qt.NoBrush)
+        p.drawRect(ir)
+        if self._face_add_rect is None:
+            return
+        rect = self._face_add_rect
+        p.setPen(QPen(QColor(255, 200, 60), 2, Qt.DashLine))
+        p.drawRect(rect)
+        hs = 8
+        p.setBrush(QColor(255, 200, 60))
+        p.setPen(Qt.NoPen)
+        for pt in (rect.topLeft(), rect.topRight(), rect.bottomRight(), rect.bottomLeft()):
+            p.drawRect(QRectF(pt.x() - hs / 2, pt.y() - hs / 2, hs, hs))
 
     def _draw_crop_overlay(self, p: QPainter) -> None:
         ir = self._img_rect()
@@ -976,7 +1348,7 @@ class _Canvas(QWidget):
 
     def wheelEvent(self, event: QWheelEvent) -> None:
         delta = event.angleDelta().y()
-        if self._red_eye_mode:
+        if self._red_eye_mode or self._face_add_mode:
             return
         if self._crop_mode:
             # Zoom centré sur le milieu, en préservant le quadrilatère de crop
@@ -999,6 +1371,16 @@ class _Canvas(QWidget):
             self.wheel_navigate.emit(1 if delta > 0 else -1)
 
     def mousePressEvent(self, event: QMouseEvent) -> None:
+        if self._vignette_mode:
+            if event.button() == Qt.LeftButton:
+                pos = event.position()
+                hit = self._vignette_hit_test(pos)
+                if hit:
+                    self._vignette_drag       = hit
+                    self._vignette_drag_start = QPointF(pos)
+                    self._vignette_edit_start = copy.copy(self._vignette_edit)
+                    self.setCursor(Qt.ClosedHandCursor)
+            return
         if self._wb_pick_mode:
             if event.button() == Qt.LeftButton and self._pixmap:
                 pos = event.position()
@@ -1021,6 +1403,27 @@ class _Canvas(QWidget):
                     cx = (pos.x() - ir.x()) / ir.width()
                     cy = (pos.y() - ir.y()) / ir.height()
                     self.red_eye_point_added.emit(cx, cy)
+            return
+        if self._face_add_mode:
+            if event.button() != Qt.LeftButton:
+                return
+            pos = event.position()
+            ir  = self._img_rect()
+            hid = self._face_add_hit_handle(pos) if self._face_add_rect is not None else None
+            if hid is not None:
+                self._face_add_action      = 'RESIZING'
+                self._face_add_handle      = hid
+                self._face_add_mouse_start = pos
+                self._face_add_rect_start  = QRectF(self._face_add_rect)
+            elif self._face_add_rect is not None and self._face_add_rect.contains(pos):
+                self._face_add_action      = 'MOVING'
+                self._face_add_mouse_start = pos
+                self._face_add_rect_start  = QRectF(self._face_add_rect)
+            elif ir.contains(pos):
+                self._face_add_action     = 'DRAWING'
+                self._face_add_draw_start = QPointF(pos)
+                self._face_add_rect       = QRectF(pos, pos)
+            self.update()
             return
         if self._crop_mode:
             if event.button() != Qt.LeftButton:
@@ -1075,9 +1478,44 @@ class _Canvas(QWidget):
 
     def mouseMoveEvent(self, event: QMouseEvent) -> None:
         pos = event.position()
+        if self._vignette_mode:
+            if self._vignette_drag:
+                self._vignette_update_drag(pos)
+            else:
+                # Mettre à jour le curseur selon la proximité des poignées
+                hit = self._vignette_hit_test(pos)
+                self.setCursor(Qt.PointingHandCursor if hit else Qt.ArrowCursor)
+            return
         if self._red_eye_mode:
             self._red_eye_mouse = pos
             self.update()
+            return
+        if self._face_add_mode:
+            if self._face_add_action == 'DRAWING':
+                ir = self._img_rect()
+                s  = self._face_add_draw_start
+                raw_x = max(ir.left(), min(ir.right(),  pos.x()))
+                raw_y = max(ir.top(),  min(ir.bottom(), pos.y()))
+                self._face_add_rect = QRectF(
+                    QPointF(min(s.x(), raw_x), min(s.y(), raw_y)),
+                    QPointF(max(s.x(), raw_x), max(s.y(), raw_y)),
+                )
+                self.update()
+            elif self._face_add_action == 'RESIZING':
+                self._apply_face_add_resize(pos)
+                self.update()
+            elif self._face_add_action == 'MOVING':
+                self._apply_face_add_move(pos)
+                self.update()
+            else:
+                hid = self._face_add_hit_handle(pos) if self._face_add_rect is not None else None
+                if hid is not None:
+                    self.setCursor([Qt.SizeFDiagCursor, Qt.SizeBDiagCursor,
+                                     Qt.SizeFDiagCursor, Qt.SizeBDiagCursor][hid])
+                elif self._face_add_rect is not None and self._face_add_rect.contains(pos):
+                    self.setCursor(Qt.SizeAllCursor)
+                else:
+                    self.setCursor(Qt.CrossCursor)
             return
         if self._crop_mode:
             if self._crop_action == 'DRAWING':
@@ -1127,6 +1565,23 @@ class _Canvas(QWidget):
                 self.update()
 
     def mouseReleaseEvent(self, event: QMouseEvent) -> None:
+        if self._vignette_mode:
+            if event.button() == Qt.LeftButton and self._vignette_drag:
+                self._vignette_drag       = None
+                self._vignette_drag_start = None
+                self._vignette_edit_start = None
+                pos = event.position()
+                hit = self._vignette_hit_test(pos)
+                self.setCursor(Qt.PointingHandCursor if hit else Qt.ArrowCursor)
+            return
+        if self._face_add_mode:
+            if event.button() == Qt.LeftButton:
+                self._face_add_action      = None
+                self._face_add_handle      = None
+                self._face_add_mouse_start = None
+                self._face_add_rect_start  = None
+                self._face_add_draw_start  = None
+            return
         if self._crop_mode:
             if event.button() == Qt.LeftButton:
                 self._drag_start       = None
@@ -1141,7 +1596,7 @@ class _Canvas(QWidget):
             self._drag_start = None
 
     def contextMenuEvent(self, event) -> None:
-        if not self._crop_mode and not self._red_eye_mode:
+        if not self._crop_mode and not self._red_eye_mode and not self._face_add_mode:
             faces = self._highlighted_faces or (
                 [self._highlighted_face] if self._highlighted_face is not None else []
             )
@@ -1159,6 +1614,10 @@ class _Canvas(QWidget):
             self.zoom_fit()
             if crop_rel:
                 self._crop_from_rel(crop_rel)
+            if self._face_add_mode:
+                # Le rectangle écran ne survit pas à un changement de zoom/offset.
+                self._face_add_rect   = None
+                self._face_add_action = None
 
 
 class _BaseLoader(QThread):
@@ -1184,10 +1643,16 @@ class PhotoViewer(QWidget):
     crop_ready           = Signal(object)  # tuple 8 coords relatives (x0,y0,…,x3,y3)
     save_requested       = Signal(object)  # PhotoInfo
     rename_requested     = Signal(object)  # PhotoInfo
+    move_requested       = Signal(object)  # PhotoInfo
     delete_requested            = Signal(list)    # list[PhotoInfo]
+    dup_badge_clicked    = Signal(object)  # PhotoInfo — badge de doublon cliqué
     red_eye_point_added         = Signal(float, float)  # cx_norm, cy_norm (0-1)
     pixel_sampled               = Signal(int, int, int)  # R, G, B — pipette balance des blancs
     face_context_menu_requested = Signal(object, object)  # (FaceInfo, QPoint global)
+    vignette_changed            = Signal(object)  # EditInfo (géométrie après drag)
+    face_bbox_ready             = Signal(object)  # tuple (bbox_x,bbox_y,bbox_w,bbox_h) int
+    face_add_mode_ended         = Signal()  # mode ajout de visage terminé (validé ou annulé)
+    force_redetect_requested    = Signal(object)  # PhotoInfo — menu contextuel
 
     def __init__(self, config=None, parent=None):
         super().__init__(parent)
@@ -1209,6 +1674,7 @@ class PhotoViewer(QWidget):
         self._preview_timer.setInterval(60)
         self._preview_timer.timeout.connect(self._reload_pixmap)
         self._setup_ui()
+        self.refresh_external_apps()
         self.setFocusPolicy(Qt.StrongFocus)
 
     def _setup_ui(self) -> None:
@@ -1243,6 +1709,14 @@ class PhotoViewer(QWidget):
         self._btn_fav.clicked.connect(self._toggle_favorite)
         tb_layout.addWidget(self._btn_fav)
 
+        # Conteneur des boutons d'applications externes (reconstruit par refresh_external_apps)
+        self._ext_apps_container = QWidget()
+        self._ext_apps_container.setStyleSheet("background: transparent;")
+        self._ext_apps_layout = QHBoxLayout(self._ext_apps_container)
+        self._ext_apps_layout.setContentsMargins(4, 0, 4, 0)
+        self._ext_apps_layout.setSpacing(4)
+        tb_layout.addWidget(self._ext_apps_container)
+
         self._btn_fit = QPushButton("⊡")
         self._btn_fit.setToolTip("Ajuster à la fenêtre  (0)")
         self._btn_fit.setFixedWidth(32)
@@ -1273,6 +1747,8 @@ class PhotoViewer(QWidget):
         self._canvas.red_eye_point_added.connect(self.red_eye_point_added)
         self._canvas.pixel_sampled.connect(self.pixel_sampled)
         self._canvas.face_context_menu_requested.connect(self.face_context_menu_requested)
+        self._canvas.vignette_changed.connect(self.vignette_changed)
+        self._canvas.face_add_confirmed.connect(self._on_face_add_confirmed)
         layout.addWidget(self._canvas, stretch=1)
 
         # ---- Pied de page ----
@@ -1344,6 +1820,22 @@ class PhotoViewer(QWidget):
         self._btn_crop_cancel.hide()
         nav_layout.addWidget(self._btn_crop_cancel)
 
+        self._btn_face_confirm = QPushButton("✓  Valider la position")
+        self._btn_face_confirm.setToolTip("Valider la position du visage  (Entrée)")
+        self._btn_face_confirm.setFixedHeight(36)
+        self._btn_face_confirm.setStyleSheet("background: #2a6a2a; color: white;")
+        self._btn_face_confirm.clicked.connect(self.confirm_face_add)
+        self._btn_face_confirm.hide()
+        nav_layout.addWidget(self._btn_face_confirm)
+
+        self._btn_face_cancel = QPushButton("✕  Annuler")
+        self._btn_face_cancel.setToolTip("Annuler l'ajout du visage  (Echap)")
+        self._btn_face_cancel.setFixedHeight(36)
+        self._btn_face_cancel.setStyleSheet("background: #6a2a2a; color: white;")
+        self._btn_face_cancel.clicked.connect(self.cancel_face_add_mode)
+        self._btn_face_cancel.hide()
+        nav_layout.addWidget(self._btn_face_cancel)
+
         nav_layout.addStretch()
 
         self._btn_next = QPushButton("Plus récente  ▶")
@@ -1352,6 +1844,24 @@ class PhotoViewer(QWidget):
         nav_layout.addWidget(self._btn_next)
 
         layout.addWidget(self._navbar)
+
+        # ---- Badge doublons (flottant sur le canvas) ----
+        self._dup_badge = QPushButton("⧉ Doublons", self)
+        self._dup_badge.setToolTip("Cette photo a des doublons — cliquer pour voir")
+        self._dup_badge.setStyleSheet(
+            "QPushButton{"
+            "  background:rgba(255,140,0,210);color:white;border:none;"
+            "  border-radius:5px;padding:3px 10px;"
+            "  font-size:11px;font-weight:bold"
+            "}"
+            "QPushButton:hover{background:rgba(255,160,40,240)}"
+        )
+        self._dup_badge.setCursor(Qt.PointingHandCursor)
+        self._dup_badge.setFixedHeight(24)
+        self._dup_badge.hide()
+        self._dup_badge.clicked.connect(
+            lambda: self.dup_badge_clicked.emit(self._photo)
+        )
 
     # ------------------------------------------------------------------ photo
 
@@ -1373,7 +1883,29 @@ class PhotoViewer(QWidget):
         self._btn_fav.setChecked(photo.is_favorite)
         self._btn_play_video.setVisible(is_video)
         self._canvas.set_highlighted_face(None)
+        self._update_dup_badge()
         self._reload_pixmap()
+
+    def _update_dup_badge(self) -> None:
+        if self._photo and self._photo.duplicate_group_id is not None:
+            self._dup_badge.show()
+            self._dup_badge.raise_()
+            self._reposition_dup_badge()
+        else:
+            self._dup_badge.hide()
+
+    def _reposition_dup_badge(self) -> None:
+        self._dup_badge.adjustSize()
+        margin = 12
+        toolbar_h = self._toolbar.height()
+        x = self.width() - self._dup_badge.width() - margin
+        y = toolbar_h + margin
+        self._dup_badge.move(x, y)
+
+    def resizeEvent(self, event) -> None:
+        super().resizeEvent(event)
+        if self._dup_badge.isVisible():
+            self._reposition_dup_badge()
 
     def highlight_face(self, face) -> None:
         """Encadre un visage unique sur la photo (appelé depuis main_window)."""
@@ -1498,6 +2030,34 @@ class PhotoViewer(QWidget):
         self._btn_next.show()
         self.crop_ready.emit(quad)
 
+    # ------------------------------------------------------------------ ajout manuel de visage
+
+    def enter_face_add_mode(self) -> None:
+        self._canvas.enter_face_add_mode()
+        self._btn_prev.hide()
+        self._btn_next.hide()
+        self._btn_face_confirm.show()
+        self._btn_face_cancel.show()
+
+    def confirm_face_add(self) -> None:
+        self._canvas.confirm_face_add()   # émet face_add_confirmed → _on_face_add_confirmed si valide
+        self._btn_face_confirm.hide()
+        self._btn_face_cancel.hide()
+        self._btn_prev.show()
+        self._btn_next.show()
+        self.face_add_mode_ended.emit()
+
+    def cancel_face_add_mode(self) -> None:
+        self._canvas.cancel_face_add_mode()
+        self._btn_face_confirm.hide()
+        self._btn_face_cancel.hide()
+        self._btn_prev.show()
+        self._btn_next.show()
+        self.face_add_mode_ended.emit()
+
+    def _on_face_add_confirmed(self, bbox: tuple) -> None:
+        self.face_bbox_ready.emit(bbox)
+
     # ------------------------------------------------------------------ red-eye mode
 
     def enter_red_eye_mode(self, radius: float = 0.03) -> None:
@@ -1509,6 +2069,17 @@ class PhotoViewer(QWidget):
     def set_red_eye_radius(self, radius: float) -> None:
         self._canvas.set_red_eye_radius(radius)
 
+    # ------------------------------------------------------------------ vignette interactive
+
+    def enter_vignette_mode(self, edit) -> None:
+        self._canvas.enter_vignette_mode(edit)
+
+    def exit_vignette_mode(self) -> None:
+        self._canvas.exit_vignette_mode()
+
+    def update_vignette(self, edit) -> None:
+        self._canvas.update_vignette(edit)
+
     # ------------------------------------------------------------------ pipette couleur (balance des blancs)
 
     def start_color_pick(self) -> None:
@@ -1519,6 +2090,44 @@ class PhotoViewer(QWidget):
         self._canvas.stop_color_pick()
 
     # ------------------------------------------------------------------ misc
+
+    def refresh_external_apps(self) -> None:
+        """Reconstruit les boutons d'applications externes dans la toolbar depuis la config."""
+        while self._ext_apps_layout.count():
+            item = self._ext_apps_layout.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+
+        if not self._config:
+            return
+
+        _icon_provider = QFileIconProvider()
+        for app in self._config.get("tools.external_apps", []):
+            name = app.get("name", "")
+            path = app.get("path", "")
+            if not path or not os.path.isfile(path):
+                continue
+            btn = QToolButton()
+            btn.setToolTip(f"Ouvrir avec {name}")
+            btn.setFixedSize(32, 32)
+            btn.setIcon(_icon_provider.icon(QFileInfo(path)))
+            btn.setIconSize(QSize(22, 22))
+            btn.setStyleSheet(
+                "QToolButton { background: white; border: none; border-radius: 4px; }"
+                "QToolButton:hover { background: #e0e8ff; }"
+                "QToolButton:pressed { background: #c0d0ff; }"
+            )
+            btn.clicked.connect(lambda _checked=False, p=path: self._open_with(p))
+            self._ext_apps_layout.addWidget(btn)
+
+    def _open_with(self, app_path: str) -> None:
+        if not self._photo:
+            return
+        import subprocess
+        try:
+            subprocess.Popen([app_path, self._photo.path])
+        except Exception as exc:
+            logger.warning("Impossible de lancer '%s' : %s", app_path, exc)
 
     def _open_in_player(self) -> None:
         if not self._photo:
@@ -1542,6 +2151,7 @@ class PhotoViewer(QWidget):
         fav_label = "Retirer des favoris" if photo.is_favorite else "Marquer comme favori"
         menu.addAction(fav_label, self._toggle_fav_from_menu)
         menu.addAction("Renommer…", lambda: self.rename_requested.emit(photo))
+        menu.addAction("Déplacer vers…", lambda: self.move_requested.emit(photo))
         menu.addAction("Enregistrer l'image traitée sur le disque",
                        lambda: self.save_requested.emit(photo))
         menu.addSeparator()
@@ -1560,6 +2170,9 @@ class PhotoViewer(QWidget):
                 )
             )
 
+        menu.addSeparator()
+        menu.addAction("Forcer une nouvelle détection sans limite de taille",
+                       lambda: self.force_redetect_requested.emit(photo))
         menu.addSeparator()
         menu.addAction("Effacer le fichier…", lambda: self.delete_requested.emit([photo]))
 
@@ -1598,6 +2211,8 @@ class PhotoViewer(QWidget):
         if key == Qt.Key_Escape:
             if self._canvas._crop_mode:
                 self.cancel_crop()
+            elif self._canvas._face_add_mode:
+                self.cancel_face_add_mode()
             elif self._canvas._red_eye_mode:
                 self.exit_red_eye_mode()
             else:
@@ -1605,15 +2220,20 @@ class PhotoViewer(QWidget):
         elif key == Qt.Key_Return or key == Qt.Key_Enter:
             if self._canvas._crop_mode:
                 self.confirm_crop()
+            elif self._canvas._face_add_mode:
+                self.confirm_face_add()
         elif key in (Qt.Key_Right, Qt.Key_Up):
-            if not self._canvas._crop_mode and not self._canvas._red_eye_mode:
+            if not self._canvas._crop_mode and not self._canvas._red_eye_mode \
+                    and not self._canvas._face_add_mode:
                 self.navigate.emit(-1)   # plus récente (droite/haut = vers le haut de la liste)
         elif key in (Qt.Key_Left, Qt.Key_Down):
-            if not self._canvas._crop_mode and not self._canvas._red_eye_mode:
+            if not self._canvas._crop_mode and not self._canvas._red_eye_mode \
+                    and not self._canvas._face_add_mode:
                 self.navigate.emit(1)    # plus ancienne (gauche/bas = vers le bas de la liste)
         elif key == Qt.Key_Delete:
             photo = self.current_photo()
-            if photo and not self._canvas._crop_mode and not self._canvas._red_eye_mode:
+            if photo and not self._canvas._crop_mode and not self._canvas._red_eye_mode \
+                    and not self._canvas._face_add_mode:
                 self.delete_requested.emit([photo])
         elif key == Qt.Key_0:
             self.zoom_fit()

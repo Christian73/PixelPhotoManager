@@ -1,3 +1,5 @@
+﻿# Copyright 2026 Christian Guyot
+# SPDX-License-Identifier: Apache-2.0
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING
 

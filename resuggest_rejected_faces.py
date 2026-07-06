@@ -1,3 +1,5 @@
+﻿# Copyright 2026 Christian Guyot
+# SPDX-License-Identifier: Apache-2.0
 #!/usr/bin/env python3
 """
 Recalcule les suggestions pour les faces isolées (pinned=1) dont la suggestion

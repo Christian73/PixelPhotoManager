@@ -1,5 +1,8 @@
+﻿# Copyright 2026 Christian Guyot
+# SPDX-License-Identifier: Apache-2.0
 import logging
 import os
+import time
 from pathlib import Path
 
 from PySide6.QtCore import QThread, Signal
@@ -80,6 +83,8 @@ class ScanThread(QThread):
                 known.update(self._catalog.get_known_mtimes(folder))
 
         batch: list = []
+        last_emit = 0.0
+        _PROGRESS_INTERVAL = 0.15  # secondes — rafraîchir la barre de statut souvent, quelle que soit la vitesse de traitement
 
         for file_count, filepath in enumerate(all_files, 1):
             if self._stop_flag:
@@ -92,7 +97,9 @@ class ScanThread(QThread):
                 existing_mtime = known.get(filepath)
                 if existing_mtime is not None and abs(existing_mtime - mtime) < 1.0:
                     processed += 1
-                    if processed % 500 == 0:
+                    now = time.monotonic()
+                    if now - last_emit >= _PROGRESS_INTERVAL:
+                        last_emit = now
                         pct = int(processed * 100 / grand_total) if grand_total else 100
                         self.progress.emit(pct, filepath)
                     continue
@@ -129,7 +136,9 @@ class ScanThread(QThread):
                 logger.error(f"Erreur scan {filepath}: {e}", exc_info=True)
 
             processed += 1
-            if processed % 500 == 0:
+            now = time.monotonic()
+            if now - last_emit >= _PROGRESS_INTERVAL:
+                last_emit = now
                 pct = int(processed * 100 / grand_total) if grand_total else 100
                 self.progress.emit(pct, filepath)
 

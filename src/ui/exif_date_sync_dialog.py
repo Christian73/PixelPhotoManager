@@ -1,3 +1,5 @@
+﻿# Copyright 2026 Christian Guyot
+# SPDX-License-Identifier: Apache-2.0
 """
 Dialogue "Synchroniser la date de création Windows avec la date EXIF".
 

@@ -10,15 +10,20 @@
 2. [Interface générale](#2-interface-générale)
 3. [Gérer vos dossiers](#3-gérer-vos-dossiers)
 4. [La grille de photos](#4-la-grille-de-photos)
-5. [Visualiser une photo ou une vidéo](#5-visualiser-une-photo-ou-une-vidéo)
-6. [Retoucher une photo](#6-retoucher-une-photo)
-7. [Albums et favoris](#7-albums-et-favoris)
-8. [Recherche](#8-recherche)
-9. [Déplacer des photos](#9-déplacer-des-photos)
-10. [Diaporama](#10-diaporama)
-11. [Reconnaissance faciale](#11-reconnaissance-faciale)
-12. [Raccourcis clavier](#12-raccourcis-clavier)
-13. [Où sont stockées vos données](#13-où-sont-stockées-vos-données)
+5. [Mode chronologie (vue en ruban)](#5-mode-chronologie-vue-en-ruban)
+6. [Visualiser une photo ou une vidéo](#6-visualiser-une-photo-ou-une-vidéo)
+7. [Retoucher une photo](#7-retoucher-une-photo)
+8. [Albums et favoris](#8-albums-et-favoris)
+9. [Recherche et filtrage](#9-recherche-et-filtrage)
+10. [Déplacer des photos](#10-déplacer-des-photos)
+11. [Enregistrer et exporter vos photos](#11-enregistrer-et-exporter-vos-photos)
+12. [Diaporama](#12-diaporama)
+13. [Reconnaissance faciale](#13-reconnaissance-faciale)
+14. [Détection des doublons](#14-détection-des-doublons)
+15. [Synchroniser les dates de création avec l'EXIF](#15-synchroniser-les-dates-de-création-avec-lexif)
+16. [Autres outils](#16-autres-outils)
+17. [Raccourcis clavier](#17-raccourcis-clavier)
+18. [Où sont stockées vos données](#18-où-sont-stockées-vos-données)
 
 ---
 
@@ -38,17 +43,21 @@ L'application indexe immédiatement vos photos et vidéos en arrière-plan. La b
 
 Menu **Fichier › Ajouter un dossier…** — sélectionnez n'importe quel dossier, il sera scanné automatiquement et ajouté à la sidebar.
 
+### Quitter l'application
+
+Menu **Fichier › Quitter** (**Ctrl + Q**).
+
 ---
 
 ## 2. Interface générale
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│  [Barre de recherche]                      [Toolbar]    │
+│  [Fichier][Affichage][Outils][Visages][Aide]  [Export]   │
 ├──────────────────┬──────────────────────────────────────┤
 │                  │                                       │
 │   SIDEBAR        │   ZONE PRINCIPALE                     │
-│                  │   (grille ou visionneuse)             │
+│                  │   (grille, ruban, ou visionneuse)      │
 │   Dossiers       │                                       │
 │   Albums         │                                       │
 │                  │                                       │
@@ -59,14 +68,25 @@ Menu **Fichier › Ajouter un dossier…** — sélectionnez n'importe quel doss
 
 | Zone | Rôle |
 |---|---|
-| **Barre de recherche** | Recherche instantanée par nom de fichier ou appareil photo |
-| **Sidebar** | Navigation dans les dossiers et albums |
-| **Zone principale** | Grille de vignettes ou visionneuse plein écran |
+| **Barre de menus** | Fichier, Affichage, Outils, Visages, Aide — voir sections dédiées |
+| **Bouton ⬆ Exporter** | Exporte la photo affichée (visionneuse) ou la sélection (grille) |
+| **Sidebar** | Filtrage, navigation dans les dossiers et albums |
+| **Zone principale** | Grille de vignettes, vue chronologie (ruban), vue Personnes ou visionneuse plein écran |
 | **Barre de statut** | Informations sur la sélection, progression du scan, curseur de taille des vignettes |
+
+### Les cinq menus
+
+| Menu | Contenu |
+|---|---|
+| **Fichier** | Ajouter un dossier…, Quitter |
+| **Affichage** | Afficher/masquer sidebar (F9), Plein écran (F11), Diaporama (F5) |
+| **Outils** | Dossiers…, Détecter les doublons…, Synchroniser dates de création avec l'EXIF…, Journal des threads…, Applications externes…, Paramètres |
+| **Visages** | Importer depuis Picasa…, Réinitialiser et réindexer…, Regrouper les visages…, Visualisation des erreurs…, Sauvegarder la reconnaissance…, Gérer les sauvegardes…, Compteurs… |
+| **Aide** | Aide… (F1), À propos |
 
 ### Masquer/afficher la sidebar
 
-Appuyez sur **F9** ou allez dans **Affichage › Afficher/masquer sidebar**.  
+Appuyez sur **F9** ou allez dans **Affichage › Afficher/masquer sidebar**.
 La sidebar peut aussi être redimensionnée en faisant glisser le séparateur vertical.
 
 ### Plein écran
@@ -102,7 +122,7 @@ Le menu **Outils › Dossiers…** ouvre un dialogue de gestion avancée des dos
 - Un indicateur ✓ (dossier trouvé sur le disque) ou ✗ (dossier introuvable)
 - Le chemin complet du dossier
 - Le nombre de fichiers indexés
-- Les sous-dossiers exclus du scan (dossiers cachés, dossiers `Originals` de Picasa) avec la raison de l'exclusion
+- Les sous-dossiers exclus du scan (dossiers cachés, dossiers `Originals` de Picasa, dossiers `.tmp_*`) avec la raison de l'exclusion
 
 **Actions disponibles :**
 - **⟳ Re-scanner** — force le re-scan complet du dossier, même pour les fichiers non modifiés depuis le dernier scan. Utile pour détecter des modifications faites hors de l'application.
@@ -137,6 +157,10 @@ La barre de statut affiche le nombre de photos sélectionnées et le total.
 
 Les vidéos sont représentées dans la grille par une vignette extraite automatiquement (à environ 10 % de la durée de la vidéo), avec un badge **▶** superposé pour les distinguer des photos.
 
+### Badge de doublons
+
+Une photo faisant partie d'un groupe de doublons détecté (voir [section 14](#14-détection-des-doublons)) affiche un badge **⧉** orange sur sa vignette. Cliquer dessus ouvre une popup **« Doublons de cette photo »** listant les autres exemplaires (nom + dossier) ; un double-clic sur un élément de la liste navigue directement vers ce fichier.
+
 ### Ouvrir une photo ou une vidéo
 
 **Double-clic** sur une vignette → ouvre la visionneuse.
@@ -148,8 +172,15 @@ Les vidéos sont représentées dans la grille par une vignette extraite automat
 | **Ouvrir** | Ouvre la photo dans la visionneuse |
 | **Marquer comme favori / Retirer des favoris** | Gère l'état favori |
 | **Renommer l'image** | Renomme le fichier sur le disque |
+| **Déplacer vers…** | Déplace le fichier vers un autre dossier surveillé |
+| **Enregistrer l'image traitée sur le disque** | Ouvre le dialogue d'enregistrement (voir [section 11](#11-enregistrer-et-exporter-vos-photos)) |
+| **Ajouter {cette photo\|les N photos sélectionnées} à un album…** | Ajoute la photo (ou toute la sélection) à un album existant |
+| **Créer un nouvel album avec {cette photo\|les N photos sélectionnées}…** | Crée un nouvel album à la volée avec la photo (ou la sélection) |
 | **Révéler dans l'Explorateur** | Ouvre le dossier contenant la photo |
+| **Retenter l'identification des visages** | *(affiché uniquement si la photo est en erreur de détection faciale)* relance l'analyse pour ce seul fichier |
 | **Effacer le fichier…** | Supprime définitivement le fichier après confirmation |
+
+> Le clic droit s'applique à **toute la sélection en cours** (Ctrl+Clic / Shift+Clic) pour Renommer/Déplacer/Ajouter à un album, pas seulement à la vignette cliquée.
 
 ### Supprimer des photos
 
@@ -161,7 +192,31 @@ Clic droit sur la vignette › **Renommer l'image** — saisissez le nouveau nom
 
 ---
 
-## 5. Visualiser une photo ou une vidéo
+## 5. Mode chronologie (vue en ruban)
+
+Cliquer sur **★ Chronologie de toutes les photos** dans la sidebar (album spécial, tout en haut de la liste Albums) affiche vos photos dans une **vue en ruban** plutôt qu'une grille classique.
+
+### Principe
+
+- Les photos sont réparties sur **cinq rangées** de tailles décroissantes vers le haut et le bas ; la **rangée centrale** (nettement plus grande) contient la « photo courante ».
+- Un petit encart flottant affiche la **date** de la photo actuellement au centre du ruban.
+- La photo centrale sert de point de départ si vous lancez un diaporama (**F5**) depuis cette vue, et c'est elle qui est supprimée par **Suppr** en l'absence d'autre sélection.
+
+### Navigation
+
+| Action | Résultat |
+|---|---|
+| **Molette** | Défilement avec inertie (glisse progressivement, comme un ruban physique) |
+| **← / →** | Avance/recule d'une photo |
+| **↑ / ↓** | Avance/recule de 3 photos |
+| **Ascenseur vertical** (à droite de la vue) | Navigation directe, visible uniquement en mode chronologie |
+| **Suppr** | Supprime la photo centrale (ou la sélection en cours) |
+
+> Ce mode n'est actif que pour l'album **Chronologie de toutes les photos** ; les autres albums (Favoris, Vidéos, Par nom de fichier, dossiers, albums personnalisés) s'affichent en grille classique.
+
+---
+
+## 6. Visualiser une photo ou une vidéo
 
 ### Ouvrir la visionneuse
 
@@ -185,27 +240,43 @@ Double-cliquez sur une vignette dans la grille.
 | **1** | Zoom 100 % (1 pixel photo = 1 pixel écran) |
 | **⊡** (barre d'outils) | Ajuster à la fenêtre |
 | **1:1** (barre d'outils) | Zoom 100 % |
+| **Ctrl + Molette** | Zoom avant/arrière |
 | Cliquer-glisser | Déplacer l'image dans la fenêtre |
 
 > En **mode recadrage**, la molette de la souris sert à zoomer. En **mode normal**, elle passe à la photo suivante ou précédente.
 
 ### Panneau EXIF
 
-Appuyez sur **I** (ou cliquez sur le bouton `[i]` dans la barre d'outils) pour afficher/masquer le panneau EXIF. Il affiche :
-- Appareil photo et objectif
-- Date et heure de prise de vue
-- ISO, vitesse d'obturation, ouverture, focale
-- Résolution et taille du fichier
-- Coordonnées GPS (si présentes)
+Appuyez sur **I** (ou cliquez sur le bouton `[i]` dans la barre d'outils) pour afficher/masquer le panneau EXIF. Il est organisé en sections :
 
-> Le panneau EXIF et le panneau Visages sont mutuellement exclusifs : ouvrir l'un ferme l'autre.
+- **Fichier** : nom, format, mode couleur, dimensions, taille, date de modification.
+- **Appareil photo** : fabricant, modèle, n° de série, objectif (fabricant/modèle/spécification/n° de série), logiciel.
+- **Prise de vue** : date, exposition, ouverture (et ouverture maximale), ISO (+ type de sensibilité), focale (+ équivalent 35 mm), zoom numérique, programme d'exposition, mode de mesure, correction d'exposition, luminosité, balance des blancs, source lumineuse, flash (décodé en texte, ex. *« Déclenché, retour détecté »*), type de scène, distance au sujet, contraste/saturation/netteté, rendu personnalisé.
+- **Image** : dimensions en pixels, espace colorimétrique, orientation, résolution, compression, bits par échantillon.
+- **Auteur / Droits** : artiste, copyright, description, et champs Windows (titre, commentaire, auteur, mots-clés, sujet).
+- **GPS** *(si présent)* : latitude/longitude, **altitude**, **vitesse GPS**, **direction de prise de vue** (vraie ou magnétique), **date/heure GPS**, **précision (DOP)**.
+- **Vidéo** *(pour les vidéos)* : résolution, images/seconde, durée, codec.
+- **Autres** : tous les autres tags EXIF présents, non couverts par les groupes ci-dessus.
+
+#### Modifier les métadonnées EXIF
+
+Le bouton **✎ Modifier les métadonnées…** en bas du panneau (désactivé pour les vidéos) ouvre un dialogue permettant de modifier directement le fichier :
+
+- **Date de prise de vue** (calendrier)
+- **Description**
+- **Artiste**
+- **Copyright**
+
+Une case **« Mettre à jour aussi la date du fichier (mtime + date de création) »** (cochée par défaut) applique en plus la nouvelle date au fichier lui-même sur le disque.
+
+> ⚠ Contrairement aux retouches d'image (non destructives), cette opération **écrit directement dans le fichier**.
 
 ### Visualiser une vidéo
 
 Quand vous ouvrez une vidéo dans la visionneuse :
 - La première image extraite est affichée.
 - Un bouton **▶ Ouvrir la vidéo** apparaît dans la barre d'outils.
-- Cliquez dessus pour lire la vidéo dans le lecteur multimédia par défaut de Windows.
+- Cliquez dessus pour lire la vidéo dans le lecteur configuré (voir **Paramètres**, [section 16](#16-autres-outils) — lecteur système par défaut ou lecteur personnalisé).
 - Le panneau de retouche n'est **pas disponible** pour les vidéos.
 
 ### Localiser sur la carte
@@ -216,18 +287,28 @@ Si une photo contient des coordonnées GPS, faites un **clic droit** dans la vis
 
 ### Marquer comme favori
 
-Cliquez sur le bouton **♡** dans la barre d'outils de la visionneuse. L'étoile pleine **★** indique un favori actif.
+Cliquez sur le bouton **♡** dans la barre d'outils de la visionneuse (ou la touche **F**). L'étoile pleine **★** indique un favori actif.
+
+### Applications externes
+
+Si vous avez configuré des applications tierces (voir [section 16](#16-autres-outils)), leurs icônes apparaissent dans la barre d'outils de la visionneuse, à côté du bouton favori. Un clic lance l'application avec la photo courante en argument (info-bulle : « Ouvrir avec *nom* »).
 
 ### Menu contextuel dans la visionneuse (clic droit)
 
 | Option | Effet |
 |---|---|
+| **Marquer comme favori / Retirer des favoris** | Gère l'état favori |
+| **Renommer…** | Renomme le fichier sur le disque |
+| **Déplacer vers…** | Déplace le fichier vers un autre dossier |
+| **Enregistrer l'image traitée sur le disque** | Ouvre le dialogue d'enregistrement (voir [section 11](#11-enregistrer-et-exporter-vos-photos)) |
 | **Révéler dans l'Explorateur** | Ouvre le dossier contenant la photo |
 | **Localiser sur la carte** | Ouvre OpenStreetMap à la position GPS (grisé si pas de GPS) |
+| **Forcer une nouvelle détection sans limite de taille** | Relance la détection de visages sur cette photo en ignorant le filtre de taille minimale, sans perdre les identifications déjà faites |
+| **Effacer le fichier…** | Supprime définitivement le fichier après confirmation |
 
 ---
 
-## 6. Retoucher une photo
+## 7. Retoucher une photo
 
 ### Accéder au panneau de retouche
 
@@ -336,45 +417,59 @@ L'historique conserve les **20 dernières actions** en mémoire, et jusqu'à **5
 
 ---
 
-## 7. Albums et favoris
+## 8. Albums et favoris
 
 ### Favoris
 
 - Dans la **grille** : clic droit sur une vignette › **Marquer comme favori**.
-- Dans la **visionneuse** : cliquez sur **♡**.
+- Dans la **visionneuse** : cliquez sur **♡** (ou touche **F**).
 - Pour voir tous vos favoris : cliquez sur **♡ Favoris** dans la section Albums de la sidebar.
 
-### Albums
+### Albums spéciaux (toujours présents, non supprimables)
 
-Les albums permettent de regrouper des photos issues de dossiers différents.
+| Album | Icône | Effet |
+|---|---|---|
+| **Chronologie de toutes les photos** | ★ | Affiche toute la bibliothèque en [vue chronologie/ruban](#5-mode-chronologie-vue-en-ruban) |
+| **Favoris** | ♡ | Photos marquées comme favorites |
+| **Vidéos** | ▶ | Toutes les vidéos de la bibliothèque |
+| **Par nom de fichier** | 🔍 | Résultat du texte tapé dans le filtre de la sidebar (voir [section 9](#9-recherche-et-filtrage)) |
 
-**Créer un album :**
+### Créer un album personnalisé
+
+**Depuis la sidebar :**
 1. Cliquez sur le bouton **+** dans l'en-tête Albums de la sidebar.
 2. Saisissez un nom.
 
-**Accéder à un album :**
-Cliquez sur son nom dans la liste Albums.
+**Depuis la grille (avec des photos déjà choisies) :**
+Clic droit sur une vignette (ou une sélection) › **Créer un nouvel album avec…** — saisissez le nom du nouvel album ; il est créé et rempli immédiatement avec la ou les photos sélectionnées.
 
-> Pour ajouter des photos à un album, cette fonctionnalité est disponible via le menu contextuel des vignettes (clic droit).
+### Ajouter des photos à un album existant
 
-### Toutes les photos
+Clic droit sur une vignette (dans la grille **ou** dans la vue Personnes) › **Ajouter à un album…** — une liste des albums existants (avec leur nombre de photos) s'affiche ; double-cliquez sur l'album cible ou sélectionnez-le puis validez.
 
-Cliquez sur **★ Toutes les photos** dans la sidebar pour afficher toutes les photos de tous les dossiers surveillés.
+> Si aucun album personnalisé n'existe encore, un message vous invite à en créer un d'abord via le panneau Albums.
 
----
+### Supprimer un album
 
-## 8. Recherche
+Clic droit sur un album personnalisé dans la sidebar › **Supprimer l'album…** — une confirmation précise le nombre de photos concernées et rappelle que **les photos restent intactes** dans le catalogue et sur le disque, seul l'album est supprimé. *(Les 4 albums spéciaux ne proposent pas cette option.)*
 
-La barre de **recherche** se trouve en haut de la fenêtre.
+### Accéder à un album
 
-- **Ctrl + F** : active la barre de recherche.
-- Tapez un terme pour filtrer par **nom de fichier**, **marque d'appareil** ou **modèle d'appareil**.
-- La recherche est instantanée (délai de 150 ms après la frappe).
-- Cliquez sur **✕** à droite de la barre ou effacez le texte pour revenir à l'affichage normal.
+Cliquez sur son nom dans la liste Albums de la sidebar.
 
 ---
 
-## 9. Déplacer des photos
+## 9. Recherche et filtrage
+
+Le champ de filtrage se trouve en haut de la **sidebar** (placeholder *« 🔍 Filtrer dossiers, personnes et fichiers… »*).
+
+- Tapez un terme : il filtre **instantanément** (à chaque frappe, sans délai) l'arborescence des **dossiers** et la liste des **personnes** identifiées dans la sidebar.
+- Le même texte alimente l'album spécial **🔍 Par nom de fichier**, qui recherche dans le **catalogue complet** par nom de fichier, marque d'appareil ou modèle d'appareil (une photo peut donc apparaître dans ce résultat même si le terme tapé correspond à son appareil photo plutôt qu'à son nom de fichier).
+- Un bouton **✕** intégré au champ efface le filtre.
+
+---
+
+## 10. Déplacer des photos
 
 ### Glisser-déposer vers un dossier
 
@@ -387,6 +482,8 @@ Pour déplacer **plusieurs photos** simultanément :
 2. Faites glisser l'une des photos sélectionnées vers le dossier destination.
    Toutes les photos de la sélection sont déplacées.
 
+Vous pouvez aussi utiliser le clic droit › **Déplacer vers…** (grille ou visionneuse) pour choisir la destination sans glisser-déposer.
+
 Après le déplacement :
 - Le fichier est déplacé sur le disque.
 - Le catalogue, les retouches et les vignettes sont mis à jour automatiquement.
@@ -396,7 +493,41 @@ Après le déplacement :
 
 ---
 
-## 10. Diaporama
+## 11. Enregistrer et exporter vos photos
+
+Il existe deux façons de sortir une image retouchée de l'application, selon votre besoin.
+
+### Enregistrer l'image traitée (un fichier à la fois)
+
+Clic droit sur une vignette ou dans la visionneuse › **Enregistrer l'image traitée sur le disque**. Une boîte de dialogue propose deux options :
+
+- **Écraser le fichier original** *(coché par défaut)* — un avertissement rappelle que l'action est irréversible. Une case **« Copier l'original dans .tmp_originals avant l'écrasement »** (cochée par défaut) permet de conserver une copie de sauvegarde horodatée du fichier d'origine dans un sous-dossier caché `.tmp_originals` avant remplacement.
+- **Enregistrer à un autre emplacement…** — ouvre l'explorateur Windows avec un nom suggéré (`nomoriginal_retouché.jpg`), pour conserver l'original intact et créer une copie retouchée à côté.
+
+Dans les deux cas :
+- Le fichier de sortie est enregistré en pleine résolution (JPEG qualité 95, ou PNG selon l'extension choisie).
+- **La date du fichier (création + modification) est reprise de l'original**, pas de la date d'enregistrement — le fichier de sortie garde donc la date de la prise de vue originale.
+- Si vous avez choisi d'écraser l'original, les retouches enregistrées dans l'application sont supprimées (elles sont désormais « figées » dans le fichier) et la vignette/l'aperçu sont rafraîchis.
+
+### Exporter plusieurs photos (bouton ⬆ Exporter)
+
+Le bouton **⬆ Exporter** de la barre d'outils principale exporte soit la photo affichée dans la visionneuse, soit toute la sélection de la grille. Le dialogue **« Exporter N photo(s) »** propose :
+
+- **Dossier de destination** — champ éditable + bouton **Parcourir…** (par défaut `Documents\Pictures\PixelPhotoManager\Export`).
+- **Taille d'export** (choix exclusif) :
+
+| Option | Résolution max. | Qualité JPEG | Taille estimée |
+|---|---|---|---|
+| Taille maximale — résolution originale | Aucune | 95 | — |
+| Grande (~4 Mpx) | 4 000 000 px | 98 | 600–1 600 Ko |
+| Moyenne (~2 Mpx) | 2 000 000 px | 94 | 320–800 Ko |
+| Petite (~500 kpx) | 500 000 px | 90 | 75–300 Ko |
+
+Toutes les photos exportées sont converties en **JPEG**, avec les retouches appliquées ; en cas de conflit de nom dans le dossier de destination, un suffixe numérique est ajouté automatiquement. Comme pour l'enregistrement, **la date du fichier original est reportée sur chaque fichier exporté**. Une fois l'export terminé, le dossier de destination s'ouvre automatiquement dans l'Explorateur.
+
+---
+
+## 12. Diaporama
 
 Lancez un diaporama depuis **Affichage › Diaporama** ou avec la touche **F5**.
 
@@ -440,38 +571,148 @@ La barre disparaît automatiquement après 5 secondes d'inactivité et réappara
 
 ---
 
-## 11. Reconnaissance faciale
+## 13. Reconnaissance faciale
 
-> La reconnaissance faciale nécessite des dépendances optionnelles (DeepFace, RetinaFace). Si elles ne sont pas installées, cette section n'est pas disponible.
+> La reconnaissance faciale nécessite des dépendances optionnelles (InsightField/buffalo_l, scikit-learn, hdbscan). Si elles ne sont pas installées, cette section n'est pas disponible.
 
-### Détecter les visages
+### Panneau « Visages » de la visionneuse
 
-Depuis le menu **Outils › Détecter les visages**, l'application analyse les photos et regroupe les visages similaires en clusters.
+Ouvrez une photo puis affichez le panneau **Visages** (à côté du panneau EXIF — les deux sont mutuellement exclusifs).
 
-### Nommer les personnes
+- **Bouton « Tous »** : encadre tous les visages détectés sur la photo.
+- **Vignettes de visage** : une carte par visage détecté, triées visages nommés d'abord. Le nom affiché sous chaque vignette indique la personne, `« Groupe N »` (cluster non nommé), `« Séparé »` (isolé manuellement) ou `« Inconnu »`.
+  - **Clic** : sélectionne/désélectionne le visage (surbrillance sur la photo).
+  - **Double-clic** sur un visage nommé : ouvre la vue détaillée de cette personne.
+  - **✕** sur la vignette : ignore ce visage (masqué de l'UI et du regroupement, récupérable).
+  - **Clic droit** : **Identifier cette personne…**, **Identifier ce groupe…**, **Désallouer le groupe**, **Ignorer ce visage**.
+- **➕ Ajouter une personne** : bascule en mode dessin manuel d'un rectangle sur la photo (pour un visage non détecté automatiquement), validé par **✓ Valider la position** (ou Entrée) / **✕ Annuler** (ou Échap), puis choix du nom.
+- **Visages ignorés… (N)** : liste les visages ignorés de la photo, avec position/taille, et un bouton **Restaurer** par ligne.
+- Chaque action (ajout, identification, ignorer, restaurer) est **annulable** via le bouton Undo général de la visionneuse.
 
-Dans le panneau **Visages** de la visionneuse ou dans la vue Personnes :
-1. Cliquez sur un groupe de visages non identifiés.
-2. Saisissez le nom de la personne.
+### Vue « Personnes » — groupes non identifiés
 
-### Importer depuis Picasa
+Accessible via l'icône/le bouton dédié qui remplace la grille de photos.
 
-Si vous avez utilisé Picasa, ses annotations de visages (fichiers `.picasa.ini` dans chaque dossier) peuvent être importées via **Outils › Importer visages Picasa…**. Les noms et régions de visages existants sont reconnus et associés aux photos correspondantes.
+- **Cartes de groupe** : vignette + nombre de visages (ou « Isolé » pour un visage seul), avec une **suggestion de personne** si le système en trouve une (ex. *« ≈ Nom (82 %) »*).
+  - Clic : sélection multiple cumulative ; Maj+clic : sélection étendue.
+  - Double-clic : ouvre les photos du groupe.
+  - Clic droit : **Identifier cette personne…** / **Identifier ce groupe…**, **Ignorer ce visage/ce groupe**, et en multi-sélection **Associer (N sélectionnés)**.
+  - Actions rapides sur une carte suggérée : **✓** (accepter), **→** (associer à une autre personne), **✕** (ignorer).
+- **Sections de suggestion** (« ≈ Probablement la même personne » / « ≈ Probablement *Nom* ») avec boutons d'en-tête **Accepter**, **Associer à…**, **Ignorer** pour toute la section d'un coup.
+- **Section « Visages isolés »** en bas de page.
+- **Barre d'action** (dès qu'un groupe est sélectionné) : **Voir les photos**, **Associer à…**, **Ignorer**, **✕** (tout désélectionner).
+- **Fusionner le groupe N** : choisissez un autre groupe dans une liste illustrée puis validez.
+- Pagination : **Charger N de plus (N restant(s))**.
+
+### Vue détaillée d'une personne
+
+Ouverte par double-clic sur une personne nommée.
+
+- **Section « En attente de vérification »** (suggestions non confirmées) : boutons **✗ Rejeter toutes** / **✓ Accepter toutes**, ou par vignette **✓**/**✗**.
+- **Section confirmée** : clic droit sur un ou plusieurs visages sélectionnés › **Réassigner à une autre personne…**, **Dé-associer de la personne**, **Utiliser ce visage comme vignette principale**, **Ajouter à un album…**, **Créer un nouvel album avec…**.
+
+### Menu « Visages » (barre de menu)
+
+| Option | Effet |
+|---|---|
+| **Importer depuis Picasa…** | Parcourt les fichiers `.picasa.ini` de vos dossiers et importe les noms/régions de visages définis dans Picasa ; propose une case **« Importer aussi les retouches Picasa (rotation, recadrage, luminosité…) »**. N'écrase jamais une association déjà faite manuellement. À faire une seule fois (le menu se grise ensuite). |
+| **Réinitialiser et réindexer…** | Deux options : **« Réinitialiser les groupes uniquement — rapide »** (garde les visages détectés, refait juste le regroupement) ou **« Réinitialisation complète + réindexation — lente »** (efface tout et relance la détection, peut prendre plusieurs heures) |
+| **Regrouper les visages…** | Relance le clustering des visages non identifiés (durée estimée affichée avant de démarrer) |
+| **Visualisation des erreurs…** | Liste les photos dont la détection a échoué (timeout/crash), avec un bouton **⟳ Réessayer** par ligne |
+| **Sauvegarder la reconnaissance…** | Crée immédiatement une sauvegarde (archive) de l'état actuel des visages, groupes et personnes |
+| **Gérer les sauvegardes…** | Liste les sauvegardes existantes (date, taille) avec **Restaurer** ou **✕ Supprimer** par ligne, et **＋ Créer une sauvegarde** |
+| **Compteurs…** | Statistiques : personnes/visages identifiés, en attente de confirmation, inconnus ; import Picasa (importés/fusionnés/en attente) ; totaux (détectés, ignorés par taille, groupes) |
+
+### Depuis une photo
+
+- Visionneuse, clic droit › **Forcer une nouvelle détection sans limite de taille** — relance la détection sur cette photo en ignorant le filtre de taille minimale, sans perdre les identifications déjà faites.
+- Grille, clic droit sur une photo en erreur › **Retenter l'identification des visages**.
 
 ---
 
-## 12. Raccourcis clavier
+## 14. Détection des doublons
+
+Menu **Outils › Détecter les doublons…** analyse l'ensemble de la bibliothèque (les vidéos sont exclues) pour repérer les photos en double, y compris des versions redimensionnées, retouchées (couleur/luminosité) ou recadrées.
+
+### Fonctionnement
+
+L'analyse se déroule en deux passes automatiques (aucune option à régler) :
+
+1. **Empreinte perceptuelle (pHash)** — détecte les doublons exacts, redimensionnés ou légèrement retouchés.
+2. **Points d'intérêt (ORB + RANSAC)** — appliqué uniquement aux photos non regroupées à l'étape 1, détecte en plus les **recadrages** (jusqu'à ~60 % de surface recadrée).
+
+Une boîte de progression affiche l'étape en cours (« Tier 1 — empreintes… », « Tier 2 — comparaison ORB… ») avec un bouton **Annuler**.
+
+### Résultat
+
+- Un message final indique le nombre de groupes et de fichiers concernés.
+- Les photos en double sont marquées d'un **badge ⧉ orange** dans la grille et la visionneuse (voir [section 4](#4-la-grille-de-photos)) — l'application ne supprime ni ne fusionne rien automatiquement, à vous de décider au cas par cas.
+- Un **rapport HTML** (`duplicates_report.html`) est généré automatiquement ; un bouton **Ouvrir le rapport** permet de le consulter directement.
+
+---
+
+## 15. Synchroniser les dates de création avec l'EXIF
+
+Menu **Outils › Synchroniser dates de création avec l'EXIF…**
+
+**Pourquoi :** lors d'un transfert ou d'une copie de fichiers, Windows attribue parfois la date du jour comme « date de création », en écrasant la date réelle de prise de vue contenue dans l'EXIF.
+
+**Ce que fait l'outil :** parcourt tout le catalogue et, quand la date EXIF diffère de la date de création Windows (au-delà d'une tolérance de 2 secondes), **remplace la date de création du fichier** par la date EXIF. Les photos sans EXIF valide, ou dont le fichier est introuvable, sont simplement ignorées et comptabilisées comme telles.
+
+> ⚠ Cette opération modifie les métadonnées système des fichiers originaux (dates), pas le contenu de l'image.
+
+Un seul bouton **Démarrer** lance le traitement sur toute la bibliothèque, avec barre de progression. À la fin, un résumé (« N fichier(s) mis à jour · N ignoré(s) ou en erreur ») est affiché, avec un bouton **Ouvrir le rapport CSV** détaillant l'action prise pour chaque fichier.
+
+---
+
+## 16. Autres outils
+
+### Journal des threads (Outils › Journal des threads…)
+
+Outil de diagnostic destiné à surveiller les traitements en arrière-plan (scan, indexation de visages, clustering, vignettes…) — utile si l'application semble lente ou bloquée.
+
+- **Bilan d'exécution** : statut global et par thread (✓ OK, ● LENT, ● TROP LONG, ✗ ERREUR, ● EN COURS).
+- **Résumé par thread** : nombre d'exécutions, durée moyenne/max, erreurs.
+- **Événements bruts** : journal détaillé filtrable (par thread, par mot-clé), avec bouton **▶ Temps réel** pour un rafraîchissement automatique.
+- Boutons **Rapport de problèmes…** (diagnostic textuel copiable) et **Exporter CSV…**.
+- **🗑 Vider** efface le journal (confirmation demandée).
+
+### Applications externes (Outils › Applications externes…)
+
+Permet d'ajouter des raccourcis vers des logiciels tiers (retoucheur externe, visionneuse RAW, etc.), accessibles ensuite sous forme d'icônes dans la barre d'outils de la visionneuse.
+
+- **Ajouter…** : choisissez un exécutable (`*.exe`) puis un nom d'affichage (utilisé comme info-bulle).
+- **Supprimer** : retire l'application sélectionnée de la liste.
+
+Un clic sur l'icône correspondante dans la visionneuse ouvre l'application avec la photo courante en argument.
+
+### Paramètres (Outils › Paramètres)
+
+Dialogue à deux catégories :
+
+- **Reconnaissance de visages** : curseur **« Tolérance de similarité »** (25 % à 70 %) — contrôle à quel point deux visages doivent se ressembler pour être placés dans le même groupe. Un indicateur textuel accompagne le curseur (groupes très stricts → très larges). Modifier ce réglage relance automatiquement le regroupement des visages à la fermeture du dialogue.
+- **Lecteur vidéo** : choix entre **« Lecteur par défaut du système »** (application Windows associée aux fichiers vidéo) ou **« Lecteur personnalisé »** (chemin vers un exécutable, ex. VLC ou MPC-HC, via **Parcourir…**). Ce choix détermine ce qu'ouvre le bouton **▶ Ouvrir la vidéo** de la visionneuse.
+
+---
+
+## 17. Raccourcis clavier
+
+### Général
+
+| Raccourci | Action |
+|---|---|
+| **Ctrl + Q** | Quitter l'application |
+| **F1** | Ouvrir l'aide |
+| **F9** | Afficher/masquer la sidebar |
+| **F11** | Plein écran |
+| **F5** | Lancer le diaporama |
 
 ### Grille
 
 | Raccourci | Action |
 |---|---|
-| **Ctrl + F** | Activer la recherche |
 | **Ctrl + A** | Sélectionner toutes les photos |
 | **Suppr** | Supprimer les photos sélectionnées (avec confirmation) |
-| **F5** | Lancer le diaporama |
-| **F9** | Afficher/masquer la sidebar |
-| **F11** | Plein écran |
 
 ### Mode chronologie (ruban)
 
@@ -521,7 +762,7 @@ Si vous avez utilisé Picasa, ses annotations de visages (fichiers `.picasa.ini`
 
 ---
 
-## 13. Où sont stockées vos données
+## 18. Où sont stockées vos données
 
 Toutes les données de l'application se trouvent dans :
 
@@ -531,22 +772,28 @@ Toutes les données de l'application se trouvent dans :
 
 Soit typiquement : `C:\Users\VotreNom\AppData\Local\PixelPhotoManager\`
 
-| Fichier | Contenu |
+| Fichier / dossier | Contenu |
 |---|---|
-| `catalog.db` | Index de toutes vos photos et vidéos (chemins, EXIF, métadonnées) |
+| `catalog.db` | Index de toutes vos photos et vidéos (chemins, EXIF, métadonnées, albums) |
 | `thumbnails.db` | Cache des vignettes générées (images et premières frames vidéo) |
 | `edits.db` | Toutes vos retouches et leur historique |
-| `config.json` | Dossiers surveillés et préférences de l'interface |
+| `faces.db` | Visages détectés, groupes/clusters, personnes identifiées |
+| `config.json` | Dossiers surveillés et préférences de l'interface (dont réglages de Paramètres) |
 | `logs\pixelphotomanager.log` | Journal de l'application (pour le dépannage) |
+| `duplicates_report.html` | Dernier rapport de détection de doublons |
+| Rapport CSV de synchro EXIF | Généré à chaque exécution de l'outil de synchronisation des dates |
+| Sauvegardes de reconnaissance faciale | Archives créées via **Visages › Sauvegarder la reconnaissance…** |
 
-> **Vos photos et vidéos originales ne sont jamais modifiées.** Vous pouvez supprimer `edits.db` pour effacer toutes les retouches et repartir de zéro, ou supprimer `catalog.db` pour forcer une réindexation complète.
+> **Vos photos et vidéos originales ne sont jamais modifiées** par les retouches ou la reconnaissance faciale. Vous pouvez supprimer `edits.db` pour effacer toutes les retouches et repartir de zéro, ou supprimer `catalog.db` pour forcer une réindexation complète.
+
+Dans chaque dossier de photos, un sous-dossier caché **`.tmp_originals`** peut apparaître : il contient les copies de sauvegarde des fichiers écrasés via **Enregistrer l'image traitée sur le disque** (uniquement si vous avez coché l'option de sauvegarde).
 
 ### Formats supportés
 
-**Images :**  
+**Images :**
 `.jpg` · `.jpeg` · `.png` · `.tiff` · `.tif` · `.webp` · `.bmp` · `.gif` · `.heic` · `.raw` · `.cr2` · `.nef` · `.arw` · `.dng`
 
-**Vidéos :**  
+**Vidéos :**
 `.mp4` · `.mov` · `.avi` · `.mkv` · `.wmv` · `.webm` · `.m4v` · `.3gp` · `.flv` · `.ts` · `.mts` · `.mpg` · `.mpeg`
 
 *(La disponibilité des formats RAW dépend des pilotes installés sur le système.)*
@@ -562,4 +809,8 @@ Soit typiquement : `C:\Users\VotreNom\AppData\Local\PixelPhotoManager\`
 | L'application est lente au démarrage | Normal lors du premier scan d'une grande bibliothèque ; le scan suivant sera beaucoup plus rapide (seules les nouvelles photos sont analysées) |
 | Un dossier déplacé manuellement (hors de l'application) n'est plus trouvé | Utilisez **Supprimer des dossiers surveillés** puis **Fichier › Ajouter un dossier…** pour le réenregistrer |
 | Récupérer l'original d'une photo retouchée | Le fichier original n'a jamais été modifié — il suffit d'effacer les retouches via **Annuler** (↩) jusqu'à l'état initial |
+| Récupérer un original écrasé par erreur | S'il a été sauvegardé (case cochée lors de l'enregistrement), il se trouve dans le sous-dossier caché `.tmp_originals` du dossier concerné |
 | La vignette d'une vidéo est noire | OpenCV n'a pas pu lire la vidéo — vérifiez que le codec est installé sur votre système |
+| Une opération semble bloquée ou anormalement lente | Ouvrez **Outils › Journal des threads…** pour voir quel traitement de fond est en cours et son statut |
+| « Détecter les doublons… » signale une erreur au démarrage | Les modules `imagehash` et `Pillow` sont requis ; sans OpenCV/numpy, seule la détection de recadrage (Tier 2) est indisponible, le reste continue de fonctionner |
+| La reconnaissance faciale ne détecte plus rien | Vérifiez via **Visages › Visualisation des erreurs…** si les fichiers concernés sont en échec de détection (timeout/crash), et utilisez **⟳ Réessayer** |

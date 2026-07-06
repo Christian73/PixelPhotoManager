@@ -1,3 +1,5 @@
+﻿# Copyright 2026 Christian Guyot
+# SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations  # annotations lazy → QDialog etc. non évalués dans le subprocess
 
 import logging
@@ -6,6 +8,18 @@ import sys
 import traceback
 from pathlib import Path
 import multiprocessing
+
+# En exe "windowed" (console=False), sys.stdout/sys.stderr valent None : toute
+# bibliothèque qui y écrit (ex. tqdm, utilisé par insightface pendant le
+# téléchargement du pack de modèles buffalo_l) plante avec
+# AttributeError: 'NoneType' object has no attribute 'write'. Ce crash
+# interrompait le téléchargement avant l'écriture du modèle sur le disque,
+# donc le modèle n'était jamais mis en cache et chaque photo retentait un
+# téléchargement complet. Étend aussi aux sous-processus workers (spawn).
+if sys.stdout is None:
+    sys.stdout = open(os.devnull, "w")
+if sys.stderr is None:
+    sys.stderr = open(os.devnull, "w")
 
 # ProcessPoolExecutor sur Windows utilise spawn : le sous-processus worker importe
 # ce module AVANT d'exécuter la tâche.  On limite au strict minimum ce qui s'exécute
@@ -40,16 +54,52 @@ if multiprocessing.current_process().name == 'MainProcess':
     from PIL import Image as _PilImage
     warnings.filterwarnings("ignore", category=_PilImage.DecompressionBombWarning)
 
+    def _show_error_dialog(exc_type, exc_value, exc_tb) -> None:
+        """Affiche un dialogue avec le traceback complet, sélectionnable et copiable."""
+        try:
+            app = QApplication.instance()
+            if app is None:
+                return
+            text = "".join(traceback.format_exception(exc_type, exc_value, exc_tb))
+
+            dlg = QDialog()
+            dlg.setWindowTitle("Erreur — PixelPhotoManager")
+            dlg.setMinimumSize(720, 420)
+            layout = QVBoxLayout(dlg)
+            layout.addWidget(QLabel("<b>Une erreur non gérée s'est produite :</b>"))
+
+            te = QTextEdit(dlg)
+            te.setReadOnly(True)
+            te.setFont(QFont("Consolas", 9))
+            te.setPlainText(text)
+            layout.addWidget(te)
+
+            btn_row = QHBoxLayout()
+            btn_copy = QPushButton("Copier le texte")
+            btn_copy.clicked.connect(lambda: app.clipboard().setText(text))
+            btn_close = QPushButton("Fermer")
+            btn_close.clicked.connect(dlg.accept)
+            btn_row.addWidget(btn_copy)
+            btn_row.addStretch()
+            btn_row.addWidget(btn_close)
+            layout.addLayout(btn_row)
+
+            dlg.exec()
+        except Exception:
+            pass
+
     def _excepthook(exc_type, exc_value, exc_tb):
         logging.getLogger(__name__).critical(
             "Exception non gérée", exc_info=(exc_type, exc_value, exc_tb)
         )
+        _show_error_dialog(exc_type, exc_value, exc_tb)
 
     def _thread_excepthook(args):
         logging.getLogger(__name__).critical(
             f"Exception non gérée dans thread {args.thread.name}",
             exc_info=(args.exc_type, args.exc_value, args.exc_tb),
         )
+        _show_error_dialog(args.exc_type, args.exc_value, args.exc_tb)
 
     sys.excepthook = _excepthook
     threading.excepthook = _thread_excepthook
@@ -57,7 +107,7 @@ if multiprocessing.current_process().name == 'MainProcess':
     from PySide6.QtWidgets import (
         QApplication, QCheckBox, QDialog, QVBoxLayout, QHBoxLayout,
         QLabel, QPushButton, QListWidget, QListWidgetItem,
-        QFileDialog, QFrame, QWidget, QSplashScreen,
+        QFileDialog, QFrame, QWidget, QSplashScreen, QTextEdit,
     )
     from PySide6.QtCore import Qt, QPoint, QTimer
     from PySide6.QtGui import QColor, QFont, QPainter, QPen, QPixmap, QLinearGradient
@@ -251,6 +301,17 @@ def main() -> None:
         }
         QMenu::item:selected {
             background: #3a5a8a;
+        }
+        QMenu::item:disabled {
+            color: #6a6a6a;
+        }
+        QMenu::item:disabled:selected {
+            background: transparent;
+        }
+        QMenu::separator {
+            height: 1px;
+            background: #6a6a6a;
+            margin: 6px 8px;
         }
         QToolBar {
             background: #252525;
@@ -453,6 +514,10 @@ def main() -> None:
 
 
 if __name__ == "__main__":
+    # CRITIQUE : doit être le premier appel dans __main__ pour les EXE PyInstaller.
+    # Sans cela, chaque sous-processus worker re-lance l'application entière sur Windows
+    # (spawn), provoquant une boucle infinie qui sature le CPU.
+    multiprocessing.freeze_support()
     try:
         logger.info("Démarrage de PixelPhotoManager")
         main()
@@ -460,6 +525,6 @@ if __name__ == "__main__":
         pass  # sortie normale de app.exec()
     except BaseException:
         logger.critical("Crash au démarrage", exc_info=True)
-        # Forcer le flush avant de quitter
+        _show_error_dialog(*sys.exc_info())
         logging.shutdown()
         sys.exit(1)

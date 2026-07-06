@@ -1,0 +1,59 @@
+Pixel Photo Manager
+Copyright 2026 Christian Guyot
+
+This product is licensed under the Apache License, Version 2.0.
+You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+
+-------------------------------------------------------------------------------
+Third-party components
+-------------------------------------------------------------------------------
+
+This software includes the following open-source components:
+
+PySide6 (Qt for Python)
+  License : LGPLv3 / GPLv2
+  Homepage: https://www.qt.io/qt-for-python
+
+Pillow
+  License : HPND (Historical Permission Notice and Disclaimer)
+  Homepage: https://python-pillow.org
+
+OpenCV (opencv-python)
+  License : Apache License 2.0
+  Homepage: https://opencv.org
+
+InsightFace
+  License : MIT License
+  Homepage: https://github.com/deepinsight/insightface
+
+ONNX Runtime
+  License : MIT License
+  Homepage: https://onnxruntime.ai
+
+scikit-learn
+  License : BSD 3-Clause License
+  Homepage: https://scikit-learn.org
+
+HDBSCAN
+  License : BSD 3-Clause License
+  Homepage: https://github.com/scikit-learn-contrib/hdbscan
+
+imagehash
+  License : BSD 2-Clause License
+  Homepage: https://github.com/JohannesBuchner/imagehash
+
+folium
+  License : MIT License
+  Homepage: https://python-visualization.github.io/folium
+
+ReportLab
+  License : BSD License
+  Homepage: https://www.reportlab.com
+
+psutil
+  License : BSD 3-Clause License
+  Homepage: https://github.com/giampaolo/psutil
+
+piexif
+  License : MIT License
+  Homepage: https://github.com/hMatoba/Piexif

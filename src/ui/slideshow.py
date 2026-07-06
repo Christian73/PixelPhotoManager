@@ -1,3 +1,5 @@
+﻿# Copyright 2026 Christian Guyot
+# SPDX-License-Identifier: Apache-2.0
 """Diaporama plein écran des photos de l'album courant."""
 
 import logging

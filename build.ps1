@@ -1,45 +1,58 @@
-# build.ps1 — Packaging PixelPhotoManager en EXE autonome
-# Usage : .\build.ps1
-# Prérequis : .venv créé avec pip install -r requirements.txt
+﻿#Requires -Version 5.1
+# Copyright 2026 Christian Guyot
+# SPDX-License-Identifier: Apache-2.0
+<#
+.SYNOPSIS
+    Packaging complet de PixelPhotoManager : EXE PyInstaller puis MSI WiX.
+.DESCRIPTION
+    Etape 1 — PyInstaller : produit dist\PixelPhotoManager\ (one-dir)
+    Etape 2 — WiX v3     : produit installer\PixelPhotoManager-Setup.msi
+
+    Usage :
+        .\build.ps1           # EXE + MSI
+        .\build.ps1 -ExeOnly  # EXE uniquement
+        .\build.ps1 -MsiOnly  # MSI uniquement (EXE deja construit)
+#>
+param(
+    [switch]$ExeOnly,
+    [switch]$MsiOnly
+)
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
-$VENV   = ".\.venv\Scripts"
-$SPEC   = "pixelphotomanager.spec"
-$DIST   = ".\dist\PixelPhotoManager"
+$VENV = ".\.venv\Scripts"
+$SPEC = "pixelphotomanager.spec"
+$DIST = ".\dist\PixelPhotoManager"
 
-Write-Host "=== PixelPhotoManager — Build EXE ===" -ForegroundColor Cyan
+Write-Host "=== PixelPhotoManager — Build ===" -ForegroundColor Cyan
 
-# Vérifications préalables
-if (-not (Test-Path "$VENV\python.exe")) {
-    Write-Host "ERREUR : venv introuvable. Créez-le avec :" -ForegroundColor Red
-    Write-Host "  python -m venv .venv && .\.venv\Scripts\pip install -r requirements.txt"
-    exit 1
+# ── Etape 1 : PyInstaller ─────────────────────────────────────────────────────
+if (-not $MsiOnly) {
+    Write-Host "`n[1/2] Build PyInstaller..." -ForegroundColor Yellow
+
+    if (-not (Test-Path "$VENV\python.exe")) {
+        Write-Error "venv introuvable. Lancez : python -m venv .venv && .\.venv\Scripts\pip install -r requirements.txt"
+    }
+    if (-not (Test-Path $SPEC)) {
+        Write-Error "$SPEC introuvable."
+    }
+
+    if (Test-Path ".\build") { Remove-Item ".\build" -Recurse -Force }
+    if (Test-Path $DIST)     { Remove-Item $DIST     -Recurse -Force }
+
+    & "$VENV\python.exe" -m PyInstaller $SPEC --clean --noconfirm
+    if ($LASTEXITCODE -ne 0) { Write-Error "PyInstaller a echoue (code $LASTEXITCODE)." }
+
+    $size = (Get-ChildItem $DIST -Recurse | Measure-Object -Property Length -Sum).Sum
+    Write-Host "  EXE : $DIST  ($([math]::Round($size / 1MB, 0)) Mo)" -ForegroundColor Green
 }
 
-if (-not (Test-Path $SPEC)) {
-    Write-Host "ERREUR : $SPEC introuvable." -ForegroundColor Red
-    exit 1
+# ── Etape 2 : MSI ─────────────────────────────────────────────────────────────
+if (-not $ExeOnly) {
+    Write-Host "`n[2/2] Build MSI..." -ForegroundColor Yellow
+    & powershell -ExecutionPolicy Bypass -File ".\installer\build_msi.ps1"
+    if ($LASTEXITCODE -ne 0) { Write-Error "build_msi.ps1 a echoue (code $LASTEXITCODE)." }
 }
 
-# Nettoyage des builds précédents
-Write-Host "`n[1/3] Nettoyage..." -ForegroundColor Yellow
-if (Test-Path ".\build") { Remove-Item ".\build" -Recurse -Force }
-if (Test-Path $DIST)     { Remove-Item $DIST     -Recurse -Force }
-
-# Build PyInstaller
-Write-Host "`n[2/3] Build PyInstaller (peut prendre 2-5 minutes)..." -ForegroundColor Yellow
-& "$VENV\python.exe" -m PyInstaller $SPEC --clean --noconfirm
-if ($LASTEXITCODE -ne 0) {
-    Write-Host "ERREUR : PyInstaller a échoué (code $LASTEXITCODE)." -ForegroundColor Red
-    exit $LASTEXITCODE
-}
-
-# Résumé
-Write-Host "`n[3/3] Build terminé." -ForegroundColor Green
-$size = (Get-ChildItem $DIST -Recurse | Measure-Object -Property Length -Sum).Sum
-Write-Host "  Dossier : $DIST"
-Write-Host "  Taille  : $([math]::Round($size / 1MB, 0)) Mo"
-Write-Host ""
-Write-Host "Pour distribuer : compressez le dossier $DIST en ZIP." -ForegroundColor Cyan
+Write-Host "`n=== Build termine ===" -ForegroundColor Cyan

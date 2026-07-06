@@ -1,3 +1,5 @@
+﻿# Copyright 2026 Christian Guyot
+# SPDX-License-Identifier: Apache-2.0
 import os
 import logging
 import shutil
@@ -237,6 +239,7 @@ class _PendingBadgeDelegate(QStyledItemDelegate):
 class Sidebar(QWidget):
     folder_selected    = Signal(str)
     album_selected     = Signal(object)   # AlbumInfo | str (special key)
+    album_delete_requested = Signal(object)  # AlbumInfo à supprimer
     scan_requested     = Signal(str)
     folder_removed     = Signal(str)
     folder_created     = Signal(str)      # chemin du nouveau sous-dossier créé
@@ -336,6 +339,8 @@ class Sidebar(QWidget):
 
         self._albums_list = QListWidget()
         self._albums_list.itemClicked.connect(self._on_album_clicked)
+        self._albums_list.setContextMenuPolicy(Qt.CustomContextMenu)
+        self._albums_list.customContextMenuRequested.connect(self._album_context_menu)
         aw_layout.addWidget(self._albums_list)
 
         self._splitter.addWidget(album_widget)
@@ -653,6 +658,18 @@ class Sidebar(QWidget):
         data = item.data(Qt.UserRole)
         self.album_selected.emit(data)
 
+    def _album_context_menu(self, pos) -> None:
+        item = self._albums_list.itemAt(pos)
+        if not item:
+            return
+        album = item.data(Qt.UserRole)
+        if not isinstance(album, AlbumInfo):
+            return   # albums spéciaux (Chronologie, Favoris, Vidéos…) : non supprimables
+        menu = QMenu(self)
+        menu.addAction("Supprimer l'album…",
+                       lambda: self.album_delete_requested.emit(album))
+        menu.exec(self._albums_list.mapToGlobal(pos))
+
     def _folder_context_menu(self, pos) -> None:
         item = self._folder_tree.itemAt(pos)
         if not item:
@@ -671,7 +688,7 @@ class Sidebar(QWidget):
                        lambda: self._move_folder(path))
         menu.addSeparator()
         menu.addAction("Ouvrir dans l'Explorateur",
-                       lambda: subprocess.Popen(f'explorer "{path}"'))
+                       lambda p=path: subprocess.Popen(["explorer", p]))
         menu.addSeparator()
         menu.addAction("Effacer le dossier…",
                        lambda: self._delete_folder(path))
@@ -778,6 +795,24 @@ class Sidebar(QWidget):
                 return p.id
         return None
 
+    def _cancel_face_loader(self) -> None:
+        """Arrête un chargement d'icônes en cours et libère le thread Qt enfant.
+        À appeler avant toute opération qui change les indices de ligne de la liste
+        (clear+rebuild, takeItem) : les signaux icon_ready(index, ...) en vol portent
+        des index qui deviendraient sinon associés à la mauvaise personne."""
+        if self._face_loader is None:
+            return
+        try:
+            self._face_loader.icon_ready.disconnect(self._on_face_icon_ready)
+        except RuntimeError:
+            pass
+        if self._face_loader.isRunning():
+            self._face_loader.stop()
+            self._face_loader.finished.connect(self._face_loader.deleteLater)
+        else:
+            self._face_loader.deleteLater()
+        self._face_loader = None
+
     def refresh_persons(self, persons: list[PersonInfo]) -> None:
         self._persons = persons
         # Mémoriser la personne actuellement sélectionnée pour la restaurer après rebuild
@@ -795,18 +830,7 @@ class Sidebar(QWidget):
             selected_id = self._pending_person_id
             scroll_to_selected = True
         self._pending_person_id = None  # consommé dans tous les cas
-        # Arrêter un chargement précédent et libérer le thread Qt enfant
-        if self._face_loader is not None:
-            try:
-                self._face_loader.icon_ready.disconnect(self._on_face_icon_ready)
-            except RuntimeError:
-                pass
-            if self._face_loader.isRunning():
-                self._face_loader.stop()
-                self._face_loader.finished.connect(self._face_loader.deleteLater)
-            else:
-                self._face_loader.deleteLater()
-            self._face_loader = None
+        self._cancel_face_loader()
         self._persons_list.clear()
         for person in persons:
             label = f"{person.name}  ({person.photo_count})"
@@ -827,6 +851,8 @@ class Sidebar(QWidget):
             self._persons_list.blockSignals(True)
             self._persons_list.setCurrentRow(fallback_row)
             self._persons_list.blockSignals(False)
+        # Réappliquer le filtre en cours (rebuild efface le masquage des items)
+        self._filter_persons_list(self.filter_text.lower())
         # Charger les icônes de visage en arrière-plan
         if persons:
             self._face_loader = _FaceIconLoader(persons, self)
@@ -870,7 +896,7 @@ class Sidebar(QWidget):
             new_label = f"{person.name}  ({person.photo_count})"
             if item.text() != new_label:
                 item.setText(new_label)
-                item.setData(Qt.UserRole, person)
+            item.setData(Qt.UserRole, person)
 
             if (person.cover_path != old_person.cover_path
                     or person.cover_bbox != old_person.cover_bbox):
@@ -888,6 +914,9 @@ class Sidebar(QWidget):
 
     def apply_person_merge(self, source_id: int, target_id: int, new_count: int) -> None:
         """Remove source from list and update target count after a merge. No icon reload."""
+        # takeItem() ci-dessous décale les index de ligne : un chargement d'icônes
+        # encore en vol appliquerait ses icônes à la mauvaise personne (cf. _cancel_face_loader).
+        self._cancel_face_loader()
         self._persons = [p for p in self._persons if p.id != source_id]
         for p in self._persons:
             if p.id == target_id:

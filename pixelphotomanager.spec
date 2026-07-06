@@ -1,15 +1,19 @@
-# -*- mode: python ; coding: utf-8 -*-
+﻿# -*- mode: python ; coding: utf-8 -*-
+# Copyright 2026 Christian Guyot
+# SPDX-License-Identifier: Apache-2.0
 """
 Spec PyInstaller — PixelPhotoManager
 Build : .venv\Scripts\pyinstaller.exe pixelphotomanager.spec --clean
 Sortie : dist\PixelPhotoManager\PixelPhotoManager.exe  (one-dir)
 """
 from PyInstaller.utils.hooks import collect_all
+from pathlib import Path
+import insightface
 
-block_cipher = None
+ROOT = Path(SPECPATH)
 
 # Packages avec ressources intégrées (templates, polices, plugins)
-_with_data = ["PIL", "folium", "reportlab"]
+_with_data = ["PIL", "folium", "reportlab", "insightface"]
 
 datas, binaries, hiddenimports = [], [], []
 for pkg in _with_data:
@@ -18,11 +22,43 @@ for pkg in _with_data:
     binaries += b
     hiddenimports += h
 
+# insightface.data.get_object() (pickle_object.py) résout ses ressources
+# différemment en mode figé : en mode "frozen", il lit
+# sys._MEIPASS/objects/<name>.pkl — un dossier "objects" À LA RACINE du
+# bundle — et NON insightface/data/objects/ (l'arborescence normale du
+# package, que collect_all() ci-dessus préserve). Sans cette copie
+# supplémentaire, get_object('meanshape_68.pkl') renvoie None en silence
+# (juste un print(), invisible en console=False), et le modèle
+# landmark_3d_68 (estimation de pose) plante avec
+# 'NoneType' object has no attribute 'shape' dans
+# transform.estimate_affine_matrix_3d23d() — pour CHAQUE visage détecté.
+_insightface_objects_dir = Path(insightface.__file__).parent / "data" / "objects"
+datas += [(str(_insightface_objects_dir), "objects")]
+
+# Pack de modèles buffalo_l (détection + embedding) embarqué dans l'exe pour
+# éviter le téléchargement (~340 Mo) depuis GitHub au 1er lancement — sur un
+# poste sans accès Internet (ou pare-feu bloquant github.com), la détection
+# de visages était sinon totalement inopérante. Placé à la racine du bundle
+# sous "insightface_root/models/buffalo_l" ; src/faces/detector.py pointe
+# explicitement FaceAnalysis(root=...) dessus en mode figé (sys._MEIPASS).
+# Nécessite d'avoir lancé l'appli au moins une fois en mode dev pour que le
+# pack soit présent dans le cache utilisateur (~/.insightface/models/buffalo_l).
+_buffalo_l_dir = Path.home() / ".insightface" / "models" / "buffalo_l"
+if not _buffalo_l_dir.is_dir():
+    raise FileNotFoundError(
+        f"Pack de modèles buffalo_l introuvable : {_buffalo_l_dir}\n"
+        "Lancez l'appli une fois en mode dev (avec accès Internet) pour "
+        "déclencher le téléchargement automatique, puis relancez le build."
+    )
+datas += [(str(_buffalo_l_dir), "insightface_root/models/buffalo_l")]
+
 a = Analysis(
-    ["main.py"],
-    pathex=["."],
+    [str(ROOT / "main.py")],
+    pathex=[str(ROOT)],
     binaries=binaries,
-    datas=datas,
+    datas=datas + [
+        (str(ROOT / "assets"), "assets"),
+    ],
     hiddenimports=hiddenimports + [
         # Pillow — plugins image chargés dynamiquement
         "PIL.Image", "PIL.ImageOps", "PIL.ImageFilter", "PIL.ImageDraw",
@@ -56,10 +92,11 @@ a = Analysis(
     runtime_hooks=[],
     excludes=[
         # Dépendances IA lourdes — non utilisées dans le build de base
+        # (sklearn/scikit_learn NE PAS exclure : requis par hdbscan pour le
+        # clustering des visages, cf. src/faces/clusterer.py)
         "deepface", "retinaface",
         "torch", "torchvision", "torchaudio",
         "tensorflow", "tensorboard", "keras",
-        "sklearn", "scikit_learn",
         # Inutiles en production
         "tkinter",
         "matplotlib",
@@ -67,11 +104,10 @@ a = Analysis(
         "debugpy",
         "pytest",
     ],
-    cipher=block_cipher,
     noarchive=False,
 )
 
-pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
+pyz = PYZ(a.pure)
 
 exe = EXE(
     pyz,
@@ -89,13 +125,12 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon="assets/lutin_camera_icon_download.ico",
+    icon=str(ROOT / "assets" / "app_icon.ico"),
 )
 
 coll = COLLECT(
     exe,
     a.binaries,
-    a.zipfiles,
     a.datas,
     strip=False,
     upx=False,
