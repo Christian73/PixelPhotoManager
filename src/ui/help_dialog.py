@@ -5,6 +5,8 @@ from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QTabWidget, QTextBrowser, QDialogButtonBox,
 )
 
+from src.core.app_version import get_app_version
+
 _STYLE = """
 <style>
   body  { font-family: Segoe UI, Arial, sans-serif; font-size: 13px;
@@ -33,10 +35,9 @@ Toutes les retouches sont stockées séparément — l'original n'est jamais mod
 
 <h2>Organisation de l'interface</h2>
 <ul>
-  <li><b>Barre de recherche</b> — en haut, recherche instantanée par nom de fichier ou appareil
-      (<kbd>Ctrl</kbd>+<kbd>F</kbd>).</li>
-  <li><b>Barre latérale gauche</b> — dossiers surveillés, albums, personnes identifiées
-      (<kbd>F9</kbd> pour afficher/masquer).</li>
+  <li><b>Barre latérale gauche</b> — dossiers surveillés, albums, personnes identifiées, et en haut
+      une case de filtrage instantané par nom de fichier, marque/modèle d'appareil, dossier ou
+      personne (<kbd>F9</kbd> pour afficher/masquer la barre latérale).</li>
   <li><b>Grille centrale</b> — vignettes des photos et vidéos du contexte sélectionné.</li>
   <li><b>Visionneuse</b> — ouverte par double-clic sur une vignette ; panneau de retouches à gauche.</li>
   <li><b>Barre du bas</b> — nombre de fichiers, taille, curseur de zoom de la grille.</li>
@@ -129,9 +130,13 @@ _TAB_NAVIGATION = _STYLE + """
 
 <h3>Recherche</h3>
 <ul>
-  <li><kbd>Ctrl</kbd>+<kbd>F</kbd> : mettre le focus sur la barre de recherche.</li>
-  <li>Recherche sur le nom de fichier, la marque et le modèle d'appareil photo.</li>
-  <li>Résultats en temps réel (délai 150 ms). Cliquez <b>✕</b> pour revenir à l'affichage normal.</li>
+  <li>Pas de barre de recherche dédiée : tout passe par la case de filtrage en haut de la
+      barre latérale (voir « Barre latérale — Filtrage » ci-dessus).</li>
+  <li>Le texte saisi filtre instantanément les dossiers et les personnes affichés dans la
+      sidebar, et alimente aussi l'album <b>🔍 Par nom de fichier</b> (recherche sur le nom
+      de fichier, la marque et le modèle d'appareil photo).</li>
+  <li>Filtrage en temps réel dès la frappe. Utilisez le bouton <b>✕</b> de la case pour
+      revenir à l'affichage complet.</li>
 </ul>
 
 <h3>Mode chronologie (ruban)</h3>
@@ -496,7 +501,6 @@ _TAB_SHORTCUTS = _STYLE + """
 <h3>Global</h3>
 <table>
   <tr><th>Raccourci</th><th>Action</th></tr>
-  <tr><td><kbd>Ctrl</kbd>+<kbd>F</kbd></td><td>Mettre le focus sur la barre de recherche</td></tr>
   <tr><td><kbd>F9</kbd></td><td>Afficher / masquer la sidebar</td></tr>
   <tr><td><kbd>F11</kbd></td><td>Basculer en plein écran</td></tr>
   <tr><td><kbd>F5</kbd></td><td>Lancer le diaporama</td></tr>
@@ -624,9 +628,9 @@ même groupe lors du clustering. Plage : 25 % à 70 %. Valeur par défaut : <b>6
 </table>
 """
 
-_TAB_ABOUT = _STYLE + """
+_TAB_ABOUT = _STYLE + f"""
 <h2>Pixel Photo Manager</h2>
-<p style="color:#aaa;">Version 1.0 &nbsp;·&nbsp; Windows x64</p>
+<p style="color:#aaa;">Version {get_app_version()} &nbsp;·&nbsp; Windows x64</p>
 <p>Copyright 2026 Christian Guyot<br>
 Distribué sous les termes de l'<b>Apache License, Version 2.0</b>.<br>
 <a href="http://www.apache.org/licenses/LICENSE-2.0" style="color:#6aacf0;">
