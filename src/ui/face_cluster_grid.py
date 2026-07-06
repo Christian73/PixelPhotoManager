@@ -225,7 +225,7 @@ class _ClusterCard(QFrame):
     1 clic         → sélection alternée (selection_toggled)
     Maj+1 clic     → sélection étendue depuis l'ancre (range_select_requested)
     2 clics        → ouvrir les photos (view_requested)
-    Clic droit     → menu contextuel (nommer / fusionner / ignorer)
+    Clic droit     → menu contextuel (nommer / fusionner / ignorer / associer si multi-sélection)
     """
 
     selection_toggled    = Signal(int, bool)  # cluster_id, is_selected
@@ -233,6 +233,7 @@ class _ClusterCard(QFrame):
     view_requested       = Signal(int)
     name_requested       = Signal(int)
     merge_requested      = Signal(int)
+    associate_requested  = Signal()           # fusionner tous les groupes sélectionnés ensemble
     ignore_requested     = Signal(int)
     quick_accept_requested = Signal(int, int)   # cluster_id, person_id
     quick_assign_requested = Signal(int)        # cluster_id
@@ -268,6 +269,7 @@ class _ClusterCard(QFrame):
         is_solo: bool = False,
         show_quick_actions: bool = False,
         show_eject: bool = False,
+        selected_ids_ref: "set[int] | None" = None,
         parent=None,
     ) -> None:
         super().__init__(parent)
@@ -276,6 +278,10 @@ class _ClusterCard(QFrame):
         self._is_solo             = is_solo
         self._is_selected         = False
         self._show_quick_actions  = show_quick_actions
+        # Référence directe vers l'ensemble des cluster_id sélectionnés dans la
+        # grille parente, pour savoir au clic droit si une multi-sélection est
+        # en cours (afficher "Associer") sans devoir répliquer l'état ailleurs.
+        self._selected_ids_ref    = selected_ids_ref
 
         self.setFixedWidth(_CARD_W)
         self.setFrameShape(QFrame.StyledPanel)
@@ -426,7 +432,12 @@ class _ClusterCard(QFrame):
                 self.set_selected(self._is_selected)
                 self.selection_toggled.emit(self._cluster_id, self._is_selected)
         elif event.button() == Qt.RightButton:
+            n_selected = len(self._selected_ids_ref) if self._selected_ids_ref else 0
             menu = QMenu(self)
+            act_associate = None
+            if self._is_selected and n_selected > 1:
+                act_associate = menu.addAction(f"Associer ({n_selected} sélectionnés)")
+                menu.addSeparator()
             if self._is_solo:
                 act_name = menu.addAction("Identifier ce visage…")
                 menu.addSeparator()
@@ -438,7 +449,9 @@ class _ClusterCard(QFrame):
                 menu.addSeparator()
                 act_ignore = menu.addAction("Ignorer ce groupe")
             chosen = menu.exec(event.globalPosition().toPoint())
-            if chosen == act_name:
+            if chosen == act_associate:
+                self.associate_requested.emit()
+            elif chosen == act_name:
                 self.name_requested.emit(self._cluster_id)
             elif chosen == act_ignore:
                 self.ignore_requested.emit(self._cluster_id)
@@ -1632,6 +1645,7 @@ class FaceClusterGrid(QWidget):
                 is_solo=is_solo,
                 show_quick_actions=quick_actions,
                 show_eject=eject,
+                selected_ids_ref=self._selected_ids,
                 parent=target._card_area,
             )
             card.selection_toggled.connect(self._on_card_selection_toggled)
@@ -1639,6 +1653,7 @@ class FaceClusterGrid(QWidget):
             card.view_requested.connect(self._on_card_view_requested)
             card.name_requested.connect(self._on_card_name_requested)
             card.merge_requested.connect(self._on_card_merge_requested)
+            card.associate_requested.connect(self._on_card_associate_requested)
             card.ignore_requested.connect(self._on_card_ignore_requested)
             card.quick_accept_requested.connect(self._on_card_quick_accept)
             card.quick_assign_requested.connect(self._on_card_quick_assign)
@@ -1879,6 +1894,7 @@ class FaceClusterGrid(QWidget):
             new_card = _ClusterCard(
                 cluster_id, fc, None, "", "",
                 show_quick_actions=True,
+                selected_ids_ref=self._selected_ids,
                 parent=flat._card_area,
             )
             new_card.selection_toggled.connect(self._on_card_selection_toggled)
@@ -1886,6 +1902,7 @@ class FaceClusterGrid(QWidget):
             new_card.view_requested.connect(self._on_card_view_requested)
             new_card.name_requested.connect(self._on_card_name_requested)
             new_card.merge_requested.connect(self._on_card_merge_requested)
+            new_card.associate_requested.connect(self._on_card_associate_requested)
             new_card.ignore_requested.connect(self._on_card_ignore_requested)
             new_card.quick_accept_requested.connect(self._on_card_quick_accept)
             new_card.quick_assign_requested.connect(self._on_card_quick_assign)
@@ -1922,6 +1939,21 @@ class FaceClusterGrid(QWidget):
         if target_id is not None:
             self._face_db.merge_clusters(cluster_id, target_id)
             self.cluster_merged.emit(cluster_id, target_id)
+
+    def _on_card_associate_requested(self) -> None:
+        """Fusionne tous les groupes/visages isolés actuellement sélectionnés
+        dans un même groupe (sans les assigner à une personne), pour pouvoir
+        les identifier ensemble en une seule fois."""
+        cluster_ids = list(self._selected_ids)
+        if len(cluster_ids) < 2:
+            return
+        face_counts = (self._pending_build_data or {}).get("face_counts", {})
+        target_id = max(cluster_ids, key=lambda cid: face_counts.get(cid, 0))
+        for cid in cluster_ids:
+            if cid != target_id:
+                self._face_db.merge_clusters(cid, target_id)
+        self._clear_selection()
+        self.cluster_merged.emit(cluster_ids[0], target_id)
 
     def _on_card_name_requested(self, cluster_id: int) -> None:
         if cluster_id in self._selected_ids and len(self._selected_ids) > 1:
@@ -2045,6 +2077,7 @@ class FaceClusterGrid(QWidget):
                 is_solo=is_solo,
                 show_quick_actions=quick_actions,
                 show_eject=eject,
+                selected_ids_ref=self._selected_ids,
                 parent=target._card_area,
             )
             card.selection_toggled.connect(self._on_card_selection_toggled)
@@ -2052,6 +2085,7 @@ class FaceClusterGrid(QWidget):
             card.view_requested.connect(self._on_card_view_requested)
             card.name_requested.connect(self._on_card_name_requested)
             card.merge_requested.connect(self._on_card_merge_requested)
+            card.associate_requested.connect(self._on_card_associate_requested)
             card.ignore_requested.connect(self._on_card_ignore_requested)
             card.quick_accept_requested.connect(self._on_card_quick_accept)
             card.quick_assign_requested.connect(self._on_card_quick_assign)
