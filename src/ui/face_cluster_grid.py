@@ -42,6 +42,18 @@ _UF_CHUNK      = 500    # lignes par bloc dans le produit matriciel de l'Union-F
                         # RAM pic ≈ _UF_CHUNK × n × 4 octets  (500 × 50k × 4 = 100 Mo)
 UNION_FIND_MAX = 80_000 # skip UF au-delà (temps > 2 min même en mode blocs)
 
+_BTN_OVL = 22   # diamètre des boutons ✓/✗ superposés sur la vignette (cf. PersonClusterView)
+_BTN_ACCEPT_STYLE = (
+    "QPushButton { background: rgba(30,150,50,215); color: white;"
+    " border-radius: 11px; font-weight: bold; font-size: 13px; border: none; padding: 0; }"
+    "QPushButton:hover { background: rgba(50,200,70,255); }"
+)
+_BTN_REJECT_STYLE = (
+    "QPushButton { background: rgba(170,30,30,215); color: white;"
+    " border-radius: 11px; font-weight: bold; font-size: 13px; border: none; padding: 0; }"
+    "QPushButton:hover { background: rgba(220,50,50,255); }"
+)
+
 
 # ------------------------------------------------------------------ helpers (module-level, utilisés par le thread)
 
@@ -232,12 +244,10 @@ class _ClusterCard(QFrame):
     range_select_requested = Signal(int)      # cluster_id (Maj+clic)
     view_requested       = Signal(int)
     name_requested       = Signal(int)
+    quick_accept_requested = Signal(int, int)   # cluster_id, person_id — accepter la suggestion sans dialogue
     merge_requested      = Signal(int)
     associate_requested  = Signal()           # fusionner tous les groupes sélectionnés ensemble
     ignore_requested     = Signal(int)
-    quick_accept_requested = Signal(int, int)   # cluster_id, person_id
-    quick_assign_requested = Signal(int)        # cluster_id
-    quick_ignore_requested = Signal(int)        # cluster_id
     eject_from_section_requested = Signal(int)  # cluster_id
 
     _STYLE_NORMAL = """
@@ -267,7 +277,6 @@ class _ClusterCard(QFrame):
         suggestion_label: str,
         suggestion_color: str,
         is_solo: bool = False,
-        show_quick_actions: bool = False,
         show_eject: bool = False,
         selected_ids_ref: "set[int] | None" = None,
         parent=None,
@@ -277,7 +286,6 @@ class _ClusterCard(QFrame):
         self._suggested_person_id = suggested_person_id
         self._is_solo             = is_solo
         self._is_selected         = False
-        self._show_quick_actions  = show_quick_actions
         # Référence directe vers l'ensemble des cluster_id sélectionnés dans la
         # grille parente, pour savoir au clic droit si une multi-sélection est
         # en cours (afficher "Associer") sans devoir répliquer l'état ailleurs.
@@ -320,56 +328,23 @@ class _ClusterCard(QFrame):
             )
             col.addWidget(lbl_sugg)
 
-        self._quick_row: "QWidget | None" = None
-        if show_quick_actions:
-            self._quick_row = QWidget()
-            self._quick_row.setStyleSheet("background: transparent;")
-            qr = QHBoxLayout(self._quick_row)
-            qr.setContentsMargins(0, 2, 0, 0)
-            qr.setSpacing(4)
-            _bs_accept = (
-                "QPushButton { background: #1a4a1a; border: 1px solid #2a7a2a; border-radius: 3px;"
-                " color: #5dba5d; font-size: 13px; font-weight: bold; padding: 0; }"
-                "QPushButton:hover { background: #2a6a2a; }"
-            )
-            _bs_ignore = (
-                "QPushButton { background: #3a1a1a; border: 1px solid #7a2a2a; border-radius: 3px;"
-                " color: #ba5d5d; font-size: 11px; font-weight: bold; padding: 0; }"
-                "QPushButton:hover { background: #5a2a2a; }"
-            )
-            _bs_assign = (
-                "QPushButton { background: #1a2a3a; border: 1px solid #2a5a7a; border-radius: 3px;"
-                " color: #7ab4d4; font-size: 10px; font-weight: bold; padding: 0 2px; }"
-                "QPushButton:hover { background: #1a3a5a; }"
-            )
-            btn_accept = QPushButton("✓")
-            btn_accept.setFixedHeight(20)
-            btn_accept.setStyleSheet(_bs_accept)
-            btn_accept.setToolTip("Accepter la suggestion")
-            btn_accept.clicked.connect(
-                lambda: self.quick_accept_requested.emit(
-                    self._cluster_id, self._suggested_person_id
-                )
-            )
-            btn_assign = QPushButton("→")
-            btn_assign.setFixedHeight(20)
-            btn_assign.setStyleSheet(_bs_assign)
-            btn_assign.setToolTip("Associer à une autre personne…")
-            btn_assign.clicked.connect(
-                lambda: self.quick_assign_requested.emit(self._cluster_id)
-            )
-            btn_ignore = QPushButton("✕")
-            btn_ignore.setFixedHeight(20)
-            btn_ignore.setStyleSheet(_bs_ignore)
-            btn_ignore.setToolTip("Ignorer ce groupe")
-            btn_ignore.clicked.connect(
-                lambda: self.quick_ignore_requested.emit(self._cluster_id)
-            )
-            qr.addWidget(btn_accept)
-            qr.addWidget(btn_assign)
-            qr.addWidget(btn_ignore)
-            col.addWidget(self._quick_row)
-            self._quick_row.setVisible(suggested_person_id is not None)
+        # Boutons ✓/✗ superposés sur la vignette, sur chaque carte (isolée, groupe
+        # ou avec suggestion) — mêmes actions que le menu contextuel (Identifier…
+        # / Ignorer), sur le même principe visuel que PersonClusterView.
+        _y = _CARD_IMG - _BTN_OVL - 3
+        btn_name = QPushButton("✓", self._lbl_img)
+        btn_name.setGeometry(_CARD_IMG - _BTN_OVL - 3, _y, _BTN_OVL, _BTN_OVL)
+        btn_name.setStyleSheet(_BTN_ACCEPT_STYLE)
+        btn_name.setCursor(Qt.PointingHandCursor)
+        btn_name.setToolTip("Identifier ce visage…" if is_solo else "Identifier cette personne…")
+        btn_name.clicked.connect(self._on_accept_clicked)
+
+        btn_ignore = QPushButton("✗", self._lbl_img)
+        btn_ignore.setGeometry(3, _y, _BTN_OVL, _BTN_OVL)
+        btn_ignore.setStyleSheet(_BTN_REJECT_STYLE)
+        btn_ignore.setCursor(Qt.PointingHandCursor)
+        btn_ignore.setToolTip("Ignorer ce visage" if is_solo else "Ignorer ce groupe")
+        btn_ignore.clicked.connect(lambda: self.ignore_requested.emit(self._cluster_id))
 
         if show_eject:
             btn_eject = QPushButton("✕ Retirer du groupe")
@@ -416,12 +391,20 @@ class _ClusterCard(QFrame):
             self._lbl_sugg.setVisible(True)
         else:
             self._lbl_sugg.setVisible(False)
-        if self._quick_row is not None:
-            self._quick_row.setVisible(sugg_id is not None)
 
     def set_selected(self, selected: bool) -> None:
         self._is_selected = selected
         self.setStyleSheet(self._STYLE_SELECTED if selected else self._STYLE_NORMAL)
+
+    def _on_accept_clicked(self) -> None:
+        # Suggestion présente : accepter directement sans passer par le dialogue.
+        # Sinon : ouvrir le dialogue d'identification classique. `_suggested_person_id`
+        # peut avoir été mis à jour après coup par set_suggestion(), d'où la lecture
+        # au moment du clic plutôt qu'à la construction de la carte.
+        if self._suggested_person_id is not None:
+            self.quick_accept_requested.emit(self._cluster_id, self._suggested_person_id)
+        else:
+            self.name_requested.emit(self._cluster_id)
 
     def mousePressEvent(self, event) -> None:
         if event.button() == Qt.LeftButton:
@@ -670,13 +653,13 @@ class _SectionWidget(QFrame):
             )
             hdr_row.addWidget(btn_ignore)
 
-            outer.addLayout(hdr_row)
-
             sep = QFrame()
             sep.setFrameShape(QFrame.HLine)
             sep.setStyleSheet(f"background: {color}; border: none;")
             sep.setFixedHeight(1)
             outer.addWidget(sep)
+
+            outer.addLayout(hdr_row)
 
         self._card_area = QWidget()
         self._card_area.setStyleSheet("background: transparent;")
@@ -920,15 +903,18 @@ class _ClusterRefreshThread(QThread):
                 representative_faces = {
                     c: v for c, v in representative_faces.items() if c not in promoted_set
                 }
-                groups_sorted = [
-                    [c for c in g if c not in promoted_set]
+                _filtered_groups = [
+                    ([c for c in g if c not in promoted_set], g[0])
                     for g in groups_sorted
                 ]
-                groups_sorted = [g for g in groups_sorted if g]
+                groups_sorted = [ng for ng, _old_root in _filtered_groups if ng]
+                # Réindexer les étiquettes sur le nouveau premier élément de chaque
+                # groupe : l'ancien root (clé de group_labels) a pu être promu et
+                # retiré du groupe, sans quoi le groupe restant perd son en-tête.
                 group_labels  = {
-                    g[0]: group_labels.get(root, ("", ""))
-                    for g in groups_sorted
-                    for root in [g[0]]
+                    ng[0]: group_labels.get(old_root, ("", ""))
+                    for ng, old_root in _filtered_groups
+                    if ng
                 }
 
             self.data_ready.emit({
@@ -1637,13 +1623,12 @@ class FaceClusterGrid(QWidget):
 
         avatar_items: list = []
 
-        def _add_card(cluster_id: int, target: _SectionWidget, is_solo: bool = False, quick_actions: bool = False, eject: bool = False) -> None:
+        def _add_card(cluster_id: int, target: _SectionWidget, is_solo: bool = False, eject: bool = False) -> None:
             fc = face_counts.get(cluster_id, 0)
             sugg_id, sugg_label, sugg_color, _ = suggestions.get(cluster_id, (None, "", "", 0.0))
             card = _ClusterCard(
                 cluster_id, fc, sugg_id, sugg_label, sugg_color,
                 is_solo=is_solo,
-                show_quick_actions=quick_actions,
                 show_eject=eject,
                 selected_ids_ref=self._selected_ids,
                 parent=target._card_area,
@@ -1652,12 +1637,10 @@ class FaceClusterGrid(QWidget):
             card.range_select_requested.connect(self._on_range_select)
             card.view_requested.connect(self._on_card_view_requested)
             card.name_requested.connect(self._on_card_name_requested)
+            card.quick_accept_requested.connect(self._on_card_quick_accept)
             card.merge_requested.connect(self._on_card_merge_requested)
             card.associate_requested.connect(self._on_card_associate_requested)
             card.ignore_requested.connect(self._on_card_ignore_requested)
-            card.quick_accept_requested.connect(self._on_card_quick_accept)
-            card.quick_assign_requested.connect(self._on_card_quick_assign)
-            card.quick_ignore_requested.connect(self._on_card_quick_ignore)
             card.eject_from_section_requested.connect(self._on_card_eject_from_section)
             target.add_card(cluster_id, card)
             self._cards[cluster_id] = card
@@ -1734,7 +1717,7 @@ class FaceClusterGrid(QWidget):
                 if kind == "solo":
                     _add_card(group[0], solo_section, is_solo=True)
                 elif len(group) == 1:
-                    _add_card(group[0], flat_section, quick_actions=True)
+                    _add_card(group[0], flat_section)
                 else:
                     label, color  = group_labels.get(group[0], ("", ""))
                     group_by_size = sorted(group, key=lambda c: -face_counts.get(c, 0))
@@ -1820,17 +1803,7 @@ class FaceClusterGrid(QWidget):
         self.cluster_ignored.emit(cluster_id)
 
     def _on_card_quick_accept(self, cluster_id: int, person_id: int) -> None:
-        if person_id is None:
-            return
         self.clusters_assigned.emit([cluster_id], person_id)
-
-    def _on_card_quick_ignore(self, cluster_id: int) -> None:
-        self._face_db.ignore_cluster(cluster_id)
-        self._anchor_id = None
-        self.remove_clusters([cluster_id])
-
-    def _on_card_quick_assign(self, cluster_id: int) -> None:
-        self._start_assign_for_clusters([cluster_id])
 
     def _on_card_eject_from_section(self, cluster_id: int) -> None:
         """Retire le cluster de sa section de suggestion et le place dans les groupes isolés."""
@@ -1866,17 +1839,25 @@ class FaceClusterGrid(QWidget):
         # Mettre à jour _cached_data
         if self._cached_data:
             self._cached_data["suggestions"].pop(cluster_id, None)
+            old_group_labels = self._cached_data.get("group_labels", {})
+            new_group_labels = dict(old_group_labels)
             new_groups = []
             for g in self._cached_data.get("groups_sorted", []):
                 if cluster_id in g:
+                    old_root = g[0]
                     new_g = [c for c in g if c != cluster_id]
                     if new_g:
                         new_groups.append(new_g)
+                        # Le groupe restant garde son étiquette, réindexée sur son
+                        # nouveau premier élément si le cluster éjecté était le root.
+                        if new_g[0] != old_root:
+                            new_group_labels[new_g[0]] = old_group_labels.get(old_root, ("", ""))
                     new_groups.append([cluster_id])
                 else:
                     new_groups.append(g)
             self._cached_data["groups_sorted"] = new_groups
-            self._cached_data.setdefault("group_labels", {})[cluster_id] = ("", "")
+            new_group_labels[cluster_id] = ("", "")
+            self._cached_data["group_labels"] = new_group_labels
 
         # Retirer de _all_combined (la carte sera ajoutée directement à flat_section)
         self._all_combined = [
@@ -1893,7 +1874,6 @@ class FaceClusterGrid(QWidget):
             rep = data["representative_faces"].get(cluster_id)
             new_card = _ClusterCard(
                 cluster_id, fc, None, "", "",
-                show_quick_actions=True,
                 selected_ids_ref=self._selected_ids,
                 parent=flat._card_area,
             )
@@ -1901,12 +1881,10 @@ class FaceClusterGrid(QWidget):
             new_card.range_select_requested.connect(self._on_range_select)
             new_card.view_requested.connect(self._on_card_view_requested)
             new_card.name_requested.connect(self._on_card_name_requested)
+            new_card.quick_accept_requested.connect(self._on_card_quick_accept)
             new_card.merge_requested.connect(self._on_card_merge_requested)
             new_card.associate_requested.connect(self._on_card_associate_requested)
             new_card.ignore_requested.connect(self._on_card_ignore_requested)
-            new_card.quick_accept_requested.connect(self._on_card_quick_accept)
-            new_card.quick_assign_requested.connect(self._on_card_quick_assign)
-            new_card.quick_ignore_requested.connect(self._on_card_quick_ignore)
             flat.add_card(cluster_id, new_card)
             self._cards[cluster_id] = new_card
             if rep:
@@ -2067,7 +2045,7 @@ class FaceClusterGrid(QWidget):
         solo_section         = self._solo_section
         avatar_items: list   = []
 
-        def _add_card(cluster_id: int, target: "_SectionWidget", is_solo: bool = False, quick_actions: bool = False, eject: bool = False) -> None:
+        def _add_card(cluster_id: int, target: "_SectionWidget", is_solo: bool = False, eject: bool = False) -> None:
             if target is None:
                 return
             fc = face_counts.get(cluster_id, 0)
@@ -2075,7 +2053,6 @@ class FaceClusterGrid(QWidget):
             card = _ClusterCard(
                 cluster_id, fc, sugg_id, sugg_label, sugg_color,
                 is_solo=is_solo,
-                show_quick_actions=quick_actions,
                 show_eject=eject,
                 selected_ids_ref=self._selected_ids,
                 parent=target._card_area,
@@ -2084,12 +2061,10 @@ class FaceClusterGrid(QWidget):
             card.range_select_requested.connect(self._on_range_select)
             card.view_requested.connect(self._on_card_view_requested)
             card.name_requested.connect(self._on_card_name_requested)
+            card.quick_accept_requested.connect(self._on_card_quick_accept)
             card.merge_requested.connect(self._on_card_merge_requested)
             card.associate_requested.connect(self._on_card_associate_requested)
             card.ignore_requested.connect(self._on_card_ignore_requested)
-            card.quick_accept_requested.connect(self._on_card_quick_accept)
-            card.quick_assign_requested.connect(self._on_card_quick_assign)
-            card.quick_ignore_requested.connect(self._on_card_quick_ignore)
             card.eject_from_section_requested.connect(self._on_card_eject_from_section)
             target.add_card(cluster_id, card)
             self._cards[cluster_id] = card
@@ -2142,7 +2117,7 @@ class FaceClusterGrid(QWidget):
                 if kind == "solo":
                     _add_card(group[0], solo_section, is_solo=True)
                 elif len(group) == 1:
-                    _add_card(group[0], flat_section, quick_actions=True)
+                    _add_card(group[0], flat_section)
                 else:
                     label, color  = group_labels.get(group[0], ("", ""))
                     group_by_size = sorted(group, key=lambda c: -face_counts.get(c, 0))
