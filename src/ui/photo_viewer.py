@@ -5,20 +5,25 @@ import io
 import logging
 import math
 import os
+import uuid
 
 from PySide6.QtCore import Qt, QThread, QTimer, QUrl, Signal, Slot, QPoint, QRectF, QPointF, QSize, QFileInfo
 from PySide6.QtGui import (
     QDesktopServices, QPixmap, QPainter, QKeyEvent, QWheelEvent,
-    QMouseEvent, QPen, QColor, QPainterPath, QPolygonF, QIcon,
+    QMouseEvent, QPen, QBrush, QColor, QPainterPath, QPolygonF, QIcon, QFont, QTextCursor,
 )
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
-    QLabel, QSizePolicy, QToolButton, QButtonGroup, QMenu, QFileIconProvider,
+    QLabel, QSizePolicy, QToolButton, QButtonGroup, QMenu, QFileIconProvider, QTextEdit,
 )
 
 from src.core.models import PhotoInfo, EditInfo
 from src.processing.edit_database import EditDatabase
 from src.processing.adjustments import ImageAdjuster
+from src.processing.annotation_geometry import catmull_rom_to_bezier_segments
+from src.ui.annotation_renderer import (
+    render_annotations, hit_test_annotations, annotation_screen_bounds,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -276,6 +281,36 @@ _EDGE_HIT   = 12   # pixels de tolérance pour détecter une poignée d'arête
 # Paires de coins formant chaque arête : haut, droite, bas, gauche
 _EDGE_INDICES = [(0, 1), (1, 2), (2, 3), (3, 0)]
 
+# Poignées de redimensionnement/rotation d'une annotation sélectionnée
+_ANNOTATION_HANDLE_HIT     = 10   # pixels de tolérance pour détecter une poignée coin/rotation
+_ANNOTATION_ROTATE_OFFSET  = 28   # pixels au-dessus du coin haut pour la poignée de rotation
+_ANNOTATION_MIN_SIZE_PX    = 8.0  # taille minimale (largeur/hauteur locale) pendant un redimensionnement
+_ANNOTATION_CORNER_CURSORS = {
+    'tl': Qt.SizeFDiagCursor, 'br': Qt.SizeFDiagCursor,
+    'tr': Qt.SizeBDiagCursor, 'bl': Qt.SizeBDiagCursor,
+}
+
+
+class _InlineTextEdit(QTextEdit):
+    """Éditeur de texte flottant pour l'outil Texte du calque d'annotations.
+    Entrée (sans Shift) valide, Échap annule, perte de focus valide — pas de
+    QInputDialog modal pour rester en manipulation directe sur le canvas."""
+    confirmed = Signal()
+    cancelled = Signal()
+
+    def keyPressEvent(self, event: QKeyEvent) -> None:
+        if event.key() in (Qt.Key_Return, Qt.Key_Enter) and not (event.modifiers() & Qt.ShiftModifier):
+            self.confirmed.emit()
+            return
+        if event.key() == Qt.Key_Escape:
+            self.cancelled.emit()
+            return
+        super().keyPressEvent(event)
+
+    def focusOutEvent(self, event) -> None:
+        super().focusOutEvent(event)
+        self.confirmed.emit()
+
 
 class _Canvas(QWidget):
     zoom_changed                = Signal(float)
@@ -287,6 +322,14 @@ class _Canvas(QWidget):
     face_context_menu_requested = Signal(object, object) # (FaceInfo, QPoint global)
     vignette_changed            = Signal(object) # EditInfo (géométrie mise à jour par drag)
     face_add_confirmed          = Signal(object) # tuple (bbox_x,bbox_y,bbox_w,bbox_h) int
+    annotation_added             = Signal(object)  # dict annotation ajoutée
+    annotation_deleted           = Signal(str)     # id de l'annotation supprimée
+    annotation_deleted_multi     = Signal(object)  # list[str] ids supprimés (suppression groupée)
+    annotation_selection_changed = Signal(object)  # list[str] ids sélectionnés (peut être vide)
+    annotation_moved              = Signal(str, object)  # (id, dict annotation à jour)
+    annotation_moved_multi        = Signal(object)  # dict[id, annotation à jour] (déplacement groupé)
+    annotation_resized            = Signal(str, object)  # (id, dict annotation à jour)
+    annotation_grouped            = Signal(object)  # dict[id, annotation à jour] (groupe/dégroupe)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -332,6 +375,41 @@ class _Canvas(QWidget):
         self._face_add_draw_start: "QPointF | None" = None
         self._face_add_mouse_start: "QPointF | None" = None
         self._face_add_rect_start: "QRectF | None" = None
+        # Calque d'annotations (dessin/texte par-dessus la photo)
+        self._annotation_mode: bool = False
+        self._annotation_tool: str = "pen"   # "pen"|"line"|"curve"|"rect"|"ellipse"|"text"|"select"
+        self._annotations_visible: bool = True
+        self._annotations: list = []
+        self._annotation_color: str = "#ffff0000"
+        self._annotation_width: float = 0.006     # fraction de min(largeur, hauteur)
+        self._annotation_fill_color: str = "#ffff0000"   # rect/ellipse : couleur de fond (alpha ignoré, cf. opacity)
+        self._annotation_opacity: float = 0.4             # rect/ellipse : opacité de la surface (0-1)
+        self._annotation_blur: float = 0.0                 # rect/ellipse : flou, fraction de min(largeur, hauteur)
+        self._annotation_font_family: str = "Arial"
+        self._annotation_font_size: float = 0.04  # fraction de min(largeur, hauteur)
+        self._annotation_bold: bool = False
+        self._annotation_italic: bool = False
+        self._annotation_selected_ids: set = set()            # sélection multiple, outil "select"
+        self._annotation_draft_type: "str | None" = None    # None|"pen"|"line"|"curve"|"rect"|"ellipse"
+        self._annotation_draft_points: list = []             # points écran en cours
+        self._annotation_hover_pos: "QPointF | None" = None  # aperçu du prochain point (courbe)
+        self._annotation_text_editor: "_InlineTextEdit | None" = None
+        self._annotation_text_pos: "QPointF | None" = None   # position écran de l'éditeur ouvert
+        self._annotation_edit_id: "str | None" = None        # id du texte en cours d'édition (None = création)
+        # Déplacement (drag) des éléments sélectionnés, outil "select"
+        self._annotation_drag_ids: list = []
+        self._annotation_drag_start: "QPointF | None" = None
+        self._annotation_drag_origs: dict = {}                # id -> copie points/pos avant drag
+        self._annotation_drag_moved: bool = False             # dépassé le seuil anti-clic
+        # Sélection rectangulaire (marquee) en zone vide
+        self._annotation_marquee_start: "QPointF | None" = None
+        self._annotation_marquee_rect: "QRectF | None" = None
+        # Redimensionnement/rotation via les poignées de l'élément sélectionné
+        self._annotation_resize_handle: "str | None" = None   # 'tl'|'tr'|'br'|'bl'|'rotate'
+        self._annotation_resize_id: "str | None" = None
+        self._annotation_resize_orig: "dict | None" = None    # copie de l'annotation avant drag
+        self._annotation_resize_start: "QPointF | None" = None  # position souris écran au début
+        self._annotation_resize_bbox0: "QRectF | None" = None   # bbox locale (non tournée) au début
         self.setMouseTracking(True)
         self.setFocusPolicy(Qt.NoFocus)
 
@@ -1138,6 +1216,615 @@ class _Canvas(QWidget):
         p.drawLine(QPointF(center.x() - arm, center.y()), QPointF(center.x() + arm, center.y()))
         p.drawLine(QPointF(center.x(), center.y() - arm), QPointF(center.x(), center.y() + arm))
 
+    # ------------------------------------------------------------------ calque d'annotations
+
+    def enter_annotation_mode(self, tool: str = "pen") -> None:
+        self._annotation_mode = True
+        self._annotation_tool = tool
+        self._annotation_selected_ids = set()
+        self.cancel_annotation_draft()
+        self._cancel_annotation_drag()
+        self._cancel_annotation_resize()
+        self._cancel_annotation_marquee()
+        self.setCursor(Qt.ArrowCursor if tool == "select" else Qt.CrossCursor)
+        self.update()
+
+    def exit_annotation_mode(self) -> None:
+        self._annotation_mode = False
+        self.cancel_annotation_draft()
+        self._cancel_annotation_drag()
+        self._cancel_annotation_resize()
+        self._cancel_annotation_marquee()
+        if self._annotation_text_editor is not None:
+            self.cancel_text_edit()
+        self._annotation_selected_ids = set()
+        self.unsetCursor()
+        self.update()
+
+    def set_annotation_tool(self, tool: str) -> None:
+        self._annotation_tool = tool
+        self.cancel_annotation_draft()
+        self._cancel_annotation_drag()
+        self._cancel_annotation_resize()
+        self._cancel_annotation_marquee()
+        if self._annotation_text_editor is not None:
+            self.cancel_text_edit()
+        self.setCursor(Qt.ArrowCursor if tool == "select" else Qt.CrossCursor)
+        self.update()
+
+    def _cancel_annotation_drag(self) -> None:
+        self._annotation_drag_ids   = []
+        self._annotation_drag_start = None
+        self._annotation_drag_origs = {}
+        self._annotation_drag_moved = False
+
+    def _cancel_annotation_marquee(self) -> None:
+        self._annotation_marquee_start = None
+        self._annotation_marquee_rect  = None
+
+    def _set_annotation_selection(self, ids) -> None:
+        self._annotation_selected_ids = set(ids)
+        self.annotation_selection_changed.emit(sorted(self._annotation_selected_ids))
+
+    def _cancel_annotation_resize(self) -> None:
+        self._annotation_resize_handle = None
+        self._annotation_resize_id     = None
+        self._annotation_resize_orig   = None
+        self._annotation_resize_start  = None
+        self._annotation_resize_bbox0  = None
+
+    def _update_annotation_drag(self, pos: QPointF) -> None:
+        ir = self._img_rect()
+        if ir.width() <= 0 or ir.height() <= 0 or self._annotation_drag_start is None:
+            return
+        dx_screen = pos.x() - self._annotation_drag_start.x()
+        dy_screen = pos.y() - self._annotation_drag_start.y()
+        if not self._annotation_drag_moved:
+            if math.hypot(dx_screen, dy_screen) < 3.0:
+                return
+            self._annotation_drag_moved = True
+        dx = dx_screen / ir.width()
+        dy = dy_screen / ir.height()
+        for ann_id in self._annotation_drag_ids:
+            ann = self._find_annotation(ann_id)
+            orig = self._annotation_drag_origs.get(ann_id)
+            if ann is None or orig is None:
+                continue
+            if "points" in orig:
+                ann["points"] = [[px + dx, py + dy] for px, py in orig["points"]]
+            elif "pos" in orig:
+                ox, oy = orig["pos"]
+                ann["pos"] = [ox + dx, oy + dy]
+        # repaint() forcé (pas update()) : sous Windows, un flot rapide de
+        # WM_MOUSEMOVE natifs peut affamer la file de repaint asynchrone de Qt,
+        # ce qui donnait l'impression que l'élément d'origine restait affiché
+        # ("fantôme") jusqu'au relâchement du clic.
+        self.repaint()
+
+    def _finish_annotation_drag(self) -> None:
+        ann_ids = list(self._annotation_drag_ids)
+        moved   = self._annotation_drag_moved
+        updated = {
+            i: copy.deepcopy(self._find_annotation(i)) for i in ann_ids
+            if self._find_annotation(i) is not None
+        }
+        self._cancel_annotation_drag()
+        self.setCursor(Qt.ArrowCursor)
+        if moved and updated:
+            if len(updated) == 1:
+                (ann_id, ann), = updated.items()
+                self.annotation_moved.emit(ann_id, ann)
+            else:
+                self.annotation_moved_multi.emit(updated)
+        self.update()
+
+    def _finish_annotation_marquee(self, event: QMouseEvent) -> None:
+        rect = self._annotation_marquee_rect
+        self._cancel_annotation_marquee()
+        if rect is None or (rect.width() < 3 and rect.height() < 3):
+            self.update()
+            return
+        ir = self._img_rect()
+        if ir.width() <= 0 or ir.height() <= 0:
+            self.update()
+            return
+        local_rect = QRectF(rect.x() - ir.x(), rect.y() - ir.y(), rect.width(), rect.height())
+        hits = {
+            a.get("id") for a in self._annotations
+            if local_rect.intersects(annotation_screen_bounds(a, ir.width(), ir.height()))
+        }
+        if bool(event.modifiers() & Qt.ControlModifier):
+            self._set_annotation_selection(self._annotation_selected_ids ^ hits)
+        else:
+            self._set_annotation_selection(hits)
+        self.update()
+
+    def _annotation_bbox_local(self, ann: dict) -> "QRectF | None":
+        """Bbox écran de ``ann`` dans son repère local non tourné (avant ``angle``),
+        origine (0,0) = coin de l'image affichée. Sert de base fixe aux poignées :
+        le centre de cette bbox reste le pivot de rotation quel que soit ``angle``."""
+        ir = self._img_rect()
+        if ir.width() <= 0 or ir.height() <= 0:
+            return None
+        rect = annotation_screen_bounds(ann, ir.width(), ir.height())
+        if rect.isEmpty():
+            return None
+        return rect
+
+    def _annotation_handle_positions(self, ann: dict) -> dict:
+        """Positions écran (repère widget) des 4 poignées de coin + la poignée de
+        rotation, tournées de ``ann['angle']`` autour du centre de la bbox locale —
+        même transformation que celle appliquée au rendu (render_annotations)."""
+        rect = self._annotation_bbox_local(ann)
+        if rect is None:
+            return {}
+        ir = self._img_rect()
+        rad = math.radians(float(ann.get("angle", 0.0) or 0.0))
+        cos_a, sin_a = math.cos(rad), math.sin(rad)
+        cx, cy = rect.center().x(), rect.center().y()
+
+        def rot(lx, ly):
+            dx, dy = lx - cx, ly - cy
+            return QPointF(ir.x() + cx + dx * cos_a - dy * sin_a,
+                           ir.y() + cy + dx * sin_a + dy * cos_a)
+
+        return {
+            'tl':     rot(rect.left(),  rect.top()),
+            'tr':     rot(rect.right(), rect.top()),
+            'br':     rot(rect.right(), rect.bottom()),
+            'bl':     rot(rect.left(),  rect.bottom()),
+            'rotate': rot(cx, rect.top() - _ANNOTATION_ROTATE_OFFSET),
+        }
+
+    def _annotation_hit_handle(self, ann: dict, pos: QPointF) -> "str | None":
+        for name, hpos in self._annotation_handle_positions(ann).items():
+            if math.hypot(pos.x() - hpos.x(), pos.y() - hpos.y()) <= _ANNOTATION_HANDLE_HIT:
+                return name
+        return None
+
+    def _start_annotation_resize(self, ann: dict, handle: str, pos: QPointF) -> None:
+        bbox0 = self._annotation_bbox_local(ann)
+        if bbox0 is None:
+            return
+        self._annotation_resize_handle = handle
+        self._annotation_resize_id     = ann.get("id")
+        self._annotation_resize_orig   = copy.deepcopy(ann)
+        self._annotation_resize_start  = QPointF(pos)
+        self._annotation_resize_bbox0  = QRectF(bbox0)
+        cursor = Qt.ClosedHandCursor if handle == 'rotate' else _ANNOTATION_CORNER_CURSORS.get(handle, Qt.SizeFDiagCursor)
+        self.setCursor(cursor)
+
+    def _update_annotation_resize(self, pos: QPointF) -> None:
+        ir = self._img_rect()
+        orig  = self._annotation_resize_orig
+        bbox0 = self._annotation_resize_bbox0
+        ann   = self._find_annotation(self._annotation_resize_id) if self._annotation_resize_id else None
+        if ir.width() <= 0 or ir.height() <= 0 or orig is None or bbox0 is None or ann is None:
+            return
+        handle = self._annotation_resize_handle
+        angle0 = float(orig.get("angle", 0.0) or 0.0)
+        rad = math.radians(angle0)
+        cos_a, sin_a = math.cos(rad), math.sin(rad)
+        cx0, cy0 = bbox0.center().x(), bbox0.center().y()
+
+        # Position souris ramenée dans le repère local non tourné (origine image, sans ir offset)
+        lx, ly = pos.x() - ir.x(), pos.y() - ir.y()
+        dx, dy = lx - cx0, ly - cy0
+        local_x = cx0 + dx * cos_a + dy * sin_a
+        local_y = cy0 - dx * sin_a + dy * cos_a
+
+        if handle == 'rotate':
+            sx = self._annotation_resize_start.x() - ir.x()
+            sy = self._annotation_resize_start.y() - ir.y()
+            a0 = math.degrees(math.atan2(sy - cy0, sx - cx0))
+            ac = math.degrees(math.atan2(ly - cy0, lx - cx0))
+            ann["angle"] = (angle0 + ac - a0) % 360.0
+            self.update()
+            return
+
+        anchors = {
+            'tl': (bbox0.right(), bbox0.bottom()),
+            'tr': (bbox0.left(),  bbox0.bottom()),
+            'br': (bbox0.left(),  bbox0.top()),
+            'bl': (bbox0.right(), bbox0.top()),
+        }
+        ax, ay = anchors[handle]
+        old_w = max(1e-6, bbox0.width())
+        old_h = max(1e-6, bbox0.height())
+        new_w = max(_ANNOTATION_MIN_SIZE_PX, abs(local_x - ax))
+        new_h = max(_ANNOTATION_MIN_SIZE_PX, abs(local_y - ay))
+        scale_x = new_w / old_w
+        scale_y = new_h / old_h
+
+        if ann.get("type") == "text":
+            # Le texte n'a pas de largeur/hauteur indépendantes : un seul facteur
+            # d'échelle (distance à l'ancre) pilote font_size, geste "diagonal" naturel.
+            old_diag = math.hypot(old_w, old_h)
+            new_diag = math.hypot(new_w, new_h)
+            scale = new_diag / max(1e-6, old_diag)
+            ann["font_size"] = max(0.005, min(1.0, float(orig.get("font_size", 0.04)) * scale))
+        else:
+            orig_pts = orig.get("points") or []
+            new_pts = []
+            for px, py in orig_pts:
+                lx0 = px * ir.width()
+                ly0 = py * ir.height()
+                nlx = ax + (lx0 - ax) * scale_x
+                nly = ay + (ly0 - ay) * scale_y
+                new_pts.append([nlx / ir.width(), nly / ir.height()])
+            ann["points"] = new_pts
+            if "width" in orig:
+                ann["width"] = max(0.0005, float(orig.get("width", 0.004)) * ((scale_x + scale_y) / 2))
+
+        self.update()
+
+    def _finish_annotation_resize(self) -> None:
+        ann_id  = self._annotation_resize_id
+        handle  = self._annotation_resize_handle
+        ann     = self._find_annotation(ann_id) if ann_id is not None else None
+        self._cancel_annotation_resize()
+        self.setCursor(Qt.ArrowCursor)
+        if handle is not None and ann is not None:
+            self.annotation_resized.emit(ann_id, copy.deepcopy(ann))
+        self.update()
+
+    def set_annotation_style(self, color: str, width: float, font_family: str,
+                              font_size: float, bold: bool, italic: bool,
+                              fill_color: str = "#40ff0000", opacity: float = 1.0,
+                              blur: float = 0.0) -> None:
+        self._annotation_color = color
+        self._annotation_width = width
+        self._annotation_font_family = font_family
+        self._annotation_font_size = font_size
+        self._annotation_bold = bold
+        self._annotation_italic = italic
+        self._annotation_fill_color = fill_color
+        self._annotation_opacity = opacity
+        self._annotation_blur = blur
+
+    def set_annotations(self, annotations: list) -> None:
+        self._annotations = annotations if annotations is not None else []
+        stale = {i for i in self._annotation_selected_ids if self._find_annotation(i) is None}
+        if stale:
+            self._annotation_selected_ids -= stale
+        if any(self._find_annotation(i) is None for i in self._annotation_drag_ids):
+            self._cancel_annotation_drag()
+        if (self._annotation_resize_id is not None
+                and self._find_annotation(self._annotation_resize_id) is None):
+            self._cancel_annotation_resize()
+        self.update()
+
+    def set_annotations_visible(self, visible: bool) -> None:
+        self._annotations_visible = visible
+        self.update()
+
+    def _find_annotation(self, ann_id: str) -> "dict | None":
+        for ann in self._annotations:
+            if ann.get("id") == ann_id:
+                return ann
+        return None
+
+    def delete_selected_annotation(self) -> list:
+        ids = list(self._annotation_selected_ids)
+        if not ids:
+            return []
+        id_set = set(ids)
+        self._annotations = [a for a in self._annotations if a.get("id") not in id_set]
+        self._annotation_selected_ids = set()
+        if id_set & set(self._annotation_drag_ids):
+            self._cancel_annotation_drag()
+        if self._annotation_resize_id in id_set:
+            self._cancel_annotation_resize()
+        if len(ids) == 1:
+            self.annotation_deleted.emit(ids[0])
+        else:
+            self.annotation_deleted_multi.emit(ids)
+        self.annotation_selection_changed.emit([])
+        self.update()
+        return ids
+
+    def clear_all_annotations(self) -> None:
+        self._annotations = []
+        self._annotation_selected_ids = set()
+        self._cancel_annotation_drag()
+        self._cancel_annotation_resize()
+        self.annotation_selection_changed.emit([])
+        self.update()
+
+    def group_selected_annotations(self) -> None:
+        ids = list(self._annotation_selected_ids)
+        if len(ids) < 2:
+            return
+        group_id = uuid.uuid4().hex
+        updated = {}
+        for ann_id in ids:
+            ann = self._find_annotation(ann_id)
+            if ann is not None:
+                ann["group"] = group_id
+                updated[ann_id] = copy.deepcopy(ann)
+        if updated:
+            self.annotation_grouped.emit(updated)
+        self.update()
+
+    def ungroup_selected_annotations(self) -> None:
+        groups = {
+            a.get("group") for a in self._annotations
+            if a.get("id") in self._annotation_selected_ids and a.get("group")
+        }
+        if not groups:
+            return
+        updated = {}
+        for ann in self._annotations:
+            if ann.get("group") in groups:
+                ann["group"] = None
+                updated[ann.get("id")] = copy.deepcopy(ann)
+        if updated:
+            self.annotation_grouped.emit(updated)
+        self.update()
+
+    def cancel_annotation_draft(self) -> None:
+        self._annotation_draft_points = []
+        self._annotation_draft_type = None
+        self._annotation_hover_pos = None
+        self.update()
+
+    def confirm_annotation_draft(self) -> None:
+        pts = self._annotation_draft_points
+        draft_type = self._annotation_draft_type
+        self._annotation_draft_points = []
+        self._annotation_draft_type = None
+        self._annotation_hover_pos = None
+        if not draft_type or len(pts) < 2:
+            self.update()
+            return
+        ir = self._img_rect()
+        if ir.width() <= 0 or ir.height() <= 0:
+            self.update()
+            return
+        norm_pts = [
+            [max(0.0, min(1.0, (pt.x() - ir.x()) / ir.width())),
+             max(0.0, min(1.0, (pt.y() - ir.y()) / ir.height()))]
+            for pt in pts
+        ]
+        ann = {
+            "id": str(uuid.uuid4()),
+            "type": draft_type,
+            "color": self._annotation_color,
+            "width": self._annotation_width,
+            "points": norm_pts,
+        }
+        if draft_type in ("rect", "ellipse"):
+            ann["fill_color"] = self._annotation_fill_color
+            ann["opacity"] = self._annotation_opacity
+            ann["blur"] = self._annotation_blur
+        self._annotations.append(ann)
+        self.annotation_added.emit(ann)
+        self.update()
+
+    def _open_text_editor(self, pos: QPointF, ann: "dict | None" = None) -> None:
+        editor = _InlineTextEdit(self)
+        editor.setAcceptRichText(False)
+        w, h = 220, 60
+        x = min(max(0, int(pos.x())), max(0, self.width()  - w))
+        y = min(max(0, int(pos.y())), max(0, self.height() - h))
+        editor.setGeometry(x, y, w, h)
+        ir = self._img_rect()
+        scale = min(ir.width(), ir.height()) if ir.width() > 0 and ir.height() > 0 else 0
+        font_family = ann.get("font_family", self._annotation_font_family) if ann else self._annotation_font_family
+        font_size   = ann.get("font_size",   self._annotation_font_size)   if ann else self._annotation_font_size
+        bold        = ann.get("bold",        self._annotation_bold)       if ann else self._annotation_bold
+        italic      = ann.get("italic",      self._annotation_italic)     if ann else self._annotation_italic
+        color_val   = ann.get("color",       self._annotation_color)      if ann else self._annotation_color
+        px = max(8, round(float(font_size) * scale)) if scale else 16
+        font = QFont(font_family or "Arial")
+        font.setPixelSize(px)
+        font.setBold(bool(bold))
+        font.setItalic(bool(italic))
+        editor.setFont(font)
+        color = QColor(color_val)
+        editor.setStyleSheet(
+            f"QTextEdit {{ background: rgba(255,255,255,235); color: {color.name()}; "
+            f"border: 1px solid #4a9fd4; }}"
+        )
+        if ann is not None:
+            editor.setPlainText(ann.get("text", ""))
+            editor.moveCursor(QTextCursor.End)
+        editor.confirmed.connect(self._on_text_edit_confirmed)
+        editor.cancelled.connect(self._on_text_edit_cancelled)
+        editor.show()
+        editor.setFocus(Qt.MouseFocusReason)
+        self._annotation_text_editor = editor
+        self._annotation_text_pos = pos
+        self._annotation_edit_id = ann.get("id") if ann is not None else None
+
+    def _open_text_editor_for_edit(self, ann: dict) -> None:
+        """Double-clic sur un texte existant (outil select) : ré-ouvre l'éditeur
+        flottant pré-rempli, à la place de l'annotation, pour modification in-place."""
+        if self._annotation_text_editor is not None:
+            return
+        ir = self._img_rect()
+        if ir.width() <= 0 or ir.height() <= 0:
+            return
+        ann_pos = ann.get("pos", [0.0, 0.0])
+        pos = QPointF(ir.x() + ann_pos[0] * ir.width(), ir.y() + ann_pos[1] * ir.height())
+        self._open_text_editor(pos, ann=ann)
+
+    def _on_text_edit_confirmed(self) -> None:
+        editor = self._annotation_text_editor
+        pos = self._annotation_text_pos
+        edit_id = self._annotation_edit_id
+        self._annotation_text_editor = None
+        self._annotation_text_pos = None
+        self._annotation_edit_id = None
+        if editor is None:
+            return
+        text = editor.toPlainText().strip()
+        editor.deleteLater()
+        if edit_id is not None:
+            ann = self._find_annotation(edit_id)
+            if ann is None:
+                self.update()
+                return
+            if not text:
+                self._annotations = [a for a in self._annotations if a.get("id") != edit_id]
+                self.annotation_deleted.emit(edit_id)
+                self.update()
+                return
+            ann["text"] = text
+            self.annotation_moved.emit(edit_id, copy.deepcopy(ann))
+            self.update()
+            return
+        if not text or pos is None:
+            self.update()
+            return
+        ir = self._img_rect()
+        if ir.width() <= 0 or ir.height() <= 0:
+            self.update()
+            return
+        ann = {
+            "id": str(uuid.uuid4()),
+            "type": "text",
+            "text": text,
+            "color": self._annotation_color,
+            "font_family": self._annotation_font_family,
+            "font_size": self._annotation_font_size,
+            "bold": self._annotation_bold,
+            "italic": self._annotation_italic,
+            "pos": [
+                max(0.0, min(1.0, (pos.x() - ir.x()) / ir.width())),
+                max(0.0, min(1.0, (pos.y() - ir.y()) / ir.height())),
+            ],
+        }
+        self._annotations.append(ann)
+        self.annotation_added.emit(ann)
+        self.update()
+
+    def cancel_text_edit(self) -> None:
+        editor = self._annotation_text_editor
+        self._annotation_text_editor = None
+        self._annotation_text_pos = None
+        self._annotation_edit_id = None
+        if editor is not None:
+            editor.deleteLater()
+        self.update()
+
+    def _on_text_edit_cancelled(self) -> None:
+        self.cancel_text_edit()
+
+    def _draw_annotation_overlay(self, p: QPainter) -> None:
+        if not self._annotations:
+            return
+        ir = self._img_rect()
+        if ir.width() <= 0 or ir.height() <= 0:
+            return
+        p.save()
+        p.translate(ir.x(), ir.y())
+        render_annotations(p, self._annotations, ir.width(), ir.height(), background=self._pixmap)
+        p.restore()
+
+    def _draw_annotation_tool_overlay(self, p: QPainter) -> None:
+        ir = self._img_rect()
+        if ir.width() <= 0 or ir.height() <= 0:
+            return
+        for ann_id in self._annotation_selected_ids:
+            ann = self._find_annotation(ann_id)
+            if ann is None:
+                continue
+            p.save()
+            p.translate(ir.x(), ir.y())
+            rect = annotation_screen_bounds(ann, ir.width(), ir.height())
+            angle = float(ann.get("angle", 0.0) or 0.0)
+            if angle:
+                center = rect.center()
+                p.translate(center)
+                p.rotate(angle)
+                p.translate(-center)
+            p.setPen(QPen(QColor(255, 210, 60), 2, Qt.DashLine))
+            p.setBrush(Qt.NoBrush)
+            p.drawRect(rect)
+            p.restore()
+        if len(self._annotation_selected_ids) == 1 and self._annotation_tool == "select":
+            ann = self._find_annotation(next(iter(self._annotation_selected_ids)))
+            if ann is not None:
+                self._draw_annotation_handles(p, ann)
+        if self._annotation_marquee_rect is not None:
+            p.save()
+            p.setPen(QPen(QColor(80, 170, 255), 1, Qt.DashLine))
+            p.setBrush(QColor(80, 170, 255, 40))
+            p.drawRect(self._annotation_marquee_rect)
+            p.restore()
+        if self._annotation_draft_type in ("rect", "ellipse") and len(self._annotation_draft_points) >= 2:
+            p.save()
+            raw_width = self._annotation_width * min(ir.width(), ir.height())
+            width_px = max(1.0, raw_width) if self._annotation_width > 0 else 0.0
+            rect = QRectF(self._annotation_draft_points[0], self._annotation_draft_points[1]).normalized()
+            opacity = max(0.0, min(1.0, self._annotation_opacity))
+            if opacity > 0.0:
+                fill = QColor(self._annotation_fill_color)
+                fill.setAlpha(round(255 * opacity))
+                p.setPen(Qt.NoPen)
+                p.setBrush(QBrush(fill))
+                if self._annotation_draft_type == "ellipse":
+                    p.drawEllipse(rect)
+                else:
+                    p.drawRect(rect)
+            if width_px > 0:
+                p.setPen(QPen(QColor(self._annotation_color), width_px))
+                p.setBrush(Qt.NoBrush)
+                if self._annotation_draft_type == "ellipse":
+                    p.drawEllipse(rect)
+                else:
+                    p.drawRect(rect)
+            p.restore()
+        elif self._annotation_draft_type and self._annotation_draft_points:
+            p.save()
+            color = QColor(self._annotation_color)
+            width_px = max(1.0, self._annotation_width * min(ir.width(), ir.height()))
+            p.setPen(QPen(color, width_px, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin))
+            p.setBrush(Qt.NoBrush)
+            pts = list(self._annotation_draft_points)
+            if self._annotation_draft_type == "curve" and self._annotation_hover_pos is not None:
+                pts = pts + [self._annotation_hover_pos]
+            if len(pts) == 1:
+                p.setBrush(color)
+                p.drawEllipse(pts[0], width_px / 2, width_px / 2)
+            else:
+                path = QPainterPath()
+                path.moveTo(pts[0])
+                if self._annotation_draft_type == "curve":
+                    segs = catmull_rom_to_bezier_segments([(pt.x(), pt.y()) for pt in pts])
+                    for _p0, cp1, cp2, p3 in segs:
+                        path.cubicTo(QPointF(*cp1), QPointF(*cp2), QPointF(*p3))
+                else:
+                    for pt in pts[1:]:
+                        path.lineTo(pt)
+                p.drawPath(path)
+            p.restore()
+
+    def _draw_annotation_handles(self, p: QPainter, ann: dict) -> None:
+        """Poignées de redimensionnement (coins) + rotation d'un élément sélectionné,
+        même style visuel que les poignées de vignette (_vignette_handle_positions)."""
+        handles = self._annotation_handle_positions(ann)
+        if not handles:
+            return
+        rotate_h = handles.get('rotate')
+        tl, tr = handles.get('tl'), handles.get('tr')
+        if rotate_h and tl and tr:
+            top_mid = QPointF((tl.x() + tr.x()) / 2, (tl.y() + tr.y()) / 2)
+            p.setPen(QPen(QColor(255, 210, 60, 160), 1, Qt.DotLine))
+            p.drawLine(top_mid, rotate_h)
+        HS = 5
+        for name, hpos in handles.items():
+            active = (name == self._annotation_resize_handle)
+            fill   = QColor(255, 210, 60, 230 if active else 170)
+            border = QPen(QColor(150, 110, 0, 230), 1.5)
+            p.setPen(border)
+            p.setBrush(fill)
+            if name == 'rotate':
+                p.drawEllipse(hpos, HS + 1, HS + 1)
+            else:
+                p.drawRect(QRectF(hpos.x() - HS, hpos.y() - HS, HS * 2, HS * 2))
+
     def set_highlighted_face(self, face) -> None:
         self._highlighted_face  = face
         self._highlighted_faces = []
@@ -1243,6 +1930,8 @@ class _Canvas(QWidget):
             pw = int(self._pixmap.width() * self._zoom)
             ph = int(self._pixmap.height() * self._zoom)
             p.drawPixmap(int(self._offset.x()), int(self._offset.y()), pw, ph, self._pixmap)
+            if self._annotations_visible:
+                self._draw_annotation_overlay(p)
             if self._highlighted_face is not None or self._highlighted_faces:
                 self._draw_face_highlight(p)
             if self._red_eye_mode:
@@ -1255,6 +1944,8 @@ class _Canvas(QWidget):
                 self._draw_vignette_overlay(p)
             if self._face_add_mode:
                 self._draw_face_add_overlay(p)
+            if self._annotation_mode:
+                self._draw_annotation_tool_overlay(p)
 
     def _draw_face_add_overlay(self, p: QPainter) -> None:
         ir = self._img_rect()
@@ -1348,7 +2039,7 @@ class _Canvas(QWidget):
 
     def wheelEvent(self, event: QWheelEvent) -> None:
         delta = event.angleDelta().y()
-        if self._red_eye_mode or self._face_add_mode:
+        if self._red_eye_mode or self._face_add_mode or self._annotation_mode:
             return
         if self._crop_mode:
             # Zoom centré sur le milieu, en préservant le quadrilatère de crop
@@ -1371,6 +2062,81 @@ class _Canvas(QWidget):
             self.wheel_navigate.emit(1 if delta > 0 else -1)
 
     def mousePressEvent(self, event: QMouseEvent) -> None:
+        if self._annotation_mode:
+            if event.button() == Qt.RightButton:
+                return  # géré par contextMenuEvent (confirmation de la courbe en cours)
+            if event.button() != Qt.LeftButton:
+                return
+            pos = event.position()
+            tool = self._annotation_tool
+            if tool == "select":
+                if len(self._annotation_selected_ids) == 1:
+                    sel_ann = self._find_annotation(next(iter(self._annotation_selected_ids)))
+                    if sel_ann is not None:
+                        hid = self._annotation_hit_handle(sel_ann, pos)
+                        if hid is not None:
+                            self._start_annotation_resize(sel_ann, hid, pos)
+                            self.update()
+                            return
+                ir = self._img_rect()
+                if ir.width() <= 0 or ir.height() <= 0:
+                    return
+                ctrl = bool(event.modifiers() & Qt.ControlModifier)
+                x, y = pos.x() - ir.x(), pos.y() - ir.y()
+                hit_id = hit_test_annotations(self._annotations, x, y, ir.width(), ir.height(), tol_px=8.0)
+                if hit_id is None:
+                    # zone vide : démarre une sélection rectangulaire (marquee)
+                    if not ctrl:
+                        self._set_annotation_selection(set())
+                    self._annotation_marquee_start = QPointF(pos)
+                    self._annotation_marquee_rect = QRectF(pos, pos)
+                    self.update()
+                    return
+                hit_ann = self._find_annotation(hit_id)
+                group = hit_ann.get("group") if hit_ann else None
+                group_ids = (
+                    {a.get("id") for a in self._annotations if a.get("group") == group}
+                    if group else {hit_id}
+                )
+                if ctrl:
+                    if group_ids <= self._annotation_selected_ids:
+                        self._set_annotation_selection(self._annotation_selected_ids - group_ids)
+                    else:
+                        self._set_annotation_selection(self._annotation_selected_ids | group_ids)
+                elif not (group_ids <= self._annotation_selected_ids):
+                    self._set_annotation_selection(group_ids)
+                if self._annotation_selected_ids:
+                    self._annotation_drag_ids   = list(self._annotation_selected_ids)
+                    self._annotation_drag_start = QPointF(pos)
+                    self._annotation_drag_origs = {
+                        i: copy.deepcopy(self._find_annotation(i)) for i in self._annotation_drag_ids
+                        if self._find_annotation(i) is not None
+                    }
+                    self._annotation_drag_moved = False
+                    self.setCursor(Qt.ClosedHandCursor)
+                self.update()
+                return
+            if tool == "text":
+                if self._annotation_text_editor is not None:
+                    return
+                if self._img_rect().contains(pos):
+                    self._open_text_editor(pos)
+                return
+            if tool == "curve":
+                if self._annotation_draft_type != "curve":
+                    self._annotation_draft_type = "curve"
+                    self._annotation_draft_points = []
+                self._annotation_draft_points.append(pos)
+                self.update()
+                return
+            if tool in ("pen", "line", "rect", "ellipse"):
+                if not self._img_rect().contains(pos):
+                    return
+                self._annotation_draft_type = tool
+                self._annotation_draft_points = [pos] if tool == "pen" else [pos, QPointF(pos)]
+                self.update()
+                return
+            return
         if self._vignette_mode:
             if event.button() == Qt.LeftButton:
                 pos = event.position()
@@ -1478,6 +2244,56 @@ class _Canvas(QWidget):
 
     def mouseMoveEvent(self, event: QMouseEvent) -> None:
         pos = event.position()
+        if self._annotation_mode:
+            tool = self._annotation_tool
+            if tool == "curve":
+                self._annotation_hover_pos = pos if self._annotation_draft_points else None
+                if self._annotation_draft_points:
+                    self.update()
+                return
+            if tool == "pen" and self._annotation_draft_type == "pen":
+                last = self._annotation_draft_points[-1]
+                if math.hypot(pos.x() - last.x(), pos.y() - last.y()) >= 2.0:
+                    ir = self._img_rect()
+                    clamped = QPointF(
+                        max(ir.left(), min(ir.right(), pos.x())),
+                        max(ir.top(), min(ir.bottom(), pos.y())),
+                    )
+                    self._annotation_draft_points.append(clamped)
+                    self.update()
+                return
+            if tool in ("line", "rect", "ellipse") and self._annotation_draft_type == tool:
+                ir = self._img_rect()
+                self._annotation_draft_points[1] = QPointF(
+                    max(ir.left(), min(ir.right(), pos.x())),
+                    max(ir.top(), min(ir.bottom(), pos.y())),
+                )
+                self.update()
+                return
+            if tool == "select" and self._annotation_resize_handle is not None:
+                self._update_annotation_resize(pos)
+                return
+            if tool == "select" and self._annotation_drag_ids:
+                self._update_annotation_drag(pos)
+                return
+            if tool == "select" and self._annotation_marquee_start is not None:
+                self._annotation_marquee_rect = QRectF(self._annotation_marquee_start, pos).normalized()
+                self.update()
+                return
+            if tool == "select":
+                sel_ann = (self._find_annotation(next(iter(self._annotation_selected_ids)))
+                           if len(self._annotation_selected_ids) == 1 else None)
+                hid = self._annotation_hit_handle(sel_ann, pos) if sel_ann is not None else None
+                if hid is not None:
+                    cursor = Qt.PointingHandCursor if hid == 'rotate' else _ANNOTATION_CORNER_CURSORS.get(hid, Qt.SizeFDiagCursor)
+                    self.setCursor(cursor)
+                    return
+                ir = self._img_rect()
+                if ir.width() > 0 and ir.height() > 0:
+                    x, y = pos.x() - ir.x(), pos.y() - ir.y()
+                    hit = hit_test_annotations(self._annotations, x, y, ir.width(), ir.height(), tol_px=8.0)
+                    self.setCursor(Qt.OpenHandCursor if hit else Qt.ArrowCursor)
+            return
         if self._vignette_mode:
             if self._vignette_drag:
                 self._vignette_update_drag(pos)
@@ -1565,6 +2381,16 @@ class _Canvas(QWidget):
                 self.update()
 
     def mouseReleaseEvent(self, event: QMouseEvent) -> None:
+        if self._annotation_mode:
+            if event.button() == Qt.LeftButton and self._annotation_draft_type in ("pen", "line", "rect", "ellipse"):
+                self.confirm_annotation_draft()
+            if event.button() == Qt.LeftButton and self._annotation_resize_handle is not None:
+                self._finish_annotation_resize()
+            if event.button() == Qt.LeftButton and self._annotation_drag_ids:
+                self._finish_annotation_drag()
+            if event.button() == Qt.LeftButton and self._annotation_marquee_start is not None:
+                self._finish_annotation_marquee(event)
+            return
         if self._vignette_mode:
             if event.button() == Qt.LeftButton and self._vignette_drag:
                 self._vignette_drag       = None
@@ -1596,6 +2422,21 @@ class _Canvas(QWidget):
             self._drag_start = None
 
     def contextMenuEvent(self, event) -> None:
+        if self._annotation_mode:
+            if self._annotation_tool == "curve" and self._annotation_draft_points:
+                self.confirm_annotation_draft()
+            elif self._annotation_selected_ids:
+                menu = QMenu(self)
+                menu.addAction("Effacer", self.delete_selected_annotation)
+                if len(self._annotation_selected_ids) >= 2:
+                    menu.addAction("Grouper", self.group_selected_annotations)
+                if any(
+                    a.get("group") for a in self._annotations
+                    if a.get("id") in self._annotation_selected_ids
+                ):
+                    menu.addAction("Dégrouper", self.ungroup_selected_annotations)
+                menu.exec(event.globalPos())
+            return
         if not self._crop_mode and not self._red_eye_mode and not self._face_add_mode:
             faces = self._highlighted_faces or (
                 [self._highlighted_face] if self._highlighted_face is not None else []
@@ -1606,6 +2447,28 @@ class _Canvas(QWidget):
                     self.face_context_menu_requested.emit(face, event.globalPos())
                     return
             self.context_menu_requested.emit(event.globalPos())
+
+    def mouseDoubleClickEvent(self, event: QMouseEvent) -> None:
+        if (self._annotation_mode and self._annotation_tool == "select"
+                and event.button() == Qt.LeftButton):
+            pos = event.position()
+            ir = self._img_rect()
+            if ir.width() > 0 and ir.height() > 0:
+                x, y = pos.x() - ir.x(), pos.y() - ir.y()
+                hit_id = hit_test_annotations(self._annotations, x, y, ir.width(), ir.height(), tol_px=8.0)
+                hit_ann = self._find_annotation(hit_id) if hit_id is not None else None
+                if hit_ann is not None and hit_ann.get("type") == "text":
+                    self._open_text_editor_for_edit(hit_ann)
+                    return
+        if (self._annotation_mode and self._annotation_tool == "curve"
+                and event.button() == Qt.LeftButton and self._annotation_draft_points):
+            # Le 2e clic du double-clic a déjà ajouté un point quasi dupliqué
+            # via mousePressEvent — on le retire avant de valider le tracé.
+            if len(self._annotation_draft_points) > 1:
+                self._annotation_draft_points.pop()
+            self.confirm_annotation_draft()
+            return
+        super().mouseDoubleClickEvent(event)
 
     def resizeEvent(self, event) -> None:
         super().resizeEvent(event)
@@ -1618,6 +2481,11 @@ class _Canvas(QWidget):
                 # Le rectangle écran ne survit pas à un changement de zoom/offset.
                 self._face_add_rect   = None
                 self._face_add_action = None
+            if self._annotation_mode:
+                # Les points en cours sont en coordonnées écran — un changement
+                # de zoom/offset les invaliderait ; les annotations déjà validées
+                # (coordonnées normalisées) ne sont pas affectées.
+                self.cancel_annotation_draft()
 
 
 class _BaseLoader(QThread):
@@ -1641,6 +2509,7 @@ class PhotoViewer(QWidget):
     navigate             = Signal(int)
     zoom_changed         = Signal(float)
     crop_ready           = Signal(object)  # tuple 8 coords relatives (x0,y0,…,x3,y3)
+    crop_mode_ended      = Signal()        # mode recadrage terminé (validé ou annulé)
     save_requested       = Signal(object)  # PhotoInfo
     rename_requested     = Signal(object)  # PhotoInfo
     move_requested       = Signal(object)  # PhotoInfo
@@ -1653,6 +2522,14 @@ class PhotoViewer(QWidget):
     face_bbox_ready             = Signal(object)  # tuple (bbox_x,bbox_y,bbox_w,bbox_h) int
     face_add_mode_ended         = Signal()  # mode ajout de visage terminé (validé ou annulé)
     force_redetect_requested    = Signal(object)  # PhotoInfo — menu contextuel
+    annotation_added             = Signal(object)  # dict annotation ajoutée
+    annotation_deleted           = Signal(str)     # id de l'annotation supprimée
+    annotation_deleted_multi     = Signal(object)  # list[str] ids supprimés (suppression groupée)
+    annotation_selection_changed = Signal(object)  # list[str] ids sélectionnés (peut être vide)
+    annotation_moved              = Signal(str, object)  # (id, dict annotation à jour)
+    annotation_moved_multi        = Signal(object)  # dict[id, annotation à jour] (déplacement groupé)
+    annotation_resized            = Signal(str, object)  # (id, dict annotation à jour)
+    annotation_grouped            = Signal(object)  # dict[id, annotation à jour] (groupe/dégroupe)
 
     def __init__(self, config=None, parent=None):
         super().__init__(parent)
@@ -1749,6 +2626,14 @@ class PhotoViewer(QWidget):
         self._canvas.face_context_menu_requested.connect(self.face_context_menu_requested)
         self._canvas.vignette_changed.connect(self.vignette_changed)
         self._canvas.face_add_confirmed.connect(self._on_face_add_confirmed)
+        self._canvas.annotation_added.connect(self.annotation_added)
+        self._canvas.annotation_deleted.connect(self.annotation_deleted)
+        self._canvas.annotation_deleted_multi.connect(self.annotation_deleted_multi)
+        self._canvas.annotation_selection_changed.connect(self.annotation_selection_changed)
+        self._canvas.annotation_moved.connect(self.annotation_moved)
+        self._canvas.annotation_moved_multi.connect(self.annotation_moved_multi)
+        self._canvas.annotation_resized.connect(self.annotation_resized)
+        self._canvas.annotation_grouped.connect(self.annotation_grouped)
         layout.addWidget(self._canvas, stretch=1)
 
         # ---- Pied de page ----
@@ -1919,6 +2804,7 @@ class PhotoViewer(QWidget):
         if not self._photo:
             return
         self._canvas.set_edit(self._edit)
+        self._canvas.set_annotations(self._edit.annotations if self._edit else [])
 
         if self._base_cache is not None:
             # Cache chaud : appliquer les retouches et afficher immédiatement
@@ -1958,6 +2844,9 @@ class PhotoViewer(QWidget):
 
     def update_edit(self, edit: EditInfo) -> None:
         self._edit = edit
+        # Les annotations sont des données vectorielles légères, rendues en
+        # calque séparé — pas besoin d'attendre le debounce du pixmap raster.
+        self._canvas.set_annotations(edit.annotations)
         # Debounce : reporte le rendu de 60 ms pour absorber les rafales de
         # sliders. Évite d'accumuler des images PIL de 72 Mo en mémoire.
         self._preview_timer.stop()
@@ -2021,6 +2910,7 @@ class PhotoViewer(QWidget):
         self._btn_next.show()
         # Restaurer l'image avec le crop appliqué (on avait affiché l'image sans crop)
         self._reload_pixmap()
+        self.crop_mode_ended.emit()
 
     def _on_crop_confirmed(self, quad: tuple) -> None:
         self._crop_format_widget.hide()
@@ -2029,6 +2919,7 @@ class PhotoViewer(QWidget):
         self._btn_prev.show()
         self._btn_next.show()
         self.crop_ready.emit(quad)
+        self.crop_mode_ended.emit()
 
     # ------------------------------------------------------------------ ajout manuel de visage
 
@@ -2088,6 +2979,39 @@ class PhotoViewer(QWidget):
 
     def stop_color_pick(self) -> None:
         self._canvas.stop_color_pick()
+
+    # ------------------------------------------------------------------ annotations (dessin/texte)
+
+    def enter_annotation_mode(self, tool: str = "pen") -> None:
+        self._canvas.enter_annotation_mode(tool)
+
+    def exit_annotation_mode(self) -> None:
+        self._canvas.exit_annotation_mode()
+
+    def set_annotation_tool(self, tool: str) -> None:
+        self._canvas.set_annotation_tool(tool)
+
+    def set_annotation_style(self, color: str, width: float, font_family: str,
+                              font_size: float, bold: bool, italic: bool,
+                              fill_color: str = "#40ff0000", opacity: float = 1.0,
+                              blur: float = 0.0) -> None:
+        self._canvas.set_annotation_style(color, width, font_family, font_size, bold, italic,
+                                           fill_color, opacity, blur)
+
+    def delete_selected_annotation(self) -> None:
+        self._canvas.delete_selected_annotation()
+
+    def clear_all_annotations(self) -> None:
+        self._canvas.clear_all_annotations()
+
+    def group_selected_annotations(self) -> None:
+        self._canvas.group_selected_annotations()
+
+    def ungroup_selected_annotations(self) -> None:
+        self._canvas.ungroup_selected_annotations()
+
+    def set_annotations_visible(self, visible: bool) -> None:
+        self._canvas.set_annotations_visible(visible)
 
     # ------------------------------------------------------------------ misc
 
@@ -2215,6 +3139,8 @@ class PhotoViewer(QWidget):
                 self.cancel_face_add_mode()
             elif self._canvas._red_eye_mode:
                 self.exit_red_eye_mode()
+            elif self._canvas._annotation_mode:
+                self._canvas.cancel_annotation_draft()
             else:
                 self.closed.emit()
         elif key == Qt.Key_Return or key == Qt.Key_Enter:
@@ -2222,19 +3148,24 @@ class PhotoViewer(QWidget):
                 self.confirm_crop()
             elif self._canvas._face_add_mode:
                 self.confirm_face_add()
+            elif self._canvas._annotation_mode and self._canvas._annotation_tool == "curve":
+                self._canvas.confirm_annotation_draft()
         elif key in (Qt.Key_Right, Qt.Key_Up):
             if not self._canvas._crop_mode and not self._canvas._red_eye_mode \
-                    and not self._canvas._face_add_mode:
+                    and not self._canvas._face_add_mode and not self._canvas._annotation_mode:
                 self.navigate.emit(-1)   # plus récente (droite/haut = vers le haut de la liste)
         elif key in (Qt.Key_Left, Qt.Key_Down):
             if not self._canvas._crop_mode and not self._canvas._red_eye_mode \
-                    and not self._canvas._face_add_mode:
+                    and not self._canvas._face_add_mode and not self._canvas._annotation_mode:
                 self.navigate.emit(1)    # plus ancienne (gauche/bas = vers le bas de la liste)
         elif key == Qt.Key_Delete:
-            photo = self.current_photo()
-            if photo and not self._canvas._crop_mode and not self._canvas._red_eye_mode \
-                    and not self._canvas._face_add_mode:
-                self.delete_requested.emit([photo])
+            if self._canvas._annotation_mode:
+                self.delete_selected_annotation()
+            else:
+                photo = self.current_photo()
+                if photo and not self._canvas._crop_mode and not self._canvas._red_eye_mode \
+                        and not self._canvas._face_add_mode:
+                    self.delete_requested.emit([photo])
         elif key == Qt.Key_0:
             self.zoom_fit()
         elif key == Qt.Key_1:

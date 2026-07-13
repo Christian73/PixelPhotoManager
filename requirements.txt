@@ -33,6 +33,9 @@ psutil>=5.9.0
 # Packaging
 pyinstaller>=6.4.0
 
+# Tests
+pytest>=8.0.0
+
 # --- Plugins IA (optionnels, lourds, nécessitent GPU recommandé) ---
 # Décommenter selon les besoins :
 # torch>=2.2.0                # Base PyTorch (CUDA ou CPU)

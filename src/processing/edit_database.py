@@ -72,6 +72,9 @@ _MIGRATE_VIGNETTE_V2 = [
     "ALTER TABLE photo_edits ADD COLUMN vignette_ry2   REAL DEFAULT 0.8",
     "ALTER TABLE photo_edits ADD COLUMN vignette_angle REAL DEFAULT 0.0",
 ]
+_MIGRATE_ANNOTATIONS = (
+    "ALTER TABLE photo_edits ADD COLUMN annotations TEXT DEFAULT NULL"
+)
 
 _CREATE_HISTORY = """
 CREATE TABLE IF NOT EXISTS edit_history (
@@ -138,6 +141,10 @@ class EditDatabase:
                     conn.execute(_sql)
                 except sqlite3.OperationalError:
                     pass
+            try:
+                conn.execute(_MIGRATE_ANNOTATIONS)
+            except sqlite3.OperationalError:
+                pass
             self._migrate_normalize_paths(conn)
             conn.commit()
 
@@ -212,6 +219,9 @@ class EditDatabase:
                     vignette_rx2=float(row["vignette_rx2"] if row["vignette_rx2"] is not None else 0.8),
                     vignette_ry2=float(row["vignette_ry2"] if row["vignette_ry2"] is not None else 0.8),
                     vignette_angle=float(row["vignette_angle"] if row["vignette_angle"] is not None else 0.0),
+                    annotations=(
+                        json.loads(row["annotations"]) if row["annotations"] else []
+                    ),
                 )
             except Exception as e:
                 logger.error(f"Erreur lecture retouches {photo_path}: {e}")
@@ -241,10 +251,10 @@ class EditDatabase:
                                  vignette_cx, vignette_cy,
                                  vignette_rx1, vignette_ry1,
                                  vignette_rx2, vignette_ry2,
-                                 vignette_angle,
+                                 vignette_angle, annotations,
                                  modified_at)
                             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                                    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                                    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
                             """,
                             (
                                 photo_path,
@@ -265,6 +275,7 @@ class EditDatabase:
                                 edit.vignette_rx1, edit.vignette_ry1,
                                 edit.vignette_rx2, edit.vignette_ry2,
                                 edit.vignette_angle,
+                                json.dumps(edit.annotations) if edit.annotations else None,
                             ),
                         )
                     conn.execute(

@@ -77,6 +77,7 @@ class EditInfo:
     vignette_rx2: float = 0.80        # rayon X externe (1.0 = demi-largeur image)
     vignette_ry2: float = 0.80        # rayon Y externe (1.0 = demi-hauteur image)
     vignette_angle: float = 0.0       # rotation en degrés
+    annotations: list = field(default_factory=list)  # calque dessin/texte, cf. annotation_renderer.py
 
     def is_modified(self) -> bool:
         return (
@@ -98,6 +99,7 @@ class EditInfo:
             or self.color_blue != 0.0
             or bool(self.red_eye_regions)
             or self.vignette_strength > 0.0
+            or bool(self.annotations)
         )
 
 
@@ -133,6 +135,7 @@ class EditInfo:
             "vignette_rx2":      self.vignette_rx2,
             "vignette_ry2":      self.vignette_ry2,
             "vignette_angle":    self.vignette_angle,
+            "annotations": [dict(a) for a in self.annotations],
         }
 
     @classmethod
@@ -174,6 +177,7 @@ class EditInfo:
             vignette_rx2=float(data.get("vignette_rx2", 0.80)),
             vignette_ry2=float(data.get("vignette_ry2", 0.80)),
             vignette_angle=float(data.get("vignette_angle", 0.0)),
+            annotations=[dict(a) for a in data.get("annotations", [])],
         )
 
 

@@ -603,6 +603,8 @@ class MainWindow(QMainWindow):
         self._persons_refresh_thread: _PersonsRefreshThread | None = None
         self._from_person_cluster_view: bool = False
         self._viewer_back_target: str = "grid"  # "grid" | "person_cluster_view"
+        # Filtre global de session (pas persisté) pour le calque d'annotations
+        self._annotations_globally_visible: bool = True
 
         self._current_photos: list[PhotoInfo] = []
         self._current_paths: set[str] = set()
@@ -813,6 +815,16 @@ class MainWindow(QMainWindow):
         lay.addWidget(self._btn_exif_toggle)
         self._act_exif_toggle = self._btn_exif_toggle
 
+        self._btn_annotations_toggle = QPushButton("✏ Annotations")
+        self._btn_annotations_toggle.setCheckable(True)
+        # setChecked() avant connect() : évite de déclencher _on_annotations_toggle
+        # ici, alors que self._viewer n'existe pas encore (_setup_central() pas encore appelé).
+        self._btn_annotations_toggle.setChecked(True)   # actif par défaut
+        self._btn_annotations_toggle.setToolTip("Afficher / masquer le calque d'annotations (dessin/texte)")
+        self._btn_annotations_toggle.toggled.connect(self._on_annotations_toggle)
+        self._btn_annotations_toggle.setVisible(False)
+        lay.addWidget(self._btn_annotations_toggle)
+
         # --- Bouton Export ---
         self._btn_export = QPushButton("⬆  Exporter")
         self._btn_export.setToolTip(
@@ -962,16 +974,29 @@ class MainWindow(QMainWindow):
         self._viewer.dup_badge_clicked.connect(self._on_duplicate_badge_clicked)
         self._edit_panel.edits_changed.connect(self._viewer.update_edit)
         self._edit_panel.crop_mode_requested.connect(self._viewer.enter_crop_mode)
+        self._edit_panel.crop_confirm_requested.connect(self._viewer.confirm_crop)
+        self._viewer.crop_mode_ended.connect(self._edit_panel.on_crop_mode_ended)
         self._edit_panel.grid_visibility_changed.connect(self._viewer.set_grid_visible)
         self._edit_panel.photo_saved.connect(self._on_photo_saved)
         self._edit_panel.rotation_stepped.connect(self._on_rotation_stepped)
         self._edit_panel.red_eye_mode_requested.connect(self._on_red_eye_mode_requested)
         self._edit_panel.wb_pick_requested.connect(self._on_wb_pick_requested)
         self._edit_panel.vignette_edit_mode.connect(self._on_vignette_edit_mode)
+        self._edit_panel.annotation_mode_requested.connect(self._on_annotation_mode_requested)
+        self._edit_panel.annotation_style_changed.connect(self._viewer.set_annotation_style)
+        self._edit_panel.annotation_delete_selected_requested.connect(self._viewer.delete_selected_annotation)
         self._viewer.crop_ready.connect(self._edit_panel.apply_crop)
         self._viewer.red_eye_point_added.connect(self._edit_panel.on_red_eye_added)
         self._viewer.vignette_changed.connect(self._edit_panel.on_vignette_changed)
         self._viewer.pixel_sampled.connect(self._edit_panel.on_wb_pixel_received)
+        self._viewer.annotation_added.connect(self._edit_panel.on_annotation_added)
+        self._viewer.annotation_deleted.connect(self._edit_panel.on_annotation_deleted)
+        self._viewer.annotation_deleted_multi.connect(self._edit_panel.on_annotation_deleted_multi)
+        self._viewer.annotation_selection_changed.connect(self._edit_panel.on_annotation_selection_changed)
+        self._viewer.annotation_moved.connect(self._edit_panel.on_annotation_moved)
+        self._viewer.annotation_moved_multi.connect(self._edit_panel.on_annotation_moved_multi)
+        self._viewer.annotation_resized.connect(self._edit_panel.on_annotation_resized)
+        self._viewer.annotation_grouped.connect(self._edit_panel.on_annotation_grouped)
 
         self._face_panel = FacePanel(self._face_db, self._catalog, self)
         self._face_panel.face_highlighted.connect(self._on_face_highlighted)
@@ -2060,6 +2085,12 @@ class MainWindow(QMainWindow):
         else:
             self._viewer.exit_vignette_mode()
 
+    def _on_annotation_mode_requested(self, active: bool, tool: str) -> None:
+        if active:
+            self._viewer.enter_annotation_mode(tool)
+        else:
+            self._viewer.exit_annotation_mode()
+
     @Slot(bool)
     def _on_wb_pick_requested(self, start: bool) -> None:
         if start:
@@ -2096,6 +2127,11 @@ class MainWindow(QMainWindow):
             self._exif_panel.hide()
             if not self._face_panel.isVisible():
                 self._right_panel.hide()
+
+    @Slot(bool)
+    def _on_annotations_toggle(self, checked: bool) -> None:
+        self._annotations_globally_visible = checked
+        self._viewer.set_annotations_visible(checked)
 
     def _update_nav_arrows(self) -> None:
         n = len(self._current_photos)
@@ -2594,6 +2630,7 @@ class MainWindow(QMainWindow):
         self._act_undo.setVisible(False)
         self._act_faces_toggle.setVisible(False)
         self._act_exif_toggle.setVisible(False)
+        self._btn_annotations_toggle.setVisible(False)
         self._lbl_fileinfo.setText("")
         self._update_status()
 
@@ -2609,6 +2646,7 @@ class MainWindow(QMainWindow):
         self._btn_grid_status.hide()
         self._act_faces_toggle.setVisible(False)
         self._act_exif_toggle.setVisible(False)
+        self._btn_annotations_toggle.setVisible(False)
         self._lbl_fileinfo.setText("")
         self._lbl_action.setText("")
 
@@ -2625,6 +2663,7 @@ class MainWindow(QMainWindow):
         self._btn_grid_status.hide()
         self._act_faces_toggle.setVisible(False)
         self._act_exif_toggle.setVisible(False)
+        self._btn_annotations_toggle.setVisible(False)
         self._lbl_fileinfo.setText("")
         self._lbl_action.setText("")
 
@@ -2733,6 +2772,9 @@ class MainWindow(QMainWindow):
         self._act_undo.setVisible(True)
         self._act_faces_toggle.setVisible(True)
         self._act_exif_toggle.setVisible(True)
+        self._btn_annotations_toggle.setVisible(True)
+        # Un nouveau _Canvas ne connaît pas spontanément l'état de session.
+        self._viewer.set_annotations_visible(self._annotations_globally_visible)
         if self._face_panel.isVisible():
             self._face_panel.set_photo(photo.path)
         if self._exif_panel.isVisible():
@@ -3222,6 +3264,7 @@ class MainWindow(QMainWindow):
         try:
             from PIL import Image, ImageOps
             from src.processing.adjustments import ImageAdjuster
+            from src.ui.annotation_renderer import composite_annotations_pil
 
             orig_stat = os.stat(photo.path)
 
@@ -3230,6 +3273,8 @@ class MainWindow(QMainWindow):
                 img = ImageOps.exif_transpose(img)
                 if edit.is_modified():
                     img = ImageAdjuster.apply_all(img, edit)
+                if self._annotations_globally_visible and edit.annotations:
+                    img = composite_annotations_pil(img, edit.annotations)
                 if img.mode not in ("RGB", "RGBA"):
                     img = img.convert("RGB")
                 if Path(dest).suffix.lower() == ".png":
@@ -3290,6 +3335,7 @@ class MainWindow(QMainWindow):
         """Exporte photos vers export_dir avec redimensionnement et qualité donnés."""
         from PIL import Image, ImageOps
         from src.processing.adjustments import ImageAdjuster
+        from src.ui.annotation_renderer import composite_annotations_pil
 
         try:
             export_dir.mkdir(parents=True, exist_ok=True)
@@ -3320,6 +3366,8 @@ class MainWindow(QMainWindow):
                                     (max(1, round(w * scale)), max(1, round(h * scale))),
                                     Image.LANCZOS,
                                 )
+                        if self._annotations_globally_visible and edit.annotations:
+                            img = composite_annotations_pil(img, edit.annotations)
                         if img.mode not in ("RGB", "RGBA"):
                             img = img.convert("RGB")
                         if img.mode == "RGBA":

@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (
     QPushButton, QScrollArea, QGroupBox, QDialog,
     QDialogButtonBox, QToolButton, QGridLayout, QSizePolicy,
     QCheckBox, QStyle, QStyleOptionSlider,
+    QButtonGroup, QColorDialog, QFontComboBox, QSpinBox, QDoubleSpinBox,
 )
 
 from src.core.models import PhotoInfo, EditInfo
@@ -34,6 +35,16 @@ _OP_LABELS: dict[str, str] = {
     "crop":               "Recadrage",
     "red_eye":            "Yeux rouges",
     "red_eye_clear":      "Effacer yeux rouges",
+    "annotation":         "Annotation",
+    "annotation_delete":  "Supprimer annotation",
+    "annotation_clear":   "Effacer annotations",
+    "annotation_move":    "Déplacer annotation",
+    "annotation_move_multi": "Déplacer annotations",
+    "annotation_delete_multi": "Supprimer annotations",
+    "annotation_resize":  "Redimensionner annotation",
+    "annotation_style":   "Modifier le style",
+    "annotation_group":   "Grouper les annotations",
+    "annotation_ungroup": "Dégrouper les annotations",
     "undo":               "Annuler",
     "redo":               "Rétablir",
     "picasa_before":      "Avant import",
@@ -988,6 +999,85 @@ def _icon_red_eye(size: int = _ICON_SIZE) -> QPixmap:
     return px
 
 
+def _icon_ann_pen(size: int = _ICON_SIZE) -> QPixmap:
+    px, p = _base_pixmap(size)
+    p.setPen(QPen(QColor(220, 60, 60), 2.5, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin))
+    path = QPainterPath()
+    path.moveTo(size * 0.15, size * 0.75)
+    path.cubicTo(size * 0.3, size * 0.35, size * 0.4, size * 0.85, size * 0.55, size * 0.45)
+    path.cubicTo(size * 0.65, size * 0.2, size * 0.75, size * 0.6, size * 0.85, size * 0.25)
+    p.drawPath(path)
+    p.end()
+    return px
+
+
+def _icon_ann_line(size: int = _ICON_SIZE) -> QPixmap:
+    px, p = _base_pixmap(size)
+    p.setPen(QPen(QColor(220, 60, 60), 2.5, Qt.SolidLine, Qt.RoundCap))
+    p.drawLine(int(size * 0.15), int(size * 0.8), int(size * 0.85), int(size * 0.2))
+    p.end()
+    return px
+
+
+def _icon_ann_curve(size: int = _ICON_SIZE) -> QPixmap:
+    px, p = _base_pixmap(size)
+    p.setPen(QPen(QColor(220, 60, 60), 2.5, Qt.SolidLine, Qt.RoundCap))
+    path = QPainterPath()
+    path.moveTo(size * 0.15, size * 0.75)
+    path.cubicTo(size * 0.15, size * 0.2, size * 0.85, size * 0.2, size * 0.85, size * 0.75)
+    p.drawPath(path)
+    p.end()
+    return px
+
+
+def _icon_ann_rect(size: int = _ICON_SIZE) -> QPixmap:
+    px, p = _base_pixmap(size)
+    p.setPen(QPen(QColor(220, 60, 60), 2.0, Qt.SolidLine))
+    p.setBrush(QColor(220, 60, 60, 70))
+    p.drawRect(int(size * 0.15), int(size * 0.25), int(size * 0.7), int(size * 0.5))
+    p.end()
+    return px
+
+
+def _icon_ann_ellipse(size: int = _ICON_SIZE) -> QPixmap:
+    px, p = _base_pixmap(size)
+    p.setPen(QPen(QColor(220, 60, 60), 2.0, Qt.SolidLine))
+    p.setBrush(QColor(220, 60, 60, 70))
+    p.drawEllipse(int(size * 0.15), int(size * 0.2), int(size * 0.7), int(size * 0.6))
+    p.end()
+    return px
+
+
+def _icon_ann_text(size: int = _ICON_SIZE) -> QPixmap:
+    px, p = _base_pixmap(size)
+    font = QFont("Arial", int(size * 0.55))
+    font.setBold(True)
+    p.setFont(font)
+    p.setPen(QColor(230, 230, 230))
+    p.drawText(px.rect(), int(Qt.AlignCenter), "T")
+    p.end()
+    return px
+
+
+def _icon_ann_select(size: int = _ICON_SIZE) -> QPixmap:
+    px, p = _base_pixmap(size)
+    # Flèche de curseur classique (pointeur de souris)
+    arrow = QPolygon([
+        QPoint(int(size * 0.16), int(size * 0.10)),
+        QPoint(int(size * 0.16), int(size * 0.78)),
+        QPoint(int(size * 0.34), int(size * 0.61)),
+        QPoint(int(size * 0.47), int(size * 0.88)),
+        QPoint(int(size * 0.59), int(size * 0.82)),
+        QPoint(int(size * 0.46), int(size * 0.55)),
+        QPoint(int(size * 0.68), int(size * 0.52)),
+    ])
+    p.setPen(QPen(QColor(30, 30, 30), 1.5, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin))
+    p.setBrush(QColor(225, 225, 225))
+    p.drawPolygon(arrow)
+    p.end()
+    return px
+
+
 # ------------------------------------------------------------------ dialogue vignette
 
 _TOGGLE_BTN_STYLE = """
@@ -998,6 +1088,14 @@ _TOGGLE_BTN_STYLE = """
     }}
     QPushButton:hover   {{ background: #3a3a3a; color: #ddd; }}
     QPushButton:checked {{ background: #1a3a5a; color: #7ab; border-color: #4a9fd4; font-weight: bold; }}
+"""
+
+_ANNOTATION_TOOL_BTN_STYLE = """
+    QToolButton {
+        background: #2e2e2e; border: 1px solid #555; border-radius: 4px; padding: 3px;
+    }
+    QToolButton:hover    { background: #3a3a3a; border-color: #777; }
+    QToolButton:checked  { background: #1a3a5a; border: 2px solid #4a9fd4; }
 """
 
 
@@ -1098,16 +1196,27 @@ _TREATMENTS: list[tuple] = [
     ("Vignette",   _icon_vignette,   []),   # dialogue dédié — sliders_def ignoré
 ]
 
+# Même surbrillance que le bouton Annotations : visible autour de l'icône tant
+# que l'outil est actif (mode canvas interactif ou dialogue de réglage ouvert).
+_ACTIVE_TOOL_STYLE = (
+    "QToolButton { background: #1a2a3a; border: 1px solid #2080a0; border-radius: 4px; }"
+)
+
 
 class EditPanel(QWidget):
     edits_changed           = Signal(object)       # EditInfo
     crop_mode_requested     = Signal()
+    crop_confirm_requested  = Signal()             # un autre outil a été sélectionné pendant un recadrage en cours
     grid_visibility_changed = Signal(bool)
     photo_saved             = Signal(str, object)  # (photo_path, EditInfo) — uniquement lors d'un enregistrement réel
     rotation_stepped        = Signal(str, int)     # (photo_path, new_rotation_degrees) — émis uniquement pour les rotations 90°
     red_eye_mode_requested  = Signal(bool, float)  # (active, radius) — bascule le mode yeux rouges dans le canvas
     wb_pick_requested       = Signal(bool)         # True = démarrer la pipette, False = annuler
     vignette_edit_mode      = Signal(bool, object) # (active: bool, edit: EditInfo)
+    annotation_mode_requested            = Signal(bool, str)   # (active, tool) — bascule le mode annotation dans le canvas
+    annotation_style_changed             = Signal(str, float, str, float, bool, bool, str, float, float)
+    # (color_argb, width, font_family, font_size, bold, italic, fill_color_argb, opacity, blur)
+    annotation_delete_selected_requested = Signal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -1117,8 +1226,19 @@ class EditPanel(QWidget):
         self._redo_stack: list[EditInfo] = []
         self._db = EditDatabase()
         self._red_eye_active = False
+        self._annotation_active = False
+        self._crop_active = False
+        self._annotation_tool = "pen"
+        self._annotation_color = QColor("#ffff0000")
+        self._annotation_fill_color = QColor("#ffff0000")
+        self._annotation_opacity = 0.4
+        self._annotation_blur = 0.0
+        self._annotation_selected_ids: set = set()
         self._active_color_dlg: "CouleursTreatmentDialog | None" = None
         self._active_vignette_dlg: "VignetteTreatmentDialog | None" = None
+        self._active_generic_dlg: "QDialog | None" = None    # Luminosité/Contraste/Redresser… non modal
+        self._active_generic_dlg_title: "str | None" = None
+        self._treatment_buttons: dict = {}   # nom de traitement -> QToolButton (surbrillance active/inactive)
         self._setup_ui()
 
     def _setup_ui(self) -> None:
@@ -1148,6 +1268,7 @@ class EditPanel(QWidget):
         grid.setSpacing(4)
         for idx, (name, icon_fn, sliders_def) in enumerate(_TREATMENTS):
             btn = self._make_treatment_button(name, icon_fn(), sliders_def)
+            self._treatment_buttons[name] = btn
             grid.addWidget(btn, idx // 2, idx % 2)
 
         # Bouton Yeux rouges — ligne 2 (ligne 1 = Couleurs | Vignette)
@@ -1162,6 +1283,19 @@ class EditPanel(QWidget):
         self._btn_red_eye.setCheckable(True)
         self._btn_red_eye.clicked.connect(self._toggle_red_eye_mode)
         grid.addWidget(self._btn_red_eye, 2, 0)
+
+        # Bouton Annotations — ligne 2, colonne 1
+        self._btn_annotations = QToolButton()
+        self._btn_annotations.setText("Annotations")
+        self._btn_annotations.setIcon(QIcon(_icon_ann_pen()))
+        self._btn_annotations.setIconSize(QSize(_ICON_SIZE, _ICON_SIZE))
+        self._btn_annotations.setToolButtonStyle(Qt.ToolButtonTextUnderIcon)
+        self._btn_annotations.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self._btn_annotations.setFixedHeight(_ICON_SIZE + 28)
+        self._btn_annotations.setToolTip("Dessiner / écrire par-dessus la photo (calque séparé)")
+        self._btn_annotations.setCheckable(True)
+        self._btn_annotations.clicked.connect(self._toggle_annotation_mode)
+        grid.addWidget(self._btn_annotations, 2, 1)
         inner_layout.addLayout(grid)
 
         # Panneau de contrôle yeux rouges (masqué hors mode)
@@ -1200,6 +1334,177 @@ class EditPanel(QWidget):
 
         self._red_eye_panel.hide()
         inner_layout.addWidget(self._red_eye_panel)
+
+        # Panneau de contrôle du calque d'annotations (masqué hors mode)
+        self._annotation_panel = QGroupBox("Annotations")
+        an_layout = QVBoxLayout(self._annotation_panel)
+        an_layout.setContentsMargins(6, 8, 6, 6)
+        an_layout.setSpacing(4)
+
+        tools_row = QHBoxLayout()
+        tools_row.setSpacing(4)
+        self._annotation_tool_group = QButtonGroup(self)
+        self._annotation_tool_group.setExclusive(True)
+        self._annotation_tool_buttons: dict[str, QToolButton] = {}
+        for tool, icon_fn, tip in [
+            ("pen",     _icon_ann_pen,     "Stylo — trait libre"),
+            ("line",    _icon_ann_line,    "Ligne droite"),
+            ("curve",   _icon_ann_curve,   "Courbe — cliquez les points de passage, double-clic pour valider"),
+            ("rect",    _icon_ann_rect,    "Rectangle"),
+            ("ellipse", _icon_ann_ellipse, "Ellipse"),
+            ("text",    _icon_ann_text,    "Texte"),
+            ("select",  _icon_ann_select,  "Sélection — cliquez un élément pour le sélectionner"),
+        ]:
+            btn = QToolButton()
+            btn.setIcon(QIcon(icon_fn()))
+            btn.setIconSize(QSize(24, 24))
+            btn.setStyleSheet(_ANNOTATION_TOOL_BTN_STYLE)
+            btn.setCheckable(True)
+            btn.setToolTip(tip)
+            btn.clicked.connect(lambda checked, t=tool: self._set_annotation_tool(t))
+            self._annotation_tool_group.addButton(btn)
+            self._annotation_tool_buttons[tool] = btn
+            tools_row.addWidget(btn)
+        self._annotation_tool_buttons["pen"].setChecked(True)
+        an_layout.addLayout(tools_row)
+
+        style_row = QHBoxLayout()
+        style_row.setSpacing(4)
+        self._btn_annotation_color = QPushButton()
+        self._btn_annotation_color.setFixedSize(28, 28)
+        self._btn_annotation_color.setToolTip("Couleur")
+        self._btn_annotation_color.clicked.connect(self._pick_annotation_color)
+        style_row.addWidget(self._btn_annotation_color)
+        style_row.addWidget(QLabel("Épaisseur"))
+        self._annotation_width_spin = QDoubleSpinBox()
+        self._annotation_width_spin.setRange(0.0, 4.0)   # % de la plus petite dimension — 0 = pas de contour
+        self._annotation_width_spin.setSingleStep(0.1)
+        self._annotation_width_spin.setDecimals(1)
+        self._annotation_width_spin.setValue(0.6)         # défaut : 0.6%
+        self._annotation_width_spin.setSuffix(" %")
+        self._annotation_width_spin.setToolTip("Épaisseur du trait (% de l'image)")
+        self._annotation_width_spin.valueChanged.connect(self._on_annotation_style_changed)
+        style_row.addWidget(self._annotation_width_spin, stretch=1)
+        self._annotation_style_row = QWidget()
+        self._annotation_style_row.setLayout(style_row)
+        an_layout.addWidget(self._annotation_style_row)
+
+        shape_row = QHBoxLayout()
+        shape_row.setSpacing(14)
+        self._btn_annotation_fill_color = QPushButton()
+        self._btn_annotation_fill_color.setFixedSize(28, 28)
+        self._btn_annotation_fill_color.setToolTip("Couleur de la surface")
+        self._btn_annotation_fill_color.clicked.connect(self._pick_annotation_fill_color)
+        shape_row.addWidget(self._btn_annotation_fill_color)
+
+        opacity_pair = QHBoxLayout()
+        opacity_pair.setSpacing(4)
+        opacity_pair.addWidget(QLabel("Opacité"))
+        self._annotation_opacity_spin = QDoubleSpinBox()
+        self._annotation_opacity_spin.setRange(0.0, 100.0)
+        self._annotation_opacity_spin.setSingleStep(5.0)
+        self._annotation_opacity_spin.setDecimals(0)
+        self._annotation_opacity_spin.setValue(40.0)
+        self._annotation_opacity_spin.setSuffix(" %")
+        self._annotation_opacity_spin.setToolTip(
+            "Opacité de la surface — à 100 %, la photo derrière n'est plus visible")
+        self._annotation_opacity_spin.valueChanged.connect(self._on_annotation_style_changed)
+        opacity_pair.addWidget(self._annotation_opacity_spin)
+        shape_row.addLayout(opacity_pair)
+
+        blur_pair = QHBoxLayout()
+        blur_pair.setSpacing(4)
+        blur_pair.addWidget(QLabel("Flou"))
+        self._annotation_blur_spin = QDoubleSpinBox()
+        self._annotation_blur_spin.setRange(0.0, 10.0)   # % de la plus petite dimension
+        self._annotation_blur_spin.setSingleStep(0.5)
+        self._annotation_blur_spin.setDecimals(1)
+        self._annotation_blur_spin.setValue(0.0)
+        self._annotation_blur_spin.setSuffix(" %")
+        self._annotation_blur_spin.setToolTip("Flou de la photo sous la surface (% de l'image)")
+        self._annotation_blur_spin.valueChanged.connect(self._on_annotation_style_changed)
+        blur_pair.addWidget(self._annotation_blur_spin)
+        shape_row.addLayout(blur_pair)
+
+        shape_row.addStretch(1)
+        self._annotation_shape_row = QWidget()
+        self._annotation_shape_row.setLayout(shape_row)
+        an_layout.addWidget(self._annotation_shape_row)
+
+        font_row = QHBoxLayout()
+        font_row.setSpacing(4)
+        self._annotation_font_combo = QFontComboBox()
+        self._annotation_font_combo.setCurrentFont(QFont("Arial"))
+        self._annotation_font_combo.currentFontChanged.connect(self._on_annotation_style_changed)
+        font_row.addWidget(self._annotation_font_combo, stretch=1)
+        self._annotation_font_size = QSpinBox()
+        self._annotation_font_size.setRange(1, 20)   # % de la plus petite dimension
+        self._annotation_font_size.setValue(4)
+        self._annotation_font_size.setSuffix(" %")
+        self._annotation_font_size.setToolTip("Taille du texte (% de l'image)")
+        self._annotation_font_size.valueChanged.connect(self._on_annotation_style_changed)
+        font_row.addWidget(self._annotation_font_size)
+        self._annotation_font_row = QWidget()
+        self._annotation_font_row.setLayout(font_row)
+        an_layout.addWidget(self._annotation_font_row)
+
+        bi_row = QHBoxLayout()
+        bi_row.setSpacing(4)
+        self._btn_annotation_bold = QToolButton()
+        self._btn_annotation_bold.setText("G")
+        self._btn_annotation_bold.setStyleSheet(_ANNOTATION_TOOL_BTN_STYLE)
+        self._btn_annotation_bold.setCheckable(True)
+        self._btn_annotation_bold.setToolTip("Gras")
+        bold_font = QFont("Arial")
+        bold_font.setBold(True)
+        self._btn_annotation_bold.setFont(bold_font)
+        self._btn_annotation_bold.clicked.connect(self._on_annotation_style_changed)
+        bi_row.addWidget(self._btn_annotation_bold)
+        self._btn_annotation_italic = QToolButton()
+        self._btn_annotation_italic.setStyleSheet(_ANNOTATION_TOOL_BTN_STYLE)
+        self._btn_annotation_italic.setText("I")
+        self._btn_annotation_italic.setCheckable(True)
+        self._btn_annotation_italic.setToolTip("Italique")
+        italic_font = QFont("Arial")
+        italic_font.setItalic(True)
+        self._btn_annotation_italic.setFont(italic_font)
+        self._btn_annotation_italic.clicked.connect(self._on_annotation_style_changed)
+        bi_row.addWidget(self._btn_annotation_italic)
+        bi_row.addSpacing(10)
+        bi_row.addWidget(QLabel("Couleur"))
+        self._btn_annotation_text_color = QPushButton()
+        self._btn_annotation_text_color.setFixedSize(24, 24)
+        self._btn_annotation_text_color.setToolTip("Couleur du texte")
+        self._btn_annotation_text_color.clicked.connect(self._pick_annotation_color)
+        bi_row.addWidget(self._btn_annotation_text_color)
+        bi_row.addStretch()
+        self._annotation_bi_row = QWidget()
+        self._annotation_bi_row.setLayout(bi_row)
+        an_layout.addWidget(self._annotation_bi_row)
+        self._update_annotation_style_controls_visibility()
+
+        self._btn_annotation_delete_sel = QPushButton("Supprimer la sélection")
+        self._btn_annotation_delete_sel.setEnabled(False)
+        self._btn_annotation_delete_sel.setToolTip("Supprimer l'élément d'annotation sélectionné")
+        self._btn_annotation_delete_sel.clicked.connect(self.annotation_delete_selected_requested.emit)
+        an_layout.addWidget(self._btn_annotation_delete_sel)
+
+        an_btns = QHBoxLayout()
+        an_btns.setSpacing(4)
+        btn_clear_ann = QPushButton("Effacer tout")
+        btn_clear_ann.setToolTip("Supprimer toutes les annotations")
+        btn_clear_ann.clicked.connect(self._clear_all_annotations)
+        an_btns.addWidget(btn_clear_ann)
+        btn_done_ann = QPushButton("Terminé")
+        btn_done_ann.setToolTip("Quitter le mode annotation  (Echap)")
+        btn_done_ann.clicked.connect(self._done_annotation_mode)
+        an_btns.addWidget(btn_done_ann)
+        an_layout.addLayout(an_btns)
+
+        self._update_annotation_color_swatch()
+        self._update_annotation_fill_color_swatch()
+        self._annotation_panel.hide()
+        inner_layout.addWidget(self._annotation_panel)
 
         # Annuler / Rétablir
         undo_row = QHBoxLayout()
@@ -1263,6 +1568,7 @@ class EditPanel(QWidget):
         btn_straighten.clicked.connect(
             lambda: self._open_treatment("Redresser", [("Angle (°)", "straighten", -10.0, 10.0, 1)])
         )
+        self._treatment_buttons["Redresser"] = btn_straighten
         row_sr.addWidget(btn_straighten)
 
         self._btn_crop = QToolButton()
@@ -1273,7 +1579,7 @@ class EditPanel(QWidget):
         self._btn_crop.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self._btn_crop.setFixedHeight(_ICON_SIZE + 28)
         self._btn_crop.setToolTip("Définir interactivement la zone de recadrage")
-        self._btn_crop.clicked.connect(self.crop_mode_requested.emit)
+        self._btn_crop.clicked.connect(self._on_crop_clicked)
         row_sr.addWidget(self._btn_crop)
 
         grp_geo.layout().addLayout(row_sr)
@@ -1368,7 +1674,43 @@ class EditPanel(QWidget):
 
         return QPoint(x, y)
 
+    def _deactivate_other_tools(self, current: str) -> None:
+        """Un seul outil d'édition actif à la fois : sélectionner un outil désactive
+        celui actuellement en cours (mode canvas interactif ou dialogue de réglage
+        non modal encore ouvert). ``current`` est le nom de l'outil qu'on active
+        (ex. "Recadrer", "Yeux rouges", "Annotations", ou un titre de _TREATMENTS).
+        La sortie équivaut à une validation (pas une annulation) : le travail en
+        cours dans l'outil quitté est appliqué, jamais perdu silencieusement."""
+        if current != "Yeux rouges" and self._red_eye_active:
+            self._btn_red_eye.setChecked(False)
+            self._toggle_red_eye_mode(False)
+        if current != "Annotations" and self._annotation_active:
+            self._btn_annotations.setChecked(False)
+            self._toggle_annotation_mode(False)
+        if current != "Recadrer" and self._crop_active:
+            self.crop_confirm_requested.emit()
+        if current != "Couleurs" and self._active_color_dlg is not None:
+            self._active_color_dlg.accept()
+        if current != "Vignette" and self._active_vignette_dlg is not None:
+            self._active_vignette_dlg.accept()
+        if current != self._active_generic_dlg_title and self._active_generic_dlg is not None:
+            self._active_generic_dlg.accept()
+
+    def _highlight_treatment_button(self, title: str, active: bool) -> None:
+        """Même surbrillance que le bouton Annotations autour de l'icône, tant que
+        l'outil ``title`` est actif (dialogue ouvert ou mode canvas en cours)."""
+        btn = self._treatment_buttons.get(title)
+        if btn is not None:
+            btn.setStyleSheet(_ACTIVE_TOOL_STYLE if active else "")
+
     def _open_treatment(self, title: str, sliders_def: list) -> None:
+        # Déjà ouvert : le ramener au premier plan plutôt que d'en ouvrir un second.
+        if self._active_generic_dlg is not None and self._active_generic_dlg_title == title:
+            self._active_generic_dlg.raise_()
+            self._active_generic_dlg.activateWindow()
+            return
+        self._deactivate_other_tools(title)
+        self._highlight_treatment_button(title, True)
         if title == "Luminosité":
             self._open_luminosite_treatment()
             return
@@ -1383,25 +1725,47 @@ class EditPanel(QWidget):
         dlg = TreatmentDialog(title, sliders_def, self._edit, parent=self)
         dlg.preview.connect(self._on_preview)
         dlg._panel = self
+        self._active_generic_dlg = dlg
+        self._active_generic_dlg_title = title
 
         is_straighten = (title == "Redresser")
         if is_straighten:
             self.grid_visibility_changed.emit(True)
 
-        if dlg.exec() == QDialog.Accepted:
-            self._checkpoint(title)
-            self._push_undo(title)
-            new_edit = dlg.get_edit()
-            for _, attr, *_ in sliders_def:
-                setattr(self._edit, attr, getattr(new_edit, attr))
-            self.edits_changed.emit(copy.copy(self._edit))
-            self._save(title)
-        else:
-            self._edit = original
-            self.edits_changed.emit(copy.copy(self._edit))
+        def _finish(accepted: bool) -> None:
+            self._active_generic_dlg = None
+            self._active_generic_dlg_title = None
+            if accepted:
+                self._checkpoint(title)
+                self._push_undo(title)
+                new_edit = dlg.get_edit()
+                for _, attr, *_ in sliders_def:
+                    setattr(self._edit, attr, getattr(new_edit, attr))
+                self.edits_changed.emit(copy.copy(self._edit))
+                self._save(title)
+            else:
+                self._edit = original
+                self.edits_changed.emit(copy.copy(self._edit))
+            if is_straighten:
+                self.grid_visibility_changed.emit(False)
+            self._highlight_treatment_button(title, False)
 
-        if is_straighten:
-            self.grid_visibility_changed.emit(False)
+        dlg.accepted.connect(lambda: _finish(True))
+        dlg.rejected.connect(lambda: _finish(False))
+        dlg.show()
+        dlg.raise_()
+
+    def _on_crop_clicked(self) -> None:
+        self._deactivate_other_tools("Recadrer")
+        self._crop_active = True
+        self._btn_crop.setStyleSheet(_ACTIVE_TOOL_STYLE)
+        self.crop_mode_requested.emit()
+
+    def on_crop_mode_ended(self) -> None:
+        """Reçu depuis la visionneuse quand le mode recadrage se termine
+        (validation ou annulation) — retire la surbrillance du bouton."""
+        self._crop_active = False
+        self._btn_crop.setStyleSheet("")
 
     def _open_couleurs_treatment(self) -> None:
         # Si le dialogue est déjà ouvert, le ramener au premier plan
@@ -1436,6 +1800,7 @@ class EditPanel(QWidget):
             # Annuler le mode pipette si toujours actif
             self.wb_pick_requested.emit(False)
             self._active_color_dlg = None
+            self._highlight_treatment_button("Couleurs", False)
 
         dlg.accepted.connect(_on_accepted)
         dlg.rejected.connect(_on_rejected)
@@ -1458,20 +1823,31 @@ class EditPanel(QWidget):
         dlg = LuminositeTreatmentDialog(self._edit, photo_path=photo_path, parent=self)
         dlg.preview.connect(self._on_preview)
         dlg._panel = self
+        self._active_generic_dlg = dlg
+        self._active_generic_dlg_title = "Luminosité"
 
-        if dlg.exec() == QDialog.Accepted:
-            self._checkpoint("Luminosité")
-            self._push_undo("Luminosité")
-            new_edit = dlg.get_edit()
-            self._edit.brightness = new_edit.brightness
-            self._edit.gamma = new_edit.gamma
-            self._edit.gamma_use_curve = new_edit.gamma_use_curve
-            self._edit.gamma_curve_points = new_edit.gamma_curve_points
-            self.edits_changed.emit(copy.copy(self._edit))
-            self._save("Luminosité")
-        else:
-            self._edit = original
-            self.edits_changed.emit(copy.copy(self._edit))
+        def _finish(accepted: bool) -> None:
+            self._active_generic_dlg = None
+            self._active_generic_dlg_title = None
+            if accepted:
+                self._checkpoint("Luminosité")
+                self._push_undo("Luminosité")
+                new_edit = dlg.get_edit()
+                self._edit.brightness = new_edit.brightness
+                self._edit.gamma = new_edit.gamma
+                self._edit.gamma_use_curve = new_edit.gamma_use_curve
+                self._edit.gamma_curve_points = new_edit.gamma_curve_points
+                self.edits_changed.emit(copy.copy(self._edit))
+                self._save("Luminosité")
+            else:
+                self._edit = original
+                self.edits_changed.emit(copy.copy(self._edit))
+            self._highlight_treatment_button("Luminosité", False)
+
+        dlg.accepted.connect(lambda: _finish(True))
+        dlg.rejected.connect(lambda: _finish(False))
+        dlg.show()
+        dlg.raise_()
 
     def _open_vignette_treatment(self) -> None:
         if self._active_vignette_dlg is not None:
@@ -1487,6 +1863,7 @@ class EditPanel(QWidget):
 
         def _finish(accepted: bool) -> None:
             self._active_vignette_dlg = None
+            self._highlight_treatment_button("Vignette", False)
             if accepted:
                 # Pousser l'état AVANT ouverture (original), pas self._edit qui a
                 # déjà été modifié par on_vignette_changed pendant le glissement.
@@ -1543,13 +1920,7 @@ class EditPanel(QWidget):
     # ------------------------------------------------------------------ public
 
     def set_photo(self, photo: PhotoInfo) -> None:
-        if self._red_eye_active:
-            self._btn_red_eye.setChecked(False)
-            self._toggle_red_eye_mode(False)
-        if self._active_color_dlg is not None:
-            self._active_color_dlg.reject()
-        if self._active_vignette_dlg is not None:
-            self._active_vignette_dlg.reject()
+        self._deactivate_other_tools("")   # aucun outil ne doit rester actif au changement de photo
         self._photo = photo
         self._edit = self._db.load(photo.path)
         # get_history retourne aussi l'état courant (dernier enregistrement).
@@ -1692,9 +2063,8 @@ class EditPanel(QWidget):
     def _toggle_red_eye_mode(self, checked: bool) -> None:
         self._red_eye_active = checked
         if checked:
-            self._btn_red_eye.setStyleSheet(
-                "QToolButton { background: #3a1a1a; border: 1px solid #8a2020; border-radius: 4px; }"
-            )
+            self._deactivate_other_tools("Yeux rouges")
+            self._btn_red_eye.setStyleSheet(_ACTIVE_TOOL_STYLE)
             self._red_eye_panel.show()
             radius = self._red_eye_slider.value() / 1000.0
             self.red_eye_mode_requested.emit(True, radius)
@@ -1729,3 +2099,285 @@ class EditPanel(QWidget):
         self._edit.red_eye_regions.append((cx, cy, radius))
         self.edits_changed.emit(copy.copy(self._edit))
         self._save("red_eye")
+
+    # ------------------------------------------------------------------ annotations
+
+    def _toggle_annotation_mode(self, checked: bool) -> None:
+        self._annotation_active = checked
+        if checked:
+            self._deactivate_other_tools("Annotations")
+            self._btn_annotations.setStyleSheet(_ACTIVE_TOOL_STYLE)
+            self._annotation_panel.show()
+            self.annotation_mode_requested.emit(True, self._annotation_tool)
+            self._emit_annotation_style()
+        else:
+            self._btn_annotations.setStyleSheet("")
+            self._annotation_panel.hide()
+            self._annotation_selected_ids = set()
+            self._btn_annotation_delete_sel.setEnabled(False)
+            self.annotation_mode_requested.emit(False, self._annotation_tool)
+        self._update_annotation_style_controls_visibility()
+
+    def _set_annotation_tool(self, tool: str) -> None:
+        self._annotation_tool = tool
+        if self._annotation_active:
+            self.annotation_mode_requested.emit(True, tool)
+        self._update_annotation_style_controls_visibility()
+
+    def _annotation_active_kind(self) -> "str | None":
+        """Détermine à quel groupe de contrôles de style le contexte courant se rapporte :
+        'line' (trait : stylo/ligne/courbe), 'shape' (rectangle/ellipse), 'text',
+        ou None si rien n'est pertinent (ex. outil Sélection sans élément sélectionné)."""
+        if self._annotation_tool in ("pen", "line", "curve"):
+            return "line"
+        if self._annotation_tool in ("rect", "ellipse"):
+            return "shape"
+        if self._annotation_tool == "text":
+            return "text"
+        if self._annotation_tool == "select" and self._annotation_selected_ids:
+            kinds = set()
+            for ann_id in self._annotation_selected_ids:
+                ann = next((a for a in self._edit.annotations if a.get("id") == ann_id), None)
+                if ann is None:
+                    continue
+                if ann.get("type") == "text":
+                    kinds.add("text")
+                elif ann.get("type") in ("rect", "ellipse"):
+                    kinds.add("shape")
+                else:
+                    kinds.add("line")
+            if len(kinds) == 1:
+                return next(iter(kinds))
+        return None
+
+    def _update_annotation_style_controls_visibility(self) -> None:
+        kind = self._annotation_active_kind()
+        self._annotation_style_row.setVisible(kind in ("line", "shape"))
+        self._annotation_shape_row.setVisible(kind == "shape")
+        self._annotation_font_row.setVisible(kind == "text")
+        self._annotation_bi_row.setVisible(kind == "text")
+
+    def _pick_annotation_color(self) -> None:
+        color = QColorDialog.getColor(
+            self._annotation_color, self, "Couleur d'annotation",
+            QColorDialog.ShowAlphaChannel,
+        )
+        if color.isValid():
+            self._annotation_color = color
+            self._update_annotation_color_swatch()
+            self._on_annotation_style_changed()
+
+    def _update_annotation_color_swatch(self) -> None:
+        style = (
+            f"background-color: {self._annotation_color.name(QColor.HexArgb)}; "
+            "border: 1px solid #888; border-radius: 3px;"
+        )
+        self._btn_annotation_color.setStyleSheet(style)
+        self._btn_annotation_text_color.setStyleSheet(style)
+
+    def _pick_annotation_fill_color(self) -> None:
+        # Pas de canal alpha ici : l'opacité de la surface est régie exclusivement
+        # par _annotation_opacity_spin, pour éviter deux contrôles de transparence
+        # qui se composent silencieusement.
+        color = QColorDialog.getColor(self._annotation_fill_color, self, "Couleur de la surface")
+        if color.isValid():
+            self._annotation_fill_color = color
+            self._update_annotation_fill_color_swatch()
+            self._on_annotation_style_changed()
+
+    def _update_annotation_fill_color_swatch(self) -> None:
+        self._btn_annotation_fill_color.setStyleSheet(
+            f"background-color: {self._annotation_fill_color.name(QColor.HexArgb)}; "
+            "border: 1px solid #888; border-radius: 3px;"
+        )
+
+    def _on_annotation_style_changed(self, *_args) -> None:
+        if self._annotation_active:
+            self._emit_annotation_style()
+
+    def _emit_annotation_style(self) -> None:
+        width = self._annotation_width_spin.value() / 100.0
+        font_family = self._annotation_font_combo.currentFont().family()
+        font_size = self._annotation_font_size.value() / 100.0
+        bold = self._btn_annotation_bold.isChecked()
+        italic = self._btn_annotation_italic.isChecked()
+        color = self._annotation_color.name(QColor.HexArgb)
+        fill_color = self._annotation_fill_color.name(QColor.HexArgb)
+        opacity = self._annotation_opacity_spin.value() / 100.0
+        blur = self._annotation_blur_spin.value() / 100.0
+        self.annotation_style_changed.emit(color, width, font_family, font_size, bold, italic,
+                                            fill_color, opacity, blur)
+        if self._annotation_selected_ids:
+            self._apply_style_to_selected(color, width, font_family, font_size, bold, italic,
+                                           fill_color, opacity, blur)
+
+    def _apply_style_to_selected(self, color: str, width: float, font_family: str,
+                                  font_size: float, bold: bool, italic: bool,
+                                  fill_color: str = "#ffff0000", opacity: float = 0.4,
+                                  blur: float = 0.0) -> None:
+        """Applique le style courant (couleur/épaisseur/police/fond) aux éléments sélectionnés,
+        plutôt qu'au seul style par défaut des prochains éléments dessinés."""
+        ids = self._annotation_selected_ids
+        new_list = []
+        any_updated = False
+        for a in self._edit.annotations:
+            if a.get("id") in ids:
+                a = dict(a)
+                a["color"] = color
+                if a.get("type") == "text":
+                    a["font_family"] = font_family
+                    a["font_size"] = font_size
+                    a["bold"] = bold
+                    a["italic"] = italic
+                elif a.get("type") in ("rect", "ellipse"):
+                    a["width"] = width
+                    a["fill_color"] = fill_color
+                    a["opacity"] = opacity
+                    a["blur"] = blur
+                else:
+                    a["width"] = width
+                any_updated = True
+            new_list.append(a)
+        if not any_updated:
+            return
+        self._checkpoint("Modifier le style")
+        self._push_undo("Modifier le style")
+        self._edit.annotations = new_list
+        self.edits_changed.emit(copy.copy(self._edit))
+        self._save("annotation_style")
+
+    def _clear_all_annotations(self) -> None:
+        if not self._edit.annotations:
+            return
+        self._checkpoint("Effacer annotations")
+        self._push_undo("Effacer annotations")
+        self._edit.annotations = []
+        self._annotation_selected_ids = set()
+        self._btn_annotation_delete_sel.setEnabled(False)
+        self._update_annotation_style_controls_visibility()
+        self.edits_changed.emit(copy.copy(self._edit))
+        self._save("annotation_clear")
+
+    def _done_annotation_mode(self) -> None:
+        self._btn_annotations.setChecked(False)
+        self._toggle_annotation_mode(False)
+
+    def on_annotation_added(self, annotation: dict) -> None:
+        """Reçu depuis le canvas quand l'utilisateur valide un nouvel élément (trait/texte)."""
+        self._checkpoint("Annotation")
+        self._push_undo("Annotation")
+        self._edit.annotations = list(self._edit.annotations) + [dict(annotation)]
+        self.edits_changed.emit(copy.copy(self._edit))
+        self._save("annotation")
+
+    def on_annotation_deleted(self, annotation_id: str) -> None:
+        """Reçu depuis le canvas quand l'utilisateur supprime l'élément sélectionné."""
+        self._checkpoint("Supprimer annotation")
+        self._push_undo("Supprimer annotation")
+        self._edit.annotations = [a for a in self._edit.annotations if a.get("id") != annotation_id]
+        self.edits_changed.emit(copy.copy(self._edit))
+        self._save("annotation_delete")
+
+    def on_annotation_deleted_multi(self, annotation_ids) -> None:
+        """Reçu depuis le canvas quand l'utilisateur supprime plusieurs éléments sélectionnés."""
+        ids = set(annotation_ids or [])
+        if not ids:
+            return
+        self._checkpoint("Supprimer annotations")
+        self._push_undo("Supprimer annotations")
+        self._edit.annotations = [a for a in self._edit.annotations if a.get("id") not in ids]
+        self.edits_changed.emit(copy.copy(self._edit))
+        self._save("annotation_delete_multi")
+
+    def on_annotation_selection_changed(self, annotation_ids) -> None:
+        self._annotation_selected_ids = set(annotation_ids or [])
+        self._btn_annotation_delete_sel.setEnabled(bool(self._annotation_selected_ids))
+        if len(self._annotation_selected_ids) == 1:
+            ann_id = next(iter(self._annotation_selected_ids))
+            ann = next((a for a in self._edit.annotations if a.get("id") == ann_id), None)
+            if ann is not None:
+                self._load_style_into_controls(ann)
+        self._update_annotation_style_controls_visibility()
+
+    def _load_style_into_controls(self, ann: dict) -> None:
+        """Reflète le style de l'élément sélectionné (couleur/épaisseur/police) dans les
+        contrôles du panneau, sans déclencher de ré-application en cascade sur l'élément."""
+        widgets = [
+            self._annotation_width_spin, self._annotation_font_combo,
+            self._annotation_font_size, self._btn_annotation_bold, self._btn_annotation_italic,
+            self._annotation_opacity_spin, self._annotation_blur_spin,
+        ]
+        for w in widgets:
+            w.blockSignals(True)
+        try:
+            self._annotation_color = QColor(ann.get("color") or self._annotation_color.name(QColor.HexArgb))
+            self._update_annotation_color_swatch()
+            if ann.get("type") == "text":
+                self._annotation_font_combo.setCurrentFont(QFont(ann.get("font_family", "Arial")))
+                self._annotation_font_size.setValue(round(ann.get("font_size", 0.04) * 100))
+                self._btn_annotation_bold.setChecked(bool(ann.get("bold", False)))
+                self._btn_annotation_italic.setChecked(bool(ann.get("italic", False)))
+            elif ann.get("type") in ("rect", "ellipse"):
+                self._annotation_width_spin.setValue(ann.get("width", 0.006) * 100)
+                self._annotation_fill_color = QColor(
+                    ann.get("fill_color") or self._annotation_fill_color.name(QColor.HexArgb)
+                )
+                self._update_annotation_fill_color_swatch()
+                self._annotation_opacity_spin.setValue(ann.get("opacity", 1.0) * 100)
+                self._annotation_blur_spin.setValue(ann.get("blur", 0.0) * 100)
+            else:
+                self._annotation_width_spin.setValue(ann.get("width", 0.006) * 100)
+        finally:
+            for w in widgets:
+                w.blockSignals(False)
+
+    def on_annotation_moved(self, annotation_id: str, updated: dict) -> None:
+        """Reçu depuis le canvas quand l'utilisateur relâche la souris après avoir
+        déplacé l'élément sélectionné (outil Sélection)."""
+        self._checkpoint("Déplacer annotation")
+        self._push_undo("Déplacer annotation")
+        self._edit.annotations = [
+            dict(updated) if a.get("id") == annotation_id else a for a in self._edit.annotations
+        ]
+        self.edits_changed.emit(copy.copy(self._edit))
+        self._save("annotation_move")
+
+    def on_annotation_moved_multi(self, updated) -> None:
+        """Reçu depuis le canvas quand l'utilisateur relâche la souris après avoir
+        déplacé plusieurs éléments sélectionnés en une fois (outil Sélection)."""
+        if not updated:
+            return
+        self._checkpoint("Déplacer annotations")
+        self._push_undo("Déplacer annotations")
+        self._edit.annotations = [
+            dict(updated[a.get("id")]) if a.get("id") in updated else a for a in self._edit.annotations
+        ]
+        self.edits_changed.emit(copy.copy(self._edit))
+        self._save("annotation_move_multi")
+
+    def on_annotation_resized(self, annotation_id: str, updated: dict) -> None:
+        """Reçu depuis le canvas quand l'utilisateur relâche la souris après avoir
+        redimensionné/tourné l'élément sélectionné via ses ancres (outil Sélection)."""
+        self._checkpoint("Redimensionner annotation")
+        self._push_undo("Redimensionner annotation")
+        self._edit.annotations = [
+            dict(updated) if a.get("id") == annotation_id else a for a in self._edit.annotations
+        ]
+        if self._annotation_selected_ids == {annotation_id}:
+            self._load_style_into_controls(updated)
+        self.edits_changed.emit(copy.copy(self._edit))
+        self._save("annotation_resize")
+
+    def on_annotation_grouped(self, updated) -> None:
+        """Reçu depuis le canvas après un Grouper/Dégrouper (menu contextuel)."""
+        if not updated:
+            return
+        is_group = any(v.get("group") for v in updated.values())
+        label = "Grouper les annotations" if is_group else "Dégrouper les annotations"
+        self._checkpoint(label)
+        self._push_undo(label)
+        self._edit.annotations = [
+            dict(updated[a.get("id")]) if a.get("id") in updated else a for a in self._edit.annotations
+        ]
+        self.edits_changed.emit(copy.copy(self._edit))
+        self._save("annotation_group" if is_group else "annotation_ungroup")
