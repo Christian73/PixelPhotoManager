@@ -80,7 +80,7 @@ Menu **Fichier › Quitter** (**Ctrl + Q**).
 |---|---|
 | **Fichier** | Ajouter un dossier…, Quitter |
 | **Affichage** | Afficher/masquer sidebar (F9), Plein écran (F11), Diaporama (F5) |
-| **Outils** | Dossiers…, Détecter les doublons…, Synchroniser dates de création avec l'EXIF…, Journal des threads…, Applications externes…, Paramètres |
+| **Outils** | Dossiers…, Détecter les doublons…, Synchroniser dates de création avec l'EXIF…, Journal des threads…, Historique des problèmes…, Applications externes…, Paramètres |
 | **Visages** | Importer depuis Picasa…, Réinitialiser et réindexer…, Regrouper les visages…, Visualisation des erreurs…, Sauvegarder la reconnaissance…, Gérer les sauvegardes…, Compteurs… |
 | **Aide** | Aide… (F1), À propos |
 
@@ -710,6 +710,15 @@ Le bouton **Dupliquées** de la sidebar (avec un badge indiquant le nombre de gr
 - **✕** sur une carte : **dissout le groupe entier** (ne supprime aucun fichier) — la carte disparaît de la grille et le badge décrémente. Cette dissolution n'est **pas persistante** : relancer une détection complète peut reformer le même groupe si les photos sont toujours similaires.
 - Bouton **Détecter les doublons…** en haut de la grille pour relancer une analyse sans repasser par le menu Outils.
 
+### Fichiers corrompus détectés pendant l'analyse
+
+Un fichier qui ne peut pas être lu pendant l'analyse (JPEG endommagé, copie interrompue…) n'est plus ignoré silencieusement : il est comptabilisé et signalé.
+
+- Le message de bilan de fin d'analyse indique le nombre de fichiers illisibles rencontrés, avec un bouton **Réparer…**.
+- Une confirmation est demandée avant toute tentative de réparation.
+- La réparation essaie de ré-enregistrer une copie propre du fichier via un décodeur plus tolérant que celui utilisé pour l'analyse (PIL en mode tolérant aux troncatures, puis le codec JPEG de Qt). L'original est sauvegardé au préalable dans un dossier caché `.tmp_originals` à côté du fichier, et les dates Windows de modification **et** de création sont préservées à l'identique sur la copie réparée.
+- Un second bilan indique le nombre de fichiers réparés. Ceux qui n'ont pas pu l'être (corruption trop importante pour les décodeurs disponibles) sont listés dans un fichier texte horodaté (`fichiers_corrompus_AAAAMMJJ_HHMMSS.txt`), dont l'emplacement reste accessible via **Outils › Historique des problèmes…** (voir [section 16](#16-autres-outils)).
+
 ---
 
 ## 15. Synchroniser les dates de création avec l'EXIF
@@ -737,6 +746,13 @@ Outil de diagnostic destiné à surveiller les traitements en arrière-plan (sca
 - **Événements bruts** : journal détaillé filtrable (par thread, par mot-clé), avec bouton **▶ Temps réel** pour un rafraîchissement automatique.
 - Boutons **Rapport de problèmes…** (diagnostic textuel copiable) et **Exporter CSV…**.
 - **🗑 Vider** efface le journal (confirmation demandée).
+
+### Historique des problèmes (Outils › Historique des problèmes…)
+
+Conserve la trace de chaque analyse de doublons ayant rencontré des fichiers corrompus (voir [section 14](#14-détection-des-doublons)).
+
+- Une ligne par analyse : date, nombre de fichiers corrompus détectés, nombre réparés.
+- Bouton **Ouvrir la liste…** par ligne : ouvre le fichier texte listant les fichiers qui n'ont pas pu être réparés lors de cette analyse (désactivé si tous ont été réparés, ou si le fichier a depuis été supprimé).
 
 ### Applications externes (Outils › Applications externes…)
 
@@ -850,12 +866,14 @@ Soit typiquement : `C:\Users\VotreNom\AppData\Local\PixelPhotoManager\`
 | `config.json` | Dossiers surveillés et préférences de l'interface (dont réglages de Paramètres) |
 | `logs\pixelphotomanager.log` | Journal de l'application (pour le dépannage) |
 | `duplicates_report.html` | Dernier rapport de détection de doublons |
+| `problems_history.jsonl` | Historique des fichiers corrompus détectés/réparés (**Outils › Historique des problèmes…**, voir [section 16](#16-autres-outils)) |
+| `fichiers_corrompus_AAAAMMJJ_HHMMSS.txt` | Liste des fichiers corrompus non réparés lors d'une analyse de doublons |
 | Rapport CSV de synchro EXIF | Généré à chaque exécution de l'outil de synchronisation des dates |
 | Sauvegardes de reconnaissance faciale | Archives créées via **Visages › Sauvegarder la reconnaissance…** |
 
 > **Vos photos et vidéos originales ne sont jamais modifiées** par les retouches ou la reconnaissance faciale. Vous pouvez supprimer `edits.db` pour effacer toutes les retouches et repartir de zéro, ou supprimer `catalog.db` pour forcer une réindexation complète.
 
-Dans chaque dossier de photos, un sous-dossier caché **`.tmp_originals`** peut apparaître : il contient les copies de sauvegarde des fichiers écrasés via **Enregistrer l'image traitée sur le disque** (uniquement si vous avez coché l'option de sauvegarde).
+Dans chaque dossier de photos, un sous-dossier caché **`.tmp_originals`** peut apparaître : il contient les copies de sauvegarde des fichiers écrasés via **Enregistrer l'image traitée sur le disque** (uniquement si vous avez coché l'option de sauvegarde), ou celles des fichiers corrompus avant tentative de réparation (voir [section 14](#14-détection-des-doublons)).
 
 ### Formats supportés
 
@@ -879,6 +897,7 @@ Dans chaque dossier de photos, un sous-dossier caché **`.tmp_originals`** peut 
 | Un dossier déplacé manuellement (hors de l'application) n'est plus trouvé | Utilisez **Supprimer des dossiers surveillés** puis **Fichier › Ajouter un dossier…** pour le réenregistrer |
 | Récupérer l'original d'une photo retouchée | Le fichier original n'a jamais été modifié — il suffit d'effacer les retouches via **Annuler** (↩) jusqu'à l'état initial |
 | Récupérer un original écrasé par erreur | S'il a été sauvegardé (case cochée lors de l'enregistrement), il se trouve dans le sous-dossier caché `.tmp_originals` du dossier concerné |
+| « Détecter les doublons… » signale des fichiers corrompus | Utilisez le bouton **Réparer…** proposé dans le bilan (voir [section 14](#14-détection-des-doublons)) ; l'original est toujours sauvegardé avant réparation dans `.tmp_originals` |
 | La vignette d'une vidéo est noire | OpenCV n'a pas pu lire la vidéo — vérifiez que le codec est installé sur votre système |
 | Une opération semble bloquée ou anormalement lente | Ouvrez **Outils › Journal des threads…** pour voir quel traitement de fond est en cours et son statut |
 | « Détecter les doublons… » signale une erreur au démarrage | Les modules `imagehash` et `Pillow` sont requis ; sans OpenCV/numpy, seule la détection de recadrage (Tier 2) est indisponible, le reste continue de fonctionner |

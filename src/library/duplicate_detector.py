@@ -42,11 +42,21 @@ _VIDEO_EXT = {'.mp4', '.mov', '.avi', '.mkv', '.wmv', '.webm',
 # ── helpers ────────────────────────────────────────────────────────────────────
 
 def _load_gray(path: str, max_dim: int) -> "np.ndarray | None":
-    """Charge en niveaux de gris, réduit si > max_dim. Retourne None en cas d'erreur."""
+    """Charge en niveaux de gris, réduit si > max_dim. Retourne None en cas d'erreur.
+
+    cv2.imread rejette les chemins non-ASCII sur Windows (cf. detector.py::
+    _exif_corrected) : on passe directement par PIL dans ce cas pour éviter
+    une tentative cv2 vouée à l'échec (warning console + double décodage)."""
     try:
         import numpy as np
         import cv2
-        img = cv2.imread(path, cv2.IMREAD_GRAYSCALE)
+        img = None
+        try:
+            path.encode("ascii")
+        except UnicodeEncodeError:
+            pass
+        else:
+            img = cv2.imread(path, cv2.IMREAD_GRAYSCALE)
         if img is None:
             from PIL import Image
             with Image.open(path) as pil:
@@ -96,9 +106,16 @@ class DuplicateDetectorThread(QThread):
         super().__init__(parent)
         self._paths = photo_paths
         self._cancelled = False
+        self._corrupted: set[str] = set()
 
     def cancel(self) -> None:
         self._cancelled = True
+
+    @property
+    def corrupted_paths(self) -> list[str]:
+        """Chemins des fichiers dont le chargement a échoué pendant le scan
+        (probablement corrompus). Stable une fois le signal `finished` émis."""
+        return sorted(self._corrupted)
 
     def run(self) -> None:
         try:
@@ -159,7 +176,8 @@ class DuplicateDetectorThread(QThread):
                     h = imagehash.phash(img)
                 hashes.append((path, h))
             except Exception as exc:
-                logger.debug("Tier 1 empreinte échouée %s : %s", path, exc)
+                logger.warning("Fichier illisible (Tier 1) : %s (%s)", path, exc)
+                self._corrupted.add(path)
 
         if self._cancelled:
             return
@@ -262,6 +280,8 @@ class DuplicateDetectorThread(QThread):
             try:
                 img = _load_gray(path, _ORB_LOAD_SIZE)
                 if img is None:
+                    logger.warning("Fichier illisible (Tier 2) : %s", path)
+                    self._corrupted.add(path)
                     continue
                 kp, des = orb.detectAndCompute(img, None)
                 if des is None or len(kp) < 10:

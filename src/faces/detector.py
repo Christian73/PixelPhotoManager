@@ -122,7 +122,7 @@ def _exif_corrected(image_path: str, extra_rotation: int = 0):
         needs_ascii = True
 
     try:
-        from src.library.exif_reader import VIDEO_EXT
+        from src.library.exif_reader import VIDEO_EXT, ascii_safe_path
         is_video = os.path.splitext(image_path)[1].lower() in VIDEO_EXT
     except Exception:
         is_video = False
@@ -130,18 +130,19 @@ def _exif_corrected(image_path: str, extra_rotation: int = 0):
     try:
         if is_video:
             import cv2
-            cap = cv2.VideoCapture(image_path)
-            if cap.isOpened():
-                total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-                target = max(0, int(total * 0.1))
-                cap.set(cv2.CAP_PROP_POS_FRAMES, target)
-                ret, frame = cap.read()
-                cap.release()
-                if ret:
-                    fd, temp_path = tempfile.mkstemp(suffix=".jpg")
-                    os.close(fd)
-                    cv2.imwrite(temp_path, frame)
-                    result_path = temp_path
+            with ascii_safe_path(image_path) as vpath:
+                cap = cv2.VideoCapture(vpath)
+                if cap.isOpened():
+                    total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+                    target = max(0, int(total * 0.1))
+                    cap.set(cv2.CAP_PROP_POS_FRAMES, target)
+                    ret, frame = cap.read()
+                    cap.release()
+                    if ret:
+                        fd, temp_path = tempfile.mkstemp(suffix=".jpg")
+                        os.close(fd)
+                        cv2.imwrite(temp_path, frame)
+                        result_path = temp_path
         else:
             from PIL import Image, ImageOps
             with Image.open(image_path) as img:

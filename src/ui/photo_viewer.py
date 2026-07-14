@@ -90,16 +90,18 @@ def _build_video_base_image(video_path: str) -> "tuple[bytes, int, int] | None":
     try:
         import cv2
         from PIL import Image
+        from src.library.exif_reader import ascii_safe_path
 
-        cap = cv2.VideoCapture(video_path, cv2.CAP_FFMPEG)
-        if not cap.isOpened():
-            cap = cv2.VideoCapture(video_path)
+        with ascii_safe_path(video_path) as safe_path:
+            cap = cv2.VideoCapture(safe_path, cv2.CAP_FFMPEG)
             if not cap.isOpened():
-                return None
-        orig_w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-        orig_h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-        ret, frame = cap.read()
-        cap.release()
+                cap = cv2.VideoCapture(safe_path)
+                if not cap.isOpened():
+                    return None
+            orig_w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+            orig_h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+            ret, frame = cap.read()
+            cap.release()
         if not ret or frame is None:
             return None
 
@@ -175,15 +177,17 @@ def _build_video_pixmap(video_path: str) -> "tuple[QPixmap, int, int] | None":
     try:
         import cv2
         from PIL import Image
+        from src.library.exif_reader import ascii_safe_path
 
-        cap = cv2.VideoCapture(video_path)
-        if not cap.isOpened():
-            return None
-        frame_count = cap.get(cv2.CAP_PROP_FRAME_COUNT)
-        if frame_count > 10:
-            cap.set(cv2.CAP_PROP_POS_FRAMES, int(frame_count * 0.1))
-        ret, frame = cap.read()
-        cap.release()
+        with ascii_safe_path(video_path) as safe_path:
+            cap = cv2.VideoCapture(safe_path)
+            if not cap.isOpened():
+                return None
+            frame_count = cap.get(cv2.CAP_PROP_FRAME_COUNT)
+            if frame_count > 10:
+                cap.set(cv2.CAP_PROP_POS_FRAMES, int(frame_count * 0.1))
+            ret, frame = cap.read()
+            cap.release()
         if not ret:
             return None
 

@@ -165,15 +165,17 @@ class ThumbnailCache:
         try:
             import cv2
             from PIL import Image
+            from src.library.exif_reader import ascii_safe_path
 
-            # CAP_FFMPEG évite DirectShow/Media Foundation sur Windows
-            cap = cv2.VideoCapture(video_path, cv2.CAP_FFMPEG)
-            if not cap.isOpened():
-                cap = cv2.VideoCapture(video_path)   # fallback
+            with ascii_safe_path(video_path) as safe_path:
+                # CAP_FFMPEG évite DirectShow/Media Foundation sur Windows
+                cap = cv2.VideoCapture(safe_path, cv2.CAP_FFMPEG)
                 if not cap.isOpened():
-                    return None
-            ret, frame = cap.read()   # première frame — aucun seek
-            cap.release()
+                    cap = cv2.VideoCapture(safe_path)   # fallback
+                    if not cap.isOpened():
+                        return None
+                ret, frame = cap.read()   # première frame — aucun seek
+                cap.release()
             if not ret or frame is None:
                 return None
 

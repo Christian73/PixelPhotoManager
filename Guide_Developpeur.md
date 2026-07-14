@@ -402,6 +402,25 @@ VIDEO_EXT = {".mp4", ".mov", ".avi", ".mkv", ".wmv", ".webm",
 
 Importée par `scanner.py` et `thumbnail_cache.py`. Toujours utiliser cette constante pour tester si un fichier est une vidéo.
 
+#### `ascii_safe_path(path)` — context manager
+
+```python
+with ascii_safe_path(video_path) as safe_path:
+    cap = cv2.VideoCapture(safe_path)
+```
+
+`cv2.VideoCapture`/`cv2.imread` rejettent les chemins non-ASCII sur Windows. Si `path` est déjà ASCII, retourné tel quel sans I/O ; sinon crée un hardlink temporaire vers un chemin ASCII (repli sur une copie si le hardlink échoue, ex. volume différent), supprimé en sortie de bloc. À utiliser systématiquement autour de tout appel `cv2.VideoCapture`/`cv2.imread`.
+
+#### `preserve_file_dates(src_stat, dst_path)`
+
+```python
+orig_stat = os.stat(path)
+# ... écriture d'une nouvelle version de `path` ...
+preserve_file_dates(orig_stat, path)
+```
+
+Copie `atime`/`mtime` (`os.utime`) et la date de création Windows (`ctypes` + `kernel32.SetFileTime`) de `src_stat` vers `dst_path`. Utilisée partout où un fichier est ré-écrit sur place sans que l'utilisateur ne doive voir ses dates changer (export avec écrasement, réparation de fichier corrompu — voir `file_repair.py`).
+
 ---
 
 ## 6. Composants UI

@@ -3,7 +3,7 @@
 import logging
 import os
 
-from PySide6.QtCore import QFileSystemWatcher, QObject, QTimer, Signal
+from PySide6.QtCore import QFileSystemWatcher, QObject, QThread, QTimer, Signal
 
 logger = logging.getLogger(__name__)
 

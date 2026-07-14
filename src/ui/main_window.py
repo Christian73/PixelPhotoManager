@@ -27,6 +27,7 @@ from src.library.thumbnail_cache import ThumbnailCache
 from src.library.folder_watcher import FolderWatcher
 from src.library.scanner import LibraryScanner
 from src.library.duplicate_detector import DuplicateDetectorThread, generate_html_report
+from src.library.exif_reader import preserve_file_dates
 from src.core.app_version import get_app_version
 from src.core.update_checker import UpdateCheckThread, STATUS_UPDATE_AVAILABLE
 from src.faces.face_database import FaceDatabase
@@ -730,6 +731,13 @@ class MainWindow(QMainWindow):
         act_journal.triggered.connect(self._open_thread_journal)
         m_tools.addAction(act_journal)
         m_tools.addSeparator()
+        act_problems = QAction("Historique des problèmes…", self)
+        act_problems.setToolTip(
+            "Afficher l'historique des fichiers corrompus détectés et réparés"
+        )
+        act_problems.triggered.connect(self._open_problems_history)
+        m_tools.addAction(act_problems)
+        m_tools.addSeparator()
         act_ext_apps = QAction("Applications externes…", self)
         act_ext_apps.setToolTip(
             "Configurer les applications tierces disponibles depuis la visionneuse"
@@ -1415,6 +1423,10 @@ class MainWindow(QMainWindow):
         from src.ui.thread_journal_dialog import ThreadJournalDialog
         dlg = ThreadJournalDialog(self)
         dlg.exec()
+
+    def _open_problems_history(self) -> None:
+        from src.ui.problems_history_dialog import ProblemsHistoryDialog
+        ProblemsHistoryDialog(self).exec()
 
     def _open_settings(self) -> None:
         dlg = SettingsDialog(self._config, self)
@@ -2439,7 +2451,7 @@ class MainWindow(QMainWindow):
 
         def _on_done(groups: dict):
             dlg.accept()
-            self._apply_duplicate_results(groups)
+            self._apply_duplicate_results(groups, detector.corrupted_paths)
 
         def _on_error(msg: str):
             dlg.reject()
@@ -2455,12 +2467,20 @@ class MainWindow(QMainWindow):
             detector.cancel()
             detector.wait(3000)
 
-    def _apply_duplicate_results(self, groups: dict) -> None:
+    def _apply_duplicate_results(self, groups: dict, corrupted_paths=()) -> None:
+        corrupted_paths = list(corrupted_paths)
         if not groups:
-            QMessageBox.information(
-                self, "Doublons",
-                "Aucun doublon détecté dans la bibliothèque."
-            )
+            msg = "Aucun doublon détecté dans la bibliothèque."
+            if corrupted_paths:
+                n = len(corrupted_paths)
+                msg += (f"\n\n⚠ {n} fichier{'s' if n != 1 else ''} n'ont pas pu être lu"
+                        f"{'s' if n != 1 else ''} pendant l'analyse (probablement corrompu"
+                        f"{'s' if n != 1 else ''}).")
+            box = QMessageBox(QMessageBox.Information, "Doublons", msg, QMessageBox.Ok, self)
+            if corrupted_paths:
+                btn_repair = box.addButton("Réparer…", QMessageBox.ActionRole)
+                btn_repair.clicked.connect(lambda: self._offer_corrupted_repair(corrupted_paths))
+            box.exec()
             self._catalog.clear_duplicate_groups()
             # Rafraîchir les badges (tout à None)
             assignments = {p.path: None for p in self._current_photos}
@@ -2516,12 +2536,95 @@ class MainWindow(QMainWindow):
                "Cliquez sur le badge pour voir où se trouvent les autres exemplaires.")
         if report_path:
             msg += f"\n\nRapport HTML généré :\n{report_path}"
+        if corrupted_paths:
+            n = len(corrupted_paths)
+            msg += (f"\n\n⚠ {n} fichier{'s' if n != 1 else ''} n'ont pas pu être lu"
+                    f"{'s' if n != 1 else ''} pendant l'analyse (probablement corrompu"
+                    f"{'s' if n != 1 else ''}).")
         box = QMessageBox(QMessageBox.Information, "Doublons détectés", msg,
                           QMessageBox.Ok, self)
         if report_path:
             btn_open = box.addButton("Ouvrir le rapport", QMessageBox.ActionRole)
             btn_open.clicked.connect(lambda: os.startfile(report_path))
+        if corrupted_paths:
+            btn_repair = box.addButton("Réparer…", QMessageBox.ActionRole)
+            btn_repair.clicked.connect(lambda: self._offer_corrupted_repair(corrupted_paths))
         box.exec()
+
+    def _record_corrupted_files(self, corrupted_count: int, repaired_count: int,
+                                 still_failed: list) -> "str | None":
+        """Écrit la liste des fichiers toujours en échec (le cas échéant) et
+        enregistre l'entrée dans l'historique des problèmes. Retourne le
+        chemin du fichier texte créé, ou None si tout a été réparé."""
+        from src.core.app_dirs import APP_DATA_DIR
+        from src.core.problems_history import problems_history
+
+        list_path = None
+        if still_failed:
+            ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+            list_path = str(APP_DATA_DIR / f"fichiers_corrompus_{ts}.txt")
+            try:
+                Path(list_path).write_text("\n".join(still_failed), encoding="utf-8")
+            except OSError as e:
+                logger.warning("Impossible d'écrire la liste des fichiers corrompus : %s", e)
+                list_path = None
+        problems_history.add_entry(corrupted_count, repaired_count, list_path)
+        return list_path
+
+    def _offer_corrupted_repair(self, corrupted_paths: list) -> None:
+        n = len(corrupted_paths)
+        reply = QMessageBox.question(
+            self,
+            "Réparer les fichiers corrompus",
+            f"{n} fichier{'s' if n != 1 else ''} semble{'nt' if n != 1 else ''} corrompu"
+            f"{'s' if n != 1 else ''}.\n\n"
+            "Tenter une réparation automatique ? PixelPhotoManager va essayer de "
+            "ré-enregistrer une copie propre de chaque fichier via un décodeur plus "
+            "tolérant, en conservant les dates de création et de modification "
+            "Windows. L'original est sauvegardé avant toute modification "
+            "(dossier caché .tmp_originals à côté du fichier).",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No,
+        )
+        if reply != QMessageBox.Yes:
+            list_path = self._record_corrupted_files(n, 0, corrupted_paths)
+            msg = "La réparation n'a pas été lancée."
+            if list_path:
+                msg += (f"\n\nLa liste des {n} fichier{'s' if n != 1 else ''} est "
+                        "disponible via Outils › Historique des problèmes.")
+            QMessageBox.information(self, "Réparation annulée", msg)
+            return
+
+        from PySide6.QtWidgets import QProgressDialog
+        from src.library.file_repair import FileRepairThread
+
+        progress = QProgressDialog("Réparation en cours…", "Annuler", 0, n, self)
+        progress.setWindowTitle("Réparation des fichiers corrompus")
+        progress.setWindowModality(Qt.WindowModal)
+        progress.setMinimumDuration(0)
+
+        thread = FileRepairThread(corrupted_paths, self)
+
+        def _on_progress(cur, total, path):
+            progress.setValue(cur)
+            progress.setLabelText(f"Réparation {cur + 1}/{total} :\n{os.path.basename(path)}")
+
+        def _on_finished(repaired_count, still_failed):
+            progress.setValue(n)
+            progress.close()
+            list_path = self._record_corrupted_files(n, repaired_count, still_failed)
+            msg = f"{repaired_count} fichier{'s' if repaired_count != 1 else ''} réparé{'s' if repaired_count != 1 else ''} sur {n}."
+            if still_failed:
+                msg += (f"\n\n{len(still_failed)} fichier(s) n'ont pas pu être réparés.")
+                if list_path:
+                    msg += "\nLa liste est disponible via Outils › Historique des problèmes."
+            QMessageBox.information(self, "Réparation terminée", msg)
+
+        thread.progress.connect(_on_progress)
+        thread.finished.connect(_on_finished)
+        progress.canceled.connect(thread.cancel)
+
+        thread.start()
 
     @Slot(object)
     def _on_duplicate_badge_clicked(self, photo: PhotoInfo) -> None:
@@ -3349,33 +3452,6 @@ class MainWindow(QMainWindow):
         shutil.copy2(photo_path, backup_dir / backup_name)
         logger.info("Original sauvegardé : %s", backup_dir / backup_name)
 
-    @staticmethod
-    def _preserve_file_dates(src_stat, dst_path: str) -> None:
-        """Copie atime, mtime et date de création (Windows) de src_stat vers dst_path."""
-        os.utime(dst_path, (src_stat.st_atime, src_stat.st_mtime))
-        try:
-            import ctypes
-            import ctypes.wintypes
-
-            class FILETIME(ctypes.Structure):
-                _fields_ = [("dwLowDateTime",  ctypes.wintypes.DWORD),
-                             ("dwHighDateTime", ctypes.wintypes.DWORD)]
-
-            # Convertir timestamp Unix → FILETIME (100 ns depuis le 1er janvier 1601)
-            val = int((src_stat.st_ctime + 11644473600) * 10_000_000)
-            ft = FILETIME(dwLowDateTime=val & 0xFFFFFFFF,
-                          dwHighDateTime=(val >> 32) & 0xFFFFFFFF)
-
-            kernel32 = ctypes.windll.kernel32
-            handle = kernel32.CreateFileW(
-                dst_path, 0x40000000, 1, None, 3, 0x02000000, None
-            )
-            if handle not in (-1, 0):
-                kernel32.SetFileTime(handle, ctypes.byref(ft), None, None)
-                kernel32.CloseHandle(handle)
-        except Exception:
-            pass   # non-Windows ou droits insuffisants : mtime suffit
-
     def _export_image(self, photo: PhotoInfo, dest: str) -> None:
         """Exporte l'image traitée pleine résolution vers dest."""
         QApplication.setOverrideCursor(Qt.WaitCursor)
@@ -3403,7 +3479,7 @@ class MainWindow(QMainWindow):
                     img.save(dest, format="JPEG", quality=95, subsampling=0)
 
             # Restaurer les dates du fichier original (atime, mtime et date de création)
-            self._preserve_file_dates(orig_stat, dest)
+            preserve_file_dates(orig_stat, dest)
 
             if os.path.normpath(dest) == os.path.normpath(photo.path):
                 # Les retouches sont maintenant baked dans le fichier : supprimer l'edit
@@ -3501,7 +3577,7 @@ class MainWindow(QMainWindow):
                         orig_stat = os.stat(photo.path)
                         img.save(str(dest), format="JPEG",
                                  quality=quality, subsampling=0)
-                        self._preserve_file_dates(orig_stat, str(dest))
+                        preserve_file_dates(orig_stat, str(dest))
                 except Exception as e:
                     errors.append(f"{photo.filename} : {e}")
                     logger.error("Export %s : %s", photo.path, e, exc_info=True)

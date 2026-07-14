@@ -68,6 +68,7 @@ Toutes les retouches sont stockées séparément — l'original n'est jamais mod
   <tr><td><code>faces.db</code></td><td>Visages détectés, embeddings, clusters et personnes identifiées</td></tr>
   <tr><td><code>config.json</code></td><td>Dossiers surveillés et préférences</td></tr>
   <tr><td><code>faces_backups\</code></td><td>Sauvegardes horodatées de la reconnaissance faciale (<code>visages_AAAAMMJJ_HHMMSS.zip</code>)</td></tr>
+  <tr><td><code>problems_history.jsonl</code></td><td>Historique des fichiers corrompus détectés/réparés lors des analyses de doublons</td></tr>
 </table>
 <p class="tip">Vos fichiers originaux ne sont <b>jamais modifiés</b>. Supprimer <code>edits.db</code>
 efface toutes les retouches ; supprimer <code>catalog.db</code> force une réindexation complète.</p>
@@ -650,6 +651,26 @@ exemplaire, nombre d'exemplaires.</p>
 </ul>
 <p class="tip">La suppression d'un doublon est <b>définitive</b> (pas de corbeille).
 Vérifiez bien les photos avant de confirmer.</p>
+
+<h3>Fichiers corrompus détectés pendant l'analyse</h3>
+<p>Si un fichier ne peut pas être lu pendant l'analyse (JPEG endommagé, copie
+interrompue…), il est signalé plutôt qu'ignoré silencieusement. Le bilan de fin
+d'analyse indique alors le nombre de fichiers concernés, avec un bouton
+<b>Réparer…</b>.</p>
+<ul>
+  <li>Une confirmation est demandée avant toute tentative de réparation.</li>
+  <li>PixelPhotoManager essaie de ré-enregistrer une copie propre du fichier à
+      l'aide d'un décodeur plus tolérant que celui utilisé pour l'analyse.</li>
+  <li>L'original est toujours sauvegardé avant modification (dossier caché
+      <code>.tmp_originals</code> à côté du fichier), et les dates Windows de
+      modification et de création sont préservées à l'identique.</li>
+  <li>Un second bilan indique le nombre de fichiers réparés. Les fichiers qui
+      n'ont pas pu être réparés (corruption trop importante) sont listés dans
+      un fichier texte horodaté.</li>
+</ul>
+<p class="tip"><b>Outils › Historique des problèmes…</b> conserve la trace de
+chaque analyse ayant rencontré des fichiers corrompus (date, nombre détecté,
+nombre réparé) avec un accès direct à la liste des fichiers non réparés.</p>
 """
 
 _TAB_SETTINGS = _STYLE + """
