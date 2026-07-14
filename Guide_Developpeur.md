@@ -59,15 +59,17 @@ PixelPhotoManager/
 │   │   ├── main_window.py         # Fenêtre principale + orchestration
 │   │   ├── sidebar.py             # Arborescence dossiers + albums
 │   │   ├── thumbnail_grid.py      # Grille de vignettes (badge ▶ pour vidéos)
-│   │   ├── photo_viewer.py        # Visionneuse + mode recadrage + vidéos
-│   │   ├── edit_panel.py          # Panneau de retouche
+│   │   ├── photo_viewer.py        # Visionneuse + mode recadrage + annotations + vidéos
+│   │   ├── edit_panel.py          # Panneau de retouche (un seul outil actif à la fois)
+│   │   ├── annotation_renderer.py # Rendu QPainter du calque d'annotations (aperçu + export)
 │   │   ├── exif_panel.py          # Panneau EXIF (toggle avec touche I)
 │   │   └── folder_manager_dialog.py  # Dialogue Outils › Dossiers…
 │   │
 │   ├── processing/                # Traitement image
 │   │   ├── adjustments.py         # ImageAdjuster.apply_all()
 │   │   ├── geometry.py            # Rotation, redressement, recadrage
-│   │   └── edit_database.py       # Persistence des retouches (SQLite)
+│   │   ├── annotation_geometry.py # Géométrie des formes d'annotation (hit-test, bbox, redimensionnement)
+│   │   └── edit_database.py       # Persistence des retouches (SQLite), inclut EditInfo.annotations
 │   │
 │   ├── faces/                     # Reconnaissance faciale (optionnel)
 │   │   ├── detector.py            # Détection (RetinaFace / OpenCV)

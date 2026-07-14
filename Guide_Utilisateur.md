@@ -318,6 +318,8 @@ Ouvrez une photo dans la visionneuse. Le panneau **Retouche** apparaît automati
 
 > Le panneau de retouche n'est pas disponible pour les vidéos.
 
+> **Un seul outil actif à la fois** : sélectionner un nouvel outil (Recadrer, Yeux rouges, Annotations, Luminosité, Contraste, Couleurs, Vignette, Redresser…) valide automatiquement le travail en cours dans l'outil précédent puis le referme — inutile de valider manuellement avant de changer d'outil.
+
 ---
 
 ### Corrections tonales
@@ -403,6 +405,50 @@ Corrige l'inclinaison de l'horizon. Plage : **-10° à +10°**.
 
 - **Miroir H** : retourne l'image horizontalement (symétrie gauche-droite).
 - **Miroir V** : retourne l'image verticalement (symétrie haut-bas).
+
+---
+
+### Yeux rouges
+
+1. Cliquez sur **Yeux rouges** dans le panneau de retouche.
+2. Cliquez directement sur chaque œil affecté dans la photo — un cercle de correction apparaît.
+3. Ajustez le curseur **Taille** si besoin (0,5 % à 8 % de la plus petite dimension de l'image).
+4. **Effacer tout** supprime toutes les corrections posées ; **Terminé** (ou **Échap**) quitte le mode sans rien perdre.
+
+---
+
+### Annotations
+
+Calque de dessin et de texte **non destructif**, superposé à la photo — indépendant des corrections tonales et de la géométrie, et conservé séparément dans les retouches de la photo.
+
+1. Cliquez sur **Annotations** dans le panneau de retouche.
+
+**Outils disponibles :**
+
+| Outil | Effet |
+|---|---|
+| Stylo | Trait libre à main levée |
+| Ligne | Ligne droite entre deux points |
+| Courbe | Cliquez les points de passage successifs, **double-clic** pour valider le tracé |
+| Rectangle | Forme rectangulaire (contour et/ou remplissage) |
+| Ellipse | Forme elliptique (contour et/ou remplissage) |
+| Texte | Zone de texte éditable directement sur la photo |
+| Sélection | Sélectionne un élément existant pour le déplacer, le redimensionner ou modifier son style |
+
+**Style** (panneau qui s'adapte à l'outil sélectionné) :
+- **Couleur** du trait ou du texte, **épaisseur** du trait (% de l'image).
+- Pour les formes : **couleur de remplissage**, **opacité**, et **flou** de la photo sous la forme.
+- Pour le texte : police, taille (% de l'image), **G** (gras), **I** (italique), couleur.
+
+**Modifier ou supprimer :**
+- Avec l'outil **Sélection**, cliquez un élément pour le sélectionner (poignées de redimensionnement), ou faites-le glisser pour le déplacer.
+- **Double-clic** sur un texte existant : rouvre l'éditeur en place.
+- **Supprimer la sélection** (ou touche **Suppr**) : supprime l'élément sélectionné. **Effacer annotations** : supprime tout le calque de la photo.
+
+**Afficher / masquer le calque :**
+Le bouton **✏ Annotations** en haut de la fenêtre (à côté du bouton EXIF, visible dès qu'une photo est ouverte) affiche ou masque le calque sans rien supprimer. Ce réglage n'est pas enregistré : il ne dure que le temps de la session en cours.
+
+> Les annotations sont incluses dans l'export et dans l'enregistrement de l'image traitée sur le disque, comme les autres retouches — sauf si le calque est masqué via **✏ Annotations** au moment de l'export.
 
 ---
 
@@ -597,7 +643,7 @@ Accessible via l'icône/le bouton dédié qui remplace la grille de photos.
   - Clic : sélection multiple cumulative ; Maj+clic : sélection étendue.
   - Double-clic : ouvre les photos du groupe.
   - Clic droit : **Identifier cette personne…** / **Identifier ce groupe…**, **Ignorer ce visage/ce groupe**, et en multi-sélection **Associer (N sélectionnés)**.
-  - Actions rapides sur une carte suggérée : **✓** (accepter), **→** (associer à une autre personne), **✕** (ignorer).
+  - **Boutons ✓ / ✗ superposés sur chaque vignette** (toutes les cartes, pas seulement celles avec suggestion) : **✓** accepte directement la suggestion en un clic si une suggestion est proposée, sinon ouvre le dialogue d'identification ; **✗** ignore le visage (carte isolée) ou tout le groupe.
 - **Sections de suggestion** (« ≈ Probablement la même personne » / « ≈ Probablement *Nom* ») avec boutons d'en-tête **Accepter**, **Associer à…**, **Ignorer** pour toute la section d'un coup.
 - **Section « Visages isolés »** en bas de page.
 - **Barre d'action** (dès qu'un groupe est sélectionné) : **Voir les photos**, **Associer à…**, **Ignorer**, **✕** (tout désélectionner).
@@ -752,6 +798,14 @@ Dialogue à deux catégories :
 | **Entrée** | Confirmer le recadrage |
 | **Échap** | Annuler le recadrage |
 | **Molette** | Zoomer dans la visionneuse |
+
+### Mode annotation
+
+| Raccourci | Action |
+|---|---|
+| **Suppr** | Supprimer l'élément d'annotation sélectionné |
+| **Entrée** | Valider une courbe en cours de tracé |
+| **Échap** | Annuler le tracé en cours (le mode annotation reste actif) |
 
 ### Panneau de retouche
 

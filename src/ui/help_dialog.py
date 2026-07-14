@@ -279,8 +279,38 @@ une base SQLite séparée et appliqués à la volée à l'affichage et à l'expo
   <li><b>Miroir H / V</b> — symétrie horizontale ou verticale.</li>
 </ul>
 
+<h3>Yeux rouges</h3>
+<ul>
+  <li>Cliquez sur <b>Yeux rouges</b>, puis cliquez sur chaque œil affecté directement sur la photo.</li>
+  <li><b>Taille</b> — rayon de la correction (0,5&nbsp;% à 8&nbsp;% de la plus petite dimension de l'image).</li>
+  <li><b>Effacer tout</b> — supprime toutes les corrections posées. <b>Terminé</b>
+      (ou <kbd>Échap</kbd>) — quitte le mode sans rien perdre.</li>
+</ul>
+
+<h3>Annotations</h3>
+<p>Calque de dessin et de texte non destructif, superposé à la photo — indépendant des
+corrections tonales et de la géométrie.</p>
+<ul>
+  <li><b>Outils</b> — stylo (trait libre), ligne, courbe (cliquez les points de passage,
+      double-clic pour valider), rectangle, ellipse, texte, et sélection (pour modifier
+      ou déplacer un élément déjà posé).</li>
+  <li><b>Style</b> — couleur du trait/texte, épaisseur, couleur et opacité de remplissage
+      des formes, flou de la photo sous la forme, police/taille/gras/italique pour le texte.</li>
+  <li>Double-clic sur un texte existant (outil Sélection) : rouvre l'éditeur en place.</li>
+  <li><b>Supprimer la sélection</b> — supprime l'élément sélectionné.
+      <b>Effacer annotations</b> — supprime tout le calque de la photo.</li>
+  <li>Bouton <b>✏ Annotations</b> en haut de la fenêtre (à côté d'EXIF) — affiche/masque le
+      calque sans rien supprimer ; ce réglage n'est pas enregistré, il ne dure que la session.</li>
+</ul>
+<p class="tip">Les annotations sont incluses dans l'export et dans l'enregistrement de l'image
+traitée, comme les autres retouches — sauf si le calque est masqué via le bouton
+✏ Annotations au moment de l'export.</p>
+
 <h3>Workflow</h3>
 <ul>
+  <li><b>Un seul outil actif à la fois</b> — sélectionner un nouvel outil (Recadrer, Yeux
+      rouges, Annotations, Luminosité/Contraste/Couleurs/Vignette/Redresser…) valide
+      automatiquement le travail en cours dans l'outil précédent, puis le referme.</li>
   <li>Double-clic sur un slider : remet la valeur à zéro.</li>
   <li>L'aperçu se met à jour en temps réel (≤ 60 ms).</li>
   <li>Cliquez <b>Appliquer</b> pour enregistrer.</li>
@@ -555,6 +585,14 @@ _TAB_SHORTCUTS = _STYLE + """
   <tr><td><kbd>Entrée</kbd></td><td>Confirmer le recadrage</td></tr>
   <tr><td><kbd>Échap</kbd></td><td>Annuler le recadrage</td></tr>
   <tr><td>Molette</td><td>Zoomer dans la visionneuse</td></tr>
+</table>
+
+<h3>Mode annotation</h3>
+<table>
+  <tr><th>Raccourci</th><th>Action</th></tr>
+  <tr><td><kbd>Suppr</kbd></td><td>Supprimer l'élément d'annotation sélectionné</td></tr>
+  <tr><td><kbd>Entrée</kbd></td><td>Valider une courbe en cours de tracé</td></tr>
+  <tr><td><kbd>Échap</kbd></td><td>Annuler le tracé en cours (le mode reste actif)</td></tr>
 </table>
 """
 
