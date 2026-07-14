@@ -18,6 +18,56 @@ _CLUSTER_TIMEOUT = 1800  # secondes max (30 min) avant abandon
 # Permet de sauter le reclustering si rien n'a changé.
 _last_clustered_n: int = -1
 
+# Cohésion minimale (cosine) exigée entre TOUTE paire de visages d'un même groupe HDBSCAN,
+# alignée sur _SIM_STRONG (people_panel.py, "très probable"). min_samples=1 rend HDBSCAN
+# quasi équivalent à un single-linkage : deux visages peuvent se retrouver dans le même
+# cluster via une chaîne de voisins proches sans jamais se ressembler eux-mêmes.
+_PURITY_MIN_SIM        = 0.60
+# Au-delà, la scission "complete linkage" (matrice de distances complète, O(k²)) coûterait
+# trop cher pour un seul groupe — cas pathologique, on le laisse tel quel plutôt que ralentir
+# tout le clustering.
+_PURITY_MAX_CLUSTER_N  = 2000
+
+
+def _purify_clusters(X_full, labels):
+    """Scinde les clusters HDBSCAN dont certaines paires de visages sont trop dissemblables.
+
+    Revérifie chaque cluster (hors bruit) avec un clustering hiérarchique "complete linkage"
+    sur les embeddings pleine dimension (normalisés, non réduits par PCA) : ce linkage borne
+    la dissemblance MAXIMALE entre deux membres — contrairement au chaînage de HDBSCAN — donc
+    un cluster n'en ressort intact que si toutes les paires qu'il contient dépassent
+    _PURITY_MIN_SIM. Les sous-groupes obtenus reçoivent de nouveaux labels (jamais fusionnés
+    entre eux au-delà de ce qu'HDBSCAN avait déjà proposé)."""
+    import numpy as np
+    from sklearn.cluster import AgglomerativeClustering
+
+    labels = np.asarray(labels)
+    next_label = int(labels.max()) + 1 if labels.size else 0
+    max_dist = float(np.sqrt(max(0.0, 2.0 * (1.0 - _PURITY_MIN_SIM))))
+
+    for lbl in np.unique(labels):
+        if lbl < 0:
+            continue
+        idx = np.where(labels == lbl)[0]
+        if len(idx) < 2 or len(idx) > _PURITY_MAX_CLUSTER_N:
+            continue
+        sub_labels = AgglomerativeClustering(
+            n_clusters=None,
+            linkage="complete",
+            metric="euclidean",
+            distance_threshold=max_dist,
+        ).fit_predict(X_full[idx])
+        if sub_labels.max() == 0:
+            continue  # groupe déjà cohérent : rien à scinder
+        for sub_id in np.unique(sub_labels):
+            if sub_id == 0:
+                continue  # garde le label HDBSCAN d'origine pour le premier sous-groupe
+            labels[idx[sub_labels == sub_id]] = next_label
+            next_label += 1
+
+    return labels
+
+
 _NB_SP = " "  # espace fine insécable utilisée comme séparateur de milliers
 
 
@@ -44,6 +94,7 @@ def _clustering_worker_proc(X_bytes: bytes, n: int, d: int, conn) -> None:
         norms = np.linalg.norm(X, axis=1, keepdims=True)
         norms[norms == 0] = 1.0
         X /= norms
+        X_full = X  # embeddings pleine dimension normalisés — conservés pour _purify_clusters
 
         # Réduction PCA
         if X.shape[1] > _PCA_DIMS and n > _PCA_DIMS:
@@ -67,6 +118,10 @@ def _clustering_worker_proc(X_bytes: bytes, n: int, d: int, conn) -> None:
             leaf_size=100,
             core_dist_n_jobs=1,
         ).fit_predict(X)
+
+        # min_samples=1 chaîne facilement des visages peu similaires entre eux (single-linkage) :
+        # revérifier chaque cluster en pleine dimension avant de l'accepter tel quel.
+        labels = _purify_clusters(X_full, labels)
 
         labels = labels.tolist()
         max_real = max((lbl for lbl in labels if lbl >= 0), default=-1)
