@@ -14,12 +14,15 @@ Deux niveaux de détection :
 """
 import logging
 import os
+import time
 from datetime import datetime
 from pathlib import Path
 
 from PySide6.QtCore import QThread, Signal
 
 logger = logging.getLogger(__name__)
+
+_PROGRESS_INTERVAL = 0.5  # secondes — throttle des logs/signaux dans les boucles O(N²)
 
 # ── Tier 1 ─────────────────────────────────────────────────────────────────────
 _HASH_THRESHOLD  = 10    # distance de Hamming max (8 = exact/resize ; 10 couvre les éditions modérées)
@@ -132,31 +135,46 @@ class DuplicateDetectorThread(QThread):
         # Phase 1 : calcul des empreintes pHash + dimensions (utilisées par le Tier 2)
         hashes: list[tuple[str, object]] = []
         dims: dict[str, tuple[int, int]] = {}
+        logger.info("Tier 1 : calcul des empreintes de %d photo(s)…", total)
 
+        last_emit = time.monotonic()
         for i, path in enumerate(paths):
             if self._cancelled:
                 return
-            if i % 20 == 0:
+            # Log systématique (pas throttlé) : si le traitement se bloque sur un
+            # fichier précis (image corrompue, volume réseau lent…), cette ligne
+            # reste la dernière du log — elle identifie le fichier en cause.
+            logger.debug("Tier 1 empreinte %d/%d : %s", i + 1, total, path)
+
+            now = time.monotonic()
+            if now - last_emit >= _PROGRESS_INTERVAL:
+                last_emit = now
                 self.progress.emit(i, grand_total,
                                    f"Tier 1 — empreintes {i}/{total}…")
+                logger.info("Tier 1 : %d/%d empreintes calculées", i, total)
+
             try:
                 with Image.open(path) as img:
                     dims[path] = img.size
                     h = imagehash.phash(img)
                 hashes.append((path, h))
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug("Tier 1 empreinte échouée %s : %s", path, exc)
 
         if self._cancelled:
             return
-
-        self.progress.emit(total, grand_total, "Tier 1 — comparaison des empreintes…")
 
         # Phase 2 : groupement par distance de Hamming O(N²)
         n = len(hashes)
         group_of: dict[str, int] = {}
         next_group = [1]
+        total_pairs = n * (n - 1) // 2
+        logger.info("Tier 1 : comparaison de %d empreintes (%d paires à évaluer)…",
+                    n, total_pairs)
+        self.progress.emit(total, grand_total,
+                           f"Tier 1 — comparaison des empreintes (0/{n})…")
 
+        last_emit = time.monotonic()
         for i in range(n):
             if self._cancelled:
                 return
@@ -169,6 +187,17 @@ class DuplicateDetectorThread(QThread):
                     continue
                 if dist <= _HASH_THRESHOLD:
                     _merge(group_of, path_i, path_j, next_group)
+
+            now = time.monotonic()
+            if now - last_emit >= _PROGRESS_INTERVAL:
+                last_emit = now
+                n_groups = len({v for v in group_of.values()})
+                self.progress.emit(
+                    total + int((i + 1) * total / n), grand_total,
+                    f"Tier 1 — comparaison des empreintes ({i + 1}/{n}, {n_groups} groupe(s))…",
+                )
+                logger.info("Tier 1 : %d/%d empreintes comparées (%d groupe(s) formés)",
+                            i + 1, n, n_groups)
 
         # ── Tier 2 : ORB + RANSAC sur les photos non groupées ──────────────────
         unmatched = [p for p in paths if p not in group_of]
@@ -237,7 +266,19 @@ class DuplicateDetectorThread(QThread):
                 kp, des = orb.detectAndCompute(img, None)
                 if des is None or len(kp) < 10:
                     continue
-                w, h = dims.get(path, (img.shape[1], img.shape[0]))
+                if path in dims:
+                    w, h = dims[path]
+                else:
+                    # Le Tier 1 n'a pas pu ouvrir ce fichier (Image.open a échoué) :
+                    # retenter avec PIL pour obtenir la vraie résolution plutôt que
+                    # de mélanger une aire réduite (_load_gray, max 800px) avec les
+                    # aires réelles des autres photos — ça fausserait le préfiltre
+                    # _ORB_AREA_FACTOR trié par aire (break prématuré possible).
+                    try:
+                        with Image.open(path) as pil_img:
+                            w, h = pil_img.size
+                    except Exception:
+                        w, h = img.shape[1], img.shape[0]
                 desc_list.append((path, kp, des, w * h))
             except Exception as exc:
                 logger.debug("ORB descripteur échoué %s : %s", os.path.basename(path), exc)
@@ -257,11 +298,25 @@ class DuplicateDetectorThread(QThread):
 
         bf = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=False)
         pairs_checked = 0
+        logger.info("Tier 2 : comparaison ORB de %d photos non groupées par le Tier 1.", m)
 
+        comparison_start = phase1_total + (grand_total - phase1_total) // 2
+        last_emit = time.monotonic()
         for i in range(m):
             if self._cancelled:
                 return
             path_i, kp_i, des_i, area_i = desc_list[i]
+
+            now = time.monotonic()
+            if now - last_emit >= _PROGRESS_INTERVAL:
+                last_emit = now
+                current = comparison_start + int((i + 1) * (grand_total - comparison_start) / m)
+                self.progress.emit(
+                    current, grand_total,
+                    f"Tier 2 — comparaison ORB ({i + 1}/{m}, {pairs_checked} paire(s) vérifiée(s))…",
+                )
+                logger.info("Tier 2 : %d/%d photos comparées (%d paire(s) vérifiée(s))",
+                            i + 1, m, pairs_checked)
 
             for j in range(i + 1, m):
                 path_j, kp_j, des_j, area_j = desc_list[j]

@@ -50,7 +50,7 @@ class Config:
             try:
                 with open(_CONFIG_FILE, "r", encoding="utf-8") as f:
                     saved = json.load(f)
-                self._data = self._merge(_DEFAULTS.copy(), saved)
+                self._data = self._merge(json.loads(json.dumps(_DEFAULTS)), saved)
                 return
             except Exception as e:
                 logger.error(f"Erreur lecture config: {e}")

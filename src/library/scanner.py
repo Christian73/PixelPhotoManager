@@ -59,6 +59,8 @@ class ScanThread(QThread):
 
         all_files: list[str] = []
         for folder in self._folders:
+            if self._stop_flag:
+                break
             for root, dirs, files in os.walk(folder):
                 if self._stop_flag:
                     break

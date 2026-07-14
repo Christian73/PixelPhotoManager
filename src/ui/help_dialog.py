@@ -763,6 +763,10 @@ QTabBar::tab:hover:!selected {
 class HelpDialog(QDialog):
     def __init__(self, parent=None, tab: str | None = None):
         super().__init__(parent)
+        # Sans ça, chaque ouverture d'Aide/À propos (dlg.exec() dans main_window.py)
+        # laissait le QDialog et son QThread de vérification de version en vie
+        # indéfiniment, parentés à MainWindow — fuite qui grossit à chaque ouverture.
+        self.setAttribute(Qt.WA_DeleteOnClose)
         self.setWindowTitle("Aide — PixelPhotoManager")
         self.resize(760, 560)
 
@@ -795,13 +799,27 @@ class HelpDialog(QDialog):
 
         layout.addWidget(tabs)
 
-        self._update_check_thread = UpdateCheckThread(get_app_version(), self)
+        # Pas de parent : WA_DeleteOnClose peut détruire ce dialogue avant que la
+        # vérification réseau (jusqu'à 5s) ne se termine — un QThread parenté serait
+        # alors détruit alors qu'il tourne encore. Il s'auto-nettoie via `finished`.
+        self._update_check_thread = UpdateCheckThread()
         self._update_check_thread.checked.connect(self._on_version_checked)
+        self._update_check_thread.finished.connect(self._update_check_thread.deleteLater)
         self._update_check_thread.start()
 
         btn_box = QDialogButtonBox(QDialogButtonBox.Close)
         btn_box.rejected.connect(self.accept)
         layout.addWidget(btn_box)
+
+    def closeEvent(self, event) -> None:
+        """Coupe le rappel vers ce dialogue (bientôt détruit via WA_DeleteOnClose)
+        sans attendre la fin du thread de vérification, qui continue et se
+        nettoie lui-même (cf. __init__)."""
+        try:
+            self._update_check_thread.checked.disconnect(self._on_version_checked)
+        except (RuntimeError, TypeError):
+            pass
+        super().closeEvent(event)
 
     def _on_version_checked(self, status: str, version: str, html_url: str) -> None:
         if self._about_browser is None:

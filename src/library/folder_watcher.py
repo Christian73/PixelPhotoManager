@@ -19,6 +19,43 @@ def _is_hidden(path: str) -> bool:
         return False
 
 
+class _TreeScanThread(QThread):
+    """Parcourt récursivement les dossiers racine hors thread UI.
+
+    os.scandir répété sur une grosse arborescence (ou un lecteur réseau lent)
+    peut largement dépasser le budget de 50ms — cf. règle "l'UI ne bloque
+    jamais" (CLAUDE.md).
+    """
+
+    finished_scan = Signal(list)  # list[tuple[str, frozenset, frozenset]]
+
+    def __init__(self, folders: list[str], parent: QObject | None = None) -> None:
+        super().__init__(parent)
+        self._folders = folders
+
+    def run(self) -> None:
+        results: list[tuple[str, frozenset, frozenset]] = []
+        for folder in self._folders:
+            self._scan(folder, results)
+        self.finished_scan.emit(results)
+
+    def _scan(self, path: str, results: list) -> None:
+        if not os.path.isdir(path):
+            return
+        try:
+            entries = list(os.scandir(path))
+            files = frozenset(e.name for e in entries if e.is_file())
+            dirs = frozenset(
+                e.name for e in entries
+                if e.is_dir(follow_symlinks=False) and not _is_hidden(e.path)
+            )
+        except OSError:
+            files, dirs = frozenset(), frozenset()
+        results.append((path, files, dirs))
+        for name in dirs:
+            self._scan(os.path.join(path, name), results)
+
+
 class FolderWatcher(QObject):
     """
     Surveille un ensemble de dossiers racine (récursivement) via QFileSystemWatcher.
@@ -42,18 +79,40 @@ class FolderWatcher(QObject):
         self._debounce.setSingleShot(True)
         self._debounce.setInterval(_DEBOUNCE_MS)
         self._debounce.timeout.connect(self._flush_pending)
+        self._scan_thread: "_TreeScanThread | None" = None
+        self._scan_generation = 0
 
     # ------------------------------------------------------------------ public
 
     def set_folders(self, folders: list[str]) -> None:
-        """Remplace l'ensemble surveillé par ces dossiers racine (récursif)."""
+        """Remplace l'ensemble surveillé par ces dossiers racine (récursif).
+
+        Le parcours récursif se fait dans un QThread (cf. _TreeScanThread) —
+        une grosse arborescence ou un lecteur réseau lent rendrait sinon cet
+        appel bloquant pour l'UI bien au-delà de 50ms."""
+        self._scan_generation += 1
+        generation = self._scan_generation
+
         existing = self._watcher.directories()
         if existing:
             self._watcher.removePaths(existing)
         self._snapshots.clear()
         self._pending.clear()
-        for folder in folders:
-            self._add_tree(folder)
+
+        thread = _TreeScanThread(list(folders), self)
+        thread.finished_scan.connect(
+            lambda results, g=generation: self._apply_scan(g, results)
+        )
+        thread.finished.connect(thread.deleteLater)
+        self._scan_thread = thread
+        thread.start()
+
+    def _apply_scan(self, generation: int, results: list) -> None:
+        if generation != self._scan_generation:
+            return  # un set_folders() plus récent a eu lieu entretemps — résultat obsolète
+        for path, files, dirs in results:
+            self._snapshots[path] = (files, dirs)
+            self._watcher.addPath(path)
         logger.debug("FolderWatcher : %d dossier(s) surveillé(s)", len(self._snapshots))
 
     # ------------------------------------------------------------------ internal

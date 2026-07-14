@@ -14,12 +14,14 @@ Double-clic : comparaison rapide (ouvre la visionneuse sur les photos du groupe)
 
 import logging
 
-from PySide6.QtCore import Qt, QThread, Signal
+from PySide6.QtCore import Qt, QThread, Signal, Slot, QByteArray
 from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import (
     QFrame, QGridLayout, QHBoxLayout, QLabel, QPushButton,
     QScrollArea, QSizePolicy, QVBoxLayout, QWidget,
 )
+
+from src.ui.thumbnail_grid import _ThumbSignals, _ThumbWorker, _get_thumb_pool
 
 logger = logging.getLogger(__name__)
 
@@ -83,6 +85,11 @@ class _DuplicateCard(QFrame):
     def __init__(self, group_id: int, photos: list, parent=None) -> None:
         super().__init__(parent)
         self._group_id = group_id
+        self._cover_path = photos[0].path if photos else None
+        self._cache = None
+        self._signals = _ThumbSignals()
+        self._signals.ready.connect(self._on_thumb_ready)
+        self._worker: "_ThumbWorker | None" = None
 
         self.setFixedWidth(_CARD_W)
         self.setFrameShape(QFrame.StyledPanel)
@@ -118,6 +125,31 @@ class _DuplicateCard(QFrame):
     @property
     def group_id(self) -> int:
         return self._group_id
+
+    def load_thumbnail(self, cache) -> None:
+        """Charge la vignette via le pool partagé (thumbnail_grid._get_thumb_pool) —
+        ne jamais décoder le JPEG sur le thread UI (cf. règle CLAUDE.md)."""
+        self._cache = cache
+        if not self._cover_path:
+            self.set_thumbnail(None)
+            return
+        pixmap = cache.get_ram(self._cover_path)
+        if pixmap:
+            self.set_thumbnail(pixmap)
+            return
+        worker = _ThumbWorker(self._cover_path, cache, self._signals)
+        self._worker = worker
+        _get_thumb_pool().start(worker)
+
+    @Slot(str, object)
+    def _on_thumb_ready(self, path: str, data: object) -> None:
+        if path != self._cover_path:
+            return
+        pixmap = QPixmap()
+        pixmap.loadFromData(QByteArray(data))
+        if not pixmap.isNull():
+            self._cache.store_pixmap(path, pixmap)
+            self.set_thumbnail(pixmap)
 
     def set_thumbnail(self, pix: "QPixmap | None") -> None:
         if pix is None:
@@ -269,8 +301,7 @@ class DuplicateGrid(QWidget):
             card = _DuplicateCard(group_id, photos, self._card_area)
             card.view_requested.connect(self.view_requested)
             card.ignore_requested.connect(self.group_ignored)
-            pix = self._thumb_cache.get(photos[0].path)
-            card.set_thumbnail(pix)
+            card.load_thumbnail(self._thumb_cache)
             self._cards[group_id] = card
 
         self._reflow()

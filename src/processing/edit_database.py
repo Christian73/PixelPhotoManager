@@ -98,12 +98,33 @@ class EditDatabase:
     Deux tables :
     - ``photo_edits``  : état courant par photo (une ligne par photo modifiée).
     - ``edit_history`` : historique des états sauvegardés (undo/redo persistant).
+
+    Singleton par chemin de base : main_window.py, photo_viewer.py et edit_panel.py
+    créent chacun leur propre EditDatabase() ; sans singleton, chacun a son propre
+    threading.Lock() (donc les 3 ne s'excluent pas mutuellement) et relance la
+    migration complète au démarrage (3x le même coût).
     """
 
+    _instances: "dict[str, EditDatabase]" = {}
+    _instances_lock = threading.Lock()
+
+    def __new__(cls, db_path: Path = _DB_PATH):
+        key = str(db_path)
+        with cls._instances_lock:
+            inst = cls._instances.get(key)
+            if inst is None:
+                inst = super().__new__(cls)
+                inst._initialized = False
+                cls._instances[key] = inst
+            return inst
+
     def __init__(self, db_path: Path = _DB_PATH) -> None:
+        if self._initialized:
+            return
         self._db_path = db_path
         self._lock = threading.Lock()
         self._init_db()
+        self._initialized = True
 
     # ------------------------------------------------------------------ init
 
@@ -227,8 +248,12 @@ class EditDatabase:
                 logger.error(f"Erreur lecture retouches {photo_path}: {e}")
                 return EditInfo()
 
-    def save(self, photo_path: str, edit: EditInfo, operation: str = "edit") -> None:
-        """Sauvegarde l'état courant et l'enregistre dans l'historique."""
+    def save(self, photo_path: str, edit: EditInfo, operation: str = "edit") -> bool:
+        """Sauvegarde l'état courant et l'enregistre dans l'historique.
+
+        Retourne False en cas d'échec (DB verrouillée, disque plein, etc.) —
+        les appelants doivent vérifier la valeur de retour avant de considérer
+        la sauvegarde comme acquise (ex. avant d'émettre un signal photo_saved)."""
         photo_path = os.path.normpath(photo_path)
         with self._lock:
             try:
@@ -261,7 +286,7 @@ class EditDatabase:
                                 edit.brightness, edit.contrast, edit.saturation,
                                 edit.gamma,
                                 int(edit.gamma_use_curve),
-                                json.dumps(edit.gamma_curve_points) if edit.gamma_use_curve else None,
+                                json.dumps(edit.gamma_curve_points) if edit.gamma_curve_points else None,
                                 edit.sharpness, edit.noise_reduction,
                                 edit.rotation, edit.straighten,
                                 int(edit.flip_h), int(edit.flip_v),
@@ -298,8 +323,10 @@ class EditDatabase:
                         (photo_path, photo_path, _HISTORY_LIMIT),
                     )
                     conn.commit()
+                    return True
             except Exception as e:
                 logger.error(f"Erreur sauvegarde retouches {photo_path}: {e}")
+                return False
 
     def has_edits(self, photo_path: str) -> bool:
         with self._lock:

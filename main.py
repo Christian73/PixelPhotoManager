@@ -456,6 +456,12 @@ def main() -> None:
     from src.library.scanner import LibraryScanner
     from src.faces.face_database import FaceDatabase
     from src.ui.main_window import MainWindow
+    from src.core.app_version import warm_app_version_async
+
+    # Précalcule get_app_version() en tâche de fond (git describe en mode dev,
+    # jusqu'à 2s) pendant les initialisations suivantes, pour que le résultat
+    # soit déjà en cache quand l'UI en a besoin (démarrage, aide).
+    warm_app_version_async()
 
     logger.debug("Initialisation Config")
     _splash_status(splash, app, "Lecture de la configuration…")

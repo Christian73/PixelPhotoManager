@@ -1199,7 +1199,7 @@ class MainWindow(QMainWindow):
 
     def _start_update_check(self) -> None:
         """Interroge la dernière release GitHub en arrière-plan (silencieux si à jour ou en erreur)."""
-        self._update_check_thread = UpdateCheckThread(get_app_version(), self)
+        self._update_check_thread = UpdateCheckThread(self)
         self._update_check_thread.checked.connect(self._on_update_checked)
         self._update_check_thread.start()
 
@@ -2582,7 +2582,7 @@ class MainWindow(QMainWindow):
     def _on_folder_deleted(self, folder: str) -> None:
         """Dossier supprimé du disque : nettoyer catalogue, caches et UI."""
         folder = os.path.normpath(folder)
-        self._purge_catalog_for_folder(folder)
+        deleted_paths = self._purge_catalog_for_folder(folder)
 
         # Retirer de la config si c'était un dossier surveillé
         for watched in list(self._config.get_scan_folders()):
@@ -2598,7 +2598,7 @@ class MainWindow(QMainWindow):
             self.show_grid()
             self._grid.set_photos([])
         else:
-            self._grid.remove_photos(list(deleted_set))
+            self._grid.remove_photos(deleted_paths)
 
         updated_folders = self._config.get_scan_folders()
         self._sidebar.refresh_folders(updated_folders)

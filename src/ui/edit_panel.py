@@ -1960,8 +1960,8 @@ class EditPanel(QWidget):
 
     def _save(self, operation: str) -> None:
         if self._photo:
-            self._db.save(self._photo.path, self._edit, operation=operation)
-            self.photo_saved.emit(self._photo.path, copy.copy(self._edit))
+            if self._db.save(self._photo.path, self._edit, operation=operation):
+                self.photo_saved.emit(self._photo.path, copy.copy(self._edit))
 
     def _checkpoint(self, op_label: str) -> None:
         """Sauvegarde l'état courant dans l'historique DB avant une opération.

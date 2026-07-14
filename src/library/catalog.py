@@ -161,6 +161,13 @@ class Catalog:
         like_clauses = " OR ".join(
             f"LOWER(filename) LIKE '%{ext}'" for ext in video_exts
         )
+        # Vérification rapide avant l'UPDATE : si aucune photo 'image' ne correspond
+        # à une extension vidéo, la retrofill est déjà faite — évite de payer le coût
+        # d'un UPDATE complet (écriture) à chaque démarrage une fois la migration faite.
+        if not conn.execute(
+            f"SELECT id FROM photos WHERE media_type='image' AND ({like_clauses}) LIMIT 1"
+        ).fetchone():
+            return
         conn.execute(
             f"UPDATE photos SET media_type='video' WHERE media_type='image' AND ({like_clauses})"
         )

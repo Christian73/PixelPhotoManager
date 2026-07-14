@@ -20,6 +20,9 @@ _CLUSTER_EVERY        = 1000  # relancer le clustering tous les N visages trouv�
 _DETECT_TIMEOUT       = 60    # secondes max par photo avant de tuer le subprocess
 _WARMUP_TIMEOUT       = 120   # secondes max pour le warmup initial (GPU peut être lent)
 _MAX_CONSECUTIVE_FAIL = 5     # échecs consécutifs avant abandon définitif
+_GPU_RETRY_AFTER      = 50    # succès consécutifs en secours CPU avant de retenter le GPU
+                               # (un seul timeout/crash isolé ne doit pas condamner tout le
+                               # reste du scan à tourner en CPU 1 worker)
 
 def _kill_executor(executor: concurrent.futures.ProcessPoolExecutor) -> None:
     """Tue de force tous les subprocesses de l'executor (nécessaire sur Windows :
@@ -46,6 +49,23 @@ def _fresh_executor_cpu() -> concurrent.futures.ProcessPoolExecutor:
         _kill_executor(ex)
         ex = concurrent.futures.ProcessPoolExecutor(max_workers=1)
     return ex
+
+
+def _fresh_executor_gpu() -> "concurrent.futures.ProcessPoolExecutor | None":
+    """Tente de recréer un executor GPU plein (_WORKERS workers) après un secours CPU.
+    Retourne None si le warmup échoue, pour laisser l'appelant rester sur CPU sans
+    interrompre le scan en cours."""
+    ex = concurrent.futures.ProcessPoolExecutor(max_workers=_WORKERS)
+    try:
+        futs = [ex.submit(warmup_worker) for _ in range(_WORKERS)]
+        for f in futs:
+            f.result(timeout=_WARMUP_TIMEOUT)
+        logger.info("FaceIndexThread: re-warmup GPU OK, retour au pipeline GPU")
+        return ex
+    except Exception as exc:
+        logger.warning("FaceIndexThread: tentative de retour au GPU échouée (%s) — reste sur CPU", exc)
+        _kill_executor(ex)
+        return None
 
 
 class TFWarmUpThread(QThread):
@@ -153,6 +173,8 @@ class FaceIndexThread(QThread):
             path_iter = iter(to_index)
             processed = 0
             consecutive_fails = 0
+            on_cpu_fallback = False
+            cpu_recovery_successes = 0
 
             def _enqueue() -> None:
                 """Remplit la file jusqu'à _WORKERS futures simultanées."""
@@ -206,6 +228,8 @@ class FaceIndexThread(QThread):
                     in_flight.clear()
                     _kill_executor(executor)
                     executor = _fresh_executor_cpu()
+                    on_cpu_fallback = True
+                    cpu_recovery_successes = 0
                     self.error.emit(path, f"timeout ({_DETECT_TIMEOUT}s)")
                     consecutive_fails += 1
                     if consecutive_fails >= _MAX_CONSECUTIVE_FAIL:
@@ -229,6 +253,8 @@ class FaceIndexThread(QThread):
                     in_flight.clear()
                     _kill_executor(executor)
                     executor = _fresh_executor_cpu()
+                    on_cpu_fallback = True
+                    cpu_recovery_successes = 0
                     self.error.emit(path, f"subprocess crash: {exc}")
                     consecutive_fails += 1
                     if consecutive_fails >= _MAX_CONSECUTIVE_FAIL:
@@ -261,6 +287,41 @@ class FaceIndexThread(QThread):
                     self.photo_indexed.emit(path, len(detections))
                     if faces_found % _CLUSTER_EVERY == 0:
                         self.cluster_requested.emit()
+
+                if on_cpu_fallback:
+                    cpu_recovery_successes += 1
+                    if cpu_recovery_successes >= _GPU_RETRY_AFTER:
+                        # Un seul timeout/crash isolé ne doit pas condamner tout le reste
+                        # du scan à tourner en CPU 1 worker : après un nombre de succès
+                        # consécutifs, retenter le GPU. Purge d'abord les futures encore
+                        # en vol sur l'executor CPU (1 worker, donc peu coûteux) avant de
+                        # le tuer, pour ne pas perdre de travail déjà soumis.
+                        while in_flight:
+                            f2, p2, _ = in_flight.popleft()
+                            processed += 1
+                            self.progress.emit(processed, total)
+                            try:
+                                d2, r2 = f2.result(timeout=_DETECT_TIMEOUT)
+                                self._face_db.save_faces(p2, d2, rotation=r2)
+                                faces_found += len(d2)
+                                indexed += 1
+                                if d2:
+                                    self.photo_indexed.emit(p2, len(d2))
+                            except Exception as exc:
+                                logger.warning(
+                                    "FaceIndexThread: échec purge avant retour GPU sur %s : %s",
+                                    os.path.basename(p2), exc,
+                                )
+                                self._face_db.mark_index_error(p2, "error")
+                        new_executor = _fresh_executor_gpu()
+                        _kill_executor(executor)
+                        if new_executor is not None:
+                            executor = new_executor
+                            on_cpu_fallback = False
+                        else:
+                            executor = _fresh_executor_cpu()
+                        cpu_recovery_successes = 0
+
                 _enqueue()
 
         finally:

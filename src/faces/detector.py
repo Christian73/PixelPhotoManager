@@ -341,13 +341,13 @@ def detect_and_embed(image_path: str, rotation: int = 0) -> list[dict]:
             continue
         x1, y1, x2, y2 = face.bbox.astype(int)
         w, h = x2 - x1, y2 - y1
-        if w < 20 or h < 20:
-            continue
         if inv != 1.0:
             x1 = int(x1 * inv)
             y1 = int(y1 * inv)
             w  = int(w  * inv)
             h  = int(h  * inv)
+        if w < 20 or h < 20:
+            continue
         result.append({
             "bbox":      (x1, y1, w, h),
             "embedding": face.embedding.tolist(),

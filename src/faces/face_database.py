@@ -1044,9 +1044,7 @@ class FaceDatabase:
         if not rows:
             return None
         embeddings = [_dec(r[0]) for r in rows]
-        n = len(embeddings)
-        dim = len(embeddings[0])
-        return [sum(embeddings[i][d] for i in range(n)) / n for d in range(dim)]
+        return _centroid(embeddings)
 
     def get_all_cluster_centroids(
         self, cluster_ids: list[int]
@@ -1548,6 +1546,7 @@ class FaceDatabase:
                 )
                 if path_row:
                     self._dedup_in_transaction(conn, [path_row[0]])
+                    self._consume_matching_picasa_annotations(conn, [path_row[0]])
                 conn.commit()
             finally:
                 conn.close()
@@ -1983,6 +1982,11 @@ class FaceDatabase:
         with self._lock:
             conn = self._conn()
             try:
+                rows = conn.execute(
+                    "SELECT DISTINCT photo_path FROM faces WHERE person_id=?",
+                    (remove_id,),
+                ).fetchall()
+                affected_paths = [r[0] for r in rows]
                 conn.execute(
                     "UPDATE faces SET person_id=? WHERE person_id=?",
                     (keep_id, remove_id),
@@ -1991,6 +1995,10 @@ class FaceDatabase:
                     "UPDATE picasa_annotations SET person_id=? WHERE person_id=?",
                     (keep_id, remove_id),
                 )
+                # keep_id et remove_id peuvent avoir chacun un visage non-ignoré sur
+                # une même photo partagée : sans dédup ici, la fusion laisserait deux
+                # visages non-ignorés pour la même personne sur cette photo.
+                self._dedup_in_transaction(conn, affected_paths)
                 conn.commit()
             finally:
                 conn.close()

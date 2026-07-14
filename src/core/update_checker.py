@@ -15,6 +15,8 @@ from urllib.error import URLError
 
 from PySide6.QtCore import QThread, Signal
 
+from src.core.app_version import get_app_version
+
 logger = logging.getLogger(__name__)
 
 _RELEASES_API_URL = "https://api.github.com/repos/Christian73/PixelPhotoManager/releases/latest"
@@ -47,11 +49,13 @@ class UpdateCheckThread(QThread):
 
     checked = Signal(str, str, str)  # (status, latest_version, html_url)
 
-    def __init__(self, current_version: str, parent=None) -> None:
+    def __init__(self, parent=None) -> None:
         super().__init__(parent)
-        self._current_version = current_version
 
     def run(self) -> None:
+        # get_app_version() en mode dev lance `git describe` (jusqu'à 2s) — calculé
+        # ici plutôt que passé au constructeur pour ne jamais bloquer le thread UI.
+        current_version = get_app_version()
         try:
             req = urllib.request.Request(
                 _RELEASES_API_URL,
@@ -81,7 +85,7 @@ class UpdateCheckThread(QThread):
             return
 
         version = latest_tag.lstrip("vV")
-        current = _parse_version(self._current_version)
+        current = _parse_version(current_version)
         if current is None:
             # Mode dev sur une branche où le tag n'est pas un ancêtre de HEAD :
             # get_app_version() retombe sur un hash git (ex. "17ab7a3-dirty"),
@@ -90,7 +94,10 @@ class UpdateCheckThread(QThread):
             self.checked.emit(STATUS_VERSION_UNKNOWN, version, html_url)
             return
 
-        if latest > current:
+        width = max(len(latest), len(current))
+        latest_padded = latest + (0,) * (width - len(latest))
+        current_padded = current + (0,) * (width - len(current))
+        if latest_padded > current_padded:
             self.checked.emit(STATUS_UPDATE_AVAILABLE, version, html_url)
         else:
             self.checked.emit(STATUS_UP_TO_DATE, version, html_url)
