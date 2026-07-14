@@ -631,6 +631,51 @@ class Catalog:
                 conn.close()
         return [_photo_from_row(r) for r in rows]
 
+    def get_duplicate_groups(self) -> dict:
+        """Retourne tous les groupes de doublons {group_id: [PhotoInfo, ...]}."""
+        with self._lock:
+            conn = self._conn()
+            try:
+                rows = conn.execute(
+                    "SELECT * FROM photos WHERE duplicate_group_id IS NOT NULL "
+                    "ORDER BY duplicate_group_id, "
+                    "COALESCE(date_taken, datetime(file_mtime, 'unixepoch')), filename"
+                ).fetchall()
+            finally:
+                conn.close()
+        groups: dict[int, list] = {}
+        for row in rows:
+            photo = _photo_from_row(row)
+            groups.setdefault(photo.duplicate_group_id, []).append(photo)
+        return groups
+
+    def count_duplicate_groups(self) -> int:
+        """Nombre de groupes de doublons distincts actuellement enregistrés."""
+        with self._lock:
+            conn = self._conn()
+            try:
+                row = conn.execute(
+                    "SELECT COUNT(DISTINCT duplicate_group_id) FROM photos "
+                    "WHERE duplicate_group_id IS NOT NULL"
+                ).fetchone()
+            finally:
+                conn.close()
+        return row[0] if row else 0
+
+    def ignore_duplicate_group(self, group_id: int) -> None:
+        """Dissout un groupe de doublons (non persistant : une future détection
+        complète peut le recréer)."""
+        with self._lock:
+            conn = self._conn()
+            try:
+                conn.execute(
+                    "UPDATE photos SET duplicate_group_id=NULL WHERE duplicate_group_id=?",
+                    (group_id,),
+                )
+                conn.commit()
+            finally:
+                conn.close()
+
     def get_all_photo_paths_for_dedup(self) -> list:
         """Retourne la liste de tous les chemins de photos pour la détection de doublons."""
         with self._lock:

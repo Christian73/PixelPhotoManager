@@ -246,6 +246,7 @@ class Sidebar(QWidget):
     folder_moved       = Signal(str, str) # (ancien_chemin, nouveau_chemin)
     folder_deleted     = Signal(str)      # dossier supprimé du disque
     photos_dropped     = Signal(list, str) # (file_paths, dest_folder_path)
+    duplicates_requested   = Signal()         # ouvrir la grille des groupes de doublons
     person_selected        = Signal(object)   # PersonInfo
     identify_requested     = Signal()         # ouvrir PeopleDialog
     person_merge_requested  = Signal(object)   # PersonInfo à fusionner
@@ -292,6 +293,10 @@ class Sidebar(QWidget):
         _lbl.setStyleSheet("color: #ccc; font-weight: bold;")
         folder_header_bar.addWidget(_lbl)
         folder_header_bar.addStretch()
+        self._btn_duplicates = _BadgeButton("Dupliquées")
+        self._btn_duplicates.setToolTip("Parcourir les groupes de doublons détectés")
+        self._btn_duplicates.clicked.connect(self.duplicates_requested)
+        folder_header_bar.addWidget(self._btn_duplicates)
         folder_header_container = QWidget()
         folder_header_container.setStyleSheet("background: #2a2a2a;")
         folder_header_container.setLayout(folder_header_bar)
@@ -977,6 +982,10 @@ class Sidebar(QWidget):
     def update_cluster_badge(self, count: int) -> None:
         """Mettre à jour le badge du bouton Identifier avec le nombre de groupes en attente."""
         self._btn_identify.set_badge(count)
+
+    def update_duplicates_badge(self, count: int) -> None:
+        """Mettre à jour le badge du bouton Dupliquées avec le nombre de groupes détectés."""
+        self._btn_duplicates.set_badge(count)
 
     def _on_person_clicked(self, item: QListWidgetItem) -> None:
         self._folder_tree.clearSelection()

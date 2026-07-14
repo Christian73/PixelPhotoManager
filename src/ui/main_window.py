@@ -37,6 +37,7 @@ from src.ui.photo_viewer import PhotoViewer
 from src.ui.edit_panel import EditPanel, MarkedSlider
 from src.ui.face_cluster_grid import FaceClusterGrid
 from src.ui.person_cluster_view import PersonClusterView
+from src.ui.duplicate_grid import DuplicateGrid
 from src.ui.face_panel import FacePanel
 from src.ui.exif_panel import ExifPanel
 from src.ui.people_panel import MergePersonsDialog, PeopleDialog
@@ -602,7 +603,7 @@ class MainWindow(QMainWindow):
         self._photo_query_thread: _PhotoQueryThread | None = None
         self._persons_refresh_thread: _PersonsRefreshThread | None = None
         self._from_person_cluster_view: bool = False
-        self._viewer_back_target: str = "grid"  # "grid" | "person_cluster_view"
+        self._viewer_back_target: str = "grid"  # "grid" | "person_cluster_view" | "duplicate_grid"
         # Filtre global de session (pas persisté) pour le calque d'annotations
         self._annotations_globally_visible: bool = True
 
@@ -632,6 +633,9 @@ class MainWindow(QMainWindow):
         _sw = self._config.get("ui.sidebar_width", 280)
         QTimer.singleShot(0, lambda: self._splitter.setSizes([_sw, max(1, self._splitter.width() - _sw)]))
         QTimer.singleShot(0, self._restore_splitter_states)
+        QTimer.singleShot(
+            0, lambda: self._sidebar.update_duplicates_badge(self._catalog.count_duplicate_groups())
+        )
 
     # ------------------------------------------------------------------ setup
 
@@ -1074,6 +1078,14 @@ class MainWindow(QMainWindow):
         self._person_cluster_view.create_album_with_requested.connect(self._on_create_album_with)
         self._stack.addWidget(self._person_cluster_view)
 
+        # Index 4 — Grille des groupes de doublons
+        self._duplicate_grid = DuplicateGrid(self._catalog, self._thumb_cache, self)
+        self._duplicate_grid.back_requested.connect(self.show_grid)
+        self._duplicate_grid.view_requested.connect(self._on_duplicate_group_view_requested)
+        self._duplicate_grid.group_ignored.connect(self._on_duplicate_group_ignored)
+        self._duplicate_grid.detect_requested.connect(self._start_duplicate_detection)
+        self._stack.addWidget(self._duplicate_grid)
+
         # Connexions sidebar
         self._sidebar.folder_selected.connect(self._on_folder_selected)
         self._sidebar.album_selected.connect(self._on_album_selected)
@@ -1086,6 +1098,7 @@ class MainWindow(QMainWindow):
         self._sidebar.photos_dropped.connect(self._on_photos_dropped)
         self._sidebar.person_selected.connect(self._on_person_selected)
         self._sidebar.identify_requested.connect(self.show_face_clusters)
+        self._sidebar.duplicates_requested.connect(self.show_duplicate_grid)
         self._sidebar.person_merge_requested.connect(self._on_person_merge_requested)
         self._sidebar.person_rename_requested.connect(self._on_person_rename_requested)
         self._sidebar.person_clear_requested.connect(self._on_person_clear_requested)
@@ -2401,6 +2414,7 @@ class MainWindow(QMainWindow):
             if self._viewer.current_photo():
                 self._viewer.current_photo().duplicate_group_id = None
                 self._viewer._update_dup_badge()
+            self._sidebar.update_duplicates_badge(0)
             return
 
         # Sauvegarder en DB
@@ -2426,6 +2440,8 @@ class MainWindow(QMainWindow):
             cp = self._viewer.current_photo()
             cp.duplicate_group_id = path_to_gid.get(cp.path)
             self._viewer._update_dup_badge()
+
+        self._sidebar.update_duplicates_badge(len(groups))
 
         # Générer le rapport HTML
         from src.core.app_dirs import APP_DATA_DIR
@@ -2463,6 +2479,33 @@ class MainWindow(QMainWindow):
         dlg = _DuplicatesPopup(photo, others, self)
         dlg.navigate_requested.connect(self._navigate_to_photo_path)
         dlg.exec()
+
+    def _on_duplicate_group_view_requested(self, group_id: int) -> None:
+        """Double-clic sur une carte de DuplicateGrid : comparaison rapide dans la visionneuse."""
+        photos = self._catalog.get_duplicates_for_group(group_id)
+        if not photos:
+            return
+        self._current_photos = photos
+        self._current_photo_index = 0
+        self._viewer_back_target = "duplicate_grid"
+        self.show_viewer(photos[0])
+
+    def _on_duplicate_group_ignored(self, group_id: int) -> None:
+        """Bouton ✗ sur une carte de DuplicateGrid : dissout le groupe entier (non persistant)."""
+        self._catalog.ignore_duplicate_group(group_id)
+        self._duplicate_grid.remove_group(group_id)
+        self._sidebar.update_duplicates_badge(self._catalog.count_duplicate_groups())
+        for p in self._current_photos:
+            if p.duplicate_group_id == group_id:
+                p.duplicate_group_id = None
+        grid_assignments = {p.path: p.duplicate_group_id for p in self._current_photos
+                            if p.duplicate_group_id is None}
+        if grid_assignments:
+            self._grid.refresh_duplicate_status(grid_assignments)
+        cp = self._viewer.current_photo()
+        if cp and cp.duplicate_group_id == group_id:
+            cp.duplicate_group_id = None
+            self._viewer._update_dup_badge()
 
     @Slot(str)
     def _navigate_to_photo_path(self, path: str) -> None:
@@ -2650,6 +2693,22 @@ class MainWindow(QMainWindow):
         self._lbl_fileinfo.setText("")
         self._lbl_action.setText("")
 
+    def show_duplicate_grid(self) -> None:
+        self._duplicate_grid.refresh()
+        self._stack.setCurrentIndex(4)
+        self._left_stack.setCurrentIndex(0)
+        self._lbl_thumb_size.hide()
+        self._thumb_slider.hide()
+        self._lbl_zoom.hide()
+        self._zoom_slider.hide()
+        self._zoom_pct_label.hide()
+        self._btn_grid_status.hide()
+        self._act_faces_toggle.setVisible(False)
+        self._act_exif_toggle.setVisible(False)
+        self._btn_annotations_toggle.setVisible(False)
+        self._lbl_fileinfo.setText("")
+        self._lbl_action.setText("")
+
     def show_person_clusters(self, person: PersonInfo) -> None:
         """Affiche les groupes de visages d'une personne au lieu de ses photos."""
         self._person_cluster_view.set_person(person)
@@ -2705,6 +2764,9 @@ class MainWindow(QMainWindow):
             if person:
                 self.show_person_clusters(person)
                 return
+        elif target == "duplicate_grid":
+            self.show_duplicate_grid()
+            return
         self.show_grid()
 
     @Slot(int)
