@@ -979,6 +979,9 @@ class MainWindow(QMainWindow):
         self._viewer.move_requested.connect(self._on_move_requested)
         self._viewer.delete_requested.connect(self._on_delete_requested)
         self._viewer.force_redetect_requested.connect(self._on_force_redetect_requested)
+        self._viewer.folder_grid_requested.connect(
+            lambda photo: self._navigate_to_photo_path(photo.path)
+        )
         self._viewer.dup_badge_clicked.connect(self._on_duplicate_badge_clicked)
         self._edit_panel.edits_changed.connect(self._viewer.update_edit)
         self._edit_panel.crop_mode_requested.connect(self._viewer.enter_crop_mode)

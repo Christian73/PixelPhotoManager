@@ -2522,6 +2522,7 @@ class PhotoViewer(QWidget):
     face_bbox_ready             = Signal(object)  # tuple (bbox_x,bbox_y,bbox_w,bbox_h) int
     face_add_mode_ended         = Signal()  # mode ajout de visage terminé (validé ou annulé)
     force_redetect_requested    = Signal(object)  # PhotoInfo — menu contextuel
+    folder_grid_requested       = Signal(object)  # PhotoInfo — menu contextuel : grille du dossier
     annotation_added             = Signal(object)  # dict annotation ajoutée
     annotation_deleted           = Signal(str)     # id de l'annotation supprimée
     annotation_deleted_multi     = Signal(object)  # list[str] ids supprimés (suppression groupée)
@@ -3081,6 +3082,8 @@ class PhotoViewer(QWidget):
         menu.addSeparator()
         menu.addAction("Révéler dans l'Explorateur",
                        lambda: os.startfile(os.path.dirname(photo.path)))
+        menu.addAction("Afficher le dossier dans la grille",
+                       lambda: self.folder_grid_requested.emit(photo))
         menu.addSeparator()
 
         gps_coords = self._resolve_gps(photo)
