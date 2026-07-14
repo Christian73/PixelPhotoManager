@@ -6,7 +6,7 @@
   <Product Id="*"
            Name="Pixel Photo Manager"
            Language="1036"
-           Version="1.0.0.0"
+           Version="$(var.ProductVersion)"
            Manufacturer="Christian Guyot"
            UpgradeCode="2A4213D1-6095-4DA5-AD2C-8A5960AFCAE7">
 

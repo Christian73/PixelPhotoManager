@@ -22,6 +22,22 @@ $ProjectRoot  = Split-Path -Parent $InstallerDir
 $DistDir      = Join-Path $ProjectRoot "dist\PixelPhotoManager"
 $OutputMsi    = Join-Path $InstallerDir "PixelPhotoManager-Setup.msi"
 $ObjDir       = Join-Path $InstallerDir "obj"
+$VersionFile  = Join-Path $ProjectRoot "VERSION"
+
+# ── Numero de version (source unique : VERSION a la racine du depot) ─────────
+# Ecrit par build.ps1 avant le build EXE ; si ce script est lance seul (hors
+# build.ps1), on le demande ici pour ne pas publier un MSI avec une version
+# perimee ou absente.
+if (-not (Test-Path $VersionFile)) {
+    $ProductVersion = Read-Host "Numero de version du MSI (ex: 1.1.0)"
+    if ($ProductVersion -notmatch '^\d+\.\d+\.\d+$') {
+        throw "Numero de version invalide : '$ProductVersion' (format attendu : Major.Minor.Build, ex: 1.1.0)"
+    }
+    Set-Content -Path $VersionFile -Value $ProductVersion -NoNewline
+} else {
+    $ProductVersion = (Get-Content $VersionFile -Raw).Trim()
+}
+Write-Host "Version MSI : $ProductVersion"
 
 # ── Localiser WiX v3 ─────────────────────────────────────────────────────────
 function Find-Wix3 {
@@ -105,7 +121,8 @@ $wxsSources += Get-ChildItem -Path $InstallerDir -Filter "harvested_*.wxs" |
 
 $candleDefs = @(
     "-dAppSourceDir=$DistDir",
-    "-dAssetsDir=$(Join-Path $ProjectRoot 'assets')"
+    "-dAssetsDir=$(Join-Path $ProjectRoot 'assets')",
+    "-dProductVersion=$ProductVersion"
 )
 
 & $Candle -arch x64 -out "$ObjDir\" -nologo -ext $WixUIExt @candleDefs @wxsSources

@@ -6,6 +6,9 @@ from PySide6.QtWidgets import (
 )
 
 from src.core.app_version import get_app_version
+from src.core.update_checker import (
+    UpdateCheckThread, STATUS_UPDATE_AVAILABLE, STATUS_UP_TO_DATE, STATUS_VERSION_UNKNOWN,
+)
 
 _STYLE = """
 <style>
@@ -669,6 +672,7 @@ même groupe lors du clustering. Plage : 25 % à 70 %. Valeur par défaut : <b>6
 _TAB_ABOUT = _STYLE + f"""
 <h2>Pixel Photo Manager</h2>
 <p style="color:#aaa;">Version {get_app_version()} &nbsp;·&nbsp; Windows x64</p>
+<p>{{version_check}}</p>
 <p>Copyright 2026 Christian Guyot<br>
 Distribué sous les termes de l'<b>Apache License, Version 2.0</b>.<br>
 <a href="http://www.apache.org/licenses/LICENSE-2.0" style="color:#6aacf0;">
@@ -754,10 +758,17 @@ class HelpDialog(QDialog):
 
         tabs = QTabWidget()
         tabs.setStyleSheet(_TABWIDGET_STYLE)
+        self._about_browser: QTextBrowser | None = None
         for title, html in _TABS:
             browser = QTextBrowser()
             browser.setOpenExternalLinks(True)
             browser.setStyleSheet(_BROWSER_STYLE)
+            if title == "À propos":
+                self._about_browser = browser
+                html = html.replace(
+                    "{version_check}",
+                    '<span style="color:#888;">Vérification de la version…</span>',
+                )
             browser.setHtml(html)
             browser.verticalScrollBar().setValue(0)
             tabs.addTab(browser, title)
@@ -770,6 +781,35 @@ class HelpDialog(QDialog):
 
         layout.addWidget(tabs)
 
+        self._update_check_thread = UpdateCheckThread(get_app_version(), self)
+        self._update_check_thread.checked.connect(self._on_version_checked)
+        self._update_check_thread.start()
+
         btn_box = QDialogButtonBox(QDialogButtonBox.Close)
         btn_box.rejected.connect(self.accept)
         layout.addWidget(btn_box)
+
+    def _on_version_checked(self, status: str, version: str, html_url: str) -> None:
+        if self._about_browser is None:
+            return
+        if status == STATUS_UPDATE_AVAILABLE:
+            fragment = (
+                '<span style="color:#e0a030;">⚠ Une nouvelle version est disponible : '
+                f'<b>{version}</b> — <a href="{html_url}" style="color:#6aacf0;">'
+                "ouvrir la page de téléchargement</a></span>"
+            )
+        elif status == STATUS_UP_TO_DATE:
+            fragment = '<span style="color:#6abf6a;">✓ Vous disposez de la dernière version.</span>'
+        elif status == STATUS_VERSION_UNKNOWN:
+            fragment = (
+                '<span style="color:#888;">Version locale non comparable (mode développement) — '
+                f"dernière version publiée : <b>{version}</b>.</span>"
+            )
+        else:
+            fragment = (
+                '<span style="color:#888;">Impossible de vérifier la disponibilité '
+                "d'une nouvelle version (pas de connexion ?).</span>"
+            )
+        scroll_pos = self._about_browser.verticalScrollBar().value()
+        self._about_browser.setHtml(_TAB_ABOUT.replace("{version_check}", fragment))
+        self._about_browser.verticalScrollBar().setValue(scroll_pos)

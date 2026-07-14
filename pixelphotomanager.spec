@@ -52,6 +52,19 @@ if not _buffalo_l_dir.is_dir():
     )
 datas += [(str(_buffalo_l_dir), "insightface_root/models/buffalo_l")]
 
+# Numéro de version embarqué à la racine du bundle (sys._MEIPASS/VERSION), lu
+# par src/core/app_version.py::get_app_version() en mode figé (le dossier .git
+# n'est pas disponible dans l'exe pour faire un "git describe"). Le fichier
+# VERSION à la racine du dépôt est mis à jour par build.ps1 avant chaque build,
+# à partir du numéro de version demandé au constructeur.
+_version_file = ROOT / "VERSION"
+if not _version_file.is_file():
+    raise FileNotFoundError(
+        f"Fichier VERSION introuvable : {_version_file}\n"
+        "Lancez le build via build.ps1 (qui le génère) plutôt que pyinstaller directement."
+    )
+datas += [(str(_version_file), ".")]
+
 a = Analysis(
     [str(ROOT / "main.py")],
     pathex=[str(ROOT)],

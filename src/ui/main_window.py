@@ -8,8 +8,8 @@ import time
 from datetime import datetime
 from pathlib import Path
 
-from PySide6.QtCore import Qt, QThread, QTimer, Signal, Slot
-from PySide6.QtGui import QAction, QKeySequence, QPixmap
+from PySide6.QtCore import Qt, QThread, QTimer, QUrl, Signal, Slot
+from PySide6.QtGui import QAction, QDesktopServices, QKeySequence, QPixmap
 from PySide6.QtWidgets import (
     QApplication, QButtonGroup, QCheckBox, QDialog, QDialogButtonBox, QFrame, QGroupBox,
     QMainWindow, QMenuBar, QWidget, QHBoxLayout, QVBoxLayout,
@@ -27,6 +27,8 @@ from src.library.thumbnail_cache import ThumbnailCache
 from src.library.folder_watcher import FolderWatcher
 from src.library.scanner import LibraryScanner
 from src.library.duplicate_detector import DuplicateDetectorThread, generate_html_report
+from src.core.app_version import get_app_version
+from src.core.update_checker import UpdateCheckThread, STATUS_UPDATE_AVAILABLE
 from src.faces.face_database import FaceDatabase
 from src.faces.face_indexer import FaceIndexThread, SingleFaceReindexThread, RetryFaceIndexThread, ForceRedetectThread, TFWarmUpThread, SimilaritySearchThread
 from src.faces.clusterer import ClusterThread
@@ -613,6 +615,7 @@ class MainWindow(QMainWindow):
         self._current_context: str = ""   # dossier ou album actif
         self._pending_person_view_id: int | None = None
         self._catalog_loader: _CatalogLoadThread | None = None
+        self._update_check_thread: UpdateCheckThread | None = None
         # Debounce du refresh du face panel après clustering (peut être déclenché
         # plusieurs fois par seconde pendant l'indexation) — délai de 3 s.
         self._face_panel_refresh_timer = QTimer()
@@ -636,6 +639,7 @@ class MainWindow(QMainWindow):
         QTimer.singleShot(
             0, lambda: self._sidebar.update_duplicates_badge(self._catalog.count_duplicate_groups())
         )
+        QTimer.singleShot(0, self._start_update_check)
 
     # ------------------------------------------------------------------ setup
 
@@ -1187,6 +1191,33 @@ class MainWindow(QMainWindow):
         self._folder_watcher = FolderWatcher(self)
         self._folder_watcher.files_changed.connect(self._on_watcher_files_changed)
         self._folder_watcher.subfolder_added.connect(self._on_folder_created)
+
+    # ------------------------------------------------------------------ mise à jour
+
+    def _start_update_check(self) -> None:
+        """Interroge la dernière release GitHub en arrière-plan (silencieux si à jour ou en erreur)."""
+        self._update_check_thread = UpdateCheckThread(get_app_version(), self)
+        self._update_check_thread.checked.connect(self._on_update_checked)
+        self._update_check_thread.start()
+
+    def _on_update_checked(self, status: str, version: str, html_url: str) -> None:
+        if status != STATUS_UPDATE_AVAILABLE:
+            return
+        box = QMessageBox(self)
+        box.setIcon(QMessageBox.Information)
+        box.setWindowTitle("Mise à jour disponible")
+        box.setText(
+            f"Une nouvelle version de Pixel Photo Manager est disponible : {version}\n"
+            f"(version actuelle : {get_app_version()}).\n\n"
+            "Pensez à lire les notes de version avant d'installer, pour connaître les "
+            "nouvelles fonctionnalités et vérifier la compatibilité avec votre "
+            "bibliothèque existante."
+        )
+        btn_open = box.addButton("Ouvrir la page de téléchargement", QMessageBox.AcceptRole)
+        box.addButton("Plus tard", QMessageBox.RejectRole)
+        box.exec()
+        if box.clickedButton() is btn_open:
+            QDesktopServices.openUrl(QUrl(html_url))
 
     # ------------------------------------------------------------------ library
 

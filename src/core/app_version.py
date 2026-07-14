@@ -11,9 +11,18 @@ def get_app_version() -> str:
     """Version affichée dans "À propos" : dernier tag git atteignable depuis HEAD.
 
     En mode figé (PyInstaller), le dossier .git n'est pas embarqué dans le bundle :
-    on retombe alors sur _FALLBACK_VERSION sans tenter l'appel git.
+    on lit alors le fichier VERSION embarqué à la racine du bundle (écrit par
+    build.ps1 à partir du VERSION du dépôt, cf. pixelphotomanager.spec), et on
+    ne retombe sur _FALLBACK_VERSION que si ce fichier est absent/illisible.
     """
     if getattr(sys, "frozen", False):
+        try:
+            version_file = Path(getattr(sys, "_MEIPASS", "")) / "VERSION"
+            text = version_file.read_text(encoding="utf-8").strip()
+            if text:
+                return text
+        except Exception:
+            pass
         return _FALLBACK_VERSION
     try:
         root = Path(__file__).resolve().parents[2]
