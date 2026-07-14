@@ -157,6 +157,8 @@ _TAB_NAVIGATION = _STYLE + """
   <li><kbd>Ctrl</kbd>+Molette : zoom avant / arrière.</li>
   <li><kbd>Échap</kbd> ou <b>✕</b> : retour à la grille.</li>
   <li><kbd>F11</kbd> : plein écran.</li>
+  <li><b>Clic droit</b> dans la visionneuse › <b>Afficher le dossier dans la grille</b> :
+      retourne à la grille en affichant le dossier de la photo courante et en la sélectionnant.</li>
 </ul>
 
 <h3>Menu contextuel de la grille (clic droit sur une photo)</h3>
@@ -625,6 +627,18 @@ _TAB_DUPES = _STYLE + """
 <ul>
   <li>Les vignettes appartenant à un groupe de doublons affichent un badge <b>⧉</b>.</li>
   <li>Cliquer sur ce badge ouvre une vue listant toutes les photos du groupe côte à côte.</li>
+</ul>
+
+<h3>Grille des groupes de doublons &nbsp;<span style="font-weight:normal;color:#888;">(bouton « Dupliquées » de la sidebar)</span></h3>
+<p>Le bouton <b>Dupliquées</b> de la sidebar (badge = nombre de groupes) ouvre une grille dédiée
+listant tous les groupes de doublons d'un coup : une carte par groupe, vignette du premier
+exemplaire, nombre d'exemplaires.</p>
+<ul>
+  <li><b>Double-clic</b> sur une carte : ouvre les exemplaires du groupe dans la visionneuse
+      pour une comparaison rapide.</li>
+  <li><b>✕</b> sur une carte : dissout le groupe entier (aucun fichier supprimé) — non
+      persistant, une future détection complète peut reformer le même groupe.</li>
+  <li>Bouton <b>Détecter les doublons…</b> en haut de la grille pour relancer une analyse.</li>
 </ul>
 
 <h3>Workflow recommandé</h3>

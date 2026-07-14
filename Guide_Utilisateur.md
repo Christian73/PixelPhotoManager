@@ -71,7 +71,7 @@ Menu **Fichier › Quitter** (**Ctrl + Q**).
 | **Barre de menus** | Fichier, Affichage, Outils, Visages, Aide — voir sections dédiées |
 | **Bouton ⬆ Exporter** | Exporte la photo affichée (visionneuse) ou la sélection (grille) |
 | **Sidebar** | Filtrage, navigation dans les dossiers et albums |
-| **Zone principale** | Grille de vignettes, vue chronologie (ruban), vue Personnes ou visionneuse plein écran |
+| **Zone principale** | Grille de vignettes, vue chronologie (ruban), vue Personnes, vue Doublons ou visionneuse plein écran |
 | **Barre de statut** | Informations sur la sélection, progression du scan, curseur de taille des vignettes |
 
 ### Les cinq menus
@@ -92,6 +92,12 @@ La sidebar peut aussi être redimensionnée en faisant glisser le séparateur ve
 ### Plein écran
 
 **F11** bascule l'application en plein écran.
+
+### Vérification des mises à jour
+
+Au démarrage, l'application interroge en arrière-plan la page des releases GitHub du projet. Si une version plus récente est disponible, une popup s'affiche avec le numéro de version et un bouton **Ouvrir la page de téléchargement** ; elle rappelle de lire les notes de version avant d'installer, pour connaître les nouvelles fonctionnalités et vérifier la compatibilité avec votre bibliothèque existante. Si vous êtes déjà à jour, ou en cas d'erreur réseau, rien ne s'affiche.
+
+L'onglet **À propos** (menu **Aide › À propos**) effectue la même vérification à chaque ouverture et affiche l'un des trois résultats : « ✓ Vous disposez de la dernière version », l'alerte de mise à jour disponible avec son lien, ou un message d'erreur si la vérification est impossible (pas de connexion).
 
 ---
 
@@ -302,6 +308,7 @@ Si vous avez configuré des applications tierces (voir [section 16](#16-autres-o
 | **Déplacer vers…** | Déplace le fichier vers un autre dossier |
 | **Enregistrer l'image traitée sur le disque** | Ouvre le dialogue d'enregistrement (voir [section 11](#11-enregistrer-et-exporter-vos-photos)) |
 | **Révéler dans l'Explorateur** | Ouvre le dossier contenant la photo |
+| **Afficher le dossier dans la grille** | Retourne à la grille de photos, en affichant le dossier contenant la photo courante et en la sélectionnant |
 | **Localiser sur la carte** | Ouvre OpenStreetMap à la position GPS (grisé si pas de GPS) |
 | **Forcer une nouvelle détection sans limite de taille** | Relance la détection de visages sur cette photo en ignorant le filtre de taille minimale, sans perdre les identifications déjà faites |
 | **Effacer le fichier…** | Supprime définitivement le fichier après confirmation |
@@ -694,6 +701,14 @@ Une boîte de progression affiche l'étape en cours (« Tier 1 — empreintes…
 - Un message final indique le nombre de groupes et de fichiers concernés.
 - Les photos en double sont marquées d'un **badge ⧉ orange** dans la grille et la visionneuse (voir [section 4](#4-la-grille-de-photos)) — l'application ne supprime ni ne fusionne rien automatiquement, à vous de décider au cas par cas.
 - Un **rapport HTML** (`duplicates_report.html`) est généré automatiquement ; un bouton **Ouvrir le rapport** permet de le consulter directement.
+
+### Grille des groupes de doublons (bouton « Dupliquées » de la sidebar)
+
+Le bouton **Dupliquées** de la sidebar (avec un badge indiquant le nombre de groupes détectés) ouvre une grille dédiée listant **tous** les groupes de doublons d'un coup — une carte par groupe, avec la vignette du premier exemplaire et le nombre d'exemplaires.
+
+- **Double-clic** sur une carte : ouvre les exemplaires du groupe dans la visionneuse, pour une comparaison rapide (navigation précédent/suivant limitée aux membres du groupe).
+- **✕** sur une carte : **dissout le groupe entier** (ne supprime aucun fichier) — la carte disparaît de la grille et le badge décrémente. Cette dissolution n'est **pas persistante** : relancer une détection complète peut reformer le même groupe si les photos sont toujours similaires.
+- Bouton **Détecter les doublons…** en haut de la grille pour relancer une analyse sans repasser par le menu Outils.
 
 ---
 

@@ -921,10 +921,31 @@ Sur Windows, `QFileDialog` retourne des chemins avec `/` (`D:/Photos`). `os.path
 ### Build
 
 ```powershell
-.\build.ps1                    # Script complet avec nettoyage et résumé
-# ou directement :
-.venv\Scripts\python.exe -m PyInstaller pixelphotomanager.spec --clean --noconfirm
+.\build.ps1                    # EXE + MSI (demande le numéro de version, tag git proposé par défaut)
+.\build.ps1 -Version 1.1.0     # EXE + MSI, version fournie directement (pas de prompt)
+.\build.ps1 -ExeOnly           # EXE uniquement
+.\build.ps1 -MsiOnly           # MSI uniquement (EXE déjà construit, VERSION déjà à jour)
 ```
+
+### Numéro de version
+
+Le fichier `VERSION` à la racine du dépôt (non versionné, régénéré à chaque build) est la
+source unique de vérité pour le numéro de version :
+
+- `build.ps1` le (re)génère : sans `-Version`, il propose le dernier tag git du dépôt
+  (`git tag --sort=-v:refname`, indépendant de la branche courante — pas `git describe`,
+  qui échoue si le tag n'est pas un ancêtre de HEAD) comme valeur par défaut.
+- `pixelphotomanager.spec` l'embarque dans l'exécutable (`datas`) ; `src/core/app_version.py::get_app_version()`
+  le lit en mode figé (`sys._MEIPASS / "VERSION"`), et retombe sur `git describe` en mode développement.
+- `installer\build_msi.ps1` le lit pour renseigner `Product/@Version` dans `installer/product.wxs`.
+
+`src/core/update_checker.py::UpdateCheckThread` compare cette version à la dernière release
+GitHub publiée (`api.github.com/repos/Christian73/PixelPhotoManager/releases/latest`, sans
+authentification). Utilisé au démarrage (`main_window.py`, notification silencieuse sauf si
+une mise à jour est disponible) et dans l'onglet **À propos** de l'aide (`help_dialog.py`,
+qui affiche aussi les états « à jour » et « erreur »). Quatre statuts : `STATUS_UPDATE_AVAILABLE`,
+`STATUS_UP_TO_DATE`, `STATUS_ERROR` (réseau/API), `STATUS_VERSION_UNKNOWN` (version locale non
+sémantique, typiquement un hash git en mode développement — à ne pas confondre avec une erreur réseau).
 
 ### Sortie
 
