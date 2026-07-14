@@ -2409,6 +2409,28 @@ class MainWindow(QMainWindow):
                                     "La bibliothèque ne contient aucune photo à analyser.")
             return
 
+        reply = QMessageBox.question(
+            self,
+            "Détecter les doublons",
+            f"Cette opération va comparer les {len(paths)} photos de la bibliothèque "
+            "entre elles pour repérer les doublons exacts ainsi que les quasi-doublons "
+            "(recadrages, retouches, redimensionnements).\n\n"
+            "Résultat : les photos concernées seront regroupées et marquées d'un badge "
+            "sur leur vignette. Rien n'est supprimé ni modifié automatiquement — vous "
+            "pourrez ensuite parcourir les groupes détectés via le bouton « Dupliquées » "
+            "de la barre latérale, et choisir vous-même quels exemplaires ignorer ou "
+            "conserver.\n\n"
+            "⚠ C'est une opération longue (proportionnelle au nombre de photos) qui "
+            "occupe l'application pendant toute sa durée — une fenêtre de progression "
+            "restera ouverte et bloquera l'utilisation de PixelPhotoManager jusqu'à la "
+            "fin. Il est recommandé de la lancer quand vous n'avez pas besoin d'utiliser "
+            "l'application dans l'immédiat, et de la laisser travailler seule jusqu'au bout.",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No,
+        )
+        if reply != QMessageBox.Yes:
+            return
+
         dlg = _DuplicateProgressDialog(len(paths), self)
         detector = DuplicateDetectorThread(paths, self)
 
