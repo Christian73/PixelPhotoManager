@@ -1970,7 +1970,7 @@ class MainWindow(QMainWindow):
         self._catalog.delete_person(person.id)
         if self._current_context == f"{_PERSON_CTX_PREFIX}{person.id}":
             self.show_grid()
-        self._refresh_persons()
+        self._sidebar.remove_person(person.id)
 
     @Slot(object)
     def _on_person_selected(self, person: PersonInfo) -> None:

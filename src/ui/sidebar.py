@@ -949,6 +949,19 @@ class Sidebar(QWidget):
                     self._persons_list.blockSignals(False)
                 break
 
+    def remove_person(self, person_id: int) -> None:
+        """Retire une personne de la liste (nom effacé/supprimé). No icon reload."""
+        # takeItem() ci-dessous décale les index de ligne : un chargement d'icônes
+        # encore en vol appliquerait ses icônes à la mauvaise personne (cf. _cancel_face_loader).
+        self._cancel_face_loader()
+        self._persons = [p for p in self._persons if p.id != person_id]
+        for i in range(self._persons_list.count()):
+            item = self._persons_list.item(i)
+            p = item.data(Qt.UserRole)
+            if isinstance(p, PersonInfo) and p.id == person_id:
+                self._persons_list.takeItem(i)
+                break
+
     def update_person_icon(self, person_id: int, face) -> None:
         """Mise à jour immédiate de l'icône d'une personne sans reconstruire toute la liste."""
         for i in range(self._persons_list.count()):
