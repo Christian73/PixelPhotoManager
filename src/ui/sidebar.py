@@ -76,7 +76,9 @@ _SPECIAL_FILENAME = "__filename__"  # album virtuel "Par nom de fichier"
 
 
 class _BadgeButton(QPushButton):
-    """QPushButton avec un badge circulaire rouge en coin supérieur droit."""
+    """QPushButton avec un simple point rouge en coin supérieur droit tant que le compte est > 0."""
+
+    _DOT_DIAMETER = 9
 
     def __init__(self, text: str, parent=None) -> None:
         super().__init__(text, parent)
@@ -92,28 +94,16 @@ class _BadgeButton(QPushButton):
         if self._badge <= 0:
             return
 
-        label = str(self._badge) if self._badge < 100 else "99+"
-
         p = QPainter(self)
         p.setRenderHint(QPainter.Antialiasing)
 
-        font = QFont()
-        font.setPixelSize(9)
-        font.setBold(True)
-        p.setFont(font)
-
-        text_w = p.fontMetrics().horizontalAdvance(label)
-        radius = max(8, text_w // 2 + 5)
-        diameter = radius * 2
-        x = self.width()  - diameter - 2
+        d = self._DOT_DIAMETER
+        x = self.width() - d - 2
         y = 2
 
         p.setPen(Qt.NoPen)
         p.setBrush(QColor("#d94f4f"))
-        p.drawEllipse(x, y, diameter, diameter)
-
-        p.setPen(QColor("white"))
-        p.drawText(QRect(x, y, diameter, diameter), Qt.AlignCenter, label)
+        p.drawEllipse(x, y, d, d)
         p.end()
 
 
