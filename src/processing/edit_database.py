@@ -329,6 +329,7 @@ class EditDatabase:
                 return False
 
     def has_edits(self, photo_path: str) -> bool:
+        photo_path = os.path.normpath(photo_path)
         with self._lock:
             try:
                 with self._connect() as conn:
