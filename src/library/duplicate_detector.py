@@ -98,9 +98,14 @@ def _merge(group_of: dict[str, int], path_a: str, path_b: str,
 class DuplicateDetectorThread(QThread):
     """Détecte les doublons en deux passes (pHash + ORB/RANSAC)."""
 
-    progress = Signal(int, int, str)  # (courant, total, message)
-    finished = Signal(dict)           # {group_id: [path, ...]}
-    error    = Signal(str)
+    progress  = Signal(int, int, str)  # (courant, total, message)
+    # object (pas dict) : PySide6 mappe Signal(dict) sur QVariantMap, qui exige des
+    # clés str côté C++ — avec des clés int (group_id), la conversion cross-thread
+    # échoue silencieusement (Shiboken log une erreur en stderr, pas d'exception
+    # Python) et le slot reçoit un dict vide, faisant croire à "aucun doublon".
+    finished  = Signal(object)         # {group_id: [path, ...]}
+    error     = Signal(str)
+    cancelled = Signal()              # émis une fois le thread réellement arrêté
 
     def __init__(self, photo_paths: list, parent=None):
         super().__init__(parent)
@@ -110,6 +115,15 @@ class DuplicateDetectorThread(QThread):
 
     def cancel(self) -> None:
         self._cancelled = True
+
+    def _is_cancelled(self) -> bool:
+        """Vérifie la demande d'annulation ; émet `cancelled` une seule fois
+        au point d'arrêt effectif (les boucles O(N²) la testent à chaque
+        itération, mais l'arrêt réel n'a lieu qu'une fois)."""
+        if self._cancelled:
+            self.cancelled.emit()
+            return True
+        return False
 
     @property
     def corrupted_paths(self) -> list[str]:
@@ -156,7 +170,7 @@ class DuplicateDetectorThread(QThread):
 
         last_emit = time.monotonic()
         for i, path in enumerate(paths):
-            if self._cancelled:
+            if self._is_cancelled():
                 return
             # Log systématique (pas throttlé) : si le traitement se bloque sur un
             # fichier précis (image corrompue, volume réseau lent…), cette ligne
@@ -179,7 +193,7 @@ class DuplicateDetectorThread(QThread):
                 logger.warning("Fichier illisible (Tier 1) : %s (%s)", path, exc)
                 self._corrupted.add(path)
 
-        if self._cancelled:
+        if self._is_cancelled():
             return
 
         # Phase 2 : groupement par distance de Hamming O(N²)
@@ -194,7 +208,7 @@ class DuplicateDetectorThread(QThread):
 
         last_emit = time.monotonic()
         for i in range(n):
-            if self._cancelled:
+            if self._is_cancelled():
                 return
             path_i, hash_i = hashes[i]
             for j in range(i + 1, n):
@@ -269,7 +283,7 @@ class DuplicateDetectorThread(QThread):
         # Pré-calcul des descripteurs (réduit chaque image à _ORB_LOAD_SIZE)
         desc_list: list[tuple[str, object, object, int]] = []  # (path, kp, des, area)
         for i, path in enumerate(unmatched):
-            if self._cancelled:
+            if self._is_cancelled():
                 return
             if i % 10 == 0:
                 self.progress.emit(
@@ -323,7 +337,7 @@ class DuplicateDetectorThread(QThread):
         comparison_start = phase1_total + (grand_total - phase1_total) // 2
         last_emit = time.monotonic()
         for i in range(m):
-            if self._cancelled:
+            if self._is_cancelled():
                 return
             path_i, kp_i, des_i, area_i = desc_list[i]
 

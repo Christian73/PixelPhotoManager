@@ -494,36 +494,6 @@ class _ResetFacesDialog(QDialog):
         return self._choice
 
 
-class _DuplicateProgressDialog(QDialog):
-    cancelled = Signal()
-
-    def __init__(self, total: int, parent=None):
-        super().__init__(parent)
-        self.setWindowTitle("Détection des doublons")
-        self.setModal(True)
-        self.setMinimumWidth(380)
-        layout = QVBoxLayout(self)
-        layout.setSpacing(12)
-        self._lbl = QLabel(f"Analyse de {total} photos…")
-        layout.addWidget(self._lbl)
-        self._bar = QProgressBar()
-        self._bar.setRange(0, total)
-        self._bar.setValue(0)
-        layout.addWidget(self._bar)
-        btn_cancel = QPushButton("Annuler")
-        btn_cancel.clicked.connect(self._on_cancel)
-        layout.addWidget(btn_cancel, alignment=Qt.AlignRight)
-
-    def update_progress(self, cur: int, total: int, msg: str) -> None:
-        self._bar.setMaximum(max(total, 1))
-        self._bar.setValue(cur)
-        self._lbl.setText(msg)
-
-    def _on_cancel(self) -> None:
-        self.cancelled.emit()
-        self.reject()
-
-
 class _DuplicatesPopup(QDialog):
     navigate_requested = Signal(str)  # chemin de la photo cible
 
@@ -595,6 +565,7 @@ class MainWindow(QMainWindow):
         self._face_indexer: FaceIndexThread | None = None
         self._reindex_thread: SingleFaceReindexThread | None = None
         self._retry_face_thread: RetryFaceIndexThread | None = None
+        self._duplicate_thread: DuplicateDetectorThread | None = None
         self._index_errors_dialog = None    # IndexErrorsDialog ouverte (ou None)
         self._force_redetect_thread: ForceRedetectThread | None = None
         self._cluster_thread: ClusterThread | None = None
@@ -1143,6 +1114,12 @@ class MainWindow(QMainWindow):
         )
         self._sb_progress_bar.hide()
         sb.addWidget(self._sb_progress_bar)
+
+        # Bouton d'annulation pour la détection de doublons (cachée par défaut)
+        self._btn_cancel_duplicate_scan = QPushButton("Annuler")
+        self._btn_cancel_duplicate_scan.setFixedHeight(20)
+        self._btn_cancel_duplicate_scan.hide()
+        sb.addWidget(self._btn_cancel_duplicate_scan)
 
         # Tiers centre — nom du fichier sélectionné et sa taille
         self._lbl_fileinfo = QLabel("")
@@ -2415,6 +2392,13 @@ class MainWindow(QMainWindow):
     # ------------------------------------------------------------------ doublons
 
     def _start_duplicate_detection(self) -> None:
+        if self._duplicate_thread and self._duplicate_thread.isRunning():
+            QMessageBox.information(
+                self, "Doublons",
+                "Une détection de doublons est déjà en cours."
+            )
+            return
+
         paths = self._catalog.get_all_photo_paths_for_dedup()
         if not paths:
             QMessageBox.information(self, "Doublons",
@@ -2432,40 +2416,97 @@ class MainWindow(QMainWindow):
             "pourrez ensuite parcourir les groupes détectés via le bouton « Dupliquées » "
             "de la barre latérale, et choisir vous-même quels exemplaires ignorer ou "
             "conserver.\n\n"
-            "⚠ C'est une opération longue (proportionnelle au nombre de photos) qui "
-            "occupe l'application pendant toute sa durée — une fenêtre de progression "
-            "restera ouverte et bloquera l'utilisation de PixelPhotoManager jusqu'à la "
-            "fin. Il est recommandé de la lancer quand vous n'avez pas besoin d'utiliser "
-            "l'application dans l'immédiat, et de la laisser travailler seule jusqu'au bout.",
+            "⚠ C'est une opération longue (proportionnelle au nombre de photos). Elle "
+            "s'exécute en arrière-plan : une barre de progression s'affiche en bas de "
+            "la fenêtre et vous pouvez continuer à utiliser PixelPhotoManager pendant "
+            "ce temps. Les résultats n'apparaîtront qu'à la fin de l'analyse.",
             QMessageBox.Yes | QMessageBox.No,
             QMessageBox.No,
         )
         if reply != QMessageBox.Yes:
             return
 
-        dlg = _DuplicateProgressDialog(len(paths), self)
         detector = DuplicateDetectorThread(paths, self)
+        self._duplicate_thread = detector
 
         def _on_progress(cur, total, msg):
-            dlg.update_progress(cur, total, msg)
+            self._sb_progress_bar.setRange(0, max(total, 1))
+            self._sb_progress_bar.setValue(cur)
+            self._lbl_action.setText(msg)
+
+        # Le calcul tourne dans un thread séparé : si la détection se termine
+        # (ou échoue) pendant que la boîte "Annuler ?" ci-dessous est ouverte
+        # (QMessageBox.exec bloque via une boucle d'événements imbriquée mais
+        # laisse passer les signaux Qt), on ferme la confirmation de force et
+        # on affiche directement le résultat — sinon les deux boîtes de
+        # dialogue s'empilent, ce qui a été observé en test manuel.
+        cancel_dialog: QMessageBox | None = None
+        dialog_dismissed_by_finish = False
+
+        def _dismiss_cancel_dialog():
+            nonlocal dialog_dismissed_by_finish
+            if cancel_dialog is not None:
+                dialog_dismissed_by_finish = True
+                cancel_dialog.close()
 
         def _on_done(groups: dict):
-            dlg.accept()
+            self._sb_progress_bar.hide()
+            self._sb_progress_bar.setValue(0)
+            self._btn_cancel_duplicate_scan.hide()
+            self._lbl_action.setText("")
+            _dismiss_cancel_dialog()
             self._apply_duplicate_results(groups, detector.corrupted_paths)
 
         def _on_error(msg: str):
-            dlg.reject()
+            self._sb_progress_bar.hide()
+            self._sb_progress_bar.setValue(0)
+            self._btn_cancel_duplicate_scan.hide()
+            self._lbl_action.setText("")
+            _dismiss_cancel_dialog()
             QMessageBox.critical(self, "Erreur détection doublons", msg)
+
+        def _on_cancelled():
+            self._sb_progress_bar.hide()
+            self._sb_progress_bar.setValue(0)
+            self._btn_cancel_duplicate_scan.hide()
+            self._lbl_action.setText("")
+            self.statusBar().showMessage("Détection de doublons annulée.", 5000)
+
+        def _on_cancel_clicked():
+            nonlocal cancel_dialog, dialog_dismissed_by_finish
+            dlg = QMessageBox(self)
+            dlg.setIcon(QMessageBox.Question)
+            dlg.setWindowTitle("Annuler la détection de doublons")
+            dlg.setText(
+                "Voulez-vous vraiment interrompre la détection de doublons en "
+                "cours ? Les résultats calculés jusqu'ici seront perdus."
+            )
+            dlg.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
+            dlg.setDefaultButton(QMessageBox.No)
+            cancel_dialog = dlg
+            dialog_dismissed_by_finish = False
+            reply = dlg.exec()
+            cancel_dialog = None
+            if dialog_dismissed_by_finish:
+                return  # le résultat vient d'être affiché par _on_done/_on_error
+            if reply == QMessageBox.Yes:
+                detector.cancel()
 
         detector.progress.connect(_on_progress)
         detector.finished.connect(_on_done)
         detector.error.connect(_on_error)
-        dlg.cancelled.connect(detector.cancel)
+        detector.cancelled.connect(_on_cancelled)
+        try:
+            self._btn_cancel_duplicate_scan.clicked.disconnect()
+        except RuntimeError:
+            pass  # aucune connexion existante (1re détection de la session)
+        self._btn_cancel_duplicate_scan.clicked.connect(_on_cancel_clicked)
 
+        self._sb_progress_bar.setRange(0, len(paths))
+        self._sb_progress_bar.setValue(0)
+        self._sb_progress_bar.show()
+        self._btn_cancel_duplicate_scan.show()
         detector.start()
-        if dlg.exec() == QDialog.Rejected and detector.isRunning():
-            detector.cancel()
-            detector.wait(3000)
 
     def _apply_duplicate_results(self, groups: dict, corrupted_paths=()) -> None:
         corrupted_paths = list(corrupted_paths)
@@ -3700,6 +3741,28 @@ class MainWindow(QMainWindow):
                 event.ignore()
                 return
             self._cluster_thread.wait(500)
+        if self._duplicate_thread and self._duplicate_thread.isRunning():
+            dlg = QMessageBox(self)
+            dlg.setWindowTitle("Détection de doublons en cours")
+            dlg.setIcon(QMessageBox.Icon.Warning)
+            dlg.setText("<b>Une détection de doublons est en cours.</b>")
+            dlg.setInformativeText(
+                "Si vous fermez l'application maintenant, l'analyse sera "
+                "interrompue et <b>le résultat sera perdu</b>. Il faudra tout "
+                "recommencer au prochain démarrage.<br><br>"
+                "Voulez-vous quand même fermer l'application ?"
+            )
+            dlg.setStandardButtons(
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+            )
+            dlg.setDefaultButton(QMessageBox.StandardButton.No)
+            dlg.button(QMessageBox.StandardButton.Yes).setText("Fermer quand même")
+            dlg.button(QMessageBox.StandardButton.No).setText("Annuler")
+            if dlg.exec() != QMessageBox.StandardButton.Yes:
+                event.ignore()
+                return
+            self._duplicate_thread.cancel()
+            self._duplicate_thread.wait(3000)
         if self._photo_query_thread and self._photo_query_thread.isRunning():
             self._photo_query_thread.wait(1000)
         if self._persons_refresh_thread and self._persons_refresh_thread.isRunning():
