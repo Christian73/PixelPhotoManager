@@ -21,6 +21,7 @@
 12. [Normalisation des chemins Windows](#12-normalisation-des-chemins-windows)
 13. [Packaging et distribution](#13-packaging-et-distribution)
 14. [Patterns à suivre pour les évolutions](#14-patterns-à-suivre-pour-les-évolutions)
+15. [Tests](#15-tests)
 
 ---
 
@@ -32,7 +33,9 @@ PixelPhotoManager/
 ├── main.py                        # Point d'entrée unique
 ├── pixelphotomanager.spec         # Spec PyInstaller (packaging)
 ├── build.ps1                      # Script de build PowerShell
-├── requirements.txt               # Dépendances Python
+├── requirements.txt               # Dépendances Python (cœur applicatif)
+├── requirements-test-e2e.txt      # Dépendances des tests bout-en-bout (pywinauto, Windows-only, optionnel)
+├── pytest.ini                     # Config pytest : markers e2e/gui, addopts -m "not e2e"
 ├── Guide_Utilisateur.md
 ├── Guide_Developpeur.md
 │
@@ -79,7 +82,18 @@ PixelPhotoManager/
 │   │   └── picasa_importer.py     # Import annotations Picasa (.picasa.ini)
 │   └── plugins/                   # Plugins intégrés (src/)
 │
-└── plugins/                       # Plugins utilisateur externes
+├── plugins/                       # Plugins utilisateur externes
+│
+├── tests/                         # Layers 1+2 (voir §15 Tests)
+│   ├── conftest.py                 # Isolation LOCALAPPDATA globale
+│   ├── test_*.py                   # Layer 1 : logique pure
+│   ├── gui_widgets/                 # Layer 2 : widgets Qt (pytest-qt)
+│   └── e2e/                        # Layer 3 : bout-en-bout (pywinauto, voir e2e/README.md)
+│       ├── conftest.py             # Fixture isolated_app
+│       └── scenarios/              # Un fichier par scénario
+│
+└── tools/
+    └── test_env/                  # Utilitaires Layer 3 : launch_isolated.py, generate_library.py
 ```
 
 **Données runtime** (non versionnées) :
@@ -111,12 +125,18 @@ python -m venv .venv
 # Lancer l'application
 .venv\Scripts\python.exe main.py
 
-# Lancer les tests
+# Lancer les tests (Layers 1+2 — unitaire + widgets Qt, multiplateforme, ~10 s)
 .venv\Scripts\python.exe -m pytest tests/
+
+# Optionnel : dépendances des tests bout-en-bout (Layer 3, Windows uniquement)
+.venv\Scripts\pip.exe install -r requirements-test-e2e.txt
+.venv\Scripts\python.exe -m pytest tests/e2e -m e2e
 
 # Construire l'EXE
 .\build.ps1
 ```
+
+Voir [§15 Tests](#15-tests) pour le détail des trois couches, l'isolation des données et la mesure de couverture.
 
 ---
 
@@ -1083,3 +1103,60 @@ thread = MyThread()
 thread.result.connect(self._on_result)   # dans le thread UI
 thread.start()
 ```
+
+---
+
+## 15. Tests
+
+### 15.1 Trois couches
+
+| Layer | Dossier | Cible | Dépendances | Vitesse |
+|---|---|---|---|---|
+| 1 — Unitaire | `tests/test_*.py` | Logique pure (DB, géométrie, doublons…), sans Qt | `requirements.txt` | ms |
+| 2 — Widgets Qt | `tests/gui_widgets/` | Widgets isolés via `pytest-qt` (pas d'automation OS) | `requirements.txt` (`pytest-qt`) | ms–s |
+| 3 — Bout-en-bout (e2e) | `tests/e2e/` | La vraie application (`main.py`) pilotée via `pywinauto`, scénario complet UI | `requirements-test-e2e.txt`, **Windows uniquement** | minutes |
+
+```powershell
+# Layers 1+2 (défaut — c'est ce que documente CLAUDE.md)
+.venv\Scripts\python.exe -m pytest tests/
+
+# Un test précis
+.venv\Scripts\python.exe -m pytest tests/test_duplicate_detector.py -v
+
+# Layer 3 — nécessite requirements-test-e2e.txt installé au préalable
+.venv\Scripts\python.exe -m pytest tests/e2e -m e2e -v
+```
+
+`pytest.ini` définit `addopts = -m "not e2e"` : `pytest tests/` sans argument **n'exécute jamais** les scénarios e2e, il faut systématiquement `-m e2e` (ou `-m ""` pour tout inclure) pour les déclencher. Deux markers sont déclarés : `e2e` (lent, Windows-only, vole le focus) et `gui` (widget Qt via pytest-qt, rapide).
+
+Si `pywinauto` n'est pas installé, `tests/e2e/conftest.py` retire automatiquement `tests/e2e/scenarios/*` de la collecte (`collect_ignore_glob`) — `pytest tests/` continue de fonctionner normalement sans que Layer 3 soit disponible. Voir **`tests/e2e/README.md`** pour le détail complet de Layer 3 (mécanique de synchronisation via sondage direct des DB, ciblage d'éléments UIA, comment ajouter un scénario, limites connues).
+
+### 15.2 Isolation des données réelles
+
+Aucun test ne doit jamais lire ni écrire dans le vrai `%LOCALAPPDATA%\PixelPhotoManager` de l'utilisateur (catalogue, vignettes, retouches, config). Deux mécanismes, un par couche :
+
+- **Layers 1+2** : `tests/conftest.py` redirige la variable d'environnement `LOCALAPPDATA` vers un dossier temporaire de session, **avant tout import** de code applicatif (chargé par pytest avant tout fichier `tests/**/*.py`). Comme `src/core/app_dirs.py::APP_DATA_DIR` est une constante de module calculée une seule fois au premier import, cette redirection garantit qu'aucun composant (y compris ceux instanciés sans point d'injection explicite, ex. `EditPanel.__init__` → `EditDatabase()`) ne peut accidentellement toucher le profil réel. Cette mutation ne porte que sur le process `pytest` en cours, jamais sur le profil persistant de l'utilisateur. Les tests Layer 1 qui passent un `db_path=tmp_path/...` explicite au constructeur ajoutent une seconde couche d'isolation, indépendante de cette variable d'environnement.
+- **Layer 3** : `tools/test_env/launch_isolated.py` lance `main.py` en sous-processus avec `LOCALAPPDATA` fixé (uniquement dans le bloc d'environnement de cet enfant) sur un dossier temporaire dédié au test, contre une bibliothèque photo **synthétique et jetable** (`tools/test_env/generate_library.py`) — jamais les vraies photos de l'utilisateur.
+
+**Conséquence pratique** : les tests peuvent tourner sans risque pendant qu'une instance réelle de l'application est ouverte sur les données de production — aucun fichier (DB, config, vignettes) n'est partagé. Il n'existe pas de verrou "instance unique" dans le code, donc une deuxième instance (lancée par Layer 3) démarre sans conflit à côté de la réelle. Deux réserves cependant :
+1. **Log partagé en mode dev** : en mode non-figé, `main.py` écrit toujours dans `<repo>/logs/pixelphotomanager.log`, indépendamment de `LOCALAPPDATA` (seul le mode `sys.frozen` redirige vers `%LOCALAPPDATA%\PixelPhotoManager\logs\`). Si l'instance réelle tourne aussi via `python main.py` pendant un run Layer 3, les deux processus écrivent dans le même fichier — lignes entrelacées, sans corruption de données ni impact sur les tests.
+2. **`pywinauto` vole le focus réel** : `click_input()` envoie de vrais événements souris/clavier au niveau OS (voir `tests/e2e/README.md`, section limites connues). Éviter d'utiliser le clavier/la souris pendant l'exécution de scénarios Layer 3.
+
+### 15.3 Mesurer la couverture
+
+`pytest-cov` n'est pas dans `requirements.txt` (outil de développement, pas une dépendance applicative) :
+
+```powershell
+.venv\Scripts\pip.exe install pytest-cov
+.venv\Scripts\python.exe -m pytest tests/ --cov=src --cov-report=term-missing
+```
+
+Ajouter `--cov-report=html` pour un rapport navigable ligne par ligne (`htmlcov/index.html`).
+
+**État courant (2026-07)** : ~9 % de `src/` couvert par Layers 1+2. Bien couverts : `core/models.py`, `library/duplicate_detector.py` (68 %), `processing/edit_database.py` (71 %), `ui/edit_panel.py` (49 %), `ui/thumbnail_grid.py` (39 %). **Non couverts du tout** : tout `src/faces/` (détection, clustering, `face_database.py`, import Picasa), tout `src/core/` sauf `models.py`/`app_dirs.py` (bus d'événements, config, plugin manager), et la quasi-totalité de `src/ui/` (`main_window.py`, `photo_viewer.py`, `sidebar.py`, tous les dialogues). Ces zones ne sont exercées qu'indirectement via les 4 scénarios Layer 3 existants (voir `tests/e2e/README.md`).
+
+### 15.4 Écrire un nouveau test
+
+- **Logique pure sans Qt** → Layer 1, `tests/test_*.py`. Préférer un `db_path=tmp_path/...` explicite en plus de l'isolation `LOCALAPPDATA` du conftest.
+- **Un widget Qt isolé** (comportement, signaux, rendu) → Layer 2, `tests/gui_widgets/`, via `pytest-qt` (fixture `qtbot`). Pas d'automation OS, pas de fenêtre visible.
+- **Un scénario bout-en-bout impliquant plusieurs composants réels** (scan → catalogue → UI, ou toute régression déjà rencontrée en production) → Layer 3, `tests/e2e/scenarios/`. Suivre le guide « Ajouter un scénario » de `tests/e2e/README.md` : fixture `isolated_app`, toujours vérifier l'état via `catalog.db`/`edits.db` (`query_one`/`wait_for_condition`) plutôt que via le texte affiché à l'écran.

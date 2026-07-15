@@ -1514,7 +1514,31 @@ def on_photo_changed(self, index: int):
 
 ---
 
-## 9. Plugins intégrés prévus
+## 9. Stratégie de tests
+
+### 9.1 Trois couches, alignées sur le coût de chaque type de bug
+
+La stratégie de tests reflète la même philosophie que le reste du projet (§2) : privilégier ce qui donne le plus de confiance pour le moins de friction. Trois couches, du moins au plus coûteux à écrire et exécuter :
+
+| Couche | Cible | Ce qu'elle attrape |
+|---|---|---|
+| **Layer 1 — Unitaire** | Logique pure (détection de doublons, géométrie des retouches, base de données) | Régressions de calcul, migrations SQL cassées |
+| **Layer 2 — Widgets Qt** | Un widget isolé (`pytest-qt`), sans lancer l'application | Bugs de rendu/état d'un composant, sans le coût d'un scénario complet |
+| **Layer 3 — Bout-en-bout** | La vraie application pilotée via automation OS (`pywinauto`), scénario utilisateur complet | Régressions d'intégration entre couches (UI ↔ thread ↔ DB) invisibles aux deux couches précédentes |
+
+Layer 3 existe précisément parce que plusieurs bugs critiques de ce projet (ex. la détection de doublons qui rapportait silencieusement « aucun doublon » à cause d'un `Signal(dict)` avec clés `int`, cf. historique du projet) ne se manifestaient qu'à l'intégration réelle — aucun test unitaire ne les aurait révélés, car chaque composant pris isolément se comportait correctement.
+
+### 9.2 Isolation totale des données réelles de l'utilisateur
+
+Principe non négociable : **aucun test ne touche jamais au profil réel de l'utilisateur** (`%LOCALAPPDATA%\PixelPhotoManager` — catalogue, vignettes, retouches, visages, configuration). Les tests Layer 1/2 redirigent cette variable d'environnement vers un dossier temporaire avant tout import de code applicatif ; les tests Layer 3 lancent une vraie instance de l'application en sous-processus, avec son propre profil isolé et une bibliothèque de photos synthétique jetable, jamais les photos réelles. Cette isolation permet en particulier de lancer la suite de tests pendant qu'une instance réelle de l'application tourne sur des données de production, sans aucun risque de collision — voir le Guide Développeur §15 pour le détail des mécanismes.
+
+### 9.3 État de la couverture (2026-07)
+
+La couverture de tests automatisés reste volontairement ciblée sur les zones à plus fort historique de régressions silencieuses (doublons, retouches non destructives) plutôt qu'exhaustive : ~9 % des lignes de `src/` sont couvertes par les Layers 1+2. La reconnaissance faciale (`src/faces/`) et la quasi-totalité de l'interface (`src/ui/`) ne sont exercées qu'indirectement par les 4 scénarios Layer 3, ce qui est une dette assumée plutôt qu'un oubli — ces zones nécessitent soit des données visages réalistes (coûteuses à synthétiser), soit une automation UI plus lourde que ce que Layer 1/2 permettent.
+
+---
+
+## 10. Plugins intégrés prévus
 
 | Plugin | Type | Description | Dépendance |
 |--------|------|-------------|------------|
@@ -1531,7 +1555,7 @@ def on_photo_changed(self, index: int):
 
 ---
 
-## 10. Roadmap
+## 11. Roadmap
 
 ### Version 1.0 — Fondations (MVP) ✓ Livré
 Scan et indexation des photos, grille de vignettes rapide, visionneuse avec zoom, retouches basiques non destructives (luminosité, contraste, saturation, gamma, netteté, débruitage, rotation, redressement, recadrage, miroir, N&B avec mixage R/G/B), undo/redo persistant, albums, favoris, recherche.
@@ -1547,7 +1571,7 @@ Intégration des modèles de restauration (HYPIR, SUPIR, DDColor, Real-ESRGAN), 
 
 ---
 
-## 11. Stack technique résumée
+## 12. Stack technique résumée
 
 | Composant | Technologie | Justification |
 |-----------|-------------|---------------|
@@ -1563,3 +1587,5 @@ Intégration des modèles de restauration (HYPIR, SUPIR, DDColor, Real-ESRGAN), 
 | Plugins | importlib dynamique | Standard Python, simple |
 | GPS/Carte | GPSPhoto + folium | Lecture EXIF GPS + carte offline |
 | Packaging | PyInstaller | Exécutable Windows autonome |
+| Tests unitaire/widgets | pytest + pytest-qt | Layers 1+2, multiplateforme, rapide |
+| Tests bout-en-bout | pywinauto (backend UIA) | Layer 3, pilotage réel de l'appli Windows |
