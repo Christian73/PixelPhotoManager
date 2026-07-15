@@ -356,6 +356,9 @@ class Sidebar(QWidget):
         _lbl = QLabel("Personnes")
         _lbl.setStyleSheet("color: #ccc; font-weight: bold;")
         persons_header_bar.addWidget(_lbl)
+        self._persons_count_lbl = QLabel("(0)")
+        self._persons_count_lbl.setStyleSheet("color: #888;")
+        persons_header_bar.addWidget(self._persons_count_lbl)
         persons_header_bar.addStretch()
         self._btn_identify = _BadgeButton("Identifier…")
         self._btn_identify.setToolTip("Nommer les groupes de visages détectés")
@@ -810,6 +813,7 @@ class Sidebar(QWidget):
 
     def refresh_persons(self, persons: list[PersonInfo]) -> None:
         self._persons = persons
+        self._persons_count_lbl.setText(f"({len(persons)})")
         # Mémoriser la personne actuellement sélectionnée pour la restaurer après rebuild
         selected_id: int | None = None
         selected_row: int = -1
@@ -865,6 +869,7 @@ class Sidebar(QWidget):
         """Met à jour compteurs et icônes des personnes sans reconstruire la liste.
         Si l'ensemble des personnes a changé (ajout/suppression), bascule sur refresh_persons."""
         self._persons = persons
+        self._persons_count_lbl.setText(f"({len(persons)})")
         new_by_id = {p.id: p for p in persons if p.id is not None}
 
         current_by_id: dict = {}
