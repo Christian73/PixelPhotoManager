@@ -15,7 +15,9 @@ Deux niveaux de détection :
 import logging
 import os
 import time
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
+from functools import partial
 from pathlib import Path
 
 from PySide6.QtCore import QThread, Signal
@@ -334,42 +336,27 @@ class DuplicateDetectorThread(QThread):
         pairs_checked = 0
         logger.info("Tier 2 : comparaison ORB de %d photos non groupées par le Tier 1.", m)
 
-        comparison_start = phase1_total + (grand_total - phase1_total) // 2
-        last_emit = time.monotonic()
-        for i in range(m):
-            if self._is_cancelled():
-                return
-            path_i, kp_i, des_i, area_i = desc_list[i]
-
-            now = time.monotonic()
-            if now - last_emit >= _PROGRESS_INTERVAL:
-                last_emit = now
-                current = comparison_start + int((i + 1) * (grand_total - comparison_start) / m)
-                self.progress.emit(
-                    current, grand_total,
-                    f"Tier 2 — comparaison ORB ({i + 1}/{m}, {pairs_checked} paire(s) vérifiée(s))…",
-                )
-                logger.info("Tier 2 : %d/%d photos comparées (%d paire(s) vérifiée(s))",
-                            i + 1, m, pairs_checked)
-
-            for j in range(i + 1, m):
-                path_j, kp_j, des_j, area_j = desc_list[j]
-
-                # Prefiltre ratio d'aire : sortie anticipée (liste triée — area_j ≥ area_i)
-                if area_i > 0 and area_j / area_i > _ORB_AREA_FACTOR:
-                    break
-
-                # Inutile de re-matcher deux photos déjà dans le même groupe
-                gi, gj = group_of.get(path_i), group_of.get(path_j)
-                if gi is not None and gi == gj:
-                    continue
-
-                pairs_checked += 1
-
-                # Appariement BFMatcher + ratio test de Lowe
+        # Comparaison des paires d'une même ligne `i` en parallèle : les appels
+        # cv2 (knnMatch/findHomography) libèrent le GIL, donc un pool de threads
+        # apporte un vrai gain sans le coût de sérialisation d'un pool de process.
+        # Chaque tâche traite un *lot* (chunk) de candidats plutôt qu'une seule
+        # paire : une paire se compare en général en bien moins d'une milliseconde,
+        # et soumettre une tâche par paire fait dominer le coût de dispatch du
+        # ThreadPoolExecutor sur le gain du parallélisme (mesuré : ~10 % de gain
+        # seulement au lieu d'un gain proche du nombre de coeurs). Découper en
+        # `n_workers` lots amortit ce coût tout en gardant tous les coeurs actifs.
+        # Les fusions (_merge) restent appliquées séquentiellement sur ce thread
+        # une fois les résultats de la ligne connus — _merge est order-independent
+        # pour une même ligne (tous les appels partagent path_i), donc paralléliser
+        # ne change jamais le résultat final (juste, potentiellement, les ids de
+        # groupe intermédiaires, renumérotés de toute façon en fin de _detect()).
+        def _compare_chunk(items, des_i=None, kp_i=None):
+            results = []
+            for path_j, kp_j, des_j in items:
                 try:
                     raw_matches = bf.knnMatch(des_i, des_j, k=2)
                 except Exception:
+                    results.append((path_j, False))
                     continue
 
                 good = [
@@ -378,9 +365,9 @@ class DuplicateDetectorThread(QThread):
                     if m1.distance < _ORB_RATIO_TEST * m2.distance
                 ]
                 if len(good) < _ORB_GOOD_MIN:
+                    results.append((path_j, False))
                     continue
 
-                # Vérification géométrique par homographie RANSAC
                 src_pts = np.float32(
                     [kp_i[m1.queryIdx].pt for m1 in good]
                 ).reshape(-1, 1, 2)
@@ -390,17 +377,64 @@ class DuplicateDetectorThread(QThread):
 
                 _, mask = cv2.findHomography(src_pts, dst_pts, cv2.RANSAC, 5.0)
                 if mask is None:
+                    results.append((path_j, False))
                     continue
 
                 inliers = int(mask.sum())
-                if inliers < _ORB_MIN_INLIERS:
+                results.append((path_j, inliers >= _ORB_MIN_INLIERS))
+            return results
+
+        n_workers = os.cpu_count() or 4
+        comparison_start = phase1_total + (grand_total - phase1_total) // 2
+        last_emit = time.monotonic()
+        with ThreadPoolExecutor(max_workers=n_workers) as executor:
+            for i in range(m):
+                if self._is_cancelled():
+                    return
+                path_i, kp_i, des_i, area_i = desc_list[i]
+
+                now = time.monotonic()
+                if now - last_emit >= _PROGRESS_INTERVAL:
+                    last_emit = now
+                    current = comparison_start + int((i + 1) * (grand_total - comparison_start) / m)
+                    self.progress.emit(
+                        current, grand_total,
+                        f"Tier 2 — comparaison ORB ({i + 1}/{m}, {pairs_checked} paire(s) vérifiée(s))…",
+                    )
+                    logger.info("Tier 2 : %d/%d photos comparées (%d paire(s) vérifiée(s))",
+                                i + 1, m, pairs_checked)
+
+                candidates = []
+                for j in range(i + 1, m):
+                    path_j, kp_j, des_j, area_j = desc_list[j]
+
+                    # Prefiltre ratio d'aire : sortie anticipée (liste triée — area_j ≥ area_i)
+                    if area_i > 0 and area_j / area_i > _ORB_AREA_FACTOR:
+                        break
+
+                    # Inutile de re-matcher deux photos déjà dans le même groupe
+                    gi, gj = group_of.get(path_i), group_of.get(path_j)
+                    if gi is not None and gi == gj:
+                        continue
+
+                    candidates.append((path_j, kp_j, des_j))
+
+                if not candidates:
                     continue
 
-                logger.debug(
-                    "Tier 2 crop détecté : %s ↔ %s (%d inliers)",
-                    os.path.basename(path_i), os.path.basename(path_j), inliers,
-                )
-                _merge(group_of, path_i, path_j, next_group)
+                pairs_checked += len(candidates)
+                chunk_size = max(1, -(-len(candidates) // n_workers))  # ceil division
+                chunks = [candidates[k:k + chunk_size] for k in range(0, len(candidates), chunk_size)]
+                worker = partial(_compare_chunk, des_i=des_i, kp_i=kp_i)
+                futures = [executor.submit(worker, chunk) for chunk in chunks]
+                for future in futures:
+                    for path_j, matched in future.result():
+                        if matched:
+                            logger.debug(
+                                "Tier 2 crop détecté : %s ↔ %s",
+                                os.path.basename(path_i), os.path.basename(path_j),
+                            )
+                            _merge(group_of, path_i, path_j, next_group)
 
         logger.info("Tier 2 : %d paire(s) vérifiées par ORB/RANSAC.", pairs_checked)
 
