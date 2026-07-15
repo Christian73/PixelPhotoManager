@@ -131,6 +131,10 @@ class ThumbnailCell(QWidget):
     def _setup_ui(self) -> None:
         self.setFixedSize(self._size + 8, self._size + 8)
         self.setCursor(Qt.PointingHandCursor)
+        # Nom accessible (UIA/QAccessible) : permet aux tests bout-en-bout
+        # (tests/e2e, pywinauto) de cibler une vignette précise par chemin de
+        # photo plutôt que par coordonnées écran devinées.
+        self.setAccessibleName(f"thumb::{self._photo.path}")
         layout = QVBoxLayout(self)
         layout.setContentsMargins(4, 4, 4, 4)
         layout.setSpacing(0)

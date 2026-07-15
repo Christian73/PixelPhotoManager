@@ -17,5 +17,10 @@ installer/*.msi
 installer/*.wixpdb
 installer/*.log
 
-# 
+#
 .VSCodeCounter
+
+# Artefacts des tests de non-régression (bibliothèque synthétique régénérée
+# par tools/test_env/generate_library.py, logs de sessions e2e en échec)
+tests/_generated_library/
+tests/e2e/.artifacts/

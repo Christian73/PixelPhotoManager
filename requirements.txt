@@ -35,6 +35,7 @@ pyinstaller>=6.4.0
 
 # Tests
 pytest>=8.0.0
+pytest-qt>=4.4.0             # tests de widgets Qt isolés (Layer 2, sans automation OS)
 
 # --- Plugins IA (optionnels, lourds, nécessitent GPU recommandé) ---
 # Décommenter selon les besoins :
