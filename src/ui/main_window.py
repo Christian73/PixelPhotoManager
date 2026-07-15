@@ -3261,6 +3261,10 @@ class MainWindow(QMainWindow):
             None,
         )
 
+        # Groupes de doublons concernés par cette suppression : si la suppression
+        # fait passer un groupe sous 2 exemplaires, ce n'est plus un doublon.
+        affected_groups = {p.duplicate_group_id for p in photos if p.duplicate_group_id is not None}
+
         deleted: list[str] = []
         errors: list[str] = []
         for photo in photos:
@@ -3280,6 +3284,25 @@ class MainWindow(QMainWindow):
             self._update_status()
             for path in deleted:
                 self._face_db.delete_for_path(path)
+
+            # Dissoudre les groupes de doublons devenus des singletons (ou vides)
+            # suite à cette suppression : sinon la carte reste affichée dans
+            # DuplicateGrid pour un groupe qui n'a plus lieu d'être.
+            stale_groups = []
+            for gid in affected_groups:
+                if len(self._catalog.get_duplicates_for_group(gid)) < 2:
+                    self._catalog.ignore_duplicate_group(gid)
+                    self._duplicate_grid.remove_group(gid)
+                    stale_groups.append(gid)
+            if stale_groups:
+                for p in self._current_photos:
+                    if p.duplicate_group_id in stale_groups:
+                        p.duplicate_group_id = None
+                self._sidebar.update_duplicates_badge(self._catalog.count_duplicate_groups())
+                grid_assignments = {p.path: None for p in self._current_photos
+                                    if p.duplicate_group_id is None}
+                if grid_assignments:
+                    self._grid.refresh_duplicate_status(grid_assignments)
 
             # Si le viewer affichait une photo supprimée, naviguer vers le voisin
             if in_viewer and any(p in deleted_paths_set
