@@ -694,7 +694,10 @@ L'analyse se déroule en deux passes automatiques (aucune option à régler) :
 1. **Empreinte perceptuelle (pHash)** — détecte les doublons exacts, redimensionnés ou légèrement retouchés.
 2. **Points d'intérêt (ORB + RANSAC)** — appliqué uniquement aux photos non regroupées à l'étape 1, détecte en plus les **recadrages** (jusqu'à ~60 % de surface recadrée).
 
-Une boîte de progression affiche l'étape en cours (« Tier 1 — empreintes… », « Tier 2 — comparaison ORB… ») avec un bouton **Annuler**.
+L'analyse tourne **en arrière-plan** : une barre de progression et un bouton **Annuler** apparaissent dans la barre de statut, en bas de la fenêtre, et indiquent l'étape en cours (« Tier 1 — empreintes… », « Tier 2 — comparaison ORB… »). Vous pouvez continuer à utiliser PixelPhotoManager normalement pendant ce temps — les résultats n'apparaissent qu'à la fin de l'analyse.
+
+- Cliquer sur **Annuler** demande confirmation (« Voulez-vous vraiment interrompre la détection de doublons en cours ? Les résultats calculés jusqu'ici seront perdus. »).
+- Si vous fermez l'application pendant qu'une analyse est en cours, un avertissement s'affiche (« Une détection de doublons est en cours… le résultat sera perdu ») avec le choix **Fermer quand même** ou **Annuler**.
 
 ### Résultat
 

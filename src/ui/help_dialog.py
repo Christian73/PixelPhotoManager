@@ -611,6 +611,11 @@ _TAB_DUPES = _STYLE + """
 <ul>
   <li><b>Outils › Détecter les doublons…</b> — lance l'analyse en arrière-plan.</li>
   <li>La durée dépend de la taille de la bibliothèque ; l'application reste utilisable.</li>
+  <li>Une barre de progression et un bouton <b>Annuler</b> apparaissent dans la barre de statut
+      pendant l'analyse ; les résultats n'apparaissent qu'à la fin.</li>
+  <li>Cliquer sur <b>Annuler</b> demande confirmation — les résultats déjà calculés seraient perdus.</li>
+  <li>Fermer l'application pendant une analyse en cours affiche un avertissement (le résultat
+      serait perdu), avec le choix de fermer quand même ou d'annuler la fermeture.</li>
 </ul>
 
 <h3>Comment ça marche — deux passes</h3>
