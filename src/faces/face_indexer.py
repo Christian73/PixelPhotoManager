@@ -8,6 +8,7 @@ from collections import deque
 
 from PySide6.QtCore import QThread, Signal
 
+from src.core.cpu_throttle import throttled_worker_count, lower_current_process_priority
 from src.faces.face_database import FaceDatabase
 from src.faces.detector import detect_and_embed, detect_and_embed_auto, warmup_worker, warmup_worker_cpu
 from src.library.catalog import Catalog
@@ -15,7 +16,7 @@ from src.library.catalog import Catalog
 logger = logging.getLogger(__name__)
 
 
-_WORKERS              = 4     # subprocesses en pipeline GPU/CPU
+_WORKERS              = throttled_worker_count()  # subprocesses en pipeline GPU/CPU, ~30 % des cœurs
 _CLUSTER_EVERY        = 1000  # relancer le clustering tous les N visages trouvés
 _DETECT_TIMEOUT       = 60    # secondes max par photo avant de tuer le subprocess
 _WARMUP_TIMEOUT       = 120   # secondes max pour le warmup initial (GPU peut être lent)
@@ -40,14 +41,18 @@ def _kill_executor(executor: concurrent.futures.ProcessPoolExecutor) -> None:
 
 def _fresh_executor_cpu() -> concurrent.futures.ProcessPoolExecutor:
     """Crée un executor propre pré-initialisé en mode CPU forcé (1 worker, conservateur)."""
-    ex = concurrent.futures.ProcessPoolExecutor(max_workers=1)
+    ex = concurrent.futures.ProcessPoolExecutor(
+        max_workers=1, initializer=lower_current_process_priority
+    )
     try:
         ex.submit(warmup_worker_cpu).result(timeout=30)
         logger.info("FaceIndexThread: re-warmup CPU OK")
     except Exception as exc:
         logger.warning("FaceIndexThread: re-warmup CPU échoué (%s) — executor nu", exc)
         _kill_executor(ex)
-        ex = concurrent.futures.ProcessPoolExecutor(max_workers=1)
+        ex = concurrent.futures.ProcessPoolExecutor(
+            max_workers=1, initializer=lower_current_process_priority
+        )
     return ex
 
 
@@ -55,7 +60,9 @@ def _fresh_executor_gpu() -> "concurrent.futures.ProcessPoolExecutor | None":
     """Tente de recréer un executor GPU plein (_WORKERS workers) après un secours CPU.
     Retourne None si le warmup échoue, pour laisser l'appelant rester sur CPU sans
     interrompre le scan en cours."""
-    ex = concurrent.futures.ProcessPoolExecutor(max_workers=_WORKERS)
+    ex = concurrent.futures.ProcessPoolExecutor(
+        max_workers=_WORKERS, initializer=lower_current_process_priority
+    )
     try:
         futs = [ex.submit(warmup_worker) for _ in range(_WORKERS)]
         for f in futs:
@@ -144,7 +151,9 @@ class FaceIndexThread(QThread):
         # les subprocesses les héritent automatiquement.
         from src.faces.detector import _register_nvidia_dll_dirs
         _register_nvidia_dll_dirs()
-        executor = concurrent.futures.ProcessPoolExecutor(max_workers=_WORKERS)
+        executor = concurrent.futures.ProcessPoolExecutor(
+            max_workers=_WORKERS, initializer=lower_current_process_priority
+        )
         try:
             # ── Phase 1 : warmup des _WORKERS subprocesses ─────────────────
             self.progress.emit(0, total)
@@ -480,7 +489,9 @@ class RetryFaceIndexThread(QThread):
         path = self._photo_path
         from src.faces.detector import _register_nvidia_dll_dirs
         _register_nvidia_dll_dirs()
-        executor = concurrent.futures.ProcessPoolExecutor(max_workers=1)
+        executor = concurrent.futures.ProcessPoolExecutor(
+            max_workers=1, initializer=lower_current_process_priority
+        )
         success = False
         unavailable = False
         detections: list = []

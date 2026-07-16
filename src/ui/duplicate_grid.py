@@ -218,8 +218,11 @@ class DuplicateGrid(QWidget):
         self._lbl_title.setStyleSheet("font-weight: bold; color: #ccc; font-size: 13px;")
         bar.addWidget(self._lbl_title)
         bar.addStretch()
-        btn_detect = QPushButton("Détecter les doublons…")
-        btn_detect.setToolTip("Analyser toutes les photos de la bibliothèque et regrouper les doublons")
+        btn_detect = QPushButton("Vérifier maintenant")
+        btn_detect.setToolTip(
+            "Force une vérification immédiate — l'analyse tourne aussi "
+            "automatiquement en arrière-plan"
+        )
         btn_detect.clicked.connect(self.detect_requested)
         bar.addWidget(btn_detect)
         root.addLayout(bar)
@@ -251,9 +254,10 @@ class DuplicateGrid(QWidget):
         self._lbl_empty.setStyleSheet("color: #555; padding: 8px;")
         empty_vbox.addWidget(self._lbl_empty)
 
-        self._btn_detect_empty = QPushButton("Détecter les doublons…")
+        self._btn_detect_empty = QPushButton("Vérifier maintenant")
         self._btn_detect_empty.setToolTip(
-            "Analyser toutes les photos de la bibliothèque et regrouper les doublons"
+            "Force une vérification immédiate — l'analyse tourne aussi "
+            "automatiquement en arrière-plan"
         )
         self._btn_detect_empty.clicked.connect(self.detect_requested)
         empty_vbox.addWidget(self._btn_detect_empty, alignment=Qt.AlignHCenter)

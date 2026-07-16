@@ -26,7 +26,7 @@ from src.library.catalog import Catalog
 from src.library.thumbnail_cache import ThumbnailCache
 from src.library.folder_watcher import FolderWatcher
 from src.library.scanner import LibraryScanner
-from src.library.duplicate_detector import DuplicateDetectorThread, generate_html_report
+from src.library.duplicate_detector import DuplicateDetectorThread
 from src.library.exif_reader import preserve_file_dates
 from src.core.app_version import get_app_version
 from src.core.update_checker import UpdateCheckThread, STATUS_UPDATE_AVAILABLE
@@ -45,6 +45,7 @@ from src.ui.face_panel import FacePanel
 from src.ui.exif_panel import ExifPanel
 from src.ui.people_panel import MergePersonsDialog, PeopleDialog
 from src.ui.settings_dialog import SettingsDialog
+from src.ui.display_order_dialog import DisplayOrderDialog
 from src.ui.face_backup_dialog import FaceBackupDialog
 
 logger = logging.getLogger(__name__)
@@ -258,7 +259,7 @@ _PERSON_CTX_PREFIX = "__person__"
 
 
 def _photo_sort_key(p: "PhotoInfo"):
-    """Clé de tri : date_taken, puis file_mtime en fallback — ordre descendant."""
+    """Clé de tri chronologique : date_taken, puis file_mtime en fallback."""
     if p.date_taken:
         return p.date_taken
     if p.file_mtime:
@@ -266,22 +267,34 @@ def _photo_sort_key(p: "PhotoInfo"):
     return datetime.min
 
 
+def _photo_filename_sort_key(p: "PhotoInfo"):
+    """Clé de tri alphabétique (nom de fichier, insensible à la casse)."""
+    return (p.filename or "").lower()
+
+
 class _CatalogLoadThread(QThread):
     """Charge get_all_photos() hors du thread UI et émet les résultats par lots."""
 
     batch_ready = Signal(list)  # list[PhotoInfo]
 
-    def __init__(self, catalog: "Catalog", batch_size: int = 300, parent=None):
+    def __init__(self, catalog: "Catalog", batch_size: int = 300, reverse: bool = False, parent=None):
         super().__init__(parent)
         self._catalog = catalog
         self._batch_size = batch_size
+        self._reverse = reverse
         self._stop = False
 
     def stop(self) -> None:
         self._stop = True
 
     def run(self) -> None:
+        # get_all_photos() est trié chronologique descendant (SQL) ; "reverse"
+        # inverse en ascendant pour suivre le réglage "Ordre d'affichage" —
+        # la vue "Toutes les photos" reste toujours chronologique, seule la
+        # direction est configurable (cf. MainWindow._sort_photos_for_display).
         photos = self._catalog.get_all_photos()
+        if self._reverse:
+            photos = list(reversed(photos))
         for i in range(0, len(photos), self._batch_size):
             if self._stop:
                 break
@@ -618,6 +631,8 @@ class MainWindow(QMainWindow):
         self._reindex_thread: SingleFaceReindexThread | None = None
         self._retry_face_thread: RetryFaceIndexThread | None = None
         self._duplicate_thread: DuplicateDetectorThread | None = None
+        self._live_corrupted_paths: list[str] = []
+        self._last_duplicate_check: datetime | None = None
         self._duplicates_popup: "_DuplicatesPopup | None" = None
         self._index_errors_dialog = None    # IndexErrorsDialog ouverte (ou None)
         self._force_redetect_thread: ForceRedetectThread | None = None
@@ -727,6 +742,10 @@ class MainWindow(QMainWindow):
         act_slideshow.setShortcut(Qt.Key_F5)
         act_slideshow.triggered.connect(self._start_slideshow)
         m_view.addAction(act_slideshow)
+        m_view.addSeparator()
+        act_order = QAction("Ordre d'affichage…", self)
+        act_order.triggered.connect(self._open_display_order_dialog)
+        m_view.addAction(act_order)
 
         # Outils
         m_tools = mb.addMenu("Outils")
@@ -735,12 +754,10 @@ class MainWindow(QMainWindow):
         act_folders.triggered.connect(self._open_folder_manager)
         m_tools.addAction(act_folders)
         m_tools.addSeparator()
-        act_detect_dupes = QAction("Détecter les doublons…", self)
-        act_detect_dupes.setToolTip(
-            "Analyse toutes les photos de la bibliothèque et regroupe les doublons"
-        )
-        act_detect_dupes.triggered.connect(self._start_duplicate_detection)
-        m_tools.addAction(act_detect_dupes)
+        act_dup_status = QAction("État des doublons…", self)
+        act_dup_status.setToolTip("Afficher l'état actuel de la détection de doublons")
+        act_dup_status.triggered.connect(self._show_duplicate_status_dialog)
+        m_tools.addAction(act_dup_status)
         m_tools.addSeparator()
         act_exif_date_sync = QAction("Synchroniser dates de création avec l'EXIF…", self)
         act_exif_date_sync.setToolTip(
@@ -1168,11 +1185,15 @@ class MainWindow(QMainWindow):
         self._sb_progress_bar.hide()
         sb.addWidget(self._sb_progress_bar)
 
-        # Bouton d'annulation pour la détection de doublons (cachée par défaut)
-        self._btn_cancel_duplicate_scan = QPushButton("Annuler")
-        self._btn_cancel_duplicate_scan.setFixedHeight(20)
-        self._btn_cancel_duplicate_scan.hide()
-        sb.addWidget(self._btn_cancel_duplicate_scan)
+        # Compteur de fichiers corrompus détectés pendant un scan de doublons
+        # (masqué par défaut) — cliquable pour afficher la liste courante.
+        self._lbl_corrupted = QPushButton("")
+        self._lbl_corrupted.setFlat(True)
+        self._lbl_corrupted.setCursor(Qt.PointingHandCursor)
+        self._lbl_corrupted.setStyleSheet("QPushButton { color: #d9822b; border: none; }")
+        self._lbl_corrupted.hide()
+        self._lbl_corrupted.clicked.connect(self._show_corrupted_list_dialog)
+        sb.addWidget(self._lbl_corrupted)
 
         # Tiers centre — nom du fichier sélectionné et sa taille
         self._lbl_fileinfo = QLabel("")
@@ -1266,6 +1287,10 @@ class MainWindow(QMainWindow):
         folders = self._config.get_scan_folders()
         albums = self._catalog.get_albums()
         self._sidebar.refresh_albums(albums)
+        self._sidebar.set_folder_order(
+            self._config.get("display_order.folder_mode", "alpha"),
+            self._config.get("display_order.folder_dir", "asc"),
+        )
         if folders:
             self._sidebar.set_tree_expanded_paths(
                 self._config.get("ui.folder_tree_expanded", [])
@@ -1359,7 +1384,8 @@ class MainWindow(QMainWindow):
         self.show_grid()
         self._update_status()
 
-        loader = _CatalogLoadThread(self._catalog, parent=self)
+        ascending = self._config.get("display_order.grid_dir", "desc") == "asc"
+        loader = _CatalogLoadThread(self._catalog, reverse=ascending, parent=self)
         loader.batch_ready.connect(self._on_catalog_batch)
         self._catalog_loader = loader
         loader.start()
@@ -1396,9 +1422,11 @@ class MainWindow(QMainWindow):
                 self._current_paths.add(photo.path)
         if visible_new:
             # Les photos découvertes pendant le scan arrivent dans l'ordre du
-            # système de fichiers, pas par date : on re-trie pour garder
-            # "plus récent en haut" pendant le scan (pas seulement à la fin).
-            self._current_photos.sort(key=_photo_sort_key, reverse=True)
+            # système de fichiers, pas trié : on re-trie pour respecter le
+            # réglage "Ordre d'affichage" pendant le scan (pas seulement à la fin).
+            self._current_photos = self._sort_photos_for_display(
+                self._current_photos, self._current_context
+            )
             self._grid.set_photos(self._current_photos)
             self._update_status()
 
@@ -1423,12 +1451,14 @@ class MainWindow(QMainWindow):
         self._sidebar.refresh_albums(albums)
         self._refresh_persons()
 
-        # Le scan ajoute les nouvelles photos dans l'ordre filesystem (non daté).
-        # On re-trie la liste courante pour garantir : plus récent en haut.
+        # Le scan ajoute les nouvelles photos dans l'ordre filesystem (non trié).
+        # On re-trie la liste courante selon le réglage "Ordre d'affichage".
         # Applicable à "Toutes les photos" et aux vues dossier (les vues spéciales
         # comme Favoris, Vidéos ou Person ne reçoivent pas de photos via _on_photos_batch).
         if self._current_photos and not self._current_context.startswith(_PERSON_CTX_PREFIX):
-            self._current_photos.sort(key=_photo_sort_key, reverse=True)
+            self._current_photos = self._sort_photos_for_display(
+                self._current_photos, self._current_context
+            )
             self._grid.set_photos(self._current_photos)
 
         if self._warmup_thread and self._warmup_thread.isRunning():
@@ -1436,6 +1466,7 @@ class MainWindow(QMainWindow):
             self._face_index_pending = True
         else:
             self._start_face_indexing()
+        self._start_duplicate_detection()
 
     @Slot()
     def _on_warmup_done(self) -> None:
@@ -2273,11 +2304,47 @@ class MainWindow(QMainWindow):
 
     @Slot(list, str)
     def _on_photo_query_ready(self, photos: list, context_key: str) -> None:
+        photos = self._sort_photos_for_display(photos, context_key)
         self._current_photos  = photos
         self._current_paths   = {p.path for p in photos}
         self._current_context = context_key
         self._grid.set_photos(photos)
         self._update_status()
+
+    def _sort_photos_for_display(self, photos: list, context: str) -> list:
+        """Applique le réglage "Ordre d'affichage" (menu Affichage) à une liste
+        de photos avant affichage dans la grille. La vue "Toutes les photos"
+        (Chronologie) reste toujours triée chronologiquement — seule sa
+        direction suit le réglage — car un tri alphabétique n'a pas de sens
+        pour un album qui s'appelle "Chronologie"."""
+        if context == "Toutes les photos":
+            mode = "chrono"
+        else:
+            mode = self._config.get("display_order.grid_mode", "chrono")
+        direction = self._config.get("display_order.grid_dir", "desc")
+        key_fn = _photo_sort_key if mode == "chrono" else _photo_filename_sort_key
+        return sorted(photos, key=key_fn, reverse=(direction == "desc"))
+
+    def _open_display_order_dialog(self) -> None:
+        dlg = DisplayOrderDialog(self._config, self)
+        if dlg.exec() == QDialog.Accepted:
+            dlg.save_to_config()
+            self._apply_display_order()
+
+    def _apply_display_order(self) -> None:
+        """Réapplique le réglage "Ordre d'affichage" à l'arbre de dossiers et
+        à la grille couramment affichée (appelé après modification via le
+        dialogue, ou au chargement de la bibliothèque)."""
+        self._sidebar.set_folder_order(
+            self._config.get("display_order.folder_mode", "alpha"),
+            self._config.get("display_order.folder_dir", "asc"),
+        )
+        self._sidebar.refresh_folders(self._config.get_scan_folders())
+        if self._current_photos:
+            self._current_photos = self._sort_photos_for_display(
+                self._current_photos, self._current_context
+            )
+            self._grid.set_photos(self._current_photos)
 
     @Slot(str)
     def _on_folder_selected(self, folder: str) -> None:
@@ -2391,7 +2458,9 @@ class MainWindow(QMainWindow):
 
         if moved_old:
             # Naviguer vers le dossier destination pour montrer les photos déplacées
-            photos = self._catalog.get_photos_in_folder(dest_folder)
+            photos = self._sort_photos_for_display(
+                self._catalog.get_photos_in_folder(dest_folder), dest_folder
+            )
             self._current_photos = photos
             self._current_paths  = {p.path for p in photos}
             self._current_context = dest_folder
@@ -2446,177 +2515,108 @@ class MainWindow(QMainWindow):
 
     def _start_duplicate_detection(self) -> None:
         if self._duplicate_thread and self._duplicate_thread.isRunning():
-            QMessageBox.information(
-                self, "Doublons",
-                "Une détection de doublons est déjà en cours."
-            )
             return
 
         paths = self._catalog.get_all_photo_paths_for_dedup()
         if not paths:
-            QMessageBox.information(self, "Doublons",
-                                    "La bibliothèque ne contient aucune photo à analyser.")
             return
 
-        reply = QMessageBox.question(
-            self,
-            "Détecter les doublons",
-            f"Cette opération va comparer les {len(paths)} photos de la bibliothèque "
-            "entre elles pour repérer les doublons exacts ainsi que les quasi-doublons "
-            "(recadrages, retouches, redimensionnements).\n\n"
-            "Résultat : les photos concernées seront regroupées et marquées d'un badge "
-            "sur leur vignette. Rien n'est supprimé ni modifié automatiquement — vous "
-            "pourrez ensuite parcourir les groupes détectés via le bouton « Dupliquées » "
-            "de la barre latérale, et choisir vous-même quels exemplaires ignorer ou "
-            "conserver.\n\n"
-            "⚠ C'est une opération longue (proportionnelle au nombre de photos). Elle "
-            "s'exécute en arrière-plan : une barre de progression s'affiche en bas de "
-            "la fenêtre et vous pouvez continuer à utiliser PixelPhotoManager pendant "
-            "ce temps. Les résultats n'apparaîtront qu'à la fin de l'analyse.",
-            QMessageBox.Yes | QMessageBox.No,
-            QMessageBox.No,
-        )
-        if reply != QMessageBox.Yes:
-            return
+        seed_groups = self._catalog.get_duplicate_group_assignments()
 
-        detector = DuplicateDetectorThread(paths, self)
+        detector = DuplicateDetectorThread(paths, seed_groups=seed_groups, parent=self)
         self._duplicate_thread = detector
 
-        def _on_progress(cur, total, msg):
-            self._sb_progress_bar.setRange(0, max(total, 1))
-            self._sb_progress_bar.setValue(cur)
-            self._lbl_action.setText(msg)
-
-        # Le calcul tourne dans un thread séparé : si la détection se termine
-        # (ou échoue) pendant que la boîte "Annuler ?" ci-dessous est ouverte
-        # (QMessageBox.exec bloque via une boucle d'événements imbriquée mais
-        # laisse passer les signaux Qt), on ferme la confirmation de force et
-        # on affiche directement le résultat — sinon les deux boîtes de
-        # dialogue s'empilent, ce qui a été observé en test manuel.
-        cancel_dialog: QMessageBox | None = None
-        dialog_dismissed_by_finish = False
-
-        def _dismiss_cancel_dialog():
-            nonlocal dialog_dismissed_by_finish
-            if cancel_dialog is not None:
-                dialog_dismissed_by_finish = True
-                cancel_dialog.close()
+        def _on_partial(groups: dict, corrupted: list):
+            self._update_corrupted_indicator(corrupted)
+            self._apply_duplicate_results(groups, corrupted, seed_groups=seed_groups)
 
         def _on_done(groups: dict):
-            self._sb_progress_bar.hide()
-            self._sb_progress_bar.setValue(0)
-            self._btn_cancel_duplicate_scan.hide()
-            self._lbl_action.setText("")
             self._duplicate_grid.set_scanning(False)
-            _dismiss_cancel_dialog()
-            self._apply_duplicate_results(groups, detector.corrupted_paths)
+            self._last_duplicate_check = datetime.now()
+            self._apply_duplicate_results(groups, detector.corrupted_paths, seed_groups=seed_groups)
 
         def _on_error(msg: str):
-            self._sb_progress_bar.hide()
-            self._sb_progress_bar.setValue(0)
-            self._btn_cancel_duplicate_scan.hide()
-            self._lbl_action.setText("")
+            logger.warning("Détection de doublons : %s", msg)
             self._duplicate_grid.set_scanning(False)
-            _dismiss_cancel_dialog()
-            QMessageBox.critical(self, "Erreur détection doublons", msg)
 
         def _on_cancelled():
-            self._sb_progress_bar.hide()
-            self._sb_progress_bar.setValue(0)
-            self._btn_cancel_duplicate_scan.hide()
-            self._lbl_action.setText("")
             self._duplicate_grid.set_scanning(False)
-            self.statusBar().showMessage("Détection de doublons annulée.", 5000)
 
-        def _on_cancel_clicked():
-            nonlocal cancel_dialog, dialog_dismissed_by_finish
-            dlg = QMessageBox(self)
-            dlg.setIcon(QMessageBox.Question)
-            dlg.setWindowTitle("Annuler la détection de doublons")
-            dlg.setText(
-                "Voulez-vous vraiment interrompre la détection de doublons en "
-                "cours ? Les résultats calculés jusqu'ici seront perdus."
-            )
-            dlg.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
-            dlg.setDefaultButton(QMessageBox.No)
-            cancel_dialog = dlg
-            dialog_dismissed_by_finish = False
-            reply = dlg.exec()
-            cancel_dialog = None
-            if dialog_dismissed_by_finish:
-                return  # le résultat vient d'être affiché par _on_done/_on_error
-            if reply == QMessageBox.Yes:
-                detector.cancel()
-
-        detector.progress.connect(_on_progress)
+        detector.partial_results.connect(_on_partial)
         detector.finished.connect(_on_done)
         detector.error.connect(_on_error)
         detector.cancelled.connect(_on_cancelled)
-        try:
-            self._btn_cancel_duplicate_scan.clicked.disconnect()
-        except RuntimeError:
-            pass  # aucune connexion existante (1re détection de la session)
-        self._btn_cancel_duplicate_scan.clicked.connect(_on_cancel_clicked)
-
-        self._sb_progress_bar.setRange(0, len(paths))
-        self._sb_progress_bar.setValue(0)
-        self._sb_progress_bar.show()
-        self._btn_cancel_duplicate_scan.show()
         self._duplicate_grid.set_scanning(True)
         detector.start()
 
-    def _apply_duplicate_results(self, groups: dict, corrupted_paths=()) -> None:
-        corrupted_paths = list(corrupted_paths)
-        if not groups:
-            msg = "Aucun doublon détecté dans la bibliothèque."
-            if corrupted_paths:
-                n = len(corrupted_paths)
-                msg += (f"\n\n⚠ {n} fichier{'s' if n != 1 else ''} n'ont pas pu être lu"
-                        f"{'s' if n != 1 else ''} pendant l'analyse (probablement corrompu"
-                        f"{'s' if n != 1 else ''}).")
-            box = QMessageBox(QMessageBox.Information, "Doublons", msg, QMessageBox.Ok, self)
-            if corrupted_paths:
-                btn_repair = box.addButton("Réparer…", QMessageBox.ActionRole)
-                btn_repair.clicked.connect(lambda: self._offer_corrupted_repair(corrupted_paths))
-            box.exec()
-            self._catalog.clear_duplicate_groups()
-            # Rafraîchir les badges (tout à None)
-            assignments = {p.path: None for p in self._current_photos}
-            self._grid.refresh_duplicate_status(assignments)
-            for p in self._current_photos:
-                p.duplicate_group_id = None
-            if self._viewer.current_photo():
-                self._viewer.current_photo().duplicate_group_id = None
-                self._viewer._update_dup_badge()
-            self._sidebar.update_duplicates_badge(0)
-            if self._stack.currentIndex() == 4:
-                self._duplicate_grid.refresh()
-            else:
-                self._duplicate_grid.invalidate()
-            return
+    def _update_corrupted_indicator(self, corrupted_paths: list[str]) -> None:
+        """Met à jour le compteur cliquable de fichiers corrompus dans la
+        barre de statut, pendant un scan de doublons en cours."""
+        self._live_corrupted_paths = list(corrupted_paths)
+        n = len(self._live_corrupted_paths)
+        if n:
+            self._lbl_corrupted.setText(f"⚠ {n} fichier{'s' if n != 1 else ''} corrompu{'s' if n != 1 else ''}")
+            self._lbl_corrupted.show()
+        else:
+            self._lbl_corrupted.hide()
 
-        # Sauvegarder en DB
-        self._catalog.clear_duplicate_groups()
+    def _show_corrupted_list_dialog(self, _checked: bool = False) -> None:
+        corrupted_paths = self._live_corrupted_paths
+        if not corrupted_paths:
+            return
+        dlg = QDialog(self)
+        dlg.setWindowTitle("Fichiers corrompus")
+        v = QVBoxLayout(dlg)
+        v.addWidget(QLabel(f"{len(corrupted_paths)} fichier(s) n'ont pas pu être lu(s) "
+                            "pendant l'analyse en cours (probablement corrompu(s)) :"))
+        list_widget = QListWidget()
+        list_widget.addItems(corrupted_paths)
+        v.addWidget(list_widget)
+        buttons = QDialogButtonBox(QDialogButtonBox.Close)
+        btn_repair = buttons.addButton("Réparer…", QDialogButtonBox.ActionRole)
+        btn_repair.clicked.connect(lambda: self._offer_corrupted_repair(list(corrupted_paths)))
+        btn_delete = buttons.addButton("Supprimer…", QDialogButtonBox.ActionRole)
+        btn_delete.clicked.connect(lambda: self._offer_corrupted_delete(list(corrupted_paths)))
+        buttons.rejected.connect(dlg.reject)
+        buttons.accepted.connect(dlg.accept)
+        buttons.button(QDialogButtonBox.Close).clicked.connect(dlg.accept)
+        v.addWidget(buttons)
+        dlg.resize(600, 400)
+        dlg.exec()
+
+    def _apply_duplicate_results(self, groups: dict, corrupted_paths=(),
+                                  *, seed_groups: dict | None = None) -> None:
+        """Applique un instantané (partiel ou final) de la détection de
+        doublons : persiste les groupes en base, met à jour les PhotoInfo en
+        mémoire et rafraîchit grille/visionneuse/sidebar. `seed_groups` est
+        l'état {path: group_id} connu au lancement de cette passe — tout
+        chemin qui y figurait mais n'apparaît plus dans `groups` (groupe
+        dissous, réduit à un singleton, ou fichier retiré de la bibliothèque)
+        voit son `duplicate_group_id` explicitement effacé."""
         assignments: dict[str, int] = {}
         for gid, members in groups.items():
             for path in members:
                 assignments[path] = gid
+
+        stale = (set(seed_groups) - set(assignments)) if seed_groups else set()
+
         self._catalog.set_duplicate_groups(assignments)
+        if stale:
+            self._catalog.set_duplicate_groups({p: None for p in stale})
 
-        # Mettre à jour les PhotoInfo en mémoire
-        path_to_gid = {p: None for p in self._catalog.get_all_photo_paths_for_dedup()}
-        path_to_gid.update(assignments)
         for photo in self._current_photos:
-            photo.duplicate_group_id = path_to_gid.get(photo.path)
+            if photo.path in assignments:
+                photo.duplicate_group_id = assignments[photo.path]
+            elif photo.path in stale:
+                photo.duplicate_group_id = None
 
-        # Rafraîchir la grille
-        grid_assignments = {p.path: p.duplicate_group_id for p in self._current_photos}
-        self._grid.refresh_duplicate_status(grid_assignments)
+        ui_assignments = dict(assignments)
+        ui_assignments.update({p: None for p in stale})
+        self._grid.refresh_duplicate_status(ui_assignments)
 
-        # Rafraîchir le badge de la visionneuse si ouverte
-        if self._viewer.current_photo():
-            cp = self._viewer.current_photo()
-            cp.duplicate_group_id = path_to_gid.get(cp.path)
+        cp = self._viewer.current_photo()
+        if cp and cp.path in ui_assignments:
+            cp.duplicate_group_id = ui_assignments[cp.path]
             self._viewer._update_dup_badge()
 
         self._sidebar.update_duplicates_badge(len(groups))
@@ -2625,37 +2625,54 @@ class MainWindow(QMainWindow):
         else:
             self._duplicate_grid.invalidate()
 
-        # Générer le rapport HTML
-        from src.core.app_dirs import APP_DATA_DIR
-        report_path = str(APP_DATA_DIR / "duplicates_report.html")
-        try:
-            generate_html_report(groups, report_path)
-        except Exception as e:
-            logger.warning("Impossible de générer le rapport : %s", e)
-            report_path = None
+    def _show_duplicate_status_dialog(self) -> None:
+        """État instantané (lecture seule) de la détection de doublons — la
+        détection tourne en continu en arrière-plan, ce dialogue remplace
+        l'ancien déclenchement manuel avec rapport de fin."""
+        running = bool(self._duplicate_thread and self._duplicate_thread.isRunning())
 
-        n_groups = len(groups)
-        n_files  = sum(len(v) for v in groups.values())
-        msg = (f"{n_groups} groupe{'s' if n_groups != 1 else ''} de doublons détecté"
-               f"{'s' if n_groups != 1 else ''} ({n_files} fichiers).\n\n"
-               "Les photos en double sont maintenant marquées d'un badge ⧉ orange.\n"
-               "Cliquez sur le badge pour voir où se trouvent les autres exemplaires.")
-        if report_path:
-            msg += f"\n\nRapport HTML généré :\n{report_path}"
-        if corrupted_paths:
-            n = len(corrupted_paths)
-            msg += (f"\n\n⚠ {n} fichier{'s' if n != 1 else ''} n'ont pas pu être lu"
-                    f"{'s' if n != 1 else ''} pendant l'analyse (probablement corrompu"
-                    f"{'s' if n != 1 else ''}).")
-        box = QMessageBox(QMessageBox.Information, "Doublons détectés", msg,
-                          QMessageBox.Ok, self)
-        if report_path:
-            btn_open = box.addButton("Ouvrir le rapport", QMessageBox.ActionRole)
-            btn_open.clicked.connect(lambda: os.startfile(report_path))
-        if corrupted_paths:
-            btn_repair = box.addButton("Réparer…", QMessageBox.ActionRole)
-            btn_repair.clicked.connect(lambda: self._offer_corrupted_repair(corrupted_paths))
-        box.exec()
+        n_groups = self._catalog.count_duplicate_groups()
+        n_photos = len(self._catalog.get_duplicate_group_assignments())
+        n_corrupted = len(self._live_corrupted_paths)
+
+        dlg = QDialog(self)
+        dlg.setWindowTitle("État des doublons")
+        v = QVBoxLayout(dlg)
+
+        v.addWidget(QLabel(f"{n_groups} groupe{'s' if n_groups != 1 else ''} de doublons "
+                            f"({n_photos} photo{'s' if n_photos != 1 else ''} concernée"
+                            f"{'s' if n_photos != 1 else ''})."))
+
+        if running:
+            status_text = "Analyse en cours…"
+        elif self._last_duplicate_check is not None:
+            status_text = f"Dernière vérification : {self._last_duplicate_check:%d/%m/%Y %H:%M}"
+        else:
+            status_text = "Dernière vérification : jamais"
+        v.addWidget(QLabel(status_text))
+
+        if n_corrupted:
+            corrupted_row = QHBoxLayout()
+            corrupted_row.addWidget(QLabel(
+                f"⚠ {n_corrupted} fichier{'s' if n_corrupted != 1 else ''} corrompu"
+                f"{'s' if n_corrupted != 1 else ''}"
+            ))
+            btn_corrupted = QPushButton("Voir la liste…")
+            btn_corrupted.clicked.connect(lambda: (dlg.accept(), self._show_corrupted_list_dialog()))
+            corrupted_row.addWidget(btn_corrupted)
+            v.addLayout(corrupted_row)
+
+        buttons = QDialogButtonBox(QDialogButtonBox.Close)
+        btn_groups = buttons.addButton("Voir les groupes", QDialogButtonBox.ActionRole)
+        btn_groups.clicked.connect(lambda: (dlg.accept(), self.show_duplicate_grid()))
+        btn_check_now = buttons.addButton("Vérifier maintenant", QDialogButtonBox.ActionRole)
+        btn_check_now.setEnabled(not running)
+        btn_check_now.clicked.connect(lambda: (dlg.accept(), self._start_duplicate_detection()))
+        buttons.rejected.connect(dlg.reject)
+        buttons.button(QDialogButtonBox.Close).clicked.connect(dlg.accept)
+        v.addWidget(buttons)
+
+        dlg.exec()
 
     def _record_corrupted_files(self, corrupted_count: int, repaired_count: int,
                                  still_failed: list) -> "str | None":
@@ -2731,6 +2748,53 @@ class MainWindow(QMainWindow):
         progress.canceled.connect(thread.cancel)
 
         thread.start()
+
+    def _offer_corrupted_delete(self, corrupted_paths: list) -> None:
+        n = len(corrupted_paths)
+        reply = QMessageBox.question(
+            self,
+            "Supprimer les fichiers corrompus",
+            f"{n} fichier{'s' if n != 1 else ''} semble{'nt' if n != 1 else ''} corrompu"
+            f"{'s' if n != 1 else ''}.\n\n"
+            f"Supprimer définitivement {'ce fichier' if n == 1 else 'ces fichiers'} ?\n\n"
+            "Cette action est irréversible.",
+            QMessageBox.Yes | QMessageBox.Cancel,
+            QMessageBox.Cancel,
+        )
+        if reply != QMessageBox.Yes:
+            return
+
+        deleted: list[str] = []
+        errors: list[str] = []
+        for path in corrupted_paths:
+            try:
+                Path(path).unlink(missing_ok=True)
+                self._catalog.delete_photo(path)
+                self._thumb_cache.invalidate(path)
+                self._face_db.delete_for_path(path)
+                deleted.append(path)
+            except Exception as e:
+                errors.append(f"{os.path.basename(path)} : {e}")
+
+        if deleted:
+            deleted_set = set(deleted)
+            self._grid.remove_photos(deleted)
+            self._current_photos = [p for p in self._current_photos if p.path not in deleted_set]
+            self._current_paths -= deleted_set
+            self._update_status()
+
+            remaining_corrupted = [p for p in self._live_corrupted_paths if p not in deleted_set]
+            self._update_corrupted_indicator(remaining_corrupted)
+
+        if errors:
+            QMessageBox.warning(self, "Erreurs de suppression",
+                                "Impossible de supprimer :\n" + "\n".join(errors))
+        elif deleted:
+            QMessageBox.information(
+                self, "Suppression terminée",
+                f"{len(deleted)} fichier{'s' if len(deleted) != 1 else ''} supprimé"
+                f"{'s' if len(deleted) != 1 else ''}.",
+            )
 
     @Slot(object)
     def _on_duplicate_badge_clicked(self, photo: PhotoInfo) -> None:
@@ -3852,25 +3916,6 @@ class MainWindow(QMainWindow):
                 return
             self._cluster_thread.wait(500)
         if self._duplicate_thread and self._duplicate_thread.isRunning():
-            dlg = QMessageBox(self)
-            dlg.setWindowTitle("Détection de doublons en cours")
-            dlg.setIcon(QMessageBox.Icon.Warning)
-            dlg.setText("<b>Une détection de doublons est en cours.</b>")
-            dlg.setInformativeText(
-                "Si vous fermez l'application maintenant, l'analyse sera "
-                "interrompue et <b>le résultat sera perdu</b>. Il faudra tout "
-                "recommencer au prochain démarrage.<br><br>"
-                "Voulez-vous quand même fermer l'application ?"
-            )
-            dlg.setStandardButtons(
-                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
-            )
-            dlg.setDefaultButton(QMessageBox.StandardButton.No)
-            dlg.button(QMessageBox.StandardButton.Yes).setText("Fermer quand même")
-            dlg.button(QMessageBox.StandardButton.No).setText("Annuler")
-            if dlg.exec() != QMessageBox.StandardButton.Yes:
-                event.ignore()
-                return
             self._duplicate_thread.cancel()
             self._duplicate_thread.wait(3000)
         if self._photo_query_thread and self._photo_query_thread.isRunning():

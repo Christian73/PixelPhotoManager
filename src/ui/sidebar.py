@@ -250,6 +250,8 @@ class Sidebar(QWidget):
         self._restoring: bool = False
         self._face_loader: _FaceIconLoader | None = None
         self._pending_person_id: int | None = None
+        self._folder_order_mode: str = "alpha"   # "alpha" | "chrono"
+        self._folder_order_dir: str = "asc"       # "asc" | "desc"
         self._setup_ui()
 
     def _setup_ui(self) -> None:
@@ -479,9 +481,27 @@ class Sidebar(QWidget):
         """Initialise l'état mémorisé depuis la config (appeler avant refresh_folders)."""
         self._expanded_paths = set(paths)
 
+    def set_folder_order(self, mode: str, direction: str) -> None:
+        """Définit l'ordre de tri du panneau Dossiers (racines + sous-dossiers).
+        mode: "alpha" | "chrono" — direction: "asc" | "desc".
+        Pris en compte au prochain refresh_folders()/expand."""
+        self._folder_order_mode = mode
+        self._folder_order_dir = direction
+
+    def _sort_folder_paths(self, paths: list[str]) -> list[str]:
+        reverse = self._folder_order_dir == "desc"
+        if self._folder_order_mode == "chrono":
+            def key(p):
+                try:
+                    return os.path.getmtime(p)
+                except OSError:
+                    return 0.0
+            return sorted(paths, key=key, reverse=reverse)
+        return sorted(paths, key=lambda p: (os.path.basename(p) or p).lower(), reverse=reverse)
+
     def refresh_folders(self, folders: list[str]) -> None:
         self._folder_tree.clear()
-        for folder in folders:
+        for folder in self._sort_folder_paths(list(folders)):
             root_item = QTreeWidgetItem([os.path.basename(folder) or folder])
             root_item.setData(0, Qt.UserRole, folder)
             root_item.setToolTip(0, folder)
@@ -516,16 +536,26 @@ class Sidebar(QWidget):
         Chaque enfant reçoit un placeholder s'il a lui-même des sous-dossiers,
         permettant le lazy loading à l'expansion."""
         try:
-            entries = sorted(os.scandir(folder_path), key=lambda e: e.name.lower(), reverse=True)
-            for entry in entries:
-                if entry.is_dir() and not entry.name.startswith("."):
-                    child = QTreeWidgetItem([entry.name])
-                    child.setData(0, Qt.UserRole, entry.path)
-                    child.setToolTip(0, entry.path)
-                    parent_item.addChild(child)
-                    if self._has_subdirs(entry.path):
-                        # Placeholder → rend le nœud dépliable
-                        child.addChild(QTreeWidgetItem([""]))
+            dirs = [e for e in os.scandir(folder_path)
+                    if e.is_dir() and not e.name.startswith(".")]
+            reverse = self._folder_order_dir == "desc"
+            if self._folder_order_mode == "chrono":
+                def key(e):
+                    try:
+                        return e.stat().st_mtime
+                    except OSError:
+                        return 0.0
+            else:
+                def key(e):
+                    return e.name.lower()
+            for entry in sorted(dirs, key=key, reverse=reverse):
+                child = QTreeWidgetItem([entry.name])
+                child.setData(0, Qt.UserRole, entry.path)
+                child.setToolTip(0, entry.path)
+                parent_item.addChild(child)
+                if self._has_subdirs(entry.path):
+                    # Placeholder → rend le nœud dépliable
+                    child.addChild(QTreeWidgetItem([""]))
         except PermissionError:
             pass
 

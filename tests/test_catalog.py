@@ -266,6 +266,41 @@ class TestDuplicateGroups:
         assert catalog.get_duplicate_groups() == {}
         assert catalog.count_duplicate_groups() == 0
 
+    def test_repeated_set_duplicate_groups_after_single_clear(self, tmp_path):
+        """Pattern utilisé par le scan de doublons progressif (main_window.py) :
+        clear_duplicate_groups() une seule fois au démarrage, puis plusieurs
+        appels croissants à set_duplicate_groups() au fil du scan — ne doit
+        laisser aucune ligne orpheline ni incohérence."""
+        catalog = Catalog(db_path=tmp_path / "catalog.db")
+        catalog.add_or_update_photo(_make_photo("C:/photos/a.jpg"))
+        catalog.add_or_update_photo(_make_photo("C:/photos/b.jpg"))
+        catalog.add_or_update_photo(_make_photo("C:/photos/c.jpg"))
+        catalog.add_or_update_photo(_make_photo("C:/photos/d.jpg"))
+
+        catalog.clear_duplicate_groups()
+
+        # Instantané 1 : un seul groupe trouvé jusqu'ici
+        catalog.set_duplicate_groups({
+            os.path.normpath("C:/photos/a.jpg"): 1,
+            os.path.normpath("C:/photos/b.jpg"): 1,
+        })
+        groups = catalog.get_duplicate_groups()
+        assert set(groups.keys()) == {1}
+        assert {p.filename for p in groups[1]} == {"a.jpg", "b.jpg"}
+
+        # Instantané 2 : un second groupe apparaît, le premier ne change pas
+        catalog.set_duplicate_groups({
+            os.path.normpath("C:/photos/a.jpg"): 1,
+            os.path.normpath("C:/photos/b.jpg"): 1,
+            os.path.normpath("C:/photos/c.jpg"): 2,
+            os.path.normpath("C:/photos/d.jpg"): 2,
+        })
+        groups = catalog.get_duplicate_groups()
+        assert set(groups.keys()) == {1, 2}
+        assert {p.filename for p in groups[1]} == {"a.jpg", "b.jpg"}
+        assert {p.filename for p in groups[2]} == {"c.jpg", "d.jpg"}
+        assert catalog.count_duplicate_groups() == 2
+
     def test_ignore_duplicate_group_dissolves_only_that_group(self, tmp_path):
         catalog = Catalog(db_path=tmp_path / "catalog.db")
         catalog.add_or_update_photo(_make_photo("C:/photos/a.jpg"))
@@ -279,6 +314,43 @@ class TestDuplicateGroups:
 
         groups = catalog.get_duplicate_groups()
         assert set(groups.keys()) == {2}
+
+    def test_get_duplicate_group_assignments_empty_when_nothing_grouped(self, tmp_path):
+        catalog = Catalog(db_path=tmp_path / "catalog.db")
+        catalog.add_or_update_photo(_make_photo("C:/photos/a.jpg"))
+
+        assert catalog.get_duplicate_group_assignments() == {}
+
+    def test_get_duplicate_group_assignments_reflects_set_duplicate_groups(self, tmp_path):
+        catalog = Catalog(db_path=tmp_path / "catalog.db")
+        catalog.add_or_update_photo(_make_photo("C:/photos/a.jpg"))
+        catalog.add_or_update_photo(_make_photo("C:/photos/b.jpg"))
+        catalog.add_or_update_photo(_make_photo("C:/photos/c.jpg"))
+
+        a = os.path.normpath("C:/photos/a.jpg")
+        b = os.path.normpath("C:/photos/b.jpg")
+        catalog.set_duplicate_groups({a: 1, b: 1})
+
+        assert catalog.get_duplicate_group_assignments() == {a: 1, b: 1}
+
+    def test_set_duplicate_groups_none_clears_stale_assignment(self, tmp_path):
+        """Technique utilisée par _apply_duplicate_results (main_window.py) pour
+        effacer les groupes obsolètes après une passe incrémentale :
+        set_duplicate_groups({p: None for p in stale})."""
+        catalog = Catalog(db_path=tmp_path / "catalog.db")
+        catalog.add_or_update_photo(_make_photo("C:/photos/a.jpg"))
+        catalog.add_or_update_photo(_make_photo("C:/photos/b.jpg"))
+
+        a = os.path.normpath("C:/photos/a.jpg")
+        b = os.path.normpath("C:/photos/b.jpg")
+        catalog.set_duplicate_groups({a: 1, b: 1})
+        assert catalog.get_duplicate_group_assignments() == {a: 1, b: 1}
+
+        catalog.set_duplicate_groups({a: None})
+
+        assert catalog.get_duplicate_group_assignments() == {b: 1}
+        rows = _raw_query_all(catalog, "SELECT duplicate_group_id FROM photos WHERE path=?", (a,))
+        assert rows == [(None,)]
 
 
 class TestCleanupAssetDirs:

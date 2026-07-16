@@ -34,3 +34,32 @@ def test_signal_object_int_keyed_dict_survives_thread_boundary(qtbot):
 
     worker.wait()
     assert received == {1: ["a"], 2: ["b"]}
+
+
+class _PartialResultsWorker(QThread):
+    """Même forme que DuplicateDetectorThread.partial_results :
+    Signal(object, object), clés int côté dict — la 2e émission de la même
+    forme que `finished`, susceptible du même bug."""
+    partial = Signal(object, object)
+
+    def run(self) -> None:
+        self.partial.emit({1: ["a"], 2: ["b"]}, ["corrupted.jpg"])
+
+
+def test_signal_object_int_keyed_dict_survives_thread_boundary_partial_results(qtbot):
+    worker = _PartialResultsWorker()
+    received: dict = {}
+    corrupted_received: list = []
+
+    def _capture(groups, corrupted):
+        received.update(groups)
+        corrupted_received.extend(corrupted)
+
+    worker.partial.connect(_capture)
+
+    with qtbot.waitSignal(worker.partial, timeout=2000):
+        worker.start()
+
+    worker.wait()
+    assert received == {1: ["a"], 2: ["b"]}
+    assert corrupted_received == ["corrupted.jpg"]

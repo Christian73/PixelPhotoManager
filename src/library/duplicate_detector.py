@@ -22,9 +22,15 @@ from pathlib import Path
 
 from PySide6.QtCore import QThread, Signal
 
+from src.core.cpu_throttle import throttled_worker_count, lower_current_thread_priority
+from src.library.dedup_cache import DedupCache
+
 logger = logging.getLogger(__name__)
 
 _PROGRESS_INTERVAL = 0.5  # secondes — throttle des logs/signaux dans les boucles O(N²)
+_LIVE_SNAPSHOT_INTERVAL = 2.0  # secondes — throttle des instantanés partial_results
+# (renumérotation + écriture catalogue + rafraîchissement UI), plus coûteux qu'un
+# simple signal de progression, donc cadencé plus lentement que _PROGRESS_INTERVAL.
 
 # ── Tier 1 ─────────────────────────────────────────────────────────────────────
 _HASH_THRESHOLD  = 10    # distance de Hamming max (8 = exact/resize ; 10 couvre les éditions modérées)
@@ -119,6 +125,23 @@ def _merge(group_of: dict[str, int], path_a: str, path_b: str,
                 group_of[p] = new
 
 
+def _renumber(group_of: dict[str, int]) -> dict[int, list[str]]:
+    """Renumérote les group_id bruts (1, 2, 3…) et exclut les singletons —
+    utilisable aussi bien sur un `group_of` final que sur un instantané
+    provisoire pris en cours de scan (les groupes ne font que croître)."""
+    raw: dict[int, list[str]] = {}
+    for path, gid in group_of.items():
+        raw.setdefault(gid, []).append(path)
+
+    groups: dict[int, list[str]] = {}
+    new_id = 1
+    for members in raw.values():
+        if len(members) >= 2:
+            groups[new_id] = members
+            new_id += 1
+    return groups
+
+
 # ── thread principal ────────────────────────────────────────────────────────────
 
 class DuplicateDetectorThread(QThread):
@@ -130,12 +153,31 @@ class DuplicateDetectorThread(QThread):
     # échoue silencieusement (Shiboken log une erreur en stderr, pas d'exception
     # Python) et le slot reçoit un dict vide, faisant croire à "aucun doublon".
     finished  = Signal(object)         # {group_id: [path, ...]}
+    # Instantané provisoire pendant le scan, même contrainte de clés que ci-dessus.
+    partial_results = Signal(object, object)  # ({group_id: [path,...]}, [chemin_corrompu, ...])
     error     = Signal(str)
     cancelled = Signal()              # émis une fois le thread réellement arrêté
 
-    def __init__(self, photo_paths: list, parent=None):
+    def __init__(self, photo_paths: list, seed_groups: dict[str, int] | None = None,
+                 cache_db_path: str | None = None,
+                 full_catalog_scan: bool = True, parent=None):
+        """seed_groups : {path: group_id} connu au moment du déclenchement
+        (typiquement Catalog.get_duplicate_group_assignments()) — amorce
+        group_of pour que la comparaison reste vraiment incrémentale (cf.
+        compared_tier1/compared_tier2 dans dedup_cache.py). Attention :
+        omettre seed_groups lors d'un 2e run sur un même cache_db_path déjà
+        peuplé par un run précédent ne redéclenche PAS une comparaison
+        complète — toutes les paires apparaîtront comme « déjà comparées »
+        et aucun groupe ne sera (re)formé. Toujours passer le seed_groups
+        courant, y compris pour un nouveau scan complet volontaire (auquel
+        cas passer {} explicitement n'aide pas non plus : purger
+        compared_tier1/compared_tier2 via un nouveau cache_db_path ou une
+        purge de cache serait nécessaire)."""
         super().__init__(parent)
         self._paths = photo_paths
+        self._seed_groups = dict(seed_groups) if seed_groups else {}
+        self._cache_db_path = cache_db_path
+        self._full_catalog_scan = full_catalog_scan
         self._cancelled = False
         self._corrupted: set[str] = set()
 
@@ -158,6 +200,7 @@ class DuplicateDetectorThread(QThread):
         return sorted(self._corrupted)
 
     def run(self) -> None:
+        self.setPriority(QThread.LowestPriority)
         try:
             self._detect()
         except Exception as e:
@@ -190,109 +233,186 @@ class DuplicateDetectorThread(QThread):
         # Les deux phases comptent chacune pour la moitié de la barre de progression.
         grand_total = total * 2
 
-        # Phase 1 : calcul des empreintes pHash + dimensions (utilisées par le Tier 2)
-        hashes: list[tuple[str, object]] = []
-        dims: dict[str, tuple[int, int]] = {}
-        micro: dict[str, "np.ndarray"] = {}
-        n_workers = os.cpu_count() or 4
-        logger.info("Tier 1 : calcul des empreintes de %d photo(s) sur %d cœur(s)…",
-                    total, n_workers)
+        cache = DedupCache(self._cache_db_path) if self._cache_db_path else DedupCache()
+        cache.open()
+        try:
+            if self._full_catalog_scan:
+                removed = cache.purge_missing(set(paths))
+                if removed:
+                    logger.info("dedup_cache : %d entrée(s) obsolète(s) purgée(s).", removed)
 
-        def _compute_fingerprint(path: str):
-            # Fonction pure (aucun état partagé écrit) : chaque appel décode son
-            # propre fichier et retourne son résultat, fusionné ensuite sur ce
-            # thread au fur et à mesure des complétions — décodage JPEG/PNG (PIL)
-            # et calcul du DCT (imagehash, numpy) libèrent tous deux le GIL le
-            # temps du calcul C, donc un pool de threads exploite réellement
-            # plusieurs cœurs ici (même raisonnement que pour ORB/RANSAC au Tier 2
-            # plus bas dans ce fichier).
-            try:
-                with Image.open(path) as img:
-                    d = img.size
-                    h = imagehash.phash(img)
-                    arr = np.asarray(
-                        img.convert("L").resize(
-                            (_HASH_MICRO_SIZE, _HASH_MICRO_SIZE), Image.LANCZOS
-                        ),
-                        dtype=np.float64,
-                    )
-                arr -= arr.mean()
-                std = arr.std()
-                if std > 1e-6:
-                    arr /= std
-                return path, h, d, arr, None
-            except Exception as exc:
-                return path, None, None, None, exc
+            # Phase 1 : calcul des empreintes pHash + dimensions (utilisées par le Tier 2)
+            hashes: list[tuple[str, object]] = []
+            dims: dict[str, tuple[int, int]] = {}
+            micro: dict[str, "np.ndarray"] = {}
+            mtimes: dict[str, float] = {}
+            n_workers = throttled_worker_count()
 
-        done = 0
-        last_emit = time.monotonic()
-        with ThreadPoolExecutor(max_workers=n_workers) as executor:
-            futures = {}
+            # Réutilisation du cache : une photo dont le mtime n'a pas changé
+            # depuis le dernier scan n'a pas besoin d'être rouverte/rehashée.
+            cached_fp = cache.get_fingerprints(paths)
+            to_compute: list[str] = []
             for path in paths:
-                # Log systématique (pas throttlé) à la soumission : si le
-                # traitement se bloque sur un fichier précis (image corrompue,
-                # volume réseau lent…), cette ligne reste la dernière du log —
-                # elle identifie le fichier en cause même en exécution parallèle.
-                logger.debug("Tier 1 empreinte (soumission) : %s", path)
-                futures[executor.submit(_compute_fingerprint, path)] = path
+                row = cached_fp.get(path)
+                if row is not None:
+                    mtime_cached, phash_hex, w, h, micro_blob = row
+                    try:
+                        current_mtime = os.path.getmtime(path)
+                    except OSError:
+                        current_mtime = None
+                    if current_mtime is not None and abs(mtime_cached - current_mtime) < 1.0:
+                        dims[path] = (w, h)
+                        micro[path] = np.frombuffer(
+                            micro_blob, dtype=np.float64
+                        ).reshape(_HASH_MICRO_SIZE, _HASH_MICRO_SIZE)
+                        mtimes[path] = current_mtime
+                        hashes.append((path, imagehash.hex_to_hash(phash_hex)))
+                        continue
+                to_compute.append(path)
 
-            for future in as_completed(futures):
-                if self._is_cancelled():
-                    for f in futures:
-                        f.cancel()
-                    return
+            cache_hits = total - len(to_compute)
+            logger.info(
+                "Tier 1 : %d/%d empreintes réutilisées du cache, %d à calculer sur %d cœur(s)…",
+                cache_hits, total, len(to_compute), n_workers,
+            )
 
-                path = futures[future]
+            def _compute_fingerprint(path: str):
+                # Fonction pure (aucun état partagé écrit) : chaque appel décode son
+                # propre fichier et retourne son résultat, fusionné ensuite sur ce
+                # thread au fur et à mesure des complétions — décodage JPEG/PNG (PIL)
+                # et calcul du DCT (imagehash, numpy) libèrent tous deux le GIL le
+                # temps du calcul C, donc un pool de threads exploite réellement
+                # plusieurs cœurs ici (même raisonnement que pour ORB/RANSAC au Tier 2
+                # plus bas dans ce fichier).
                 try:
-                    path, h, d, arr, exc = future.result()
-                except Exception as e:
-                    # _compute_fingerprint capture déjà toute exception en interne
-                    # (retournée dans le tuple plutôt que levée) : ce garde-fou ne
-                    # devrait normalement jamais se déclencher, mais une panne
-                    # inattendue d'un worker ne doit pas faire échouer tout le scan.
-                    logger.warning("Worker Tier 1 en échec pour %s : %s", path, e)
-                    h = d = arr = None
-                    exc = e
-                done += 1
-                if exc is not None:
-                    logger.warning("Fichier illisible (Tier 1) : %s (%s)", path, exc)
-                    self._corrupted.add(path)
-                else:
-                    dims[path] = d
-                    micro[path] = arr
-                    hashes.append((path, h))
+                    with Image.open(path) as img:
+                        d = img.size
+                        h = imagehash.phash(img)
+                        arr = np.asarray(
+                            img.convert("L").resize(
+                                (_HASH_MICRO_SIZE, _HASH_MICRO_SIZE), Image.LANCZOS
+                            ),
+                            dtype=np.float64,
+                        )
+                    # Lu après l'ouverture réussie (pas avant) pour que le mtime
+                    # persisté corresponde au contenu réellement empreinté.
+                    mtime = os.path.getmtime(path)
+                    arr -= arr.mean()
+                    std = arr.std()
+                    if std > 1e-6:
+                        arr /= std
+                    return path, h, d, arr, mtime, None
+                except Exception as exc:
+                    return path, None, None, None, None, exc
 
-                now = time.monotonic()
-                if now - last_emit >= _PROGRESS_INTERVAL:
-                    last_emit = now
-                    self.progress.emit(done, grand_total,
-                                       f"Tier 1 — empreintes {done}/{total}…")
-                    logger.info("Tier 1 : %d/%d empreintes calculées", done, total)
+            done = cache_hits
+            if cache_hits:
+                # Signal immédiat : évite que la barre semble figée pendant
+                # qu'on saute la majorité d'une grosse bibliothèque déjà en cache.
+                self.progress.emit(done, grand_total,
+                                   f"Tier 1 — empreintes {done}/{total} (cache)…")
 
-        if self._is_cancelled():
-            return
+            last_emit = time.monotonic()
+            last_persist = last_emit
+            pending_fp: list[tuple] = []
+            try:
+                with ThreadPoolExecutor(
+                    max_workers=n_workers, initializer=lower_current_thread_priority
+                ) as executor:
+                    futures = {}
+                    for path in to_compute:
+                        # Log systématique (pas throttlé) à la soumission : si le
+                        # traitement se bloque sur un fichier précis (image corrompue,
+                        # volume réseau lent…), cette ligne reste la dernière du log —
+                        # elle identifie le fichier en cause même en exécution parallèle.
+                        logger.debug("Tier 1 empreinte (soumission) : %s", path)
+                        futures[executor.submit(_compute_fingerprint, path)] = path
 
-        # Phase 2 : groupement par distance de Hamming O(N²)
-        n = len(hashes)
-        group_of: dict[str, int] = {}
-        next_group = [1]
-        total_pairs = n * (n - 1) // 2
-        logger.info("Tier 1 : comparaison de %d empreintes (%d paires à évaluer)…",
-                    n, total_pairs)
-        self.progress.emit(total, grand_total,
-                           f"Tier 1 — comparaison des empreintes (0/{n})…")
+                    for future in as_completed(futures):
+                        if self._is_cancelled():
+                            for f in futures:
+                                f.cancel()
+                            return
 
-        last_emit = time.monotonic()
-        for i in range(n):
+                        path = futures[future]
+                        try:
+                            path, h, d, arr, mtime, exc = future.result()
+                        except Exception as e:
+                            # _compute_fingerprint capture déjà toute exception en interne
+                            # (retournée dans le tuple plutôt que levée) : ce garde-fou ne
+                            # devrait normalement jamais se déclencher, mais une panne
+                            # inattendue d'un worker ne doit pas faire échouer tout le scan.
+                            logger.warning("Worker Tier 1 en échec pour %s : %s", path, e)
+                            h = d = arr = mtime = None
+                            exc = e
+                        done += 1
+                        if exc is not None:
+                            logger.warning("Fichier illisible (Tier 1) : %s (%s)", path, exc)
+                            self._corrupted.add(path)
+                        else:
+                            dims[path] = d
+                            micro[path] = arr
+                            mtimes[path] = mtime
+                            hashes.append((path, h))
+                            pending_fp.append((path, mtime, str(h), d[0], d[1], arr.tobytes()))
+
+                        now = time.monotonic()
+                        if now - last_emit >= _PROGRESS_INTERVAL:
+                            last_emit = now
+                            self.progress.emit(done, grand_total,
+                                               f"Tier 1 — empreintes {done}/{total}…")
+                            logger.info("Tier 1 : %d/%d empreintes calculées", done, total)
+                        if pending_fp and now - last_persist >= _PROGRESS_INTERVAL:
+                            last_persist = now
+                            cache.store_fingerprints(pending_fp)
+                            pending_fp = []
+            finally:
+                # Persiste tout ce qui a été calculé jusqu'ici, y compris en cas
+                # d'annulation (return ci-dessus) — c'est ce qui rend le scan reprenable.
+                if pending_fp:
+                    cache.store_fingerprints(pending_fp)
+
             if self._is_cancelled():
                 return
-            path_i, hash_i = hashes[i]
-            for j in range(i + 1, n):
-                path_j, hash_j = hashes[j]
+
+            # Phase 2 : groupement incrémental par distance de Hamming — amorcé
+            # avec les groupes déjà connus (self._seed_groups), puis seules les
+            # paires impliquant au moins un fichier « nouveau » (jamais comparé
+            # lors d'une passe complète antérieure, ou modifié depuis) sont
+            # évaluées. Les paires ancien×ancien ne sont même pas itérées : déjà
+            # vérifiées lors d'une passe précédente et ne peuvent pas changer
+            # tant qu'aucun des deux fichiers n'est modifié.
+            paths_set = set(paths)
+            group_of: dict[str, int] = {
+                p: gid for p, gid in self._seed_groups.items() if p in paths_set
+            }
+            next_group = [max(group_of.values(), default=0) + 1]
+
+            compared_tier1 = cache.get_compared_tier1([p for p, _ in hashes])
+            new_list: list[tuple[str, object]] = []
+            old_list: list[tuple[str, object]] = []
+            for path, h in hashes:
+                cached_mtime = compared_tier1.get(path)
+                if cached_mtime is not None and abs(cached_mtime - mtimes[path]) < 1.0:
+                    old_list.append((path, h))
+                else:
+                    new_list.append((path, h))
+
+            n = len(new_list)
+            total_pairs = n * (n - 1) // 2 + n * len(old_list)
+            logger.info(
+                "Tier 1 : comparaison de %d empreinte(s) nouvelle(s)/modifiée(s) "
+                "contre %d ancienne(s) (%d paire(s) à évaluer)…",
+                n, len(old_list), total_pairs,
+            )
+            self.progress.emit(total, grand_total,
+                               f"Tier 1 — comparaison des empreintes (0/{n})…")
+
+            def _compare_pair(path_i, hash_i, path_j, hash_j) -> None:
                 try:
                     dist = hash_i - hash_j
                 except Exception:
-                    continue
+                    return
                 if dist <= _HASH_THRESHOLD:
                     # Un pHash peut coïncider par hasard entre deux photos sans
                     # rapport (répartition de luminosité globale similaire),
@@ -304,40 +424,53 @@ class DuplicateDetectorThread(QThread):
                     if arr_i is not None and arr_j is not None:
                         pixel_diff = float(np.abs(arr_i - arr_j).mean())
                         if pixel_diff > _HASH_PIXEL_MAX_DIFF:
-                            continue
+                            return
                     _merge(group_of, path_i, path_j, next_group)
 
-            now = time.monotonic()
-            if now - last_emit >= _PROGRESS_INTERVAL:
-                last_emit = now
-                n_groups = len({v for v in group_of.values()})
-                self.progress.emit(
-                    total + int((i + 1) * total / n), grand_total,
-                    f"Tier 1 — comparaison des empreintes ({i + 1}/{n}, {n_groups} groupe(s))…",
-                )
-                logger.info("Tier 1 : %d/%d empreintes comparées (%d groupe(s) formés)",
-                            i + 1, n, n_groups)
+            last_emit = time.monotonic()
+            last_snapshot = last_emit
+            for i in range(n):
+                if self._is_cancelled():
+                    return
+                path_i, hash_i = new_list[i]
+                for j in range(i + 1, n):
+                    path_j, hash_j = new_list[j]
+                    _compare_pair(path_i, hash_i, path_j, hash_j)
+                for path_j, hash_j in old_list:
+                    _compare_pair(path_i, hash_i, path_j, hash_j)
 
-        # ── Tier 2 : ORB + RANSAC sur les photos non groupées ──────────────────
-        unmatched = [p for p in paths if p not in group_of]
-        logger.info("Tier 1 : %d groupe(s). Tier 2 sur %d photos non groupées.",
-                    len({v for v in group_of.values()}), len(unmatched))
+                now = time.monotonic()
+                if now - last_emit >= _PROGRESS_INTERVAL:
+                    last_emit = now
+                    n_groups = len({v for v in group_of.values()})
+                    self.progress.emit(
+                        total + int((i + 1) * total / n), grand_total,
+                        f"Tier 1 — comparaison des empreintes ({i + 1}/{n}, {n_groups} groupe(s))…",
+                    )
+                    logger.info("Tier 1 : %d/%d empreintes comparées (%d groupe(s) formés)",
+                                i + 1, n, n_groups)
+                if now - last_snapshot >= _LIVE_SNAPSHOT_INTERVAL:
+                    last_snapshot = now
+                    self.partial_results.emit(_renumber(group_of), sorted(self._corrupted))
 
-        self._detect_crops(unmatched, dims, group_of, next_group, total, grand_total)
+            cache.store_compared_tier1([(p, mtimes[p]) for p, _ in new_list])
 
-        # Phase finale : renumérotation (1, 2, 3…)
-        raw: dict[int, list[str]] = {}
-        for path, gid in group_of.items():
-            raw.setdefault(gid, []).append(path)
+            # ── Tier 2 : ORB + RANSAC sur les photos non groupées ──────────────────
+            unmatched = [p for p in paths if p not in group_of]
+            logger.info("Tier 1 : %d groupe(s). Tier 2 sur %d photos non groupées.",
+                        len({v for v in group_of.values()}), len(unmatched))
 
-        groups: dict[int, list[str]] = {}
-        new_id = 1
-        for members in raw.values():
-            if len(members) >= 2:
-                groups[new_id] = members
-                new_id += 1
+            # Émission inconditionnelle : rend visibles les résultats du Tier 1
+            # (souvent déjà la majorité des vrais doublons) avant que la phase
+            # ORB, plus lente, ne démarre.
+            self.partial_results.emit(_renumber(group_of), sorted(self._corrupted))
 
-        self.finished.emit(groups)
+            self._detect_crops(unmatched, dims, group_of, next_group, total, grand_total, cache)
+
+            # Phase finale : renumérotation (1, 2, 3…)
+            self.finished.emit(_renumber(group_of))
+        finally:
+            cache.close()
 
     # ── Tier 2 : ORB + RANSAC ──────────────────────────────────────────────────
 
@@ -349,6 +482,7 @@ class DuplicateDetectorThread(QThread):
         next_group: list[int],
         phase1_total: int,
         grand_total: int,
+        cache: "DedupCache",
     ) -> None:
         """Détecte les doublons recadrés par correspondance ORB + vérification RANSAC."""
         if len(unmatched) < 2:
@@ -357,6 +491,7 @@ class DuplicateDetectorThread(QThread):
         try:
             import cv2
             import numpy as np
+            from PIL import Image
         except ImportError:
             logger.warning("Tier 2 ignoré : opencv-python ou numpy non disponible")
             return
@@ -367,42 +502,97 @@ class DuplicateDetectorThread(QThread):
 
         orb = cv2.ORB_create(nfeatures=_ORB_MAX_KP)
 
-        # Pré-calcul des descripteurs (réduit chaque image à _ORB_LOAD_SIZE)
+        # Réutilisation du cache : reconstruit (kp, des, image de travail) sans
+        # redécoder le fichier original ni relancer orb.detectAndCompute().
         desc_list: list[tuple[str, object, object, int, object]] = []  # (path, kp, des, area, img)
-        for i, path in enumerate(unmatched):
-            if self._is_cancelled():
-                return
-            if i % 10 == 0:
-                self.progress.emit(
-                    phase1_total + i * (grand_total - phase1_total) // (n * 2),
-                    grand_total,
-                    f"Tier 2 — ORB descripteurs {i}/{n}…",
-                )
-            try:
-                img = _load_gray(path, _ORB_LOAD_SIZE)
-                if img is None:
-                    logger.warning("Fichier illisible (Tier 2) : %s", path)
-                    self._corrupted.add(path)
-                    continue
-                kp, des = orb.detectAndCompute(img, None)
-                if des is None or len(kp) < 10:
-                    continue
-                if path in dims:
-                    w, h = dims[path]
-                else:
-                    # Le Tier 1 n'a pas pu ouvrir ce fichier (Image.open a échoué) :
-                    # retenter avec PIL pour obtenir la vraie résolution plutôt que
-                    # de mélanger une aire réduite (_load_gray, max 800px) avec les
-                    # aires réelles des autres photos — ça fausserait le préfiltre
-                    # _ORB_AREA_FACTOR trié par aire (break prématuré possible).
+        mtimes2: dict[str, float] = {}
+        cached_orb = cache.get_orb_features(unmatched)
+        to_compute: list[str] = []
+        for path in unmatched:
+            row = cached_orb.get(path)
+            if row is not None:
+                mtime_cached, w, h, kp_blob, des_blob, img_blob = row
+                try:
+                    current_mtime = os.path.getmtime(path)
+                except OSError:
+                    current_mtime = None
+                if current_mtime is not None and abs(mtime_cached - current_mtime) < 1.0:
                     try:
-                        with Image.open(path) as pil_img:
-                            w, h = pil_img.size
-                    except Exception:
-                        w, h = img.shape[1], img.shape[0]
-                desc_list.append((path, kp, des, w * h, img))
-            except Exception as exc:
-                logger.debug("ORB descripteur échoué %s : %s", os.path.basename(path), exc)
+                        des = np.frombuffer(des_blob, dtype=np.uint8).reshape(-1, 32)
+                        pts = np.frombuffer(kp_blob, dtype=np.float32).reshape(-1, 2)
+                        img = cv2.imdecode(
+                            np.frombuffer(img_blob, dtype=np.uint8), cv2.IMREAD_GRAYSCALE
+                        )
+                        if img is not None and des.shape[0] > 0 and len(pts) == des.shape[0]:
+                            kp = [cv2.KeyPoint(float(x), float(y), 1.0) for x, y in pts]
+                            mtimes2[path] = current_mtime
+                            desc_list.append((path, kp, des, w * h, img))
+                            continue
+                    except Exception as exc:
+                        logger.debug("dedup_cache : ligne ORB corrompue pour %s (%s), recalcul.",
+                                    path, exc)
+            to_compute.append(path)
+
+        cache_hits = n - len(to_compute)
+        logger.info(
+            "Tier 2 : %d/%d features ORB réutilisées du cache, %d à calculer…",
+            cache_hits, n, len(to_compute),
+        )
+
+        pending_orb: list[tuple] = []
+        try:
+            for i, path in enumerate(to_compute):
+                if self._is_cancelled():
+                    return
+                idx = cache_hits + i
+                if idx % 10 == 0:
+                    self.progress.emit(
+                        phase1_total + idx * (grand_total - phase1_total) // (n * 2),
+                        grand_total,
+                        f"Tier 2 — ORB descripteurs {idx}/{n}…",
+                    )
+                    if pending_orb:
+                        cache.store_orb_features(pending_orb)
+                        pending_orb = []
+                try:
+                    img = _load_gray(path, _ORB_LOAD_SIZE)
+                    if img is None:
+                        logger.warning("Fichier illisible (Tier 2) : %s", path)
+                        self._corrupted.add(path)
+                        continue
+                    mtime = os.path.getmtime(path)
+                    kp, des = orb.detectAndCompute(img, None)
+                    if des is None or len(kp) < 10:
+                        continue
+                    if path in dims:
+                        w, h = dims[path]
+                    else:
+                        # Le Tier 1 n'a pas pu ouvrir ce fichier (Image.open a échoué) :
+                        # retenter avec PIL pour obtenir la vraie résolution plutôt que
+                        # de mélanger une aire réduite (_load_gray, max 800px) avec les
+                        # aires réelles des autres photos — ça fausserait le préfiltre
+                        # _ORB_AREA_FACTOR trié par aire (break prématuré possible).
+                        try:
+                            with Image.open(path) as pil_img:
+                                w, h = pil_img.size
+                        except Exception:
+                            w, h = img.shape[1], img.shape[0]
+                    mtimes2[path] = mtime
+                    desc_list.append((path, kp, des, w * h, img))
+
+                    ok, buf = cv2.imencode(".jpg", img, [cv2.IMWRITE_JPEG_QUALITY, 90])
+                    if ok:
+                        kp_xy = np.array([k.pt for k in kp], dtype=np.float32).tobytes()
+                        pending_orb.append(
+                            (path, mtime, w, h, kp_xy, des.tobytes(), buf.tobytes())
+                        )
+                except Exception as exc:
+                    logger.debug("ORB descripteur échoué %s : %s", os.path.basename(path), exc)
+        finally:
+            # Persiste tout ce qui a été calculé jusqu'ici, y compris en cas
+            # d'annulation (return ci-dessus) — c'est ce qui rend le scan reprenable.
+            if pending_orb:
+                cache.store_orb_features(pending_orb)
 
         m = len(desc_list)
         if m < 2:
@@ -413,6 +603,19 @@ class DuplicateDetectorThread(QThread):
             grand_total,
             f"Tier 2 — comparaison ORB ({m} photos)…",
         )
+
+        # Complétude des comparaisons (incrémentalité) : un chemin déjà comparé
+        # à tout le reste lors d'une passe complète antérieure (mtime inchangé
+        # depuis) est « ancien » — les paires ancien×ancien sont sautées plus
+        # bas, sans perturber le tri par aire ni le préfiltre _ORB_AREA_FACTOR
+        # (qui reste calculé sur la liste complète, triée, inchangée).
+        compared_tier2 = cache.get_compared_tier2([path for path, *_ in desc_list])
+        old_paths_set: set[str] = set()
+        for path, *_rest in desc_list:
+            cached_mtime = compared_tier2.get(path)
+            if cached_mtime is not None and abs(cached_mtime - mtimes2[path]) < 1.0:
+                old_paths_set.add(path)
+        new_paths_set = {path for path, *_ in desc_list if path not in old_paths_set}
 
         # Tri par aire croissante : accélère le prefiltre (photos similaires proches)
         desc_list.sort(key=lambda x: x[3])
@@ -505,10 +708,13 @@ class DuplicateDetectorThread(QThread):
                     results.append((path_j, False))
             return results
 
-        n_workers = os.cpu_count() or 4
+        n_workers = throttled_worker_count()
         comparison_start = phase1_total + (grand_total - phase1_total) // 2
         last_emit = time.monotonic()
-        with ThreadPoolExecutor(max_workers=n_workers) as executor:
+        last_snapshot = last_emit
+        with ThreadPoolExecutor(
+            max_workers=n_workers, initializer=lower_current_thread_priority
+        ) as executor:
             for i in range(m):
                 if self._is_cancelled():
                     return
@@ -524,6 +730,9 @@ class DuplicateDetectorThread(QThread):
                     )
                     logger.info("Tier 2 : %d/%d photos comparées (%d paire(s) vérifiée(s))",
                                 i + 1, m, pairs_checked)
+                if now - last_snapshot >= _LIVE_SNAPSHOT_INTERVAL:
+                    last_snapshot = now
+                    self.partial_results.emit(_renumber(group_of), sorted(self._corrupted))
 
                 candidates = []
                 for j in range(i + 1, m):
@@ -532,6 +741,11 @@ class DuplicateDetectorThread(QThread):
                     # Prefiltre ratio d'aire : sortie anticipée (liste triée — area_j ≥ area_i)
                     if area_i > 0 and area_j / area_i > _ORB_AREA_FACTOR:
                         break
+
+                    # Paire ancien×ancien : déjà entièrement vérifiée lors d'une
+                    # passe complète antérieure, aucun des deux n'a changé depuis.
+                    if path_i in old_paths_set and path_j in old_paths_set:
+                        continue
 
                     # Inutile de re-matcher deux photos déjà dans le même groupe
                     gi, gj = group_of.get(path_i), group_of.get(path_j)
@@ -568,6 +782,7 @@ class DuplicateDetectorThread(QThread):
                             _merge(group_of, path_i, path_j, next_group)
 
         logger.info("Tier 2 : %d paire(s) vérifiées par ORB/RANSAC.", pairs_checked)
+        cache.store_compared_tier2([(path, mtimes2[path]) for path in new_paths_set])
 
 
 # ── rapport HTML ────────────────────────────────────────────────────────────────

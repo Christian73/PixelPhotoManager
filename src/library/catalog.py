@@ -124,7 +124,10 @@ class Catalog:
         self._init_db()
 
     def _conn(self) -> sqlite3.Connection:
-        return sqlite3.connect(self._db_path, check_same_thread=False)
+        conn = sqlite3.connect(self._db_path, check_same_thread=False)
+        conn.execute("PRAGMA journal_mode=WAL")
+        conn.execute("PRAGMA synchronous=NORMAL")
+        return conn
 
     def _init_db(self) -> None:
         with self._lock:
@@ -140,6 +143,9 @@ class Catalog:
                 self._migrate_normalize_paths(conn)
                 self._migrate_video_fields(conn)
                 self._migrate_duplicate_fields(conn)
+                conn.execute(
+                    "CREATE INDEX IF NOT EXISTS idx_photos_dup_group ON photos(duplicate_group_id)"
+                )
                 conn.commit()
             finally:
                 conn.close()
@@ -656,6 +662,21 @@ class Catalog:
             groups.setdefault(photo.duplicate_group_id, []).append(photo)
         return groups
 
+    def get_duplicate_group_assignments(self) -> dict:
+        """{path: group_id} pour toutes les photos actuellement groupées —
+        version légère de get_duplicate_groups() (pas de PhotoInfo complet),
+        utilisée pour amorcer (seed) une passe de détection incrémentale."""
+        with self._lock:
+            conn = self._conn()
+            try:
+                rows = conn.execute(
+                    "SELECT path, duplicate_group_id FROM photos "
+                    "WHERE duplicate_group_id IS NOT NULL"
+                ).fetchall()
+            finally:
+                conn.close()
+        return {path: gid for path, gid in rows}
+
     def count_duplicate_groups(self) -> int:
         """Nombre de groupes de doublons distincts actuellement enregistrés."""
         with self._lock:
@@ -670,8 +691,12 @@ class Catalog:
         return row[0] if row else 0
 
     def ignore_duplicate_group(self, group_id: int) -> None:
-        """Dissout un groupe de doublons (non persistant : une future détection
-        complète peut le recréer)."""
+        """Dissout un groupe de doublons. Avec la détection incrémentale
+        (DuplicateDetectorThread ne recompare jamais deux fichiers déjà tous
+        les deux vérifiés lors d'une passe complète antérieure, cf.
+        dedup_cache.compared_tier1/2), ce groupe ne sera plus recréé tant
+        qu'aucun de ses membres ne change — un nouveau fichier correspondant
+        à l'un d'eux reste en revanche détecté normalement."""
         with self._lock:
             conn = self._conn()
             try:
