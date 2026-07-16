@@ -494,56 +494,70 @@ class _ResetFacesDialog(QDialog):
         return self._choice
 
 
-class _DuplicatesPopup(QDialog):
+class _DuplicatesPopup(QFrame):
+    """Popup flottante listant tous les exemplaires d'un groupe de doublons
+    (original inclus). Fenêtre de type Qt.Popup : se ferme automatiquement au
+    clic en dehors d'elle (comme un menu), en plus du bouton « Fermer ».
+    Cliquer sur un exemplaire navigue directement (signal navigate_requested)
+    sans fermer la popup, pour permettre de comparer plusieurs exemplaires
+    de suite."""
+
     navigate_requested = Signal(str)  # chemin de la photo cible
 
     def __init__(self, photo, others: list, parent=None):
-        super().__init__(parent)
-        self.setWindowTitle("Doublons de cette photo")
-        self.setMinimumWidth(500)
+        super().__init__(parent, Qt.Popup)
+        self.setObjectName("duplicatesPopup")
+        self.setStyleSheet(
+            "#duplicatesPopup { background: #262626; border: 1px solid #555; border-radius: 6px; }"
+            "QLabel { color: #ddd; }"
+        )
+        self.setMinimumWidth(440)
+
         layout = QVBoxLayout(self)
+        layout.setContentsMargins(14, 12, 14, 12)
         layout.setSpacing(8)
 
-        lbl = QLabel(
-            f"<b>{os.path.basename(photo.path)}</b> a {len(others)} autre"
-            f"{'s' if len(others) != 1 else ''} exemplaire"
-            f"{'s' if len(others) != 1 else ''} :"
-        )
-        lbl.setWordWrap(True)
-        layout.addWidget(lbl)
+        n = len(others)
+        title = QLabel(f"{n + 1} exemplaire{'s' if n + 1 != 1 else ''} dans ce groupe de doublons :")
+        title.setStyleSheet("font-weight: bold; font-size: 13px;")
+        title.setWordWrap(True)
+        layout.addWidget(title)
 
         self._list = QListWidget()
         self._list.setAlternatingRowColors(True)
+        self._list.setMinimumHeight(140)
+        self._list.setMaximumHeight(320)
+        self._add_entry(photo, is_original=True)
         for p in others:
-            item = QListWidgetItem(
-                f"{os.path.basename(p.path)}\n{p.directory}"
-            )
-            item.setData(Qt.UserRole, p.path)
-            item.setToolTip(p.path)
-            self._list.addItem(item)
-        self._list.itemDoubleClicked.connect(self._on_navigate)
+            self._add_entry(p, is_original=False)
+        self._list.itemClicked.connect(self._on_navigate)
         layout.addWidget(self._list)
-
-        btn_row = QHBoxLayout()
-        btn_nav = QPushButton("Aller à ce fichier")
-        btn_nav.clicked.connect(lambda: self._on_navigate(self._list.currentItem()))
-        btn_close = QPushButton("Fermer")
-        btn_close.clicked.connect(self.accept)
-        btn_row.addWidget(btn_nav)
-        btn_row.addStretch()
-        btn_row.addWidget(btn_close)
-        layout.addLayout(btn_row)
-
         if self._list.count() > 0:
             self._list.setCurrentRow(0)
 
+        btn_row = QHBoxLayout()
+        btn_row.addStretch()
+        btn_close = QPushButton("Fermer")
+        btn_close.clicked.connect(self.close)
+        btn_row.addWidget(btn_close)
+        layout.addLayout(btn_row)
+
+    def _add_entry(self, p, is_original: bool) -> None:
+        size = _fmt_size(p.file_size) or "—"
+        prefix = "★ Original — " if is_original else ""
+        item = QListWidgetItem(f"{prefix}{p.filename}\n{p.directory}\n{size}")
+        item.setData(Qt.UserRole, p.path)
+        item.setToolTip(p.path)
+        if is_original:
+            font = item.font()
+            font.setBold(True)
+            item.setFont(font)
+        self._list.addItem(item)
+
     def _on_navigate(self, item) -> None:
-        if item is None:
-            return
         path = item.data(Qt.UserRole)
         if path:
             self.navigate_requested.emit(path)
-            self.accept()
 
 
 class MainWindow(QMainWindow):
@@ -566,6 +580,7 @@ class MainWindow(QMainWindow):
         self._reindex_thread: SingleFaceReindexThread | None = None
         self._retry_face_thread: RetryFaceIndexThread | None = None
         self._duplicate_thread: DuplicateDetectorThread | None = None
+        self._duplicates_popup: "_DuplicatesPopup | None" = None
         self._index_errors_dialog = None    # IndexErrorsDialog ouverte (ou None)
         self._force_redetect_thread: ForceRedetectThread | None = None
         self._cluster_thread: ClusterThread | None = None
@@ -2454,6 +2469,7 @@ class MainWindow(QMainWindow):
             self._sb_progress_bar.setValue(0)
             self._btn_cancel_duplicate_scan.hide()
             self._lbl_action.setText("")
+            self._duplicate_grid.set_scanning(False)
             _dismiss_cancel_dialog()
             self._apply_duplicate_results(groups, detector.corrupted_paths)
 
@@ -2462,6 +2478,7 @@ class MainWindow(QMainWindow):
             self._sb_progress_bar.setValue(0)
             self._btn_cancel_duplicate_scan.hide()
             self._lbl_action.setText("")
+            self._duplicate_grid.set_scanning(False)
             _dismiss_cancel_dialog()
             QMessageBox.critical(self, "Erreur détection doublons", msg)
 
@@ -2470,6 +2487,7 @@ class MainWindow(QMainWindow):
             self._sb_progress_bar.setValue(0)
             self._btn_cancel_duplicate_scan.hide()
             self._lbl_action.setText("")
+            self._duplicate_grid.set_scanning(False)
             self.statusBar().showMessage("Détection de doublons annulée.", 5000)
 
         def _on_cancel_clicked():
@@ -2506,6 +2524,7 @@ class MainWindow(QMainWindow):
         self._sb_progress_bar.setValue(0)
         self._sb_progress_bar.show()
         self._btn_cancel_duplicate_scan.show()
+        self._duplicate_grid.set_scanning(True)
         detector.start()
 
     def _apply_duplicate_results(self, groups: dict, corrupted_paths=()) -> None:
@@ -2532,6 +2551,10 @@ class MainWindow(QMainWindow):
                 self._viewer.current_photo().duplicate_group_id = None
                 self._viewer._update_dup_badge()
             self._sidebar.update_duplicates_badge(0)
+            if self._stack.currentIndex() == 4:
+                self._duplicate_grid.refresh()
+            else:
+                self._duplicate_grid.invalidate()
             return
 
         # Sauvegarder en DB
@@ -2559,6 +2582,10 @@ class MainWindow(QMainWindow):
             self._viewer._update_dup_badge()
 
         self._sidebar.update_duplicates_badge(len(groups))
+        if self._stack.currentIndex() == 4:
+            self._duplicate_grid.refresh()
+        else:
+            self._duplicate_grid.invalidate()
 
         # Générer le rapport HTML
         from src.core.app_dirs import APP_DATA_DIR
@@ -2676,9 +2703,31 @@ class MainWindow(QMainWindow):
         if not others:
             return
 
+        if self._duplicates_popup is not None:
+            self._duplicates_popup.close()
+
         dlg = _DuplicatesPopup(photo, others, self)
-        dlg.navigate_requested.connect(self._navigate_to_photo_path)
-        dlg.exec()
+        dlg.navigate_requested.connect(
+            lambda path: self._on_duplicate_popup_navigate(path, duplicates)
+        )
+        self._duplicates_popup = dlg
+        dlg.adjustSize()
+        center = self.geometry().center()
+        dlg.move(center.x() - dlg.width() // 2, center.y() - dlg.height() // 2)
+        dlg.show()
+
+    def _on_duplicate_popup_navigate(self, path: str, group_photos: list) -> None:
+        """Clic sur un exemplaire dans la popup de doublons. Si la visionneuse
+        est déjà affichée, on y reste et on change simplement la photo montrée
+        (comparaison rapide, même principe que _on_duplicate_group_view_requested) ;
+        sinon on retombe sur la navigation classique dans la grille."""
+        if self._stack.currentIndex() == 1:
+            idx = next((i for i, p in enumerate(group_photos) if p.path == path), 0)
+            self._current_photos = group_photos
+            self._current_photo_index = idx
+            self.show_viewer(group_photos[idx])
+        else:
+            self._navigate_to_photo_path(path)
 
     def _on_duplicate_group_view_requested(self, group_id: int) -> None:
         """Double-clic sur une carte de DuplicateGrid : comparaison rapide dans la visionneuse."""
@@ -2894,7 +2943,7 @@ class MainWindow(QMainWindow):
         self._lbl_action.setText("")
 
     def show_duplicate_grid(self) -> None:
-        self._duplicate_grid.refresh()
+        self._duplicate_grid.ensure_loaded()
         self._stack.setCurrentIndex(4)
         self._left_stack.setCurrentIndex(0)
         self._lbl_thumb_size.hide()

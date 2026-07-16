@@ -14,10 +14,10 @@ Double-clic : comparaison rapide (ouvre la visionneuse sur les photos du groupe)
 
 import logging
 
-from PySide6.QtCore import Qt, QThread, Signal, Slot, QByteArray
+from PySide6.QtCore import Qt, QThread, QTimer, Signal, Slot, QByteArray
 from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import (
-    QFrame, QGridLayout, QHBoxLayout, QLabel, QPushButton,
+    QFrame, QGridLayout, QHBoxLayout, QLabel, QProgressBar, QPushButton,
     QScrollArea, QSizePolicy, QVBoxLayout, QWidget,
 )
 
@@ -197,6 +197,8 @@ class DuplicateGrid(QWidget):
         self._cards: dict[int, _DuplicateCard] = {}
         self._current_cols: int = _COLS_MIN
         self._load_thread: "_DuplicateGroupLoadThread | None" = None
+        self._loaded = False
+        self._scanning = False
         self._setup_ui()
 
     # ------------------------------------------------------------------ setup
@@ -235,11 +237,45 @@ class DuplicateGrid(QWidget):
         self._card_gl.setContentsMargins(0, 0, 0, 0)
         self._content_vbox.addWidget(self._card_area)
 
-        self._lbl_empty = QLabel("Aucun groupe de doublons — lancez une détection.")
+        # Panneau vide/état — mutuellement exclusif avec _card_area, occupe tout
+        # l'espace restant (stretch=1) et centre son contenu via l'alignement du
+        # layout interne : centre bien à l'écran quel que soit le nombre de
+        # cartes (0 ici) et la hauteur réelle du viewport.
+        self._empty_panel = QWidget()
+        empty_vbox = QVBoxLayout(self._empty_panel)
+        empty_vbox.setAlignment(Qt.AlignCenter)
+        empty_vbox.setSpacing(10)
+
+        self._lbl_empty = QLabel("Aucun groupe de doublons.")
         self._lbl_empty.setAlignment(Qt.AlignCenter)
-        self._lbl_empty.setStyleSheet("color: #555; padding: 24px;")
-        self._lbl_empty.setVisible(False)
-        self._content_vbox.addWidget(self._lbl_empty)
+        self._lbl_empty.setStyleSheet("color: #555; padding: 8px;")
+        empty_vbox.addWidget(self._lbl_empty)
+
+        self._btn_detect_empty = QPushButton("Détecter les doublons…")
+        self._btn_detect_empty.setToolTip(
+            "Analyser toutes les photos de la bibliothèque et regrouper les doublons"
+        )
+        self._btn_detect_empty.clicked.connect(self.detect_requested)
+        empty_vbox.addWidget(self._btn_detect_empty, alignment=Qt.AlignHCenter)
+
+        self._lbl_scanning = QLabel("Recherche de doublons en cours…")
+        self._lbl_scanning.setAlignment(Qt.AlignCenter)
+        self._lbl_scanning.setStyleSheet("color: #aaa; font-size: 13px; padding: 8px;")
+        empty_vbox.addWidget(self._lbl_scanning)
+
+        self._scan_bar = QProgressBar()
+        self._scan_bar.setFixedWidth(220)
+        self._scan_bar.setFixedHeight(6)
+        self._scan_bar.setTextVisible(False)
+        self._scan_bar.setRange(0, 0)  # animation indéterminée (marquee)
+        self._scan_bar.setStyleSheet(
+            "QProgressBar { background: #1e1e2e; border: none; border-radius: 3px; }"
+            "QProgressBar::chunk { background: #4a8fd4; border-radius: 3px; }"
+        )
+        empty_vbox.addWidget(self._scan_bar, alignment=Qt.AlignHCenter)
+
+        self._empty_panel.setVisible(False)
+        self._content_vbox.addWidget(self._empty_panel, 1)
 
         self._scroll = QScrollArea()
         self._scroll.setWidgetResizable(True)
@@ -268,7 +304,52 @@ class DuplicateGrid(QWidget):
                 Qt.AlignLeft | Qt.AlignTop,
             )
 
+    def _force_reflow(self) -> None:
+        """Recalcule les colonnes depuis la largeur réelle et replace toutes les
+        cartes. Appelé en différé après un chargement pour corriger le cas où
+        le viewport n'était pas encore dimensionné au moment du premier affichage
+        (ex: bascule depuis un QStackedWidget sans redimensionnement réel — cf.
+        même pattern dans face_cluster_grid.py::_force_reflow)."""
+        available = self._scroll.viewport().width()
+        if available <= 0:
+            QTimer.singleShot(50, self._force_reflow)  # viewport pas encore prêt
+            return
+        self._current_cols = max(_COLS_MIN, available // (_CARD_W + _CARD_SPACING))
+        self._reflow()
+
+    # ------------------------------------------------------------------ empty/scanning state
+
+    def _update_empty_state(self) -> None:
+        empty = not self._cards
+        self._card_area.setVisible(not empty)
+        self._empty_panel.setVisible(empty)
+        if empty:
+            self._lbl_scanning.setVisible(self._scanning)
+            self._scan_bar.setVisible(self._scanning)
+            self._lbl_empty.setVisible(not self._scanning)
+            self._btn_detect_empty.setVisible(not self._scanning)
+
+    def set_scanning(self, scanning: bool) -> None:
+        """Affiche/masque l'indicateur de recherche en cours (visible uniquement
+        quand la grille est vide — cf. DuplicateDetectorThread côté main_window)."""
+        if self._scanning == scanning:
+            return
+        self._scanning = scanning
+        self._update_empty_state()
+
     # ------------------------------------------------------------------ public
+
+    def ensure_loaded(self) -> None:
+        """Affiche l'écran sans recharger si les données déjà en mémoire
+        sont à jour (ex: simple retour depuis la visionneuse) ; ne
+        recharge que lors du premier affichage ou après invalidate()."""
+        if not self._loaded:
+            self.refresh()
+
+    def invalidate(self) -> None:
+        """Marque les données courantes comme périmées : le prochain
+        ensure_loaded() déclenchera un vrai rechargement."""
+        self._loaded = False
 
     def refresh(self) -> None:
         """Recharge tous les groupes de doublons depuis le catalogue."""
@@ -292,8 +373,6 @@ class DuplicateGrid(QWidget):
         self._lbl_title.setText(
             f"{n} groupe{'s' if n > 1 else ''} de doublons" if n else ""
         )
-        self._lbl_empty.setVisible(n == 0)
-        self._card_area.setVisible(n > 0)
 
         for group_id, photos in groups.items():
             if not photos:
@@ -304,7 +383,9 @@ class DuplicateGrid(QWidget):
             card.load_thumbnail(self._thumb_cache)
             self._cards[group_id] = card
 
-        self._reflow()
+        self._update_empty_state()
+        self._loaded = True
+        QTimer.singleShot(0, self._force_reflow)
 
     def remove_group(self, group_id: int) -> None:
         """Retire une carte de groupe sans recharger toute la grille."""
@@ -316,6 +397,5 @@ class DuplicateGrid(QWidget):
         self._lbl_title.setText(
             f"{n} groupe{'s' if n > 1 else ''} de doublons" if n else ""
         )
-        self._lbl_empty.setVisible(n == 0)
-        self._card_area.setVisible(n > 0)
+        self._update_empty_state()
         self._reflow()
