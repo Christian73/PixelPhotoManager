@@ -8,7 +8,7 @@ import time
 from datetime import datetime
 from pathlib import Path
 
-from PySide6.QtCore import Qt, QThread, QTimer, QUrl, Signal, Slot
+from PySide6.QtCore import QEvent, QPoint, Qt, QThread, QTimer, QUrl, Signal, Slot
 from PySide6.QtGui import QAction, QDesktopServices, QKeySequence, QPixmap
 from PySide6.QtWidgets import (
     QApplication, QButtonGroup, QCheckBox, QDialog, QDialogButtonBox, QFrame, QGroupBox,
@@ -500,7 +500,11 @@ class _DuplicatesPopup(QFrame):
     clic en dehors d'elle (comme un menu), en plus du bouton « Fermer ».
     Cliquer sur un exemplaire navigue directement (signal navigate_requested)
     sans fermer la popup, pour permettre de comparer plusieurs exemplaires
-    de suite."""
+    de suite.
+
+    Déplaçable par cliquer-glisser (titre ou fond de la popup) : une popup
+    sans barre de titre (Qt.Popup) reste sinon coincée là où elle s'ouvre,
+    ce qui peut masquer une partie importante de la photo comparée."""
 
     navigate_requested = Signal(str)  # chemin de la photo cible
 
@@ -512,6 +516,7 @@ class _DuplicatesPopup(QFrame):
             "QLabel { color: #ddd; }"
         )
         self.setMinimumWidth(440)
+        self._drag_offset: QPoint | None = None
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(14, 12, 14, 12)
@@ -521,6 +526,9 @@ class _DuplicatesPopup(QFrame):
         title = QLabel(f"{n + 1} exemplaire{'s' if n + 1 != 1 else ''} dans ce groupe de doublons :")
         title.setStyleSheet("font-weight: bold; font-size: 13px;")
         title.setWordWrap(True)
+        title.setCursor(Qt.SizeAllCursor)
+        title.setToolTip("Cliquer-glisser pour déplacer la fenêtre")
+        title.installEventFilter(self)
         layout.addWidget(title)
 
         self._list = QListWidget()
@@ -558,6 +566,36 @@ class _DuplicatesPopup(QFrame):
         path = item.data(Qt.UserRole)
         if path:
             self.navigate_requested.emit(path)
+
+    def eventFilter(self, obj, event) -> bool:
+        # Le titre est un enfant (QLabel) : les événements souris qui
+        # l'atteignent ne remontent pas naturellement au QFrame parent, d'où
+        # ce filtre pour le rendre lui aussi déplaçable (cf. mousePressEvent/
+        # mouseMoveEvent ci-dessous pour le reste de la popup).
+        if event.type() == QEvent.MouseButtonPress and event.button() == Qt.LeftButton:
+            self._drag_offset = event.globalPosition().toPoint() - self.frameGeometry().topLeft()
+            return True
+        if event.type() == QEvent.MouseMove and self._drag_offset is not None:
+            self.move(event.globalPosition().toPoint() - self._drag_offset)
+            return True
+        if event.type() == QEvent.MouseButtonRelease:
+            self._drag_offset = None
+            return True
+        return super().eventFilter(obj, event)
+
+    def mousePressEvent(self, event) -> None:
+        if event.button() == Qt.LeftButton:
+            self._drag_offset = event.globalPosition().toPoint() - self.frameGeometry().topLeft()
+        super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event) -> None:
+        if self._drag_offset is not None:
+            self.move(event.globalPosition().toPoint() - self._drag_offset)
+        super().mouseMoveEvent(event)
+
+    def mouseReleaseEvent(self, event) -> None:
+        self._drag_offset = None
+        super().mouseReleaseEvent(event)
 
 
 class MainWindow(QMainWindow):
