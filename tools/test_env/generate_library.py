@@ -29,7 +29,7 @@ from pathlib import Path
 
 import numpy as np
 import piexif
-from PIL import Image, ImageDraw, ImageFilter
+from PIL import Image, ImageDraw, ImageEnhance, ImageFilter
 
 SEED = 20260715
 
@@ -43,7 +43,21 @@ _N_SHAPES = 40          # formes dessinées par image — texture riche sur tout
 # nombre d'inliers RANSAC très supérieur au seuil _ORB_MIN_INLIERS=40.
 _CROP_BOX_RATIO = (0.15, 0.15, 0.85, 0.85)
 
+# Paire "rafale" (même arrière-plan texturé partagé, sujet de premier plan
+# différent) : rectangle opaque fixe noir/blanc couvrant ~30% de l'aire,
+# peint au même endroit dans les deux variantes. Reproduit le faux positif
+# du Tier 2 (cf. src/library/duplicate_detector.py::_ORB_MAX_MEAN_DIFF) :
+# l'arrière-plan seul fournit largement plus d'inliers RANSAC que
+# _ORB_MIN_INLIERS, alors que les photos ne se ressemblent pas réellement.
+_BURST_BOX_RATIO = (0.28, 0.25, 0.73, 0.85)
+
 _BASE_DATE = datetime(2026, 1, 1, 10, 0, 0)
+
+# Retouche luminosité/contraste modérée : garde anti-régression pour la
+# vérification post-hash du Tier 1 (cf. src/library/duplicate_detector.py::
+# _HASH_PIXEL_MAX_DIFF) — une vraie retouche légitime doit rester groupée.
+_EDIT_BRIGHTNESS = 1.25
+_EDIT_CONTRAST = 1.15
 
 
 @dataclass
@@ -53,6 +67,8 @@ class LibraryManifest:
     exact_duplicate_pair: tuple[Path, Path]
     resized_duplicate_pair: tuple[Path, Path]
     crop_duplicate_pair: tuple[Path, Path]
+    burst_pair: tuple[Path, Path]
+    edited_duplicate_pair: tuple[Path, Path]
     corrupted_file: Path
     dated_photos: dict[Path, datetime]
     video: Path | None = None
@@ -73,6 +89,8 @@ class LibraryManifest:
             exact_duplicate_pair=(_r(self.exact_duplicate_pair[0]), _r(self.exact_duplicate_pair[1])),
             resized_duplicate_pair=(_r(self.resized_duplicate_pair[0]), _r(self.resized_duplicate_pair[1])),
             crop_duplicate_pair=(_r(self.crop_duplicate_pair[0]), _r(self.crop_duplicate_pair[1])),
+            burst_pair=(_r(self.burst_pair[0]), _r(self.burst_pair[1])),
+            edited_duplicate_pair=(_r(self.edited_duplicate_pair[0]), _r(self.edited_duplicate_pair[1])),
             corrupted_file=_r(self.corrupted_file),
             dated_photos={_r(p): dt for p, dt in self.dated_photos.items()},
             video=_r(self.video) if self.video is not None else None,
@@ -213,6 +231,38 @@ def build_library(dest_dir: Path, *, seed: int = SEED) -> LibraryManifest:
     _dated(crop_b, offset_days=30)
     images += [crop_a, crop_b]
 
+    # -- Paire "rafale" (arrière-plan partagé, sujet différent — ne doit --
+    # -- PAS être groupée, cf. _ORB_MAX_MEAN_DIFF) ---------------------------
+    burst_a_path = dest_dir / "burst_a.jpg"
+    burst_b_path = dest_dir / "burst_b.jpg"
+    base_burst = _make_base_image(rng, index=4)
+    bw, bh = base_burst.size
+    bl, bt, br, bb = _BURST_BOX_RATIO
+    box = (int(bl * bw), int(bt * bh), int(br * bw), int(bb * bh))
+    burst_a = base_burst.copy()
+    ImageDraw.Draw(burst_a).rectangle(box, fill=(0, 0, 0))
+    burst_b = base_burst.copy()
+    ImageDraw.Draw(burst_b).rectangle(box, fill=(255, 255, 255))
+    _save_jpeg(burst_a, burst_a_path)
+    _dated(burst_a_path, offset_days=40)
+    _save_jpeg(burst_b, burst_b_path)
+    _dated(burst_b_path, offset_days=40)
+    images += [burst_a_path, burst_b_path]
+
+    # -- Paire retouchée (luminosité + contraste — doit rester groupée --
+    # -- malgré la vérification post-hash du Tier 1, cf. _HASH_PIXEL_MAX_DIFF) -
+    edited_a = dest_dir / "edited_a.jpg"
+    edited_b = dest_dir / "edited_b.jpg"
+    base_edited = _make_base_image(rng, index=5)
+    _save_jpeg(base_edited, edited_a)
+    _dated(edited_a, offset_days=50)
+    retouched = ImageEnhance.Contrast(
+        ImageEnhance.Brightness(base_edited).enhance(_EDIT_BRIGHTNESS)
+    ).enhance(_EDIT_CONTRAST)
+    _save_jpeg(retouched, edited_b)
+    _dated(edited_b, offset_days=50)
+    images += [edited_a, edited_b]
+
     # -- Fichier corrompu ----------------------------------------------------
     corrupted = dest_dir / "corrupted.jpg"
     _make_corrupted_jpeg(corrupted, rng)
@@ -226,6 +276,8 @@ def build_library(dest_dir: Path, *, seed: int = SEED) -> LibraryManifest:
         exact_duplicate_pair=(exact_a, exact_b),
         resized_duplicate_pair=(resized_a, resized_b),
         crop_duplicate_pair=(crop_a, crop_b),
+        burst_pair=(burst_a_path, burst_b_path),
+        edited_duplicate_pair=(edited_a, edited_b),
         corrupted_file=corrupted,
         dated_photos=dated_photos,
         video=video,

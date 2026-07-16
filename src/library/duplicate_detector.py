@@ -15,7 +15,7 @@ Deux niveaux de détection :
 import logging
 import os
 import time
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from functools import partial
 from pathlib import Path
@@ -28,6 +28,12 @@ _PROGRESS_INTERVAL = 0.5  # secondes — throttle des logs/signaux dans les bouc
 
 # ── Tier 1 ─────────────────────────────────────────────────────────────────────
 _HASH_THRESHOLD  = 10    # distance de Hamming max (8 = exact/resize ; 10 couvre les éditions modérées)
+_HASH_MICRO_SIZE     = 8    # miniature (px) pour la vérification post-hash
+_HASH_PIXEL_MAX_DIFF = 0.5  # écart moyen (miniature 8x8 normalisée) au-delà
+# duquel une paire pHash-positive est rejetée. Calibré empiriquement : pire
+# retouche légitime plausible (rotation 5°, sous le seuil pHash) ~0.31 ;
+# faux positif réel observé (deux photos sans rapport, hash coïncidant tout
+# juste au seuil) ~0.88 — marge nette (~2.8x).
 
 # ── Tier 2 ─────────────────────────────────────────────────────────────────────
 _ORB_MIN_INLIERS = 40    # inliers RANSAC minimum pour valider un appariement
@@ -36,6 +42,13 @@ _ORB_MAX_KP      = 300   # keypoints ORB max par image (vitesse vs rappel)
 _ORB_RATIO_TEST  = 0.75  # seuil du ratio test de Lowe
 _ORB_LOAD_SIZE   = 800   # dimension max (px) pour charger une image en Tier 2
 _ORB_GOOD_MIN    = 15    # matches après ratio test requis avant de lancer RANSAC
+_ORB_MAX_MEAN_DIFF = 25.0  # écart de pixels (0-255) après recalage par
+# homographie, sur la zone de recouvrement. Calibré empiriquement : un
+# vrai recadrage (paire synthétique crop_duplicate_pair) donne ~14 ;
+# deux faux positifs réels observés (rafale, arrière-plan statique très
+# texturé mais sujet différent) donnaient 38 et 42 — c'est le seul des
+# signaux testés (nombre d'inliers, ratio inliers/good) qui sépare
+# nettement les deux cas.
 
 _VIDEO_EXT = {'.mp4', '.mov', '.avi', '.mkv', '.wmv', '.webm',
               '.m4v', '.3gp', '.flv', '.ts', '.mts', '.mpg', '.mpeg'}
@@ -48,17 +61,28 @@ def _load_gray(path: str, max_dim: int) -> "np.ndarray | None":
 
     cv2.imread rejette les chemins non-ASCII sur Windows (cf. detector.py::
     _exif_corrected) : on passe directement par PIL dans ce cas pour éviter
-    une tentative cv2 vouée à l'échec (warning console + double décodage)."""
+    une tentative cv2 vouée à l'échec (warning console + double décodage).
+
+    Le TIFF est exclu de cv2.imread quel que soit le chemin : certains TIFF
+    avec des tags de métadonnées exotiques (ex. tag 50341/0xc4a5, observé en
+    usage réel) déclenchent un bug connu du décodeur libtiff d'OpenCV
+    (assertion interne "original_ptr == real_mat.data" dans loadsave.cpp) qui
+    peut aboutir à un abort() du process plutôt qu'à une cv2.error Python
+    normalement rattrapable — un try/except ne protège pas contre ce cas.
+    PIL décode ces mêmes fichiers sans problème (déjà utilisé sans incident
+    par le Tier 1, qui ne passe jamais par cv2)."""
     try:
         import numpy as np
         import cv2
         img = None
-        try:
-            path.encode("ascii")
-        except UnicodeEncodeError:
-            pass
-        else:
-            img = cv2.imread(path, cv2.IMREAD_GRAYSCALE)
+        is_tiff = Path(path).suffix.lower() in (".tif", ".tiff")
+        if not is_tiff:
+            try:
+                path.encode("ascii")
+            except UnicodeEncodeError:
+                pass
+            else:
+                img = cv2.imread(path, cv2.IMREAD_GRAYSCALE)
         if img is None:
             from PIL import Image
             with Image.open(path) as pil:
@@ -145,6 +169,7 @@ class DuplicateDetectorThread(QThread):
     def _detect(self) -> None:
         try:
             import imagehash
+            import numpy as np
             from PIL import Image
         except ImportError as e:
             self.error.emit(
@@ -168,32 +193,81 @@ class DuplicateDetectorThread(QThread):
         # Phase 1 : calcul des empreintes pHash + dimensions (utilisées par le Tier 2)
         hashes: list[tuple[str, object]] = []
         dims: dict[str, tuple[int, int]] = {}
-        logger.info("Tier 1 : calcul des empreintes de %d photo(s)…", total)
+        micro: dict[str, "np.ndarray"] = {}
+        n_workers = os.cpu_count() or 4
+        logger.info("Tier 1 : calcul des empreintes de %d photo(s) sur %d cœur(s)…",
+                    total, n_workers)
 
-        last_emit = time.monotonic()
-        for i, path in enumerate(paths):
-            if self._is_cancelled():
-                return
-            # Log systématique (pas throttlé) : si le traitement se bloque sur un
-            # fichier précis (image corrompue, volume réseau lent…), cette ligne
-            # reste la dernière du log — elle identifie le fichier en cause.
-            logger.debug("Tier 1 empreinte %d/%d : %s", i + 1, total, path)
-
-            now = time.monotonic()
-            if now - last_emit >= _PROGRESS_INTERVAL:
-                last_emit = now
-                self.progress.emit(i, grand_total,
-                                   f"Tier 1 — empreintes {i}/{total}…")
-                logger.info("Tier 1 : %d/%d empreintes calculées", i, total)
-
+        def _compute_fingerprint(path: str):
+            # Fonction pure (aucun état partagé écrit) : chaque appel décode son
+            # propre fichier et retourne son résultat, fusionné ensuite sur ce
+            # thread au fur et à mesure des complétions — décodage JPEG/PNG (PIL)
+            # et calcul du DCT (imagehash, numpy) libèrent tous deux le GIL le
+            # temps du calcul C, donc un pool de threads exploite réellement
+            # plusieurs cœurs ici (même raisonnement que pour ORB/RANSAC au Tier 2
+            # plus bas dans ce fichier).
             try:
                 with Image.open(path) as img:
-                    dims[path] = img.size
+                    d = img.size
                     h = imagehash.phash(img)
-                hashes.append((path, h))
+                    arr = np.asarray(
+                        img.convert("L").resize(
+                            (_HASH_MICRO_SIZE, _HASH_MICRO_SIZE), Image.LANCZOS
+                        ),
+                        dtype=np.float64,
+                    )
+                arr -= arr.mean()
+                std = arr.std()
+                if std > 1e-6:
+                    arr /= std
+                return path, h, d, arr, None
             except Exception as exc:
-                logger.warning("Fichier illisible (Tier 1) : %s (%s)", path, exc)
-                self._corrupted.add(path)
+                return path, None, None, None, exc
+
+        done = 0
+        last_emit = time.monotonic()
+        with ThreadPoolExecutor(max_workers=n_workers) as executor:
+            futures = {}
+            for path in paths:
+                # Log systématique (pas throttlé) à la soumission : si le
+                # traitement se bloque sur un fichier précis (image corrompue,
+                # volume réseau lent…), cette ligne reste la dernière du log —
+                # elle identifie le fichier en cause même en exécution parallèle.
+                logger.debug("Tier 1 empreinte (soumission) : %s", path)
+                futures[executor.submit(_compute_fingerprint, path)] = path
+
+            for future in as_completed(futures):
+                if self._is_cancelled():
+                    for f in futures:
+                        f.cancel()
+                    return
+
+                path = futures[future]
+                try:
+                    path, h, d, arr, exc = future.result()
+                except Exception as e:
+                    # _compute_fingerprint capture déjà toute exception en interne
+                    # (retournée dans le tuple plutôt que levée) : ce garde-fou ne
+                    # devrait normalement jamais se déclencher, mais une panne
+                    # inattendue d'un worker ne doit pas faire échouer tout le scan.
+                    logger.warning("Worker Tier 1 en échec pour %s : %s", path, e)
+                    h = d = arr = None
+                    exc = e
+                done += 1
+                if exc is not None:
+                    logger.warning("Fichier illisible (Tier 1) : %s (%s)", path, exc)
+                    self._corrupted.add(path)
+                else:
+                    dims[path] = d
+                    micro[path] = arr
+                    hashes.append((path, h))
+
+                now = time.monotonic()
+                if now - last_emit >= _PROGRESS_INTERVAL:
+                    last_emit = now
+                    self.progress.emit(done, grand_total,
+                                       f"Tier 1 — empreintes {done}/{total}…")
+                    logger.info("Tier 1 : %d/%d empreintes calculées", done, total)
 
         if self._is_cancelled():
             return
@@ -220,6 +294,17 @@ class DuplicateDetectorThread(QThread):
                 except Exception:
                     continue
                 if dist <= _HASH_THRESHOLD:
+                    # Un pHash peut coïncider par hasard entre deux photos sans
+                    # rapport (répartition de luminosité globale similaire),
+                    # surtout quand la distance tombe tout juste au seuil —
+                    # vérification de secours sur une miniature 8x8 normalisée
+                    # (cf. _HASH_PIXEL_MAX_DIFF).
+                    arr_i = micro.get(path_i)
+                    arr_j = micro.get(path_j)
+                    if arr_i is not None and arr_j is not None:
+                        pixel_diff = float(np.abs(arr_i - arr_j).mean())
+                        if pixel_diff > _HASH_PIXEL_MAX_DIFF:
+                            continue
                     _merge(group_of, path_i, path_j, next_group)
 
             now = time.monotonic()
@@ -283,7 +368,7 @@ class DuplicateDetectorThread(QThread):
         orb = cv2.ORB_create(nfeatures=_ORB_MAX_KP)
 
         # Pré-calcul des descripteurs (réduit chaque image à _ORB_LOAD_SIZE)
-        desc_list: list[tuple[str, object, object, int]] = []  # (path, kp, des, area)
+        desc_list: list[tuple[str, object, object, int, object]] = []  # (path, kp, des, area, img)
         for i, path in enumerate(unmatched):
             if self._is_cancelled():
                 return
@@ -315,7 +400,7 @@ class DuplicateDetectorThread(QThread):
                             w, h = pil_img.size
                     except Exception:
                         w, h = img.shape[1], img.shape[0]
-                desc_list.append((path, kp, des, w * h))
+                desc_list.append((path, kp, des, w * h, img))
             except Exception as exc:
                 logger.debug("ORB descripteur échoué %s : %s", os.path.basename(path), exc)
 
@@ -332,7 +417,6 @@ class DuplicateDetectorThread(QThread):
         # Tri par aire croissante : accélère le prefiltre (photos similaires proches)
         desc_list.sort(key=lambda x: x[3])
 
-        bf = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=False)
         pairs_checked = 0
         logger.info("Tier 2 : comparaison ORB de %d photos non groupées par le Tier 1.", m)
 
@@ -350,38 +434,75 @@ class DuplicateDetectorThread(QThread):
         # pour une même ligne (tous les appels partagent path_i), donc paralléliser
         # ne change jamais le résultat final (juste, potentiellement, les ids de
         # groupe intermédiaires, renumérotés de toute façon en fin de _detect()).
-        def _compare_chunk(items, des_i=None, kp_i=None):
+        def _compare_chunk(items, des_i=None, kp_i=None, img_i=None, path_i=""):
+            # BFMatcher local au worker plutôt qu'une instance partagée entre
+            # threads du pool : le thread-safety de cv2.BFMatcher.knnMatch()
+            # n'est pas documenté par OpenCV, et un objet natif partagé appelé
+            # concurremment est un candidat plausible à un crash dur (segfault),
+            # donc non rattrapable par un try/except Python. Le coût de création
+            # est négligeable face au travail du lot (plusieurs comparaisons ORB).
+            local_bf = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=False)
             results = []
-            for path_j, kp_j, des_j in items:
+            for path_j, kp_j, des_j, img_j in items:
+                # Tout le corps de la comparaison (pas seulement knnMatch) est
+                # protégé : une géométrie dégénérée (ex. homographie quasi
+                # singulière) peut faire échouer n'importe quel appel cv2 en
+                # aval (findHomography, warpPerspective, absdiff) — une paire
+                # en erreur ne doit ni faire planter tout le lot, ni annuler
+                # le scan entier (cf. run() qui, sinon, transformerait ça en
+                # message d'erreur pour l'utilisateur au lieu d'un simple
+                # "pas de correspondance" pour cette paire).
                 try:
-                    raw_matches = bf.knnMatch(des_i, des_j, k=2)
-                except Exception:
+                    raw_matches = local_bf.knnMatch(des_i, des_j, k=2)
+
+                    good = [
+                        m1 for pair in raw_matches if len(pair) == 2
+                        for m1, m2 in (pair,)
+                        if m1.distance < _ORB_RATIO_TEST * m2.distance
+                    ]
+                    if len(good) < _ORB_GOOD_MIN:
+                        results.append((path_j, False))
+                        continue
+
+                    src_pts = np.float32(
+                        [kp_i[m1.queryIdx].pt for m1 in good]
+                    ).reshape(-1, 1, 2)
+                    dst_pts = np.float32(
+                        [kp_j[m1.trainIdx].pt for m1 in good]
+                    ).reshape(-1, 1, 2)
+
+                    H, mask = cv2.findHomography(src_pts, dst_pts, cv2.RANSAC, 5.0)
+                    if mask is None:
+                        results.append((path_j, False))
+                        continue
+
+                    inliers = int(mask.sum())
+                    if inliers < _ORB_MIN_INLIERS:
+                        results.append((path_j, False))
+                        continue
+
+                    # Un arrière-plan riche et statique (ex: rafale de photos)
+                    # peut fournir à lui seul assez d'inliers cohérents même si
+                    # le sujet réel diffère complètement — le nombre d'inliers
+                    # ne suffit pas à garantir que les photos se ressemblent
+                    # réellement. Vérification supplémentaire : recaler j sur i
+                    # via l'homographie trouvée et exiger que les pixels
+                    # concordent sur la zone de recouvrement (cf. _ORB_MAX_MEAN_DIFF).
+                    h_i, w_i = img_i.shape[:2]
+                    warped = cv2.warpPerspective(img_j, H, (w_i, h_i))
+                    valid = cv2.warpPerspective(
+                        np.full(img_j.shape, 255, dtype=np.uint8), H, (w_i, h_i)
+                    ) > 0
+                    if not valid.any():
+                        results.append((path_j, False))
+                        continue
+
+                    mean_diff = float(cv2.absdiff(warped, img_i)[valid].mean())
+                    results.append((path_j, mean_diff <= _ORB_MAX_MEAN_DIFF))
+                except Exception as exc:
+                    logger.debug("Tier 2 comparaison échouée %s ↔ %s : %s",
+                                os.path.basename(path_i), os.path.basename(path_j), exc)
                     results.append((path_j, False))
-                    continue
-
-                good = [
-                    m1 for pair in raw_matches if len(pair) == 2
-                    for m1, m2 in (pair,)
-                    if m1.distance < _ORB_RATIO_TEST * m2.distance
-                ]
-                if len(good) < _ORB_GOOD_MIN:
-                    results.append((path_j, False))
-                    continue
-
-                src_pts = np.float32(
-                    [kp_i[m1.queryIdx].pt for m1 in good]
-                ).reshape(-1, 1, 2)
-                dst_pts = np.float32(
-                    [kp_j[m1.trainIdx].pt for m1 in good]
-                ).reshape(-1, 1, 2)
-
-                _, mask = cv2.findHomography(src_pts, dst_pts, cv2.RANSAC, 5.0)
-                if mask is None:
-                    results.append((path_j, False))
-                    continue
-
-                inliers = int(mask.sum())
-                results.append((path_j, inliers >= _ORB_MIN_INLIERS))
             return results
 
         n_workers = os.cpu_count() or 4
@@ -391,7 +512,7 @@ class DuplicateDetectorThread(QThread):
             for i in range(m):
                 if self._is_cancelled():
                     return
-                path_i, kp_i, des_i, area_i = desc_list[i]
+                path_i, kp_i, des_i, area_i, img_i = desc_list[i]
 
                 now = time.monotonic()
                 if now - last_emit >= _PROGRESS_INTERVAL:
@@ -406,7 +527,7 @@ class DuplicateDetectorThread(QThread):
 
                 candidates = []
                 for j in range(i + 1, m):
-                    path_j, kp_j, des_j, area_j = desc_list[j]
+                    path_j, kp_j, des_j, area_j, img_j = desc_list[j]
 
                     # Prefiltre ratio d'aire : sortie anticipée (liste triée — area_j ≥ area_i)
                     if area_i > 0 and area_j / area_i > _ORB_AREA_FACTOR:
@@ -417,7 +538,7 @@ class DuplicateDetectorThread(QThread):
                     if gi is not None and gi == gj:
                         continue
 
-                    candidates.append((path_j, kp_j, des_j))
+                    candidates.append((path_j, kp_j, des_j, img_j))
 
                 if not candidates:
                     continue
@@ -425,10 +546,20 @@ class DuplicateDetectorThread(QThread):
                 pairs_checked += len(candidates)
                 chunk_size = max(1, -(-len(candidates) // n_workers))  # ceil division
                 chunks = [candidates[k:k + chunk_size] for k in range(0, len(candidates), chunk_size)]
-                worker = partial(_compare_chunk, des_i=des_i, kp_i=kp_i)
+                worker = partial(_compare_chunk, des_i=des_i, kp_i=kp_i, img_i=img_i, path_i=path_i)
                 futures = [executor.submit(worker, chunk) for chunk in chunks]
                 for future in futures:
-                    for path_j, matched in future.result():
+                    try:
+                        chunk_result = future.result()
+                    except Exception as exc:
+                        # _compare_chunk protège déjà chaque paire individuellement ;
+                        # ce garde-fou supplémentaire évite qu'une panne inattendue
+                        # d'un lot entier (ex. MemoryError) n'interrompe tout le
+                        # scan pour les photos restantes.
+                        logger.warning("Tier 2 : lot de comparaison échoué pour %s : %s",
+                                      os.path.basename(path_i), exc)
+                        continue
+                    for path_j, matched in chunk_result:
                         if matched:
                             logger.debug(
                                 "Tier 2 crop détecté : %s ↔ %s",
