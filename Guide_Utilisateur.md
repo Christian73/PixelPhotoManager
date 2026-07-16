@@ -79,8 +79,8 @@ Menu **Fichier › Quitter** (**Ctrl + Q**).
 | Menu | Contenu |
 |---|---|
 | **Fichier** | Ajouter un dossier…, Quitter |
-| **Affichage** | Afficher/masquer sidebar (F9), Plein écran (F11), Diaporama (F5) |
-| **Outils** | Dossiers…, Détecter les doublons…, Synchroniser dates de création avec l'EXIF…, Journal des threads…, Historique des problèmes…, Applications externes…, Paramètres |
+| **Affichage** | Afficher/masquer sidebar (F9), Plein écran (F11), Diaporama (F5), Ordre d'affichage… |
+| **Outils** | Dossiers…, État des doublons…, Synchroniser dates de création avec l'EXIF…, Journal des threads…, Historique des problèmes…, Applications externes…, Paramètres |
 | **Visages** | Importer depuis Picasa…, Réinitialiser et réindexer…, Regrouper les visages…, Visualisation des erreurs…, Sauvegarder la reconnaissance…, Gérer les sauvegardes…, Compteurs… |
 | **Aide** | Aide… (F1), À propos |
 
@@ -92,6 +92,10 @@ La sidebar peut aussi être redimensionnée en faisant glisser le séparateur ve
 ### Plein écran
 
 **F11** bascule l'application en plein écran.
+
+### Ordre d'affichage
+
+**Affichage › Ordre d'affichage…** ouvre une fenêtre à deux blocs indépendants : **Dossiers** (sidebar) et **Grille de photos**. Pour chacun, choisissez le mode de tri — **Alphabétique** ou **Chronologique** — et le sens — **Croissant** ou **Décroissant**. Les deux blocs sont réglés séparément : par exemple trier les dossiers par ordre alphabétique tout en gardant la grille en ordre chronologique décroissant (photos les plus récentes en premier). Le réglage est mémorisé d'une session à l'autre.
 
 ### Vérification des mises à jour
 
@@ -685,42 +689,42 @@ Ouverte par double-clic sur une personne nommée.
 
 ## 14. Détection des doublons
 
-Menu **Outils › Détecter les doublons…** analyse l'ensemble de la bibliothèque (les vidéos sont exclues) pour repérer les photos en double, y compris des versions redimensionnées, retouchées (couleur/luminosité) ou recadrées.
+La détection des doublons tourne **automatiquement en arrière-plan**, sans action de votre part : elle démarre après chaque scan de la bibliothèque (les vidéos sont exclues) pour repérer les photos en double, y compris des versions redimensionnées, retouchées (couleur/luminosité) ou recadrées. Il n'y a plus de déclenchement manuel ni de rapport de fin d'analyse — consultez l'état de la détection via **Outils › État des doublons…**.
 
 ### Fonctionnement
 
-L'analyse se déroule en deux passes automatiques (aucune option à régler) :
+L'analyse se déroule en deux passes (aucune option à régler) :
 
 1. **Empreinte perceptuelle (pHash)** — détecte les doublons exacts, redimensionnés ou légèrement retouchés.
 2. **Points d'intérêt (ORB + RANSAC)** — appliqué uniquement aux photos non regroupées à l'étape 1, détecte en plus les **recadrages** (jusqu'à ~60 % de surface recadrée).
 
-L'analyse tourne **en arrière-plan** : une barre de progression et un bouton **Annuler** apparaissent dans la barre de statut, en bas de la fenêtre, et indiquent l'étape en cours (« Tier 1 — empreintes… », « Tier 2 — comparaison ORB… »). Vous pouvez continuer à utiliser PixelPhotoManager normalement pendant ce temps — les résultats n'apparaissent qu'à la fin de l'analyse.
+Elle est **incrémentale** : une paire de photos déjà comparée lors d'une passe précédente n'est jamais recomparée, seules les paires impliquant une photo nouvelle ou modifiée le sont. Une nouvelle passe après l'ajout de quelques photos est donc rapide, même sur une grosse bibliothèque. L'analyse tourne en tâche de fond à priorité réduite, pour ne pas ralentir le reste de l'application pendant que vous l'utilisez.
 
-- Cliquer sur **Annuler** demande confirmation (« Voulez-vous vraiment interrompre la détection de doublons en cours ? Les résultats calculés jusqu'ici seront perdus. »).
-- Si vous fermez l'application pendant qu'une analyse est en cours, un avertissement s'affiche (« Une détection de doublons est en cours… le résultat sera perdu ») avec le choix **Fermer quand même** ou **Annuler**.
+Les photos en double sont marquées d'un **badge ⧉ orange** dans la grille et la visionneuse (voir [section 4](#4-la-grille-de-photos)) — l'application ne supprime ni ne fusionne rien automatiquement, à vous de décider au cas par cas.
 
-### Résultat
+### État des doublons (Outils › État des doublons…)
 
-- Un message final indique le nombre de groupes et de fichiers concernés.
-- Les photos en double sont marquées d'un **badge ⧉ orange** dans la grille et la visionneuse (voir [section 4](#4-la-grille-de-photos)) — l'application ne supprime ni ne fusionne rien automatiquement, à vous de décider au cas par cas.
-- Un **rapport HTML** (`duplicates_report.html`) est généré automatiquement ; un bouton **Ouvrir le rapport** permet de le consulter directement.
+Cette fenêtre affiche un instantané de l'état actuel :
+
+- Le nombre de groupes de doublons et de photos concernées.
+- Si une analyse est en cours (« Analyse en cours… ») ou la date de la dernière vérification terminée.
+- S'il y a des fichiers corrompus détectés (voir plus bas), leur nombre avec un bouton **Voir la liste…**.
+- Boutons **Voir les groupes** (ouvre la grille des groupes de doublons), **Vérifier maintenant** (force une nouvelle passe immédiatement — désactivé si une analyse est déjà en cours) et **Fermer**.
 
 ### Grille des groupes de doublons (bouton « Dupliquées » de la sidebar)
 
 Le bouton **Dupliquées** de la sidebar (avec un badge indiquant le nombre de groupes détectés) ouvre une grille dédiée listant **tous** les groupes de doublons d'un coup — une carte par groupe, avec la vignette du premier exemplaire et le nombre d'exemplaires.
 
 - **Double-clic** sur une carte : ouvre les exemplaires du groupe dans la visionneuse, pour une comparaison rapide (navigation précédent/suivant limitée aux membres du groupe).
-- **✕** sur une carte : **dissout le groupe entier** (ne supprime aucun fichier) — la carte disparaît de la grille et le badge décrémente. Cette dissolution n'est **pas persistante** : relancer une détection complète peut reformer le même groupe si les photos sont toujours similaires.
-- Bouton **Détecter les doublons…** en haut de la grille pour relancer une analyse sans repasser par le menu Outils.
+- **✕** sur une carte : **dissout le groupe entier** (ne supprime aucun fichier) — la carte disparaît de la grille et le badge décrémente. Cette dissolution est **persistante** : le groupe ne sera plus jamais reformé tant qu'aucun de ses membres ne change (une nouvelle photo similaire à l'un d'eux reste en revanche détectée normalement).
+- Bouton **Vérifier maintenant** en haut de la grille pour relancer une analyse sans repasser par le menu Outils.
 
 ### Fichiers corrompus détectés pendant l'analyse
 
-Un fichier qui ne peut pas être lu pendant l'analyse (JPEG endommagé, copie interrompue…) n'est plus ignoré silencieusement : il est comptabilisé et signalé.
+Un fichier qui ne peut pas être lu pendant l'analyse (JPEG endommagé, copie interrompue…) n'est pas ignoré silencieusement : il est comptabilisé et signalé (compteur ⚠ dans **Outils › État des doublons…**, bouton **Voir la liste…**). Cette liste propose deux actions :
 
-- Le message de bilan de fin d'analyse indique le nombre de fichiers illisibles rencontrés, avec un bouton **Réparer…**.
-- Une confirmation est demandée avant toute tentative de réparation.
-- La réparation essaie de ré-enregistrer une copie propre du fichier via un décodeur plus tolérant que celui utilisé pour l'analyse (PIL en mode tolérant aux troncatures, puis le codec JPEG de Qt). L'original est sauvegardé au préalable dans un dossier caché `.tmp_originals` à côté du fichier, et les dates Windows de modification **et** de création sont préservées à l'identique sur la copie réparée.
-- Un second bilan indique le nombre de fichiers réparés. Ceux qui n'ont pas pu l'être (corruption trop importante pour les décodeurs disponibles) sont listés dans un fichier texte horodaté (`fichiers_corrompus_AAAAMMJJ_HHMMSS.txt`), dont l'emplacement reste accessible via **Outils › Historique des problèmes…** (voir [section 16](#16-autres-outils)).
+- **Réparer…** — après confirmation, tente de ré-enregistrer une copie propre de chaque fichier via un décodeur plus tolérant que celui utilisé pour l'analyse (PIL en mode tolérant aux troncatures, puis le codec JPEG de Qt). L'original est sauvegardé au préalable dans un dossier caché `.tmp_originals` à côté du fichier, et les dates Windows de modification **et** de création sont préservées à l'identique sur la copie réparée. Un bilan indique le nombre de fichiers réparés ; ceux qui n'ont pas pu l'être (corruption trop importante pour les décodeurs disponibles) sont listés dans un fichier texte horodaté (`fichiers_corrompus_AAAAMMJJ_HHMMSS.txt`), dont l'emplacement reste accessible via **Outils › Historique des problèmes…** (voir [section 16](#16-autres-outils)).
+- **Supprimer…** — après confirmation (action irréversible), supprime définitivement les fichiers sélectionnés du disque et les retire du catalogue, des vignettes et des visages associés.
 
 ---
 
@@ -868,7 +872,6 @@ Soit typiquement : `C:\Users\VotreNom\AppData\Local\PixelPhotoManager\`
 | `faces.db` | Visages détectés, groupes/clusters, personnes identifiées |
 | `config.json` | Dossiers surveillés et préférences de l'interface (dont réglages de Paramètres) |
 | `logs\pixelphotomanager.log` | Journal de l'application (pour le dépannage) |
-| `duplicates_report.html` | Dernier rapport de détection de doublons |
 | `problems_history.jsonl` | Historique des fichiers corrompus détectés/réparés (**Outils › Historique des problèmes…**, voir [section 16](#16-autres-outils)) |
 | `fichiers_corrompus_AAAAMMJJ_HHMMSS.txt` | Liste des fichiers corrompus non réparés lors d'une analyse de doublons |
 | Rapport CSV de synchro EXIF | Généré à chaque exécution de l'outil de synchronisation des dates |
@@ -900,8 +903,8 @@ Dans chaque dossier de photos, un sous-dossier caché **`.tmp_originals`** peut 
 | Un dossier déplacé manuellement (hors de l'application) n'est plus trouvé | Utilisez **Supprimer des dossiers surveillés** puis **Fichier › Ajouter un dossier…** pour le réenregistrer |
 | Récupérer l'original d'une photo retouchée | Le fichier original n'a jamais été modifié — il suffit d'effacer les retouches via **Annuler** (↩) jusqu'à l'état initial |
 | Récupérer un original écrasé par erreur | S'il a été sauvegardé (case cochée lors de l'enregistrement), il se trouve dans le sous-dossier caché `.tmp_originals` du dossier concerné |
-| « Détecter les doublons… » signale des fichiers corrompus | Utilisez le bouton **Réparer…** proposé dans le bilan (voir [section 14](#14-détection-des-doublons)) ; l'original est toujours sauvegardé avant réparation dans `.tmp_originals` |
+| **État des doublons…** signale des fichiers corrompus | Utilisez le bouton **Réparer…** (ou **Supprimer…**) proposé dans la liste (voir [section 14](#14-détection-des-doublons)) ; l'original est toujours sauvegardé avant réparation dans `.tmp_originals` |
 | La vignette d'une vidéo est noire | OpenCV n'a pas pu lire la vidéo — vérifiez que le codec est installé sur votre système |
 | Une opération semble bloquée ou anormalement lente | Ouvrez **Outils › Journal des threads…** pour voir quel traitement de fond est en cours et son statut |
-| « Détecter les doublons… » signale une erreur au démarrage | Les modules `imagehash` et `Pillow` sont requis ; sans OpenCV/numpy, seule la détection de recadrage (Tier 2) est indisponible, le reste continue de fonctionner |
+| La détection de doublons ne semble jamais tourner | Les modules `imagehash` et `Pillow` sont requis ; sans OpenCV/numpy, seule la détection de recadrage (Tier 2) est indisponible, le reste continue de fonctionner |
 | La reconnaissance faciale ne détecte plus rien | Vérifiez via **Visages › Visualisation des erreurs…** si les fichiers concernés sont en échec de détection (timeout/crash), et utilisez **⟳ Réessayer** |

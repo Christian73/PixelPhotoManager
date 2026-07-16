@@ -99,6 +99,16 @@ Pour les vidéos, `generate()` délègue à `_generate_video_thumb()` : `cv2.Vid
 - Le re-scan forcé passe par `LibraryScanner.scan(folders, force=True)` → `ScanThread(force=True)` → `known = {}` (bypass du cache mtime).
 - `folder_removed` est traité par `MainWindow._on_folder_removed()` : confirmation (nombre de photos affecté) puis `_purge_catalog_for_folder()` supprime les photos du catalogue, les vignettes (`ThumbnailCache.invalidate`) et les visages/`indexed_photos` (`FaceDatabase.delete_for_path`) pour ce dossier. Les fichiers restent intacts sur le disque.
 
+### Détection de doublons — continue et incrémentale
+
+`src/library/duplicate_detector.py` (`DuplicateDetectorThread`) se déclenche automatiquement après chaque scan (`MainWindow._on_scan_finished()` → `_start_duplicate_detection()`), sur le même principe que l'indexation des visages : pas de bouton manuel, pas de rapport de fin. Le menu **Outils › État des doublons…** (`MainWindow._show_duplicate_status_dialog()`) affiche un instantané en lecture seule (nombre de groupes/photos, dernière vérification, fichiers corrompus) avec un bouton **Vérifier maintenant** pour forcer une passe.
+
+Deux niveaux (Tier 1 pHash, Tier 2 ORB+RANSAC pour les recadrages) — voir le docstring du module. La comparaison **par paires** (pas seulement le calcul pHash/ORB par fichier, déjà caché par mtime) est vraiment incrémentale grâce à deux tables `compared_tier1`/`compared_tier2` (`src/library/dedup_cache.py`) qui tracent quels chemins ont déjà été intégralement comparés au reste de la bibliothèque connue — seules les paires nouveau×ancien et nouveau×nouveau sont réévaluées, jamais ancien×ancien.
+
+`DuplicateDetectorThread` prend un paramètre `seed_groups: dict[path, group_id]` (typiquement `Catalog.get_duplicate_group_assignments()`) pour amorcer `group_of` sans tout recomparer. **Piège** : relancer le thread sur un `cache_db_path` déjà peuplé **sans repasser `seed_groups`** fait que toutes les paires apparaissent comme « déjà comparées » et qu'aucun groupe n'est reformé — retour silencieux de `{}` au lieu d'une erreur. En usage réel (`main_window.py`), `seed_groups` est toujours récupéré frais avant chaque création de thread ; seul un nouveau test/script qui relance `_detect()` plusieurs fois sur le même cache doit y penser explicitement.
+
+Conséquence de l'incrémentalité : `Catalog.ignore_duplicate_group()` (dissoudre un groupe, bouton ✕ de la grille des doublons) est maintenant **persistant** — un groupe ignoré n'est plus jamais recréé tant qu'aucun de ses membres ne change (ils sont déjà dans `compared_tier1`/`_tier2`, donc jamais recomparés entre eux). Un nouveau fichier correspondant à l'un d'eux reste détecté normalement (comparaison new×old).
+
 ### Visages — deux étages de filtrage par taille
 
 `src/faces/detector.py::detect_and_embed()` exclut définitivement (visage jamais écrit en base) : `det_score < 0.5`, `embedding is None`, ou `w < 20 / h < 20` px. Ne pas y ajouter de seuil d'aire relatif à l'image — ça a déjà causé un bug (visages valides supprimés silencieusement, sans trace ni rattrapage possible).
