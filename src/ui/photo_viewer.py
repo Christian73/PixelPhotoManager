@@ -2781,10 +2781,17 @@ class PhotoViewer(QWidget):
             self._dup_badge.show()
             self._dup_badge.raise_()
             self._reposition_dup_badge()
+            # La géométrie du viewer peut ne pas être définitive à cet instant
+            # (ex. bascule depuis la grille : le stack/splitter ne se redimensionne
+            # qu'après cet appel) — un repositionnement différé rattrape le calcul
+            # une fois la géométrie finale connue, pour éviter le badge mal placé.
+            QTimer.singleShot(0, self._reposition_dup_badge)
         else:
             self._dup_badge.hide()
 
     def _reposition_dup_badge(self) -> None:
+        if not self._dup_badge.isVisible():
+            return
         self._dup_badge.adjustSize()
         margin = 12
         toolbar_h = self._toolbar.height()
@@ -2796,6 +2803,11 @@ class PhotoViewer(QWidget):
         super().resizeEvent(event)
         if self._dup_badge.isVisible():
             self._reposition_dup_badge()
+
+    def showEvent(self, event) -> None:
+        super().showEvent(event)
+        if self._dup_badge.isVisible():
+            QTimer.singleShot(0, self._reposition_dup_badge)
 
     def highlight_face(self, face) -> None:
         """Encadre un visage unique sur la photo (appelé depuis main_window)."""
