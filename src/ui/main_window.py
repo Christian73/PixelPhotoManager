@@ -27,6 +27,7 @@ from src.library.thumbnail_cache import ThumbnailCache
 from src.library.folder_watcher import FolderWatcher
 from src.library.scanner import LibraryScanner
 from src.library.duplicate_detector import DuplicateDetectorThread
+from src.library.dedup_cache import DedupCache
 from src.library.exif_reader import preserve_file_dates
 from src.core.app_version import get_app_version
 from src.core.update_checker import UpdateCheckThread, STATUS_UPDATE_AVAILABLE
@@ -633,6 +634,10 @@ class MainWindow(QMainWindow):
         self._duplicate_thread: DuplicateDetectorThread | None = None
         self._live_corrupted_paths: list[str] = []
         self._last_duplicate_check: datetime | None = None
+        # (courant, total, message) de la passe de détection en cours, ou None
+        # si aucune n'est en cours — alimente la barre de progression de
+        # "État des doublons…" (cf. _show_duplicate_status_dialog).
+        self._dup_progress: "tuple[int, int, str] | None" = None
         self._duplicates_popup: "_DuplicatesPopup | None" = None
         self._index_errors_dialog = None    # IndexErrorsDialog ouverte (ou None)
         self._force_redetect_thread: ForceRedetectThread | None = None
@@ -758,6 +763,20 @@ class MainWindow(QMainWindow):
         act_dup_status.setToolTip("Afficher l'état actuel de la détection de doublons")
         act_dup_status.triggered.connect(self._show_duplicate_status_dialog)
         m_tools.addAction(act_dup_status)
+        m_tools.addSeparator()
+        act_corrupted = QAction("Fichiers corrompus…", self)
+        act_corrupted.setToolTip(
+            "Afficher les fichiers corrompus détectés par l'analyse des doublons"
+        )
+        act_corrupted.triggered.connect(self._show_corrupted_status_dialog)
+        m_tools.addAction(act_corrupted)
+        act_deleted_corrupted = QAction("Fichiers corrompus supprimés…", self)
+        act_deleted_corrupted.setToolTip(
+            "Afficher les fichiers corrompus supprimés définitivement "
+            "(pour tenter de les retrouver dans une sauvegarde)"
+        )
+        act_deleted_corrupted.triggered.connect(self._open_deleted_corrupted_files_dialog)
+        m_tools.addAction(act_deleted_corrupted)
         m_tools.addSeparator()
         act_exif_date_sync = QAction("Synchroniser dates de création avec l'EXIF…", self)
         act_exif_date_sync.setToolTip(
@@ -1194,6 +1213,9 @@ class MainWindow(QMainWindow):
         self._lbl_corrupted.hide()
         self._lbl_corrupted.clicked.connect(self._show_corrupted_list_dialog)
         sb.addWidget(self._lbl_corrupted)
+        # Restaure l'état persisté (survit à un redémarrage — voir dedup_cache.py)
+        # plutôt que d'attendre la fin du prochain scan pour le réafficher.
+        self._update_corrupted_indicator(self._load_persisted_corrupted_paths())
 
         # Tiers centre — nom du fichier sélectionné et sa taille
         self._lbl_fileinfo = QLabel("")
@@ -1488,6 +1510,10 @@ class MainWindow(QMainWindow):
     def _open_problems_history(self) -> None:
         from src.ui.problems_history_dialog import ProblemsHistoryDialog
         ProblemsHistoryDialog(self).exec()
+
+    def _open_deleted_corrupted_files_dialog(self) -> None:
+        from src.ui.deleted_corrupted_files_dialog import DeletedCorruptedFilesDialog
+        DeletedCorruptedFilesDialog(self).exec()
 
     def _open_settings(self) -> None:
         dlg = SettingsDialog(self._config, self)
@@ -2525,24 +2551,32 @@ class MainWindow(QMainWindow):
 
         detector = DuplicateDetectorThread(paths, seed_groups=seed_groups, parent=self)
         self._duplicate_thread = detector
+        self._dup_progress = (0, max(len(paths), 1) * 2, "Démarrage…")
 
         def _on_partial(groups: dict, corrupted: list):
             self._update_corrupted_indicator(corrupted)
             self._apply_duplicate_results(groups, corrupted, seed_groups=seed_groups)
 
+        def _on_progress(current: int, total: int, message: str):
+            self._dup_progress = (current, total, message)
+
         def _on_done(groups: dict):
             self._duplicate_grid.set_scanning(False)
             self._last_duplicate_check = datetime.now()
+            self._dup_progress = None
             self._apply_duplicate_results(groups, detector.corrupted_paths, seed_groups=seed_groups)
 
         def _on_error(msg: str):
             logger.warning("Détection de doublons : %s", msg)
             self._duplicate_grid.set_scanning(False)
+            self._dup_progress = None
 
         def _on_cancelled():
             self._duplicate_grid.set_scanning(False)
+            self._dup_progress = None
 
         detector.partial_results.connect(_on_partial)
+        detector.progress.connect(_on_progress)
         detector.finished.connect(_on_done)
         detector.error.connect(_on_error)
         detector.cancelled.connect(_on_cancelled)
@@ -2560,6 +2594,70 @@ class MainWindow(QMainWindow):
         else:
             self._lbl_corrupted.hide()
 
+    def _load_persisted_corrupted_paths(self) -> list[str]:
+        """Fichiers corrompus connus du dernier passage de détection de
+        doublons, persistés dans dedup_cache.db pour survivre à un
+        redémarrage de l'application (voir DedupCache.replace_corrupted_paths)."""
+        cache = DedupCache()
+        cache.open()
+        try:
+            return cache.get_corrupted_paths()
+        finally:
+            cache.close()
+
+    def _remove_persisted_corrupted_paths(self, paths) -> None:
+        """Retire des chemins précis de la liste persistée (réparation ou
+        suppression manuelle réussie), sans attendre le prochain passage
+        complet de détection de doublons pour que dedup_cache.db reflète
+        l'état réel."""
+        paths = list(paths)
+        if not paths:
+            return
+        cache = DedupCache()
+        cache.open()
+        try:
+            cache.remove_corrupted_paths(paths)
+        finally:
+            cache.close()
+
+    def _show_corrupted_status_dialog(self) -> None:
+        """Point d'entrée dédié (menu Outils › Fichiers corrompus…) : résumé
+        + actions, plutôt que la liste détaillée (_show_corrupted_list_dialog,
+        accessible ici via "Lister…" et déjà utilisée par l'indicateur de la
+        barre de statut et "État des doublons…"). Pas de bouton "Supprimer…"
+        ici (ni dans _show_corrupted_list_dialog) : l'utilisateur doit
+        d'abord tenter une réparation, l'option de suppression n'étant
+        proposée que pour les fichiers toujours en échec après coup, via
+        _show_repair_result_dialog."""
+        corrupted_paths = list(self._live_corrupted_paths)
+        n = len(corrupted_paths)
+
+        dlg = QDialog(self)
+        dlg.setWindowTitle("Fichiers corrompus")
+        v = QVBoxLayout(dlg)
+
+        if n:
+            v.addWidget(QLabel(
+                f"⚠ {n} fichier{'s' if n != 1 else ''} corrompu{'s' if n != 1 else ''} "
+                "détecté(s) par l'analyse des doublons (probablement illisible(s))."
+            ))
+        else:
+            v.addWidget(QLabel("Aucun fichier corrompu détecté."))
+
+        buttons = QDialogButtonBox(QDialogButtonBox.Close)
+        btn_list = buttons.addButton("Lister…", QDialogButtonBox.ActionRole)
+        btn_list.setEnabled(bool(n))
+        btn_list.clicked.connect(lambda: (dlg.accept(), self._show_corrupted_list_dialog()))
+        btn_repair = buttons.addButton("Réparer…", QDialogButtonBox.ActionRole)
+        btn_repair.setEnabled(bool(n))
+        btn_repair.clicked.connect(lambda: (dlg.accept(), self._offer_corrupted_repair(corrupted_paths)))
+        buttons.rejected.connect(dlg.reject)
+        buttons.button(QDialogButtonBox.Close).setText("Fermer")
+        buttons.button(QDialogButtonBox.Close).clicked.connect(dlg.accept)
+        v.addWidget(buttons)
+
+        dlg.exec()
+
     def _show_corrupted_list_dialog(self, _checked: bool = False) -> None:
         corrupted_paths = self._live_corrupted_paths
         if not corrupted_paths:
@@ -2575,10 +2673,9 @@ class MainWindow(QMainWindow):
         buttons = QDialogButtonBox(QDialogButtonBox.Close)
         btn_repair = buttons.addButton("Réparer…", QDialogButtonBox.ActionRole)
         btn_repair.clicked.connect(lambda: self._offer_corrupted_repair(list(corrupted_paths)))
-        btn_delete = buttons.addButton("Supprimer…", QDialogButtonBox.ActionRole)
-        btn_delete.clicked.connect(lambda: self._offer_corrupted_delete(list(corrupted_paths)))
         buttons.rejected.connect(dlg.reject)
         buttons.accepted.connect(dlg.accept)
+        buttons.button(QDialogButtonBox.Close).setText("Fermer")
         buttons.button(QDialogButtonBox.Close).clicked.connect(dlg.accept)
         v.addWidget(buttons)
         dlg.resize(600, 400)
@@ -2628,8 +2725,13 @@ class MainWindow(QMainWindow):
     def _show_duplicate_status_dialog(self) -> None:
         """État instantané (lecture seule) de la détection de doublons — la
         détection tourne en continu en arrière-plan, ce dialogue remplace
-        l'ancien déclenchement manuel avec rapport de fin."""
-        running = bool(self._duplicate_thread and self._duplicate_thread.isRunning())
+        l'ancien déclenchement manuel avec rapport de fin. Si une passe est en
+        cours, une barre de progression (alimentée par self._dup_progress,
+        mis à jour par le signal `progress` du thread — cf.
+        _start_duplicate_detection) se met à jour en direct tant que le
+        dialogue reste ouvert."""
+        thread = self._duplicate_thread
+        running = bool(thread and thread.isRunning())
 
         n_groups = self._catalog.count_duplicate_groups()
         n_photos = len(self._catalog.get_duplicate_group_assignments())
@@ -2649,7 +2751,30 @@ class MainWindow(QMainWindow):
             status_text = f"Dernière vérification : {self._last_duplicate_check:%d/%m/%Y %H:%M}"
         else:
             status_text = "Dernière vérification : jamais"
-        v.addWidget(QLabel(status_text))
+        lbl_status = QLabel(status_text)
+        v.addWidget(lbl_status)
+
+        progress_bar = None
+        lbl_progress = None
+        if running:
+            progress_bar = QProgressBar()
+            lbl_progress = QLabel()
+            v.addWidget(progress_bar)
+            v.addWidget(lbl_progress)
+
+            def _set_progress(current: int, total: int, message: str) -> None:
+                total = max(total, 1)
+                current = min(max(current, 0), total)
+                remaining = total - current
+                progress_bar.setRange(0, total)
+                progress_bar.setValue(current)
+                prefix = f"{message} — " if message else ""
+                lbl_progress.setText(
+                    f"{prefix}{current}/{total} "
+                    f"({remaining} restant{'s' if remaining != 1 else ''})"
+                )
+
+            _set_progress(*(self._dup_progress or (0, 1, "Démarrage…")))
 
         if n_corrupted:
             corrupted_row = QHBoxLayout()
@@ -2671,6 +2796,44 @@ class MainWindow(QMainWindow):
         buttons.rejected.connect(dlg.reject)
         buttons.button(QDialogButtonBox.Close).clicked.connect(dlg.accept)
         v.addWidget(buttons)
+
+        if running and thread is not None:
+            def _on_progress(current: int, total: int, message: str) -> None:
+                _set_progress(current, total, message)
+
+            def _on_terminal(*_args) -> None:
+                # Émis par finished/error/cancelled : la passe en cours (celle
+                # que ce dialogue affichait) s'est terminée pendant qu'il
+                # restait ouvert — fige la barre à 100 % et réactive
+                # "Vérifier maintenant" plutôt que de laisser un état figé.
+                if progress_bar is not None:
+                    progress_bar.setValue(progress_bar.maximum())
+                if lbl_progress is not None:
+                    lbl_progress.setText("Analyse terminée.")
+                lbl_status.setText(
+                    f"Dernière vérification : {self._last_duplicate_check:%d/%m/%Y %H:%M}"
+                    if self._last_duplicate_check else "Dernière vérification : jamais"
+                )
+                btn_check_now.setEnabled(True)
+
+            thread.progress.connect(_on_progress)
+            thread.finished.connect(_on_terminal)
+            thread.error.connect(_on_terminal)
+            thread.cancelled.connect(_on_terminal)
+
+            def _cleanup(*_args) -> None:
+                for signal, slot in (
+                    (thread.progress, _on_progress),
+                    (thread.finished, _on_terminal),
+                    (thread.error, _on_terminal),
+                    (thread.cancelled, _on_terminal),
+                ):
+                    try:
+                        signal.disconnect(slot)
+                    except (RuntimeError, TypeError):
+                        pass
+
+            dlg.finished.connect(_cleanup)
 
         dlg.exec()
 
@@ -2735,19 +2898,76 @@ class MainWindow(QMainWindow):
         def _on_finished(repaired_count, still_failed):
             progress.setValue(n)
             progress.close()
-            list_path = self._record_corrupted_files(n, repaired_count, still_failed)
-            msg = f"{repaired_count} fichier{'s' if repaired_count != 1 else ''} réparé{'s' if repaired_count != 1 else ''} sur {n}."
-            if still_failed:
-                msg += (f"\n\n{len(still_failed)} fichier(s) n'ont pas pu être réparés.")
-                if list_path:
-                    msg += "\nLa liste est disponible via Outils › Historique des problèmes."
-            QMessageBox.information(self, "Réparation terminée", msg)
+            self._record_corrupted_files(n, repaired_count, still_failed)
+
+            still_failed_set = set(still_failed)
+            repaired_paths = [p for p in corrupted_paths if p not in still_failed_set]
+            self._remove_persisted_corrupted_paths(repaired_paths)
+            self._update_corrupted_indicator(
+                [p for p in self._live_corrupted_paths if p not in set(repaired_paths)]
+            )
+
+            # Le contenu du fichier a changé sur disque (nouvelle image
+            # ré-enregistrée par file_repair.py) : sans ça, la grille garde
+            # l'ancienne vignette (tronquée/corrompue) en cache jusqu'au
+            # prochain redémarrage.
+            if repaired_paths:
+                self._thumb_cache.invalidate_many(repaired_paths)
+                for path in repaired_paths:
+                    self._grid.refresh_photo(path, None)
+
+            self._show_repair_result_dialog(repaired_paths, list(still_failed))
 
         thread.progress.connect(_on_progress)
         thread.finished.connect(_on_finished)
         progress.canceled.connect(thread.cancel)
 
         thread.start()
+
+    def _show_repair_result_dialog(self, repaired_paths: list[str],
+                                     still_failed: list[str]) -> None:
+        """Résumé d'un cycle de réparation : chemins réparés, chemins
+        toujours en échec, et — pour ces derniers — un bouton pour les
+        supprimer directement (réutilise _offer_corrupted_delete, qui
+        enregistre les chemins supprimés dans deleted_corrupted_files.py
+        pour qu'ils restent retrouvables plus tard dans une sauvegarde)."""
+        dlg = QDialog(self)
+        dlg.setWindowTitle("Réparation terminée")
+        v = QVBoxLayout(dlg)
+
+        n_repaired = len(repaired_paths)
+        v.addWidget(QLabel(
+            f"{n_repaired} fichier{'s' if n_repaired != 1 else ''} réparé"
+            f"{'s' if n_repaired != 1 else ''} :"
+        ))
+        if repaired_paths:
+            list_repaired = QListWidget()
+            list_repaired.addItems(repaired_paths)
+            v.addWidget(list_repaired, stretch=1)
+
+        n_failed = len(still_failed)
+        if still_failed:
+            v.addWidget(QLabel(
+                f"{n_failed} fichier{'s' if n_failed != 1 else ''} n'"
+                f"{'a' if n_failed == 1 else 'ont'} pas pu être réparé"
+                f"{'s' if n_failed != 1 else ''} :"
+            ))
+            list_failed = QListWidget()
+            list_failed.addItems(still_failed)
+            v.addWidget(list_failed, stretch=1)
+
+        buttons = QDialogButtonBox(QDialogButtonBox.Close)
+        if still_failed:
+            btn_delete = buttons.addButton("Supprimer ces fichiers…", QDialogButtonBox.ActionRole)
+            btn_delete.clicked.connect(
+                lambda: (dlg.accept(), self._offer_corrupted_delete(list(still_failed)))
+            )
+        buttons.rejected.connect(dlg.reject)
+        buttons.button(QDialogButtonBox.Close).clicked.connect(dlg.accept)
+        v.addWidget(buttons)
+
+        dlg.resize(560, 420)
+        dlg.exec()
 
     def _offer_corrupted_delete(self, corrupted_paths: list) -> None:
         n = len(corrupted_paths)
@@ -2783,8 +3003,12 @@ class MainWindow(QMainWindow):
             self._current_paths -= deleted_set
             self._update_status()
 
+            self._remove_persisted_corrupted_paths(deleted)
             remaining_corrupted = [p for p in self._live_corrupted_paths if p not in deleted_set]
             self._update_corrupted_indicator(remaining_corrupted)
+
+            from src.core.deleted_corrupted_files import deleted_corrupted_files
+            deleted_corrupted_files.add_deleted(deleted)
 
         if errors:
             QMessageBox.warning(self, "Erreurs de suppression",
@@ -2888,6 +3112,10 @@ class MainWindow(QMainWindow):
             for path in all_paths:
                 self._thumb_cache.invalidate(path)
                 self._face_db.delete_for_path(path)
+            self._remove_persisted_corrupted_paths(all_paths)
+            self._update_corrupted_indicator(
+                [p for p in self._live_corrupted_paths if p not in set(all_paths)]
+            )
 
             deleted_set = set(all_paths)
             self._current_photos = [p for p in self._current_photos
