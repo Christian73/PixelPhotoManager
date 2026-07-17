@@ -11,6 +11,7 @@ interne (ThreadPoolExecutor) ne fait que renvoyer des résultats en mémoire,
 jamais d'accès SQLite direct depuis les workers."""
 import logging
 import sqlite3
+import time
 from pathlib import Path
 
 from src.core.app_dirs import APP_DATA_DIR
@@ -61,6 +62,11 @@ CREATE TABLE IF NOT EXISTS compared_tier1 (
 CREATE TABLE IF NOT EXISTS compared_tier2 (
     path       TEXT PRIMARY KEY,
     file_mtime REAL NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS corrupted_files (
+    path        TEXT PRIMARY KEY,
+    detected_at REAL NOT NULL
 );
 """
 
@@ -221,6 +227,46 @@ class DedupCache:
     def store_compared_tier2(self, rows: list[tuple[str, float]]) -> None:
         self._store_compared("compared_tier2", rows)
 
+    # ── Fichiers corrompus ────────────────────────────────────────────────────
+    # Persistés ici plutôt que gardés seulement en mémoire (MainWindow) pour
+    # survivre à un redémarrage de l'application. Un fichier corrompu n'obtient
+    # jamais d'empreinte/de features (cf. duplicate_detector.py), donc à chaque
+    # passage il est systématiquement retenté et retombe dans ce même set — la
+    # liste persistée est donc remplacée intégralement en fin de passage
+    # (`replace_corrupted_paths`), ce qui la maintient à jour automatiquement
+    # (réparé ou supprimé -> disparaît au passage suivant) sans logique de
+    # réconciliation dédiée.
+
+    def get_corrupted_paths(self) -> list[str]:
+        return [row[0] for row in self._conn.execute(
+            "SELECT path FROM corrupted_files ORDER BY path"
+        )]
+
+    def replace_corrupted_paths(self, paths) -> None:
+        """Remplace intégralement la liste persistée par `paths` (l'état
+        complet et à jour à la fin d'un passage Tier 1 + Tier 2)."""
+        now = time.time()
+        self._conn.execute("DELETE FROM corrupted_files")
+        if paths:
+            self._conn.executemany(
+                "INSERT OR REPLACE INTO corrupted_files (path, detected_at) VALUES (?, ?)",
+                [(p, now) for p in paths],
+            )
+        self._conn.commit()
+
+    def remove_corrupted_paths(self, paths) -> None:
+        """Retire des chemins précis (réparation ou suppression manuelle
+        réussie) sans attendre la fin du prochain passage complet."""
+        paths = list(paths)
+        if not paths:
+            return
+        for chunk in _chunks(paths, _IN_CLAUSE_CHUNK):
+            placeholders = ",".join("?" * len(chunk))
+            self._conn.execute(
+                f"DELETE FROM corrupted_files WHERE path IN ({placeholders})", chunk
+            )
+        self._conn.commit()
+
     # ── Maintenance ───────────────────────────────────────────────────────────
 
     def purge_missing(self, keep_paths: set[str]) -> int:
@@ -228,8 +274,12 @@ class DedupCache:
         dans keep_paths (photos supprimées/déplacées/retirées de la
         bibliothèque depuis le dernier scan). Retourne le nombre de lignes
         supprimées (fingerprints + orb_features uniquement, à titre
-        indicatif — compared_tier1/2 sont purgées de la même façon mais ne
-        comptent pas dans le total retourné, comme avant cette extension)."""
+        indicatif — compared_tier1/2 et corrupted_files sont purgées de la
+        même façon mais ne comptent pas dans le total retourné, comme avant
+        cette extension). Un fichier corrompu n'a jamais de fingerprint (cf.
+        `replace_corrupted_paths`) : sans l'inclure explicitement ici, son
+        chemin ne serait jamais vu comme « connu » et donc jamais purgé de
+        corrupted_files après suppression du fichier/dossier."""
         cached_paths: set[str] = set()
         for row in self._conn.execute("SELECT path FROM fingerprints"):
             cached_paths.add(row[0])
@@ -238,6 +288,8 @@ class DedupCache:
         for row in self._conn.execute("SELECT path FROM compared_tier1"):
             cached_paths.add(row[0])
         for row in self._conn.execute("SELECT path FROM compared_tier2"):
+            cached_paths.add(row[0])
+        for row in self._conn.execute("SELECT path FROM corrupted_files"):
             cached_paths.add(row[0])
 
         stale = cached_paths - keep_paths
@@ -260,6 +312,9 @@ class DedupCache:
             )
             self._conn.execute(
                 f"DELETE FROM compared_tier2 WHERE path IN ({placeholders})", chunk
+            )
+            self._conn.execute(
+                f"DELETE FROM corrupted_files WHERE path IN ({placeholders})", chunk
             )
         self._conn.commit()
         return deleted

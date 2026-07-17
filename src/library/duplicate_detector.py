@@ -470,6 +470,14 @@ class DuplicateDetectorThread(QThread):
             # Phase finale : renumérotation (1, 2, 3…)
             self.finished.emit(_renumber(group_of))
         finally:
+            # self._corrupted est, à ce stade (quelle que soit la sortie —
+            # normale ou annulation), l'état complet et à jour : tout fichier
+            # corrompu est systématiquement retenté à chaque passage (jamais
+            # mis en cache dans fingerprints/orb_features), donc un fichier
+            # réparé ou supprimé depuis le dernier passage n'y figure plus.
+            # Persisté ici (et pas seulement gardé en mémoire côté UI) pour
+            # survivre à un redémarrage de l'application.
+            cache.replace_corrupted_paths(self._corrupted)
             cache.close()
 
     # ── Tier 2 : ORB + RANSAC ──────────────────────────────────────────────────

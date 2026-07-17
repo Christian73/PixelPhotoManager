@@ -90,6 +90,33 @@ class TestDetectRealLibrary:
         members_by_path = {p: gid for gid, members in groups.items() for p in members}
         assert str(manifest.corrupted_file) not in members_by_path
 
+    def test_corrupted_file_persisted_to_cache_db(self, tmp_path):
+        """Complète TestCorruptedFilesPersistence (test_dedup_cache.py, qui
+        teste DedupCache en isolation) : vérifie qu'un vrai passage de
+        _detect() persiste bien self._corrupted dans corrupted_files (finally
+        de _detect(), cf. duplicate_detector.py), pas seulement en mémoire.
+        manifest.corrupted_file n'est volontairement pas dans manifest.images
+        (cf. generate_library.py) : il faut l'ajouter explicitement aux
+        chemins scannés, comme test_corrupted_file_rediscovered_after_repair."""
+        from src.library.dedup_cache import DedupCache
+
+        manifest = build_library(tmp_path / "lib")
+        paths = [str(p) for p in manifest.images] + [str(manifest.corrupted_file)]
+        cache_db_path = str(tmp_path / "dedup_cache.db")
+
+        thread = DuplicateDetectorThread(paths, cache_db_path=cache_db_path)
+        received = {}
+        thread.finished.connect(lambda groups: received.update(groups=groups))
+        thread._detect()
+        assert "groups" in received
+
+        cache = DedupCache(cache_db_path)
+        cache.open()
+        try:
+            assert cache.get_corrupted_paths() == [str(manifest.corrupted_file)]
+        finally:
+            cache.close()
+
     def test_no_photos_emits_empty_dict(self, tmp_path):
         thread = DuplicateDetectorThread([])
         received = {}
@@ -116,7 +143,11 @@ class TestDetectRealLibrary:
 
         monkeypatch.setattr(dd.os.path, "isfile", _lying_isfile)
 
-        thread = DuplicateDetectorThread(paths)
+        # cache_db_path isolé : sans ça, _detect() écrirait dans le vrai
+        # dedup_cache.db de la machine (et, depuis la persistance de
+        # corrupted_files, en écraserait intégralement le contenu réel —
+        # cf. DedupCache.replace_corrupted_paths).
+        thread = DuplicateDetectorThread(paths, cache_db_path=str(tmp_path / "dedup_cache.db"))
         received = {}
         thread.finished.connect(lambda groups: received.update(groups=groups))
         thread._detect()  # ne doit pas lever d'exception
