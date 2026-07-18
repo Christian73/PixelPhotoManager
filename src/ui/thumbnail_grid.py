@@ -411,6 +411,7 @@ class ThumbnailGrid(QScrollArea):
     rename_requested          = Signal(object)
     move_requested            = Signal(object)
     delete_requested          = Signal(list)
+    remove_from_album_requested = Signal(list)    # list[PhotoInfo] — retirer de l'album affiché
     save_requested            = Signal(object)
     duplicate_clicked         = Signal(object)   # PhotoInfo — badge de doublon cliqué
     add_to_album_requested    = Signal(list)      # list[PhotoInfo] — ajouter à album existant
@@ -424,6 +425,9 @@ class ThumbnailGrid(QScrollArea):
         self._photos: list[PhotoInfo] = []
         self._selected: set[str] = set()
         self._materialized: dict[int, ThumbnailCell] = {}
+        # Album affiché (via set_album_context()), sinon None : pilote l'action
+        # "Retirer de l'album" du menu contextuel et le comportement de la touche Del.
+        self._album_id: int | None = None
         # False tant qu'aucun scroll n'a eu lieu depuis le dernier affichage : seule
         # la partie visible est alors préparée. Passe à True au 1er _on_scroll(),
         # ce qui active la marge d'un écran au-dessus/en dessous (cf. _visible_range).
@@ -1162,6 +1166,12 @@ class ThumbnailGrid(QScrollArea):
 
         drag.exec(Qt.MoveAction)
 
+    def set_album_context(self, album_id: int | None) -> None:
+        """Indique si la grille affiche le contenu d'un album (et lequel), pour
+        proposer "Retirer de l'album" et faire pointer la touche Del dessus plutôt
+        que sur l'effacement définitif du fichier."""
+        self._album_id = album_id
+
     def set_index_error_paths(self, paths) -> None:
         """Met à jour l'ensemble des photos en erreur d'indexation faciale
         (timeout/crash) — pilote l'action "Retenter l'identification des visages"
@@ -1210,9 +1220,22 @@ class ThumbnailGrid(QScrollArea):
             menu.addAction("Retenter l'identification des visages",
                            lambda: self.retry_face_index_requested.emit(photo))
         menu.addSeparator()
+        if self._album_id is not None:
+            rm_lbl = "Retirer les photos de l'album" if n > 1 else "Retirer de l'album"
+            menu.addAction(rm_lbl, lambda p=photos: self.remove_from_album_requested.emit(p))
         del_lbl = "Effacer les fichiers…" if n > 1 else "Effacer le fichier…"
         menu.addAction(del_lbl, lambda p=photos: self.delete_requested.emit(p))
         menu.exec(pos)
+
+    def _emit_delete_or_remove(self, photos: list) -> None:
+        """Touche Del : retire de l'album affiché s'il y en a un, sinon efface
+        définitivement le(s) fichier(s)."""
+        if not photos:
+            return
+        if self._album_id is not None:
+            self.remove_from_album_requested.emit(photos)
+        else:
+            self.delete_requested.emit(photos)
 
     def keyPressEvent(self, event) -> None:
         if self._ribbon_mode:
@@ -1228,11 +1251,11 @@ class ThumbnailGrid(QScrollArea):
             elif key == Qt.Key_Delete:
                 selected = self.get_selected()
                 if selected:
-                    self.delete_requested.emit(selected)
+                    self._emit_delete_or_remove(selected)
                 else:
                     center_idx = self._ribbon_offset + self._center_pos()
                     if 0 <= center_idx < len(self._photos):
-                        self.delete_requested.emit([self._photos[center_idx]])
+                        self._emit_delete_or_remove([self._photos[center_idx]])
                 event.accept()
                 return
             else:
@@ -1245,6 +1268,6 @@ class ThumbnailGrid(QScrollArea):
         elif event.key() == Qt.Key_Delete:
             selected = self.get_selected()
             if selected:
-                self.delete_requested.emit(selected)
+                self._emit_delete_or_remove(selected)
         else:
             super().keyPressEvent(event)

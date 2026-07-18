@@ -398,6 +398,13 @@ class Catalog:
         with self._lock:
             conn = self._conn()
             try:
+                # Doit précéder le DELETE sur photos : la sous-requête a besoin que la
+                # ligne existe encore pour résoudre son id (pas de FK/cascade déclarée).
+                conn.execute(
+                    "DELETE FROM album_photos WHERE photo_id IN "
+                    "(SELECT id FROM photos WHERE path=?)",
+                    (path,),
+                )
                 conn.execute("DELETE FROM photos WHERE path=?", (path,))
                 self._dissolve_singleton_duplicate_groups(conn)
                 conn.commit()
@@ -465,6 +472,19 @@ class Catalog:
             try:
                 conn.execute(
                     "INSERT OR IGNORE INTO album_photos (album_id, photo_id) VALUES (?,?)",
+                    (album_id, photo_id),
+                )
+                conn.commit()
+            finally:
+                conn.close()
+
+    def remove_photo_from_album(self, album_id: int, photo_id: int) -> None:
+        """Retire une photo d'un album (le fichier et la photo elle-même ne sont pas touchés)."""
+        with self._lock:
+            conn = self._conn()
+            try:
+                conn.execute(
+                    "DELETE FROM album_photos WHERE album_id=? AND photo_id=?",
                     (album_id, photo_id),
                 )
                 conn.commit()
@@ -601,6 +621,11 @@ class Catalog:
         with self._lock:
             conn = self._conn()
             try:
+                conn.executemany(
+                    "DELETE FROM album_photos WHERE photo_id IN "
+                    "(SELECT id FROM photos WHERE path=?)",
+                    [(p,) for p in paths],
+                )
                 conn.executemany(
                     "DELETE FROM photos WHERE path=?", [(p,) for p in paths]
                 )

@@ -507,6 +507,46 @@ class TestAlbumCrud:
         assert catalog.get_albums() == []
         assert len(catalog.get_all_photos()) == 1
 
+    def test_delete_photo_updates_album_photo_count(self, tmp_path):
+        catalog = Catalog(db_path=tmp_path / "catalog.db")
+        album = catalog.create_album("Vacances")
+        p1 = catalog.add_or_update_photo(_make_photo("C:/photos/a.jpg"))
+        p2 = catalog.add_or_update_photo(_make_photo("C:/photos/b.jpg"))
+        catalog.add_photo_to_album(album.id, p1.id)
+        catalog.add_photo_to_album(album.id, p2.id)
+
+        catalog.delete_photo(p1.path)
+
+        assert catalog.get_albums()[0].photo_count == 1
+
+    def test_delete_photos_updates_album_photo_count(self, tmp_path):
+        catalog = Catalog(db_path=tmp_path / "catalog.db")
+        album = catalog.create_album("Vacances")
+        p1 = catalog.add_or_update_photo(_make_photo("C:/photos/a.jpg"))
+        p2 = catalog.add_or_update_photo(_make_photo("C:/photos/b.jpg"))
+        catalog.add_photo_to_album(album.id, p1.id)
+        catalog.add_photo_to_album(album.id, p2.id)
+
+        catalog.delete_photos([p1.path, p2.path])
+
+        assert catalog.get_albums()[0].photo_count == 0
+
+    def test_remove_photo_from_album_keeps_photo_in_catalog(self, tmp_path):
+        catalog = Catalog(db_path=tmp_path / "catalog.db")
+        album = catalog.create_album("Vacances")
+        p1 = catalog.add_or_update_photo(_make_photo("C:/photos/a.jpg"))
+        p2 = catalog.add_or_update_photo(_make_photo("C:/photos/b.jpg"))
+        catalog.add_photo_to_album(album.id, p1.id)
+        catalog.add_photo_to_album(album.id, p2.id)
+
+        catalog.remove_photo_from_album(album.id, p1.id)
+
+        assert catalog.get_albums()[0].photo_count == 1
+        remaining = {p.path for p in catalog.get_photos_in_album(album.id)}
+        assert remaining == {p2.path}
+        # La photo retirée de l'album reste dans le catalogue.
+        assert catalog.get_photo_by_path(p1.path) is not None
+
     def test_get_favorites_only_returns_flagged_photos(self, tmp_path):
         catalog = Catalog(db_path=tmp_path / "catalog.db")
         fav = catalog.add_or_update_photo(_make_photo("C:/photos/a.jpg"))

@@ -662,6 +662,7 @@ class MainWindow(QMainWindow):
         self._current_paths: set[str] = set()
         self._current_photo_index: int = 0
         self._current_context: str = ""   # dossier ou album actif
+        self._current_album_id: int | None = None   # id de l'album actif, sinon None
         self._pending_person_view_id: int | None = None
         self._catalog_loader: _CatalogLoadThread | None = None
         self._update_check_thread: UpdateCheckThread | None = None
@@ -1002,6 +1003,7 @@ class MainWindow(QMainWindow):
         self._grid.rename_requested.connect(self._on_rename_requested)
         self._grid.move_requested.connect(self._on_move_requested)
         self._grid.delete_requested.connect(self._on_delete_requested)
+        self._grid.remove_from_album_requested.connect(self._on_remove_from_album_requested)
         self._grid.save_requested.connect(self._on_save_requested)
         self._grid.duplicate_clicked.connect(self._on_duplicate_badge_clicked)
         self._grid.add_to_album_requested.connect(self._on_add_to_album)
@@ -1050,6 +1052,7 @@ class MainWindow(QMainWindow):
         self._viewer.rename_requested.connect(self._on_rename_requested)
         self._viewer.move_requested.connect(self._on_move_requested)
         self._viewer.delete_requested.connect(self._on_delete_requested)
+        self._viewer.remove_from_album_requested.connect(self._on_remove_from_album_requested)
         self._viewer.force_redetect_requested.connect(self._on_force_redetect_requested)
         self._viewer.folder_grid_requested.connect(
             lambda photo: self._navigate_to_photo_path(photo.path)
@@ -1404,6 +1407,8 @@ class MainWindow(QMainWindow):
         self._current_photos = []
         self._current_paths = set()
         self._current_context = "Toutes les photos"
+        self._current_album_id = None
+        self._grid.set_album_context(None)
         self._grid.set_ribbon_mode(True)
         self._grid.set_date_overlay_visible(True)
         self._grid.set_photos([])
@@ -1480,7 +1485,15 @@ class MainWindow(QMainWindow):
         self._update_status()
         albums = self._catalog.get_albums()
         self._sidebar.refresh_albums(albums)
-        self._refresh_persons()
+        # Rebuild complet uniquement si le scan a trouvé de nouvelles photos (donc
+        # potentiellement de nouveaux visages/personnes) : sinon (rescan déclenché par
+        # le watcher après une suppression, ou par un simple attribut de fichier changé),
+        # une mise à jour légère évite de vider/recharger toute la liste des personnes
+        # avec ses vignettes — visible et inutile puisque rien n'a changé côté visages.
+        if total:
+            self._refresh_persons()
+        else:
+            self._update_persons_counts()
 
         # Le scan ajoute les nouvelles photos dans l'ordre filesystem (non trié).
         # On re-trie la liste courante selon le réglage "Ordre d'affichage".
@@ -2339,19 +2352,22 @@ class MainWindow(QMainWindow):
         self._viewer.set_zoom(value / 100.0)
         self._zoom_pct_label.setText(f"{value}%")
 
-    def _start_photo_query(self, fn, context_key: str) -> None:
+    def _start_photo_query(self, fn, context_key: str, album_id: int | None = None) -> None:
         """Lance une requête photo en arrière-plan et met à jour la grille à l'arrivée."""
         self._cancel_grid_display_ops()
         self._photo_query_thread = _PhotoQueryThread(fn, context_key, self)
-        self._photo_query_thread.photos_ready.connect(self._on_photo_query_ready)
+        self._photo_query_thread.photos_ready.connect(
+            lambda photos, ctx, aid=album_id: self._on_photo_query_ready(photos, ctx, aid)
+        )
         self._photo_query_thread.start()
 
-    @Slot(list, str)
-    def _on_photo_query_ready(self, photos: list, context_key: str) -> None:
+    def _on_photo_query_ready(self, photos: list, context_key: str, album_id: int | None = None) -> None:
         photos = self._sort_photos_for_display(photos, context_key)
-        self._current_photos  = photos
-        self._current_paths   = {p.path for p in photos}
-        self._current_context = context_key
+        self._current_photos   = photos
+        self._current_paths    = {p.path for p in photos}
+        self._current_context  = context_key
+        self._current_album_id = album_id
+        self._grid.set_album_context(album_id)
         self._grid.set_photos(photos)
         self._update_status()
 
@@ -2402,6 +2418,7 @@ class MainWindow(QMainWindow):
         self._grid.set_date_overlay_visible(False)
         self._grid_nav_bar.hide()
         self.show_grid()
+        self._current_album_id = None
         self._start_photo_query(
             lambda: self._catalog.get_photos_in_folder(folder),
             folder,
@@ -2445,6 +2462,7 @@ class MainWindow(QMainWindow):
             self._start_photo_query(
                 lambda: self._catalog.get_photos_in_album(album_id),
                 album_name,
+                album_id,
             )
 
     @Slot(str)
@@ -3172,6 +3190,7 @@ class MainWindow(QMainWindow):
             idx = next((i for i, p in enumerate(group_photos) if p.path == path), 0)
             self._current_photos = group_photos
             self._current_photo_index = idx
+            self._current_album_id = None
             self.show_viewer(group_photos[idx])
         else:
             self._navigate_to_photo_path(path)
@@ -3183,6 +3202,7 @@ class MainWindow(QMainWindow):
             return
         self._current_photos = photos
         self._current_photo_index = 0
+        self._current_album_id = None
         self._viewer_back_target = "duplicate_grid"
         self.show_viewer(photos[0])
 
@@ -3461,6 +3481,7 @@ class MainWindow(QMainWindow):
         self._current_photo_index = next(
             (i for i, p in enumerate(self._current_photos) if p.path == path), 0
         )
+        self._current_album_id = None
         self._viewer_back_target = "person_cluster_view"
         self.show_viewer(photo)
 
@@ -3533,6 +3554,7 @@ class MainWindow(QMainWindow):
 
     def show_viewer(self, photo: PhotoInfo) -> None:
         is_video = photo.media_type == "video"
+        self._viewer.set_album_context(self._current_album_id)
         self._viewer.set_photo(photo)
         if not is_video:
             self._edit_panel.set_photo(photo)
@@ -3796,6 +3818,9 @@ class MainWindow(QMainWindow):
                                     if p.path not in deleted_set]
             self._current_paths -= deleted_set
             self._update_status()
+            # Rafraîchir immédiatement les compteurs d'albums plutôt que d'attendre
+            # le rescan déclenché par le watcher suite à la suppression des fichiers.
+            self._sidebar.refresh_albums(self._catalog.get_albums())
             for path in deleted:
                 self._face_db.delete_for_path(path)
 
@@ -3852,6 +3877,48 @@ class MainWindow(QMainWindow):
         if errors:
             QMessageBox.warning(self, "Erreurs de suppression",
                                 "Impossible de supprimer :\n" + "\n".join(errors))
+
+    def _on_remove_from_album_requested(self, photos: list) -> None:
+        """Retire les photos de l'album affiché (touche Del / menu contextuel en
+        contexte album, grille ou visionneuse) : ne touche ni au fichier disque
+        ni à la photo elle-même, contrairement à _on_delete_requested."""
+        if not photos or self._current_album_id is None:
+            return
+
+        album_id = self._current_album_id
+        for photo in photos:
+            self._catalog.remove_photo_from_album(album_id, photo.id)
+
+        in_viewer = self._stack.currentIndex() == 1
+        viewed_index = self._current_photo_index
+        removed_set = {p.path for p in photos}
+        current_viewed = self._viewer.current_photo()
+
+        first_removed_idx = next(
+            (i for i, p in enumerate(self._current_photos) if p.path in removed_set),
+            None,
+        )
+
+        self._grid.remove_photos(list(removed_set))
+        self._current_photos = [p for p in self._current_photos if p.path not in removed_set]
+        self._current_paths -= removed_set
+        self._update_status()
+        self._sidebar.refresh_albums(self._catalog.get_albums())
+
+        # Si la visionneuse affichait une photo retirée, naviguer vers le voisin
+        # (même logique que _on_delete_requested).
+        if in_viewer and current_viewed and current_viewed.path in removed_set:
+            if not self._current_photos:
+                self.show_grid()
+            else:
+                new_index = min(viewed_index, len(self._current_photos) - 1)
+                self._current_photo_index = new_index
+                self.show_viewer(self._current_photos[new_index])
+        elif not in_viewer and self._current_photos and first_removed_idx is not None:
+            neighbor_idx = min(first_removed_idx, len(self._current_photos) - 1)
+            neighbor_path = self._current_photos[neighbor_idx].path
+            self._grid.scroll_to_photo(neighbor_path)
+            self._grid.select_photo(neighbor_path)
 
     def _update_viewer_status(self, photo: PhotoInfo) -> None:
         size_str = _fmt_size(photo.file_size)

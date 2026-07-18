@@ -2518,6 +2518,7 @@ class PhotoViewer(QWidget):
     rename_requested     = Signal(object)  # PhotoInfo
     move_requested       = Signal(object)  # PhotoInfo
     delete_requested            = Signal(list)    # list[PhotoInfo]
+    remove_from_album_requested = Signal(list)    # list[PhotoInfo] — retrait d'album (non destructif)
     dup_badge_clicked    = Signal(object)  # PhotoInfo — badge de doublon cliqué
     red_eye_point_added         = Signal(float, float)  # cx_norm, cy_norm (0-1)
     pixel_sampled               = Signal(int, int, int)  # R, G, B — pipette balance des blancs
@@ -2549,6 +2550,11 @@ class PhotoViewer(QWidget):
         # Le chargement est asynchrone pour éviter de bloquer le thread UI,
         # particulièrement critique pour les vidéos (cv2.VideoCapture + COM).
         self._base_loader: "_BaseLoader | None" = None
+        # Album affiché lorsque la visionneuse a été ouverte depuis sa grille
+        # (ou None) : détermine si le menu contextuel propose "Retirer de
+        # l'album" et si la touche Del retire de l'album plutôt que d'effacer
+        # le fichier — cf. ThumbnailGrid.set_album_context.
+        self._album_id: int | None = None
         # Debounce pour les previews de retouche : on ne recharge que 60 ms
         # après le dernier événement slider (évite les surcharges mémoire).
         self._preview_timer = QTimer(self)
@@ -2757,6 +2763,12 @@ class PhotoViewer(QWidget):
 
     def current_photo(self) -> "PhotoInfo | None":
         return self._photo
+
+    def set_album_context(self, album_id: int | None) -> None:
+        """Indique si la photo affichée provient d'un album (et lequel), pour
+        proposer "Retirer de l'album" et faire pointer la touche Del dessus
+        plutôt que sur l'effacement définitif du fichier."""
+        self._album_id = album_id
 
     def set_photo(self, photo: PhotoInfo, edit: EditInfo | None = None) -> None:
         self._preview_timer.stop()
@@ -3117,7 +3129,11 @@ class PhotoViewer(QWidget):
         menu.addAction("Forcer une nouvelle détection sans limite de taille",
                        lambda: self.force_redetect_requested.emit(photo))
         menu.addSeparator()
-        menu.addAction("Effacer le fichier…", lambda: self.delete_requested.emit([photo]))
+        if self._album_id is not None:
+            menu.addAction("Retirer de l'album",
+                           lambda: self.remove_from_album_requested.emit([photo]))
+        else:
+            menu.addAction("Effacer le fichier…", lambda: self.delete_requested.emit([photo]))
 
         menu.exec(pos)
 
@@ -3184,7 +3200,10 @@ class PhotoViewer(QWidget):
                 photo = self.current_photo()
                 if photo and not self._canvas._crop_mode and not self._canvas._red_eye_mode \
                         and not self._canvas._face_add_mode:
-                    self.delete_requested.emit([photo])
+                    if self._album_id is not None:
+                        self.remove_from_album_requested.emit([photo])
+                    else:
+                        self.delete_requested.emit([photo])
         elif key == Qt.Key_0:
             self.zoom_fit()
         elif key == Qt.Key_1:
