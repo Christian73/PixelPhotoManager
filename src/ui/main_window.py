@@ -624,6 +624,7 @@ class MainWindow(QMainWindow):
         super().__init__()
         self._config = config
         self._catalog = catalog
+        self._migrate_dissolve_date_conflicted_duplicate_groups()
         self._thumb_cache = thumb_cache
         self._scanner = scanner
         self._face_db = face_db
@@ -638,6 +639,9 @@ class MainWindow(QMainWindow):
         # si aucune n'est en cours — alimente la barre de progression de
         # "État des doublons…" (cf. _show_duplicate_status_dialog).
         self._dup_progress: "tuple[int, int, str] | None" = None
+        # Chemins ignorés via le bouton ✗ pendant le passage de détection en
+        # cours — cf. _on_duplicate_group_ignored pour la raison d'être.
+        self._duplicate_ignored_paths: set[str] = set()
         self._duplicates_popup: "_DuplicatesPopup | None" = None
         self._index_errors_dialog = None    # IndexErrorsDialog ouverte (ou None)
         self._force_redetect_thread: ForceRedetectThread | None = None
@@ -2561,6 +2565,53 @@ class MainWindow(QMainWindow):
 
     # ------------------------------------------------------------------ doublons
 
+    def _migrate_dissolve_date_conflicted_duplicate_groups(self) -> None:
+        """Migration ponctuelle : dissout les groupes de doublons existants qui
+        contiennent au moins deux membres dont la date EXIF est connue et
+        différente (cf. duplicate_detector.py::_dates_differ). Un tel groupe ne
+        peut plus être *créé* aujourd'hui, mais l'incrémentalité de la
+        détection (compared_tier1/compared_tier2, dedup_cache.py) ne recompare
+        et ne dissout jamais spontanément un groupe déjà formé avant l'ajout de
+        cette règle — cf. dedup_exif_date_exclusion_2026-07 en mémoire.
+
+        En plus de dissoudre le groupe en base (duplicate_group_id=NULL, comme
+        Catalog.ignore_duplicate_group), retire aussi ses membres de
+        compared_tier1/tier2 pour qu'ils soient recomparés intégralement au
+        prochain passage plutôt que de rester des « paires ancien×ancien »
+        jamais réévaluées — sans ça, la dissolution ne durerait pas : le
+        prochain seed_groups() les retrouverait simplement fusionnés à
+        l'identique puisque plus rien ne les aurait jamais reconfrontés.
+
+        Naturellement idempotente : une fois ces groupes dissous, la règle de
+        date empêche définitivement leur recréation, donc ce balayage ne
+        trouve plus rien aux démarrages suivants — pas de flag « déjà
+        exécuté » nécessaire, contrairement à une migration one-shot classique."""
+        if self._catalog.count_duplicate_groups() == 0:
+            return
+        groups = self._catalog.get_duplicate_groups()
+        conflicted_group_ids: list[int] = []
+        conflicted_paths: list[str] = []
+        for gid, photos in groups.items():
+            known_dates = {p.date_taken for p in photos if p.date_taken is not None}
+            if len(known_dates) > 1:
+                conflicted_group_ids.append(gid)
+                conflicted_paths.extend(p.path for p in photos)
+        if not conflicted_group_ids:
+            return
+        for gid in conflicted_group_ids:
+            self._catalog.ignore_duplicate_group(gid)
+        cache = DedupCache()
+        cache.open()
+        try:
+            cache.remove_compared(conflicted_paths)
+        finally:
+            cache.close()
+        logger.info(
+            "Migration doublons : %d groupe(s) à dates EXIF conflictuelles dissous "
+            "(%d photo(s) remise(s) en file pour recomparaison complète).",
+            len(conflicted_group_ids), len(conflicted_paths),
+        )
+
     @Slot()
     def _on_persons_thumbnails_ready_start_duplicates(self) -> None:
         try:
@@ -2581,6 +2632,9 @@ class MainWindow(QMainWindow):
 
         seed_groups = self._catalog.get_duplicate_group_assignments()
         dates = self._catalog.get_photo_dates_for_dedup()
+        # seed_groups reflète déjà tout ✗ cliqué avant ce lancement — repartir
+        # d'un ensemble vide pour ce nouveau passage (cf. _on_duplicate_group_ignored).
+        self._duplicate_ignored_paths = set()
 
         detector = DuplicateDetectorThread(
             paths, seed_groups=seed_groups, parent=self, dates=dates
@@ -2761,6 +2815,13 @@ class MainWindow(QMainWindow):
         for gid, members in groups.items():
             for path in members:
                 assignments[path] = gid
+
+        # Exclut tout chemin dissous via le bouton ✗ pendant ce passage : le
+        # thread de détection peut encore les avoir fusionnés dans son état
+        # interne (capturé avant l'ignore) — cf. _on_duplicate_group_ignored.
+        if self._duplicate_ignored_paths:
+            assignments = {p: gid for p, gid in assignments.items()
+                           if p not in self._duplicate_ignored_paths}
 
         stale = (set(seed_groups) - set(assignments)) if seed_groups else set()
 
@@ -3126,7 +3187,19 @@ class MainWindow(QMainWindow):
         self.show_viewer(photos[0])
 
     def _on_duplicate_group_ignored(self, group_id: int) -> None:
-        """Bouton ✗ sur une carte de DuplicateGrid : dissout le groupe entier (non persistant)."""
+        """Bouton ✗ sur une carte de DuplicateGrid : dissout le groupe entier,
+        persistant (cf. Catalog.ignore_duplicate_group). Piège corrigé ici :
+        si un DuplicateDetectorThread tourne déjà, ce groupe peut être fusionné
+        dans son group_of *en mémoire* depuis avant ce clic — son prochain
+        instantané (partial_results, cadencé toutes les _LIVE_SNAPSHOT_INTERVAL
+        secondes, ou finished) réécrirait alors bêtement ce même groupe en
+        base via _apply_duplicate_results, le faisant réapparaître quelques
+        secondes après sa dissolution. On mémorise donc les chemins concernés
+        dans _duplicate_ignored_paths (vidé à chaque nouveau lancement dans
+        _start_duplicate_detection) pour que _apply_duplicate_results les
+        exclue de tout instantané du passage en cours."""
+        ignored_paths = {p.path for p in self._catalog.get_duplicates_for_group(group_id)}
+        self._duplicate_ignored_paths |= ignored_paths
         self._catalog.ignore_duplicate_group(group_id)
         self._duplicate_grid.remove_group(group_id)
         self._sidebar.update_duplicates_badge(self._catalog.count_duplicate_groups())
@@ -3731,7 +3804,12 @@ class MainWindow(QMainWindow):
             # DuplicateGrid pour un groupe qui n'a plus lieu d'être.
             stale_groups = []
             for gid in affected_groups:
-                if len(self._catalog.get_duplicates_for_group(gid)) < 2:
+                remaining = self._catalog.get_duplicates_for_group(gid)
+                if len(remaining) < 2:
+                    # Même piège que le bouton ✗ (cf. _on_duplicate_group_ignored) :
+                    # un passage de détection en cours peut encore fusionner ce
+                    # groupe en mémoire depuis avant la suppression.
+                    self._duplicate_ignored_paths |= {p.path for p in remaining}
                     self._catalog.ignore_duplicate_group(gid)
                     self._duplicate_grid.remove_group(gid)
                     stale_groups.append(gid)
@@ -4229,6 +4307,13 @@ class MainWindow(QMainWindow):
             self._face_indexer.stop()
         if self._duplicate_thread and self._duplicate_thread.isRunning():
             self._duplicate_thread.cancel()
+
+        # Masquer la fenêtre tout de suite : tout l'état utile est déjà
+        # sauvegardé ci-dessus, donc rien n'empêche de rendre la fermeture
+        # instantanée à l'écran pendant que les wait() ci-dessous (jusqu'à
+        # ~10 s cumulés si un scan/détection est en cours) tournent en
+        # arrière-plan, invisibles pour l'utilisateur.
+        self.hide()
 
         self._scanner.wait_stopped(3000)
         if self._face_indexer and self._face_indexer.isRunning():

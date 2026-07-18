@@ -438,6 +438,12 @@ class DuplicateDetectorThread(QThread):
                                f"Tier 1 — comparaison des empreintes (0/{n})…")
 
             def _compare_pair(path_i, hash_i, path_j, hash_j) -> None:
+                # Discriminant le plus simple et le moins cher évalué en premier
+                # (lookup dict + comparaison, pas d'accès image) : deux photos de
+                # dates EXIF connues et différentes ne sont jamais des doublons,
+                # inutile de calculer quoi que ce soit d'autre pour la paire.
+                if _dates_differ(self._dates, path_i, path_j):
+                    return
                 try:
                     dist = hash_i - hash_j
                 except Exception:
@@ -454,8 +460,6 @@ class DuplicateDetectorThread(QThread):
                         pixel_diff = float(np.abs(arr_i - arr_j).mean())
                         if pixel_diff > _HASH_PIXEL_MAX_DIFF:
                             return
-                    if _dates_differ(self._dates, path_i, path_j):
-                        return
                     _merge(group_of, path_i, path_j, next_group)
 
             last_emit = time.monotonic()
@@ -699,6 +703,14 @@ class DuplicateDetectorThread(QThread):
                 # plusieurs secondes de plus que nécessaire.
                 if self._cancelled:
                     break
+                # Discriminant le plus simple et le moins cher d'abord (lookup
+                # dict), avant tout le pipeline ORB (knnMatch + RANSAC +
+                # warpPerspective + absdiff) qui est de loin le plus coûteux de
+                # toute la détection — deux photos de dates EXIF connues et
+                # différentes ne sont jamais des doublons.
+                if _dates_differ(self._dates, path_i, path_j):
+                    results.append((path_j, False))
+                    continue
                 # Tout le corps de la comparaison (pas seulement knnMatch) est
                 # protégé : une géométrie dégénérée (ex. homographie quasi
                 # singulière) peut faire échouer n'importe quel appel cv2 en
@@ -753,10 +765,7 @@ class DuplicateDetectorThread(QThread):
                         continue
 
                     mean_diff = float(cv2.absdiff(warped, img_i)[valid].mean())
-                    matched = mean_diff <= _ORB_MAX_MEAN_DIFF
-                    if matched and _dates_differ(self._dates, path_i, path_j):
-                        matched = False
-                    results.append((path_j, matched))
+                    results.append((path_j, mean_diff <= _ORB_MAX_MEAN_DIFF))
                 except Exception as exc:
                     logger.debug("Tier 2 comparaison échouée %s ↔ %s : %s",
                                 os.path.basename(path_i), os.path.basename(path_j), exc)

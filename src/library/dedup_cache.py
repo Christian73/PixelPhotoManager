@@ -227,6 +227,27 @@ class DedupCache:
     def store_compared_tier2(self, rows: list[tuple[str, float]]) -> None:
         self._store_compared("compared_tier2", rows)
 
+    def remove_compared(self, paths) -> None:
+        """Retire des chemins précis de compared_tier1 ET compared_tier2, pour
+        forcer leur recomparaison complète (Tier 1 + Tier 2) contre le reste de
+        la bibliothèque lors du prochain passage — les empreintes/features déjà
+        calculées (fingerprints/orb_features) restent valables et ne sont pas
+        touchées, seule la marque « déjà comparé » est retirée. Utilisé par les
+        migrations ponctuelles qui invalident des groupes de doublons déjà
+        formés (cf. MainWindow._migrate_dissolve_date_conflicted_duplicate_groups)."""
+        paths = list(paths)
+        if not paths:
+            return
+        for chunk in _chunks(paths, _IN_CLAUSE_CHUNK):
+            placeholders = ",".join("?" * len(chunk))
+            self._conn.execute(
+                f"DELETE FROM compared_tier1 WHERE path IN ({placeholders})", chunk
+            )
+            self._conn.execute(
+                f"DELETE FROM compared_tier2 WHERE path IN ({placeholders})", chunk
+            )
+        self._conn.commit()
+
     # ── Fichiers corrompus ────────────────────────────────────────────────────
     # Persistés ici plutôt que gardés seulement en mémoire (MainWindow) pour
     # survivre à un redémarrage de l'application. Un fichier corrompu n'obtient
