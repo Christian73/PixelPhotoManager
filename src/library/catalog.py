@@ -632,7 +632,15 @@ class Catalog:
     # ------------------------------------------------------------------ doublons
 
     def set_duplicate_groups(self, assignments: dict) -> None:
-        """Enregistre les groupes de doublons détectés. assignments = {path: group_id}."""
+        """Enregistre les groupes de doublons détectés. assignments = {path: group_id}.
+
+        Dissout aussi tout groupe retombé à 0/1 exemplaire par cet appel : un
+        DuplicateDetectorThread en cours au moment d'une suppression calcule ses
+        assignations sur un état capturé avant celle-ci, et peut donc réécrire ici
+        un membre survivant seul dans son ancien groupe — sans ce garde-fou, le
+        groupe de 1 réapparaît jusqu'au prochain delete_photo(s)/redémarrage (cf.
+        dedup_singleton_groups_any_delete_path en mémoire, dont ce chemin n'était
+        pas couvert)."""
         if not assignments:
             return
         with self._lock:
@@ -642,6 +650,7 @@ class Catalog:
                     "UPDATE photos SET duplicate_group_id=? WHERE path=?",
                     [(gid, path) for path, gid in assignments.items()],
                 )
+                self._dissolve_singleton_duplicate_groups(conn)
                 conn.commit()
             finally:
                 conn.close()

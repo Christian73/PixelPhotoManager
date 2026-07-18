@@ -345,9 +345,11 @@ class DuplicateDetectorThread(QThread):
             last_persist = last_emit
             pending_fp: list[tuple] = []
             try:
-                with ThreadPoolExecutor(
+                executor = ThreadPoolExecutor(
                     max_workers=n_workers, initializer=lower_current_thread_priority
-                ) as executor:
+                )
+                cancelled_mid_flight = False
+                try:
                     futures = {}
                     for path in to_compute:
                         # Log systématique (pas throttlé) à la soumission : si le
@@ -359,9 +361,8 @@ class DuplicateDetectorThread(QThread):
 
                     for future in as_completed(futures):
                         if self._is_cancelled():
-                            for f in futures:
-                                f.cancel()
-                            return
+                            cancelled_mid_flight = True
+                            break
 
                         path = futures[future]
                         try:
@@ -395,6 +396,21 @@ class DuplicateDetectorThread(QThread):
                             last_persist = now
                             cache.store_fingerprints(pending_fp)
                             pending_fp = []
+                finally:
+                    # Un thread Python ne peut pas être tué proprement de l'extérieur
+                    # (contrairement à un ProcessPoolExecutor, cf. FaceIndexThread), mais
+                    # shutdown(wait=False, cancel_futures=True) évite au moins d'attendre
+                    # ici la fin des ~n_workers tâches déjà en cours (chacune : un seul
+                    # décodage d'image, borné) — sans ça, le `with ThreadPoolExecutor`
+                    # implicite bloquait sur shutdown(wait=True) jusqu'à la fin de TOUT
+                    # le lot restant à chaque annulation, un des principaux contributeurs
+                    # à la fermeture lente de l'application quand une détection de
+                    # doublons est en cours (cf. MainWindow.closeEvent).
+                    executor.shutdown(
+                        wait=not cancelled_mid_flight, cancel_futures=cancelled_mid_flight
+                    )
+                if cancelled_mid_flight:
+                    return
             finally:
                 # Persiste tout ce qui a été calculé jusqu'ici, y compris en cas
                 # d'annulation (return ci-dessus) — c'est ce qui rend le scan reprenable.
@@ -776,12 +792,15 @@ class DuplicateDetectorThread(QThread):
         comparison_start = phase1_total + (grand_total - phase1_total) // 2
         last_emit = time.monotonic()
         last_snapshot = last_emit
-        with ThreadPoolExecutor(
+        executor = ThreadPoolExecutor(
             max_workers=n_workers, initializer=lower_current_thread_priority
-        ) as executor:
+        )
+        cancelled_mid_flight = False
+        try:
             for i in range(m):
                 if self._is_cancelled():
-                    return
+                    cancelled_mid_flight = True
+                    break
                 path_i, kp_i, des_i, area_i, img_i = desc_list[i]
 
                 now = time.monotonic()
@@ -830,7 +849,8 @@ class DuplicateDetectorThread(QThread):
                     if self._is_cancelled():
                         for f in futures:
                             f.cancel()
-                        return
+                        cancelled_mid_flight = True
+                        break
                     try:
                         chunk_result = future.result()
                     except Exception as exc:
@@ -848,6 +868,19 @@ class DuplicateDetectorThread(QThread):
                                 os.path.basename(path_i), os.path.basename(path_j),
                             )
                             _merge(group_of, path_i, path_j, next_group)
+                if cancelled_mid_flight:
+                    break
+        finally:
+            # Cf. le commentaire équivalent au Tier 1 : un thread Python ne peut pas
+            # être tué de l'extérieur, mais shutdown(wait=False, cancel_futures=True)
+            # évite d'attendre ici la fin des tâches déjà en cours — chacune sort déjà
+            # vite via `if self._cancelled: break` dans _compare_chunk (item par item),
+            # donc ce non-blocage est surtout une garantie supplémentaire (ex. si un
+            # seul appel cv2 est en cours et prend plus longtemps que prévu) plutôt
+            # que le principal gain, contrairement au Tier 1.
+            executor.shutdown(wait=not cancelled_mid_flight, cancel_futures=cancelled_mid_flight)
+        if cancelled_mid_flight:
+            return
 
         logger.info("Tier 2 : %d paire(s) vérifiées par ORB/RANSAC.", pairs_checked)
         cache.store_compared_tier2([(path, mtimes2[path]) for path in new_paths_set])

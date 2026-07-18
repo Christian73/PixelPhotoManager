@@ -131,20 +131,28 @@ class TestMigrateDuplicateFields:
             )
             """
         )
-        conn.execute(
+        conn.executemany(
             "INSERT INTO photos (path, filename, directory) VALUES (?,?,?)",
-            (os.path.normpath("C:/photos/a.jpg"), "a.jpg", os.path.normpath("C:/photos")),
+            [
+                (os.path.normpath("C:/photos/a.jpg"), "a.jpg", os.path.normpath("C:/photos")),
+                (os.path.normpath("C:/photos/b.jpg"), "b.jpg", os.path.normpath("C:/photos")),
+            ],
         )
         conn.commit()
         conn.close()
 
         catalog = Catalog(db_path=db_path)
 
-        # La colonne existe et set_duplicate_groups()/get_duplicate_groups() fonctionnent.
-        catalog.set_duplicate_groups({os.path.normpath("C:/photos/a.jpg"): 1})
+        # La colonne existe et set_duplicate_groups()/get_duplicate_groups() fonctionnent
+        # (deux membres : un groupe de 1 serait dissous par l'invariant, cf.
+        # TestDuplicateGroups.test_set_duplicate_groups_dissolves_singletons).
+        catalog.set_duplicate_groups({
+            os.path.normpath("C:/photos/a.jpg"): 1,
+            os.path.normpath("C:/photos/b.jpg"): 1,
+        })
         groups = catalog.get_duplicate_groups()
         assert 1 in groups
-        assert groups[1][0].filename == "a.jpg"
+        assert {p.filename for p in groups[1]} == {"a.jpg", "b.jpg"}
 
     def test_init_db_is_idempotent(self, tmp_path):
         db_path = tmp_path / "catalog.db"
@@ -305,9 +313,13 @@ class TestDuplicateGroups:
         catalog = Catalog(db_path=tmp_path / "catalog.db")
         catalog.add_or_update_photo(_make_photo("C:/photos/a.jpg"))
         catalog.add_or_update_photo(_make_photo("C:/photos/b.jpg"))
+        catalog.add_or_update_photo(_make_photo("C:/photos/c.jpg"))
+        catalog.add_or_update_photo(_make_photo("C:/photos/d.jpg"))
         catalog.set_duplicate_groups({
             os.path.normpath("C:/photos/a.jpg"): 1,
-            os.path.normpath("C:/photos/b.jpg"): 2,
+            os.path.normpath("C:/photos/b.jpg"): 1,
+            os.path.normpath("C:/photos/c.jpg"): 2,
+            os.path.normpath("C:/photos/d.jpg"): 2,
         })
 
         catalog.ignore_duplicate_group(1)
@@ -336,21 +348,45 @@ class TestDuplicateGroups:
     def test_set_duplicate_groups_none_clears_stale_assignment(self, tmp_path):
         """Technique utilisée par _apply_duplicate_results (main_window.py) pour
         effacer les groupes obsolètes après une passe incrémentale :
-        set_duplicate_groups({p: None for p in stale})."""
+        set_duplicate_groups({p: None for p in stale}). Ici un 3e membre reste
+        dans le groupe pour vérifier que seul le chemin explicitement effacé
+        perd son groupe (cf. test suivant pour le cas où plus aucun membre
+        valide ne reste)."""
         catalog = Catalog(db_path=tmp_path / "catalog.db")
         catalog.add_or_update_photo(_make_photo("C:/photos/a.jpg"))
         catalog.add_or_update_photo(_make_photo("C:/photos/b.jpg"))
+        catalog.add_or_update_photo(_make_photo("C:/photos/c.jpg"))
 
         a = os.path.normpath("C:/photos/a.jpg")
         b = os.path.normpath("C:/photos/b.jpg")
-        catalog.set_duplicate_groups({a: 1, b: 1})
-        assert catalog.get_duplicate_group_assignments() == {a: 1, b: 1}
+        c = os.path.normpath("C:/photos/c.jpg")
+        catalog.set_duplicate_groups({a: 1, b: 1, c: 1})
+        assert catalog.get_duplicate_group_assignments() == {a: 1, b: 1, c: 1}
 
         catalog.set_duplicate_groups({a: None})
 
-        assert catalog.get_duplicate_group_assignments() == {b: 1}
+        assert catalog.get_duplicate_group_assignments() == {b: 1, c: 1}
         rows = _raw_query_all(catalog, "SELECT duplicate_group_id FROM photos WHERE path=?", (a,))
         assert rows == [(None,)]
+
+    def test_set_duplicate_groups_dissolves_leftover_singleton(self, tmp_path):
+        """Régression : un DuplicateDetectorThread en cours au moment d'une
+        suppression peut réécrire, via set_duplicate_groups(), le groupe d'un
+        membre survivant seul (l'autre membre a disparu de la table `photos`
+        entre-temps — l'UPDATE le concernant est un no-op silencieux). Sans
+        dissolution automatique ici, ce groupe de 1 restait affiché jusqu'au
+        prochain delete_photo(s)/redémarrage (cf. dedup_singleton_groups_any_
+        delete_path en mémoire)."""
+        catalog = Catalog(db_path=tmp_path / "catalog.db")
+        catalog.add_or_update_photo(_make_photo("C:/photos/a.jpg"))
+        # b.jpg n'est PAS inséré dans le catalogue : simule sa suppression
+        # pendant que le thread de détection avait déjà A et B fusionnés.
+        b = os.path.normpath("C:/photos/b.jpg")
+        a = os.path.normpath("C:/photos/a.jpg")
+
+        catalog.set_duplicate_groups({a: 1, b: 1})
+
+        assert catalog.get_duplicate_group_assignments() == {}
 
 
 class TestCleanupAssetDirs:
