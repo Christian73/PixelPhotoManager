@@ -35,6 +35,13 @@ class ThumbnailCache:
     def __init__(self, db_path: str | Path = _DB_PATH):
         self._db_path = str(db_path)
         self._thread_local = threading.local()  # connexion SQLite par thread
+        # Sérialise les écritures SQLite entre threads (pattern Catalog/FaceDatabase) :
+        # sans ça, les 4+2 threads de génération de vignettes (thumbnail_grid.py) et le
+        # thread UI (invalidate() lors d'une suppression) se disputent le verrou d'écriture
+        # SQLite via son busy_timeout — un simple Lock Python, tenu seulement le temps de
+        # l'INSERT/DELETE+commit (jamais pendant le décodage image), est plus rapide et
+        # déterministe que d'attendre la retenue/nouvelle tentative de SQLite.
+        self._db_lock = threading.Lock()
         # OrderedDict : insertion-order = LRU order (oldest first).
         # Remplace l'ancien couple dict + deque qui accumulait des clés en double
         # et provoquait des évictions prématurées sur les photos visitées plusieurs fois.
@@ -133,16 +140,17 @@ class ThumbnailCache:
             key = self._key(photo_path)
             mtime = Path(photo_path).stat().st_mtime
 
-            conn = self._conn()
-            conn.execute(
-                """
-                INSERT OR REPLACE INTO thumbnails
-                    (photo_hash, photo_path, file_mtime, thumbnail_data)
-                VALUES (?, ?, ?, ?)
-                """,
-                (key, photo_path, mtime, data),
-            )
-            conn.commit()
+            with self._db_lock:
+                conn = self._conn()
+                conn.execute(
+                    """
+                    INSERT OR REPLACE INTO thumbnails
+                        (photo_hash, photo_path, file_mtime, thumbnail_data)
+                    VALUES (?, ?, ?, ?)
+                    """,
+                    (key, photo_path, mtime, data),
+                )
+                conn.commit()
 
             return data
         except Exception as e:
@@ -191,14 +199,15 @@ class ThumbnailCache:
 
             key   = self._key(video_path)
             mtime = Path(video_path).stat().st_mtime
-            conn  = self._conn()
-            conn.execute(
-                "INSERT OR REPLACE INTO thumbnails"
-                " (photo_hash, photo_path, file_mtime, thumbnail_data)"
-                " VALUES (?, ?, ?, ?)",
-                (key, video_path, mtime, data),
-            )
-            conn.commit()
+            with self._db_lock:
+                conn = self._conn()
+                conn.execute(
+                    "INSERT OR REPLACE INTO thumbnails"
+                    " (photo_hash, photo_path, file_mtime, thumbnail_data)"
+                    " VALUES (?, ?, ?, ?)",
+                    (key, video_path, mtime, data),
+                )
+                conn.commit()
 
             return data
         except Exception as e:
@@ -214,36 +223,39 @@ class ThumbnailCache:
         if pixmap is not None:
             self._store_ram(new_key, pixmap)
         # DB : copier la ligne sous la nouvelle clé puis supprimer l'ancienne
-        conn = self._conn()
-        conn.execute(
-            """
-            INSERT OR REPLACE INTO thumbnails
-                (photo_hash, photo_path, file_mtime, thumbnail_data)
-            SELECT ?, ?, file_mtime, thumbnail_data
-            FROM thumbnails WHERE photo_hash = ?
-            """,
-            (new_key, new_path, old_key),
-        )
-        conn.execute("DELETE FROM thumbnails WHERE photo_hash = ?", (old_key,))
-        conn.commit()
+        with self._db_lock:
+            conn = self._conn()
+            conn.execute(
+                """
+                INSERT OR REPLACE INTO thumbnails
+                    (photo_hash, photo_path, file_mtime, thumbnail_data)
+                SELECT ?, ?, file_mtime, thumbnail_data
+                FROM thumbnails WHERE photo_hash = ?
+                """,
+                (new_key, new_path, old_key),
+            )
+            conn.execute("DELETE FROM thumbnails WHERE photo_hash = ?", (old_key,))
+            conn.commit()
 
     def invalidate(self, photo_path: str) -> None:
         key = self._key(photo_path)
         self._ram.pop(key, None)
-        conn = self._conn()
-        conn.execute("DELETE FROM thumbnails WHERE photo_hash=?", (key,))
-        conn.commit()
+        with self._db_lock:
+            conn = self._conn()
+            conn.execute("DELETE FROM thumbnails WHERE photo_hash=?", (key,))
+            conn.commit()
 
     def invalidate_many(self, photo_paths: list[str]) -> None:
         """Supprime en une transaction les vignettes d'une liste de chemins."""
         keys = [self._key(p) for p in photo_paths]
         for key in keys:
             self._ram.pop(key, None)
-        conn = self._conn()
-        conn.executemany(
-            "DELETE FROM thumbnails WHERE photo_hash=?", [(k,) for k in keys]
-        )
-        conn.commit()
+        with self._db_lock:
+            conn = self._conn()
+            conn.executemany(
+                "DELETE FROM thumbnails WHERE photo_hash=?", [(k,) for k in keys]
+            )
+            conn.commit()
 
     def _store_ram(self, key: str, pixmap: QPixmap) -> None:
         """LRU sur OrderedDict : O(1) insert/evict, sans doublons."""

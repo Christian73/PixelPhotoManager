@@ -1210,8 +1210,8 @@ class ThumbnailGrid(QScrollArea):
             menu.addAction("Retenter l'identification des visages",
                            lambda: self.retry_face_index_requested.emit(photo))
         menu.addSeparator()
-        menu.addAction("Effacer le fichier…",
-                       lambda: self.delete_requested.emit([photo]))
+        del_lbl = "Effacer les fichiers…" if n > 1 else "Effacer le fichier…"
+        menu.addAction(del_lbl, lambda p=photos: self.delete_requested.emit(p))
         menu.exec(pos)
 
     def keyPressEvent(self, event) -> None:
