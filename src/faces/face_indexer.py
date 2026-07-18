@@ -123,6 +123,7 @@ class FaceIndexThread(QThread):
         self._face_db = face_db
         self._catalog = catalog
         self._stop_flag = False
+        self._executor: "concurrent.futures.ProcessPoolExecutor | None" = None
 
     def run(self) -> None:
         from src.core.thread_journal import journal, rss_mb
@@ -154,6 +155,7 @@ class FaceIndexThread(QThread):
         executor = concurrent.futures.ProcessPoolExecutor(
             max_workers=_WORKERS, initializer=lower_current_process_priority
         )
+        self._executor = executor
         try:
             # ── Phase 1 : warmup des _WORKERS subprocesses ─────────────────
             self.progress.emit(0, total)
@@ -219,6 +221,8 @@ class FaceIndexThread(QThread):
                     detections, det_rotation = fut.result(timeout=remaining)
 
                 except concurrent.futures.TimeoutError:
+                    if self._stop_flag:
+                        break
                     logger.error("FaceIndexThread: timeout %ds sur %s",
                                  _DETECT_TIMEOUT, os.path.basename(path))
                     journal.step("FaceIndexThread", f"TIMEOUT {os.path.basename(path)}", t0)
@@ -237,6 +241,7 @@ class FaceIndexThread(QThread):
                     in_flight.clear()
                     _kill_executor(executor)
                     executor = _fresh_executor_cpu()
+                    self._executor = executor
                     on_cpu_fallback = True
                     cpu_recovery_successes = 0
                     self.error.emit(path, f"timeout ({_DETECT_TIMEOUT}s)")
@@ -249,6 +254,12 @@ class FaceIndexThread(QThread):
                     continue
 
                 except concurrent.futures.BrokenExecutor as exc:
+                    if self._stop_flag:
+                        # Executor tué par stop() (arrêt demandé pendant que
+                        # fut.result() bloquait, jusqu'à _DETECT_TIMEOUT=60s
+                        # sans ça) : pas un vrai crash, ne pas le compter
+                        # comme échec ni relancer un executor de secours.
+                        break
                     logger.error("FaceIndexThread: subprocess crashé sur %s",
                                  os.path.basename(path))
                     journal.step("FaceIndexThread", f"CRASH {os.path.basename(path)}", t0)
@@ -262,6 +273,7 @@ class FaceIndexThread(QThread):
                     in_flight.clear()
                     _kill_executor(executor)
                     executor = _fresh_executor_cpu()
+                    self._executor = executor
                     on_cpu_fallback = True
                     cpu_recovery_successes = 0
                     self.error.emit(path, f"subprocess crash: {exc}")
@@ -305,7 +317,7 @@ class FaceIndexThread(QThread):
                         # consécutifs, retenter le GPU. Purge d'abord les futures encore
                         # en vol sur l'executor CPU (1 worker, donc peu coûteux) avant de
                         # le tuer, pour ne pas perdre de travail déjà soumis.
-                        while in_flight:
+                        while in_flight and not self._stop_flag:
                             f2, p2, _ = in_flight.popleft()
                             processed += 1
                             self.progress.emit(processed, total)
@@ -329,12 +341,14 @@ class FaceIndexThread(QThread):
                             on_cpu_fallback = False
                         else:
                             executor = _fresh_executor_cpu()
+                        self._executor = executor
                         cpu_recovery_successes = 0
 
                 _enqueue()
 
         finally:
             executor.shutdown(wait=False, cancel_futures=True)
+            self._executor = None
 
         if indexed > 0:
             self.cluster_requested.emit()
@@ -354,6 +368,15 @@ class FaceIndexThread(QThread):
 
     def stop(self) -> None:
         self._stop_flag = True
+        # Sans ça, run() peut rester bloqué jusqu'à _DETECT_TIMEOUT (60s) ou
+        # _WARMUP_TIMEOUT (120s) dans un fut.result() en cours avant de
+        # seulement remarquer le flag — tuer l'executor fait échouer cet
+        # appel immédiatement (BrokenExecutor), ce qui débloque la boucle
+        # sans attendre. Contribue directement à un arrêt rapide de
+        # l'application (cf. MainWindow.closeEvent).
+        executor = self._executor
+        if executor is not None:
+            _kill_executor(executor)
 
 
 class SingleFaceReindexThread(QThread):

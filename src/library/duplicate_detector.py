@@ -35,11 +35,16 @@ _LIVE_SNAPSHOT_INTERVAL = 2.0  # secondes — throttle des instantanés partial_
 # ── Tier 1 ─────────────────────────────────────────────────────────────────────
 _HASH_THRESHOLD  = 10    # distance de Hamming max (8 = exact/resize ; 10 couvre les éditions modérées)
 _HASH_MICRO_SIZE     = 8    # miniature (px) pour la vérification post-hash
-_HASH_PIXEL_MAX_DIFF = 0.5  # écart moyen (miniature 8x8 normalisée) au-delà
+_HASH_PIXEL_MAX_DIFF = 0.34  # écart moyen (miniature 8x8 normalisée) au-delà
 # duquel une paire pHash-positive est rejetée. Calibré empiriquement : pire
 # retouche légitime plausible (rotation 5°, sous le seuil pHash) ~0.31 ;
-# faux positif réel observé (deux photos sans rapport, hash coïncidant tout
-# juste au seuil) ~0.88 — marge nette (~2.8x).
+# deux faux positifs réels observés (photos sans rapport, hash coïncidant
+# tout juste au seuil, silhouette clair/sombre similaire — ex. ciel+côte vs
+# ciel+falaise) ~0.375 et ~0.88. Le premier faux positif (0.375) est proche
+# du cas légitime (0.31) : marge résiduelle étroite (~0.03 de chaque côté).
+# Si un nouveau faux négatif apparaît (vraie retouche non détectée), il faut
+# remonter ce seuil et se reposer sur le bouton ✕ (Catalog.ignore_duplicate_group,
+# persistant) pour les faux positifs résiduels plutôt que sur ce seul seuil.
 
 # ── Tier 2 ─────────────────────────────────────────────────────────────────────
 _ORB_MIN_INLIERS = 40    # inliers RANSAC minimum pour valider un appariement
@@ -125,6 +130,20 @@ def _merge(group_of: dict[str, int], path_a: str, path_b: str,
                 group_of[p] = new
 
 
+def _dates_differ(dates: dict, path_a: str, path_b: str) -> bool:
+    """True seulement si les deux photos ont une date EXIF connue et
+    différente — une rafale (même seconde EXIF, sous-secondes différentes)
+    doit être exclue des doublons même si le contenu visuel est
+    quasi-identique, sur demande explicite de l'utilisateur. Une date
+    manquante d'un côté ou des deux ne bloque jamais la fusion (repli sur le
+    seul signal visuel, comme avant l'ajout de cette vérification)."""
+    dt_a = dates.get(path_a)
+    dt_b = dates.get(path_b)
+    if dt_a is None or dt_b is None:
+        return False
+    return dt_a != dt_b
+
+
 def _renumber(group_of: dict[str, int]) -> dict[int, list[str]]:
     """Renumérote les group_id bruts (1, 2, 3…) et exclut les singletons —
     utilisable aussi bien sur un `group_of` final que sur un instantané
@@ -160,7 +179,8 @@ class DuplicateDetectorThread(QThread):
 
     def __init__(self, photo_paths: list, seed_groups: dict[str, int] | None = None,
                  cache_db_path: str | None = None,
-                 full_catalog_scan: bool = True, parent=None):
+                 full_catalog_scan: bool = True, parent=None,
+                 dates: dict | None = None):
         """seed_groups : {path: group_id} connu au moment du déclenchement
         (typiquement Catalog.get_duplicate_group_assignments()) — amorce
         group_of pour que la comparaison reste vraiment incrémentale (cf.
@@ -172,7 +192,15 @@ class DuplicateDetectorThread(QThread):
         courant, y compris pour un nouveau scan complet volontaire (auquel
         cas passer {} explicitement n'aide pas non plus : purger
         compared_tier1/compared_tier2 via un nouveau cache_db_path ou une
-        purge de cache serait nécessaire)."""
+        purge de cache serait nécessaire).
+
+        dates : {path: datetime|None} — date de prise de vue (EXIF, précision
+        sous-seconde si disponible ; typiquement
+        Catalog.get_photo_dates_for_dedup()). Deux photos dont les dates sont
+        toutes deux connues et différentes ne sont jamais fusionnées en
+        doublons, même si les signaux visuels (pHash, ORB) concordent — cf.
+        _dates_differ(). Une date manquante ne bloque rien (repli sur le seul
+        signal visuel)."""
         super().__init__(parent)
         self._paths = photo_paths
         self._seed_groups = dict(seed_groups) if seed_groups else {}
@@ -180,6 +208,7 @@ class DuplicateDetectorThread(QThread):
         self._full_catalog_scan = full_catalog_scan
         self._cancelled = False
         self._corrupted: set[str] = set()
+        self._dates = dates or {}
 
     def cancel(self) -> None:
         self._cancelled = True
@@ -425,6 +454,8 @@ class DuplicateDetectorThread(QThread):
                         pixel_diff = float(np.abs(arr_i - arr_j).mean())
                         if pixel_diff > _HASH_PIXEL_MAX_DIFF:
                             return
+                    if _dates_differ(self._dates, path_i, path_j):
+                        return
                     _merge(group_of, path_i, path_j, next_group)
 
             last_emit = time.monotonic()
@@ -655,6 +686,19 @@ class DuplicateDetectorThread(QThread):
             local_bf = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=False)
             results = []
             for path_j, kp_j, des_j, img_j in items:
+                # Lecture directe du flag (pas _is_cancelled(), qui émet le
+                # signal `cancelled` à chaque appel) : permet d'interrompre un
+                # lot en cours d'item en item plutôt que d'attendre qu'il aille
+                # au bout — un lot peut contenir des dizaines de candidats,
+                # chacun coûtant potentiellement plusieurs dizaines de ms
+                # (knnMatch + RANSAC + warpPerspective + absdiff), et le
+                # `with ThreadPoolExecutor(...)` englobant attend (wait=True à
+                # la sortie du bloc) que les tâches déjà en cours se terminent
+                # avant de rendre la main à closeEvent — sans ce garde-fou,
+                # fermer l'application pendant le Tier 2 pouvait rester bloqué
+                # plusieurs secondes de plus que nécessaire.
+                if self._cancelled:
+                    break
                 # Tout le corps de la comparaison (pas seulement knnMatch) est
                 # protégé : une géométrie dégénérée (ex. homographie quasi
                 # singulière) peut faire échouer n'importe quel appel cv2 en
@@ -709,7 +753,10 @@ class DuplicateDetectorThread(QThread):
                         continue
 
                     mean_diff = float(cv2.absdiff(warped, img_i)[valid].mean())
-                    results.append((path_j, mean_diff <= _ORB_MAX_MEAN_DIFF))
+                    matched = mean_diff <= _ORB_MAX_MEAN_DIFF
+                    if matched and _dates_differ(self._dates, path_i, path_j):
+                        matched = False
+                    results.append((path_j, matched))
                 except Exception as exc:
                     logger.debug("Tier 2 comparaison échouée %s ↔ %s : %s",
                                 os.path.basename(path_i), os.path.basename(path_j), exc)
@@ -771,6 +818,10 @@ class DuplicateDetectorThread(QThread):
                 worker = partial(_compare_chunk, des_i=des_i, kp_i=kp_i, img_i=img_i, path_i=path_i)
                 futures = [executor.submit(worker, chunk) for chunk in chunks]
                 for future in futures:
+                    if self._is_cancelled():
+                        for f in futures:
+                            f.cancel()
+                        return
                     try:
                         chunk_result = future.result()
                     except Exception as exc:

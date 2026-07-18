@@ -199,6 +199,7 @@ class DuplicateGrid(QWidget):
         self._load_thread: "_DuplicateGroupLoadThread | None" = None
         self._loaded = False
         self._scanning = False
+        self._last_signature: dict[int, tuple] | None = None
         self._setup_ui()
 
     # ------------------------------------------------------------------ setup
@@ -368,6 +369,17 @@ class DuplicateGrid(QWidget):
         self._load_thread.start()
 
     def _on_groups_ready(self, groups: dict) -> None:
+        signature = {
+            group_id: tuple(sorted(p.path for p in photos))
+            for group_id, photos in groups.items() if photos
+        }
+        if self._loaded and signature == self._last_signature:
+            # Contenu identique à ce qui est déjà affiché (snapshot périodique
+            # pendant un scan en arrière-plan, cf. _LIVE_SNAPSHOT_INTERVAL côté
+            # duplicate_detector.py) — éviter de tout détruire/reconstruire
+            # (vignettes incluses) pour ne pas provoquer de clignotement.
+            return
+
         for card in self._cards.values():
             card.setParent(None)
             card.deleteLater()
@@ -389,6 +401,7 @@ class DuplicateGrid(QWidget):
 
         self._update_empty_state()
         self._loaded = True
+        self._last_signature = signature
         QTimer.singleShot(0, self._force_reflow)
 
     def remove_group(self, group_id: int) -> None:
@@ -397,6 +410,8 @@ class DuplicateGrid(QWidget):
         if card is not None:
             card.setParent(None)
             card.deleteLater()
+        if self._last_signature is not None:
+            self._last_signature.pop(group_id, None)
         n = len(self._cards)
         self._lbl_title.setText(
             f"{n} groupe{'s' if n > 1 else ''} de doublons" if n else ""

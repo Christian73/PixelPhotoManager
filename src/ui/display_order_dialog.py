@@ -11,6 +11,25 @@ from PySide6.QtWidgets import (
 
 from src.core.config import Config
 
+# Le thème sombre global ne définit pas QRadioButton::indicator, ce qui rend
+# le bouton sélectionné indiscernable du non-sélectionné sur fond foncé
+# (même correctif que people_panel.py::_RADIO_STYLE).
+_RADIO_STYLE = """
+QRadioButton::indicator {
+    width: 13px; height: 13px;
+    border-radius: 7px;
+    border: 2px solid #888;
+    background: transparent;
+}
+QRadioButton::indicator:checked {
+    background: #7aabdb;
+    border: 2px solid #7aabdb;
+}
+QRadioButton::indicator:unchecked:hover {
+    border-color: #bbb;
+}
+"""
+
 
 class _OrderSection(QGroupBox):
     """Un groupe de deux choix indépendants : mode (alpha/chrono) et
@@ -21,6 +40,7 @@ class _OrderSection(QGroupBox):
 
     def __init__(self, title: str, default_mode: str, default_dir: str, parent=None):
         super().__init__(title, parent)
+        self.setStyleSheet(_RADIO_STYLE)
         v = QVBoxLayout(self)
 
         mode_row = QHBoxLayout()
@@ -53,11 +73,38 @@ class _OrderSection(QGroupBox):
         return "desc" if self._rb_desc.isChecked() else "asc"
 
 
+class _ChronoAlbumSection(QGroupBox):
+    """Direction seule (le mode est toujours chronologique pour cet album,
+    donc pas de paire de boutons "mode" ici, contrairement à _OrderSection)."""
+
+    def __init__(self, default_dir: str, parent=None):
+        super().__init__("Album « Chronologie » (toutes les photos)", parent)
+        self.setStyleSheet(_RADIO_STYLE)
+        v = QVBoxLayout(self)
+
+        dir_row = QHBoxLayout()
+        self._rb_asc = QRadioButton("Anti-chronologique (plus anciennes d'abord)")
+        self._rb_desc = QRadioButton("Chronologique (plus récentes d'abord)")
+        self._dir_group = QButtonGroup(self)
+        self._dir_group.addButton(self._rb_asc)
+        self._dir_group.addButton(self._rb_desc)
+        dir_row.addWidget(self._rb_desc)
+        dir_row.addWidget(self._rb_asc)
+        v.addLayout(dir_row)
+
+        (self._rb_desc if default_dir == "desc" else self._rb_asc).setChecked(True)
+
+    def direction(self) -> str:
+        return "desc" if self._rb_desc.isChecked() else "asc"
+
+
 class DisplayOrderDialog(QDialog):
-    """Popup de configuration de l'ordre d'affichage des dossiers (sidebar)
-    et de la grille de photos. La grille de "Chronologie de toutes les
-    photos" reste toujours triée chronologiquement (seule la direction s'y
-    applique) : ce cas particulier est géré côté MainWindow, pas ici."""
+    """Popup de configuration de l'ordre d'affichage des dossiers (sidebar),
+    de la grille de photos et de l'album spécial "Chronologie" (toutes les
+    photos). Ce dernier reste toujours trié chronologiquement (un tri
+    alphabétique n'a pas de sens pour un album qui s'appelle "Chronologie")
+    mais dispose de sa propre direction, indépendante de celle de la grille
+    de photos standard."""
 
     def __init__(self, config: Config, parent=None):
         super().__init__(parent)
@@ -75,8 +122,15 @@ class DisplayOrderDialog(QDialog):
             config.get("display_order.grid_mode", "chrono"),
             config.get("display_order.grid_dir", "desc"),
         )
+        self._chrono_album = _ChronoAlbumSection(
+            config.get(
+                "display_order.chrono_album_dir",
+                config.get("display_order.grid_dir", "desc"),
+            ),
+        )
         layout.addWidget(self._folders)
         layout.addWidget(self._grid)
+        layout.addWidget(self._chrono_album)
 
         buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         buttons.accepted.connect(self.accept)
@@ -88,4 +142,5 @@ class DisplayOrderDialog(QDialog):
         self._config.set("display_order.folder_dir", self._folders.direction())
         self._config.set("display_order.grid_mode", self._grid.mode())
         self._config.set("display_order.grid_dir", self._grid.direction())
+        self._config.set("display_order.chrono_album_dir", self._chrono_album.direction())
         self._config.save()

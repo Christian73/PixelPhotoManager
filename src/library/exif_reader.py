@@ -71,6 +71,23 @@ def preserve_file_dates(src_stat: os.stat_result, dst_path: str) -> None:
         pass   # non-Windows ou droits insuffisants : mtime suffit
 
 
+_SUBSEC_TAG_FOR = {
+    "DateTimeOriginal": "SubsecTimeOriginal",
+    "DateTimeDigitized": "SubsecTimeDigitized",
+    "DateTime": "SubsecTime",
+}
+
+
+def _parse_subsec(value: str) -> int:
+    """Convertit un tag EXIF SubsecTime* (ex. '05', '563') en microsecondes.
+    Le tag représente les décimales de la seconde, pas des microsecondes
+    brutes : '05' = 0.05s = 50000µs (et non 5µs), d'où le padding à droite."""
+    value = value.strip()
+    if not value or not value.isdigit():
+        return 0
+    return int((value + "000000")[:6])
+
+
 class ExifReader:
     SUPPORTED = {".jpg", ".jpeg", ".png", ".tiff", ".tif", ".webp", ".bmp", ".gif"}
 
@@ -122,9 +139,13 @@ class ExifReader:
                 for tag in ("DateTimeOriginal", "DateTimeDigitized", "DateTime"):
                     if tag in exif and exif[tag]:
                         try:
-                            result["date_taken"] = datetime.strptime(
+                            dt = datetime.strptime(
                                 str(exif[tag]), "%Y:%m:%d %H:%M:%S"
                             )
+                            subsec = exif.get(_SUBSEC_TAG_FOR[tag])
+                            if subsec:
+                                dt = dt.replace(microsecond=_parse_subsec(str(subsec)))
+                            result["date_taken"] = dt
                             break
                         except ValueError:
                             pass

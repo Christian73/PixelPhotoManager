@@ -146,6 +146,10 @@ class Catalog:
                 conn.execute(
                     "CREATE INDEX IF NOT EXISTS idx_photos_dup_group ON photos(duplicate_group_id)"
                 )
+                # Filet de sécurité au démarrage : dissout les groupes de 1 exemplaire
+                # déjà présents en base (ex. créés avant l'ajout de la dissolution
+                # systématique dans delete_photo/delete_photos).
+                self._dissolve_singleton_duplicate_groups(conn)
                 conn.commit()
             finally:
                 conn.close()
@@ -395,6 +399,7 @@ class Catalog:
             conn = self._conn()
             try:
                 conn.execute("DELETE FROM photos WHERE path=?", (path,))
+                self._dissolve_singleton_duplicate_groups(conn)
                 conn.commit()
             finally:
                 conn.close()
@@ -599,9 +604,30 @@ class Catalog:
                 conn.executemany(
                     "DELETE FROM photos WHERE path=?", [(p,) for p in paths]
                 )
+                self._dissolve_singleton_duplicate_groups(conn)
                 conn.commit()
             finally:
                 conn.close()
+
+    def _dissolve_singleton_duplicate_groups(self, conn) -> None:
+        """Dissout tout groupe de doublons retombé à 0 ou 1 exemplaire suite à une
+        suppression. Invariant nécessaire quel que soit le chemin de suppression
+        emprunté (suppression manuelle, nettoyage d'entrées fantômes par le
+        scanner, purge de dossier...) — voir dedup_singleton_groups_any_delete_path
+        en mémoire pour le contexte : avant ce correctif seule la suppression
+        manuelle via l'UI dissolvait ces groupes, laissant réapparaître des
+        groupes de 1 exemplaire après un scan qui retire des fichiers disparus."""
+        conn.execute(
+            """
+            UPDATE photos SET duplicate_group_id = NULL
+            WHERE duplicate_group_id IN (
+                SELECT duplicate_group_id FROM photos
+                WHERE duplicate_group_id IS NOT NULL
+                GROUP BY duplicate_group_id
+                HAVING COUNT(*) < 2
+            )
+            """
+        )
 
     # ------------------------------------------------------------------ doublons
 
@@ -719,6 +745,28 @@ class Catalog:
             finally:
                 conn.close()
         return [r[0] for r in rows]
+
+    def get_photo_dates_for_dedup(self) -> dict:
+        """Retourne {path: datetime|None} (date_taken EXIF, précision sous-seconde
+        si disponible) pour tous les chemins catalogués — utilisé par la détection
+        de doublons pour ne pas fusionner deux photos dont la date de prise de vue
+        diffère (ex. rafale : même scène, instants de capture différents)."""
+        with self._lock:
+            conn = self._conn()
+            try:
+                rows = conn.execute("SELECT path, date_taken FROM photos").fetchall()
+            finally:
+                conn.close()
+        result: dict = {}
+        for path, date_taken in rows:
+            dt = None
+            if date_taken:
+                try:
+                    dt = datetime.fromisoformat(date_taken)
+                except ValueError:
+                    pass
+            result[path] = dt
+        return result
 
     def get_photos_by_paths(self, paths: list[str]) -> list[PhotoInfo]:
         """Returns PhotoInfo objects for the given paths (in catalog order)."""

@@ -185,9 +185,19 @@ class LibraryScanner:
         return self._thread
 
     def stop(self) -> None:
+        self.request_stop()
+        self.wait_stopped()
+
+    def request_stop(self) -> None:
+        """Signale l'arrêt sans attendre. Permet à MainWindow.closeEvent de
+        signaler tous les threads d'arrière-plan avant de les attendre, pour
+        qu'ils s'arrêtent en parallèle plutôt que l'un après l'autre."""
         if self._thread and self._thread.isRunning():
             self._thread.stop()
-            self._thread.wait(3000)
+
+    def wait_stopped(self, timeout_ms: int = 3000) -> None:
+        if self._thread and self._thread.isRunning():
+            self._thread.wait(timeout_ms)
 
     @property
     def is_scanning(self) -> bool:

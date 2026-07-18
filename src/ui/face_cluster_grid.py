@@ -248,6 +248,7 @@ class _ClusterCard(QFrame):
     merge_requested      = Signal(int)
     associate_requested  = Signal()           # fusionner tous les groupes sélectionnés ensemble
     ignore_requested     = Signal(int)
+    ignore_selection_requested = Signal()     # ignorer tous les groupes/visages sélectionnés
     eject_from_section_requested = Signal(int)  # cluster_id
 
     _STYLE_NORMAL = """
@@ -416,28 +417,32 @@ class _ClusterCard(QFrame):
                 self.selection_toggled.emit(self._cluster_id, self._is_selected)
         elif event.button() == Qt.RightButton:
             n_selected = len(self._selected_ids_ref) if self._selected_ids_ref else 0
+            bulk = self._is_selected and n_selected > 1
             menu = QMenu(self)
             act_associate = None
-            if self._is_selected and n_selected > 1:
+            if bulk:
                 act_associate = menu.addAction(f"Associer ({n_selected} sélectionnés)")
                 menu.addSeparator()
             if self._is_solo:
                 act_name = menu.addAction("Identifier ce visage…")
                 menu.addSeparator()
-                act_ignore = menu.addAction("Ignorer ce visage")
+                act_ignore = menu.addAction("Ignorer ces visages" if bulk else "Ignorer ce visage")
                 act_merge  = None
             else:
                 act_name   = menu.addAction("Identifier cette personne…")
                 act_merge  = None
                 menu.addSeparator()
-                act_ignore = menu.addAction("Ignorer ce groupe")
+                act_ignore = menu.addAction("Ignorer ces groupes" if bulk else "Ignorer ce groupe")
             chosen = menu.exec(event.globalPosition().toPoint())
             if chosen == act_associate:
                 self.associate_requested.emit()
             elif chosen == act_name:
                 self.name_requested.emit(self._cluster_id)
             elif chosen == act_ignore:
-                self.ignore_requested.emit(self._cluster_id)
+                if bulk:
+                    self.ignore_selection_requested.emit()
+                else:
+                    self.ignore_requested.emit(self._cluster_id)
         super().mousePressEvent(event)
 
     def mouseDoubleClickEvent(self, event) -> None:
@@ -1067,6 +1072,7 @@ class FaceClusterGrid(QWidget):
     clusters_named(cluster_ids, name)         — créer une personne pour N groupes
     clusters_assigned(cluster_ids, pid)       — assigner N groupes à une personne
     cluster_ignored(cluster_id)               — ignorer un groupe
+    clusters_ignored(cluster_ids)             — ignorer N groupes/visages sélectionnés
     cluster_merged(source_id, target_id)      — fusionner deux groupes
     back_requested()                          — retourner à la grille de photos
     photos_requested(cluster_id, label)       — afficher les photos d'un groupe
@@ -1077,6 +1083,7 @@ class FaceClusterGrid(QWidget):
     clusters_named     = Signal(list, str)    # list[int], name
     clusters_assigned  = Signal(list, int)    # list[int], person_id
     cluster_ignored    = Signal(int)
+    clusters_ignored   = Signal(list)         # list[int]
     cluster_merged     = Signal(int, int)
     back_requested     = Signal()
     photos_requested   = Signal(int, str)
@@ -1641,6 +1648,7 @@ class FaceClusterGrid(QWidget):
             card.merge_requested.connect(self._on_card_merge_requested)
             card.associate_requested.connect(self._on_card_associate_requested)
             card.ignore_requested.connect(self._on_card_ignore_requested)
+            card.ignore_selection_requested.connect(self._on_card_ignore_selection_requested)
             card.eject_from_section_requested.connect(self._on_card_eject_from_section)
             target.add_card(cluster_id, card)
             self._cards[cluster_id] = card
@@ -1802,6 +1810,18 @@ class FaceClusterGrid(QWidget):
         self._face_db.ignore_cluster(cluster_id)
         self.cluster_ignored.emit(cluster_id)
 
+    def _on_card_ignore_selection_requested(self) -> None:
+        """Ignore tous les groupes/visages isolés actuellement sélectionnés
+        (menu contextuel « Ignorer ces groupes », visible seulement en
+        multi-sélection — cf. _ClusterCard.mousePressEvent)."""
+        cluster_ids = list(self._selected_ids)
+        if not cluster_ids:
+            return
+        for cid in cluster_ids:
+            self._face_db.ignore_cluster(cid)
+        self._clear_selection()
+        self.clusters_ignored.emit(cluster_ids)
+
     def _on_card_quick_accept(self, cluster_id: int, person_id: int) -> None:
         self.clusters_assigned.emit([cluster_id], person_id)
 
@@ -1885,6 +1905,7 @@ class FaceClusterGrid(QWidget):
             new_card.merge_requested.connect(self._on_card_merge_requested)
             new_card.associate_requested.connect(self._on_card_associate_requested)
             new_card.ignore_requested.connect(self._on_card_ignore_requested)
+            new_card.ignore_selection_requested.connect(self._on_card_ignore_selection_requested)
             flat.add_card(cluster_id, new_card)
             self._cards[cluster_id] = new_card
             if rep:
@@ -2065,6 +2086,7 @@ class FaceClusterGrid(QWidget):
             card.merge_requested.connect(self._on_card_merge_requested)
             card.associate_requested.connect(self._on_card_associate_requested)
             card.ignore_requested.connect(self._on_card_ignore_requested)
+            card.ignore_selection_requested.connect(self._on_card_ignore_selection_requested)
             card.eject_from_section_requested.connect(self._on_card_eject_from_section)
             target.add_card(cluster_id, card)
             self._cards[cluster_id] = card

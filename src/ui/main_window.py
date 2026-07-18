@@ -11,7 +11,7 @@ from pathlib import Path
 from PySide6.QtCore import QEvent, QPoint, Qt, QThread, QTimer, QUrl, Signal, Slot
 from PySide6.QtGui import QAction, QDesktopServices, QKeySequence, QPixmap
 from PySide6.QtWidgets import (
-    QApplication, QButtonGroup, QCheckBox, QDialog, QDialogButtonBox, QFrame, QGroupBox,
+    QAbstractItemView, QApplication, QButtonGroup, QCheckBox, QDialog, QDialogButtonBox, QFrame, QGroupBox,
     QMainWindow, QMenuBar, QWidget, QHBoxLayout, QVBoxLayout,
     QRadioButton, QScrollBar, QSplitter, QStackedWidget, QStatusBar, QToolBar,
     QLineEdit, QSlider, QLabel, QPushButton,
@@ -1123,6 +1123,7 @@ class MainWindow(QMainWindow):
         self._face_cluster_grid.clusters_named.connect(self._on_clusters_named)
         self._face_cluster_grid.clusters_assigned.connect(self._on_clusters_assigned)
         self._face_cluster_grid.cluster_ignored.connect(self._on_cluster_ignored)
+        self._face_cluster_grid.clusters_ignored.connect(self._on_clusters_ignored)
         self._face_cluster_grid.cluster_merged.connect(self._on_cluster_merged)
         self._face_cluster_grid.photos_requested.connect(self._on_cluster_photos_requested)
         self._face_cluster_grid.back_requested.connect(self.show_grid)
@@ -1406,7 +1407,11 @@ class MainWindow(QMainWindow):
         self.show_grid()
         self._update_status()
 
-        ascending = self._config.get("display_order.grid_dir", "desc") == "asc"
+        chrono_dir = self._config.get(
+            "display_order.chrono_album_dir",
+            self._config.get("display_order.grid_dir", "desc"),
+        )
+        ascending = chrono_dir == "asc"
         loader = _CatalogLoadThread(self._catalog, reverse=ascending, parent=self)
         loader.batch_ready.connect(self._on_catalog_batch)
         self._catalog_loader = loader
@@ -1488,7 +1493,12 @@ class MainWindow(QMainWindow):
             self._face_index_pending = True
         else:
             self._start_face_indexing()
-        self._start_duplicate_detection()
+        # Différer la détection des doublons jusqu'à ce que les vignettes des
+        # visages des personnes connues (sidebar) soient chargées, pour ne pas
+        # leur faire concurrence en CPU/E-S dès le démarrage de l'application.
+        self._sidebar.persons_thumbnails_ready.connect(
+            self._on_persons_thumbnails_ready_start_duplicates, Qt.UniqueConnection
+        )
 
     @Slot()
     def _on_warmup_done(self) -> None:
@@ -2030,6 +2040,10 @@ class MainWindow(QMainWindow):
     def _on_cluster_ignored(self, _cluster_id: int) -> None:
         self._face_cluster_grid.remove_clusters([_cluster_id])
 
+    @Slot(list)
+    def _on_clusters_ignored(self, cluster_ids: list) -> None:
+        self._face_cluster_grid.remove_clusters(cluster_ids)
+
     @Slot(int, int)
     def _on_cluster_merged(self, _source: int, _target: int) -> None:
         self._face_cluster_grid.refresh()
@@ -2340,14 +2354,20 @@ class MainWindow(QMainWindow):
     def _sort_photos_for_display(self, photos: list, context: str) -> list:
         """Applique le réglage "Ordre d'affichage" (menu Affichage) à une liste
         de photos avant affichage dans la grille. La vue "Toutes les photos"
-        (Chronologie) reste toujours triée chronologiquement — seule sa
-        direction suit le réglage — car un tri alphabétique n'a pas de sens
-        pour un album qui s'appelle "Chronologie"."""
+        (Chronologie) reste toujours triée chronologiquement — un tri
+        alphabétique n'a pas de sens pour un album qui s'appelle
+        "Chronologie" — mais sa direction suit un réglage dédié
+        (`display_order.chrono_album_dir`), indépendant de celui de la
+        grille de photos standard (`display_order.grid_dir`)."""
         if context == "Toutes les photos":
             mode = "chrono"
+            direction = self._config.get(
+                "display_order.chrono_album_dir",
+                self._config.get("display_order.grid_dir", "desc"),
+            )
         else:
             mode = self._config.get("display_order.grid_mode", "chrono")
-        direction = self._config.get("display_order.grid_dir", "desc")
+            direction = self._config.get("display_order.grid_dir", "desc")
         key_fn = _photo_sort_key if mode == "chrono" else _photo_filename_sort_key
         return sorted(photos, key=key_fn, reverse=(direction == "desc"))
 
@@ -2449,6 +2469,8 @@ class MainWindow(QMainWindow):
                 return
             self._purge_catalog_for_folder(folder)
             self._grid.set_photos(self._current_photos)
+            self._duplicate_grid.invalidate()
+            self._sidebar.update_duplicates_badge(self._catalog.count_duplicate_groups())
 
         self._config.remove_scan_folder(folder)
         remaining = self._config.get_scan_folders()
@@ -2539,6 +2561,16 @@ class MainWindow(QMainWindow):
 
     # ------------------------------------------------------------------ doublons
 
+    @Slot()
+    def _on_persons_thumbnails_ready_start_duplicates(self) -> None:
+        try:
+            self._sidebar.persons_thumbnails_ready.disconnect(
+                self._on_persons_thumbnails_ready_start_duplicates
+            )
+        except (RuntimeError, TypeError):
+            pass
+        self._start_duplicate_detection()
+
     def _start_duplicate_detection(self) -> None:
         if self._duplicate_thread and self._duplicate_thread.isRunning():
             return
@@ -2548,8 +2580,11 @@ class MainWindow(QMainWindow):
             return
 
         seed_groups = self._catalog.get_duplicate_group_assignments()
+        dates = self._catalog.get_photo_dates_for_dedup()
 
-        detector = DuplicateDetectorThread(paths, seed_groups=seed_groups, parent=self)
+        detector = DuplicateDetectorThread(
+            paths, seed_groups=seed_groups, parent=self, dates=dates
+        )
         self._duplicate_thread = detector
         self._dup_progress = (0, max(len(paths), 1) * 2, "Démarrage…")
 
@@ -2665,20 +2700,52 @@ class MainWindow(QMainWindow):
         dlg = QDialog(self)
         dlg.setWindowTitle("Fichiers corrompus")
         v = QVBoxLayout(dlg)
-        v.addWidget(QLabel(f"{len(corrupted_paths)} fichier(s) n'ont pas pu être lu(s) "
-                            "pendant l'analyse en cours (probablement corrompu(s)) :"))
+        lbl_count = QLabel()
+        v.addWidget(lbl_count)
         list_widget = QListWidget()
-        list_widget.addItems(corrupted_paths)
+        list_widget.setSelectionMode(QAbstractItemView.ExtendedSelection)
         v.addWidget(list_widget)
+
+        def _refresh(paths) -> None:
+            list_widget.clear()
+            list_widget.addItems(paths)
+            n = len(paths)
+            lbl_count.setText(
+                f"{n} fichier{'s' if n != 1 else ''} n'{'a' if n == 1 else 'ont'} pas pu "
+                f"être lu{'s' if n != 1 else ''} pendant l'analyse en cours "
+                "(probablement corrompu(s)) :"
+            )
+            btn_repair.setEnabled(bool(n))
+            btn_delete.setEnabled(bool(n))
+
+        def _target_paths() -> list:
+            """Fichiers sélectionnés, ou tous si aucune sélection — permet de
+            garder l'action « sur toute la liste » en un clic (comportement
+            précédent) tout en offrant le ciblage d'une sélection."""
+            selected = [item.text() for item in list_widget.selectedItems()]
+            return selected if selected else [
+                list_widget.item(i).text() for i in range(list_widget.count())
+            ]
+
         buttons = QDialogButtonBox(QDialogButtonBox.Close)
         btn_repair = buttons.addButton("Réparer…", QDialogButtonBox.ActionRole)
-        btn_repair.clicked.connect(lambda: self._offer_corrupted_repair(list(corrupted_paths)))
+        btn_repair.clicked.connect(
+            lambda: self._offer_corrupted_repair(
+                _target_paths(), on_done=lambda: _refresh(list(self._live_corrupted_paths))
+            )
+        )
+        btn_delete = buttons.addButton("Effacer…", QDialogButtonBox.ActionRole)
+        btn_delete.clicked.connect(
+            lambda: (self._offer_corrupted_delete(_target_paths()),
+                     _refresh(list(self._live_corrupted_paths)))
+        )
         buttons.rejected.connect(dlg.reject)
         buttons.accepted.connect(dlg.accept)
         buttons.button(QDialogButtonBox.Close).setText("Fermer")
         buttons.button(QDialogButtonBox.Close).clicked.connect(dlg.accept)
         v.addWidget(buttons)
         dlg.resize(600, 400)
+        _refresh(list(corrupted_paths))
         dlg.exec()
 
     def _apply_duplicate_results(self, groups: dict, corrupted_paths=(),
@@ -2735,7 +2802,6 @@ class MainWindow(QMainWindow):
 
         n_groups = self._catalog.count_duplicate_groups()
         n_photos = len(self._catalog.get_duplicate_group_assignments())
-        n_corrupted = len(self._live_corrupted_paths)
 
         dlg = QDialog(self)
         dlg.setWindowTitle("État des doublons")
@@ -2775,17 +2841,6 @@ class MainWindow(QMainWindow):
                 )
 
             _set_progress(*(self._dup_progress or (0, 1, "Démarrage…")))
-
-        if n_corrupted:
-            corrupted_row = QHBoxLayout()
-            corrupted_row.addWidget(QLabel(
-                f"⚠ {n_corrupted} fichier{'s' if n_corrupted != 1 else ''} corrompu"
-                f"{'s' if n_corrupted != 1 else ''}"
-            ))
-            btn_corrupted = QPushButton("Voir la liste…")
-            btn_corrupted.clicked.connect(lambda: (dlg.accept(), self._show_corrupted_list_dialog()))
-            corrupted_row.addWidget(btn_corrupted)
-            v.addLayout(corrupted_row)
 
         buttons = QDialogButtonBox(QDialogButtonBox.Close)
         btn_groups = buttons.addButton("Voir les groupes", QDialogButtonBox.ActionRole)
@@ -2857,7 +2912,7 @@ class MainWindow(QMainWindow):
         problems_history.add_entry(corrupted_count, repaired_count, list_path)
         return list_path
 
-    def _offer_corrupted_repair(self, corrupted_paths: list) -> None:
+    def _offer_corrupted_repair(self, corrupted_paths: list, on_done=None) -> None:
         n = len(corrupted_paths)
         reply = QMessageBox.question(
             self,
@@ -2917,6 +2972,8 @@ class MainWindow(QMainWindow):
                     self._grid.refresh_photo(path, None)
 
             self._show_repair_result_dialog(repaired_paths, list(still_failed))
+            if on_done is not None:
+                on_done()
 
         thread.progress.connect(_on_progress)
         thread.finished.connect(_on_finished)
@@ -3006,6 +3063,9 @@ class MainWindow(QMainWindow):
             self._remove_persisted_corrupted_paths(deleted)
             remaining_corrupted = [p for p in self._live_corrupted_paths if p not in deleted_set]
             self._update_corrupted_indicator(remaining_corrupted)
+
+            self._duplicate_grid.invalidate()
+            self._sidebar.update_duplicates_badge(self._catalog.count_duplicate_groups())
 
             from src.core.deleted_corrupted_files import deleted_corrupted_files
             deleted_corrupted_files.add_deleted(deleted)
@@ -3128,6 +3188,8 @@ class MainWindow(QMainWindow):
         """Dossier supprimé du disque : nettoyer catalogue, caches et UI."""
         folder = os.path.normpath(folder)
         deleted_paths = self._purge_catalog_for_folder(folder)
+        self._duplicate_grid.invalidate()
+        self._sidebar.update_duplicates_badge(self._catalog.count_duplicate_groups())
 
         # Retirer de la config si c'était un dossier surveillé
         for watched in list(self._config.get_scan_folders()):
@@ -3682,12 +3744,22 @@ class MainWindow(QMainWindow):
                                     if p.duplicate_group_id is None}
                 if grid_assignments:
                     self._grid.refresh_duplicate_status(grid_assignments)
+                # Filet de sécurité : force un rechargement depuis le catalogue au
+                # prochain affichage de la grille des doublons, même si
+                # remove_group() a déjà mis les cartes à jour en mémoire.
+                self._duplicate_grid.invalidate()
 
             # Si le viewer affichait une photo supprimée, naviguer vers le voisin
             if in_viewer and any(p in deleted_paths_set
                                  for p in [self._viewer.current_photo().path]
                                  if self._viewer.current_photo()):
-                if not self._current_photos:
+                # Comparaison de doublons réduite à 0 ou 1 exemplaire : elle n'a
+                # plus lieu d'être, retour automatique à la grille des doublons
+                # plutôt que de continuer à afficher le seul exemplaire restant.
+                if self._viewer_back_target == "duplicate_grid" and len(self._current_photos) <= 1:
+                    self._viewer_back_target = "grid"
+                    self.show_duplicate_grid()
+                elif not self._current_photos:
                     self.show_grid()
                 else:
                     new_index = min(viewed_index, len(self._current_photos) - 1)
@@ -4107,11 +4179,9 @@ class MainWindow(QMainWindow):
             "ui.splitters.sidebar_panels",
             self._sidebar.save_splitter_state(),
         )
-        self._folder_watcher.set_folders([])
-        self._scanner.stop()
-        if self._face_indexer and self._face_indexer.isRunning():
-            self._face_indexer.stop()
-            self._face_indexer.wait(3000)
+        # Confirmation AVANT tout signal d'arrêt : si l'utilisateur annule la
+        # fermeture (ci-dessous), aucun thread d'arrière-plan ne doit avoir
+        # été interrompu entre-temps.
         if self._cluster_thread and self._cluster_thread.isRunning():
             elapsed = int(time.monotonic() - self._cluster_start_time) if self._cluster_start_time else 0
             m, s = divmod(elapsed, 60)
@@ -4142,10 +4212,47 @@ class MainWindow(QMainWindow):
             if dlg.exec() != QMessageBox.StandardButton.Yes:
                 event.ignore()
                 return
-            self._cluster_thread.wait(500)
+
+        self._folder_watcher.set_folders([])
+
+        # Signale l'arrêt à tous les threads d'arrière-plan avant d'attendre
+        # quoi que ce soit : ils s'arrêtent ainsi en parallèle plutôt que
+        # l'un après l'autre — l'ancienne attente séquentielle pouvait
+        # cumuler plusieurs secondes par thread, jusqu'à une bonne minute
+        # avec FaceIndexThread, qui pouvait rester bloqué jusqu'à
+        # _DETECT_TIMEOUT/_WARMUP_TIMEOUT dans un appel bloquant sur son
+        # subprocess avant même de remarquer la demande d'arrêt (corrigé
+        # séparément : FaceIndexThread.stop() tue maintenant l'executor
+        # tout de suite).
+        self._scanner.request_stop()
+        if self._face_indexer and self._face_indexer.isRunning():
+            self._face_indexer.stop()
         if self._duplicate_thread and self._duplicate_thread.isRunning():
             self._duplicate_thread.cancel()
+
+        self._scanner.wait_stopped(3000)
+        if self._face_indexer and self._face_indexer.isRunning():
+            self._face_indexer.wait(3000)
+        if self._cluster_thread and self._cluster_thread.isRunning():
+            self._cluster_thread.wait(500)
+        if self._duplicate_thread and self._duplicate_thread.isRunning():
             self._duplicate_thread.wait(3000)
+            if self._duplicate_thread.isRunning():
+                # Un thread ORB peut rester bloqué au-delà du délai ci-dessus
+                # (un seul appel cv2 en cours, ex. gros fichier sur un volume
+                # réseau lent) malgré cancel() — un thread Python ne peut pas
+                # être tué proprement de l'extérieur, et `sys.exit()`
+                # attendrait quand même sa fin (atexit de ThreadPoolExecutor).
+                # Sur demande explicite de l'utilisateur (l'appli mettait trop
+                # de temps à se fermer) : on préfère tuer le process
+                # immédiatement plutôt que de laisser l'appli traîner en
+                # arrière-plan. Tout l'état utile (config, géométrie, dernière
+                # vue) est déjà sauvegardé plus haut dans cette méthode.
+                logger.warning(
+                    "Détection de doublons : arrêt forcé du process, le "
+                    "thread ne s'est pas arrêté à temps à la fermeture."
+                )
+                os._exit(0)
         if self._photo_query_thread and self._photo_query_thread.isRunning():
             self._photo_query_thread.wait(1000)
         if self._persons_refresh_thread and self._persons_refresh_thread.isRunning():

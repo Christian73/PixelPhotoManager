@@ -243,6 +243,7 @@ class Sidebar(QWidget):
     person_rename_requested = Signal(object)  # PersonInfo à renommer
     person_clear_requested  = Signal(object)  # PersonInfo dont on efface le nom
     tree_state_changed     = Signal(list)     # list[str] — chemins dépliés
+    persons_thumbnails_ready = Signal()       # vignettes de visages des personnes connues chargées
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -834,6 +835,10 @@ class Sidebar(QWidget):
             self._face_loader.icon_ready.disconnect(self._on_face_icon_ready)
         except RuntimeError:
             pass
+        try:
+            self._face_loader.finished.disconnect(self._on_face_loader_finished)
+        except RuntimeError:
+            pass
         if self._face_loader.isRunning():
             self._face_loader.stop()
             self._face_loader.finished.connect(self._face_loader.deleteLater)
@@ -886,7 +891,10 @@ class Sidebar(QWidget):
         if persons:
             self._face_loader = _FaceIconLoader(persons, self)
             self._face_loader.icon_ready.connect(self._on_face_icon_ready)
+            self._face_loader.finished.connect(self._on_face_loader_finished)
             self._face_loader.start()
+        else:
+            self.persons_thumbnails_ready.emit()
 
     @Slot(int, bytes)
     def _on_face_icon_ready(self, index: int, data: bytes) -> None:
@@ -894,6 +902,10 @@ class Sidebar(QWidget):
             pix = QPixmap()
             pix.loadFromData(data)
             self._persons_list.item(index).setIcon(QIcon(pix))
+
+    @Slot()
+    def _on_face_loader_finished(self) -> None:
+        self.persons_thumbnails_ready.emit()
 
     def update_persons_data(self, persons: list) -> None:
         """Met à jour compteurs et icônes des personnes sans reconstruire la liste.

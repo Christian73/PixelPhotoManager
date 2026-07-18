@@ -8,7 +8,9 @@ franchissement du QThread)."""
 import os
 from pathlib import Path
 
-from src.library.duplicate_detector import DuplicateDetectorThread, _load_gray, _merge
+from datetime import datetime
+
+from src.library.duplicate_detector import DuplicateDetectorThread, _load_gray, _merge, _dates_differ
 from tools.test_env.generate_library import build_library
 
 
@@ -156,6 +158,103 @@ class TestDetectRealLibrary:
         assert vanishing in thread.corrupted_paths
         members_by_path = {p: gid for gid, members in received["groups"].items() for p in members}
         assert vanishing not in members_by_path
+
+
+class TestDatesDiffer:
+    def test_both_known_and_different(self):
+        assert _dates_differ(
+            {"a": datetime(2026, 1, 4, 12, 19, 15, 50000),
+             "b": datetime(2026, 1, 4, 12, 19, 15, 630000)},
+            "a", "b",
+        )
+
+    def test_both_known_and_equal(self):
+        dt = datetime(2026, 1, 4, 12, 19, 15)
+        assert not _dates_differ({"a": dt, "b": dt}, "a", "b")
+
+    def test_one_missing_does_not_block(self):
+        assert not _dates_differ({"a": datetime(2026, 1, 4, 12, 19, 15)}, "a", "b")
+
+    def test_both_missing_does_not_block(self):
+        assert not _dates_differ({}, "a", "b")
+
+
+class TestDuplicateExifDateExclusion:
+    """Vérifie la règle explicite de l'utilisateur : deux photos dont les
+    dates EXIF sont toutes deux connues et différentes ne doivent jamais
+    être groupées comme doublons, même si pHash/ORB les jugent identiques
+    (cas d'une rafale : contenu quasi-identique, instants différents)."""
+
+    def _run(self, tmp_path, dates=None):
+        manifest = build_library(tmp_path / "lib")
+        thread = DuplicateDetectorThread(
+            [str(p) for p in manifest.images],
+            cache_db_path=str(tmp_path / "dedup_cache.db"),
+            dates=dates,
+        )
+        received = {}
+        thread.finished.connect(lambda groups: received.update(groups=groups))
+        thread._detect()
+        assert "groups" in received
+        return manifest, received["groups"]
+
+    def test_tier1_pair_not_grouped_when_dates_differ(self, tmp_path):
+        manifest = build_library(tmp_path / "lib")
+        a, b = (str(p) for p in manifest.exact_duplicate_pair)
+        dates = {a: datetime(2026, 1, 4, 12, 19, 15), b: datetime(2026, 1, 4, 12, 19, 16)}
+        thread = DuplicateDetectorThread(
+            [str(p) for p in manifest.images],
+            cache_db_path=str(tmp_path / "dedup_cache.db"),
+            dates=dates,
+        )
+        received = {}
+        thread.finished.connect(lambda groups: received.update(groups=groups))
+        thread._detect()
+        members_by_path = {p: gid for gid, members in received["groups"].items() for p in members}
+        assert not (a in members_by_path and b in members_by_path
+                    and members_by_path[a] == members_by_path[b])
+
+    def test_tier1_pair_still_grouped_when_dates_equal(self, tmp_path):
+        manifest = build_library(tmp_path / "lib")
+        a, b = (str(p) for p in manifest.exact_duplicate_pair)
+        same = datetime(2026, 1, 4, 12, 19, 15)
+        dates = {a: same, b: same}
+        thread = DuplicateDetectorThread(
+            [str(p) for p in manifest.images],
+            cache_db_path=str(tmp_path / "dedup_cache.db"),
+            dates=dates,
+        )
+        received = {}
+        thread.finished.connect(lambda groups: received.update(groups=groups))
+        thread._detect()
+        members_by_path = {p: gid for gid, members in received["groups"].items() for p in members}
+        assert a in members_by_path and b in members_by_path
+        assert members_by_path[a] == members_by_path[b]
+
+    def test_tier1_pair_still_grouped_when_dates_unknown(self, tmp_path):
+        """Absence de dates (dates=None) : comportement inchangé par rapport
+        à avant l'ajout de cette règle."""
+        manifest, groups = self._run(tmp_path, dates=None)
+        a, b = (str(p) for p in manifest.exact_duplicate_pair)
+        members_by_path = {p: gid for gid, members in groups.items() for p in members}
+        assert a in members_by_path and b in members_by_path
+        assert members_by_path[a] == members_by_path[b]
+
+    def test_tier2_crop_pair_not_grouped_when_dates_differ(self, tmp_path):
+        manifest = build_library(tmp_path / "lib")
+        a, b = (str(p) for p in manifest.crop_duplicate_pair)
+        dates = {a: datetime(2026, 1, 4, 12, 19, 15), b: datetime(2026, 1, 4, 12, 19, 16)}
+        thread = DuplicateDetectorThread(
+            [str(p) for p in manifest.images],
+            cache_db_path=str(tmp_path / "dedup_cache.db"),
+            dates=dates,
+        )
+        received = {}
+        thread.finished.connect(lambda groups: received.update(groups=groups))
+        thread._detect()
+        members_by_path = {p: gid for gid, members in received["groups"].items() for p in members}
+        assert not (a in members_by_path and b in members_by_path
+                    and members_by_path[a] == members_by_path[b])
 
 
 class TestLoadGrayTiffBypassesCv2:
