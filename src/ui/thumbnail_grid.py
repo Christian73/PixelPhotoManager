@@ -1234,10 +1234,14 @@ class ThumbnailGrid(QScrollArea):
                            lambda: self.retry_face_index_requested.emit(photo))
         menu.addSeparator()
         if self._album_id is not None:
+            # Vue album : seul le retrait (non destructif) est proposé — jamais
+            # l'effacement du fichier, même en multi-sélection (même règle que la
+            # visionneuse et que la touche Del, cf. _emit_delete_or_remove).
             rm_lbl = "Retirer les photos de l'album" if n > 1 else "Retirer de l'album"
             menu.addAction(rm_lbl, lambda p=photos: self.remove_from_album_requested.emit(p))
-        del_lbl = "Effacer les fichiers…" if n > 1 else "Effacer le fichier…"
-        menu.addAction(del_lbl, lambda p=photos: self.delete_requested.emit(p))
+        else:
+            del_lbl = "Effacer les fichiers…" if n > 1 else "Effacer le fichier…"
+            menu.addAction(del_lbl, lambda p=photos: self.delete_requested.emit(p))
         menu.exec(pos)
 
     def _emit_delete_or_remove(self, photos: list) -> None:
