@@ -108,13 +108,17 @@ class _BadgeButton(QPushButton):
 
 
 class _FaceIconLoader(QThread):
-    """Charge les crops de visages en arrière-plan pour éviter de freezer le thread UI."""
+    """Charge les crops de visages en arrière-plan pour éviter de freezer le thread UI.
+
+    Ne reçoit que les (index de ligne, personne) dont l'icône n'est pas déjà
+    dans le cache session de la Sidebar — les icônes en cache sont posées
+    immédiatement par refresh_persons, sans re-décoder les originaux."""
 
     icon_ready = Signal(int, bytes)   # (index dans la liste, PNG bytes)
 
-    def __init__(self, persons: list, parent=None) -> None:
+    def __init__(self, items: "list[tuple[int, object]]", parent=None) -> None:
         super().__init__(parent)
-        self._persons = persons
+        self._items = items
         self._stop_flag = False
 
     def stop(self) -> None:
@@ -122,9 +126,9 @@ class _FaceIconLoader(QThread):
 
     def run(self) -> None:
         from src.core.models import FaceInfo
-        cover_paths = [p.cover_path for p in self._persons if p.cover_path and p.cover_bbox]
+        cover_paths = [p.cover_path for _, p in self._items if p.cover_path and p.cover_bbox]
         edit_rots = _load_edit_rotations(cover_paths)
-        for i, person in enumerate(self._persons):
+        for i, person in self._items:
             if self._stop_flag:
                 break
             if person.cover_path and person.cover_bbox:
@@ -251,6 +255,12 @@ class Sidebar(QWidget):
         self._restoring: bool = False
         self._face_loader: _FaceIconLoader | None = None
         self._pending_person_id: int | None = None
+        # Cache session des icônes de visage (36 px, PNG) par
+        # (cover_path, cover_bbox) : refresh_persons re-décodait sinon TOUTES
+        # les couvertures depuis les photos originales à chaque rebuild
+        # (fin de scan, renommage, assignation…) alors que la quasi-totalité
+        # n'a pas changé. Purgé des entrées orphelines à chaque rebuild.
+        self._icon_bytes_cache: dict[tuple, bytes] = {}
         self._folder_order_mode: str = "alpha"   # "alpha" | "chrono"
         self._folder_order_dir: str = "asc"       # "asc" | "desc"
         self._setup_ui()
@@ -522,20 +532,14 @@ class Sidebar(QWidget):
             finally:
                 self._restoring = False
 
-    def _has_subdirs(self, folder_path: str) -> bool:
-        """Retourne True si folder_path contient au moins un sous-dossier visible."""
-        try:
-            for entry in os.scandir(folder_path):
-                if entry.is_dir() and not entry.name.startswith("."):
-                    return True
-        except PermissionError:
-            pass
-        return False
-
     def _populate_subfolders(self, parent_item: QTreeWidgetItem, folder_path: str) -> None:
         """Ajoute les sous-dossiers immédiats de folder_path sous parent_item.
-        Chaque enfant reçoit un placeholder s'il a lui-même des sous-dossiers,
-        permettant le lazy loading à l'expansion."""
+        Chaque enfant reçoit systématiquement un placeholder (lazy loading à
+        l'expansion) — même principe que les nœuds racine dans refresh_folders :
+        vérifier s'il a réellement des sous-dossiers coûterait un os.scandir
+        par enfant (très lent sur un volume réseau), pour seul bénéfice de
+        masquer le chevron des nœuds vides. Un nœud sans sous-dossier se
+        replie simplement à la première expansion."""
         try:
             dirs = [e for e in os.scandir(folder_path)
                     if e.is_dir() and not e.name.startswith(".")]
@@ -554,9 +558,8 @@ class Sidebar(QWidget):
                 child.setData(0, Qt.UserRole, entry.path)
                 child.setToolTip(0, entry.path)
                 parent_item.addChild(child)
-                if self._has_subdirs(entry.path):
-                    # Placeholder → rend le nœud dépliable
-                    child.addChild(QTreeWidgetItem([""]))
+                # Placeholder → rend le nœud dépliable
+                child.addChild(QTreeWidgetItem([""]))
         except PermissionError:
             pass
 
@@ -866,11 +869,21 @@ class Sidebar(QWidget):
         self._pending_person_id = None  # consommé dans tous les cas
         self._cancel_face_loader()
         self._persons_list.clear()
-        for person in persons:
+        to_load: list[tuple[int, PersonInfo]] = []
+        for row, person in enumerate(persons):
             label = f"{person.name}  ({person.photo_count})"
             item = QListWidgetItem(label)
             item.setData(Qt.UserRole, person)
             self._persons_list.addItem(item)
+            # Icône depuis le cache session si la couverture n'a pas changé,
+            # sinon à charger en arrière-plan (décodage de l'original).
+            cached = self._icon_bytes_cache.get(self._icon_cache_key(person))
+            if cached is not None:
+                pix = QPixmap()
+                pix.loadFromData(cached)
+                item.setIcon(QIcon(pix))
+            elif person.cover_path and person.cover_bbox:
+                to_load.append((row, person))
             if selected_id is not None and person.id == selected_id:
                 self._persons_list.blockSignals(True)
                 self._persons_list.setCurrentItem(item)
@@ -887,21 +900,39 @@ class Sidebar(QWidget):
             self._persons_list.blockSignals(False)
         # Réappliquer le filtre en cours (rebuild efface le masquage des items)
         self._filter_persons_list(self.filter_text.lower())
-        # Charger les icônes de visage en arrière-plan
-        if persons:
-            self._face_loader = _FaceIconLoader(persons, self)
+        # Purge des entrées orphelines (personne supprimée/fusionnée, couverture changée)
+        valid_keys = {self._icon_cache_key(p) for p in persons}
+        self._icon_bytes_cache = {
+            k: v for k, v in self._icon_bytes_cache.items() if k in valid_keys
+        }
+        # Charger en arrière-plan uniquement les icônes absentes du cache.
+        # persons_thumbnails_ready doit être émis dans tous les cas : il sert
+        # de gate au démarrage de la détection de doublons (main_window).
+        if to_load:
+            self._face_loader = _FaceIconLoader(to_load, self)
             self._face_loader.icon_ready.connect(self._on_face_icon_ready)
             self._face_loader.finished.connect(self._on_face_loader_finished)
             self._face_loader.start()
         else:
             self.persons_thumbnails_ready.emit()
 
+    @staticmethod
+    def _icon_cache_key(person) -> tuple:
+        bbox = person.cover_bbox
+        return (person.cover_path, tuple(bbox) if bbox else None)
+
     @Slot(int, bytes)
     def _on_face_icon_ready(self, index: int, data: bytes) -> None:
         if index < self._persons_list.count():
+            item = self._persons_list.item(index)
             pix = QPixmap()
             pix.loadFromData(data)
-            self._persons_list.item(index).setIcon(QIcon(pix))
+            item.setIcon(QIcon(pix))
+            # Alimente le cache session : la clé est dérivée de la personne
+            # portée par l'item (robuste aux rebuilds entre l'emit et ici).
+            person = item.data(Qt.UserRole)
+            if isinstance(person, PersonInfo):
+                self._icon_bytes_cache[self._icon_cache_key(person)] = data
 
     @Slot()
     def _on_face_loader_finished(self) -> None:

@@ -81,17 +81,23 @@ class ThumbnailCache:
     def get_ram(self, photo_path: str) -> QPixmap | None:
         """Retourne la vignette depuis le cache RAM uniquement (thread UI, non bloquant)."""
         key = self._key(photo_path)
-        if key in self._ram:
+        # try/except plutôt que test d'appartenance : invalidate()/
+        # invalidate_many() peuvent maintenant tourner dans un thread de fond
+        # (_DeleteWorkerThread) et retirer la clé entre le test et l'accès.
+        # Chaque opération individuelle sur l'OrderedDict reste atomique (GIL).
+        try:
             self._ram.move_to_end(key)   # marquer MRU
             return self._ram[key]
-        return None
+        except KeyError:
+            return None
 
     def get(self, photo_path: str) -> QPixmap | None:
         key = self._key(photo_path)
-        if key in self._ram:
+        try:
             self._ram.move_to_end(key)
             return self._ram[key]
-        return self._get_from_db(photo_path, key)
+        except KeyError:
+            return self._get_from_db(photo_path, key)
 
     def get_bytes(self, photo_path: str) -> bytes | None:
         """Retourne les bytes JPEG depuis SQLite sans créer de QPixmap.

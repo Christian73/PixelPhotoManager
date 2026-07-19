@@ -148,10 +148,14 @@ Le `PluginManager` charge les plugins dynamiquement via `importlib`. Les plugins
 
 SQLite embarqué, zéro configuration. Le catalogue est dans `%LOCALAPPDATA%\PixelPhotoManager\catalog.db`. Les vignettes ont leur propre base `thumbnails.db`. La configuration est dans `config.json` dans le même dossier. Le chemin de base est défini dans `src/core/app_dirs.py` (`APP_DATA_DIR`). Utiliser `sqlite3` standard, pas d'ORM.
 
+**Pattern de connexion** (commun à `Catalog`, `FaceDatabase`, `ThumbnailCache`, `EditDatabase`) : connexion SQLite **par (instance, thread)**, mise en cache dans un `threading.local` porté par l'instance, PRAGMAs (`journal_mode=WAL`, `synchronous=NORMAL`, `cache_size`) posés une seule fois à la création. Ne jamais revenir au schéma « connexion neuve par appel ». Corollaire : les méthodes d'écriture ne ferment pas la connexion — en cas d'exception elles font `conn.rollback()` (garde `except BaseException: conn.rollback(); raise`) pour ne **jamais** laisser la connexion cachée dans une transaction ouverte, sinon toutes les écritures suivantes échouent en `database is locked`. Toute nouvelle méthode d'écriture doit reprendre cette garde.
+
 **Migrations automatiques au démarrage** (pattern `try: ALTER TABLE ... except: pass`) :
 - `_migrate_normalize_paths()` — normalise les séparateurs Windows
 - `_migrate_video_fields()` — ajoute `media_type` et `duration` si absents
 - `_migrate_face_tables()` — ajoute les tables de visages et annotations Picasa
+
+Piège : l'index `idx_faces_suggestion` (faces.db) doit être créé **après** les migrations dans `_init_db` — la colonne `suggestion_person_id` n'existe pas dans `_CREATE_FACES`, seulement via `ALTER TABLE`.
 
 ---
 

@@ -120,14 +120,41 @@ class Catalog:
     def __init__(self, db_path: str | Path = _DB_PATH):
         self._db_path = str(db_path)
         self._lock = threading.Lock()
+        # Connexion SQLite par (instance, thread), créée une fois puis
+        # réutilisée (pattern ThumbnailCache) : chaque méthode ouvrait avant
+        # une connexion neuve + 2 PRAGMAs, payés à chaque requête — sur les
+        # chemins chauds (scan, requêtes de vues, badge), ce coût dépassait
+        # souvent celui de la requête elle-même. threading.local est porté par
+        # l'instance : deux Catalog sur le même chemin (tests) gardent chacun
+        # leur connexion.
+        self._tls = threading.local()
         Path(self._db_path).parent.mkdir(parents=True, exist_ok=True)
         self._init_db()
 
     def _conn(self) -> sqlite3.Connection:
-        conn = sqlite3.connect(self._db_path, check_same_thread=False)
-        conn.execute("PRAGMA journal_mode=WAL")
-        conn.execute("PRAGMA synchronous=NORMAL")
+        """Connexion SQLite du thread courant, créée une seule fois par thread.
+
+        Les méthodes d'écriture ne ferment plus la connexion : en cas
+        d'exception, leur garde `except BaseException: conn.rollback()`
+        remplace le rollback implicite qu'assurait l'ancienne fermeture —
+        une connexion mise en cache ne doit jamais rester au milieu d'une
+        transaction ouverte (les écritures suivantes échoueraient en
+        « database is locked »)."""
+        conn = getattr(self._tls, "conn", None)
+        if conn is None:
+            conn = sqlite3.connect(self._db_path, timeout=5, check_same_thread=False)
+            conn.execute("PRAGMA journal_mode=WAL")
+            conn.execute("PRAGMA synchronous=NORMAL")
+            conn.execute("PRAGMA cache_size=-2048")
+            self._tls.conn = conn
         return conn
+
+    def close(self) -> None:
+        """Ferme la connexion du thread courant (tests, arrêt de l'application)."""
+        conn = getattr(self._tls, "conn", None)
+        if conn is not None:
+            conn.close()
+            self._tls.conn = None
 
     def _init_db(self) -> None:
         with self._lock:
@@ -146,13 +173,20 @@ class Catalog:
                 conn.execute(
                     "CREATE INDEX IF NOT EXISTS idx_photos_dup_group ON photos(duplicate_group_id)"
                 )
+                conn.execute(
+                    "CREATE INDEX IF NOT EXISTS idx_photos_favorite ON photos(is_favorite)"
+                )
+                conn.execute(
+                    "CREATE INDEX IF NOT EXISTS idx_photos_media_type ON photos(media_type)"
+                )
                 # Filet de sécurité au démarrage : dissout les groupes de 1 exemplaire
                 # déjà présents en base (ex. créés avant l'ajout de la dissolution
                 # systématique dans delete_photo/delete_photos).
                 self._dissolve_singleton_duplicate_groups(conn)
                 conn.commit()
-            finally:
-                conn.close()
+            except BaseException:
+                conn.rollback()   # cf. _conn() : jamais de transaction ouverte
+                raise
 
     def _migrate_video_fields(self, conn) -> None:
         for stmt in (
@@ -274,8 +308,9 @@ class Catalog:
                 row = conn.execute(
                     "SELECT * FROM photos WHERE path=?", (photo.path,)
                 ).fetchone()
-            finally:
-                conn.close()
+            except BaseException:
+                conn.rollback()   # cf. _conn() : jamais de transaction ouverte
+                raise
         if row:
             return _photo_from_row(row)
         return photo
@@ -291,8 +326,9 @@ class Catalog:
                     "SELECT COUNT(*) FROM photos WHERE directory=? OR directory LIKE ?",
                     (folder, like_pattern),
                 ).fetchone()
-            finally:
-                conn.close()
+            except BaseException:
+                conn.rollback()   # cf. _conn() : jamais de transaction ouverte
+                raise
         return row[0] if row else 0
 
     def get_photos_in_folder(self, folder: str) -> list[PhotoInfo]:
@@ -304,8 +340,9 @@ class Catalog:
                     "SELECT * FROM photos WHERE directory=? ORDER BY COALESCE(date_taken, datetime(file_mtime, 'unixepoch')) DESC, filename",
                     (folder,),
                 ).fetchall()
-            finally:
-                conn.close()
+            except BaseException:
+                conn.rollback()   # cf. _conn() : jamais de transaction ouverte
+                raise
         return [_photo_from_row(r) for r in rows]
 
     def get_all_photo_paths(self) -> list[str]:
@@ -314,8 +351,9 @@ class Catalog:
             conn = self._conn()
             try:
                 rows = conn.execute("SELECT path FROM photos").fetchall()
-            finally:
-                conn.close()
+            except BaseException:
+                conn.rollback()   # cf. _conn() : jamais de transaction ouverte
+                raise
         return [r[0] for r in rows]
 
     def get_all_photos(self) -> list[PhotoInfo]:
@@ -325,8 +363,9 @@ class Catalog:
                 rows = conn.execute(
                     "SELECT * FROM photos ORDER BY COALESCE(date_taken, datetime(file_mtime, 'unixepoch')) DESC, filename"
                 ).fetchall()
-            finally:
-                conn.close()
+            except BaseException:
+                conn.rollback()   # cf. _conn() : jamais de transaction ouverte
+                raise
         return [_photo_from_row(r) for r in rows]
 
     def search(self, query: str) -> list[PhotoInfo]:
@@ -342,8 +381,9 @@ class Catalog:
                     """,
                     (pattern, pattern, pattern),
                 ).fetchall()
-            finally:
-                conn.close()
+            except BaseException:
+                conn.rollback()   # cf. _conn() : jamais de transaction ouverte
+                raise
         return [_photo_from_row(r) for r in rows]
 
     def get_photo_by_path(self, path: str) -> Optional[PhotoInfo]:
@@ -353,8 +393,9 @@ class Catalog:
                 row = conn.execute(
                     "SELECT * FROM photos WHERE path=?", (path,)
                 ).fetchone()
-            finally:
-                conn.close()
+            except BaseException:
+                conn.rollback()   # cf. _conn() : jamais de transaction ouverte
+                raise
         return _photo_from_row(row) if row else None
 
     def update_paths_prefix(self, old_prefix: str, new_prefix: str) -> None:
@@ -374,8 +415,9 @@ class Catalog:
                     (new_prefix, n + 1, new_prefix, n + 1, old_prefix, like_pattern),
                 )
                 conn.commit()
-            finally:
-                conn.close()
+            except BaseException:
+                conn.rollback()   # cf. _conn() : jamais de transaction ouverte
+                raise
 
     def move_photo(self, old_path: str, new_path: str) -> None:
         """Met à jour le chemin d'un fichier photo dans le catalogue."""
@@ -390,8 +432,9 @@ class Catalog:
                     (new_path, new_dir, os.path.basename(new_path), old_path),
                 )
                 conn.commit()
-            finally:
-                conn.close()
+            except BaseException:
+                conn.rollback()   # cf. _conn() : jamais de transaction ouverte
+                raise
 
     def delete_photo(self, path: str) -> None:
         """Supprime la photo du catalogue (ne touche pas au fichier disque)."""
@@ -408,8 +451,9 @@ class Catalog:
                 conn.execute("DELETE FROM photos WHERE path=?", (path,))
                 self._dissolve_singleton_duplicate_groups(conn)
                 conn.commit()
-            finally:
-                conn.close()
+            except BaseException:
+                conn.rollback()   # cf. _conn() : jamais de transaction ouverte
+                raise
 
     def set_favorite(self, photo_id: int, is_favorite: bool) -> None:
         with self._lock:
@@ -420,8 +464,9 @@ class Catalog:
                     (int(is_favorite), photo_id),
                 )
                 conn.commit()
-            finally:
-                conn.close()
+            except BaseException:
+                conn.rollback()   # cf. _conn() : jamais de transaction ouverte
+                raise
 
     def get_albums(self) -> list[AlbumInfo]:
         with self._lock:
@@ -437,8 +482,9 @@ class Catalog:
                     ORDER BY a.name
                     """
                 ).fetchall()
-            finally:
-                conn.close()
+            except BaseException:
+                conn.rollback()   # cf. _conn() : jamais de transaction ouverte
+                raise
         return [AlbumInfo(name=r[1], id=r[0], description=r[2], photo_count=r[3]) for r in rows]
 
     def create_album(self, name: str) -> AlbumInfo:
@@ -450,8 +496,9 @@ class Catalog:
                 )
                 conn.commit()
                 album_id = cursor.lastrowid
-            finally:
-                conn.close()
+            except BaseException:
+                conn.rollback()   # cf. _conn() : jamais de transaction ouverte
+                raise
         return AlbumInfo(name=name, id=album_id)
 
     def delete_album(self, album_id: int) -> None:
@@ -463,8 +510,9 @@ class Catalog:
                 conn.execute("DELETE FROM album_photos WHERE album_id = ?", (album_id,))
                 conn.execute("DELETE FROM albums WHERE id = ?", (album_id,))
                 conn.commit()
-            finally:
-                conn.close()
+            except BaseException:
+                conn.rollback()   # cf. _conn() : jamais de transaction ouverte
+                raise
 
     def add_photo_to_album(self, album_id: int, photo_id: int) -> None:
         with self._lock:
@@ -475,8 +523,31 @@ class Catalog:
                     (album_id, photo_id),
                 )
                 conn.commit()
-            finally:
-                conn.close()
+            except BaseException:
+                conn.rollback()   # cf. _conn() : jamais de transaction ouverte
+                raise
+
+    def add_photos_to_album(self, album_id: int, photo_ids: list[int]) -> int:
+        """Ajoute plusieurs photos à un album en une seule transaction.
+        Retourne le nombre de photos réellement ajoutées (déjà présentes ignorées)."""
+        if not photo_ids:
+            return 0
+        with self._lock:
+            conn = self._conn()
+            try:
+                # total_changes (et non SELECT changes()) : executemany ne
+                # rapporte sinon que la dernière ligne.
+                before = conn.total_changes
+                conn.executemany(
+                    "INSERT OR IGNORE INTO album_photos (album_id, photo_id) VALUES (?,?)",
+                    [(album_id, pid) for pid in photo_ids],
+                )
+                added = conn.total_changes - before
+                conn.commit()
+            except BaseException:
+                conn.rollback()   # cf. _conn() : jamais de transaction ouverte
+                raise
+        return added
 
     def remove_photo_from_album(self, album_id: int, photo_id: int) -> None:
         """Retire une photo d'un album (le fichier et la photo elle-même ne sont pas touchés)."""
@@ -488,8 +559,28 @@ class Catalog:
                     (album_id, photo_id),
                 )
                 conn.commit()
-            finally:
-                conn.close()
+            except BaseException:
+                conn.rollback()   # cf. _conn() : jamais de transaction ouverte
+                raise
+
+    def remove_photos_from_album(self, album_id: int, photo_ids: list[int]) -> None:
+        """Retire plusieurs photos d'un album en un seul DELETE (fichiers et
+        photos non touchés)."""
+        if not photo_ids:
+            return
+        with self._lock:
+            conn = self._conn()
+            try:
+                placeholders = ",".join("?" * len(photo_ids))
+                conn.execute(
+                    f"DELETE FROM album_photos WHERE album_id=?"
+                    f" AND photo_id IN ({placeholders})",
+                    (album_id, *photo_ids),
+                )
+                conn.commit()
+            except BaseException:
+                conn.rollback()   # cf. _conn() : jamais de transaction ouverte
+                raise
 
     def get_photos_in_album(self, album_id: int) -> list[PhotoInfo]:
         with self._lock:
@@ -504,8 +595,9 @@ class Catalog:
                     """,
                     (album_id,),
                 ).fetchall()
-            finally:
-                conn.close()
+            except BaseException:
+                conn.rollback()   # cf. _conn() : jamais de transaction ouverte
+                raise
         return [_photo_from_row(r) for r in rows]
 
     def get_favorites(self) -> list[PhotoInfo]:
@@ -515,8 +607,9 @@ class Catalog:
                 rows = conn.execute(
                     "SELECT * FROM photos WHERE is_favorite=1 ORDER BY COALESCE(date_taken, datetime(file_mtime, 'unixepoch')) DESC"
                 ).fetchall()
-            finally:
-                conn.close()
+            except BaseException:
+                conn.rollback()   # cf. _conn() : jamais de transaction ouverte
+                raise
         return [_photo_from_row(r) for r in rows]
 
     def get_videos(self) -> list[PhotoInfo]:
@@ -526,8 +619,9 @@ class Catalog:
                 rows = conn.execute(
                     "SELECT * FROM photos WHERE media_type='video' ORDER BY COALESCE(date_taken, datetime(file_mtime, 'unixepoch')) DESC"
                 ).fetchall()
-            finally:
-                conn.close()
+            except BaseException:
+                conn.rollback()   # cf. _conn() : jamais de transaction ouverte
+                raise
         return [_photo_from_row(r) for r in rows]
 
     def get_stats(self) -> dict:
@@ -537,8 +631,9 @@ class Catalog:
                 total = conn.execute("SELECT COUNT(*) FROM photos").fetchone()[0]
                 total_size = conn.execute("SELECT SUM(file_size) FROM photos").fetchone()[0] or 0
                 folders = conn.execute("SELECT COUNT(DISTINCT directory) FROM photos").fetchone()[0]
-            finally:
-                conn.close()
+            except BaseException:
+                conn.rollback()   # cf. _conn() : jamais de transaction ouverte
+                raise
         return {"total_photos": total, "total_size": total_size, "folders": folders}
 
     def rename_photo(self, old_path: str, new_path: str) -> bool:
@@ -552,8 +647,9 @@ class Catalog:
                 )
                 conn.commit()
                 return conn.execute("SELECT changes()").fetchone()[0] > 0
-            finally:
-                conn.close()
+            except BaseException:
+                conn.rollback()   # cf. _conn() : jamais de transaction ouverte
+                raise
 
     def get_known_mtimes(self, folder: str) -> dict[str, float]:
         """Returns {path: mtime} for all photos at or below folder (recursive).
@@ -570,8 +666,9 @@ class Catalog:
                     "WHERE directory=? OR directory LIKE ?",
                     (folder, like_pattern),
                 ).fetchall()
-            finally:
-                conn.close()
+            except BaseException:
+                conn.rollback()   # cf. _conn() : jamais de transaction ouverte
+                raise
         return {r[0]: r[1] for r in rows}
 
     def get_all_paths_under(self, folder: str) -> set[str]:
@@ -588,8 +685,9 @@ class Catalog:
                     "SELECT path FROM photos WHERE directory=? OR directory LIKE ?",
                     (folder, like_pattern),
                 ).fetchall()
-            finally:
-                conn.close()
+            except BaseException:
+                conn.rollback()   # cf. _conn() : jamais de transaction ouverte
+                raise
         return {r[0] for r in rows}
 
     def cleanup_asset_dirs(self) -> list[str]:
@@ -608,8 +706,9 @@ class Catalog:
                     conn.executemany("DELETE FROM photos WHERE path=?",
                                      [(p,) for p in to_delete])
                     conn.commit()
-            finally:
-                conn.close()
+            except BaseException:
+                conn.rollback()   # cf. _conn() : jamais de transaction ouverte
+                raise
         if to_delete:
             logger.info("cleanup_asset_dirs : %d entrée(s) supprimée(s)", len(to_delete))
         return to_delete
@@ -631,8 +730,9 @@ class Catalog:
                 )
                 self._dissolve_singleton_duplicate_groups(conn)
                 conn.commit()
-            finally:
-                conn.close()
+            except BaseException:
+                conn.rollback()   # cf. _conn() : jamais de transaction ouverte
+                raise
 
     def _dissolve_singleton_duplicate_groups(self, conn) -> None:
         """Dissout tout groupe de doublons retombé à 0 ou 1 exemplaire suite à une
@@ -677,8 +777,9 @@ class Catalog:
                 )
                 self._dissolve_singleton_duplicate_groups(conn)
                 conn.commit()
-            finally:
-                conn.close()
+            except BaseException:
+                conn.rollback()   # cf. _conn() : jamais de transaction ouverte
+                raise
 
     def clear_duplicate_groups(self) -> None:
         """Efface tous les marqueurs de doublons."""
@@ -687,8 +788,9 @@ class Catalog:
             try:
                 conn.execute("UPDATE photos SET duplicate_group_id=NULL")
                 conn.commit()
-            finally:
-                conn.close()
+            except BaseException:
+                conn.rollback()   # cf. _conn() : jamais de transaction ouverte
+                raise
 
     def get_duplicates_for_group(self, group_id: int) -> list:
         """Retourne toutes les photos du groupe de doublons donné."""
@@ -700,8 +802,9 @@ class Catalog:
                     "ORDER BY COALESCE(date_taken, datetime(file_mtime, 'unixepoch')), filename",
                     (group_id,),
                 ).fetchall()
-            finally:
-                conn.close()
+            except BaseException:
+                conn.rollback()   # cf. _conn() : jamais de transaction ouverte
+                raise
         return [_photo_from_row(r) for r in rows]
 
     def get_duplicate_groups(self) -> dict:
@@ -714,8 +817,9 @@ class Catalog:
                     "ORDER BY duplicate_group_id, "
                     "COALESCE(date_taken, datetime(file_mtime, 'unixepoch')), filename"
                 ).fetchall()
-            finally:
-                conn.close()
+            except BaseException:
+                conn.rollback()   # cf. _conn() : jamais de transaction ouverte
+                raise
         groups: dict[int, list] = {}
         for row in rows:
             photo = _photo_from_row(row)
@@ -733,8 +837,9 @@ class Catalog:
                     "SELECT path, duplicate_group_id FROM photos "
                     "WHERE duplicate_group_id IS NOT NULL"
                 ).fetchall()
-            finally:
-                conn.close()
+            except BaseException:
+                conn.rollback()   # cf. _conn() : jamais de transaction ouverte
+                raise
         return {path: gid for path, gid in rows}
 
     def count_duplicate_groups(self) -> int:
@@ -746,8 +851,9 @@ class Catalog:
                     "SELECT COUNT(DISTINCT duplicate_group_id) FROM photos "
                     "WHERE duplicate_group_id IS NOT NULL"
                 ).fetchone()
-            finally:
-                conn.close()
+            except BaseException:
+                conn.rollback()   # cf. _conn() : jamais de transaction ouverte
+                raise
         return row[0] if row else 0
 
     def ignore_duplicate_group(self, group_id: int) -> None:
@@ -765,8 +871,9 @@ class Catalog:
                     (group_id,),
                 )
                 conn.commit()
-            finally:
-                conn.close()
+            except BaseException:
+                conn.rollback()   # cf. _conn() : jamais de transaction ouverte
+                raise
 
     def get_all_photo_paths_for_dedup(self) -> list:
         """Retourne la liste de tous les chemins de photos pour la détection de doublons."""
@@ -776,8 +883,9 @@ class Catalog:
                 rows = conn.execute(
                     "SELECT path FROM photos ORDER BY path"
                 ).fetchall()
-            finally:
-                conn.close()
+            except BaseException:
+                conn.rollback()   # cf. _conn() : jamais de transaction ouverte
+                raise
         return [r[0] for r in rows]
 
     def get_photo_dates_for_dedup(self) -> dict:
@@ -789,8 +897,9 @@ class Catalog:
             conn = self._conn()
             try:
                 rows = conn.execute("SELECT path, date_taken FROM photos").fetchall()
-            finally:
-                conn.close()
+            except BaseException:
+                conn.rollback()   # cf. _conn() : jamais de transaction ouverte
+                raise
         result: dict = {}
         for path, date_taken in rows:
             dt = None
@@ -815,8 +924,9 @@ class Catalog:
                     " ORDER BY COALESCE(date_taken, datetime(file_mtime, 'unixepoch')) DESC, filename",
                     paths,
                 ).fetchall()
-            finally:
-                conn.close()
+            except BaseException:
+                conn.rollback()   # cf. _conn() : jamais de transaction ouverte
+                raise
         return [_photo_from_row(r) for r in rows]
 
     # ------------------------------------------------------------------ persons
@@ -829,8 +939,9 @@ class Catalog:
                 rows = conn.execute(
                     "SELECT id, name FROM persons ORDER BY name"
                 ).fetchall()
-            finally:
-                conn.close()
+            except BaseException:
+                conn.rollback()   # cf. _conn() : jamais de transaction ouverte
+                raise
         return [PersonInfo(name=r[1], id=r[0]) for r in rows]
 
     def get_person(self, person_id: int) -> "PersonInfo | None":
@@ -841,8 +952,9 @@ class Catalog:
                 row = conn.execute(
                     "SELECT id, name FROM persons WHERE id=?", (person_id,)
                 ).fetchone()
-            finally:
-                conn.close()
+            except BaseException:
+                conn.rollback()   # cf. _conn() : jamais de transaction ouverte
+                raise
         return PersonInfo(name=row[1], id=row[0]) if row else None
 
     def create_person(self, name: str) -> PersonInfo:
@@ -854,8 +966,9 @@ class Catalog:
                 )
                 conn.commit()
                 person_id = cur.lastrowid
-            finally:
-                conn.close()
+            except BaseException:
+                conn.rollback()   # cf. _conn() : jamais de transaction ouverte
+                raise
         return PersonInfo(name=name, id=person_id)
 
     def rename_person(self, person_id: int, name: str) -> None:
@@ -866,8 +979,9 @@ class Catalog:
                     "UPDATE persons SET name=? WHERE id=?", (name, person_id)
                 )
                 conn.commit()
-            finally:
-                conn.close()
+            except BaseException:
+                conn.rollback()   # cf. _conn() : jamais de transaction ouverte
+                raise
 
     def delete_person(self, person_id: int) -> None:
         with self._lock:
@@ -875,5 +989,6 @@ class Catalog:
             try:
                 conn.execute("DELETE FROM persons WHERE id=?", (person_id,))
                 conn.commit()
-            finally:
-                conn.close()
+            except BaseException:
+                conn.rollback()   # cf. _conn() : jamais de transaction ouverte
+                raise

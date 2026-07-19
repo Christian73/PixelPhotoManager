@@ -188,13 +188,18 @@ Une photo faisant partie d'un groupe de doublons détecté (voir [section 14](#1
 | **Créer un nouvel album avec {cette photo\|les N photos sélectionnées}…** | Crée un nouvel album à la volée avec la photo (ou la sélection) |
 | **Révéler dans l'Explorateur** | Ouvre le dossier contenant la photo |
 | **Retenter l'identification des visages** | *(affiché uniquement si la photo est en erreur de détection faciale)* relance l'analyse pour ce seul fichier |
-| **Effacer le fichier…** | Supprime définitivement le fichier après confirmation |
+| **Retirer de l'album / Retirer les photos de l'album** | *(vue album uniquement)* Retire la ou les photos de l'album affiché — fichiers et catalogue intacts |
+| **Effacer le fichier… / Effacer les fichiers…** | Supprime définitivement le ou les fichiers après confirmation |
 
-> Le clic droit s'applique à **toute la sélection en cours** (Ctrl+Clic / Shift+Clic) pour Renommer/Déplacer/Ajouter à un album, pas seulement à la vignette cliquée.
+> Le clic droit s'applique à **toute la sélection en cours** (Ctrl+Clic / Shift+Clic) pour Renommer/Déplacer/Ajouter à un album/Effacer, pas seulement à la vignette cliquée.
 
 ### Supprimer des photos
 
-Sélectionnez une ou plusieurs photos, puis appuyez sur la touche **Suppr** (ou clic droit › Effacer le fichier…). Une confirmation est demandée. La suppression est **définitive** (pas de corbeille).
+Sélectionnez une ou plusieurs photos, puis appuyez sur la touche **Suppr** (ou clic droit › Effacer le(s) fichier(s)…). Une confirmation est demandée. La suppression est **définitive** (pas de corbeille).
+
+La suppression s'exécute en arrière-plan : l'interface reste utilisable pendant l'opération, et la barre de statut affiche la progression (« Suppression… n/total ») sur les grosses sélections.
+
+> **Dans un album** : la touche **Suppr** (grille comme visionneuse) **retire** la ou les photos de l'album au lieu de supprimer les fichiers — voir [Retirer des photos d'un album](#8-albums-et-favoris).
 
 ### Renommer une photo
 
@@ -316,6 +321,9 @@ Si vous avez configuré des applications tierces (voir [section 16](#16-autres-o
 | **Localiser sur la carte** | Ouvre OpenStreetMap à la position GPS (grisé si pas de GPS) |
 | **Forcer une nouvelle détection sans limite de taille** | Relance la détection de visages sur cette photo en ignorant le filtre de taille minimale, sans perdre les identifications déjà faites |
 | **Effacer le fichier…** | Supprime définitivement le fichier après confirmation |
+| **Retirer de l'album** | *(remplace « Effacer le fichier… » quand la photo est ouverte depuis un album)* Retire la photo de l'album — fichier et catalogue intacts |
+
+> Comme dans la grille, la touche **Suppr** dans la visionneuse retire la photo de l'album si elle a été ouverte depuis un album, et supprime le fichier sinon.
 
 ---
 
@@ -506,6 +514,16 @@ Clic droit sur une vignette (dans la grille **ou** dans la vue Personnes) › **
 
 > Si aucun album personnalisé n'existe encore, un message vous invite à en créer un d'abord via le panneau Albums.
 
+### Retirer des photos d'un album
+
+Dans la vue d'un album personnalisé :
+
+- Sélectionnez une ou plusieurs photos, puis appuyez sur **Suppr**, ou clic droit › **Retirer de l'album** (**Retirer les photos de l'album** pour une sélection multiple).
+- Seul le lien avec l'album est supprimé : **le fichier et la photo restent intacts** sur le disque, dans le catalogue et dans la vue de leur dossier.
+- Le même comportement s'applique dans la **visionneuse** ouverte depuis l'album (touche **Suppr** ou clic droit › **Retirer de l'album**).
+
+> Pour supprimer réellement un fichier du disque, faites-le depuis la vue de son **dossier** (ou une autre vue non-album), où **Suppr** conserve son sens habituel de suppression définitive.
+
 ### Supprimer un album
 
 Clic droit sur un album personnalisé dans la sidebar › **Supprimer l'album…** — une confirmation précise le nombre de photos concernées et rappelle que **les photos restent intactes** dans le catalogue et sur le disque, seul l'album est supprimé. *(Les 4 albums spéciaux ne proposent pas cette option.)*
@@ -643,8 +661,7 @@ Ouvrez une photo puis affichez le panneau **Visages** (à côté du panneau EXIF
   - **✕** sur la vignette : ignore ce visage (masqué de l'UI et du regroupement, récupérable).
   - **Clic droit** : **Identifier cette personne…**, **Identifier ce groupe…**, **Désallouer le groupe**, **Ignorer ce visage**.
 - **➕ Ajouter une personne** : bascule en mode dessin manuel d'un rectangle sur la photo (pour un visage non détecté automatiquement), validé par **✓ Valider la position** (ou Entrée) / **✕ Annuler** (ou Échap), puis choix du nom.
-- **Visages ignorés… (N)** : liste les visages ignorés de la photo, avec position/taille, et un bouton **Restaurer** par ligne.
-- Chaque action (ajout, identification, ignorer, restaurer) est **annulable** via le bouton Undo général de la visionneuse.
+- **Visages ignorés… (N)** : liste les visages ignorés de la photo, avec position/taille, et un bouton **Restaurer** par ligne — c'est par ce dialogue qu'un visage ignoré par erreur se récupère.
 
 ### Vue « Personnes » — groupes non identifiés
 
@@ -796,7 +813,7 @@ Dialogue à deux catégories :
 | Raccourci | Action |
 |---|---|
 | **Ctrl + A** | Sélectionner toutes les photos |
-| **Suppr** | Supprimer les photos sélectionnées (avec confirmation) |
+| **Suppr** | Supprimer les photos sélectionnées (avec confirmation) — dans un album : retirer de l'album, fichiers intacts |
 
 ### Mode chronologie (ruban)
 

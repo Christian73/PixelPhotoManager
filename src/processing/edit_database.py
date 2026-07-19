@@ -123,6 +123,11 @@ class EditDatabase:
             return
         self._db_path = db_path
         self._lock = threading.Lock()
+        # Connexion SQLite par thread, créée une fois puis réutilisée (pattern
+        # ThumbnailCache) : load() est appelé à chaque navigation dans la
+        # visionneuse — ouvrir une connexion neuve à chaque flèche coûtait
+        # plus cher que la requête elle-même.
+        self._tls = threading.local()
         self._init_db()
         self._initialized = True
 
@@ -184,8 +189,13 @@ class EditDatabase:
                 )
 
     def _connect(self) -> sqlite3.Connection:
-        conn = sqlite3.connect(self._db_path)
-        conn.row_factory = sqlite3.Row
+        conn = getattr(self._tls, "conn", None)
+        if conn is None:
+            conn = sqlite3.connect(self._db_path, timeout=5, check_same_thread=False)
+            conn.row_factory = sqlite3.Row
+            conn.execute("PRAGMA journal_mode=WAL")
+            conn.execute("PRAGMA synchronous=NORMAL")
+            self._tls.conn = conn
         return conn
 
     # ------------------------------------------------------------------ API publique

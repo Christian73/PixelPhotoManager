@@ -421,6 +421,89 @@ class TestCounts:
         assert stats == {"total_photos": 2, "total_size": 300, "folders": 1}
 
 
+class TestThreadLocalConnection:
+    """_conn() met la connexion en cache par (instance, thread) — pattern
+    ThumbnailCache généralisé en 2026-07. Ces tests verrouillent les
+    invariants du refactor : réutilisation, visibilité inter-instances (WAL),
+    connexion utilisable après une écriture échouée (garde rollback), et
+    absence d'exception sous lecture/écriture concurrentes."""
+
+    def test_same_thread_reuses_single_connection(self, tmp_path):
+        catalog = Catalog(db_path=tmp_path / "catalog.db")
+        conn1 = catalog._conn()
+        catalog.add_or_update_photo(_make_photo("C:/photos/a.jpg"))
+        assert catalog._conn() is conn1
+
+    def test_two_instances_same_path_see_each_others_writes(self, tmp_path):
+        db_path = tmp_path / "catalog.db"
+        cat1 = Catalog(db_path=db_path)
+        cat2 = Catalog(db_path=db_path)
+
+        p = cat1.add_or_update_photo(_make_photo("C:/photos/a.jpg"))
+
+        assert cat2.get_photo_by_path(p.path) is not None
+        assert cat1._conn() is not cat2._conn()
+
+    def test_failed_write_leaves_connection_usable(self, tmp_path):
+        """Une écriture qui échoue ne doit pas laisser la connexion cachée au
+        milieu d'une transaction (sinon : « database is locked » pour toutes
+        les écritures suivantes)."""
+        catalog = Catalog(db_path=tmp_path / "catalog.db")
+        try:
+            # photo_id inexistant + album_id None → IntegrityError sur la PK
+            catalog.add_photos_to_album(None, [None])
+        except sqlite3.IntegrityError:
+            pass
+        assert not catalog._conn().in_transaction
+
+        # La connexion reste pleinement utilisable
+        p = catalog.add_or_update_photo(_make_photo("C:/photos/a.jpg"))
+        assert p.id is not None
+
+    def test_concurrent_reader_and_writer(self, tmp_path):
+        """Un écrivain (add_or_update_photo en boucle) et un lecteur
+        (get_all_photos en boucle) sur la même instance ne doivent lever
+        aucune exception (WAL + verrou Python)."""
+        import threading as _threading
+
+        catalog = Catalog(db_path=tmp_path / "catalog.db")
+        errors: list[Exception] = []
+
+        def writer():
+            try:
+                for i in range(50):
+                    catalog.add_or_update_photo(_make_photo(f"C:/photos/w{i}.jpg"))
+            except Exception as e:   # pragma: no cover - échec attendu du test
+                errors.append(e)
+
+        def reader():
+            try:
+                for _ in range(50):
+                    catalog.get_all_photos()
+            except Exception as e:   # pragma: no cover
+                errors.append(e)
+
+        threads = [_threading.Thread(target=writer), _threading.Thread(target=reader)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
+        assert errors == []
+        assert len(catalog.get_all_photos()) == 50
+
+
+class TestIndexes:
+    def test_query_indexes_exist(self, tmp_path):
+        """Les index qui évitent les full scans (favoris, vidéos, groupes de
+        doublons) doivent être créés au démarrage."""
+        catalog = Catalog(db_path=tmp_path / "catalog.db")
+        names = {r[1] for r in _raw_query_all(catalog, "PRAGMA index_list('photos')")}
+        assert "idx_photos_favorite" in names
+        assert "idx_photos_media_type" in names
+        assert "idx_photos_dup_group" in names
+
+
 class TestPersonCrud:
     def test_create_get_person(self, tmp_path):
         catalog = Catalog(db_path=tmp_path / "catalog.db")
@@ -530,6 +613,36 @@ class TestAlbumCrud:
         catalog.delete_photos([p1.path, p2.path])
 
         assert catalog.get_albums()[0].photo_count == 0
+
+    def test_add_photos_to_album_batch(self, tmp_path):
+        catalog = Catalog(db_path=tmp_path / "catalog.db")
+        album = catalog.create_album("Vacances")
+        p1 = catalog.add_or_update_photo(_make_photo("C:/photos/a.jpg"))
+        p2 = catalog.add_or_update_photo(_make_photo("C:/photos/b.jpg"))
+        catalog.add_photo_to_album(album.id, p1.id)
+
+        # p1 déjà présent (ignoré), p2 nouveau → 1 seul ajout effectif
+        added = catalog.add_photos_to_album(album.id, [p1.id, p2.id])
+
+        assert added == 1
+        assert catalog.get_albums()[0].photo_count == 2
+        assert catalog.add_photos_to_album(album.id, []) == 0
+
+    def test_remove_photos_from_album_batch(self, tmp_path):
+        catalog = Catalog(db_path=tmp_path / "catalog.db")
+        album = catalog.create_album("Vacances")
+        photos = [
+            catalog.add_or_update_photo(_make_photo(f"C:/photos/{n}.jpg"))
+            for n in "abc"
+        ]
+        catalog.add_photos_to_album(album.id, [p.id for p in photos])
+
+        catalog.remove_photos_from_album(album.id, [photos[0].id, photos[2].id])
+
+        remaining = {p.path for p in catalog.get_photos_in_album(album.id)}
+        assert remaining == {photos[1].path}
+        # Les photos retirées restent dans le catalogue
+        assert catalog.get_photo_by_path(photos[0].path) is not None
 
     def test_remove_photo_from_album_keeps_photo_in_catalog(self, tmp_path):
         catalog = Catalog(db_path=tmp_path / "catalog.db")

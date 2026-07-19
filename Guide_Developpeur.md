@@ -307,7 +307,9 @@ Le champ `crop` stocke un tuple de 8 valeurs `(x0,y0, x1,y1, x2,y2, x3,y3)` — 
 
 ### `catalog.py` — Catalogue SQLite
 
-Interface d'accès à `catalog.db`. Toutes les méthodes sont **thread-safe** (verrou `threading.Lock` sur chaque opération, connexion créée et fermée à chaque appel).
+Interface d'accès à `catalog.db`. Toutes les méthodes sont **thread-safe** : verrou `threading.Lock` sur chaque opération, et **connexion SQLite par (instance, thread)** mise en cache dans un `threading.local` porté par l'instance (pattern partagé avec `ThumbnailCache`, `FaceDatabase` et `EditDatabase`). La connexion est créée une seule fois par thread avec ses PRAGMAs (`journal_mode=WAL`, `synchronous=NORMAL`, `cache_size=-2048`) — l'ancien schéma « connexion neuve + PRAGMAs à chaque appel » coûtait souvent plus cher que la requête elle-même.
+
+**Invariant du pattern** : les méthodes d'écriture ne ferment plus la connexion ; en cas d'exception, une garde `except BaseException: conn.rollback(); raise` remplace le rollback implicite qu'assurait l'ancienne fermeture. Une connexion cachée ne doit **jamais** rester au milieu d'une transaction ouverte (toutes les écritures suivantes échoueraient en `database is locked`). `close()` ferme la connexion du thread courant (tests, `closeEvent`).
 
 ```python
 catalog = Catalog()   # utilise APP_DATA_DIR / "catalog.db"
@@ -319,10 +321,15 @@ catalog.search(query)                       # filename, make, model
 catalog.move_photo(old_path, new_path)
 catalog.rename_photo(old_path, new_path)
 catalog.delete_photo(path)
+catalog.delete_photos(paths)                # variante lot (albums nettoyés, groupes doublons dissous)
+catalog.add_photos_to_album(album_id, ids)  # lot — retourne le nombre réellement ajouté
+catalog.remove_photos_from_album(album_id, ids)  # lot
 catalog.get_known_mtimes(folder)            # dict {path: mtime} pour le scanner
 catalog.update_paths_prefix(old, new)       # renommage de dossier en masse
 catalog.count_photos_in_folder(folder)      # int — compte récursif pour le FolderManagerDialog
 ```
+
+**Index** : `idx_photos_directory`, `idx_photos_dup_group`, `idx_photos_favorite`, `idx_photos_media_type` — les vues Favoris/Vidéos ne scannent pas la table.
 
 **Migrations au démarrage** (dans `_init_db()`) :
 - `_migrate_normalize_paths()` — normalise les séparateurs de chemins dans les données existantes.
@@ -357,6 +364,21 @@ LibraryScanner.scan(folders, force=False) → ScanThread (QThread)
 | `photos_removed` | `list[str]` | Une fois, si des fantômes ont été trouvés |
 | `progress` | `(int, str)` | Toutes les 50 photos |
 | `finished` | `int` (total nouvelles) | Une fois |
+
+---
+
+### `folder_watcher.py` — Surveillance disque
+
+`FolderWatcher` surveille récursivement les dossiers racine via `QFileSystemWatcher` (snapshots par dossier, debounce 400 ms) et émet `files_changed(path)` / `subfolder_added(path)`. `MainWindow._on_watcher_files_changed` répond par un rescan du sous-arbre concerné.
+
+**Absorption des changements auto-infligés** : quand l'application supprime ou déplace elle-même des fichiers (touche Suppr, drag & drop, fichiers corrompus), l'événement watcher qui suit ne fait que constater ce que l'UI a déjà traité — le rescan serait du pur gaspillage (re-walk du dossier + refresh albums/personnes + réarmement de la détection de doublons).
+
+```python
+watcher.notify_self_deletions(paths, ttl_s=10.0)  # AVANT de toucher au disque
+watcher.notify_self_additions(paths, ttl_s=10.0)  # destinations d'un déplacement
+```
+
+Les noms déclarés (par dossier, avec deadline) sont soustraits des ensembles apparus/disparus dans `_process()` : si l'événement ne contient **que** des changements annoncés, `files_changed` n'est pas émis. Tout changement externe dans le même dossier (autre fichier ajouté/supprimé, y c. dans le même événement) émet toujours. Le TTL borne le cas où l'opération annoncée échoue finalement.
 
 ---
 
@@ -455,7 +477,24 @@ Copie `atime`/`mtime` (`os.utime`) et la date de création Windows (`ctypes` + `
 |---|---|---|
 | `_current_photos` | `list[PhotoInfo]` | Photos affichées dans la grille |
 | `_current_context` | `str` | Dossier ou contexte actif (`"Toutes les photos"`, `"Favoris"`, un chemin, un nom d'album) |
+| `_current_album_id` | `int \| None` | Id de l'album affiché (sinon `None`) — pilote « Retirer de l'album » et le comportement de la touche Suppr dans la grille et la visionneuse |
 | `_current_photo_index` | `int` | Index de la photo ouverte dans la visionneuse |
+
+**Flux d'une suppression (touche Suppr / « Effacer le(s) fichier(s)… ») :**
+
+```
+delete_requested (grille ou visionneuse)
+  → _on_delete_requested(photos)
+    → confirmation (thread UI), capture du contexte (viewer, groupes de doublons…)
+    → _folder_watcher.notify_self_deletions(paths)   # pas de rescan redondant
+    → _DeleteWorkerThread (QThread) :
+        unlink par fichier (+ progress) puis, en lot :
+        catalog.delete_photos / thumb_cache.invalidate_many / face_db.delete_for_paths
+    → _on_delete_finished(...) (thread UI) : grille, albums, groupes de doublons,
+      navigation vers le voisin, erreurs
+```
+
+Garde de réentrance : un seul `_delete_thread` à la fois (partagé avec la suppression des fichiers corrompus). En **contexte album** (`_current_album_id` non `None`), la touche Suppr émet `remove_from_album_requested` à la place : `Catalog.remove_photos_from_album` supprime uniquement le lien `album_photos`, fichiers et catalogue intacts.
 
 **Flux d'un changement de dossier :**
 
@@ -522,7 +561,11 @@ La sidebar est divisée en deux zones via un `QSplitter` vertical :
 
 **Lazy-loading de l'arborescence** :
 
-Quand un nœud possède des sous-dossiers, un **placeholder** (item vide sans `UserRole`) est ajouté pour rendre le nœud dépliable. À l'expansion (`itemExpanded`), le placeholder est remplacé par les vrais sous-dossiers (`_populate_subfolders`).
+Chaque nœud reçoit systématiquement un **placeholder** (item vide sans `UserRole`) qui le rend dépliable. À l'expansion (`itemExpanded`), le placeholder est remplacé par les vrais sous-dossiers (`_populate_subfolders`). On ne vérifie **pas** si le dossier a réellement des sous-dossiers (ça coûterait un `os.scandir` par enfant — très lent sur un volume réseau) : un nœud sans sous-dossier se replie simplement à la première expansion.
+
+**Cache session des icônes de personnes** :
+
+`refresh_persons` (rebuild complet de la liste Personnes) ne re-décode plus toutes les vignettes de couverture depuis les photos originales : un cache en mémoire (`_icon_bytes_cache`, clé `(cover_path, cover_bbox)`) fournit instantanément les icônes inchangées, et seul le reste part dans `_FaceIconLoader` (QThread). Le signal `persons_thumbnails_ready` est émis dans **tous** les cas (immédiatement si tout vient du cache) — il sert de gate au démarrage de la détection de doublons dans `main_window.py`.
 
 **Drag & drop** :
 

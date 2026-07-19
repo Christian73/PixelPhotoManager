@@ -86,6 +86,41 @@ def _raw_query_all(db, sql, params=()):
         conn.close()
 
 
+class TestThreadLocalConnection:
+    def test_wal_mode_enabled(self, tmp_path):
+        """FaceDatabase tournait sans WAL du tout (rollback-journal par
+        défaut) : chaque écriture de l'indexeur bloquait les lectures UI."""
+        db = FaceDatabase(db_path=tmp_path / "faces.db")
+        mode = db._conn().execute("PRAGMA journal_mode").fetchone()[0]
+        assert mode == "wal"
+
+    def test_same_thread_reuses_single_connection(self, tmp_path):
+        db = FaceDatabase(db_path=tmp_path / "faces.db")
+        conn1 = db._conn()
+        db.get_persons_pending_count()
+        assert db._conn() is conn1
+
+    def test_two_instances_same_path_see_each_others_writes(self, tmp_path):
+        db_path = tmp_path / "faces.db"
+        db1 = FaceDatabase(db_path=db_path)
+        db2 = FaceDatabase(db_path=db_path)
+        _raw_insert_face(db1, "a.jpg")
+
+        # db2 (autre connexion) voit l'écriture commitée via db1/_raw
+        rows = db2.get_faces_for_photo("a.jpg")
+        assert len(rows) == 1
+
+
+class TestIndexes:
+    def test_suggestion_index_exists(self, tmp_path):
+        """idx_faces_suggestion évite un full scan de la table faces dans
+        get_suggested_clusters_for_person / get_persons_pending_count. Créé
+        après la migration qui ajoute la colonne (absente de _CREATE_FACES)."""
+        db = FaceDatabase(db_path=tmp_path / "faces.db")
+        names = {r[1] for r in _raw_query_all(db, "PRAGMA index_list('faces')")}
+        assert "idx_faces_suggestion" in names
+
+
 class TestHelpers:
     def test_enc_dec_roundtrip(self):
         original = [0.5, -1.25, 3.0, 0.0]
@@ -375,6 +410,33 @@ class TestFaceCrud:
 
         db.unignore_cluster(9)
         assert all(r[0] == 0 for r in _raw_query_all(db, "SELECT ignored FROM faces WHERE cluster_id=9"))
+
+    def test_delete_for_paths_purges_all_tables(self, tmp_path):
+        db = FaceDatabase(db_path=tmp_path / "faces.db")
+        for name in ("a.jpg", "b.jpg", "keep.jpg"):
+            _raw_insert_face(db, name)
+            _raw_insert_picasa_annotation(db, name, person_id=1)
+        conn = sqlite3.connect(db._db_path)
+        try:
+            for name in ("a.jpg", "b.jpg", "keep.jpg"):
+                conn.execute(
+                    "INSERT INTO indexed_photos (photo_path, indexed_at) VALUES (?, 0)",
+                    (name,),
+                )
+                conn.execute(
+                    "INSERT INTO face_index_errors (photo_path, error_type, last_attempt)"
+                    " VALUES (?, 'corrupt', 0)",
+                    (name,),
+                )
+            conn.commit()
+        finally:
+            conn.close()
+
+        db.delete_for_paths(["a.jpg", "b.jpg"])
+
+        for table in ("faces", "indexed_photos", "picasa_annotations", "face_index_errors"):
+            paths = {r[0] for r in _raw_query_all(db, f"SELECT photo_path FROM {table}")}
+            assert paths == {"keep.jpg"}, f"table {table}"
 
     def test_assign_person_to_faces_batch_dedups_shared_photo(self, tmp_path):
         db = FaceDatabase(db_path=tmp_path / "faces.db")

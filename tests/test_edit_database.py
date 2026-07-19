@@ -11,6 +11,7 @@ en setup pour repartir d'un état propre, comme le lot précédent l'a fait pour
 `Config._instance`."""
 import os
 import sqlite3
+import threading
 
 from src.core.models import EditInfo
 from src.processing.edit_database import EditDatabase
@@ -25,6 +26,24 @@ class BaseEditDatabaseTest:
 
     def _make_db(self, tmp_path) -> EditDatabase:
         return EditDatabase(db_path=tmp_path / "edits.db")
+
+
+class TestConnectionReuse(BaseEditDatabaseTest):
+    def test_same_thread_reuses_single_connection(self, tmp_path):
+        """_connect() met la connexion en cache par thread (pattern
+        ThumbnailCache) : load() est appelé à chaque navigation dans la
+        visionneuse, une connexion neuve par appel coûtait plus cher que la
+        requête elle-même."""
+        db = self._make_db(tmp_path)
+        conn1 = db._connect()
+        db.load("C:/photos/a.jpg")
+        db.load("C:/photos/b.jpg")
+        assert db._connect() is conn1
+
+    def test_wal_mode_enabled(self, tmp_path):
+        db = self._make_db(tmp_path)
+        mode = db._connect().execute("PRAGMA journal_mode").fetchone()[0]
+        assert mode == "wal"
 
 
 class TestHasEdits(BaseEditDatabaseTest):
@@ -188,8 +207,13 @@ class TestLoadExceptionPath:
         db = EditDatabase(db_path=db_path)
         db.save("C:/photos/a.jpg", EditInfo(brightness=0.2))
 
-        # Corrompt le fichier pour forcer une exception à la lecture.
+        # Corrompt le fichier pour forcer une exception à la lecture. La
+        # connexion en cache (par thread) garde le fichier d'origine ouvert et
+        # continuerait de lire via la WAL : on la jette pour que le prochain
+        # _connect() rouvre le fichier corrompu — c'est bien le chemin
+        # d'exception de load() qui est testé ici, pas la corruption à chaud.
         db_path.write_bytes(b"not a sqlite database")
+        db._tls = threading.local()
 
         loaded = db.load("C:/photos/a.jpg")
 

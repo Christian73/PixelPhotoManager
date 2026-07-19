@@ -303,21 +303,145 @@ class _CatalogLoadThread(QThread):
 
 
 class _PhotoQueryThread(QThread):
-    """Exécute une requête catalog/face_db dans un thread secondaire."""
+    """Exécute une requête catalog/face_db dans un thread secondaire.
+
+    Le tri d'affichage (O(n log n) sur toute la bibliothèque pour "Toutes les
+    photos") est fait ici aussi : les paramètres de tri sont résolus par
+    l'appelant sur le thread UI (lectures de Config) et passés au thread."""
 
     photos_ready = Signal(list, str)   # list[PhotoInfo], context_key
 
-    def __init__(self, fn, context_key: str, parent=None) -> None:
+    def __init__(self, fn, context_key: str, sort_key_fn=None,
+                 sort_reverse: bool = False, parent=None) -> None:
         super().__init__(parent)
-        self._fn          = fn
-        self._context_key = context_key
+        self._fn           = fn
+        self._context_key  = context_key
+        self._sort_key_fn  = sort_key_fn
+        self._sort_reverse = sort_reverse
 
     def run(self) -> None:
         try:
             photos = self._fn()
+            if self._sort_key_fn is not None:
+                photos = sorted(photos, key=self._sort_key_fn,
+                                reverse=self._sort_reverse)
             self.photos_ready.emit(photos, self._context_key)
         except Exception:
             self.photos_ready.emit([], self._context_key)
+
+
+class _DeleteWorkerThread(QThread):
+    """Supprime les fichiers disque puis purge catalogue/vignettes/visages en
+    lot, hors du thread UI (règle CLAUDE.md : l'UI ne bloque jamais). L'ancienne
+    boucle synchrone dans _on_delete_requested (unlink + 3 allers-retours
+    SQLite par photo) gelait l'UI plusieurs secondes sur une multi-sélection."""
+
+    progress        = Signal(int, int)     # fait, total (libellé barre d'état)
+    finished_delete = Signal(list, list)   # deleted_paths: list[str], errors: list[str]
+
+    def __init__(self, paths: list[str], catalog, thumb_cache, face_db,
+                 parent=None) -> None:
+        super().__init__(parent)
+        self._paths       = list(paths)
+        self._catalog     = catalog
+        self._thumb_cache = thumb_cache
+        self._face_db     = face_db
+
+    def run(self) -> None:
+        deleted: list[str] = []
+        errors:  list[str] = []
+        for i, path in enumerate(self._paths):
+            try:
+                Path(path).unlink(missing_ok=True)
+                deleted.append(path)
+            except Exception as e:
+                errors.append(f"{os.path.basename(path)} : {e}")
+            self.progress.emit(i + 1, len(self._paths))
+        if deleted:
+            try:
+                # En lot : delete_photos dissout aussi les groupes de doublons
+                # devenus singletons, dans la même transaction.
+                self._catalog.delete_photos(deleted)
+                self._thumb_cache.invalidate_many(deleted)
+                self._face_db.delete_for_paths(deleted)
+            except Exception:
+                logger.exception("Purge catalogue/vignettes/visages après suppression")
+        self.finished_delete.emit(deleted, errors)
+
+
+class _DupMigrationThread(QThread):
+    """Exécute la migration des groupes de doublons à dates EXIF conflictuelles
+    puis compte les groupes restants (badge sidebar), hors du thread UI : au
+    premier lancement après upgrade, la migration charge TOUS les groupes avec
+    leurs photos — exécutée avant dans MainWindow.__init__, elle retardait
+    d'autant le premier affichage de la fenêtre.
+
+    Migration : dissout les groupes existants qui contiennent au moins deux
+    membres dont la date EXIF est connue et différente (cf.
+    duplicate_detector.py::_dates_differ). Un tel groupe ne peut plus être
+    *créé* aujourd'hui, mais l'incrémentalité de la détection
+    (compared_tier1/compared_tier2, dedup_cache.py) ne recompare et ne dissout
+    jamais spontanément un groupe déjà formé avant l'ajout de cette règle —
+    cf. dedup_exif_date_exclusion_2026-07 en mémoire.
+
+    En plus de dissoudre le groupe en base (duplicate_group_id=NULL, comme
+    Catalog.ignore_duplicate_group), retire aussi ses membres de
+    compared_tier1/tier2 pour qu'ils soient recomparés intégralement au
+    prochain passage plutôt que de rester des « paires ancien×ancien » jamais
+    réévaluées — sans ça, la dissolution ne durerait pas : le prochain
+    seed_groups() les retrouverait simplement fusionnés à l'identique puisque
+    plus rien ne les aurait jamais reconfrontés.
+
+    Naturellement idempotente : une fois ces groupes dissous, la règle de date
+    empêche définitivement leur recréation, donc ce balayage ne trouve plus
+    rien aux démarrages suivants — pas de flag « déjà exécuté » nécessaire.
+
+    Séquencement : _start_duplicate_detection ne doit jamais démarrer avant la
+    fin de cette migration (cf. _on_persons_thumbnails_ready_start_duplicates),
+    sinon seed_groups serait amorcé avec les groupes non encore dissous."""
+
+    done = Signal(int)   # nombre de groupes de doublons restants (badge)
+
+    def __init__(self, catalog, parent=None) -> None:
+        super().__init__(parent)
+        self._catalog = catalog
+
+    def run(self) -> None:
+        try:
+            self._migrate()
+        except Exception:
+            logger.exception("Migration des groupes de doublons à dates conflictuelles")
+        try:
+            self.done.emit(self._catalog.count_duplicate_groups())
+        except Exception:
+            self.done.emit(0)
+
+    def _migrate(self) -> None:
+        if self._catalog.count_duplicate_groups() == 0:
+            return
+        groups = self._catalog.get_duplicate_groups()
+        conflicted_group_ids: list[int] = []
+        conflicted_paths: list[str] = []
+        for gid, photos in groups.items():
+            known_dates = {p.date_taken for p in photos if p.date_taken is not None}
+            if len(known_dates) > 1:
+                conflicted_group_ids.append(gid)
+                conflicted_paths.extend(p.path for p in photos)
+        if not conflicted_group_ids:
+            return
+        for gid in conflicted_group_ids:
+            self._catalog.ignore_duplicate_group(gid)
+        cache = DedupCache()
+        cache.open()
+        try:
+            cache.remove_compared(conflicted_paths)
+        finally:
+            cache.close()
+        logger.info(
+            "Migration doublons : %d groupe(s) à dates EXIF conflictuelles dissous "
+            "(%d photo(s) remise(s) en file pour recomparaison complète).",
+            len(conflicted_group_ids), len(conflicted_paths),
+        )
 
 
 class _PersonsRefreshThread(QThread):
@@ -624,7 +748,6 @@ class MainWindow(QMainWindow):
         super().__init__()
         self._config = config
         self._catalog = catalog
-        self._migrate_dissolve_date_conflicted_duplicate_groups()
         self._thumb_cache = thumb_cache
         self._scanner = scanner
         self._face_db = face_db
@@ -653,6 +776,14 @@ class MainWindow(QMainWindow):
         self._face_index_pending: bool = False
         self._photo_query_thread: _PhotoQueryThread | None = None
         self._persons_refresh_thread: _PersonsRefreshThread | None = None
+        self._dup_migration_thread: _DupMigrationThread | None = None
+        self._delete_thread: _DeleteWorkerThread | None = None
+        self._scan_had_removals: bool = False
+        # False tant que la liste des personnes de la sidebar n'a jamais été
+        # peuplée : le premier _on_scan_finished doit toujours déclencher un
+        # refresh, même si le scan n'a rien changé — c'est lui qui assure le
+        # remplissage initial (aucun autre chemin ne le fait au démarrage).
+        self._persons_loaded: bool = False
         self._from_person_cluster_view: bool = False
         self._viewer_back_target: str = "grid"  # "grid" | "person_cluster_view" | "duplicate_grid"
         # Filtre global de session (pas persisté) pour le calque d'annotations
@@ -686,9 +817,12 @@ class MainWindow(QMainWindow):
         _sw = self._config.get("ui.sidebar_width", 280)
         QTimer.singleShot(0, lambda: self._splitter.setSizes([_sw, max(1, self._splitter.width() - _sw)]))
         QTimer.singleShot(0, self._restore_splitter_states)
-        QTimer.singleShot(
-            0, lambda: self._sidebar.update_duplicates_badge(self._catalog.count_duplicate_groups())
-        )
+        # Migration des groupes de doublons + comptage pour le badge, en thread
+        # (au premier lancement après upgrade elle charge tous les groupes —
+        # exécutée en synchrone ici, elle retardait le premier affichage).
+        self._dup_migration_thread = _DupMigrationThread(self._catalog, self)
+        self._dup_migration_thread.done.connect(self._sidebar.update_duplicates_badge)
+        self._dup_migration_thread.start()
         QTimer.singleShot(0, self._start_update_check)
 
     # ------------------------------------------------------------------ setup
@@ -872,14 +1006,6 @@ class MainWindow(QMainWindow):
         lay.addWidget(spacer)
 
         # --- Boutons contextuels (masqués par défaut) ---
-        self._btn_undo = QPushButton("↩ Annuler")
-        self._btn_undo.setToolTip("Annuler la dernière action sur les visages")
-        self._btn_undo.setEnabled(False)
-        self._btn_undo.clicked.connect(self._on_undo_clicked)
-        self._btn_undo.setVisible(False)
-        lay.addWidget(self._btn_undo)
-        self._act_undo = self._btn_undo          # alias de compatibilité
-
         self._btn_faces_toggle = QPushButton("Visages")
         self._btn_faces_toggle.setCheckable(True)
         self._btn_faces_toggle.setToolTip("Afficher / masquer les visages de la photo")
@@ -1092,7 +1218,6 @@ class MainWindow(QMainWindow):
         self._face_panel.person_cluster_requested.connect(
             self._on_face_panel_person_cluster_requested
         )
-        self._face_panel.undo_stack_changed.connect(self._on_face_undo_stack_changed)
         self._face_panel.add_face_mode_requested.connect(self._on_add_face_mode_requested)
         self._viewer.face_context_menu_requested.connect(self._on_face_context_menu)
         self._viewer.face_bbox_ready.connect(self._face_panel.on_face_bbox_ready)
@@ -1436,6 +1561,10 @@ class MainWindow(QMainWindow):
         self._update_status()
 
     def _start_scan(self, folders: list[str], force: bool = False) -> None:
+        # Trace si ce scan a retiré des photos (fichiers disparus du disque) :
+        # _on_scan_finished s'en sert pour ne rafraîchir albums/personnes que
+        # si quelque chose a réellement changé.
+        self._scan_had_removals = False
         thread = self._scanner.scan(folders, force=force)
         thread.photos_batch.connect(self._on_photos_batch)
         thread.photos_removed.connect(self._on_photos_removed)
@@ -1470,36 +1599,45 @@ class MainWindow(QMainWindow):
     def _on_photos_removed(self, paths: list[str]) -> None:
         """Retire de l'UI les photos dont le fichier a disparu du disque."""
         removed_set = set(paths)
+        self._scan_had_removals = True
         self._current_photos = [p for p in self._current_photos
                                  if p.path not in removed_set]
         self._current_paths -= removed_set
         self._grid.remove_photos(paths)
         self._update_status()
-        for path in paths:
-            self._face_db.delete_for_path(path)
+        self._face_db.delete_for_paths(paths)
         logger.info("%d photo(s) retirée(s) du catalogue (fichiers absents)", len(paths))
 
     @Slot(int)
     def _on_scan_finished(self, total: int) -> None:
         self._lbl_action.setText("")
         self._update_status()
-        albums = self._catalog.get_albums()
-        self._sidebar.refresh_albums(albums)
-        # Rebuild complet uniquement si le scan a trouvé de nouvelles photos (donc
-        # potentiellement de nouveaux visages/personnes) : sinon (rescan déclenché par
-        # le watcher après une suppression, ou par un simple attribut de fichier changé),
-        # une mise à jour légère évite de vider/recharger toute la liste des personnes
-        # avec ses vignettes — visible et inutile puisque rien n'a changé côté visages.
+        # Ne rafraîchir albums et personnes que si le scan a réellement changé
+        # quelque chose (nouvelles photos, ou fichiers disparus du disque) : un
+        # rescan sans changement — cas fréquent d'un événement watcher sur un
+        # simple attribut de fichier — ne doit rien coûter.
+        if total or self._scan_had_removals:
+            self._sidebar.refresh_albums(self._catalog.get_albums())
+        # Rebuild complet uniquement si le scan a trouvé de nouvelles photos
+        # (donc potentiellement de nouveaux visages/personnes) ; mise à jour
+        # légère des compteurs sur simple suppression — évite de vider et
+        # recharger toute la liste des personnes avec ses vignettes. Le tout
+        # premier passage refresh toujours (remplissage initial de la liste,
+        # cf. _persons_loaded) : update_persons_data bascule alors d'elle-même
+        # sur un rebuild complet puisque la liste est encore vide.
         if total:
             self._refresh_persons()
-        else:
+        elif self._scan_had_removals or not self._persons_loaded:
             self._update_persons_counts()
+        self._persons_loaded = True
 
         # Le scan ajoute les nouvelles photos dans l'ordre filesystem (non trié).
         # On re-trie la liste courante selon le réglage "Ordre d'affichage".
         # Applicable à "Toutes les photos" et aux vues dossier (les vues spéciales
         # comme Favoris, Vidéos ou Person ne reçoivent pas de photos via _on_photos_batch).
-        if self._current_photos and not self._current_context.startswith(_PERSON_CTX_PREFIX):
+        # Inutile si le scan n'a rien ajouté : l'ordre courant est déjà bon.
+        if total and self._current_photos \
+                and not self._current_context.startswith(_PERSON_CTX_PREFIX):
             self._current_photos = self._sort_photos_for_display(
                 self._current_photos, self._current_context
             )
@@ -2230,18 +2368,6 @@ class MainWindow(QMainWindow):
             self._viewer.cancel_face_add_mode()
 
     @Slot(bool)
-    def _on_face_undo_stack_changed(self, can_undo: bool) -> None:
-        self._btn_undo.setEnabled(can_undo)
-        if can_undo and self._face_panel._undo_stack:
-            desc = self._face_panel._undo_stack[-1][0]
-            self._btn_undo.setToolTip(f"Annuler : {desc}")
-        else:
-            self._btn_undo.setToolTip("Annuler la dernière action sur les visages")
-
-    @Slot()
-    def _on_undo_clicked(self) -> None:
-        self._face_panel.undo()
-
     def _on_face_panel_person_cluster_requested(self, person_id: int) -> None:
         """Double-clic sur un visage nommé dans le panneau → vue clusters de la personne."""
         person = self._catalog.get_person(person_id)
@@ -2355,14 +2481,18 @@ class MainWindow(QMainWindow):
     def _start_photo_query(self, fn, context_key: str, album_id: int | None = None) -> None:
         """Lance une requête photo en arrière-plan et met à jour la grille à l'arrivée."""
         self._cancel_grid_display_ops()
-        self._photo_query_thread = _PhotoQueryThread(fn, context_key, self)
+        # Paramètres de tri résolus ici (thread UI : lectures de Config),
+        # tri exécuté dans le thread avec la requête.
+        key_fn, reverse = self._sort_params_for_context(context_key)
+        self._photo_query_thread = _PhotoQueryThread(
+            fn, context_key, key_fn, reverse, self
+        )
         self._photo_query_thread.photos_ready.connect(
             lambda photos, ctx, aid=album_id: self._on_photo_query_ready(photos, ctx, aid)
         )
         self._photo_query_thread.start()
 
     def _on_photo_query_ready(self, photos: list, context_key: str, album_id: int | None = None) -> None:
-        photos = self._sort_photos_for_display(photos, context_key)
         self._current_photos   = photos
         self._current_paths    = {p.path for p in photos}
         self._current_context  = context_key
@@ -2371,9 +2501,11 @@ class MainWindow(QMainWindow):
         self._grid.set_photos(photos)
         self._update_status()
 
-    def _sort_photos_for_display(self, photos: list, context: str) -> list:
-        """Applique le réglage "Ordre d'affichage" (menu Affichage) à une liste
-        de photos avant affichage dans la grille. La vue "Toutes les photos"
+    def _sort_params_for_context(self, context: str) -> tuple:
+        """Résout les paramètres de tri (key_fn, reverse) du réglage "Ordre
+        d'affichage" pour un contexte donné. Doit être appelé sur le thread UI
+        (lectures de Config) ; le tri lui-même peut ensuite s'exécuter dans un
+        thread secondaire (_PhotoQueryThread). La vue "Toutes les photos"
         (Chronologie) reste toujours triée chronologiquement — un tri
         alphabétique n'a pas de sens pour un album qui s'appelle
         "Chronologie" — mais sa direction suit un réglage dédié
@@ -2389,7 +2521,14 @@ class MainWindow(QMainWindow):
             mode = self._config.get("display_order.grid_mode", "chrono")
             direction = self._config.get("display_order.grid_dir", "desc")
         key_fn = _photo_sort_key if mode == "chrono" else _photo_filename_sort_key
-        return sorted(photos, key=key_fn, reverse=(direction == "desc"))
+        return key_fn, direction == "desc"
+
+    def _sort_photos_for_display(self, photos: list, context: str) -> list:
+        """Applique le réglage "Ordre d'affichage" à une liste de photos, sur
+        le thread courant (voir _sort_params_for_context pour la version
+        déportée dans _PhotoQueryThread)."""
+        key_fn, reverse = self._sort_params_for_context(context)
+        return sorted(photos, key=key_fn, reverse=reverse)
 
     def _open_display_order_dialog(self) -> None:
         dlg = DisplayOrderDialog(self._config, self)
@@ -2502,6 +2641,14 @@ class MainWindow(QMainWindow):
     @Slot(list, str)
     def _on_photos_dropped(self, file_paths: list, dest_folder: str) -> None:
         """Déplace les fichiers glissés vers dest_folder et met à jour toutes les références."""
+        # Déclarer les déplacements au watcher AVANT de toucher au disque :
+        # toutes les références (catalogue, vignettes, visages, grille) sont
+        # mises à jour ici même, le rescan que déclencherait sinon le watcher
+        # serait purement redondant.
+        self._folder_watcher.notify_self_deletions(file_paths)
+        self._folder_watcher.notify_self_additions(
+            [os.path.join(dest_folder, os.path.basename(p)) for p in file_paths]
+        )
         moved_old: list[str] = []
         errors:    list[str] = []
         for src in file_paths:
@@ -2583,53 +2730,6 @@ class MainWindow(QMainWindow):
 
     # ------------------------------------------------------------------ doublons
 
-    def _migrate_dissolve_date_conflicted_duplicate_groups(self) -> None:
-        """Migration ponctuelle : dissout les groupes de doublons existants qui
-        contiennent au moins deux membres dont la date EXIF est connue et
-        différente (cf. duplicate_detector.py::_dates_differ). Un tel groupe ne
-        peut plus être *créé* aujourd'hui, mais l'incrémentalité de la
-        détection (compared_tier1/compared_tier2, dedup_cache.py) ne recompare
-        et ne dissout jamais spontanément un groupe déjà formé avant l'ajout de
-        cette règle — cf. dedup_exif_date_exclusion_2026-07 en mémoire.
-
-        En plus de dissoudre le groupe en base (duplicate_group_id=NULL, comme
-        Catalog.ignore_duplicate_group), retire aussi ses membres de
-        compared_tier1/tier2 pour qu'ils soient recomparés intégralement au
-        prochain passage plutôt que de rester des « paires ancien×ancien »
-        jamais réévaluées — sans ça, la dissolution ne durerait pas : le
-        prochain seed_groups() les retrouverait simplement fusionnés à
-        l'identique puisque plus rien ne les aurait jamais reconfrontés.
-
-        Naturellement idempotente : une fois ces groupes dissous, la règle de
-        date empêche définitivement leur recréation, donc ce balayage ne
-        trouve plus rien aux démarrages suivants — pas de flag « déjà
-        exécuté » nécessaire, contrairement à une migration one-shot classique."""
-        if self._catalog.count_duplicate_groups() == 0:
-            return
-        groups = self._catalog.get_duplicate_groups()
-        conflicted_group_ids: list[int] = []
-        conflicted_paths: list[str] = []
-        for gid, photos in groups.items():
-            known_dates = {p.date_taken for p in photos if p.date_taken is not None}
-            if len(known_dates) > 1:
-                conflicted_group_ids.append(gid)
-                conflicted_paths.extend(p.path for p in photos)
-        if not conflicted_group_ids:
-            return
-        for gid in conflicted_group_ids:
-            self._catalog.ignore_duplicate_group(gid)
-        cache = DedupCache()
-        cache.open()
-        try:
-            cache.remove_compared(conflicted_paths)
-        finally:
-            cache.close()
-        logger.info(
-            "Migration doublons : %d groupe(s) à dates EXIF conflictuelles dissous "
-            "(%d photo(s) remise(s) en file pour recomparaison complète).",
-            len(conflicted_group_ids), len(conflicted_paths),
-        )
-
     @Slot()
     def _on_persons_thumbnails_ready_start_duplicates(self) -> None:
         try:
@@ -2638,6 +2738,13 @@ class MainWindow(QMainWindow):
             )
         except (RuntimeError, TypeError):
             pass
+        # La migration des groupes à dates conflictuelles (_DupMigrationThread)
+        # doit être terminée avant d'amorcer seed_groups : en pratique elle
+        # finit bien avant le chargement des vignettes de personnes, la garde
+        # couvre le premier lancement après upgrade (migration longue).
+        if self._dup_migration_thread is not None and self._dup_migration_thread.isRunning():
+            self._dup_migration_thread.finished.connect(self._start_duplicate_detection)
+            return
         self._start_duplicate_detection()
 
     def _start_duplicate_detection(self) -> None:
@@ -3120,18 +3227,27 @@ class MainWindow(QMainWindow):
         if reply != QMessageBox.Yes:
             return
 
-        deleted: list[str] = []
-        errors: list[str] = []
-        for path in corrupted_paths:
-            try:
-                Path(path).unlink(missing_ok=True)
-                self._catalog.delete_photo(path)
-                self._thumb_cache.invalidate(path)
-                self._face_db.delete_for_path(path)
-                deleted.append(path)
-            except Exception as e:
-                errors.append(f"{os.path.basename(path)} : {e}")
+        # Même pipeline que _on_delete_requested : worker partagé (garde de
+        # réentrance commune), suppression absorbée par le watcher, épilogue UI
+        # dans _on_corrupted_delete_finished.
+        if self._delete_thread is not None and self._delete_thread.isRunning():
+            self.statusBar().showMessage("Une suppression est déjà en cours…", 3000)
+            return
+        self._folder_watcher.notify_self_deletions(list(corrupted_paths))
+        worker = _DeleteWorkerThread(
+            list(corrupted_paths), self._catalog, self._thumb_cache,
+            self._face_db, self,
+        )
+        self._delete_thread = worker
+        worker.progress.connect(
+            lambda done, total: self._lbl_action.setText(f"Suppression… {done}/{total}")
+        )
+        worker.finished_delete.connect(self._on_corrupted_delete_finished)
+        worker.start()
 
+    def _on_corrupted_delete_finished(self, deleted: list, errors: list) -> None:
+        """Épilogue UI de la suppression des fichiers corrompus (worker)."""
+        self._lbl_action.setText("")
         if deleted:
             deleted_set = set(deleted)
             self._grid.remove_photos(deleted)
@@ -3355,11 +3471,9 @@ class MainWindow(QMainWindow):
         if dlg.exec() != QDialog.Accepted or lst.currentRow() < 0:
             return
         album = albums[lst.currentRow()]
-        added = 0
-        for photo in photos:
-            if photo.id is not None:
-                self._catalog.add_photo_to_album(album.id, photo.id)
-                added += 1
+        added = self._catalog.add_photos_to_album(
+            album.id, [p.id for p in photos if p.id is not None]
+        )
         self._sidebar.refresh_albums(self._catalog.get_albums())
         self.statusBar().showMessage(
             f"{added} photo(s) ajoutée(s) à « {album.name} »", 4000
@@ -3374,11 +3488,9 @@ class MainWindow(QMainWindow):
         if not ok or not name.strip():
             return
         album = self._catalog.create_album(name.strip())
-        added = 0
-        for photo in photos:
-            if photo.id is not None:
-                self._catalog.add_photo_to_album(album.id, photo.id)
-                added += 1
+        added = self._catalog.add_photos_to_album(
+            album.id, [p.id for p in photos if p.id is not None]
+        )
         self._sidebar.refresh_albums(self._catalog.get_albums())
         self.statusBar().showMessage(
             f"Album « {name.strip()} » créé avec {added} photo(s)", 4000
@@ -3404,7 +3516,6 @@ class MainWindow(QMainWindow):
         self._zoom_slider.hide()
         self._zoom_pct_label.hide()
         self._btn_grid_status.show()
-        self._act_undo.setVisible(False)
         self._act_faces_toggle.setVisible(False)
         self._act_exif_toggle.setVisible(False)
         self._btn_annotations_toggle.setVisible(False)
@@ -3567,7 +3678,6 @@ class MainWindow(QMainWindow):
         self._zoom_slider.show()
         self._zoom_pct_label.show()
         self._btn_grid_status.hide()
-        self._act_undo.setVisible(True)
         self._act_faces_toggle.setVisible(True)
         self._act_exif_toggle.setVisible(True)
         self._btn_annotations_toggle.setVisible(True)
@@ -3786,6 +3896,12 @@ class MainWindow(QMainWindow):
             if chk.isChecked():
                 self._config.set("ui.delete_no_confirm", True)
 
+        # Un seul worker de suppression à la fois : deux workers entrelacés
+        # rendraient l'épilogue (grille, groupes de doublons) incohérent.
+        if self._delete_thread is not None and self._delete_thread.isRunning():
+            self.statusBar().showMessage("Une suppression est déjà en cours…", 3000)
+            return
+
         # Mémoriser l'état du viewer avant la suppression
         in_viewer = self._stack.currentIndex() == 1
         viewed_index = self._current_photo_index
@@ -3801,16 +3917,38 @@ class MainWindow(QMainWindow):
         # fait passer un groupe sous 2 exemplaires, ce n'est plus un doublon.
         affected_groups = {p.duplicate_group_id for p in photos if p.duplicate_group_id is not None}
 
-        deleted: list[str] = []
-        errors: list[str] = []
-        for photo in photos:
-            try:
-                Path(photo.path).unlink(missing_ok=True)
-                self._catalog.delete_photo(photo.path)
-                self._thumb_cache.invalidate(photo.path)
-                deleted.append(photo.path)
-            except Exception as e:
-                errors.append(f"{photo.filename}: {e}")
+        # Déclarer les suppressions au watcher AVANT de toucher au disque : le
+        # rescan qu'il déclencherait sinon (debounce 400 ms) referait en pur
+        # gaspillage tout ce que l'épilogue ci-dessous met déjà à jour.
+        self._folder_watcher.notify_self_deletions([p.path for p in photos])
+
+        # Unlink + purge catalogue/vignettes/visages dans un thread : la boucle
+        # synchrone gelait l'UI plusieurs secondes sur une multi-sélection.
+        worker = _DeleteWorkerThread(
+            [p.path for p in photos], self._catalog, self._thumb_cache,
+            self._face_db, self,
+        )
+        self._delete_thread = worker
+        worker.progress.connect(
+            lambda done, total: self._lbl_action.setText(f"Suppression… {done}/{total}")
+        )
+        worker.finished_delete.connect(
+            lambda deleted, errors: self._on_delete_finished(
+                deleted, errors, in_viewer, viewed_index,
+                first_deleted_idx, affected_groups,
+            )
+        )
+        worker.start()
+
+    def _on_delete_finished(self, deleted: list, errors: list, in_viewer: bool,
+                            viewed_index: int, first_deleted_idx,
+                            affected_groups: set) -> None:
+        """Épilogue UI d'une suppression exécutée par _DeleteWorkerThread :
+        mise à jour grille/albums/groupes de doublons et navigation voisin.
+        Reste sur le thread UI — il touche _duplicate_ignored_paths et l'état
+        des widgets."""
+        self._lbl_action.setText("")
+        deleted_paths_set = set(deleted)
         if deleted:
             self._grid.remove_photos(deleted)
             deleted_set = set(deleted)
@@ -3818,11 +3956,9 @@ class MainWindow(QMainWindow):
                                     if p.path not in deleted_set]
             self._current_paths -= deleted_set
             self._update_status()
-            # Rafraîchir immédiatement les compteurs d'albums plutôt que d'attendre
-            # le rescan déclenché par le watcher suite à la suppression des fichiers.
+            # Rafraîchir immédiatement les compteurs d'albums : le watcher
+            # n'émettra plus pour cette suppression (notify_self_deletions).
             self._sidebar.refresh_albums(self._catalog.get_albums())
-            for path in deleted:
-                self._face_db.delete_for_path(path)
 
             # Dissoudre les groupes de doublons devenus des singletons (ou vides)
             # suite à cette suppression : sinon la carte reste affichée dans
@@ -3886,8 +4022,9 @@ class MainWindow(QMainWindow):
             return
 
         album_id = self._current_album_id
-        for photo in photos:
-            self._catalog.remove_photo_from_album(album_id, photo.id)
+        self._catalog.remove_photos_from_album(
+            album_id, [p.id for p in photos if p.id is not None]
+        )
 
         in_viewer = self._stack.currentIndex() == 1
         viewed_index = self._current_photo_index
@@ -4409,6 +4546,19 @@ class MainWindow(QMainWindow):
             self._photo_query_thread.wait(1000)
         if self._persons_refresh_thread and self._persons_refresh_thread.isRunning():
             self._persons_refresh_thread.wait(1000)
+        if self._dup_migration_thread and self._dup_migration_thread.isRunning():
+            self._dup_migration_thread.wait(2000)
+        if self._delete_thread and self._delete_thread.isRunning():
+            # Laisser la purge DB en lot se terminer : l'interrompre laisserait
+            # des fichiers supprimés du disque mais encore présents au catalogue.
+            self._delete_thread.wait(5000)
+        # Fermer les connexions SQLite du thread UI (checkpoint du WAL) ;
+        # celles des threads morts sont fermées par le GC.
+        try:
+            self._catalog.close()
+            self._face_db.close()
+        except Exception:
+            pass
         super().closeEvent(event)
 
     def keyPressEvent(self, event) -> None:

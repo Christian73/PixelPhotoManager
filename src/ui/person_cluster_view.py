@@ -763,8 +763,7 @@ class PersonClusterView(QWidget):
         elif chosen == act_cover:
             self._set_cover_face(face_id)
         elif chosen in (act_add_album, act_new_album):
-            photos = [self._catalog.get_photo_by_path(p) for p in selected_paths]
-            photos = [p for p in photos if p is not None]
+            photos = self._catalog.get_photos_by_paths(list(selected_paths))
             if photos:
                 if chosen == act_add_album:
                     self.add_to_album_requested.emit(photos)

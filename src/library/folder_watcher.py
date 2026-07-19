@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 import logging
 import os
+import time
 
 from PySide6.QtCore import QFileSystemWatcher, QObject, QThread, QTimer, Signal
 
@@ -81,6 +82,14 @@ class FolderWatcher(QObject):
         self._debounce.timeout.connect(self._flush_pending)
         self._scan_thread: "_TreeScanThread | None" = None
         self._scan_generation = 0
+        # Changements auto-infligés à absorber : dir -> (noms de fichiers,
+        # deadline time.monotonic). Quand l'application supprime/déplace
+        # elle-même des fichiers (touche Del, drag & drop), l'événement watcher
+        # qui suit ne fait que constater ce que l'UI a déjà traité — sans cette
+        # absorption, chaque suppression déclenchait un rescan complet du
+        # dossier suivi d'un refresh albums/personnes redondant.
+        self._self_deleted: dict[str, tuple[set[str], float]] = {}
+        self._self_added: dict[str, tuple[set[str], float]] = {}
 
     # ------------------------------------------------------------------ public
 
@@ -106,6 +115,49 @@ class FolderWatcher(QObject):
         thread.finished.connect(thread.deleteLater)
         self._scan_thread = thread
         thread.start()
+
+    def notify_self_deletions(self, paths: list[str], ttl_s: float = 10.0) -> None:
+        """Déclare des fichiers que l'application va supprimer elle-même : les
+        événements du watcher qui ne font que constater ces disparitions seront
+        absorbés (pas de files_changed → pas de rescan redondant). Un
+        changement EXTERNE dans le même dossier (autre fichier ajouté ou
+        supprimé) émet toujours. Le TTL borne le cas où la suppression échoue
+        finalement (le nom resterait sinon absorbé indéfiniment)."""
+        self._notify_self(self._self_deleted, paths, ttl_s)
+
+    def notify_self_additions(self, paths: list[str], ttl_s: float = 10.0) -> None:
+        """Pendant du précédent pour des fichiers que l'application va créer
+        elle-même (destination d'un déplacement par drag & drop)."""
+        self._notify_self(self._self_added, paths, ttl_s)
+
+    @staticmethod
+    def _notify_self(table: dict, paths: list[str], ttl_s: float) -> None:
+        deadline = time.monotonic() + ttl_s
+        for path in paths:
+            directory = os.path.dirname(os.path.normpath(path))
+            names, _ = table.get(directory, (set(), 0.0))
+            names.add(os.path.basename(path))
+            table[directory] = (names, deadline)
+
+    @staticmethod
+    def _consume_suppressed(table: dict, directory: str, names: frozenset) -> frozenset:
+        """Retourne l'intersection de names avec les noms déclarés pour ce
+        dossier (si la deadline n'est pas dépassée) et retire les noms
+        consommés de la table."""
+        entry = table.get(directory)
+        if entry is None:
+            return frozenset()
+        declared, deadline = entry
+        if time.monotonic() > deadline:
+            del table[directory]
+            return frozenset()
+        consumed = names & declared
+        declared -= consumed
+        if declared:
+            table[directory] = (declared, deadline)
+        else:
+            del table[directory]
+        return frozenset(consumed)
 
     def _apply_scan(self, generation: int, results: list) -> None:
         if generation != self._scan_generation:
@@ -177,9 +229,20 @@ class FolderWatcher(QObject):
 
         self._snapshots[path] = (new_files, new_dirs)
 
-        if new_files != old_files:
+        # Absorber les changements que l'application a elle-même provoqués
+        # (cf. notify_self_deletions/notify_self_additions) : tout autre
+        # changement dans le même événement émet normalement.
+        disappeared = old_files - new_files
+        appeared    = new_files - old_files
+        sup_del = self._consume_suppressed(self._self_deleted, path, disappeared)
+        sup_add = self._consume_suppressed(self._self_added, path, appeared)
+        if (disappeared - sup_del) or (appeared - sup_add):
             logger.debug("FolderWatcher : fichiers modifiés dans %s", path)
             self.files_changed.emit(path)
+        elif disappeared or appeared:
+            logger.debug(
+                "FolderWatcher : changement auto-infligé absorbé dans %s", path
+            )
 
         for name in (new_dirs - old_dirs):
             subdir = os.path.join(path, name)

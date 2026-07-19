@@ -107,6 +107,8 @@ _TAB_NAVIGATION = _STYLE + """
 <ul>
   <li>Albums personnels — créés via le bouton <b>+</b> dans l'en-tête Albums.</li>
   <li>Cliquez sur un album pour en afficher le contenu dans la grille.</li>
+  <li>Dans un album personnel, <kbd>Suppr</kbd> ou clic droit › <b>Retirer de l'album</b>
+      retire la photo de l'album <b>sans toucher</b> au fichier ni au catalogue.</li>
 </ul>
 
 <h3>Barre latérale — Filtrage</h3>
@@ -171,7 +173,8 @@ _TAB_NAVIGATION = _STYLE + """
   <tr><td><b>Déplacer vers…</b></td><td>Déplace le fichier dans un autre dossier surveillé</td></tr>
   <tr><td><b>Enregistrer l'image traitée sur le disque</b></td><td>Exporte une copie avec toutes les retouches appliquées</td></tr>
   <tr><td><b>Révéler dans l'Explorateur</b></td><td>Ouvre le dossier contenant la photo dans l'Explorateur</td></tr>
-  <tr><td><b>Effacer le fichier…</b></td><td>Supprime le fichier du disque (<b>irréversible</b>, confirmation demandée)</td></tr>
+  <tr><td><b>Retirer de l'album</b></td><td><i>(vue album uniquement)</i> Retire la ou les photos de l'album affiché — le fichier et la photo restent intacts</td></tr>
+  <tr><td><b>Effacer le(s) fichier(s)…</b></td><td>Supprime le ou les fichiers du disque (<b>irréversible</b>, confirmation demandée)</td></tr>
 </table>
 <p class="tip"><b>Astuce :</b> Pour déplacer une ou plusieurs photos, vous pouvez aussi les
 glisser-déposer directement vers un dossier dans la barre latérale.</p>
@@ -182,6 +185,11 @@ glisser-déposer directement vers un dossier dans la barre latérale.</p>
   <li>En mode chronologie sans sélection : <kbd>Suppr</kbd> efface la photo centrale.</li>
   <li>Dans la visionneuse : bouton 🗑 dans la barre d'outils.</li>
   <li>La suppression est <b>définitive</b> (pas de corbeille). Une confirmation est demandée.</li>
+  <li>La suppression s'exécute en arrière-plan : l'interface reste utilisable et la barre
+      de statut affiche la progression (« Suppression… n/total ») sur les grosses sélections.</li>
+  <li><b>Dans un album</b> : <kbd>Suppr</kbd> (grille ou visionneuse) <b>retire</b> la photo
+      de l'album au lieu de supprimer le fichier — le fichier et la photo restent intacts
+      dans leur dossier. Pour supprimer réellement le fichier, passez par la vue de son dossier.</li>
 </ul>
 
 <h3>Déplacer des photos</h3>
@@ -523,7 +531,7 @@ candidat à une suggestion pour d'autres personnes.</p>
   <li><b>Automatiquement</b> lors de la détection : taille inférieure au seuil proportionnel
       ou score de confiance &lt; 0,65. Le visage est stocké mais exclu du clustering.</li>
   <li><b>Manuellement</b> via le bouton ✕ dans le panneau Visages (faux positif, doublure,
-      arrière-plan). Cette action est annulable.</li>
+      arrière-plan). Le visage reste récupérable via <b>Visages ignorés…</b> (ci-dessous).</li>
 </ul>
 <p>Le bouton <b>Visages ignorés…</b> en bas du panneau Visages permet de voir et restaurer
 les visages ignorés photo par photo.</p>
@@ -546,7 +554,7 @@ _TAB_SHORTCUTS = _STYLE + """
 <h3>Grille de photos</h3>
 <table>
   <tr><th>Raccourci</th><th>Action</th></tr>
-  <tr><td><kbd>Suppr</kbd></td><td>Supprimer les photos sélectionnées (avec confirmation)</td></tr>
+  <tr><td><kbd>Suppr</kbd></td><td>Supprimer les photos sélectionnées (avec confirmation) — dans un album : retirer de l'album, sans toucher aux fichiers</td></tr>
   <tr><td><kbd>Ctrl</kbd>+<kbd>A</kbd></td><td>Tout sélectionner</td></tr>
   <tr><td>Double-clic</td><td>Ouvrir dans la visionneuse</td></tr>
 </table>

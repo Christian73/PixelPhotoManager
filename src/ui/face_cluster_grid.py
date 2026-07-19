@@ -576,11 +576,8 @@ class _MergePickerDialog(QDialog):
         self._btn_ok.setEnabled(True)
 
     def _start_loader(self) -> None:
-        items = []
-        for cid in self._rows:
-            rep = self._face_db.get_representative_face(cluster_id=cid)
-            if rep:
-                items.append((cid, rep))
+        reps = self._face_db.get_all_representative_faces(list(self._rows))
+        items = [(cid, rep) for cid, rep in reps.items() if rep]
         if items:
             self._loader = _AvatarLoader(items, 40, self)
             self._loader.avatar_ready.connect(self._on_avatar_ready)

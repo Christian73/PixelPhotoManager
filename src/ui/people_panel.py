@@ -671,10 +671,13 @@ class PeopleDialog(QDialog):
 
         person_ids = [p.id for p in persons if p.id is not None]
         person_cluster_embs = self._face_db.get_all_person_cluster_centroids(person_ids)
+        reps = self._face_db.get_all_representative_faces(
+            [cid for cid, _ in clusters]
+        )
 
         avatar_items: list[tuple[int, FaceInfo]] = []
         for cluster_id, face_count in clusters:
-            rep = self._face_db.get_representative_face(cluster_id=cluster_id)
+            rep = reps.get(cluster_id)
 
             # Suggestion : meilleur score contre chaque centroïde de groupe connu
             suggestion: tuple[str, int, float] | None = None

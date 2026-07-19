@@ -423,6 +423,10 @@ class ThumbnailGrid(QScrollArea):
         self._cache       = cache
         self._thumb_size  = 180
         self._photos: list[PhotoInfo] = []
+        # Index chemin → PhotoInfo, maintenu en parallèle de _photos : évite les
+        # parcours O(n) de toute la liste à chaque changement de sélection
+        # (get_selected/select_photo sont sur le chemin chaud clic/clavier).
+        self._by_path: dict[str, PhotoInfo] = {}
         self._selected: set[str] = set()
         self._materialized: dict[int, ThumbnailCell] = {}
         # Album affiché (via set_album_context()), sinon None : pilote l'action
@@ -510,6 +514,7 @@ class ThumbnailGrid(QScrollArea):
         self._cancel_pending_workers()
         self._dematerialize_all()
         self._photos = list(photos)
+        self._by_path = {p.path: p for p in self._photos}
         if self._ribbon_mode:
             self._buffer_active = False
             self._ribbon_offset = 0
@@ -530,6 +535,7 @@ class ThumbnailGrid(QScrollArea):
 
     def add_photo(self, photo: PhotoInfo) -> None:
         self._photos.append(photo)
+        self._by_path[photo.path] = photo
         if self._ribbon_mode:
             QTimer.singleShot(0, self._update_ribbon_cells)
         else:
@@ -540,6 +546,7 @@ class ThumbnailGrid(QScrollArea):
         if not photos:
             return
         self._photos.extend(photos)
+        self._by_path.update((p.path, p) for p in photos)
         if self._ribbon_mode:
             QTimer.singleShot(0, self._update_ribbon_cells)
         else:
@@ -550,6 +557,8 @@ class ThumbnailGrid(QScrollArea):
         paths_set = set(paths)
         self._dematerialize_all()
         self._photos = [p for p in self._photos if p.path not in paths_set]
+        for path in paths_set:
+            self._by_path.pop(path, None)
         self._selected -= paths_set
         if self._ribbon_mode:
             self._clamp_ribbon_offset()
@@ -583,17 +592,18 @@ class ThumbnailGrid(QScrollArea):
         self._dematerialize_all()
         self._buffer_active = False
         self._photos.clear()
+        self._by_path.clear()
         if not self._ribbon_mode:
             self._container.set_total(0)
 
     def update_photo_path(self, old_path: str, new_path: str) -> None:
         new_p = Path(new_path)
-        for photo in self._photos:
-            if photo.path == old_path:
-                photo.path     = new_path
-                photo.filename = new_p.name
-                photo.directory = str(new_p.parent)
-                break
+        photo = self._by_path.pop(old_path, None)
+        if photo is not None:
+            photo.path     = new_path
+            photo.filename = new_p.name
+            photo.directory = str(new_p.parent)
+            self._by_path[new_path] = photo
         if old_path in self._selected:
             self._selected.discard(old_path)
             self._selected.add(new_path)
@@ -601,7 +611,10 @@ class ThumbnailGrid(QScrollArea):
     # ══════════════════════════════════════════════════════════════════ sélection
 
     def get_selected(self) -> list[PhotoInfo]:
-        return [p for p in self._photos if p.path in self._selected]
+        # O(sélection) et non O(bibliothèque) — appelé à chaque clic/flèche.
+        # L'ordre n'est pas celui de la grille (ordre du set) : les
+        # consommateurs actuels traitent le résultat comme un ensemble.
+        return [self._by_path[p] for p in self._selected if p in self._by_path]
 
     def select_all(self) -> None:
         self._selected = {p.path for p in self._photos}
@@ -611,7 +624,7 @@ class ThumbnailGrid(QScrollArea):
 
     def select_photo(self, path: str) -> None:
         """Sélectionne une seule photo par chemin et émet selection_changed."""
-        if not any(p.path == path for p in self._photos):
+        if path not in self._by_path:
             return
         self._clear_selection()
         self._selected.add(path)

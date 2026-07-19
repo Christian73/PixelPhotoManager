@@ -118,6 +118,8 @@ class FaceDatabase:
     def __init__(self, db_path: str | Path = _DB_PATH) -> None:
         self._db_path = str(db_path)
         self._lock = threading.Lock()
+        # Connexion SQLite par (instance, thread) — cf. _conn().
+        self._tls = threading.local()
         Path(self._db_path).parent.mkdir(parents=True, exist_ok=True)
         self._init_db()
         # Cache du centroïde de chaque personne (utilisé pour les suggestions de
@@ -129,7 +131,30 @@ class FaceDatabase:
         self._person_centroid_cache_fp = None
 
     def _conn(self) -> sqlite3.Connection:
-        return sqlite3.connect(self._db_path, check_same_thread=False)
+        """Connexion SQLite du thread courant, créée une seule fois par thread
+        (pattern ThumbnailCache/Catalog). Gagne au passage WAL + synchronous
+        NORMAL + timeout, totalement absents avant : en mode rollback-journal
+        par défaut, chaque écriture de l'indexeur de visages bloquait les
+        lectures de l'UI (et réciproquement).
+
+        Les méthodes d'écriture ne ferment plus la connexion : en cas
+        d'exception, leur garde `except BaseException: conn.rollback()`
+        remplace le rollback implicite qu'assurait l'ancienne fermeture."""
+        conn = getattr(self._tls, "conn", None)
+        if conn is None:
+            conn = sqlite3.connect(self._db_path, timeout=5, check_same_thread=False)
+            conn.execute("PRAGMA journal_mode=WAL")
+            conn.execute("PRAGMA synchronous=NORMAL")
+            conn.execute("PRAGMA cache_size=-2048")
+            self._tls.conn = conn
+        return conn
+
+    def close(self) -> None:
+        """Ferme la connexion du thread courant (tests, arrêt de l'application)."""
+        conn = getattr(self._tls, "conn", None)
+        if conn is not None:
+            conn.close()
+            self._tls.conn = None
 
     def _init_db(self) -> None:
         with self._lock:
@@ -181,6 +206,13 @@ class FaceDatabase:
                     conn.execute(
                         "ALTER TABLE faces ADD COLUMN det_score REAL DEFAULT 1.0"
                     )
+                # Après la migration (la colonne n'existe pas dans _CREATE_FACES) :
+                # sert get_suggested_clusters_for_person et get_persons_pending_count,
+                # qui scannaient sinon toute la table faces (~60k lignes).
+                conn.execute(
+                    "CREATE INDEX IF NOT EXISTS idx_faces_suggestion"
+                    " ON faces(suggestion_person_id)"
+                )
                 # Migration indexed_photos
                 ip_cols = {r[1] for r in conn.execute("PRAGMA table_info(indexed_photos)")}
                 if "rotation" not in ip_cols:
@@ -222,8 +254,9 @@ class FaceDatabase:
                 if stale_paths:
                     self._consume_matching_picasa_annotations(conn, stale_paths)
                 conn.commit()
-            finally:
-                conn.close()
+            except BaseException:
+                conn.rollback()   # cf. _conn() : jamais de transaction ouverte
+                raise
 
     # ------------------------------------------------------------------ indexing
 
@@ -245,8 +278,9 @@ class FaceDatabase:
                 error_rows = conn.execute(
                     "SELECT photo_path FROM face_index_errors"
                 ).fetchall()
-            finally:
-                conn.close()
+            except BaseException:
+                conn.rollback()   # cf. _conn() : jamais de transaction ouverte
+                raise
         indexed = {r[0] for r in rows} | {r[0] for r in error_rows}
         return [
             p for p in all_paths
@@ -277,8 +311,9 @@ class FaceDatabase:
                         (photo_path, error_type, time.time()),
                     )
                 conn.commit()
-            finally:
-                conn.close()
+            except BaseException:
+                conn.rollback()   # cf. _conn() : jamais de transaction ouverte
+                raise
 
     def clear_index_error(self, photo_path: str) -> None:
         photo_path = os.path.normpath(photo_path)
@@ -289,8 +324,9 @@ class FaceDatabase:
                     "DELETE FROM face_index_errors WHERE photo_path=?", (photo_path,)
                 )
                 conn.commit()
-            finally:
-                conn.close()
+            except BaseException:
+                conn.rollback()   # cf. _conn() : jamais de transaction ouverte
+                raise
 
     def get_index_error(self, photo_path: str) -> Optional[dict]:
         photo_path = os.path.normpath(photo_path)
@@ -302,8 +338,9 @@ class FaceDatabase:
                     " FROM face_index_errors WHERE photo_path=?",
                     (photo_path,),
                 ).fetchone()
-            finally:
-                conn.close()
+            except BaseException:
+                conn.rollback()   # cf. _conn() : jamais de transaction ouverte
+                raise
         if not row:
             return None
         return {"error_type": row[0], "last_attempt": row[1], "excluded": bool(row[2])}
@@ -323,8 +360,9 @@ class FaceDatabase:
                     rows = conn.execute(
                         "SELECT photo_path FROM face_index_errors WHERE excluded=0"
                     ).fetchall()
-            finally:
-                conn.close()
+            except BaseException:
+                conn.rollback()   # cf. _conn() : jamais de transaction ouverte
+                raise
         return [r[0] for r in rows]
 
     def set_index_excluded(self, photo_path: str, excluded: bool = True) -> None:
@@ -348,8 +386,9 @@ class FaceDatabase:
                         (photo_path, "excluded", time.time()),
                     )
                 conn.commit()
-            finally:
-                conn.close()
+            except BaseException:
+                conn.rollback()   # cf. _conn() : jamais de transaction ouverte
+                raise
 
     def get_indexed_rotation(self, photo_path: str) -> int:
         """Rotation (degrés CW) utilisée lors de la dernière indexation réussie
@@ -362,8 +401,9 @@ class FaceDatabase:
                     "SELECT rotation FROM indexed_photos WHERE photo_path=?",
                     (photo_path,),
                 ).fetchone()
-            finally:
-                conn.close()
+            except BaseException:
+                conn.rollback()   # cf. _conn() : jamais de transaction ouverte
+                raise
         return row[0] if row and row[0] is not None else 0
 
     # Seuils d'auto-ignorance pour les faces de mauvaise qualité.
@@ -545,8 +585,9 @@ class FaceDatabase:
                         (photo_path, bx, by, bw, bh, pid),
                     )
                 conn.commit()
-            finally:
-                conn.close()
+            except BaseException:
+                conn.rollback()   # cf. _conn() : jamais de transaction ouverte
+                raise
 
     # ------------------------------------------------------------------ clustering
 
@@ -560,8 +601,9 @@ class FaceDatabase:
                     " WHERE embedding IS NOT NULL"
                     "   AND (pinned IS NULL OR pinned = 0)"
                 ).fetchone()[0]
-            finally:
-                conn.close()
+            except BaseException:
+                conn.rollback()   # cf. _conn() : jamais de transaction ouverte
+                raise
 
     def count_identified_faces(self) -> int:
         """Nombre de faces avec embedding ET person_id assigné (non épinglées)."""
@@ -574,8 +616,9 @@ class FaceDatabase:
                     "   AND (pinned IS NULL OR pinned = 0)"
                     "   AND person_id IS NOT NULL"
                 ).fetchone()[0]
-            finally:
-                conn.close()
+            except BaseException:
+                conn.rollback()   # cf. _conn() : jamais de transaction ouverte
+                raise
 
     def get_all_embeddings(
         self,
@@ -600,8 +643,9 @@ class FaceDatabase:
                     "   AND (ignored IS NULL OR ignored = 0)"
                     f"   AND (pinned IS NULL OR pinned = 0){extra}"
                 ).fetchall()
-            finally:
-                conn.close()
+            except BaseException:
+                conn.rollback()   # cf. _conn() : jamais de transaction ouverte
+                raise
         if not rows:
             return np.empty((0, 0), dtype=np.float32), []
         face_ids = [r[0] for r in rows]
@@ -681,8 +725,9 @@ class FaceDatabase:
                 # Après propagation, dédupliquer sur toutes les photos concernées.
                 self._dedup_in_transaction(conn)
                 conn.commit()
-            finally:
-                conn.close()
+            except BaseException:
+                conn.rollback()   # cf. _conn() : jamais de transaction ouverte
+                raise
 
     # ------------------------------------------------------------------ queries
 
@@ -696,8 +741,9 @@ class FaceDatabase:
                     " WHERE cluster_id IS NOT NULL"
                     " GROUP BY cluster_id ORDER BY COUNT(*) DESC"
                 ).fetchall()
-            finally:
-                conn.close()
+            except BaseException:
+                conn.rollback()   # cf. _conn() : jamais de transaction ouverte
+                raise
         return [(r[0], r[1]) for r in rows]
 
     def get_unnamed_clusters(self) -> list[tuple[int, int]]:
@@ -715,8 +761,9 @@ class FaceDatabase:
                     "   AND (pinned IS NULL OR pinned = 0)"
                     " GROUP BY cluster_id ORDER BY COUNT(*) DESC"
                 ).fetchall()
-            finally:
-                conn.close()
+            except BaseException:
+                conn.rollback()   # cf. _conn() : jamais de transaction ouverte
+                raise
         return [(r[0], r[1]) for r in rows]
 
     def ignore_cluster(self, cluster_id: int) -> None:
@@ -728,8 +775,9 @@ class FaceDatabase:
                     "UPDATE faces SET ignored=1 WHERE cluster_id=?", (cluster_id,)
                 )
                 conn.commit()
-            finally:
-                conn.close()
+            except BaseException:
+                conn.rollback()   # cf. _conn() : jamais de transaction ouverte
+                raise
 
     def unignore_cluster(self, cluster_id: int) -> None:
         """Re-expose a previously ignored cluster."""
@@ -740,8 +788,9 @@ class FaceDatabase:
                     "UPDATE faces SET ignored=0 WHERE cluster_id=?", (cluster_id,)
                 )
                 conn.commit()
-            finally:
-                conn.close()
+            except BaseException:
+                conn.rollback()   # cf. _conn() : jamais de transaction ouverte
+                raise
 
     # ------------------------------------------------------------------ pending suggestions
 
@@ -764,8 +813,9 @@ class FaceDatabase:
                         (person_id, score, cluster_id),
                     )
                 conn.commit()
-            finally:
-                conn.close()
+            except BaseException:
+                conn.rollback()   # cf. _conn() : jamais de transaction ouverte
+                raise
 
     def clear_cluster_suggestion(self, cluster_id: int) -> None:
         """Clear suggestion (reject). The cluster returns to the unnamed list."""
@@ -778,8 +828,9 @@ class FaceDatabase:
                     (cluster_id,),
                 )
                 conn.commit()
-            finally:
-                conn.close()
+            except BaseException:
+                conn.rollback()   # cf. _conn() : jamais de transaction ouverte
+                raise
 
     def resuggest_clusters(
         self, cluster_ids: "list[int]", exclude_person_id: "int | None" = None
@@ -812,8 +863,9 @@ class FaceDatabase:
                     embs = [_dec(r[0]) for r in rows]
                     if embs:
                         cid_to_embs[cid] = embs
-            finally:
-                conn.close()
+            except BaseException:
+                conn.rollback()   # cf. _conn() : jamais de transaction ouverte
+                raise
 
         if not cid_to_embs:
             return
@@ -835,8 +887,9 @@ class FaceDatabase:
                         "SELECT person_id, embedding FROM faces"
                         " WHERE person_id IS NOT NULL AND embedding IS NOT NULL"
                     ).fetchall()
-            finally:
-                conn.close()
+            except BaseException:
+                conn.rollback()   # cf. _conn() : jamais de transaction ouverte
+                raise
 
         for pid, blob in pers_rows:
             by_person.setdefault(pid, []).append(_dec(blob))
@@ -884,8 +937,9 @@ class FaceDatabase:
                 self._dedup_in_transaction(conn, paths)
                 self._consume_matching_picasa_annotations(conn, paths)
                 conn.commit()
-            finally:
-                conn.close()
+            except BaseException:
+                conn.rollback()   # cf. _conn() : jamais de transaction ouverte
+                raise
 
     def get_suggested_clusters_for_person(
         self, person_id: int
@@ -905,8 +959,9 @@ class FaceDatabase:
                     " ORDER BY MAX(suggestion_score) DESC",
                     (person_id,),
                 ).fetchall()
-            finally:
-                conn.close()
+            except BaseException:
+                conn.rollback()   # cf. _conn() : jamais de transaction ouverte
+                raise
         return [(r[0], r[1], r[2] or 0.0) for r in rows]
 
     def get_persons_pending_count(self) -> "dict[int, int]":
@@ -920,8 +975,9 @@ class FaceDatabase:
                     " WHERE suggestion_person_id IS NOT NULL AND person_id IS NULL"
                     " GROUP BY suggestion_person_id"
                 ).fetchall()
-            finally:
-                conn.close()
+            except BaseException:
+                conn.rollback()   # cf. _conn() : jamais de transaction ouverte
+                raise
         return {r[0]: r[1] for r in rows}
 
     def get_representative_face(
@@ -957,8 +1013,9 @@ class FaceDatabase:
                         " ORDER BY (bbox_w * bbox_h) DESC LIMIT 1",
                         (person_id,),
                     ).fetchone()
-            finally:
-                conn.close()
+            except BaseException:
+                conn.rollback()   # cf. _conn() : jamais de transaction ouverte
+                raise
         if row:
             return FaceInfo(
                 id=row[0], photo_path=row[1],
@@ -985,8 +1042,9 @@ class FaceDatabase:
                     "UPDATE faces SET is_cover=1 WHERE id=?", (face_id,)
                 )
                 conn.commit()
-            finally:
-                conn.close()
+            except BaseException:
+                conn.rollback()   # cf. _conn() : jamais de transaction ouverte
+                raise
 
     def get_face_by_id(self, face_id: int) -> Optional[FaceInfo]:
         """Returns FaceInfo for a single face_id, or None if not found."""
@@ -1003,8 +1061,9 @@ class FaceDatabase:
                     " WHERE f.id=?",
                     (face_id,),
                 ).fetchone()
-            finally:
-                conn.close()
+            except BaseException:
+                conn.rollback()   # cf. _conn() : jamais de transaction ouverte
+                raise
         if row:
             return FaceInfo(
                 id=row[0], photo_path=row[1],
@@ -1039,8 +1098,9 @@ class FaceDatabase:
                         " WHERE person_id=? AND embedding IS NOT NULL",
                         (person_id,),
                     ).fetchall()
-            finally:
-                conn.close()
+            except BaseException:
+                conn.rollback()   # cf. _conn() : jamais de transaction ouverte
+                raise
         if not rows:
             return None
         embeddings = [_dec(r[0]) for r in rows]
@@ -1068,8 +1128,9 @@ class FaceDatabase:
                     ).fetchall()
                     for cid, blob in rows:
                         by_cluster.setdefault(cid, []).append(_dec(blob))
-            finally:
-                conn.close()
+            except BaseException:
+                conn.rollback()   # cf. _conn() : jamais de transaction ouverte
+                raise
         return {cid: _centroid(embs) for cid, embs in by_cluster.items()}
 
     def get_all_person_centroids(
@@ -1084,6 +1145,12 @@ class FaceDatabase:
         rendait la popup d'identification de visage très lente à s'ouvrir."""
         if not person_ids:
             return {}
+        # Le verrou n'est tenu que pendant les lectures SQL : le décodage des
+        # ~60k embeddings (plusieurs secondes lors d'une reconstruction du
+        # cache) se fait hors verrou pour ne pas bloquer les autres threads
+        # (ex. requêtes visages du thread UI). Si deux threads reconstruisent
+        # en même temps, le résultat est identique — le dernier écrit gagne.
+        rows = None
         with self._lock:
             conn = self._conn()
             try:
@@ -1098,24 +1165,26 @@ class FaceDatabase:
                         "SELECT person_id, embedding FROM faces"
                         " WHERE person_id IS NOT NULL AND embedding IS NOT NULL"
                     ).fetchall()
-                    sums: dict[int, "np.ndarray"] = {}
-                    counts: dict[int, int] = {}
-                    import numpy as np
-                    for pid, blob in rows:
-                        vec = np.frombuffer(blob, dtype=np.float32)
-                        if pid in sums:
-                            sums[pid] += vec
-                            counts[pid] += 1
-                        else:
-                            sums[pid] = vec.copy()
-                            counts[pid] = 1
-                    cache = {
-                        pid: (sums[pid] / counts[pid]).tolist() for pid in sums
-                    }
-                    self._person_centroid_cache = cache
-                    self._person_centroid_cache_fp = fp
-            finally:
-                conn.close()
+            except BaseException:
+                conn.rollback()   # cf. _conn() : jamais de transaction ouverte
+                raise
+        if rows is not None:
+            sums: dict[int, "np.ndarray"] = {}
+            counts: dict[int, int] = {}
+            import numpy as np
+            for pid, blob in rows:
+                vec = np.frombuffer(blob, dtype=np.float32)
+                if pid in sums:
+                    sums[pid] += vec
+                    counts[pid] += 1
+                else:
+                    sums[pid] = vec.copy()
+                    counts[pid] = 1
+            cache = {
+                pid: (sums[pid] / counts[pid]).tolist() for pid in sums
+            }
+            self._person_centroid_cache = cache
+            self._person_centroid_cache_fp = fp
         wanted = set(person_ids)
         return {pid: emb for pid, emb in cache.items() if pid in wanted}
 
@@ -1133,23 +1202,26 @@ class FaceDatabase:
         if not person_ids:
             return {}
         _CHUNK = 500
-        by_pc: dict[tuple, list] = {}
+        all_rows: list = []
         with self._lock:
             conn = self._conn()
             try:
                 for i in range(0, len(person_ids), _CHUNK):
                     chunk = person_ids[i:i + _CHUNK]
                     ph = ",".join("?" * len(chunk))
-                    rows = conn.execute(
+                    all_rows.extend(conn.execute(
                         f"SELECT person_id, cluster_id, embedding FROM faces"
                         f" WHERE person_id IN ({ph})"
                         f"   AND embedding IS NOT NULL AND cluster_id IS NOT NULL",
                         chunk,
-                    ).fetchall()
-                    for pid, cid, blob in rows:
-                        by_pc.setdefault((pid, cid), []).append(_dec(blob))
-            finally:
-                conn.close()
+                    ).fetchall())
+            except BaseException:
+                conn.rollback()   # cf. _conn() : jamais de transaction ouverte
+                raise
+        # Décodage des embeddings hors verrou (cf. get_all_person_centroids).
+        by_pc: dict[tuple, list] = {}
+        for pid, cid, blob in all_rows:
+            by_pc.setdefault((pid, cid), []).append(_dec(blob))
         result: dict[int, dict[int, list[float]]] = {}
         for (pid, cid), embs in by_pc.items():
             result.setdefault(pid, {})[cid] = _centroid(embs)
@@ -1165,8 +1237,9 @@ class FaceDatabase:
                     " WHERE cluster_id=? AND person_id IS NOT NULL LIMIT 1",
                     (cluster_id,),
                 ).fetchone()
-            finally:
-                conn.close()
+            except BaseException:
+                conn.rollback()   # cf. _conn() : jamais de transaction ouverte
+                raise
         return row[0] if row else None
 
     def get_cluster_persons(self, cluster_ids: list[int]) -> dict[int, int]:
@@ -1190,8 +1263,9 @@ class FaceDatabase:
                         chunk,
                     ).fetchall()
                     result.update({r[0]: r[1] for r in rows})
-            finally:
-                conn.close()
+            except BaseException:
+                conn.rollback()   # cf. _conn() : jamais de transaction ouverte
+                raise
         return result
 
     def get_all_representative_faces(
@@ -1221,8 +1295,9 @@ class FaceDatabase:
                         f" ORDER BY f.cluster_id, f.is_cover DESC, area DESC",
                         chunk,
                     ).fetchall())
-            finally:
-                conn.close()
+            except BaseException:
+                conn.rollback()   # cf. _conn() : jamais de transaction ouverte
+                raise
         result: dict[int, FaceInfo] = {}
         for row in all_rows:
             cid = row[6]
@@ -1250,8 +1325,9 @@ class FaceDatabase:
                     " WHERE f.photo_path=?",
                     (photo_path,),
                 ).fetchall()
-            finally:
-                conn.close()
+            except BaseException:
+                conn.rollback()   # cf. _conn() : jamais de transaction ouverte
+                raise
         return [
             FaceInfo(
                 id=r[0], photo_path=r[1],
@@ -1274,8 +1350,9 @@ class FaceDatabase:
                     " WHERE cluster_id=? AND ignored=0",
                     (cluster_id,),
                 ).fetchall()
-            finally:
-                conn.close()
+            except BaseException:
+                conn.rollback()   # cf. _conn() : jamais de transaction ouverte
+                raise
         return [r[0] for r in rows]
 
     def get_clusters_for_person(self, person_id: int) -> list[tuple[int, int]]:
@@ -1293,8 +1370,9 @@ class FaceDatabase:
                     " ORDER BY COUNT(DISTINCT photo_path) DESC",
                     (person_id,),
                 ).fetchall()
-            finally:
-                conn.close()
+            except BaseException:
+                conn.rollback()   # cf. _conn() : jamais de transaction ouverte
+                raise
         return [(r[0], r[1]) for r in rows]
 
     def unassign_person_from_cluster(self, person_id: int, cluster_id: int) -> None:
@@ -1315,8 +1393,9 @@ class FaceDatabase:
                 for photo_path in paths:
                     self._release_picasa_annotation(conn, photo_path, person_id)
                 conn.commit()
-            finally:
-                conn.close()
+            except BaseException:
+                conn.rollback()   # cf. _conn() : jamais de transaction ouverte
+                raise
 
     def get_photos_for_person(self, person_id: int) -> list[str]:
         """Returns distinct photo paths for a named person."""
@@ -1327,8 +1406,9 @@ class FaceDatabase:
                     "SELECT DISTINCT photo_path FROM faces WHERE person_id=?",
                     (person_id,),
                 ).fetchall()
-            finally:
-                conn.close()
+            except BaseException:
+                conn.rollback()   # cf. _conn() : jamais de transaction ouverte
+                raise
         return [r[0] for r in rows]
 
     def get_faces_for_person(self, person_id: int) -> list["FaceInfo"]:
@@ -1347,8 +1427,9 @@ class FaceDatabase:
                     " ORDER BY f.photo_path, f.bbox_x",
                     (person_id,),
                 ).fetchall()
-            finally:
-                conn.close()
+            except BaseException:
+                conn.rollback()   # cf. _conn() : jamais de transaction ouverte
+                raise
         return [
             FaceInfo(
                 id=r[0], photo_path=r[1],
@@ -1377,8 +1458,9 @@ class FaceDatabase:
                     " ORDER BY f.photo_path, f.bbox_x",
                     (cluster_id,),
                 ).fetchall()
-            finally:
-                conn.close()
+            except BaseException:
+                conn.rollback()   # cf. _conn() : jamais de transaction ouverte
+                raise
         return [
             FaceInfo(
                 id=r[0], photo_path=r[1],
@@ -1456,8 +1538,9 @@ class FaceDatabase:
                     self._dedup_in_transaction(conn, [row[0]])
                     self._consume_matching_picasa_annotations(conn, [row[0]])
                 conn.commit()
-            finally:
-                conn.close()
+            except BaseException:
+                conn.rollback()   # cf. _conn() : jamais de transaction ouverte
+                raise
 
     def assign_person_to_faces(self, face_ids: list[int], person_id: int) -> None:
         """Assign a named person to multiple faces in a single transaction."""
@@ -1477,8 +1560,9 @@ class FaceDatabase:
                 self._dedup_in_transaction(conn, paths)
                 self._consume_matching_picasa_annotations(conn, paths)
                 conn.commit()
-            finally:
-                conn.close()
+            except BaseException:
+                conn.rollback()   # cf. _conn() : jamais de transaction ouverte
+                raise
 
     def unassign_face(self, face_id: int) -> None:
         """Remove person and cluster from a single face (returns it to unknowns).
@@ -1497,8 +1581,9 @@ class FaceDatabase:
                 if row and row[1] is not None:
                     self._release_picasa_annotation(conn, row[0], row[1])
                 conn.commit()
-            finally:
-                conn.close()
+            except BaseException:
+                conn.rollback()   # cf. _conn() : jamais de transaction ouverte
+                raise
 
     def isolate_face(self, face_id: int) -> None:
         """Sépare une face de son groupe et la protège du re-clustering.
@@ -1522,8 +1607,9 @@ class FaceDatabase:
                 if face_row and face_row[1] is not None:
                     self._release_picasa_annotation(conn, face_row[0], face_row[1])
                 conn.commit()
-            finally:
-                conn.close()
+            except BaseException:
+                conn.rollback()   # cf. _conn() : jamais de transaction ouverte
+                raise
 
     def isolate_and_assign_face(self, face_id: int, person_id: int) -> None:
         """Sépare un visage de son groupe et l'assigne à une personne en une transaction.
@@ -1548,8 +1634,9 @@ class FaceDatabase:
                     self._dedup_in_transaction(conn, [path_row[0]])
                     self._consume_matching_picasa_annotations(conn, [path_row[0]])
                 conn.commit()
-            finally:
-                conn.close()
+            except BaseException:
+                conn.rollback()   # cf. _conn() : jamais de transaction ouverte
+                raise
 
     def add_manual_face(self, photo_path: str, bbox: tuple, person_id: int) -> int:
         """Insère un visage positionné manuellement (bboxe dessinée par l'utilisateur,
@@ -1584,8 +1671,9 @@ class FaceDatabase:
                 self._dedup_in_transaction(conn, [photo_path])
                 conn.commit()
                 return face_id
-            finally:
-                conn.close()
+            except BaseException:
+                conn.rollback()   # cf. _conn() : jamais de transaction ouverte
+                raise
 
     def delete_face(self, face_id: int) -> None:
         """Supprime définitivement un visage (hard delete).
@@ -1600,8 +1688,9 @@ class FaceDatabase:
             try:
                 conn.execute("DELETE FROM faces WHERE id=?", (face_id,))
                 conn.commit()
-            finally:
-                conn.close()
+            except BaseException:
+                conn.rollback()   # cf. _conn() : jamais de transaction ouverte
+                raise
 
     def recalculate_size_ignored(
         self, progress_cb=None
@@ -1625,8 +1714,9 @@ class FaceDatabase:
                     "   AND (det_score IS NULL OR det_score >= ?)",
                     (self._AUTO_IGNORE_MIN_SCORE,),
                 ).fetchall()
-            finally:
-                conn.close()
+            except BaseException:
+                conn.rollback()   # cf. _conn() : jamais de transaction ouverte
+                raise
 
         photos = [r[0] for r in rows]
         total = len(photos)
@@ -1683,11 +1773,10 @@ class FaceDatabase:
                             unignored += 1
                     conn.commit()
                 except Exception as exc:
+                    conn.rollback()   # cf. _conn() : jamais de transaction ouverte
                     logger.warning(
                         "recalculate_size_ignored: erreur %s : %s", photo_path, exc
                     )
-                finally:
-                    conn.close()
 
         if progress_cb:
             progress_cb(total, total)
@@ -1717,8 +1806,9 @@ class FaceDatabase:
                     "   AND ignored = 0"
                     "   AND embedding IS NOT NULL"
                 ).fetchall()
-            finally:
-                conn.close()
+            except BaseException:
+                conn.rollback()   # cf. _conn() : jamais de transaction ouverte
+                raise
 
         if not rows:
             return 0, 0
@@ -1737,8 +1827,9 @@ class FaceDatabase:
                     "SELECT person_id, embedding FROM faces"
                     " WHERE person_id IS NOT NULL AND embedding IS NOT NULL"
                 ).fetchall()
-            finally:
-                conn.close()
+            except BaseException:
+                conn.rollback()   # cf. _conn() : jamais de transaction ouverte
+                raise
 
         by_person: "dict[int, list]" = {}
         for pid, blob in pers_rows:
@@ -1775,8 +1866,9 @@ class FaceDatabase:
                     "UPDATE faces SET ignored=1 WHERE id=?", (face_id,)
                 )
                 conn.commit()
-            finally:
-                conn.close()
+            except BaseException:
+                conn.rollback()   # cf. _conn() : jamais de transaction ouverte
+                raise
 
     def unignore_face(self, face_id: int) -> None:
         """Restore a previously ignored face."""
@@ -1785,8 +1877,9 @@ class FaceDatabase:
             try:
                 conn.execute("UPDATE faces SET ignored=0 WHERE id=?", (face_id,))
                 conn.commit()
-            finally:
-                conn.close()
+            except BaseException:
+                conn.rollback()   # cf. _conn() : jamais de transaction ouverte
+                raise
 
     def unassign_person_from_face(self, face_id: int) -> None:
         """Clear person_id from a single face without touching cluster or pinned."""
@@ -1800,8 +1893,9 @@ class FaceDatabase:
                 if row and row[1] is not None:
                     self._release_picasa_annotation(conn, row[0], row[1])
                 conn.commit()
-            finally:
-                conn.close()
+            except BaseException:
+                conn.rollback()   # cf. _conn() : jamais de transaction ouverte
+                raise
 
     def isolate_and_suggest(
         self, face_ids: list[int], exclude_person_id: "int | None" = None
@@ -1842,8 +1936,9 @@ class FaceDatabase:
                     if emb_row and emb_row[0]:
                         face_embs[cid] = _dec(emb_row[0])
                 conn.commit()
-            finally:
-                conn.close()
+            except BaseException:
+                conn.rollback()   # cf. _conn() : jamais de transaction ouverte
+                raise
 
         if not face_embs:
             return
@@ -1865,8 +1960,9 @@ class FaceDatabase:
                         "SELECT person_id, embedding FROM faces"
                         " WHERE person_id IS NOT NULL AND embedding IS NOT NULL"
                     ).fetchall()
-            finally:
-                conn.close()
+            except BaseException:
+                conn.rollback()   # cf. _conn() : jamais de transaction ouverte
+                raise
 
         for pid, blob in rows:
             by_person.setdefault(pid, []).append(_dec(blob))
@@ -1905,8 +2001,9 @@ class FaceDatabase:
                     " WHERE f.photo_path=? AND f.ignored=1",
                     (photo_path,),
                 ).fetchall()
-            finally:
-                conn.close()
+            except BaseException:
+                conn.rollback()   # cf. _conn() : jamais de transaction ouverte
+                raise
         from src.core.models import FaceInfo
         return [
             FaceInfo(
@@ -1929,8 +2026,9 @@ class FaceDatabase:
                     (target_cluster_id, source_cluster_id),
                 )
                 conn.commit()
-            finally:
-                conn.close()
+            except BaseException:
+                conn.rollback()   # cf. _conn() : jamais de transaction ouverte
+                raise
 
     def assign_person_to_cluster(self, cluster_id: int, person_id: int) -> None:
         with self._lock:
@@ -1946,8 +2044,9 @@ class FaceDatabase:
                 self._dedup_in_transaction(conn, paths)
                 self._consume_matching_picasa_annotations(conn, paths)
                 conn.commit()
-            finally:
-                conn.close()
+            except BaseException:
+                conn.rollback()   # cf. _conn() : jamais de transaction ouverte
+                raise
 
     def unassign_person(self, person_id: int) -> None:
         """Remove person assignment from all faces (before deleting a person)."""
@@ -1963,8 +2062,9 @@ class FaceDatabase:
                 for photo_path in paths:
                     self._release_picasa_annotation(conn, photo_path, person_id)
                 conn.commit()
-            finally:
-                conn.close()
+            except BaseException:
+                conn.rollback()   # cf. _conn() : jamais de transaction ouverte
+                raise
 
     def merge_persons(self, keep_id: int, remove_id: int) -> None:
         """
@@ -2000,8 +2100,9 @@ class FaceDatabase:
                 # visages non-ignorés pour la même personne sur cette photo.
                 self._dedup_in_transaction(conn, affected_paths)
                 conn.commit()
-            finally:
-                conn.close()
+            except BaseException:
+                conn.rollback()   # cf. _conn() : jamais de transaction ouverte
+                raise
 
     def get_person_photo_count(self, person_id: int) -> int:
         """Count distinct photos where person_id has a face. Fast single query."""
@@ -2013,8 +2114,9 @@ class FaceDatabase:
                     " WHERE person_id=? AND cluster_id IS NOT NULL",
                     (person_id,),
                 ).fetchone()
-            finally:
-                conn.close()
+            except BaseException:
+                conn.rollback()   # cf. _conn() : jamais de transaction ouverte
+                raise
         return row[0] if row else 0
 
     # ------------------------------------------------------------------ enrichment
@@ -2039,8 +2141,9 @@ class FaceDatabase:
                     " WHERE person_id IS NOT NULL AND cluster_id IS NOT NULL"
                     " GROUP BY person_id"
                 ).fetchall()
-            finally:
-                conn.close()
+            except BaseException:
+                conn.rollback()   # cf. _conn() : jamais de transaction ouverte
+                raise
         counts = {r[0]: r[1] for r in count_rows}
         for p in persons:
             if p.id in counts:
@@ -2082,8 +2185,9 @@ class FaceDatabase:
                     "        detected_rotation"
                     " FROM ranked WHERE rn = 1"
                 ).fetchall()
-            finally:
-                conn.close()
+            except BaseException:
+                conn.rollback()   # cf. _conn() : jamais de transaction ouverte
+                raise
         pending_counts = self.get_persons_pending_count()
         counts = {r[0]: r[1] for r in count_rows}
         reps = {r[0]: r[1:] for r in rep_rows}
@@ -2202,8 +2306,9 @@ class FaceDatabase:
                     )
 
                 conn.commit()
-            finally:
-                conn.close()
+            except BaseException:
+                conn.rollback()   # cf. _conn() : jamais de transaction ouverte
+                raise
 
     def _release_picasa_annotation(self, conn, photo_path: str, person_id: "int | None") -> None:
         """Quand une identification est retirée d'un visage, remet consumed=0 sur
@@ -2347,8 +2452,9 @@ class FaceDatabase:
                     "   AND person_id IS NULL"
                 )
                 conn.commit()
-            finally:
-                conn.close()
+            except BaseException:
+                conn.rollback()   # cf. _conn() : jamais de transaction ouverte
+                raise
 
     def cleanup_overlapping_placeholders(self) -> int:
         """Supprime les faces placeholder (embedding IS NULL, non épinglées) qui chevauchent
@@ -2418,8 +2524,9 @@ class FaceDatabase:
                                 break
                 if deleted or conflicts:
                     conn.commit()
-            finally:
-                conn.close()
+            except BaseException:
+                conn.rollback()   # cf. _conn() : jamais de transaction ouverte
+                raise
         if deleted:
             logger.info(
                 "cleanup_overlapping_placeholders: %d placeholder(s) supprimé(s)", deleted
@@ -2468,8 +2575,9 @@ class FaceDatabase:
                 ).rowcount
                 if n:
                     conn.commit()
-            finally:
-                conn.close()
+            except BaseException:
+                conn.rollback()   # cf. _conn() : jamais de transaction ouverte
+                raise
         if n:
             logger.info(
                 "restore_orphaned_ignored_faces: %d visage(s) réactivé(s) (identification orpheline)", n
@@ -2502,8 +2610,9 @@ class FaceDatabase:
                 ).rowcount
                 if n:
                     conn.commit()
-            finally:
-                conn.close()
+            except BaseException:
+                conn.rollback()   # cf. _conn() : jamais de transaction ouverte
+                raise
         if n:
             logger.info(
                 "cleanup_stale_placeholder_faces: %d placeholder(s) orphelin(s) supprimé(s)", n
@@ -2532,8 +2641,9 @@ class FaceDatabase:
                 ).rowcount
                 if n:
                     conn.commit()
-            finally:
-                conn.close()
+            except BaseException:
+                conn.rollback()   # cf. _conn() : jamais de transaction ouverte
+                raise
         if n:
             logger.info(
                 "assign_person_synthetic_clusters: %d face(s) migrées vers cluster synthétique", n
@@ -2566,8 +2676,9 @@ class FaceDatabase:
                 ).rowcount
                 if n_faces or n_ann:
                     conn.commit()
-            finally:
-                conn.close()
+            except BaseException:
+                conn.rollback()   # cf. _conn() : jamais de transaction ouverte
+                raise
         if n_faces or n_ann:
             logger.info(
                 "cleanup_orphan_person_ids: %d face(s) réinitialisées, "
@@ -2589,8 +2700,9 @@ class FaceDatabase:
                 conn.execute("DELETE FROM face_index_errors")
                 conn.execute("UPDATE picasa_annotations SET consumed=0")
                 conn.commit()
-            finally:
-                conn.close()
+            except BaseException:
+                conn.rollback()   # cf. _conn() : jamais de transaction ouverte
+                raise
 
     def delete_for_path(self, photo_path: str) -> None:
         """Remove all face data for a deleted photo."""
@@ -2609,8 +2721,33 @@ class FaceDatabase:
                     "DELETE FROM face_index_errors WHERE photo_path=?", (photo_path,)
                 )
                 conn.commit()
-            finally:
-                conn.close()
+            except BaseException:
+                conn.rollback()   # cf. _conn() : jamais de transaction ouverte
+                raise
+
+    def delete_for_paths(self, photo_paths: list[str]) -> None:
+        """Supprime en une seule transaction les données visages de plusieurs
+        photos (variante lot de delete_for_path)."""
+        if not photo_paths:
+            return
+        params = [(os.path.normpath(p),) for p in photo_paths]
+        with self._lock:
+            conn = self._conn()
+            try:
+                conn.executemany("DELETE FROM faces WHERE photo_path=?", params)
+                conn.executemany(
+                    "DELETE FROM indexed_photos WHERE photo_path=?", params
+                )
+                conn.executemany(
+                    "DELETE FROM picasa_annotations WHERE photo_path=?", params
+                )
+                conn.executemany(
+                    "DELETE FROM face_index_errors WHERE photo_path=?", params
+                )
+                conn.commit()
+            except BaseException:
+                conn.rollback()   # cf. _conn() : jamais de transaction ouverte
+                raise
 
     def update_path(self, old_path: str, new_path: str) -> None:
         """Rename/move a single photo: update photo_path in both tables."""
@@ -2636,8 +2773,9 @@ class FaceDatabase:
                     (new_path, old_path),
                 )
                 conn.commit()
-            finally:
-                conn.close()
+            except BaseException:
+                conn.rollback()   # cf. _conn() : jamais de transaction ouverte
+                raise
 
     def update_paths_prefix(self, old_prefix: str, new_prefix: str) -> None:
         """Rename/move a folder: rewrite every path that starts with old_prefix."""
@@ -2657,8 +2795,9 @@ class FaceDatabase:
                         (new_prefix, n + 1, old_prefix, like_pattern),
                     )
                 conn.commit()
-            finally:
-                conn.close()
+            except BaseException:
+                conn.rollback()   # cf. _conn() : jamais de transaction ouverte
+                raise
 
     def get_stats(self) -> dict:
         with self._lock:
@@ -2678,8 +2817,9 @@ class FaceDatabase:
                     "SELECT COUNT(DISTINCT cluster_id) FROM faces"
                     " WHERE cluster_id IS NOT NULL"
                 ).fetchone()[0]
-            finally:
-                conn.close()
+            except BaseException:
+                conn.rollback()   # cf. _conn() : jamais de transaction ouverte
+                raise
         return {
             "indexed_photos": indexed,
             "total_faces": faces,
@@ -2734,8 +2874,9 @@ class FaceDatabase:
                 picasa_placeholder = scalar(
                     "SELECT COUNT(*) FROM picasa_annotations WHERE consumed=0"
                 )
-            finally:
-                conn.close()
+            except BaseException:
+                conn.rollback()   # cf. _conn() : jamais de transaction ouverte
+                raise
         return {
             "total_faces": total_faces,
             "ignored_faces": ignored_faces,
