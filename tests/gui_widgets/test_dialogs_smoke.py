@@ -321,9 +321,9 @@ class TestPicasaImportDialog:
         dlg = PicasaImportDialog(config, catalog, face_db)
         qtbot.addWidget(dlg)
         dlg._on_import()
-        with qtbot.waitSignal(dlg._thread.finished, timeout=15000):
-            pass
-        qtbot.waitUntil(lambda: dlg._btn_skip.text() == "Fermer", timeout=5000)
+        # pas de waitSignal sur dlg._thread.finished : le thread peut émettre
+        # avant l'abonnement (course classique) — attendre l'état final de l'UI
+        qtbot.waitUntil(lambda: dlg._btn_skip.text() == "Fermer", timeout=15000)
 
         assert config.get("picasa.import_done") is True
         assert "personne(s) créée(s)" in dlg._lbl_status.text()
@@ -412,9 +412,9 @@ class TestExifDateSync:
         assert dlg._btn_start.isEnabled()
 
         dlg._start()
-        with qtbot.waitSignal(dlg._thread.finished, timeout=10000):
-            pass
-        qtbot.waitUntil(lambda: dlg._lbl_result.isVisibleTo(dlg), timeout=5000)
+        # cf. test_full_import_flow : attendre l'état final de l'UI, pas le
+        # signal du thread (course si le thread finit avant l'abonnement)
+        qtbot.waitUntil(lambda: dlg._lbl_result.isVisibleTo(dlg), timeout=15000)
         assert "0 fichier(s) mis à jour" in dlg._lbl_result.text()
 
     def test_open_csv_uses_startfile(self, qtbot, tmp_path, monkeypatch):

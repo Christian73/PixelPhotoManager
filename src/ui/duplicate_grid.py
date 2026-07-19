@@ -381,6 +381,11 @@ class DuplicateGrid(QWidget):
             return
 
         for card in self._cards.values():
+            # hide() AVANT setParent(None) : détacher un widget encore visible
+            # conserve son état « à montrer » — la carte détachée redevient une
+            # fenêtre top-level qui peut s'afficher (petite fenêtre flottante
+            # au-dessus de l'application) avant que deleteLater ne s'exécute.
+            card.hide()
             card.setParent(None)
             card.deleteLater()
         self._cards.clear()
@@ -408,6 +413,7 @@ class DuplicateGrid(QWidget):
         """Retire une carte de groupe sans recharger toute la grille."""
         card = self._cards.pop(group_id, None)
         if card is not None:
+            card.hide()   # cf. _on_groups_ready : jamais setParent(None) sur un widget visible
             card.setParent(None)
             card.deleteLater()
         if self._last_signature is not None:

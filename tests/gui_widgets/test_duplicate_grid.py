@@ -231,3 +231,51 @@ class TestDuplicateGrid:
         grid._current_cols = 2
         grid._reflow()
         assert grid._card_gl.count() == 5
+
+
+class TestNoGhostWindows:
+    def test_rapid_ignores_leave_no_toplevel_cards(self, qtbot, tmp_path):
+        """Régression du bug 2026-07-19 : ✗ sur plusieurs groupes d'affilée
+        faisait apparaître les cartes retirées comme de petites fenêtres
+        flottantes au-dessus de l'application — setParent(None) sur un widget
+        encore visible conserve son état « à montrer » et la carte détachée
+        (top-level) s'affichait avant que deleteLater ne s'exécute. Le
+        correctif : hide() systématique avant le détachement. Nécessite une
+        grille réellement affichée pour se manifester."""
+        from PySide6.QtWidgets import QApplication
+        from src.ui.duplicate_grid import _DuplicateCard
+
+        catalog = Catalog(db_path=tmp_path / "catalog.db")
+        cache = ThumbnailCache(db_path=tmp_path / "thumbs.db")
+        grid = DuplicateGrid(catalog, cache)
+        qtbot.addWidget(grid)
+        grid.group_ignored.connect(grid.remove_group)
+        grid.resize(640, 420)
+        grid.show()
+        qtbot.waitExposed(grid)
+
+        grid._on_groups_ready(_groups(tmp_path, {i: 2 for i in range(1, 6)}))
+        qtbot.wait(150)   # laisse _force_reflow (singleShot) afficher les cartes
+
+        # ✗ sur 4 cartes coup sur coup, sans retour à l'event loop entre deux
+        for gid in (1, 2, 3, 4):
+            grid._cards[gid].findChild(QPushButton).click()
+
+        # processEvents (et non qtbot.wait) : dans l'application réelle le
+        # deleteLater posé pendant le traitement du clic n'est exécuté qu'au
+        # retour à la boucle externe — c'est dans cet intervalle que les cartes
+        # détachées s'affichaient. qtbot.wait entre dans un exec() qui traite
+        # les DeferredDelete immédiatement et masquerait la régression.
+        import time
+        deadline = time.monotonic() + 0.3
+        while time.monotonic() < deadline:
+            QApplication.processEvents()
+
+        ghosts = [
+            w for w in QApplication.topLevelWidgets()
+            if isinstance(w, _DuplicateCard) and w.isVisible()
+        ]
+        assert ghosts == []
+        assert set(grid._cards.keys()) == {5}
+        qtbot.wait(50)   # laisse les DeferredDelete s'exécuter avant la fermeture
+        grid.close()

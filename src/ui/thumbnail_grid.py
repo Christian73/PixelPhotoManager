@@ -845,6 +845,7 @@ class ThumbnailGrid(QScrollArea):
             if idx not in target:
                 cell = self._materialized.pop(idx)
                 cell.cancel_pending_load()
+                cell.hide()   # jamais setParent(None) sur un widget visible (fenêtre fantôme)
                 cell.setParent(None)
 
         # Mettre à jour ou créer les cellules
@@ -914,6 +915,7 @@ class ThumbnailGrid(QScrollArea):
             if i not in needed:
                 cell = self._materialized.pop(i)
                 cell.cancel_pending_load()
+                cell.hide()   # jamais setParent(None) sur un widget visible (fenêtre fantôme)
                 cell.setParent(None)
 
         for i in needed:
@@ -944,6 +946,7 @@ class ThumbnailGrid(QScrollArea):
             if i not in needed:
                 cell = self._materialized.pop(i)
                 cell.cancel_pending_load()
+                cell.hide()   # jamais setParent(None) sur un widget visible (fenêtre fantôme)
                 cell.setParent(None)
 
         for i in needed:
@@ -976,6 +979,7 @@ class ThumbnailGrid(QScrollArea):
     def _dematerialize_all(self) -> None:
         for cell in self._materialized.values():
             cell.cancel_pending_load()
+            cell.hide()   # jamais setParent(None) sur un widget visible (fenêtre fantôme)
             cell.setParent(None)
         self._materialized.clear()
 

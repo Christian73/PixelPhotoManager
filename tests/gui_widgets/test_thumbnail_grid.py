@@ -97,6 +97,45 @@ class TestDuplicateBadgeForwarding:
         assert blocker.args == [photo]
 
 
+class TestNoGhostCellWindows:
+    def test_dematerialize_leaves_no_visible_toplevel_cells(self, qtbot, tmp_path):
+        """Garde préventive — même racine que le bug des cartes de
+        DuplicateGrid (2026-07-19) : setParent(None) sur un widget encore
+        visible en fait une fenêtre top-level affichable. Contrairement aux
+        cartes (référencées jusqu'au deleteLater), les cellules détachées
+        sont détruites par le GC dès _materialized.clear(), donc le fantôme
+        n'est pas reproductible ici sans le correctif — ce test verrouille
+        l'invariant « cellule détachée ⇒ cachée » sans prouver la régression."""
+        from PySide6.QtWidgets import QApplication
+        from src.ui.thumbnail_grid import ThumbnailCell
+
+        grid = _make_grid(qtbot, tmp_path)
+        grid.resize(640, 420)
+        grid.show()
+        qtbot.waitExposed(grid)
+        grid.set_photos([_photo(f"C:/lib/p{i}.jpg") for i in range(12)])
+        qtbot.wait(150)   # matérialisation de la zone visible
+        assert grid._materialized   # précondition : des cellules existent
+
+        grid.set_ribbon_mode(True)  # _dematerialize_all()
+
+        # processEvents et non qtbot.wait : cf. TestNoGhostWindows dans
+        # test_duplicate_grid.py — un exec() traiterait les DeferredDelete
+        # et masquerait la fenêtre fantôme.
+        import time
+        deadline = time.monotonic() + 0.3
+        while time.monotonic() < deadline:
+            QApplication.processEvents()
+
+        ghosts = [
+            w for w in QApplication.topLevelWidgets()
+            if isinstance(w, ThumbnailCell) and w.isVisible()
+        ]
+        assert ghosts == []
+        qtbot.wait(50)
+        grid.close()
+
+
 class TestRemovePhotos:
     def test_remove_photos_updates_list_and_selection(self, qtbot, tmp_path):
         grid = _make_grid(qtbot, tmp_path)
