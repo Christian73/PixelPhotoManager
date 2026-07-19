@@ -1,0 +1,18 @@
+# Configuration coverage.py — partagée entre les tests unitaires/GUI
+# (pytest --cov=src) et les scénarios e2e (PPM_E2E_COVERAGE=1, cf.
+# tools/test_env/launch_isolated.py : l'application est alors lancée via
+# `coverage run` et écrit un fichier .coverage.* par processus, à fusionner
+# avec `coverage combine`).
+
+[run]
+source = src
+# Un fichier de données par processus (suffixe hôte/pid) : indispensable pour
+# que les données du sous-processus e2e ne écrasent pas celles de pytest-cov.
+parallel = true
+
+[report]
+# Cliquet de non-régression : échoue si la couverture repasse sous ce seuil.
+# À RELEVER à chaque campagne de tests (jamais baisser). Historique :
+#   2026-07-19  29 % → 36 % (phases 1+2) → 45,8 % (phases 3+4, seuil 45)
+fail_under = 45
+precision = 0

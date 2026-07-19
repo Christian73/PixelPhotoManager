@@ -77,7 +77,33 @@ def isolated_app(tmp_path, synthetic_library_master):
             edits_db=app_data_dir / "PixelPhotoManager" / "edits.db",
         )
     finally:
+        _graceful_close(locals().get("window"), app)
         launch_isolated.terminate(app, window_pid=locals().get("window_pid"))
+
+
+def _graceful_close(window, app, timeout: float = 20.0) -> None:
+    """Tente une fermeture propre de l'application avant le terminate() de
+    secours. Indispensable quand l'appli tourne sous coverage
+    (PPM_E2E_COVERAGE=1, cf. launch_isolated) : TerminateProcess n'exécute
+    jamais le hook atexit qui écrit les données de couverture. Best-effort :
+    confirme l'éventuel avertissement « analyse en cours » puis attend la fin
+    du processus ; en cas d'échec, terminate() reprend la main."""
+    if window is None:
+        return
+    try:
+        window.close()
+    except Exception:
+        return
+    try:
+        # closeEvent peut demander confirmation (ex. détection de doublons en
+        # cours) — cliquer Oui si le bouton apparaît, sinon continuer.
+        try:
+            find_dialog_button(window, ["Oui", "Yes", "&Oui", "&Yes"], timeout=3.0).click_input()
+        except Exception:
+            pass
+        app.process.wait(timeout=timeout)
+    except Exception:
+        pass
 
 
 def _find_window_pid(launcher_pid: int, timeout: float = 30.0) -> int:

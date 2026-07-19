@@ -28,9 +28,24 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 # Lancer un test précis
 .venv\Scripts\python.exe -m pytest tests/test_thumbnail_cache.py::TestThumbnailCache::test_lru_eviction -v
 
+# Couverture (cliquet fail_under dans .coveragerc — relever, jamais baisser)
+.venv\Scripts\python.exe -m pytest tests/ --cov=src
+
+# Scénarios e2e avec couverture du code UI (l'appli tourne sous coverage,
+# fichiers .coverage.* écrits à la racine — fusionner avec coverage combine)
+$env:PPM_E2E_COVERAGE='1'; .venv\Scripts\python.exe -m pytest tests/e2e -m e2e
+.venv\Scripts\python.exe -m coverage combine; .venv\Scripts\python.exe -m coverage report
+
 # Packaging Windows (exécutable autonome)
 .venv\Scripts\pyinstaller.exe pixelphotomanager.spec
 ```
+
+### Règles de test
+
+- **Tout bugfix s'accompagne de son test de non-régression** (cf. `test_signal_object_cross_thread.py`, `test_duplicate_detector.py::test_tiff_never_reaches_cv2_imread` pour le style attendu).
+- **Piège coverage/QThread** : coverage.py ne trace pas le code exécuté dans un `QThread.start()` réel (thread natif Qt, hors `sys.settrace` en Python 3.11). Dans les tests, appeler `thread.run()` en synchrone (les signaux sont émis en connexion directe et le code est tracé) ; garder un ou deux vrais `.start()` + `qtbot.waitSignal` par module pour la plomberie cross-thread.
+- **Piège QThread jetable dans un test** : un vrai `QThread` sans parent auto-détruit via `deleteLater` pendant que son thread OS se termine déclenche un fail-fast Qt (0xC0000409) dès que l'event loop de pytest-qt traite la destruction — utiliser un stub non-QThread (cf. `_InertUpdateThread` dans `test_dialogs_smoke.py`).
+- Le cliquet `fail_under` (`.coveragerc`) s'applique à tout run `--cov` : le relever après chaque campagne qui augmente durablement la couverture.
 
 ---
 

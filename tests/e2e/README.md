@@ -39,6 +39,26 @@ de fonctionner normalement (Layers 1+2 seulement).
 pas** ces scénarios : `pytest.ini` définit `addopts = -m "not e2e"`. Il faut
 systématiquement `-m e2e` (ou `-m ""` pour tout inclure) pour les déclencher.
 
+## Couverture de code des scénarios
+
+`--cov` ne voit pas le code exécuté par l'application (sous-processus). Pour
+que les scénarios créditent la couverture du code UI :
+
+```powershell
+$env:PPM_E2E_COVERAGE='1'
+.venv\Scripts\python.exe -m pytest tests/e2e -m e2e
+.venv\Scripts\python.exe -m coverage combine
+.venv\Scripts\python.exe -m coverage report
+```
+
+`launch_isolated.py` lance alors l'appli via `coverage run` (un fichier
+`.coverage.<hôte>.<pid>` par lancement, cf. `parallel = true` dans
+`.coveragerc`), et `_graceful_close()` (conftest) ferme la fenêtre proprement
+avant le `terminate()` de secours — un TerminateProcess n'exécuterait pas le
+hook atexit qui écrit les données. Ordre de grandeur : les seuls 2 tests de
+`test_scan_and_browse.py` créditent `main_window.py` à ~35 % et
+`thumbnail_grid.py` à ~49 %.
+
 ## Ce que chaque scénario vérifie
 
 | Fichier | Vérifie |

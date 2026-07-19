@@ -25,5 +25,6 @@ installer/*.log
 tests/_generated_library/
 tests/e2e/.artifacts/
 
-# Rapport pytest-cov
+# Rapport pytest-cov (+ fichiers par processus du mode parallel/e2e)
 .coverage
+.coverage.*

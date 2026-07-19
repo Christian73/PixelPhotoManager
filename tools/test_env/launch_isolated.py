@@ -74,8 +74,23 @@ def launch_app(
 
     child_env = {**os.environ, "LOCALAPPDATA": str(app_data_dir)}
 
+    # PPM_E2E_COVERAGE=1 : lancer l'appli sous coverage.py pour que les
+    # scénarios e2e créditent la couverture du code UI. `parallel = true`
+    # (.coveragerc) fait écrire un fichier .coverage.<hôte>.<pid> distinct
+    # dans le cwd (racine du dépôt), à fusionner ensuite avec
+    # `coverage combine` avant `coverage report`. Nécessite une fermeture
+    # PROPRE de l'application (cf. _graceful_close dans tests/e2e/conftest.py) :
+    # un TerminateProcess n'exécute pas le hook atexit qui écrit les données.
+    cmd = [str(python_exe), "main.py"]
+    if os.environ.get("PPM_E2E_COVERAGE") == "1":
+        cmd = [
+            str(python_exe), "-m", "coverage", "run",
+            "--rcfile", str(repo_root / ".coveragerc"),
+            "main.py",
+        ]
+
     process = subprocess.Popen(
-        [str(python_exe), "main.py"],
+        cmd,
         cwd=str(repo_root),
         env=child_env,
     )
