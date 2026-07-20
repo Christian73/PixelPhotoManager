@@ -72,7 +72,17 @@ def launch_app(
 
     prepare_app_data_dir(app_data_dir, scan_folders, extra_config)
 
-    child_env = {**os.environ, "LOCALAPPDATA": str(app_data_dir)}
+    # PPM_SUPPRESS_EXPLORER=1 : l'export ouvre normalement le dossier de
+    # destination dans l'Explorateur (main_window.py::_run_export) — en e2e,
+    # cette fenêtre passerait devant la fenêtre pilotée par UIA et resterait
+    # ouverte après la fin du test (explorer.exe n'est pas un enfant du
+    # processus applicatif, donc jamais fermé par terminate()), perturbant
+    # les scénarios suivants.
+    child_env = {
+        **os.environ,
+        "LOCALAPPDATA": str(app_data_dir),
+        "PPM_SUPPRESS_EXPLORER": "1",
+    }
 
     # PPM_E2E_COVERAGE=1 : lancer l'appli sous coverage.py pour que les
     # scénarios e2e créditent la couverture du code UI. `parallel = true`

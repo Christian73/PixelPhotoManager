@@ -2335,7 +2335,13 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
                    f"exportée{'s' if n > 1 else ''}  →  {export_dir}")
             self._lbl_action.setText(msg)
             QTimer.singleShot(5000, lambda: self._lbl_action.setText(""))
-            os.startfile(str(export_dir))
+            # PPM_SUPPRESS_EXPLORER=1 (posé par tools/test_env/launch_isolated.py) :
+            # ouvrir l'Explorateur ici passerait devant la fenêtre de l'appli et
+            # resterait ouvert après la fin du test (processus explorer.exe non
+            # rattaché à l'appli, jamais fermé par terminate()), perturbant les
+            # scénarios e2e suivants qui pilotent la fenêtre via UIA.
+            if os.environ.get("PPM_SUPPRESS_EXPLORER") != "1":
+                os.startfile(str(export_dir))
 
     def _restore_splitter_states(self) -> None:
         import base64
