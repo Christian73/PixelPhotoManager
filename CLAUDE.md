@@ -145,6 +145,31 @@ Conséquence de l'incrémentalité : `Catalog.ignore_duplicate_group()` (dissoud
 
 `src/faces/face_database.py::save_faces()` marque ensuite `ignored=1` (visage conservé en base, masqué de l'UI/clustering, **récupérable**) selon un seuil proportionnel à la résolution de la photo et `_AUTO_IGNORE_MIN_SCORE` (0.65). Seuil de taille : un visage qualifie la photo de "premier plan" s'il atteint `_AUTO_IGNORE_MIN_SIDE_FG_RATIO` (20 % du plus petit côté de la photo, ou 2× le seuil de base si plus grand). Si au moins un visage premier plan est présent, tout visage plus petit que `_AUTO_IGNORE_FG_FRACTION` (1/4) du plus petit visage premier plan est ignoré. Sinon (aucun premier plan), seuil de base `_AUTO_IGNORE_MIN_SIDE_RATIO` = 3 % du plus petit côté. C'est le seul étage qui doit décider si un petit visage est bruit ou non — `FaceDatabase.recalculate_size_ignored()` implémente la même règle mais n'est actuellement rattachée à aucune entrée de menu (code orphelin, cf. `RevaluateSizeIgnoredThread` dans `face_indexer.py`).
 
+### Visages — paliers de confiance de la reconnaissance (visage vs personne connue)
+
+`src/faces/face_database.py` compare la similarité cosinus d'un visage (ou du centroïde
+d'un groupe) aux centroïdes des personnes déjà nommées, à trois paliers croissants :
+- `< 0.60` : aucune action automatique (visage non identifié).
+- `_SIM_SUGGEST = 0.60` : suggestion enregistrée (`suggestion_person_id`/`suggestion_score`)
+  → le groupe apparaît « en attente de vérification » chez la personne concernée, à
+  confirmer manuellement.
+- `_SIM_AUTO_ASSIGN = 0.70` : allocation automatique de la personne, **sans confirmation**
+  (mêmes effets de bord que `accept_cluster_suggestion` : dédup, consommation des
+  annotations Picasa en attente).
+
+`set_cluster_suggestions()` est le point d'entrée unique qui applique cette bascule pour
+les 4 producteurs de suggestions (`resuggest_clusters`, `find_similar_to_persons`,
+`isolate_and_suggest`, l'auto-promotion de `face_cluster_workers.py`) — idempotent dans
+les deux branches (`WHERE person_id IS NULL AND suggestion_person_id IS NULL`), un cluster
+déjà assigné ou déjà suggéré n'est jamais réécrit par un appel ultérieur, quel que soit
+le palier atteint.
+
+`_SIM_STRONG = 0.55` (`src/ui/people_panel.py`) est un seuil **distinct**, purement
+d'affichage (libellé bleu « Probablement X » vs gris « Peut-être X » à `_SIM_WEAK = 0.50`)
+pour les visages qui n'ont pas encore atteint `_SIM_SUGGEST` — ne pas le confondre avec les
+seuils ci-dessus ni avec `_SIM_GROUP` (0.72, seuil d'auto-groupement de clusters
+*non identifiés* entre eux, sans rapport avec la correspondance à une personne connue).
+
 ### Visages — cache des centroïdes personne (popup d'assignation de nom)
 
 `src/faces/face_database.py::get_all_person_centroids()` décode les embeddings (512D float32) de tous les visages identifiés pour calculer le centroïde de chaque personne — jusqu'à ~60k visages sur une grosse bibliothèque, plusieurs secondes en pur Python. Le résultat complet est mis en cache en mémoire (`self._person_centroid_cache`) et réutilisé tant qu'un fingerprint bon marché (`SELECT COUNT(*), SUM(person_id) FROM faces WHERE person_id IS NOT NULL`, quelques ms via `idx_faces_person`) n'a pas changé — le `SUM` est nécessaire en plus du `COUNT` pour détecter les réassignations (`merge_persons`) qui ne changent pas le nombre de lignes. Le décodage lui-même est vectorisé via `numpy.frombuffer` plutôt que `struct.unpack` (facteur ~10). `enrich_persons()` (photo_count + cover_path/cover_bbox + pending_count) est également coûteux (~1 s, dominé par une CTE avec fenêtrage pour la photo de couverture) ; `enrich_persons_photo_count()` en est une variante allégée (photo_count seul) à utiliser partout où la couverture n'est pas affichée, ex. la popup d'assignation.

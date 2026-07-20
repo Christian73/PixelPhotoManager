@@ -140,8 +140,10 @@ def _cosine_sim(a: list[float], b: list[float]) -> float:
         return dot / (na * nb) if na > 0 and nb > 0 else 0.0
 
 
-# Seuils pour l'affichage des suggestions
-_SIM_STRONG  = 0.60   # très probable  → libellé en bleu
+# Seuils pour l'affichage des suggestions (visages pas encore "en attente de
+# vérification" — sous _SIM_SUGGEST dans face_database.py — affichés ici en
+# aperçu live pendant que l'utilisateur parcourt les groupes non identifiés).
+_SIM_STRONG  = 0.55   # très probable  → libellé en bleu
 _SIM_WEAK    = 0.50   # possible        → libellé en gris
 
 

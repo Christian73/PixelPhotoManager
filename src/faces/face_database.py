@@ -79,7 +79,19 @@ def _iou(a: tuple, b: tuple) -> float:
     return inter / union if union > 0 else 0.0
 
 
-_SIM_SUGGEST = 0.50  # seuil minimum pour proposer une suggestion après dé-association
+# Paliers de confiance pour la reconnaissance (similarité cosinus embedding vs
+# centroïde de personne), du plus bas au plus haut :
+#   [0.00, 0.60[  aucune action automatique (visage non identifié)
+#   [0.60, 0.70[  suggestion enregistrée (suggestion_person_id/score) : le
+#                 groupe apparaît en « en attente de vérification » chez la
+#                 personne concernée, à confirmer manuellement
+#   [0.70, 1.00]  allocation automatique de la personne, sans confirmation
+#                 (cf. set_cluster_suggestions ci-dessous)
+# _SIM_STRONG (0.55, src/ui/people_panel.py) est un seuil d'affichage distinct
+# (libellé bleu « Probablement X » vs gris « Peut-être X ») pour les visages
+# qui n'ont pas encore atteint _SIM_SUGGEST — ne pas confondre les deux.
+_SIM_SUGGEST     = 0.60  # seuil minimum pour créer une suggestion « en attente de vérification »
+_SIM_AUTO_ASSIGN = 0.70  # seuil d'allocation automatique de la personne, sans confirmation
 
 
 def _enc(embedding: list[float]) -> bytes:
@@ -731,18 +743,48 @@ class FaceDatabase:
         """Batch-set suggestion_person_id/score for multiple clusters.
 
         suggestions: {cluster_id: (person_id, score)}
-        Only sets suggestions for clusters that don't already have one (idempotent).
+        Point d'entrée unique de tous les producteurs de suggestions
+        (resuggest_clusters, find_similar_to_persons, isolate_and_suggest,
+        auto-promotion de la grille de groupes) : un score >= _SIM_AUTO_ASSIGN
+        alloue directement la personne, sans passer par l'étape de vérification
+        manuelle (mêmes effets de bord que accept_cluster_suggestion : dédup,
+        consommation des annotations Picasa en attente). En dessous, seule la
+        suggestion est enregistrée (« en attente de vérification »), idempotent :
+        ne touche pas les clusters ayant déjà une suggestion ou déjà assignés.
         """
         if not suggestions:
             return
+        auto    = {cid: v for cid, v in suggestions.items() if v[1] >= _SIM_AUTO_ASSIGN}
+        pending = {cid: v for cid, v in suggestions.items() if cid not in auto}
         with self._guard() as conn:
-            for cluster_id, (person_id, score) in suggestions.items():
+            for cluster_id, (person_id, score) in pending.items():
                 conn.execute(
                     "UPDATE faces SET suggestion_person_id=?, suggestion_score=?"
                     " WHERE cluster_id=?"
                     "   AND suggestion_person_id IS NULL",
                     (person_id, score, cluster_id),
                 )
+            if auto:
+                all_paths: list[str] = []
+                for cluster_id, (person_id, _score) in auto.items():
+                    paths = [r[0] for r in conn.execute(
+                        "SELECT DISTINCT photo_path FROM faces WHERE cluster_id=?",
+                        (cluster_id,),
+                    ).fetchall()]
+                    # Même garde d'idempotence que la branche "pending" : un cluster
+                    # déjà assigné ou déjà suggéré (par un appel précédent) n'est pas
+                    # réécrit — "premier appel gagne", quel que soit le palier.
+                    cur = conn.execute(
+                        "UPDATE faces SET person_id=?, suggestion_person_id=NULL,"
+                        " suggestion_score=NULL"
+                        " WHERE cluster_id=? AND person_id IS NULL"
+                        "   AND suggestion_person_id IS NULL",
+                        (person_id, cluster_id),
+                    )
+                    if cur.rowcount:
+                        all_paths.extend(paths)
+                self._dedup_in_transaction(conn, all_paths)
+                self._consume_matching_picasa_annotations(conn, all_paths)
             conn.commit()
 
     def clear_cluster_suggestion(self, cluster_id: int) -> None:
@@ -1562,8 +1604,9 @@ class FaceDatabase:
 
         Pour chaque cluster sans person_id ni suggestion existante, calcule son centroïde
         et le compare à tous les centroïdes de personnes nommées. Si la similarité cosinus
-        atteint _SIM_SUGGEST (0.50), une suggestion est créée et apparaîtra dans la section
-        « En attente » de la vue de la personne concernée.
+        atteint _SIM_SUGGEST (0.60), une suggestion est créée et apparaîtra dans la section
+        « En attente » de la vue de la personne concernée (ou la personne est allouée
+        directement si le score atteint _SIM_AUTO_ASSIGN — cf. set_cluster_suggestions).
 
         Retourne (suggestions_créées, clusters_vérifiés).
         """

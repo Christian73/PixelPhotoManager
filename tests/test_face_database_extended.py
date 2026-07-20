@@ -157,26 +157,26 @@ class TestClusterSuggestions:
 
     def test_set_and_get_suggestions(self, db):
         self._cluster_with_person(db)
-        db.set_cluster_suggestions({1: (9, 0.8)})
-        assert db.get_suggested_clusters_for_person(9) == [(1, 2, 0.8)]
+        db.set_cluster_suggestions({1: (9, 0.65)})  # sous _SIM_AUTO_ASSIGN → en attente
+        assert db.get_suggested_clusters_for_person(9) == [(1, 2, 0.65)]
         assert db.get_persons_pending_count() == {9: 1}
 
     def test_set_suggestions_idempotent(self, db):
         self._cluster_with_person(db)
-        db.set_cluster_suggestions({1: (9, 0.8)})
-        db.set_cluster_suggestions({1: (7, 0.9)})  # déjà suggéré → inchangé
+        db.set_cluster_suggestions({1: (9, 0.65)})
+        db.set_cluster_suggestions({1: (7, 0.9)})  # déjà suggéré → inchangé (même au palier auto-assign)
         assert db.get_suggested_clusters_for_person(9) != []
         assert db.get_suggested_clusters_for_person(7) == []
 
     def test_clear_suggestion(self, db):
         self._cluster_with_person(db)
-        db.set_cluster_suggestions({1: (9, 0.8)})
+        db.set_cluster_suggestions({1: (9, 0.65)})
         db.clear_cluster_suggestion(1)
         assert db.get_suggested_clusters_for_person(9) == []
 
     def test_accept_suggestion_assigns_person(self, db):
         self._cluster_with_person(db)
-        db.set_cluster_suggestions({1: (9, 0.8)})
+        db.set_cluster_suggestions({1: (9, 0.65)})
         db.accept_cluster_suggestion(1)
         rows = _qall(db, "SELECT person_id FROM faces WHERE cluster_id=1")
         assert all(r[0] == 9 for r in rows)
@@ -191,10 +191,27 @@ class TestClusterSuggestions:
     def test_resuggest_finds_best_person(self, db):
         self._cluster_with_person(db)
         db.resuggest_clusters([1])
-        sugg = db.get_suggested_clusters_for_person(9)
-        assert len(sugg) == 1
-        assert sugg[0][0] == 1
-        assert sugg[0][2] > 0.9
+        # similarité > 0.9 >= _SIM_AUTO_ASSIGN → allocation directe, pas de suggestion en attente
+        rows = _qall(db, "SELECT person_id FROM faces WHERE cluster_id=1")
+        assert all(r[0] == 9 for r in rows)
+        assert db.get_suggested_clusters_for_person(9) == []
+
+    def test_set_cluster_suggestions_auto_assigns_above_threshold(self, db):
+        self._cluster_with_person(db)
+        db.set_cluster_suggestions({1: (9, 0.9)})  # >= _SIM_AUTO_ASSIGN
+        rows = _qall(db, "SELECT person_id, suggestion_person_id, suggestion_score"
+                         " FROM faces WHERE cluster_id=1")
+        assert all(r == (9, None, None) for r in rows)
+        assert db.get_suggested_clusters_for_person(9) == []
+
+    def test_set_cluster_suggestions_auto_assign_idempotent_against_pending(self, db):
+        self._cluster_with_person(db)
+        db.set_cluster_suggestions({1: (9, 0.65)})  # en attente d'abord
+        db.set_cluster_suggestions({1: (7, 0.95)})  # auto-tier mais déjà suggéré → inchangé
+        rows = _qall(db, "SELECT person_id FROM faces WHERE cluster_id=1")
+        assert all(r[0] is None for r in rows)
+        assert db.get_suggested_clusters_for_person(9) != []
+        assert db.get_suggested_clusters_for_person(7) == []
 
     def test_resuggest_excludes_person(self, db):
         self._cluster_with_person(db)
@@ -213,7 +230,9 @@ class TestClusterSuggestions:
         assert created == 1
         assert checked == 1
         assert calls == [(1, 1)]
-        assert db.get_suggested_clusters_for_person(9)[0][0] == 1
+        # similarité > 0.9 >= _SIM_AUTO_ASSIGN → allocation directe (pas de suggestion en attente)
+        rows = _qall(db, "SELECT person_id FROM faces WHERE cluster_id=1")
+        assert all(r[0] == 9 for r in rows)
 
     def test_find_similar_no_clusters(self, db):
         assert db.find_similar_to_persons() == (0, 0)
@@ -377,8 +396,10 @@ class TestIsolation:
         )
         assert row[0] < 0
         assert row[1] == 1
-        assert row[2] is None
-        assert row[3] == 2   # suggéré à la personne 2, pas la 1 (exclue)
+        # similarité > 0.9 >= _SIM_AUTO_ASSIGN → allocation directe à la personne 2
+        # (pas la 1, exclue), pas de suggestion en attente
+        assert row[2] == 2
+        assert row[3] is None
 
     def test_isolate_and_suggest_empty_input(self, db):
         db.isolate_and_suggest([])  # ne doit pas lever

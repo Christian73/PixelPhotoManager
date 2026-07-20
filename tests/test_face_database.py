@@ -470,7 +470,7 @@ class TestSuggestions:
         db = FaceDatabase(db_path=tmp_path / "faces.db")
         base = _base_vec(0)
         _raw_insert_face(db, "named.jpg", person_id=1, embedding=base)
-        _raw_insert_face(db, "unnamed.jpg", cluster_id=5, embedding=_similar_vec(base, noise=0.01))
+        _raw_insert_face(db, "unnamed.jpg", cluster_id=5, embedding=_similar_vec(base, noise=4))
 
         created, checked = db.find_similar_to_persons()
 
@@ -497,8 +497,8 @@ class TestSuggestions:
         db = FaceDatabase(db_path=tmp_path / "faces.db")
         base = _base_vec(0)
         _raw_insert_face(db, "p1.jpg", person_id=1, embedding=base)
-        _raw_insert_face(db, "p2.jpg", person_id=2, embedding=_similar_vec(base, noise=0.01, seed=1))
-        _raw_insert_face(db, "unnamed.jpg", cluster_id=9, embedding=_similar_vec(base, noise=0.01, seed=2))
+        _raw_insert_face(db, "p2.jpg", person_id=2, embedding=_similar_vec(base, noise=0.5, seed=1))
+        _raw_insert_face(db, "unnamed.jpg", cluster_id=9, embedding=_similar_vec(base, noise=0.5, seed=2))
 
         db.resuggest_clusters([9], exclude_person_id=1)
 

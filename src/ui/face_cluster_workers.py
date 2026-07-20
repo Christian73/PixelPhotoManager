@@ -26,7 +26,7 @@ from PySide6.QtWidgets import (
 )
 
 from src.core.models import PersonInfo
-from src.faces.face_database import FaceDatabase
+from src.faces.face_database import FaceDatabase, _SIM_SUGGEST
 from src.ui.loading_label import LoadingLabel
 from src.ui.people_panel import (
     _AssignDialog, _AvatarLoader, _cosine_sim, _SIM_WEAK, _SIM_STRONG,
@@ -419,12 +419,15 @@ class _ClusterRefreshThread(QThread):
                 cluster_ids, cluster_embeddings, persons, person_cluster_embeddings
             )
 
-            # Auto-promotion : les clusters avec suggestion forte (≥ 0.82) passent
-            # en "attente de vérification" et disparaissent de la liste à identifier.
+            # Auto-promotion : les clusters dont le score atteint _SIM_SUGGEST (seuil
+            # "en attente de vérification", pas le seuil d'affichage _SIM_STRONG qui
+            # gouverne uniquement la couleur du libellé) passent en attente de
+            # vérification (ou sont alloués directement au-delà de _SIM_AUTO_ASSIGN,
+            # cf. set_cluster_suggestions) et disparaissent de la liste à identifier.
             strong = {
                 cid: (pid, score)
                 for cid, (pid, _label, _color, score) in suggestions.items()
-                if pid is not None and score >= _SIM_STRONG
+                if pid is not None and score >= _SIM_SUGGEST
             }
             if strong:
                 self._face_db.set_cluster_suggestions(strong)
