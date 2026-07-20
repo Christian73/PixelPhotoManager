@@ -52,6 +52,10 @@ if not _buffalo_l_dir.is_dir():
     )
 datas += [(str(_buffalo_l_dir), "insightface_root/models/buffalo_l")]
 
+# Contenu des onglets d'aide (src/ui/help_content/*.html) — résolu en mode
+# figé via sys._MEIPASS/help_content (cf. src/ui/help_dialog.py::_content_dir).
+datas += [("src/ui/help_content", "help_content")]
+
 # Numéro de version embarqué à la racine du bundle (sys._MEIPASS/VERSION), lu
 # par src/core/app_version.py::get_app_version() en mode figé (le dossier .git
 # n'est pas disponible dans l'exe pour faire un "git describe"). Le fichier

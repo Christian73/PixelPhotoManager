@@ -17,14 +17,9 @@ logger = logging.getLogger(__name__)
 SUPPORTED_EXT = ExifReader.SUPPORTED | VIDEO_EXT
 
 
-def _is_hidden(path: str) -> bool:
-    """Return True if path is hidden (Windows hidden attribute or leading dot)."""
-    if os.path.basename(path).startswith("."):
-        return True
-    try:
-        return bool(os.stat(path).st_file_attributes & 0x2)
-    except (AttributeError, OSError):
-        return False
+# Ré-export : implémentation partagée (cf. fs_utils), alias conservé pour les
+# usages internes et les tests existants.
+from src.library.fs_utils import is_hidden_path as _is_hidden  # noqa: E402
 
 
 _BATCH_SIZE = 50   # photos regroupées par émission pour éviter de saturer l'event loop

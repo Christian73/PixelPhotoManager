@@ -59,11 +59,26 @@ src/
 ├── ui/            Fenêtre principale, grille, visionneuse, sidebar, panneaux
 │                  folder_manager_dialog.py : dialogue Outils › Dossiers…
 │                  exif_panel.py            : panneau EXIF dans la visionneuse
+│                  Découpage 2026-07 (les gros fichiers délèguent à des modules
+│                  dédiés, noms historiques ré-exportés depuis le module d'origine) :
+│                  - main_window.py  → background_workers.py (7 QThreads),
+│                    export_dialogs.py, reset_faces_dialog.py, duplicates_popup.py,
+│                    ui_utils.py (fmt_size)
+│                  - photo_viewer.py → viewer_canvas.py (_Canvas + _InlineTextEdit),
+│                    viewer_pixmaps.py (_build_pixmap & co., utilisé par slideshow)
+│                  - edit_panel.py   → edit_sliders.py (MarkedSlider/EditSlider),
+│                    treatment_dialogs.py (_TREATMENTS + dialogues), edit_icons.py
+│                  Importer les classes depuis le module d'origine reste valide
+│                  (ré-exports) ; le nouveau code doit importer le module dédié.
 ├── processing/    Retouches image (non destructives)
 ├── faces/         Détection, reconnaissance, clustering (+ import Picasa)
 └── plugins/       Plugins intégrés (carte, restauration IA, etc.)
 plugins/           Plugins utilisateur (externe à src/)
 ```
+
+`src/library/fs_utils.py::is_hidden_path()` est l'unique implémentation du test
+« chemin caché » (attribut Windows ou préfixe point) — scanner, folder_watcher
+et folder_manager_dialog l'aliasent en `_is_hidden` ; ne pas recréer de copie.
 
 ### Bus d'événements — pièce centrale
 

@@ -11,13 +11,9 @@ logger = logging.getLogger(__name__)
 _DEBOUNCE_MS = 400
 
 
-def _is_hidden(path: str) -> bool:
-    if os.path.basename(path).startswith("."):
-        return True
-    try:
-        return bool(os.stat(path).st_file_attributes & 0x2)
-    except (AttributeError, OSError):
-        return False
+# Ré-export : implémentation partagée (cf. fs_utils), alias conservé pour les
+# usages internes et les tests existants.
+from src.library.fs_utils import is_hidden_path as _is_hidden  # noqa: E402
 
 
 class _TreeScanThread(QThread):

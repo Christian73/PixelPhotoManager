@@ -20,7 +20,7 @@ la DB, cf. CLAUDE.md "Retouches non destructives") -> re-vérification de la
 persistance de l'annulation."""
 import pytest
 
-from tests.e2e.conftest import find_dialog_button, find_thumbnail, query_one, wait_for_condition
+from tests.e2e.conftest import double_click_element, open_photo_in_viewer, find_dialog_button, find_thumbnail, query_one, wait_for_condition
 
 pytestmark = pytest.mark.e2e
 
@@ -46,8 +46,7 @@ def test_luminosity_edit_applies_persists_and_undoes(isolated_app):
     )
     assert _brightness(edits_db, photo) is None, "aucune retouche ne doit préexister sur la photo témoin"
 
-    thumb = find_thumbnail(window, str(photo), timeout=30.0)
-    thumb.double_click_input()
+    open_photo_in_viewer(window, photo)
 
     # Bouton de traitement "Luminosité" (QToolButton, texte exact) — descendant
     # de la fenêtre principale, apparaît une fois l'EditPanel affiché (_left_stack -> index 1).
@@ -68,25 +67,29 @@ def test_luminosity_edit_applies_persists_and_undoes(isolated_app):
         message="la retouche de luminosité n'a pas été persistée dans edits.db",
     )
 
-    # Annuler (bouton "Annuler" de l'EditPanel — raccourci Ctrl+Z réel, seul
-    # bouton "Annuler" restant une fois le dialogue de traitement fermé).
-    find_dialog_button(window, ["Annuler"], exact=True, timeout=10.0).click_input()
+    # Annuler (bouton undo de l'EditPanel). Libellé DYNAMIQUE depuis
+    # l'évolution UI : « Annuler  <opération> » (ex. « Annuler  Luminosité »),
+    # d'où la recherche non exacte — le « Annuler » du dialogue de traitement
+    # est fermé à ce stade, pas d'ambiguïté.
+    find_dialog_button(window, ["Annuler"], exact=False, timeout=10.0).click_input()
 
+    # État vierge restauré : depuis l'évolution d'EditDatabase, une photo
+    # revenue à l'état d'origine voit sa ligne photo_edits SUPPRIMÉE (et non
+    # brightness=0) — l'absence de ligne est donc le succès attendu.
     wait_for_condition(
-        lambda: _brightness(edits_db, photo) is not None and abs(_brightness(edits_db, photo)) < 0.02,
+        lambda: _brightness(edits_db, photo) is None or abs(_brightness(edits_db, photo)) < 0.02,
         timeout=20.0,
         message="l'annulation (undo) n'a pas restauré la luminosité d'origine dans edits.db",
     )
 
     # Re-navigation (retour à la grille puis ré-ouverture) : la persistance de
     # l'annulation ne doit pas dépendre de l'état en mémoire de l'EditPanel.
-    # Bouton "▦" de la barre de statut (main_window.py::_btn_grid_status,
-    # tooltip "Retour à la grille" — connecté à show_grid()) ; texte exact,
-    # seul bouton de ce glyphe dans la fenêtre.
-    find_dialog_button(window, ["▦"], exact=True, timeout=10.0).click_input()
-    thumb2 = find_thumbnail(window, str(photo), timeout=30.0)
-    thumb2.double_click_input()
-    assert abs(_brightness(edits_db, photo)) < 0.02
+    # Bouton "✕" de la visionneuse (PhotoViewer → closed → show_grid) — le
+    # bouton "▦" de la barre de statut est caché en mode visionneuse.
+    find_dialog_button(window, ["✕"], exact=True, timeout=10.0).click_input()
+    open_photo_in_viewer(window, photo)
+    b = _brightness(edits_db, photo)
+    assert b is None or abs(b) < 0.02
 
 
 def _wait_for_slider(window, timeout: float = 10.0):

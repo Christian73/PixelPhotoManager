@@ -1,0 +1,40 @@
+<h2>PixelPhotoManager</h2>
+<p>Gestionnaire de photos et vidéos non destructif pour Windows.
+Toutes les retouches sont stockées séparément — l'original n'est jamais modifié.</p>
+
+<h2>Organisation de l'interface</h2>
+<ul>
+  <li><b>Barre latérale gauche</b> — dossiers surveillés, albums, personnes identifiées, et en haut
+      une case de filtrage instantané par nom de fichier, marque/modèle d'appareil, dossier ou
+      personne (<kbd>F9</kbd> pour afficher/masquer la barre latérale).</li>
+  <li><b>Grille centrale</b> — vignettes des photos et vidéos du contexte sélectionné.</li>
+  <li><b>Visionneuse</b> — ouverte par double-clic sur une vignette ; panneau de retouches à gauche.</li>
+  <li><b>Barre du bas</b> — nombre de fichiers, taille, curseur de zoom de la grille.</li>
+</ul>
+
+<h2>Modes d'affichage de la grille</h2>
+<ul>
+  <li><b>Mode grille</b> — vignettes uniformes, taille réglable avec le curseur en bas à droite.</li>
+  <li><b>Mode chronologie</b> — ruban temporal : 5 rangées de tailles croissantes vers le centre.
+    La photo centrale est la photo « courante ». Naviguez avec la molette, les flèches
+    ou l'ascenseur à droite. Le diaporama démarrera depuis cette photo centrale.</li>
+</ul>
+
+<h2>Formats supportés</h2>
+<p><b>Images :</b> JPEG, PNG, TIFF, WebP, BMP, GIF, HEIC, RAW (CR2, NEF, ARW, DNG)…<br>
+<b>Vidéos :</b> MP4, MOV, AVI, MKV, WMV, WebM, M4V, 3GP, FLV, TS, MTS, MPG, MPEG.</p>
+
+<h2>Où sont stockées vos données</h2>
+<p>Toutes les données se trouvent dans <b>%LOCALAPPDATA%\PixelPhotoManager\</b></p>
+<table>
+  <tr><th>Fichier / Dossier</th><th>Contenu</th></tr>
+  <tr><td><code>catalog.db</code></td><td>Index photos/vidéos (chemins, EXIF, métadonnées)</td></tr>
+  <tr><td><code>thumbnails.db</code></td><td>Cache des vignettes générées</td></tr>
+  <tr><td><code>edits.db</code></td><td>Toutes les retouches et leur historique</td></tr>
+  <tr><td><code>faces.db</code></td><td>Visages détectés, embeddings, clusters et personnes identifiées</td></tr>
+  <tr><td><code>config.json</code></td><td>Dossiers surveillés et préférences</td></tr>
+  <tr><td><code>faces_backups\</code></td><td>Sauvegardes horodatées de la reconnaissance faciale (<code>visages_AAAAMMJJ_HHMMSS.zip</code>)</td></tr>
+  <tr><td><code>problems_history.jsonl</code></td><td>Historique des fichiers corrompus détectés/réparés lors des analyses de doublons</td></tr>
+</table>
+<p class="tip">Vos fichiers originaux ne sont <b>jamais modifiés</b>. Supprimer <code>edits.db</code>
+efface toutes les retouches ; supprimer <code>catalog.db</code> force une réindexation complète.</p>

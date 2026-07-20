@@ -19,13 +19,9 @@ from src.library.catalog import Catalog
 # ---------------------------------------------------------------------------
 # Helpers
 
-def _is_hidden(path: str) -> bool:
-    if os.path.basename(path).startswith("."):
-        return True
-    try:
-        return bool(os.stat(path).st_file_attributes & 0x2)
-    except (AttributeError, OSError):
-        return False
+# Implémentation partagée avec le scanner et le watcher (cf. fs_utils) : les
+# règles d'exclusion affichées ici doivent rester identiques à celles du scan.
+from src.library.fs_utils import is_hidden_path as _is_hidden  # noqa: E402
 
 
 def _find_subdirs(folder: str) -> list[tuple[str, bool, str]]:

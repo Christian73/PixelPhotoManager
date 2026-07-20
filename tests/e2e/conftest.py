@@ -290,6 +290,63 @@ def find_thumbnail(window, photo_path: str, *, timeout: float = 15.0):
     raise TimeoutError(f"Vignette {name!r} introuvable après {timeout}s : {last_exc}")
 
 
+def double_click_element(element, *, gap_s: float = 0.10) -> None:
+    """Double-clic réel sur un élément UIA, par SendInput brut.
+
+    Ne PAS utiliser `element.double_click_input()` : pywinauto envoie ses deux
+    clics à ~1 ms d'écart, trop rapprochés pour que Qt 6.11 synthétise un
+    QEvent.MouseButtonDblClick (les deux arrivent comme deux Press simples) ;
+    et deux `click_input()` successifs retombent au-delà des 500 ms de la
+    fenêtre système à cause des Timings internes de pywinauto. Constaté
+    empiriquement le 2026-07-20 : fenêtre valide ≈ 20-500 ms, d'où ce helper
+    à ~100 ms."""
+    import ctypes
+
+    user32 = ctypes.windll.user32
+    r = element.rectangle()
+    cx, cy = (r.left + r.right) // 2, (r.top + r.bottom) // 2
+    user32.SetCursorPos(cx, cy)
+    time.sleep(0.08)
+
+    MOUSEEVENTF_LEFTDOWN, MOUSEEVENTF_LEFTUP = 0x0002, 0x0004
+    for i in range(2):
+        user32.mouse_event(MOUSEEVENTF_LEFTDOWN, 0, 0, 0, 0)
+        time.sleep(0.02)
+        user32.mouse_event(MOUSEEVENTF_LEFTUP, 0, 0, 0, 0)
+        if i == 0:
+            time.sleep(gap_s)
+
+
+def open_photo_in_viewer(window, photo_path, *, attempts: int = 4) -> None:
+    """Ouvre une photo dans la visionneuse par double-clic sur sa vignette,
+    avec vérification et re-tentative : pendant/juste après le scan initial la
+    grille peut se réordonner entre la localisation de la vignette et le clic
+    (cellules réassignées), le double-clic part alors dans le vide ou sur une
+    autre cellule. Le marqueur de succès est le bouton « 1:1 » de la barre de
+    la visionneuse (absent de la grille)."""
+    last_exc: Exception | None = None
+    for _ in range(attempts):
+        try:
+            # premier plan obligatoire : le double-clic brut (SendInput) part
+            # à une position écran — si une autre fenêtre recouvre l'appli,
+            # c'est elle qui reçoit les clics.
+            window.set_focus()
+        except Exception:
+            pass
+        thumb = find_thumbnail(window, str(photo_path), timeout=30.0)
+        double_click_element(thumb)
+        try:
+            find_dialog_button(window, ["1:1"], exact=True, timeout=4.0)
+            return
+        except LookupError as exc:
+            last_exc = exc
+            time.sleep(1.0)
+    raise LookupError(
+        f"La visionneuse ne s'est pas ouverte pour {photo_path} "
+        f"après {attempts} double-clics ({last_exc})"
+    )
+
+
 def wait_for_condition(predicate, *, timeout: float = 30.0, poll: float = 0.3,
                         message: str = "condition non remplie") -> None:
     """Attend qu'une fonction sans argument devienne vraie — utilisé pour

@@ -14,5 +14,6 @@ parallel = true
 # Cliquet de non-régression : échoue si la couverture repasse sous ce seuil.
 # À RELEVER à chaque campagne de tests (jamais baisser). Historique :
 #   2026-07-19  29 % → 36 % (phases 1+2) → 45,8 % (phases 3+4, seuil 45)
-fail_under = 45
+#   2026-07-20  45,8 % → 48,84 % (refactor modularisation N1-N5, seuil 48)
+fail_under = 48
 precision = 0

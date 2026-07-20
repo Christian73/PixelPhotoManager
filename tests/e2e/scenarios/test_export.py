@@ -28,7 +28,7 @@ import numpy as np
 import pytest
 from PIL import Image
 
-from tests.e2e.conftest import find_dialog_button, find_thumbnail, query_one, wait_for_condition
+from tests.e2e.conftest import double_click_element, open_photo_in_viewer, find_dialog_button, find_thumbnail, query_one, wait_for_condition
 
 pytestmark = pytest.mark.e2e
 
@@ -75,7 +75,7 @@ def test_export_bakes_in_edit_and_preserves_dates(isolated_app):
     original_mtime = Path(photo).stat().st_mtime
     original_luminance = _mean_luminance(photo)
 
-    find_thumbnail(window, str(photo), timeout=30.0).double_click_input()
+    open_photo_in_viewer(window, photo)
 
     find_dialog_button(window, ["Luminosité"], exact=True, timeout=15.0).click_input()
     sliders = []

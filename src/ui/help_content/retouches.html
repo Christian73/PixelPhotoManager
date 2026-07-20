@@ -1,0 +1,106 @@
+<h2>Retouches non destructives</h2>
+<p>Les ajustements n'écrivent jamais dans le fichier d'origine. Ils sont stockés dans
+une base SQLite séparée et appliqués à la volée à l'affichage et à l'export.</p>
+
+<h3>Corrections tonales</h3>
+<table>
+  <tr><th>Correction</th><th>Plage</th><th>Description</th></tr>
+  <tr><td><b>Luminosité</b></td><td>−1,00 à +1,00</td><td>Éclaircit ou assombrit l'image globalement</td></tr>
+  <tr><td><b>Contraste</b></td><td>−1,00 à +1,00</td><td>Élargit ou réduit la plage tonale</td></tr>
+  <tr><td><b>Saturation</b></td><td>−1,00 à +1,00</td><td>Renforce ou atténue les couleurs (−1 = N&amp;B)</td></tr>
+  <tr><td><b>Gamma</b></td><td>0,10 à 3,00</td><td>Courbe de luminosité (1,0 = neutre)</td></tr>
+</table>
+
+<h3>Couleurs (Noir &amp; Blanc avec mixage de canaux)</h3>
+<ul>
+  <li>Cochez <b>Noir &amp; Blanc</b> et dosez les contributions Rouge/Vert/Bleu (−1 à +1).</li>
+  <li>Exemple : Rouge +1, Bleu −1 → ciel foncé et peaux claires (filtre rouge argentique).</li>
+</ul>
+
+<h3>Vignette</h3>
+<ul>
+  <li>Ajoute un assombrissement (ou éclaircissement) progressif sur les bords de l'image.</li>
+  <li><b>Intensité</b> — de 0,00 (aucun effet) à 1,00 (effet maximum).</li>
+  <li><b>Couleur</b> — Noir (fondu sombre, style argentique) ou Blanc (fondu clair, style rétro).</li>
+  <li>La forme et la position de la vignette sont réglables directement sur la photo :</li>
+</ul>
+<table>
+  <tr><th>Poignée</th><th>Effet</th></tr>
+  <tr><td>Cercle intérieur (pointillés)</td><td>Début du fondu</td></tr>
+  <tr><td>Cercle extérieur</td><td>Fin du fondu</td></tr>
+  <tr><td>Poignée ronde au sommet</td><td>Rotation de l'ellipse</td></tr>
+  <tr><td>Croix centrale</td><td>Déplacer le centre de la vignette</td></tr>
+</table>
+
+<h3>Géométrie</h3>
+<ul>
+  <li><b>↺ / ↻</b> — rotation de 90° anti-horaire / horaire.</li>
+  <li><b>Redresser</b> — corrige l'inclinaison de l'horizon (−10° à +10°), avec grille de référence.</li>
+  <li><b>Recadrer</b> — sélection libre ou aux formats 10×15 / 13×18 (portrait ou paysage).
+      La zone de recadrage est mémorisée entre les sessions.</li>
+  <li><b>Miroir H / V</b> — symétrie horizontale ou verticale.</li>
+</ul>
+
+<h3>Yeux rouges</h3>
+<ul>
+  <li>Cliquez sur <b>Yeux rouges</b>, puis cliquez sur chaque œil affecté directement sur la photo.</li>
+  <li><b>Taille</b> — rayon de la correction (0,5&nbsp;% à 8&nbsp;% de la plus petite dimension de l'image).</li>
+  <li><b>Effacer tout</b> — supprime toutes les corrections posées. <b>Terminé</b>
+      (ou <kbd>Échap</kbd>) — quitte le mode sans rien perdre.</li>
+</ul>
+
+<h3>Annotations</h3>
+<p>Calque de dessin et de texte non destructif, superposé à la photo — indépendant des
+corrections tonales et de la géométrie.</p>
+<ul>
+  <li><b>Outils</b> — stylo (trait libre), ligne, courbe (cliquez les points de passage,
+      double-clic pour valider), rectangle, ellipse, texte, et sélection (pour modifier
+      ou déplacer un élément déjà posé).</li>
+  <li><b>Style</b> — couleur du trait/texte, épaisseur, couleur et opacité de remplissage
+      des formes, flou de la photo sous la forme, police/taille/gras/italique pour le texte.</li>
+  <li>Double-clic sur un texte existant (outil Sélection) : rouvre l'éditeur en place.</li>
+  <li><b>Supprimer la sélection</b> — supprime l'élément sélectionné.
+      <b>Effacer annotations</b> — supprime tout le calque de la photo.</li>
+  <li>Bouton <b>✏ Annotations</b> en haut de la fenêtre (à côté d'EXIF) — affiche/masque le
+      calque sans rien supprimer ; ce réglage n'est pas enregistré, il ne dure que la session.</li>
+</ul>
+<p class="tip">Les annotations sont incluses dans l'export et dans l'enregistrement de l'image
+traitée, comme les autres retouches — sauf si le calque est masqué via le bouton
+✏ Annotations au moment de l'export.</p>
+
+<h3>Workflow</h3>
+<ul>
+  <li><b>Un seul outil actif à la fois</b> — sélectionner un nouvel outil (Recadrer, Yeux
+      rouges, Annotations, Luminosité/Contraste/Couleurs/Vignette/Redresser…) valide
+      automatiquement le travail en cours dans l'outil précédent, puis le referme.</li>
+  <li>Double-clic sur un slider : remet la valeur à zéro.</li>
+  <li>L'aperçu se met à jour en temps réel (≤ 60 ms).</li>
+  <li>Cliquez <b>Appliquer</b> pour enregistrer.</li>
+  <li><kbd>Ctrl</kbd>+<kbd>Z</kbd> / <kbd>Ctrl</kbd>+<kbd>Y</kbd> — undo/redo persistant
+      entre les sessions (50 états max par photo).</li>
+  <li><b>Réinitialiser</b> — revient à l'original sans supprimer l'historique.</li>
+</ul>
+
+<h3>Export</h3>
+<p><b>Enregistrer une copie</b> — exporte l'image avec les retouches appliquées dans un nouveau
+fichier JPEG. Quatre préréglages de taille sont proposés :</p>
+<table>
+  <tr><th>Préréglage</th><th>Résolution max.</th><th>Poids estimé</th><th>Usage typique</th></tr>
+  <tr><td><b>Taille maximale</b></td><td>Résolution originale</td><td>variable</td>
+      <td>Archivage, impression grand format, retouche externe</td></tr>
+  <tr><td><b>Grande (~4 Mpx)</b></td><td>≈ 2 600 × 1 500 px</td><td>600–1 600 Ko</td>
+      <td>Impression A4/A3, partage haute qualité</td></tr>
+  <tr><td><b>Moyenne (~2 Mpx)</b></td><td>≈ 1 800 × 1 100 px</td><td>320–800 Ko</td>
+      <td>Affichage écran, diaporamas, pièce jointe mail légère</td></tr>
+  <tr><td><b>Petite (~500 kpx)</b></td><td>≈ 900 × 560 px</td><td>75–300 Ko</td>
+      <td>Réseaux sociaux, aperçu web, messagerie mobile</td></tr>
+</table>
+<p class="tip"><b>Conseil :</b> Pour envoyer une photo par e-mail ou la poster sur un réseau
+social, préférez <b>Moyenne</b> ou <b>Petite</b> — une photo en taille maximale peut dépasser
+5 Mo et être refusée ou ralentir l'envoi. L'original sur le disque n'est jamais modifié.</p>
+
+<h3>EXIF</h3>
+<ul>
+  <li>Touche <kbd>I</kbd> (ou bouton <b>[i]</b>) : affiche/masque le panneau EXIF dans la visionneuse.</li>
+  <li><b>Outils › Synchroniser les dates EXIF</b> — corrige les dates en lot.</li>
+</ul>

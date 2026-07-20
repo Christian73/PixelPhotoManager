@@ -1,0 +1,73 @@
+<h2>Détection de doublons</h2>
+<p>PixelPhotoManager repère les photos visuellement similaires même lorsqu'elles ont
+été redimensionnées, légèrement retouchées ou recadrées.</p>
+
+<h3>Lancer la détection</h3>
+<ul>
+  <li><b>Outils › Détecter les doublons…</b> — lance l'analyse en arrière-plan.</li>
+  <li>La durée dépend de la taille de la bibliothèque ; l'application reste utilisable.</li>
+  <li>Une barre de progression et un bouton <b>Annuler</b> apparaissent dans la barre de statut
+      pendant l'analyse ; les résultats n'apparaissent qu'à la fin.</li>
+  <li>Cliquer sur <b>Annuler</b> demande confirmation — les résultats déjà calculés seraient perdus.</li>
+  <li>Fermer l'application pendant une analyse en cours affiche un avertissement (le résultat
+      serait perdu), avec le choix de fermer quand même ou d'annuler la fermeture.</li>
+</ul>
+
+<h3>Comment ça marche — deux passes</h3>
+<table>
+  <tr><th>Passe</th><th>Technique</th><th>Cas couverts</th></tr>
+  <tr><td><b>1 — pHash</b></td><td>Empreinte perceptuelle (Hamming)</td>
+      <td>Doublons exacts, redimensionnés, légèrement retouchés (couleur, luminosité)</td></tr>
+  <tr><td><b>2 — ORB + RANSAC</b></td><td>Correspondance de points-clés</td>
+      <td>Doublons recadrés (jusqu'à ~60 % de surface rognée) — uniquement pour les photos
+          non groupées par la passe 1</td></tr>
+</table>
+<p class="tip"><b>Note :</b> Les vidéos ne sont pas analysées pour les doublons.</p>
+
+<h3>Badge de doublon</h3>
+<ul>
+  <li>Les vignettes appartenant à un groupe de doublons affichent un badge <b>⧉</b>.</li>
+  <li>Cliquer sur ce badge ouvre une vue listant toutes les photos du groupe côte à côte.</li>
+</ul>
+
+<h3>Grille des groupes de doublons &nbsp;<span style="font-weight:normal;color:#888;">(bouton « Dupliquées » de la sidebar)</span></h3>
+<p>Le bouton <b>Dupliquées</b> de la sidebar (badge = nombre de groupes) ouvre une grille dédiée
+listant tous les groupes de doublons d'un coup : une carte par groupe, vignette du premier
+exemplaire, nombre d'exemplaires.</p>
+<ul>
+  <li><b>Double-clic</b> sur une carte : ouvre les exemplaires du groupe dans la visionneuse
+      pour une comparaison rapide.</li>
+  <li><b>✕</b> sur une carte : dissout le groupe entier (aucun fichier supprimé) — non
+      persistant, une future détection complète peut reformer le même groupe.</li>
+  <li>Bouton <b>Détecter les doublons…</b> en haut de la grille pour relancer une analyse.</li>
+</ul>
+
+<h3>Workflow recommandé</h3>
+<ul>
+  <li>Lancez la détection via <b>Outils › Détecter les doublons…</b>.</li>
+  <li>Quand l'analyse est terminée, les badges <b>⧉</b> apparaissent sur les vignettes concernées.</li>
+  <li>Cliquez sur un badge pour examiner le groupe de photos similaires.</li>
+  <li>Sélectionnez les exemplaires à conserver / supprimer, puis appuyez sur <kbd>Suppr</kbd>.</li>
+</ul>
+<p class="tip">La suppression d'un doublon est <b>définitive</b> (pas de corbeille).
+Vérifiez bien les photos avant de confirmer.</p>
+
+<h3>Fichiers corrompus détectés pendant l'analyse</h3>
+<p>Si un fichier ne peut pas être lu pendant l'analyse (JPEG endommagé, copie
+interrompue…), il est signalé plutôt qu'ignoré silencieusement. Le bilan de fin
+d'analyse indique alors le nombre de fichiers concernés, avec un bouton
+<b>Réparer…</b>.</p>
+<ul>
+  <li>Une confirmation est demandée avant toute tentative de réparation.</li>
+  <li>PixelPhotoManager essaie de ré-enregistrer une copie propre du fichier à
+      l'aide d'un décodeur plus tolérant que celui utilisé pour l'analyse.</li>
+  <li>L'original est toujours sauvegardé avant modification (dossier caché
+      <code>.tmp_originals</code> à côté du fichier), et les dates Windows de
+      modification et de création sont préservées à l'identique.</li>
+  <li>Un second bilan indique le nombre de fichiers réparés. Les fichiers qui
+      n'ont pas pu être réparés (corruption trop importante) sont listés dans
+      un fichier texte horodaté.</li>
+</ul>
+<p class="tip"><b>Outils › Historique des problèmes…</b> conserve la trace de
+chaque analyse ayant rencontré des fichiers corrompus (date, nombre détecté,
+nombre réparé) avec un accès direct à la liste des fichiers non réparés.</p>

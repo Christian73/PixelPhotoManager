@@ -5,14 +5,20 @@
 du QThread, voir bugfix_signal_dict_int_keys_2026-07.md). Contrairement à
 tests/test_duplicate_detector.py (Tier1/Tier2 en synchrone) et
 tests/test_signal_object_cross_thread.py (marshalling Qt isolé), ce scénario
-vérifie le chemin complet réel : menu → confirmation → thread → catalogue.
+vérifie le chemin complet réel : détection AUTOMATIQUE après le scan (le
+déclencheur de production depuis l'évolution « détection continue » —
+l'ancien menu « Outils › Détecter les doublons… » n'existe plus) → thread →
+catalogue. Repli si l'auto-détection tarde : « Outils › État des doublons… »
+→ « Vérifier maintenant ».
 
 Si `Signal(dict)` était réintroduit par erreur, CE scénario échouerait (plus
 aucun groupe de doublons en base malgré une détection qui se termine sans
 erreur) — c'est exactement la panne silencieuse observée en production."""
+import time
+
 import pytest
 
-from tests.e2e.conftest import click_menu_item, click_yes, query_one, wait_for_condition
+from tests.e2e.conftest import click_menu_item, find_dialog_button, query_one, wait_for_condition
 
 pytestmark = pytest.mark.e2e
 
@@ -36,12 +42,41 @@ def test_duplicate_detection_groups_exact_resized_and_cropped_pairs(isolated_app
         timeout=60.0, message="le scan initial n'a pas terminé",
     )
 
-    click_menu_item(isolated_app.window, "Outils", "Détecter les doublons…")
-    click_yes(isolated_app.window)  # confirme la boîte de dialogue d'avertissement
-
     def _detection_done() -> bool:
-        exact_a_group = _group_id(catalog_db, manifest.exact_duplicate_pair[0])
-        return exact_a_group is not None
+        # Détection CONTINUE : les groupes arrivent par instantanés progressifs
+        # (Tier 1 d'abord, Tier 2 recadrages ensuite) — attendre les 3 paires,
+        # pas seulement la première, avant de vérifier les assertions.
+        return all(
+            _group_id(catalog_db, pair[0]) is not None
+            for pair in (manifest.exact_duplicate_pair,
+                         manifest.resized_duplicate_pair,
+                         manifest.crop_duplicate_pair)
+        )
+
+    # La détection démarre automatiquement après le scan (production). La
+    # chaîne de gating (vignettes personnes → migration → détection) peut
+    # dépasser la minute sur machine chargée (indexation ONNX en parallèle) —
+    # attente généreuse, puis repli « État des doublons… → Vérifier
+    # maintenant » retenté deux fois (UIA lent sous charge).
+    try:
+        wait_for_condition(_detection_done, timeout=90.0, message="")
+    except TimeoutError:
+        for attempt in range(2):
+            try:
+                isolated_app.window.set_focus()
+                click_menu_item(isolated_app.window, "Outils", "État des doublons…")
+                find_dialog_button(
+                    isolated_app.window, ["Vérifier maintenant"], timeout=15.0
+                ).click_input()
+                time.sleep(0.5)
+                find_dialog_button(
+                    isolated_app.window, ["Fermer"], timeout=15.0
+                ).click_input()
+                break
+            except LookupError:
+                if attempt == 1:
+                    raise
+                time.sleep(2.0)
 
     wait_for_condition(
         _detection_done, timeout=120.0,

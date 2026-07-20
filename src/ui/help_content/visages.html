@@ -1,0 +1,178 @@
+<h2>Détection et reconnaissance des visages</h2>
+
+<p>Le pipeline de reconnaissance se déroule en trois étapes :</p>
+<p style="text-align:center; font-size:13px;">
+  <b>① Analyser</b> (automatique) &nbsp;→&nbsp; <b>② Regrouper</b> &nbsp;→&nbsp; <b>③ Identifier</b>
+</p>
+<p>Seules les étapes ② et ③ demandent une action de votre part.
+Les options ci-dessous sont présentées dans l'ordre où elles apparaissent dans le
+menu <b>Visages</b>. Lisez les descriptions avant d'en utiliser une : certaines sont longues.</p>
+
+<hr/>
+
+<h3>① Analyser les visages &nbsp;<span style="font-weight:normal;color:#888;">(automatique, aucune action requise)</span></h3>
+<p><b>Ce que ça fait :</b> Dès qu'un scan de la bibliothèque détecte de nouvelles photos,
+l'analyse démarre automatiquement en arrière-plan : InsightFace (modèle buffalo_l) détecte
+les visages et calcule un vecteur ArcFace 512D par visage. À la fin, le regroupement
+démarre lui aussi automatiquement. La progression s'affiche dans la barre de statut.</p>
+<p><b>Périmètre :</b> Uniquement les photos <u>jamais encore analysées</u> (nouvelles photos
+ajoutées à la bibliothèque). Les photos déjà traitées sont ignorées, même si elles
+contiennent des visages marqués «&nbsp;ignoré&nbsp;».</p>
+<p class="tip">Durée : de quelques secondes (nouvelle photo) à plusieurs heures
+(première analyse d'une grande bibliothèque). L'application reste utilisable pendant ce temps.</p>
+
+<hr/>
+
+<h3>Import Picasa &nbsp;<span style="font-weight:normal;color:#888;">(Visages › Importer depuis Picasa…)</span></h3>
+<ul>
+  <li>Importe les annotations de visages depuis les fichiers <code>.picasa.ini</code>
+      de Google Picasa : noms et régions de visages.</li>
+  <li>Les noms sont associés automatiquement aux personnes existantes ou créent
+      de nouvelles personnes.</li>
+</ul>
+<p class="tip"><b>À ne faire qu'une seule fois.</b> Un nouvel import ré-insère tous les noms
+et annotations Picasa déjà connus, ce qui peut créer des doublons ou réintroduire
+des associations supprimées. Un avertissement s'affiche si vous tentez de relancer l'import.</p>
+
+<hr/>
+
+<h3>Réinitialiser et réindexer &nbsp;<span style="font-weight:normal;color:#888;">(Visages › Réinitialiser et réindexer…)</span></h3>
+<p>Deux options au choix, à utiliser avec précaution :</p>
+<table>
+  <tr><th>Option</th><th>Ce qui est effacé</th><th>Ce qui est conservé</th></tr>
+  <tr>
+    <td><b>Reset clustering</b></td>
+    <td>Groupes HDBSCAN uniquement</td>
+    <td>Embeddings, noms et associations personne ↔ visage</td>
+  </tr>
+  <tr>
+    <td><b>Réindexation complète</b></td>
+    <td>Tout (embeddings, groupes, noms, associations)</td>
+    <td>— (table rase)</td>
+  </tr>
+</table>
+<p class="tip"><b>La réindexation complète prend plusieurs heures</b> selon la taille
+de la bibliothèque. Faites une sauvegarde avant.</p>
+
+<hr/>
+
+<h3>② Regrouper les visages &nbsp;<span style="font-weight:normal;color:#888;">(Visages › Regrouper les visages…)</span></h3>
+<p><b>Ce que ça fait :</b> Regroupe par similarité les visages qui ont déjà été analysés,
+à l'aide de l'algorithme HDBSCAN sur les vecteurs ArcFace. Les groupes sont ensuite
+présentés dans <i>Identifier les personnes…</i></p>
+<p><b>Périmètre :</b> Tous les visages avec un embedding stocké, <u>sauf</u> ceux déjà
+identifiés (person_id assigné). Les associations validées sont conservées intactes.</p>
+<p><b>Ce que ça ne fait PAS :</b></p>
+<ul>
+  <li>Ne relance pas la détection InsightFace.</li>
+  <li>N'efface pas les noms ou associations déjà confirmés.</li>
+  <li>Ne traite pas les visages marqués «&nbsp;ignoré&nbsp;».</li>
+</ul>
+<p class="tip">Durée : 15 à 30 minutes selon la taille de la bibliothèque.
+À relancer après avoir ajusté la tolérance de similarité dans les Paramètres.</p>
+<p class="tip">Dès que de nouveaux groupes sont formés, l'application compare
+automatiquement le centroïde (embedding moyen) de chacun aux personnes déjà nommées.
+Au-delà de 50&nbsp;% de similarité cosinus, une suggestion apparaît dans la vue de la
+personne concernée, section «&nbsp;En attente de vérification&nbsp;» — voir l'étape
+③ ci-dessous. Cette comparaison est silencieuse, ne relance jamais InsightFace et
+n'associe jamais un visage sans validation de votre part.</p>
+
+<hr/>
+
+<h3>Visualisation des erreurs &nbsp;<span style="font-weight:normal;color:#888;">(Visages › Visualisation des erreurs…)</span></h3>
+<p><b>Ce que ça fait :</b> Liste les photos pour lesquelles l'étape ① (analyse) a échoué
+— timeout ou crash du sous-processus de détection — avec vignette, nom de fichier et
+type d'erreur. Le bouton <b>⟳ Réessayer</b> relance l'analyse pour ce seul fichier ;
+la ligne disparaît de la liste dès que le traitement réussit.</p>
+<p><b>Périmètre :</b> Uniquement les photos en erreur. Tant qu'une photo reste en erreur,
+elle est exclue des analyses automatiques suivantes (elle n'est pas retentée à chaque scan).</p>
+<p class="tip">Ces photos sont aussi repérables directement dans la grille : un clic droit
+sur une vignette en erreur propose l'option « Retenter l'identification des visages »
+dans le menu contextuel.</p>
+
+<hr/>
+
+<h3>Sauvegarde et restauration</h3>
+<ul>
+  <li><b>Visages › Sauvegarder la reconnaissance…</b> — crée une sauvegarde horodatée
+      de l'intégralité de <code>faces.db</code> (embeddings, groupes, personnes, annotations).</li>
+  <li><b>Visages › Gérer les sauvegardes…</b> — liste, restaure ou supprime les sauvegardes.
+      L'état courant est automatiquement sauvegardé avant toute restauration.</li>
+</ul>
+
+<hr/>
+
+<h3>Compteurs &nbsp;<span style="font-weight:normal;color:#888;">(Visages › Compteurs…)</span></h3>
+<p>Affiche un résumé chiffré de la reconnaissance faciale : nombre de personnes
+identifiées, de visages identifiés / reconnus / en attente de confirmation / inconnus,
+ainsi que les compteurs liés à l'import Picasa. Aucun traitement n'est lancé —
+c'est un simple état des lieux.</p>
+
+<hr/>
+
+<h3>③ Identifier les personnes &nbsp;<span style="font-weight:normal;color:#888;">(bouton « Identifier… » dans la sidebar)</span></h3>
+<p>Le bouton <b>Identifier…</b> de la barre latérale (avec un badge indiquant le nombre
+de groupes en attente) ouvre la vue des groupes anonymes pour les nommer. Les suggestions
+de noms (en bleu) indiquent une forte ressemblance avec une personne déjà nommée.
+Attribuer le même nom à plusieurs groupes les fusionne dans la même personne.</p>
+<p>Aucun traitement n'est lancé — c'est une navigation pure.</p>
+
+<h3>Vue des visages d'une personne</h3>
+<p>Cliquez sur une personne dans la sidebar pour ouvrir sa vue détaillée.
+Elle affiche deux sections :</p>
+<ul>
+  <li><b>Visages confirmés</b> — visages déjà associés à cette personne.
+    <ul>
+      <li>Simple clic : sélectionner un visage.</li>
+      <li><kbd>Ctrl</kbd>+clic : multi-sélection. <kbd>Shift</kbd>+clic : sélection en plage.</li>
+      <li>Double-clic : ouvrir la photo correspondante dans la visionneuse.</li>
+    </ul>
+  </li>
+</ul>
+<p><b>Clic droit</b> sur un visage confirmé :</p>
+<table>
+  <tr><th>Action</th><th>Effet</th></tr>
+  <tr><td><b>Réassigner</b></td><td>Déplace le ou les visages sélectionnés vers une autre personne</td></tr>
+  <tr><td><b>Dé-associer</b></td><td>Retire le visage de la personne ; il est réévalué pour d'autres personnes</td></tr>
+  <tr><td><b>Définir comme vignette principale</b></td><td>Utilise ce visage comme avatar dans la sidebar</td></tr>
+</table>
+<ul>
+  <li><b>En attente de vérification</b> — groupes que le système suggère d'associer à cette personne.
+    <ul>
+      <li>Survolez une vignette pour faire apparaître <b>✓</b> (accepter) et <b>✗</b> (rejeter).</li>
+      <li><b>Clic droit</b> : accepter ou rejeter le groupe entier.</li>
+      <li>Boutons <b>Accepter toutes</b> / <b>Rejeter toutes</b> en en-tête de la section.</li>
+    </ul>
+  </li>
+</ul>
+<p class="tip">Un visage rejeté n'est jamais perdu : il reste isolé et continue d'être
+candidat à une suggestion pour d'autres personnes.</p>
+
+<h3>Gérer les personnes (sidebar)</h3>
+<ul>
+  <li>Les personnes nommées apparaissent dans la barre latérale sous <b>Personnes</b>.</li>
+  <li>Un badge orange entre la vignette et le nom indique le nombre de suggestions en attente.</li>
+  <li>Dans la visionneuse, le panneau <b>Visages</b> liste les visages de la photo ouverte.</li>
+</ul>
+<p><b>Clic droit</b> sur une personne dans la sidebar :</p>
+<table>
+  <tr><th>Action</th><th>Effet</th></tr>
+  <tr><td><b>Renommer…</b></td><td>Modifie le nom dans toute la bibliothèque</td></tr>
+  <tr><td><b>Fusionner avec…</b></td><td>Fusionne tous les visages de cette personne avec ceux d'une autre</td></tr>
+  <tr><td><b>Effacer le nom…</b></td><td>Retire le nom — les visages redeviennent des groupes anonymes</td></tr>
+</table>
+
+<hr/>
+
+<h3>Visages ignorés</h3>
+<p>Un visage peut être ignoré de deux façons :</p>
+<ul>
+  <li><b>Automatiquement</b> lors de la détection : taille inférieure au seuil proportionnel
+      ou score de confiance &lt; 0,65. Le visage est stocké mais exclu du clustering.</li>
+  <li><b>Manuellement</b> via le bouton ✕ dans le panneau Visages (faux positif, doublure,
+      arrière-plan). Le visage reste récupérable via <b>Visages ignorés…</b> (ci-dessous).</li>
+</ul>
+<p>Le bouton <b>Visages ignorés…</b> en bas du panneau Visages permet de voir et restaurer
+les visages ignorés photo par photo.</p>
+
+<hr/>
