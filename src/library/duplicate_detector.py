@@ -377,8 +377,21 @@ class DuplicateDetectorThread(QThread):
                             exc = e
                         done += 1
                         if exc is not None:
-                            logger.warning("Fichier illisible (Tier 1) : %s (%s)", path, exc)
-                            self._corrupted.add(path)
+                            # Un fichier supprimé (par l'utilisateur, pendant que ce
+                            # scan tourne) échoue à l'ouverture exactement comme un
+                            # fichier corrompu (FileNotFoundError capturée dans le
+                            # même except Exception ci-dessus) — vérifier qu'il existe
+                            # encore avant de le classer corrompu, sinon il resterait
+                            # signalé (et proposé à la suppression/réparation) pour un
+                            # fichier qui n'existe déjà plus.
+                            if os.path.exists(path):
+                                logger.warning("Fichier illisible (Tier 1) : %s (%s)", path, exc)
+                                self._corrupted.add(path)
+                            else:
+                                logger.debug(
+                                    "Fichier disparu avant le calcul d'empreinte (Tier 1) : %s",
+                                    path,
+                                )
                         else:
                             dims[path] = d
                             micro[path] = arr
@@ -616,8 +629,15 @@ class DuplicateDetectorThread(QThread):
                 try:
                     img = _load_gray(path, _ORB_LOAD_SIZE)
                     if img is None:
-                        logger.warning("Fichier illisible (Tier 2) : %s", path)
-                        self._corrupted.add(path)
+                        # Cf. commentaire équivalent au Tier 1 : un fichier supprimé
+                        # entre-temps échoue à l'ouverture comme un fichier corrompu.
+                        if os.path.exists(path):
+                            logger.warning("Fichier illisible (Tier 2) : %s", path)
+                            self._corrupted.add(path)
+                        else:
+                            logger.debug(
+                                "Fichier disparu avant le calcul ORB (Tier 2) : %s", path
+                            )
                         continue
                     mtime = os.path.getmtime(path)
                     kp, des = orb.detectAndCompute(img, None)

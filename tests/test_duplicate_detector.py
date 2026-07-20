@@ -129,9 +129,12 @@ class TestDetectRealLibrary:
     def test_file_disappearing_after_prefilter_does_not_crash(self, tmp_path, monkeypatch):
         """Simule la disparition d'un fichier entre le pré-filtre os.path.isfile()
         et l'ouverture réelle (PIL) dans _compute_fingerprint — le cas exact
-        rapporté par l'utilisateur ("disparition d'un fichier durant le
-        traitement"). Le pré-filtre n'est qu'une optimisation ; le vrai
-        garde-fou est le try/except large autour de Image.open()."""
+        rapporté par l'utilisateur ("un fichier que je supprime se retrouve
+        dans la liste des fichiers corrompus"). Image.open() échoue de la
+        même façon (FileNotFoundError) pour un fichier disparu que pour un
+        fichier réellement corrompu : le garde-fou re-vérifie os.path.exists()
+        avant de classer corrompu, donc un fichier disparu est simplement
+        ignoré, jamais proposé à la réparation/suppression pour rien."""
         manifest = build_library(tmp_path / "lib")
         paths = [str(p) for p in manifest.images]
         vanishing = paths[0]
@@ -155,7 +158,7 @@ class TestDetectRealLibrary:
         thread._detect()  # ne doit pas lever d'exception
 
         assert "groups" in received
-        assert vanishing in thread.corrupted_paths
+        assert vanishing not in thread.corrupted_paths
         members_by_path = {p: gid for gid, members in received["groups"].items() for p in members}
         assert vanishing not in members_by_path
 
