@@ -15,16 +15,18 @@ from PySide6.QtGui import (
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QSlider,
     QPushButton, QDialog, QDialogButtonBox, QGridLayout, QSizePolicy,
-    QCheckBox, QStyle, QStyleOptionSlider, QButtonGroup,
+    QCheckBox, QStyle, QStyleOptionSlider, QButtonGroup, QGroupBox,
 )
 
 from src.core.models import EditInfo
+from src.processing.adjustments import ImageAdjuster
 
 logger = logging.getLogger(__name__)
 
 from src.ui.edit_sliders import EditSlider, MarkedSlider  # noqa: E402
 from src.ui.edit_icons import (  # noqa: E402
     _icon_brightness, _icon_contrast, _icon_saturation, _icon_vignette,
+    _TOGGLE_BTN_STYLE,
 )
 
 class TreatmentDialog(QDialog):
