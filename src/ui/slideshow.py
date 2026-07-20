@@ -435,14 +435,16 @@ class SlideshowWindow(QWidget):
         if self._index < len(self._photos) - 1:
             self._index += 1
             self._load_current()
-            self._advance_timer.start()
+            if self._playing:
+                self._advance_timer.start()
 
     def _go_newer(self) -> None:
         """▶ / → : aller vers la photo plus récente (index - 1)."""
         if self._index > 0:
             self._index -= 1
             self._load_current()
-            self._advance_timer.start()
+            if self._playing:
+                self._advance_timer.start()
 
     # ------------------------------------------------------------------ intervalle
 

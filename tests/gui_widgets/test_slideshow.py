@@ -164,6 +164,24 @@ class TestSlideshowWindowLogic:
         win._advance()
         assert win._playing is False
 
+    def test_navigation_while_paused_does_not_resume(self, qtbot):
+        photos = [PhotoInfo(path=f"absent_{i}.jpg", file_size=1, file_mtime=1.0)
+                  for i in range(3)]
+        win = SlideshowWindow(photos, start_index=1)
+        qtbot.addWidget(win)
+        win._toggle_play()   # pause
+        assert not win._advance_timer.isActive()
+
+        win._go_older()
+        assert win._playing is False
+        assert not win._advance_timer.isActive()
+        assert win._btn_playpause.text() == "▶"
+
+        win._go_newer()
+        assert win._playing is False
+        assert not win._advance_timer.isActive()
+        assert win._btn_playpause.text() == "▶"
+
     def test_show_overlay_restarts_hide_timer(self, qtbot):
         win = self._win(qtbot)
         win._overlay.hide()
