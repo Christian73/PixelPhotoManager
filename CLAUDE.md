@@ -17,7 +17,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 .venv\Scripts\Activate.ps1
 
 # Lancer l'application
-.venv\Scripts\python.exe src/core/app.py
+.venv\Scripts\python.exe main.py
 
 # Installer les dépendances
 .venv\Scripts\pip.exe install -r requirements.txt
@@ -29,12 +29,22 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 .venv\Scripts\python.exe -m pytest tests/test_thumbnail_cache.py::TestThumbnailCache::test_lru_eviction -v
 
 # Couverture (cliquet fail_under dans .coveragerc — relever, jamais baisser)
-.venv\Scripts\python.exe -m pytest tests/ --cov=src
+# COVERAGE_FILE dédié pour pouvoir combiner ensuite avec la couverture e2e (cf. plus bas) :
+# sans ça, l'étape e2e écrase ce fichier au lieu de le fusionner (déjà vu : total qui baisse au
+# lieu de monter après un "coverage combine").
+$env:COVERAGE_FILE='.coverage.base'; .venv\Scripts\python.exe -m pytest tests/ --cov=src
+Remove-Item Env:\COVERAGE_FILE
 
 # Scénarios e2e avec couverture du code UI (l'appli tourne sous coverage,
 # fichiers .coverage.* écrits à la racine — fusionner avec coverage combine)
 $env:PPM_E2E_COVERAGE='1'; .venv\Scripts\python.exe -m pytest tests/e2e -m e2e
 .venv\Scripts\python.exe -m coverage combine; .venv\Scripts\python.exe -m coverage report
+Copy-Item .coverage .coverage.e2e -Force  # préserve le résultat e2e-only sous un nom dédié
+
+# Analyse combinée (base + e2e) : fusionne les deux séries préservées ci-dessus en un seul total
+$env:COVERAGE_FILE='.coverage.combined'; .venv\Scripts\python.exe -m coverage combine --keep .coverage.base .coverage.e2e
+.venv\Scripts\python.exe -m coverage report --data-file=.coverage.combined
+Remove-Item Env:\COVERAGE_FILE
 
 # Packaging Windows (exécutable autonome)
 .venv\Scripts\pyinstaller.exe pixelphotomanager.spec

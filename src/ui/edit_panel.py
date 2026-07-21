@@ -46,6 +46,7 @@ _OP_LABELS: dict[str, str] = {
     "annotation_ungroup": "Dégrouper les annotations",
     "undo":               "Annuler",
     "redo":               "Rétablir",
+    "restore_all":        "Remise en place des retouches",
     "picasa_before":      "Avant import",
     "picasa_rotate":      "Rotation",
     "picasa_crop":        "Recadrage",
@@ -128,6 +129,7 @@ class EditPanel(QWidget):
         self._edit = EditInfo()
         self._undo_stack: list[EditInfo] = []
         self._redo_stack: list[EditInfo] = []
+        self._reset_snapshots: dict[str, EditInfo] = {}  # path normalisé -> état avant reset_all()
         self._db = EditDatabase()
         self._red_eye_active = False
         self._annotation_active = False
@@ -421,16 +423,20 @@ class EditPanel(QWidget):
         self._btn_redo = QPushButton("Rétablir")
         self._btn_redo.setEnabled(False)
         self._btn_redo.setShortcut(QKeySequence("Ctrl+Y"))
+        self._btn_redo.setStyleSheet("QPushButton:disabled { color: #555; }")
         self._btn_redo.clicked.connect(self.redo)
         undo_row.addWidget(self._btn_redo)
         inner_layout.addLayout(undo_row)
 
-        # Réinitialiser toutes les retouches
-        self._btn_reset = QPushButton("Réinitialiser toutes les retouches")
+        # Réinitialiser toutes les retouches / Remettre toutes les retouches
+        reset_row = QHBoxLayout()
+        reset_row.setSpacing(4)
+        self._btn_reset = QPushButton("Réinitialiser\ntoutes les retouches")
         self._btn_reset.setEnabled(False)
         self._btn_reset.setToolTip(
             "Supprime toutes les retouches et l'historique pour cette photo.\n"
-            "Le fichier original sur disque n'est pas modifié."
+            "Le fichier original sur disque n'est pas modifié.\n"
+            "Réversible via « Remettre toutes les retouches »."
         )
         self._btn_reset.setStyleSheet(
             "QPushButton { color: #c07070; }"
@@ -438,7 +444,17 @@ class EditPanel(QWidget):
             "QPushButton:disabled { color: #555; }"
         )
         self._btn_reset.clicked.connect(self.reset_all)
-        inner_layout.addWidget(self._btn_reset)
+        reset_row.addWidget(self._btn_reset)
+        self._btn_restore = QPushButton("Remettre\ntoutes les retouches")
+        self._btn_restore.setEnabled(False)
+        self._btn_restore.setToolTip(
+            "Remet en place les retouches supprimées par le dernier\n"
+            "« Réinitialiser toutes les retouches » sur cette photo."
+        )
+        self._btn_restore.setStyleSheet("QPushButton:disabled { color: #555; }")
+        self._btn_restore.clicked.connect(self.restore_all)
+        reset_row.addWidget(self._btn_restore)
+        inner_layout.addLayout(reset_row)
 
         # Géométrie (boutons directs)
         grp_geo = QGroupBox("Géométrie")
@@ -881,6 +897,10 @@ class EditPanel(QWidget):
         if len(self._undo_stack) > _UNDO_MAX:
             self._undo_stack.pop(0)
         self._redo_stack.clear()
+        # une nouvelle retouche après un reset_all() invalide l'instantané de restauration
+        # (sinon un futur restore_all() écraserait silencieusement cette retouche)
+        if self._photo:
+            self._reset_snapshots.pop(os.path.normpath(self._photo.path), None)
         self._update_undo_buttons()
 
     def _update_undo_buttons(self) -> None:
@@ -899,22 +919,16 @@ class EditPanel(QWidget):
             self._btn_redo.setText("Rétablir")
             self._btn_redo.setEnabled(False)
         self._btn_reset.setEnabled(self._edit.is_modified())
+        can_restore = bool(self._photo) and os.path.normpath(self._photo.path) in self._reset_snapshots
+        self._btn_restore.setEnabled(can_restore)
 
     def reset_all(self) -> None:
-        """Supprime toutes les retouches et l'historique pour la photo courante."""
+        """Supprime toutes les retouches et l'historique pour la photo courante.
+
+        Pas de confirmation : l'action est réversible via restore_all()."""
         if not self._photo:
             return
-        from PySide6.QtWidgets import QMessageBox
-        reply = QMessageBox.question(
-            self,
-            "Réinitialiser les retouches",
-            f"Supprimer toutes les retouches de cette photo ?\n\n"
-            "Le fichier original sur disque n'est pas modifié.",
-            QMessageBox.Yes | QMessageBox.No,
-            QMessageBox.No,
-        )
-        if reply != QMessageBox.Yes:
-            return
+        self._reset_snapshots[os.path.normpath(self._photo.path)] = copy.copy(self._edit)
         self._db.delete(self._photo.path)
         self._edit = EditInfo()
         self._undo_stack.clear()
@@ -922,6 +936,21 @@ class EditPanel(QWidget):
         self._update_undo_buttons()
         self.edits_changed.emit(copy.copy(self._edit))
         self.photo_saved.emit(self._photo.path, copy.copy(self._edit))
+
+    def restore_all(self) -> None:
+        """Remet en place les retouches supprimées par le dernier reset_all() sur cette photo."""
+        if not self._photo:
+            return
+        snapshot = self._reset_snapshots.pop(os.path.normpath(self._photo.path), None)
+        if snapshot is None:
+            self._update_undo_buttons()
+            return
+        self._edit = snapshot
+        self._undo_stack.clear()
+        self._redo_stack.clear()
+        self._save("restore_all")
+        self._update_undo_buttons()
+        self.edits_changed.emit(copy.copy(self._edit))
 
     def _rotate_cw(self) -> None:
         self._checkpoint("Rotation +90°")

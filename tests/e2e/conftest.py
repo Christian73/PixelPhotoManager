@@ -261,17 +261,23 @@ def find_dialog_button(window, texts: list[str], exact: bool = False, *, timeout
     avec un léger délai après l'action qui le déclenche."""
     deadline = time.monotonic() + timeout
     last_exc: Exception | None = None
+    last_labels: list[str] = []
     while time.monotonic() < deadline:
         try:
+            last_labels = []
             for button in window.descendants(control_type="Button"):
                 label = button.window_text()
+                last_labels.append(label)
                 for text in texts:
                     if (label == text) if exact else (text.lower() in label.lower()):
                         return button
         except Exception as exc:
             last_exc = exc
         time.sleep(0.3)
-    raise LookupError(f"Aucun bouton correspondant à {texts!r} trouvé après {timeout}s ({last_exc})")
+    raise LookupError(
+        f"Aucun bouton correspondant à {texts!r} trouvé après {timeout}s ({last_exc}) — "
+        f"boutons vus au dernier essai : {last_labels!r}"
+    )
 
 
 def invoke_button(

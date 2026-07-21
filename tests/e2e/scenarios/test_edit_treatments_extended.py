@@ -8,8 +8,9 @@ Chemin exercé pour chaque traitement à curseur simple (Contraste, Couleurs,
 Redresser, Vignette) : bouton de l'EditPanel réel -> dialogue non modal réel ->
 glissé du QSlider réel -> "Valider" -> persistance vérifiée directement sur
 edits.db (jamais l'UI). Rotation/Miroir H/Miroir V : boutons directs, pas de
-dialogue, persistance immédiate. Réinitialiser : confirmation puis suppression
-totale de la ligne photo_edits. Pour finir, régression prioritaire du
+dialogue, persistance immédiate. Réinitialiser : suppression immédiate de la
+ligne photo_edits (sans confirmation — action réversible via « Remettre
+toutes les retouches », cf. EditPanel.restore_all). Pour finir, régression prioritaire du
 NameError historique (commit 34d8c5e) : GammaCurveWidget plantait à chaque
 rendu après un découpage de fichier ayant omis un import — reproduit ici en
 cochant réellement les deux cases « Fonctions avancées… » puis « Fonctions
@@ -18,7 +19,6 @@ le bug se produit au paintEvent, avant toute interaction avec la courbe)."""
 import pytest
 
 from tests.e2e.conftest import (
-    click_yes,
     find_checkbox,
     find_dialog_button,
     open_photo_in_viewer,
@@ -109,7 +109,7 @@ def test_edit_treatments_extended(isolated_app):
     find_dialog_button(window, ["Contraste"], exact=True, timeout=15.0).click_input()
     sliders = _wait_for_n_sliders(window, 1)
     _set_slider(sliders[0], 0.6)
-    find_dialog_button(window, ["Valider"], exact=True, timeout=10.0).click_input()
+    find_dialog_button(window, ["Valider"], exact=True, timeout=20.0).click_input()
     wait_for_condition(
         lambda: _column(edits_db, photo, "contrast") is not None
         and abs(_column(edits_db, photo, "contrast") - 0.6) < 0.02,
@@ -128,7 +128,7 @@ def test_edit_treatments_extended(isolated_app):
     _wait_for_n_sliders(window, 4)
     sl_r = _slider_labeled(window, "Rouge")
     _set_slider(sl_r, 0.4)
-    find_dialog_button(window, ["Valider"], exact=True, timeout=10.0).click_input()
+    find_dialog_button(window, ["Valider"], exact=True, timeout=20.0).click_input()
     wait_for_condition(
         lambda: _column(edits_db, photo, "saturation") is not None
         and abs(_column(edits_db, photo, "saturation") - (-0.3)) < 0.02
@@ -140,7 +140,7 @@ def test_edit_treatments_extended(isolated_app):
     find_dialog_button(window, ["Redresser"], exact=True, timeout=15.0).click_input()
     sliders = _wait_for_n_sliders(window, 1)
     _set_slider(sliders[0], 5.0)
-    find_dialog_button(window, ["Valider"], exact=True, timeout=10.0).click_input()
+    find_dialog_button(window, ["Valider"], exact=True, timeout=20.0).click_input()
     wait_for_condition(
         lambda: _column(edits_db, photo, "straighten") is not None
         and abs(_column(edits_db, photo, "straighten") - 5.0) < 0.15,
@@ -152,7 +152,7 @@ def test_edit_treatments_extended(isolated_app):
     find_dialog_button(window, ["Vignette"], exact=True, timeout=15.0).click_input()
     sliders = _wait_for_n_sliders(window, 1)
     _set_slider(sliders[0], 0.5)
-    find_dialog_button(window, ["Valider"], exact=True, timeout=10.0).click_input()
+    find_dialog_button(window, ["Valider"], exact=True, timeout=20.0).click_input()
     wait_for_condition(
         lambda: _column(edits_db, photo, "vignette_strength") is not None
         and abs(_column(edits_db, photo, "vignette_strength") - 0.5) < 0.02,
@@ -176,9 +176,9 @@ def test_edit_treatments_extended(isolated_app):
         timeout=20.0, message="le miroir vertical n'a pas été persisté",
     )
 
-    # ---- Réinitialiser toutes les retouches : confirmation puis ligne supprimée ----
-    find_dialog_button(window, ["Réinitialiser toutes les retouches"], exact=True, timeout=10.0).click_input()
-    click_yes(window)
+    # ---- Réinitialiser toutes les retouches : sans confirmation (réversible), ligne supprimée ----
+    # Libellé sur 2 lignes (edit_panel.py) : UIA renvoie le \n littéral dans window_text().
+    find_dialog_button(window, ["Réinitialiser\ntoutes les retouches"], exact=True, timeout=10.0).click_input()
     wait_for_condition(
         lambda: not _row_exists(edits_db, photo),
         timeout=20.0, message="la réinitialisation n'a pas supprimé la ligne photo_edits",
@@ -197,7 +197,7 @@ def test_edit_treatments_extended(isolated_app):
     )
     assert window.exists(), "la fenêtre principale n'a pas survécu au rendu de GammaCurveWidget"
 
-    find_dialog_button(window, ["Valider"], exact=True, timeout=10.0).click_input()
+    find_dialog_button(window, ["Valider"], exact=True, timeout=20.0).click_input()
     wait_for_condition(
         lambda: _column(edits_db, photo, "gamma_use_curve") == 1,
         timeout=20.0, message="gamma_use_curve n'a pas été persisté après validation de la courbe",

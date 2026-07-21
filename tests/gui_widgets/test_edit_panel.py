@@ -6,6 +6,8 @@
 (pas de `db_path=` injectable) — la redirection de `%LOCALAPPDATA%` par
 `tests/conftest.py` (chargée avant tout import de test) est ce qui garantit
 que ces tests n'écrivent jamais dans le vrai profil utilisateur."""
+from PySide6.QtWidgets import QMessageBox
+
 from src.core.models import PhotoInfo
 from src.ui.edit_panel import EditPanel, EditSlider
 
@@ -103,3 +105,80 @@ class TestEditPanelUndoRedo:
         panel2 = self._make_panel(qtbot)
         panel2.set_photo(photo)
         assert panel2._undo_stack, "l'historique doit être rechargé depuis la DB"
+
+
+class TestEditPanelResetRestore:
+    def _make_panel(self, qtbot) -> EditPanel:
+        panel = EditPanel()
+        qtbot.addWidget(panel)
+        return panel
+
+    def test_reset_all_does_not_prompt_for_confirmation(self, qtbot, tmp_path, monkeypatch):
+        """Régression : reset_all() est réversible via restore_all(), donc ne doit
+        plus afficher de popup de confirmation (cf. QMessageBox.question retiré)."""
+        def _fail_if_called(*a, **k):
+            raise AssertionError("reset_all() ne doit plus afficher de QMessageBox de confirmation")
+        monkeypatch.setattr(QMessageBox, "question", _fail_if_called)
+        panel = self._make_panel(qtbot)
+        photo = _photo(str(tmp_path / "photo1.jpg"))
+        panel.set_photo(photo)
+
+        panel._edit.brightness = 0.4
+        panel.reset_all()
+        assert not panel._edit.is_modified()
+
+    def test_reset_all_then_restore_all_brings_back_the_edit(self, qtbot, tmp_path):
+        panel = self._make_panel(qtbot)
+        photo = _photo(str(tmp_path / "photo1.jpg"))
+        panel.set_photo(photo)
+
+        panel._checkpoint("Luminosité")
+        panel._push_undo("Luminosité")
+        panel._edit.brightness = 0.4
+        panel._save("brightness")
+        modified = panel.get_edit()
+
+        assert not panel._btn_restore.isEnabled()
+        panel.reset_all()
+        assert not panel._edit.is_modified()
+        assert panel._btn_restore.isEnabled(), "reset_all() doit rendre le bouton restore disponible"
+
+        with qtbot.waitSignal(panel.edits_changed, timeout=1000) as blocker:
+            panel.restore_all()
+        assert blocker.args == [modified]
+        assert panel._edit.brightness == 0.4
+        assert not panel._btn_restore.isEnabled(), "l'instantané est consommé après restauration"
+
+        panel2 = self._make_panel(qtbot)
+        panel2.set_photo(photo)
+        assert panel2.get_edit().brightness == 0.4, "la restauration doit être persistée en DB"
+
+    def test_restore_all_without_prior_reset_is_a_noop(self, qtbot, tmp_path):
+        panel = self._make_panel(qtbot)
+        photo = _photo(str(tmp_path / "photo1.jpg"))
+        panel.set_photo(photo)
+
+        panel._edit.brightness = 0.3
+        panel.restore_all()
+        assert panel._edit.brightness == 0.3
+
+    def test_new_edit_after_reset_invalidates_restore_snapshot(self, qtbot, tmp_path):
+        panel = self._make_panel(qtbot)
+        photo = _photo(str(tmp_path / "photo1.jpg"))
+        panel.set_photo(photo)
+
+        panel._checkpoint("Luminosité")
+        panel._push_undo("Luminosité")
+        panel._edit.brightness = 0.4
+        panel._save("brightness")
+
+        panel.reset_all()
+        assert panel._btn_restore.isEnabled()
+
+        panel._checkpoint("Rotation +90°")
+        panel._push_undo("Rotation +90°")
+        panel._edit.rotation = 90
+
+        assert not panel._btn_restore.isEnabled(), (
+            "une nouvelle retouche après reset_all() doit invalider l'instantané de restauration"
+        )
