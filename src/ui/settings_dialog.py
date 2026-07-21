@@ -171,6 +171,11 @@ class _VideoPlayerPage(QWidget):
 
         self._edit_path = QLineEdit()
         self._edit_path.setPlaceholderText("Chemin vers l'exécutable…")
+        # Nom accessible pour l'automatisation pywinauto (e2e) — sans lui,
+        # ce QLineEdit est indiscernable du champ de filtre de la sidebar
+        # (MainWindow reste dans l'arbre UIA derrière ce dialogue modal),
+        # même convention que ThumbnailCell/_DuplicateCard/extapp.
+        self._edit_path.setAccessibleName("settings::video_player_path")
         self._edit_path.textChanged.connect(lambda: self._rb_custom.setChecked(True))
         path_row.addWidget(self._edit_path, stretch=1)
 

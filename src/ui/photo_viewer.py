@@ -131,6 +131,7 @@ class PhotoViewer(QWidget):
     face_add_mode_ended         = Signal()  # mode ajout de visage terminé (validé ou annulé)
     force_redetect_requested    = Signal(object)  # PhotoInfo — menu contextuel
     folder_grid_requested       = Signal(object)  # PhotoInfo — menu contextuel : grille du dossier
+    favorite_toggle_requested   = Signal(object)  # PhotoInfo — bascule favori demandée
     annotation_added             = Signal(object)  # dict annotation ajoutée
     annotation_deleted           = Signal(str)     # id de l'annotation supprimée
     annotation_deleted_multi     = Signal(object)  # list[str] ids supprimés (suppression groupée)
@@ -665,6 +666,10 @@ class PhotoViewer(QWidget):
                 continue
             btn = QToolButton()
             btn.setToolTip(f"Ouvrir avec {name}")
+            # Nom accessible pour l'automatisation pywinauto (e2e) — même
+            # convention que ThumbnailCell/_DuplicateCard : ce bouton n'a pas
+            # de texte propre (icône seule), donc pas de window_text() unique.
+            btn.setAccessibleName(f"extapp::{name}")
             btn.setFixedSize(32, 32)
             btn.setIcon(_icon_provider.icon(QFileInfo(path)))
             btn.setIconSize(QSize(22, 22))
@@ -767,6 +772,7 @@ class PhotoViewer(QWidget):
         if self._photo:
             self._photo.is_favorite = checked
             self._btn_fav.setText("★" if checked else "♡")
+            self.favorite_toggle_requested.emit(self._photo)
 
     def keyPressEvent(self, event: QKeyEvent) -> None:
         key = event.key()

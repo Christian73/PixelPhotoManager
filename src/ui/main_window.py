@@ -130,6 +130,7 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
         self._persons_refresh_thread: _PersonsRefreshThread | None = None
         self._dup_migration_thread: _DupMigrationThread | None = None
         self._delete_thread: _DeleteWorkerThread | None = None
+        self._pending_deletes: list = []  # suppressions confirmées en attente (worker déjà occupé)
         self._scan_had_removals: bool = False
         # Garde manuelle (pas Qt.UniqueConnection : voir _on_scan_finished) —
         # une seule connexion du portillon persons_thumbnails_ready par appli.
@@ -490,6 +491,7 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
         self._grid.add_to_album_requested.connect(self._on_add_to_album)
         self._grid.create_album_with_requested.connect(self._on_create_album_with)
         self._grid.retry_face_index_requested.connect(self._on_retry_face_index_requested)
+        self._grid.favorite_toggle_requested.connect(self._on_favorite_toggle_requested)
 
         self._grid_nav_bar = QWidget()
         self._grid_nav_bar.setStyleSheet("background: rgba(0,0,0,200);")
@@ -535,6 +537,7 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
         self._viewer.delete_requested.connect(self._on_delete_requested)
         self._viewer.remove_from_album_requested.connect(self._on_remove_from_album_requested)
         self._viewer.force_redetect_requested.connect(self._on_force_redetect_requested)
+        self._viewer.favorite_toggle_requested.connect(self._on_favorite_toggle_requested)
         self._viewer.folder_grid_requested.connect(
             lambda photo: self._navigate_to_photo_path(photo.path)
         )
@@ -1839,11 +1842,21 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
                 self._config.set("ui.delete_no_confirm", True)
 
         # Un seul worker de suppression à la fois : deux workers entrelacés
-        # rendraient l'épilogue (grille, groupes de doublons) incohérent.
+        # rendraient l'épilogue (grille, groupes de doublons) incohérent. La
+        # suppression est déjà confirmée à ce stade : la mettre en file plutôt
+        # que de l'abandonner silencieusement (cf. _pending_deletes en mémoire —
+        # un worker peut rester `isRunning()` plusieurs secondes, notamment sur
+        # `FaceDatabase.delete_for_paths` en cas de contention SQLite passagère,
+        # largement plus long que le message de statut furtif qui avertissait
+        # l'utilisateur avant ce correctif).
         if self._delete_thread is not None and self._delete_thread.isRunning():
-            self.statusBar().showMessage("Une suppression est déjà en cours…", 3000)
+            self._pending_deletes.append(photos)
+            self.statusBar().showMessage("Suppression mise en file d'attente…", 3000)
             return
 
+        self._start_delete_worker(photos)
+
+    def _start_delete_worker(self, photos: list) -> None:
         # Mémoriser l'état du viewer avant la suppression
         in_viewer = self._stack.currentIndex() == 1
         viewed_index = self._current_photo_index
@@ -1955,6 +1968,17 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
         if errors:
             QMessageBox.warning(self, "Erreurs de suppression",
                                 "Impossible de supprimer :\n" + "\n".join(errors))
+
+        if self._pending_deletes:
+            self._start_delete_worker(self._pending_deletes.pop(0))
+
+    def _on_favorite_toggle_requested(self, photo: PhotoInfo) -> None:
+        """Persiste la bascule favori demandée par la grille (menu contextuel)
+        ou la visionneuse (bouton ★ / menu contextuel) — les deux émetteurs
+        basculent photo.is_favorite avant d'émettre, ce handler n'a qu'à écrire
+        l'état déjà à jour."""
+        if photo.id is not None:
+            self._catalog.set_favorite(photo.id, photo.is_favorite)
 
     def _on_remove_from_album_requested(self, photos: list) -> None:
         """Retire les photos de l'album affiché (touche Del / menu contextuel en

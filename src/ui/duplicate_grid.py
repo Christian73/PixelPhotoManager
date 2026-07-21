@@ -96,6 +96,9 @@ class _DuplicateCard(QFrame):
         self.setCursor(Qt.PointingHandCursor)
         self.setStyleSheet(self._STYLE)
         self.setToolTip("Double-clic : comparer dans la visionneuse — ✗ : ignorer ce groupe")
+        # Nom accessible pour l'automatisation pywinauto (e2e) — même convention
+        # que ThumbnailCell (thumbnail_grid.py: "thumb::<path>").
+        self.setAccessibleName(f"dupgroup::{group_id}")
 
         col = QVBoxLayout(self)
         col.setContentsMargins(6, 6, 6, 6)
@@ -120,6 +123,7 @@ class _DuplicateCard(QFrame):
         btn_ignore.setStyleSheet(_BTN_REJECT_STYLE)
         btn_ignore.setCursor(Qt.PointingHandCursor)
         btn_ignore.setToolTip("Ignorer ce groupe de doublons")
+        btn_ignore.setAccessibleName(f"dupgroup_ignore::{group_id}")
         btn_ignore.clicked.connect(lambda: self.ignore_requested.emit(self._group_id))
 
     @property

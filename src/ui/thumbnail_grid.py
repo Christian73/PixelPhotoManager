@@ -417,6 +417,7 @@ class ThumbnailGrid(QScrollArea):
     add_to_album_requested    = Signal(list)      # list[PhotoInfo] — ajouter à album existant
     create_album_with_requested = Signal(list)    # list[PhotoInfo] — créer nouvel album
     retry_face_index_requested = Signal(object)   # PhotoInfo — retenter l'identification des visages
+    favorite_toggle_requested = Signal(object)    # PhotoInfo — bascule favori demandée
 
     def __init__(self, cache: ThumbnailCache, parent=None):
         super().__init__(parent)
@@ -1204,6 +1205,10 @@ class ThumbnailGrid(QScrollArea):
             if cell.photo.path in assignments:
                 cell.set_duplicate_group(assignments[cell.photo.path])
 
+    def _toggle_favorite_from_menu(self, photo: PhotoInfo) -> None:
+        photo.is_favorite = not photo.is_favorite
+        self.favorite_toggle_requested.emit(photo)
+
     @Slot(object, object)
     def _on_right_click(self, photo: PhotoInfo, pos) -> None:
         # Effective selection: full selection if photo is already selected, else just this photo
@@ -1216,7 +1221,7 @@ class ThumbnailGrid(QScrollArea):
         menu.addAction("Ouvrir", lambda: self.photo_activated.emit(photo))
         menu.addSeparator()
         fav_label = "Retirer des favoris" if photo.is_favorite else "Marquer comme favori"
-        menu.addAction(fav_label)
+        menu.addAction(fav_label, lambda: self._toggle_favorite_from_menu(photo))
         menu.addAction("Renommer l'image", lambda: self.rename_requested.emit(photo))
         menu.addAction("Déplacer vers…", lambda: self.move_requested.emit(photo))
         menu.addAction("Enregistrer l'image traitée sur le disque",

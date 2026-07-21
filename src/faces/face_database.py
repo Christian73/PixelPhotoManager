@@ -2297,8 +2297,14 @@ class FaceDatabase:
                   )
                 """
             ).rowcount
-            if n:
-                conn.commit()
+            # commit() inconditionnel : un UPDATE/DELETE ouvre une transaction
+            # même à 0 ligne affectée ; ne committer que si n>0 laissait la
+            # connexion de ce thread dans une transaction ouverte, bloquant
+            # ensuite toute écriture d'un autre thread en "database is locked"
+            # (cf. CLAUDE.md, pattern de connexion) — bug réel observé via e2e
+            # (test_folder_management), second FaceIndexThread requeue vs
+            # ClusterThread.assign_person_synthetic_clusters.
+            conn.commit()
         if n:
             logger.info(
                 "restore_orphaned_ignored_faces: %d visage(s) réactivé(s) (identification orpheline)", n
@@ -2327,8 +2333,8 @@ class FaceDatabase:
                 "     WHERE pa2.photo_path = faces.photo_path"
                 "   )"
             ).rowcount
-            if n:
-                conn.commit()
+            # commit() inconditionnel — cf. restore_orphaned_ignored_faces ci-dessus.
+            conn.commit()
         if n:
             logger.info(
                 "cleanup_stale_placeholder_faces: %d placeholder(s) orphelin(s) supprimé(s)", n
@@ -2353,8 +2359,8 @@ class FaceDatabase:
                 " WHERE person_id IS NOT NULL"
                 f"   AND (cluster_id IS NULL OR cluster_id < {self._SYNTHETIC_CLUSTER_BASE})"
             ).rowcount
-            if n:
-                conn.commit()
+            # commit() inconditionnel — cf. restore_orphaned_ignored_faces ci-dessus.
+            conn.commit()
         if n:
             logger.info(
                 "assign_person_synthetic_clusters: %d face(s) migrées vers cluster synthétique", n
@@ -2383,8 +2389,8 @@ class FaceDatabase:
                 f"DELETE FROM picasa_annotations WHERE person_id NOT IN ({ph})",
                 vals,
             ).rowcount
-            if n_faces or n_ann:
-                conn.commit()
+            # commit() inconditionnel — cf. restore_orphaned_ignored_faces ci-dessus.
+            conn.commit()
         if n_faces or n_ann:
             logger.info(
                 "cleanup_orphan_person_ids: %d face(s) réinitialisées, "

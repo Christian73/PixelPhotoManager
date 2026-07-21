@@ -245,6 +245,13 @@ class FacesController:
 
     def _start_face_indexing(self) -> None:
         if self._face_indexer and self._face_indexer.isRunning():
+            # Un scan (ex. re-scan forcé) vient d'ajouter/modifier des photos
+            # pendant qu'une indexation précédente tourne encore : sans cette
+            # garde, la demande est perdue silencieusement — aucun mécanisme
+            # ne relance l'indexation pour les nouvelles photos, contrairement
+            # au cas symétrique du warmup TF (_on_scan_finished/_on_warmup_done).
+            # _on_face_indexing_finished relance dès que le run en cours se termine.
+            self._face_index_pending = True
             return
         if self._face_indexer is not None:
             self._face_indexer.deleteLater()
@@ -365,6 +372,9 @@ class FacesController:
         self._lbl_action.setText("")
         if faces > 0:
             self._run_clustering()
+        if self._face_index_pending:
+            self._face_index_pending = False
+            self._start_face_indexing()
 
     def _on_face_index_error(self, path: str, msg: str) -> None:
         """Timeout/crash pendant l'analyse automatique : la photo est déjà

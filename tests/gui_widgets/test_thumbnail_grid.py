@@ -136,6 +136,26 @@ class TestNoGhostCellWindows:
         grid.close()
 
 
+class TestFavoriteToggleFromMenu:
+    def test_toggle_favorite_flips_state_and_emits_signal(self, qtbot, tmp_path):
+        """Régression : le menu contextuel « Marquer comme favori » n'était
+        câblé à aucun callback (fav_label ajouté sans action) — l'action ne
+        faisait donc strictement rien. Ce test aurait échoué avant le
+        correctif puisqu'aucun signal n'était jamais émis."""
+        grid = _make_grid(qtbot, tmp_path)
+        photo = _photo("C:/lib/fav.jpg", is_favorite=False)
+        grid.set_photos([photo])
+
+        with qtbot.waitSignal(grid.favorite_toggle_requested, timeout=1000) as blocker:
+            grid._toggle_favorite_from_menu(photo)
+        assert blocker.args == [photo]
+        assert photo.is_favorite is True
+
+        with qtbot.waitSignal(grid.favorite_toggle_requested, timeout=1000):
+            grid._toggle_favorite_from_menu(photo)
+        assert photo.is_favorite is False
+
+
 class TestRemovePhotos:
     def test_remove_photos_updates_list_and_selection(self, qtbot, tmp_path):
         grid = _make_grid(qtbot, tmp_path)

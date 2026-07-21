@@ -800,3 +800,84 @@ class TestCleanupFamily:
         assert n == 1
         assert _raw_query_one(db, "SELECT cluster_id FROM faces WHERE id=?", (identified,))[0] == 10_000_007
         assert _raw_query_one(db, "SELECT cluster_id FROM faces WHERE id=?", (unidentified,))[0] == 3
+
+
+class TestZeroRowCommitDoesNotLeaveOpenTransaction:
+    """Régression : restore_orphaned_ignored_faces / cleanup_stale_placeholder_faces /
+    assign_person_synthetic_clusters / cleanup_orphan_person_ids ne committaient
+    l'UPDATE/DELETE que si rowcount>0 (`if n: conn.commit()`). Un UPDATE/DELETE qui
+    ne touche aucune ligne ouvre quand même une transaction (BEGIN implicite du
+    module sqlite3 dès le premier DML) — sauter le commit laissait la connexion
+    thread-local dans une transaction ouverte indéfiniment. Le verrou Python
+    (_guard()) n'empêche pas ce bug : il protège l'exécution concurrente du code,
+    pas la clôture de la transaction SQLite sous-jacente une fois le verrou relâché.
+
+    Découvert via test_folder_management.py (e2e) : le clustering déclenché après
+    un FaceIndexThread qui ne trouve aucun visage (n_identified=0, donc rowcount=0
+    dans assign_person_synthetic_clusters) laissait la connexion du ClusterThread
+    bloquée en transaction ouverte — le FaceIndexThread suivant (re-scan requeue)
+    plantait alors sur son propre save_faces() avec
+    `sqlite3.OperationalError: database is locked` après expiration du busy_timeout
+    (5 s), cf. CLAUDE.md pattern de connexion."""
+
+    def test_restore_orphaned_ignored_faces_zero_rows_commits(self, tmp_path):
+        db = FaceDatabase(db_path=tmp_path / "faces.db")
+
+        n = db.restore_orphaned_ignored_faces()
+
+        assert n == 0
+        assert db._conn().in_transaction is False
+
+    def test_cleanup_stale_placeholder_faces_zero_rows_commits(self, tmp_path):
+        db = FaceDatabase(db_path=tmp_path / "faces.db")
+
+        n = db.cleanup_stale_placeholder_faces()
+
+        assert n == 0
+        assert db._conn().in_transaction is False
+
+    def test_assign_person_synthetic_clusters_zero_rows_commits(self, tmp_path):
+        db = FaceDatabase(db_path=tmp_path / "faces.db")
+        _raw_insert_face(db, "a.jpg")  # aucun person_id -> rowcount=0
+
+        n = db.assign_person_synthetic_clusters()
+
+        assert n == 0
+        assert db._conn().in_transaction is False
+
+    def test_cleanup_orphan_person_ids_zero_rows_commits(self, tmp_path):
+        db = FaceDatabase(db_path=tmp_path / "faces.db")
+        _raw_insert_face(db, "a.jpg", person_id=1)
+
+        n_faces, n_ann = db.cleanup_orphan_person_ids(valid_person_ids={1})
+
+        assert (n_faces, n_ann) == (0, 0)
+        assert db._conn().in_transaction is False
+
+    def test_zero_row_commit_does_not_block_a_second_thread_writer(self, tmp_path):
+        """Reproduction directe du scénario e2e : un thread appelle une méthode à
+        rowcount=0, un AUTRE thread (donc une AUTRE connexion sqlite thread-local)
+        doit pouvoir écrire immédiatement après, sans attendre le busy_timeout."""
+        import threading
+
+        db = FaceDatabase(db_path=tmp_path / "faces.db")
+
+        def _run_zero_row_method():
+            db.assign_person_synthetic_clusters()
+
+        t = threading.Thread(target=_run_zero_row_method)
+        t.start()
+        t.join(timeout=5)
+        assert not t.is_alive()
+
+        def _write_from_other_thread():
+            _raw_insert_face(db, "b.jpg")
+
+        writer = threading.Thread(target=_write_from_other_thread)
+        writer.start()
+        writer.join(timeout=5)
+        assert not writer.is_alive(), (
+            "l'écriture depuis un autre thread est restée bloquée : la connexion "
+            "du premier thread a probablement laissé une transaction ouverte"
+        )
+        assert _raw_query_one(db, "SELECT COUNT(*) FROM faces WHERE photo_path=?", ("b.jpg",))[0] == 1

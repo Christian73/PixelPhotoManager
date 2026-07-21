@@ -15,5 +15,6 @@ parallel = true
 # À RELEVER à chaque campagne de tests (jamais baisser). Historique :
 #   2026-07-19  29 % → 36 % (phases 1+2) → 45,8 % (phases 3+4, seuil 45)
 #   2026-07-20  45,8 % → 48,84 % (refactor modularisation N1-N5, seuil 48)
-fail_under = 48
+#   2026-07-21  48,84 % → 49,23 % (correctif file d'attente suppressions, seuil 49)
+fail_under = 49
 precision = 0
