@@ -11,6 +11,7 @@ from pathlib import Path
 
 from PySide6.QtCore import QThread, Signal
 
+from src.faces.clusterer import reset_clustering_cache
 from src.library.dedup_cache import DedupCache
 
 logger = logging.getLogger(__name__)
@@ -251,4 +252,9 @@ class _ResetWorkerThread(QThread):
             self._face_db.reset_clustering()
         else:                    # RESET_FULL
             self._face_db.reset_index()
+        # Les deux resets vident cluster_id en masse sans changer le nombre
+        # de visages non identifiés si la bibliothèque n'a pas bougé entre
+        # temps : sans invalider ce cache, le clustering qui suit (déclenché
+        # par _on_reset_done) sauterait silencieusement (cf. reset_clustering_cache).
+        reset_clustering_cache()
         self.done.emit(self._choice)

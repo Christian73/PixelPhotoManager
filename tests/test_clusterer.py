@@ -227,6 +227,43 @@ class TestRunClustering:
 # ------------------------------------------------------------------ ClusterThread
 
 
+class TestResetClusteringCache:
+    def test_clears_sentinel(self, monkeypatch):
+        monkeypatch.setattr(clusterer, "_last_clustered_n", 42)
+        clusterer.reset_clustering_cache()
+        assert clusterer._last_clustered_n == -1
+
+    def test_reclusters_after_db_reset_with_same_face_count(self, tmp_path):
+        """Bug 2026-07 (test_faces_reset_full) : FaceDatabase.reset_clustering()/
+        reset_index() vident cluster_id en masse sans changer N (même bibliothèque
+        réindexée à l'identique) — sans invalider le cache, _run_clustering croit
+        qu'aucun changement n'est survenu et saute le regroupement, laissant tous
+        les visages bloqués avec cluster_id=NULL indéfiniment."""
+        db = FaceDatabase(db_path=tmp_path / "faces.db")
+        ids = [
+            _insert_emb_face(db, f"a{i}.jpg", _vec(0, seed=i)) for i in range(3)
+        ] + [
+            _insert_emb_face(db, f"b{i}.jpg", _vec(1, seed=i + 10)) for i in range(3)
+        ]
+        assert clusterer._run_clustering(db) >= 1
+
+        db.reset_clustering()
+        clusterer.reset_clustering_cache()
+        assert clusterer._run_clustering(db) >= 1
+
+        conn = sqlite3.connect(db._db_path)
+        try:
+            cluster_ids = [
+                conn.execute(
+                    "SELECT cluster_id FROM faces WHERE id=?", (fid,)
+                ).fetchone()[0]
+                for fid in ids
+            ]
+        finally:
+            conn.close()
+        assert all(cid is not None for cid in cluster_ids)
+
+
 class TestClusterThread:
     def test_finished_signal(self, qtbot, tmp_path):
         db = FaceDatabase(db_path=tmp_path / "faces.db")

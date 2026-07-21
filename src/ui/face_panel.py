@@ -214,6 +214,7 @@ class _FaceItem(QFrame):
         self._face_id = face.id
         self.setFrameShape(QFrame.NoFrame)
         self.setStyleSheet(self._STYLE_NORMAL)
+        self.setAccessibleName(f"faceitem::{face.id}")
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(4, 4, 4, 4)

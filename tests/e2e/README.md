@@ -55,10 +55,16 @@ $env:PPM_E2E_COVERAGE='1'
 `.coverage.<hôte>.<pid>` par lancement, cf. `parallel = true` dans
 `.coveragerc`), et `_graceful_close()` (conftest) ferme la fenêtre proprement
 avant le `terminate()` de secours — un TerminateProcess n'exécuterait pas le
-hook atexit qui écrit les données. Ordre de grandeur constaté avec les 2 seuls
-tests initiaux de `test_scan_and_browse.py` : `main_window.py` ~35 %,
-`thumbnail_grid.py` ~49 % — à rafraîchir maintenant que la suite compte
-12 tests (voir §6 du plan de ce chantier e2e pour la procédure).
+hook atexit qui écrit les données. Ce rapport ne combine que le code exécuté
+par les 14 scénarios e2e (pas la suite `pytest tests/` de base) : le total
+global (46 %) est **normalement sous le cliquet `fail_under`** (49) et
+`coverage report` renvoie donc un code de sortie non nul dans ce mode — c'est
+attendu, purement informationnel, jamais gating. Ordre de grandeur constaté
+avec les 14 scénarios actuels (2026-07) : `main_window.py` 73 %,
+`thumbnail_grid.py` 72 %, `edit_panel.py` 70 %, `photo_viewer.py` 69 %,
+`sidebar.py` 70 %, `face_cluster_grid.py` 55 %, `main_window_faces.py` 47 % —
+nette hausse par rapport aux ~35 %/~49 % (`main_window.py`/`thumbnail_grid.py`)
+mesurés avec les 2 seuls tests initiaux de `test_scan_and_browse.py`.
 
 ## Ce que chaque scénario vérifie
 
@@ -75,6 +81,7 @@ tests initiaux de `test_scan_and_browse.py` : `main_window.py` ~35 %,
 | `test_albums.py` | Les 3 chemins de création d'album (sidebar "+", "Créer un nouvel album avec…" en multi-sélection grille, "Ajouter … à un album…" en sélection simple) et le seul chemin de suppression (menu contextuel sidebar, confirmation standard Oui/Non) — vérifie les lignes `albums`/`album_photos` sans jamais toucher aux photos ni aux fichiers sur disque. |
 | `test_save_options_and_settings.py` | "Enregistrer l'image traitée sur le disque" (écrasement + sauvegarde `.tmp_originals`), case "Ne plus demander" de la confirmation de suppression (persistance `ui.delete_no_confirm`), Applications externes (icône visionneuse ajoutée/retirée), Paramètres › Lecteur vidéo (round-trip `config.json`), Aide/À propos. |
 | `test_sidebar_special_views.py` | Vues spéciales de la sidebar (Favoris, Vidéos, recherche par nom de fichier) — preuve de bout en bout des deux correctifs favoris de ce chantier (viewer qui ne persistait rien, item de menu grille sans callback), via les deux chemins d'entrée (bouton visionneuse + menu contextuel grille). |
+| `test_faces_identify_and_reset.py` | Utilise `isolated_app_with_faces` (7 photos de visages, voir `fixtures/faces/`). `test_faces_identify_and_reset` : identifier un visage isolé (nouvelle personne) et un cluster entier (nouvelle personne) depuis la visionneuse/`FaceClusterGrid`, fusionner les deux personnes créées, ignorer puis restaurer un visage, "Réinitialiser les groupes uniquement" (RESET_CLUSTERING, non destructif — les personnes identifiées doivent survivre). `test_faces_reset_full` (lancement séparé, destructif) : "Réinitialisation complète" (RESET_FULL) → `faces`/`indexed_photos` vidés puis ré-indexation complète — régression directe du bug de cache de regroupement HDBSCAN périmé (`clusterer._last_clustered_n`) corrigé en 2026-07 (voir `bugfix_clustering_cache_stale_after_reset_2026-07.md`). |
 
 Le détail exact des étapes de chaque fichier est documenté dans son propre
 docstring de module — cette table reste volontairement un résumé.
@@ -135,16 +142,15 @@ de trace en base.
 
 ## Limites connues / dette assumée
 
-- Pas encore de couverture e2e dédiée à l'identification/fusion/reset de
-  visages (`test_faces_identify_and_reset.py`, prévu via une fixture
-  `isolated_app_with_faces` dédiée dans `conftest.py`) — bloqué en attendant
-  des photos de visages de test (`tests/e2e/fixtures/faces/`, 7 images : 3
+- Couverture e2e de l'identification/fusion/reset de visages désormais
+  présente (`test_faces_identify_and_reset.py`, fixture dédiée
+  `isolated_app_with_faces` + `tests/e2e/fixtures/faces/`, 7 images : 3
   solo « Personne A », 3 solo « Personne B », 1 photo des deux ensemble,
   générées/choisies pour ne pas représenter de vraie personne identifiable).
-  En attendant, la reconnaissance faciale (InsightFace/HDBSCAN) n'est exercée
-  qu'indirectement : son déclenchement automatique après chaque scan
-  (`_on_scan_finished` → `_start_face_indexing`) tourne "en fond" pendant tous
-  les scénarios existants sans être vérifié directement.
+  Aucune hypothèse n'est faite sur la topologie exacte du regroupement
+  HDBSCAN (non garanti reproductible sur des visages générés par IA) :
+  chaque étape interroge `faces.db` pour trouver un candidat plutôt que de
+  deviner un id/nombre de groupes.
 - Volontairement hors périmètre pour cette campagne : toute automation de
   glissé/geste à main levée sur un widget peint à la main (recadrage, poignées
   de vignette, placement yeux rouges, annotations, pipette balance des blancs,

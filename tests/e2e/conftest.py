@@ -365,6 +365,26 @@ def find_checkbox(window, text: str, *, timeout: float = 10.0):
     raise LookupError(f"Case à cocher contenant {text!r} introuvable après {timeout}s ({last_exc})")
 
 
+def find_radio_button(window, text: str, *, timeout: float = 10.0):
+    """Cherche un `QRadioButton` parmi les descendants de `window` dont le
+    texte contient `text` — analogue à `find_checkbox` mais filtré sur
+    `control_type="RadioButton"` (ex. choisir une personne existante dans
+    `_AssignDialog`/`MergePersonsDialog`/`_ResetFacesDialog`, dont les
+    libellés incluent un compte de photos variable, d'où une recherche par
+    sous-chaîne plutôt que par égalité exacte)."""
+    deadline = time.monotonic() + timeout
+    last_exc: Exception | None = None
+    while time.monotonic() < deadline:
+        try:
+            for radio in window.descendants(control_type="RadioButton"):
+                if text in radio.window_text():
+                    return radio
+        except Exception as exc:
+            last_exc = exc
+        time.sleep(0.3)
+    raise LookupError(f"Bouton radio contenant {text!r} introuvable après {timeout}s ({last_exc})")
+
+
 def click_yes(window) -> None:
     find_dialog_button(window, ["Oui", "Yes", "&Oui", "&Yes"]).click_input()
 
@@ -630,6 +650,44 @@ def find_thumbnail(window, photo_path: str, *, timeout: float = 15.0):
     raise TimeoutError(f"Vignette {name!r} introuvable après {timeout}s : {last_exc}")
 
 
+def scroll_grid_into_view(window, photo_path: str, *, max_attempts: int = 30) -> None:
+    """Scrolle la grille (molette réelle, `wheel_mouse_input`) jusqu'à ce que
+    la vignette de `photo_path` existe dans l'arbre UIA.
+
+    Nécessaire après toute navigation qui a pu laisser la position de scroll
+    loin du haut de la grille (ex. retour depuis `FaceClusterGrid` via son
+    bouton « ← Photos ») : `ThumbnailGrid` ne matérialise que les cellules de
+    `_visible_range()` (+ marge d'un écran, cf. docstring de `find_thumbnail`)
+    — une vignette précédemment visible peut être sortie du champ sans qu'un
+    scroll manuel ne l'y ramène. Molette plutôt que touches clavier (Page
+    Down/End) : pas d'hypothèse fiable sur le widget qui a le focus clavier à
+    l'instant de l'appel, alors que la molette suit uniquement la position du
+    curseur."""
+    try:
+        find_thumbnail(window, photo_path, timeout=1.0)
+        return
+    except TimeoutError:
+        pass
+    rect = window.rectangle()
+    # coords de wheel_mouse_input()/click_input() sont relatives au client de
+    # `window` (passées à client_to_screen() en interne) : PAS des coordonnées
+    # écran absolues, malgré `window.rectangle()` qui, lui, renvoie des
+    # coordonnées écran.
+    coords = (int((rect.right - rect.left) * 0.65), int((rect.bottom - rect.top) * 0.5))
+    for _ in range(max_attempts):
+        window.wheel_mouse_input(coords=coords, wheel_dist=-3)
+        time.sleep(0.3)
+        try:
+            find_thumbnail(window, photo_path, timeout=1.0)
+            return
+        except TimeoutError:
+            continue
+    raise TimeoutError(
+        f"Vignette 'thumb::{photo_path}' introuvable après {max_attempts} "
+        "molettes de défilement"
+    )
+
+
 def double_click_element(element, *, gap_s: float = 0.10) -> None:
     """Double-clic réel sur un élément UIA, par SendInput brut.
 
@@ -658,33 +716,40 @@ def double_click_element(element, *, gap_s: float = 0.10) -> None:
 
 
 def open_photo_in_viewer(window, photo_path, *, attempts: int = 4) -> None:
-    """Ouvre une photo dans la visionneuse par double-clic sur sa vignette,
-    avec vérification et re-tentative : pendant/juste après le scan initial la
-    grille peut se réordonner entre la localisation de la vignette et le clic
-    (cellules réassignées), le double-clic part alors dans le vide ou sur une
-    autre cellule. Le marqueur de succès initial est le bouton « 1:1 » de la
-    barre de la visionneuse (absent de la grille) — mais ça ne suffit pas :
-    confirmé empiriquement (test_duplicates_ui.py, dump de
-    `PhotoViewer._update_dup_badge`) qu'un double-clic peut ouvrir la
-    visionneuse avec succès tout en affichant une AUTRE photo que celle visée
-    (la grille avait réassigné entre-temps la cellule à la position cliquée,
-    même piège de réordonnancement que documenté ci-dessus, mais qui aboutit
-    ici sur un clic « réussi » du point de vue du seul marqueur « 1:1 »). On
-    vérifie donc en plus que `PhotoViewer._lbl_name` (le `QLabel` du chemin
-    complet, cf. photo_viewer.py:388) correspond bien au chemin demandé avant
-    de considérer l'ouverture comme réussie."""
+    """Ouvre une photo dans la visionneuse via le menu contextuel « Ouvrir »
+    de sa vignette (clic droit unique), PAS un double-clic.
+
+    Un double-clic nécessite deux clics distincts à la même position écran, à
+    ~100 ms d'intervalle (cf. `double_click_element`) : si la grille se
+    réordonne entre les deux — pendant/juste après le scan initial, après un
+    retour depuis `FaceClusterGrid`, ou même sous simple charge de fond élevée
+    qui retarde le traitement du 2e clic — celui-ci peut atterrir sur une
+    AUTRE cellule que la première. Confirmé empiriquement (test_duplicates_ui.py,
+    puis de façon déterministe et reproductible dans
+    test_faces_identify_and_reset.py, y compris avec un délai d'attente de
+    stabilité de position ajouté avant le clic) : le double-clic peut
+    « réussir » (bouton « 1:1 » présent) tout en affichant une photo
+    différente de celle visée — pas un cas rare, un mode de défaillance stable.
+    Le menu contextuel « Ouvrir » (`thumbnail_grid.py::_on_right_click`,
+    `menu.addAction("Ouvrir", lambda: self.photo_activated.emit(photo))`)
+    n'a besoin que d'un seul clic pour atterrir sur la bonne cellule, et
+    capture la `PhotoInfo` cliquée dans la fermeture du callback dès
+    l'ouverture du menu — aucune fenêtre de réassignation entre deux clics.
+    `right_click_and_click_context_menu_item` retente déjà tout l'enchaînement
+    clic droit + recherche de menu si besoin (cf. sa propre docstring).
+    Vérifie quand même `PhotoViewer._lbl_name` (chemin complet affiché,
+    photo_viewer.py:388) après coup, par défense en profondeur."""
     last_exc: Exception | None = None
     for _ in range(attempts):
         try:
-            # premier plan obligatoire : le double-clic brut (SendInput) part
-            # à une position écran — si une autre fenêtre recouvre l'appli,
-            # c'est elle qui reçoit les clics.
             window.set_focus()
         except Exception:
             pass
-        thumb = find_thumbnail(window, str(photo_path), timeout=30.0)
-        double_click_element(thumb)
         try:
+            right_click_and_click_context_menu_item(
+                lambda: find_thumbnail(window, str(photo_path), timeout=30.0),
+                window, "Ouvrir", exact=True, timeout=10.0,
+            )
             find_dialog_button(window, ["1:1"], exact=True, timeout=4.0)
             wait_for_condition(
                 lambda: any(
@@ -698,8 +763,8 @@ def open_photo_in_viewer(window, photo_path, *, attempts: int = 4) -> None:
         except (LookupError, TimeoutError) as exc:
             last_exc = exc
             # La visionneuse peut être ouverte sur la mauvaise photo : la
-            # refermer avant de retenter, sinon le prochain double-clic sur la
-            # grille échoue silencieusement (la visionneuse reste affichée).
+            # refermer avant de retenter, sinon la prochaine ouverture
+            # échoue silencieusement (la visionneuse reste affichée).
             try:
                 find_dialog_button(window, ["✕"], exact=True, timeout=2.0).click_input()
             except LookupError:
@@ -707,7 +772,7 @@ def open_photo_in_viewer(window, photo_path, *, attempts: int = 4) -> None:
             time.sleep(1.0)
     raise LookupError(
         f"La visionneuse ne s'est pas ouverte sur {photo_path} "
-        f"après {attempts} double-clics ({last_exc})"
+        f"après {attempts} tentatives ({last_exc})"
     )
 
 

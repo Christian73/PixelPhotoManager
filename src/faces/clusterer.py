@@ -18,6 +18,21 @@ _CLUSTER_TIMEOUT = 1800  # secondes max (30 min) avant abandon
 # Permet de sauter le reclustering si rien n'a changé.
 _last_clustered_n: int = -1
 
+
+def reset_clustering_cache() -> None:
+    """Invalide le cache de "dernier N regroupé" utilisé par `_run_clustering`
+    pour sauter le reclustering si rien n'a changé.
+
+    À appeler après tout `FaceDatabase.reset_clustering()`/`reset_index()` :
+    ces méthodes vident `cluster_id` en masse sans changer le nombre de
+    visages non identifiés (ré-indexation à l'identique) — sans cet appel,
+    `_run_clustering` voit `n == _last_clustered_n`, croit qu'aucun changement
+    n'est survenu et saute le regroupement, laissant tous les visages bloqués
+    avec `cluster_id=NULL` indéfiniment (bug constaté 2026-07 via
+    `test_faces_reset_full`)."""
+    global _last_clustered_n
+    _last_clustered_n = -1
+
 # Cohésion minimale (cosine) exigée entre TOUTE paire de visages d'un même groupe HDBSCAN,
 # alignée sur _SIM_STRONG (people_panel.py, "très probable"). min_samples=1 rend HDBSCAN
 # quasi équivalent à un single-linkage : deux visages peuvent se retrouver dans le même

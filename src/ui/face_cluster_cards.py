@@ -125,6 +125,7 @@ class _ClusterCard(QFrame):
 
         self.setFixedWidth(_CARD_W)
         self.setFrameShape(QFrame.StyledPanel)
+        self.setAccessibleName(f"facecluster::{cluster_id}")
         self.setCursor(Qt.PointingHandCursor)
         self.setStyleSheet(self._STYLE_NORMAL)
         if is_solo:
