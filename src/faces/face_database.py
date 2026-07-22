@@ -81,16 +81,18 @@ def _iou(a: tuple, b: tuple) -> float:
 
 # Paliers de confiance pour la reconnaissance (similarité cosinus embedding vs
 # centroïde de personne), du plus bas au plus haut :
-#   [0.00, 0.60[  aucune action automatique (visage non identifié)
-#   [0.60, 0.70[  suggestion enregistrée (suggestion_person_id/score) : le
+#   [0.00, 0.55[  aucune action automatique (visage non identifié)
+#   [0.55, 0.70[  suggestion enregistrée (suggestion_person_id/score) : le
 #                 groupe apparaît en « en attente de vérification » chez la
 #                 personne concernée, à confirmer manuellement
 #   [0.70, 1.00]  allocation automatique de la personne, sans confirmation
 #                 (cf. set_cluster_suggestions ci-dessous)
-# _SIM_STRONG (0.55, src/ui/people_panel.py) est un seuil d'affichage distinct
-# (libellé bleu « Probablement X » vs gris « Peut-être X ») pour les visages
-# qui n'ont pas encore atteint _SIM_SUGGEST — ne pas confondre les deux.
-_SIM_SUGGEST     = 0.60  # seuil minimum pour créer une suggestion « en attente de vérification »
+# _SIM_STRONG (0.50) et _SIM_WEAK (0.45, src/ui/people_panel.py) sont des seuils
+# d'affichage distincts (libellé bleu « Probablement X » >= _SIM_STRONG, gris
+# « Peut-être X » sur [_SIM_WEAK, _SIM_STRONG[) pour les visages qui n'ont pas
+# encore atteint _SIM_SUGGEST — ne pas confondre ces deux seuils avec ceux
+# ci-dessus.
+_SIM_SUGGEST     = 0.55  # seuil minimum pour créer une suggestion « en attente de vérification »
 _SIM_AUTO_ASSIGN = 0.70  # seuil d'allocation automatique de la personne, sans confirmation
 
 
@@ -1607,7 +1609,7 @@ class FaceDatabase:
 
         Pour chaque cluster sans person_id ni suggestion existante, calcule son centroïde
         et le compare à tous les centroïdes de personnes nommées. Si la similarité cosinus
-        atteint _SIM_SUGGEST (0.60), une suggestion est créée et apparaîtra dans la section
+        atteint _SIM_SUGGEST (0.55), une suggestion est créée et apparaîtra dans la section
         « En attente » de la vue de la personne concernée (ou la personne est allouée
         directement si le score atteint _SIM_AUTO_ASSIGN — cf. set_cluster_suggestions).
 

@@ -202,8 +202,8 @@ Conséquence de l'incrémentalité : `Catalog.ignore_duplicate_group()` (dissoud
 
 `src/faces/face_database.py` compare la similarité cosinus d'un visage (ou du centroïde
 d'un groupe) aux centroïdes des personnes déjà nommées, à trois paliers croissants :
-- `< 0.60` : aucune action automatique (visage non identifié).
-- `_SIM_SUGGEST = 0.60` : suggestion enregistrée (`suggestion_person_id`/`suggestion_score`)
+- `< 0.55` : aucune action automatique (visage non identifié).
+- `_SIM_SUGGEST = 0.55` : suggestion enregistrée (`suggestion_person_id`/`suggestion_score`)
   → le groupe apparaît « en attente de vérification » chez la personne concernée, à
   confirmer manuellement.
 - `_SIM_AUTO_ASSIGN = 0.70` : allocation automatique de la personne, **sans confirmation**
@@ -217,8 +217,8 @@ les deux branches (`WHERE person_id IS NULL AND suggestion_person_id IS NULL`), 
 déjà assigné ou déjà suggéré n'est jamais réécrit par un appel ultérieur, quel que soit
 le palier atteint.
 
-`_SIM_STRONG = 0.55` (`src/ui/people_panel.py`) est un seuil **distinct**, purement
-d'affichage (libellé bleu « Probablement X » vs gris « Peut-être X » à `_SIM_WEAK = 0.50`)
+`_SIM_STRONG = 0.50` (`src/ui/people_panel.py`) est un seuil **distinct**, purement
+d'affichage (libellé bleu « Probablement X » vs gris « Peut-être X » à `_SIM_WEAK = 0.45`)
 pour les visages qui n'ont pas encore atteint `_SIM_SUGGEST` — ne pas le confondre avec les
 seuils ci-dessus ni avec `_SIM_GROUP` (0.72, seuil d'auto-groupement de clusters
 *non identifiés* entre eux, sans rapport avec la correspondance à une personne connue).

@@ -646,6 +646,7 @@ class FaceClusterGrid(QWidget):
         if suggestions:
             persons_by_id = {p.id: p for p in (self._persons or [])}
             singleton_by_person: dict[int, list[int]] = {}
+            singleton_scores: dict[int, float] = {}
             flat_singletons: list[int] = []
             rebuilt_main: list[list[int]] = []
             for g in main_groups:
@@ -656,6 +657,7 @@ class FaceClusterGrid(QWidget):
                     pid, _, _, score = suggestions.get(cid, (None, "", "", 0.0))
                     if pid is not None and score >= _SIM_WEAK:
                         singleton_by_person.setdefault(pid, []).append(cid)
+                        singleton_scores[cid] = score
                     else:
                         flat_singletons.append(cid)
             for pid, cids in sorted(singleton_by_person.items(),
@@ -666,8 +668,10 @@ class FaceClusterGrid(QWidget):
                     p_name = p.name if p else f"Personne #{pid}"
                     n_f = sum(face_counts.get(c, 0) for c in cids)
                     fp = "s" if n_f > 1 else ""
+                    best_score = max(singleton_scores.get(c, 0.0) for c in cids)
+                    pct = round(best_score * 100)
                     group_labels[cids[0]] = (
-                        f"≈ Probablement {p_name}"
+                        f"≈ Probablement {p_name} ({pct} %)"
                         f"  —  {len(cids)} groupe{'s' if len(cids) > 1 else ''},"
                         f" {n_f} visage{fp}",
                         "#7aabdb",

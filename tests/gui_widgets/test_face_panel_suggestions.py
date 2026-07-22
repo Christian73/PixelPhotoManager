@@ -155,7 +155,7 @@ class TestAcceptRejectSuggestion:
 class TestProbableMatchInformativeLabel:
     """Libellé informatif "≈ Probablement/Peut-être X" pour un visage dont la
     similarité au centroïde d'une personne connue est calculée à la volée
-    (0.50 <= sim < 0.60, sous le seuil de suggestion persistée _SIM_SUGGEST) —
+    (0.45 <= sim < 0.55, sous le seuil de suggestion persistée _SIM_SUGGEST) —
     pas de coche ✓/✕ à ce niveau de confiance, cf. choix utilisateur explicite."""
 
     def _seed_person_face(self, face_db, catalog, tmp_path, name="Marc de Saint Roman"):
@@ -173,7 +173,7 @@ class TestProbableMatchInformativeLabel:
         person = self._seed_person_face(face_db, catalog, tmp_path)
         photo = str(tmp_path / "a.jpg")
         _make_photo(photo)
-        # cos(angle) ~= 0.60 >= _SIM_STRONG (0.55)
+        # cos(angle) ~= 0.60 >= _SIM_STRONG (0.50)
         face_id = _raw_insert_face(
             face_db, photo, cluster_id=77,
             embedding=_tilted_embedding(math.acos(0.60)),
@@ -192,10 +192,10 @@ class TestProbableMatchInformativeLabel:
         person = self._seed_person_face(face_db, catalog, tmp_path)
         photo = str(tmp_path / "a.jpg")
         _make_photo(photo)
-        # cos(angle) ~= 0.52 : dans [_SIM_WEAK=0.50, _SIM_STRONG=0.55)
+        # cos(angle) ~= 0.47 : dans [_SIM_WEAK=0.45, _SIM_STRONG=0.50)
         face_id = _raw_insert_face(
             face_db, photo, cluster_id=77,
-            embedding=_tilted_embedding(math.acos(0.52)),
+            embedding=_tilted_embedding(math.acos(0.47)),
         )
 
         _load_and_settle(qtbot, panel, photo)
@@ -211,7 +211,7 @@ class TestProbableMatchInformativeLabel:
         self._seed_person_face(face_db, catalog, tmp_path)
         photo = str(tmp_path / "a.jpg")
         _make_photo(photo)
-        # cos(angle) ~= 0.30 : sous _SIM_WEAK (0.50), aucun libellé informatif
+        # cos(angle) ~= 0.30 : sous _SIM_WEAK (0.45), aucun libellé informatif
         face_id = _raw_insert_face(
             face_db, photo, cluster_id=77,
             embedding=_tilted_embedding(math.acos(0.30)),

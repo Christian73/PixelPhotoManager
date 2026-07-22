@@ -143,8 +143,8 @@ def _cosine_sim(a: list[float], b: list[float]) -> float:
 # Seuils pour l'affichage des suggestions (visages pas encore "en attente de
 # vérification" — sous _SIM_SUGGEST dans face_database.py — affichés ici en
 # aperçu live pendant que l'utilisateur parcourt les groupes non identifiés).
-_SIM_STRONG  = 0.55   # très probable  → libellé en bleu
-_SIM_WEAK    = 0.50   # possible        → libellé en gris
+_SIM_STRONG  = 0.50   # très probable  → libellé en bleu
+_SIM_WEAK    = 0.45   # possible        → libellé en gris
 
 
 def _placeholder_pixmap(size: int = _AVATAR_SIZE) -> QPixmap:

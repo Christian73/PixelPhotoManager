@@ -133,10 +133,10 @@ class _FacesDataLoader(QThread):
             persons = self._catalog.get_persons()
             person_names_items = [(p.id, p.name) for p in persons]
 
-            # Libellé informatif "≈ Probablement/Peut-être X" (seuil _SIM_WEAK=0.50,
+            # Libellé informatif "≈ Probablement/Peut-être X" (seuil _SIM_WEAK=0.45,
             # cf. people_panel.py/CLAUDE.md) pour les visages qui n'ont ni personne
             # assignée (directement ou via leur cluster) ni suggestion persistée
-            # (>= _SIM_SUGGEST=0.60, gérée séparément par les coches ✓/✕) — purement
+            # (>= _SIM_SUGGEST=0.55, gérée séparément par les coches ✓/✕) — purement
             # informatif ici, pas de coche automatique vu la confiance encore faible.
             probable_items: list[tuple[int, tuple[int, float]]] = []
             candidates = [
@@ -719,7 +719,7 @@ class FacePanel(QWidget):
                 name_color = "#7aabdb"
             elif face.id in probable and probable[face.id][0] in person_names:
                 # Correspondance calculée à la volée (pas persistée, sous le seuil
-                # _SIM_SUGGEST=0.60 qui déclenche les coches ✓/✕) : purement informatif,
+                # _SIM_SUGGEST=0.55 qui déclenche les coches ✓/✕) : purement informatif,
                 # confirmation via le menu contextuel "Identifier cette personne…".
                 prob_pid, prob_sim = probable[face.id]
                 prob_name = person_names[prob_pid]
