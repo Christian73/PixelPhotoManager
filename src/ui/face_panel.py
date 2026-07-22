@@ -20,7 +20,8 @@ from src.core.models import FaceInfo
 from src.faces.face_database import FaceDatabase
 from src.ui.loading_label import LoadingLabel
 from src.ui.people_panel import (
-    _AssignDialog, _cosine_sim, _face_bytes, _load_edit_rotations, _SIM_WEAK,
+    _AssignDialog, _cosine_sim, _face_bytes, _load_edit_rotations,
+    _SIM_STRONG, _SIM_WEAK,
 )
 
 logger = logging.getLogger(__name__)
@@ -103,8 +104,9 @@ class _FacesDataLoader(QThread):
     Les dicts sont transmis comme list de tuples pour éviter la coercition
     des clés entières en str par PySide6 lors des connexions cross-thread.
     """
-    # photo_path, faces, person_names_items [(int,str)], cluster_persons_items [(int,int)]
-    data_ready = Signal(str, list, list, list)
+    # photo_path, faces, person_names_items [(int,str)], cluster_persons_items [(int,int)],
+    # probable_items [(face_id, (person_id, score))]
+    data_ready = Signal(str, list, list, list, list)
 
     def __init__(self, face_db: "FaceDatabase", catalog, photo_path: str, parent=None) -> None:
         super().__init__(parent)
@@ -131,14 +133,47 @@ class _FacesDataLoader(QThread):
             persons = self._catalog.get_persons()
             person_names_items = [(p.id, p.name) for p in persons]
 
+            # Libellé informatif "≈ Probablement/Peut-être X" (seuil _SIM_WEAK=0.50,
+            # cf. people_panel.py/CLAUDE.md) pour les visages qui n'ont ni personne
+            # assignée (directement ou via leur cluster) ni suggestion persistée
+            # (>= _SIM_SUGGEST=0.60, gérée séparément par les coches ✓/✕) — purement
+            # informatif ici, pas de coche automatique vu la confiance encore faible.
+            probable_items: list[tuple[int, tuple[int, float]]] = []
+            candidates = [
+                f for f in faces
+                if not f.person_id
+                and f.cluster_id is not None
+                and f.cluster_id not in cluster_persons
+                and f.suggestion_person_id is None
+                and not f.pinned
+            ]
+            if candidates:
+                person_ids = [p.id for p in persons if p.id is not None]
+                person_centroids = (
+                    self._face_db.get_all_person_centroids(person_ids) if person_ids else {}
+                )
+                if person_centroids:
+                    for f in candidates:
+                        c_emb = self._face_db.get_representative_embedding(cluster_id=f.cluster_id)
+                        if not c_emb:
+                            continue
+                        best_sim, best_id = 0.0, None
+                        for pid, p_emb in person_centroids.items():
+                            sim = _cosine_sim(c_emb, p_emb)
+                            if sim > best_sim:
+                                best_sim, best_id = sim, pid
+                        if best_id is not None and best_sim >= _SIM_WEAK:
+                            probable_items.append((f.id, (best_id, best_sim)))
+
             self.data_ready.emit(
                 self._photo_path, faces,
                 person_names_items,
                 list(cluster_persons.items()),
+                probable_items,
             )
         except Exception:
             logger.exception("[FacesDataLoader] exception during load")
-            self.data_ready.emit(self._photo_path, [], [], [])
+            self.data_ready.emit(self._photo_path, [], [], [], [])
 
 
 class _AssignPrepLoader(QThread):
@@ -301,6 +336,7 @@ class _FaceItem(QFrame):
             f"font-size: 11px; color: {name_color or '#ccc'}; border: none;"
         )
         layout.addWidget(lbl_name)
+        self._name_label = lbl_name
 
         sep = QFrame()
         sep.setFrameShape(QFrame.HLine)
@@ -608,13 +644,14 @@ class FacePanel(QWidget):
 
     # ------------------------------------------------------------------ data loading
 
-    @Slot(str, list, list, list)
+    @Slot(str, list, list, list, list)
     def _on_faces_data_ready(
         self,
         photo_path: str,
         faces: list,
         person_names_items: list,
         cluster_persons_items: list,
+        probable_items: list,
     ) -> None:
         if photo_path != self._current_photo:
             return  # navigation entre-temps
@@ -623,6 +660,7 @@ class FacePanel(QWidget):
         # des clés en str par PySide6 lors de la transmission cross-thread via Signal.
         person_names: dict[int, str] = {int(k): v for k, v in person_names_items}
         cluster_persons: dict[int, int] = {int(k): v for k, v in cluster_persons_items}
+        probable: dict[int, tuple[int, float]] = {int(k): v for k, v in probable_items}
         self._cluster_persons = cluster_persons
 
         self._clear()
@@ -679,6 +717,16 @@ class FacePanel(QWidget):
                 name = f"{sugg_name} ? ({pct} %)"
                 suggestion = True
                 name_color = "#7aabdb"
+            elif face.id in probable and probable[face.id][0] in person_names:
+                # Correspondance calculée à la volée (pas persistée, sous le seuil
+                # _SIM_SUGGEST=0.60 qui déclenche les coches ✓/✕) : purement informatif,
+                # confirmation via le menu contextuel "Identifier cette personne…".
+                prob_pid, prob_sim = probable[face.id]
+                prob_name = person_names[prob_pid]
+                pct = round(prob_sim * 100)
+                qualifier = "Probablement" if prob_sim >= _SIM_STRONG else "Peut-être"
+                name = f"≈ {qualifier} {prob_name} ({pct} %)"
+                name_color = "#7aabdb" if prob_sim >= _SIM_STRONG else "#888"
             elif face.cluster_id is not None:
                 name = f"Groupe {face.cluster_id}"
             else:

@@ -4,11 +4,12 @@
 vérification dans FacePanel (panneau visages de la visionneuse) : nom suggéré +
 tick vert/croix rouge superposés sur la vignette pour confirmer/rejeter sans
 passer par le dialogue d'assignation complet."""
+import math
 import sqlite3
 
 from PIL import Image
 
-from src.faces.face_database import FaceDatabase
+from src.faces.face_database import FaceDatabase, _enc
 from src.library.catalog import Catalog
 from src.ui.face_panel import FacePanel
 
@@ -20,20 +21,34 @@ def _make_photo(path) -> None:
 def _raw_insert_face(
     db, photo_path, cluster_id=None, person_id=None,
     suggestion_person_id=None, suggestion_score=None, bbox=(10, 10, 50, 50),
+    embedding=None,
 ) -> int:
     conn = sqlite3.connect(db._db_path)
     try:
         cur = conn.execute(
             "INSERT INTO faces"
             " (photo_path, bbox_x, bbox_y, bbox_w, bbox_h,"
-            "  cluster_id, person_id, suggestion_person_id, suggestion_score)"
-            " VALUES (?,?,?,?,?,?,?,?,?)",
-            (photo_path, *bbox, cluster_id, person_id, suggestion_person_id, suggestion_score),
+            "  cluster_id, person_id, suggestion_person_id, suggestion_score, embedding)"
+            " VALUES (?,?,?,?,?,?,?,?,?,?)",
+            (
+                photo_path, *bbox, cluster_id, person_id, suggestion_person_id,
+                suggestion_score, _enc(embedding) if embedding is not None else None,
+            ),
         )
         conn.commit()
         return cur.lastrowid
     finally:
         conn.close()
+
+
+def _tilted_embedding(angle_rad: float, dim: int = 8) -> list[float]:
+    """Vecteur unitaire dans le plan (e0, e1), incliné de angle_rad par rapport à
+    e0 — permet de fabriquer deux embeddings à une similarité cosinus contrôlée
+    (cos(angle_rad)) sans dépendre d'un vrai modèle de reconnaissance faciale."""
+    vec = [0.0] * dim
+    vec[0] = math.cos(angle_rad)
+    vec[1] = math.sin(angle_rad)
+    return vec
 
 
 def _make_panel(qtbot, tmp_path):
@@ -135,3 +150,74 @@ class TestAcceptRejectSuggestion:
         finally:
             conn.close()
         assert row == (None, None)
+
+
+class TestProbableMatchInformativeLabel:
+    """Libellé informatif "≈ Probablement/Peut-être X" pour un visage dont la
+    similarité au centroïde d'une personne connue est calculée à la volée
+    (0.50 <= sim < 0.60, sous le seuil de suggestion persistée _SIM_SUGGEST) —
+    pas de coche ✓/✕ à ce niveau de confiance, cf. choix utilisateur explicite."""
+
+    def _seed_person_face(self, face_db, catalog, tmp_path, name="Marc de Saint Roman"):
+        person = catalog.create_person(name)
+        person_photo = str(tmp_path / "person_ref.jpg")
+        _make_photo(person_photo)
+        _raw_insert_face(
+            face_db, person_photo, cluster_id=None, person_id=person.id,
+            embedding=_tilted_embedding(0.0),
+        )
+        return person
+
+    def test_strong_match_shows_blue_probablement_label(self, qtbot, tmp_path):
+        panel, face_db, catalog = _make_panel(qtbot, tmp_path)
+        person = self._seed_person_face(face_db, catalog, tmp_path)
+        photo = str(tmp_path / "a.jpg")
+        _make_photo(photo)
+        # cos(angle) ~= 0.60 >= _SIM_STRONG (0.55)
+        face_id = _raw_insert_face(
+            face_db, photo, cluster_id=77,
+            embedding=_tilted_embedding(math.acos(0.60)),
+        )
+
+        _load_and_settle(qtbot, panel, photo)
+
+        item = panel._items[face_id]
+        assert "Probablement" in item._name_label.text()
+        assert person.name in item._name_label.text()
+        assert not hasattr(item, "_btn_accept")
+        assert not hasattr(item, "_btn_reject")
+
+    def test_weak_match_shows_gray_peut_etre_label(self, qtbot, tmp_path):
+        panel, face_db, catalog = _make_panel(qtbot, tmp_path)
+        person = self._seed_person_face(face_db, catalog, tmp_path)
+        photo = str(tmp_path / "a.jpg")
+        _make_photo(photo)
+        # cos(angle) ~= 0.52 : dans [_SIM_WEAK=0.50, _SIM_STRONG=0.55)
+        face_id = _raw_insert_face(
+            face_db, photo, cluster_id=77,
+            embedding=_tilted_embedding(math.acos(0.52)),
+        )
+
+        _load_and_settle(qtbot, panel, photo)
+
+        item = panel._items[face_id]
+        assert "Peut-être" in item._name_label.text()
+        assert person.name in item._name_label.text()
+        assert not hasattr(item, "_btn_accept")
+        assert not hasattr(item, "_btn_reject")
+
+    def test_below_threshold_shows_generic_group_label(self, qtbot, tmp_path):
+        panel, face_db, catalog = _make_panel(qtbot, tmp_path)
+        self._seed_person_face(face_db, catalog, tmp_path)
+        photo = str(tmp_path / "a.jpg")
+        _make_photo(photo)
+        # cos(angle) ~= 0.30 : sous _SIM_WEAK (0.50), aucun libellé informatif
+        face_id = _raw_insert_face(
+            face_db, photo, cluster_id=77,
+            embedding=_tilted_embedding(math.acos(0.30)),
+        )
+
+        _load_and_settle(qtbot, panel, photo)
+
+        item = panel._items[face_id]
+        assert "Groupe 77" in item._name_label.text()
