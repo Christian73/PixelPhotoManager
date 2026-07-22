@@ -1207,7 +1207,8 @@ class FaceDatabase:
                 "SELECT f.id, f.photo_path, f.bbox_x, f.bbox_y, f.bbox_w, f.bbox_h,"
                 "       f.cluster_id, f.person_id, f.ignored, f.pinned,"
                 "       CASE WHEN f.embedding IS NULL THEN 0"
-                "            ELSE COALESCE(ip.rotation, 0) END"
+                "            ELSE COALESCE(ip.rotation, 0) END,"
+                "       f.suggestion_person_id, f.suggestion_score"
                 " FROM faces f"
                 " LEFT JOIN indexed_photos ip ON f.photo_path = ip.photo_path"
                 " WHERE f.photo_path=?",
@@ -1221,6 +1222,8 @@ class FaceDatabase:
                 ignored=bool(r[8]),
                 pinned=bool(r[9]),
                 detected_rotation=r[10],
+                suggestion_person_id=r[11],
+                suggestion_score=r[12] or 0.0,
             )
             for r in rows
         ]

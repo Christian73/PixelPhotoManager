@@ -213,3 +213,5 @@ class FaceInfo:
     ignored: bool = False
     pinned: bool = False   # True = face isolée manuellement, exclue du re-clustering
     detected_rotation: int = 0   # rotation CW (degrés) appliquée lors de la détection
+    suggestion_person_id: Optional[int] = None   # personne suggérée (en attente de vérification)
+    suggestion_score: float = 0.0                # similarité cosinus de la suggestion ci-dessus

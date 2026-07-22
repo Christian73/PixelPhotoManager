@@ -618,6 +618,24 @@ class TestClusterGetters:
         assert (faces[0].bbox_x, faces[0].bbox_y, faces[0].bbox_w, faces[0].bbox_h) == (1, 2, 3, 4)
         assert faces[0].person_id == 5
 
+    def test_get_faces_for_photo_returns_suggestion_fields(self, tmp_path):
+        # Non-régression : get_faces_for_photo ignorait suggestion_person_id/score,
+        # empêchant le panel de visages d'afficher les suggestions en attente.
+        db = FaceDatabase(db_path=tmp_path / "faces.db")
+        face_id = _raw_insert_face(db, "a.jpg", cluster_id=5)
+        conn = sqlite3.connect(db._db_path)
+        conn.execute(
+            "UPDATE faces SET suggestion_person_id=7, suggestion_score=0.65 WHERE id=?",
+            (face_id,),
+        )
+        conn.commit()
+        conn.close()
+
+        faces = db.get_faces_for_photo("a.jpg")
+
+        assert faces[0].suggestion_person_id == 7
+        assert faces[0].suggestion_score == pytest.approx(0.65)
+
     def test_get_photos_for_cluster_excludes_ignored(self, tmp_path):
         db = FaceDatabase(db_path=tmp_path / "faces.db")
         _raw_insert_face(db, "visible.jpg", cluster_id=1)

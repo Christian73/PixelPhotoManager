@@ -191,10 +191,12 @@ _BTN_IGNORE_SZ = 20   # diamètre du bouton ✕
 class _FaceItem(QFrame):
     """Un visage dans le panneau : vignette + nom. Supporte le menu contextuel."""
 
-    clicked                = Signal(int)           # face_id  (clic gauche)
-    double_clicked         = Signal(int)           # face_id  (double-clic gauche)
-    context_menu_requested = Signal(int, object)   # (face_id, QPoint global)
-    ignore_requested       = Signal(int)           # face_id  (bouton ✕)
+    clicked                     = Signal(int)           # face_id  (clic gauche)
+    double_clicked              = Signal(int)           # face_id  (double-clic gauche)
+    context_menu_requested      = Signal(int, object)   # (face_id, QPoint global)
+    ignore_requested            = Signal(int)           # face_id  (bouton ✕ bas droite)
+    suggestion_accept_requested = Signal(int)           # face_id  (bouton ✓ suggestion)
+    suggestion_reject_requested = Signal(int)           # face_id  (bouton ✕ suggestion)
 
     _STYLE_NORMAL   = "background: transparent; border: none;"
     _STYLE_SELECTED = "background: #1a2f45; border: 2px solid #4a9fd4; border-radius: 4px;"
@@ -207,8 +209,29 @@ class _FaceItem(QFrame):
         "}"
         "QPushButton:hover { background: rgba(220,50,50,240); }"
     )
+    _BTN_ACCEPT_STYLE = (
+        "QPushButton {"
+        "  background: rgba(30,150,30,210);"
+        "  color: white; border-radius: 10px;"
+        "  font-weight: bold; font-size: 12px;"
+        "  border: none; padding: 0;"
+        "}"
+        "QPushButton:hover { background: rgba(50,190,50,240); }"
+    )
+    _BTN_REJECT_STYLE = (
+        "QPushButton {"
+        "  background: rgba(180,30,30,210);"
+        "  color: white; border-radius: 10px;"
+        "  font-weight: bold; font-size: 12px;"
+        "  border: none; padding: 0;"
+        "}"
+        "QPushButton:hover { background: rgba(220,50,50,240); }"
+    )
 
-    def __init__(self, face: FaceInfo, name: str, parent=None) -> None:
+    def __init__(
+        self, face: FaceInfo, name: str, parent=None,
+        *, suggestion: bool = False, name_color: "str | None" = None,
+    ) -> None:
         super().__init__(parent)
         self._face    = face
         self._face_id = face.id
@@ -245,13 +268,38 @@ class _FaceItem(QFrame):
         self._btn_ignore.clicked.connect(lambda: self.ignore_requested.emit(self._face_id))
         self._btn_ignore.raise_()
 
+        if suggestion:
+            self._btn_accept = QPushButton("✓", img_container)
+            self._btn_accept.setGeometry(2, 2, _BTN_IGNORE_SZ, _BTN_IGNORE_SZ)
+            self._btn_accept.setStyleSheet(self._BTN_ACCEPT_STYLE)
+            self._btn_accept.setCursor(Qt.PointingHandCursor)
+            self._btn_accept.setToolTip("Confirmer cette personne (tout le groupe)")
+            self._btn_accept.clicked.connect(
+                lambda: self.suggestion_accept_requested.emit(self._face_id)
+            )
+            self._btn_accept.raise_()
+
+            self._btn_reject = QPushButton("✕", img_container)
+            self._btn_reject.setGeometry(
+                _THUMB - _BTN_IGNORE_SZ - 2, 2, _BTN_IGNORE_SZ, _BTN_IGNORE_SZ
+            )
+            self._btn_reject.setStyleSheet(self._BTN_REJECT_STYLE)
+            self._btn_reject.setCursor(Qt.PointingHandCursor)
+            self._btn_reject.setToolTip("Rejeter cette suggestion")
+            self._btn_reject.clicked.connect(
+                lambda: self.suggestion_reject_requested.emit(self._face_id)
+            )
+            self._btn_reject.raise_()
+
         layout.addWidget(img_container, alignment=Qt.AlignHCenter)
 
         lbl_name = QLabel(name)
         lbl_name.setAlignment(Qt.AlignCenter)
         lbl_name.setWordWrap(True)
         lbl_name.setMaximumWidth(_WIDTH - 8)
-        lbl_name.setStyleSheet("font-size: 11px; color: #ccc; border: none;")
+        lbl_name.setStyleSheet(
+            f"font-size: 11px; color: {name_color or '#ccc'}; border: none;"
+        )
         layout.addWidget(lbl_name)
 
         sep = QFrame()
@@ -607,6 +655,8 @@ class FacePanel(QWidget):
 
         loader_items = []
         for face in faces_sorted:
+            suggestion = False
+            name_color = None
             if face.person_id and face.person_id in person_names:
                 name = person_names[face.person_id]
             elif face.cluster_id is not None and face.cluster_id in cluster_persons:
@@ -616,16 +666,34 @@ class FacePanel(QWidget):
                 name = person_names.get(pid, f"Groupe {face.cluster_id}")
             elif face.pinned:
                 name = "Séparé"
+            elif (
+                face.suggestion_person_id is not None
+                and face.suggestion_person_id in person_names
+                and face.cluster_id is not None
+            ):
+                # Suggestion en attente de vérification (_SIM_SUGGEST <= score < _SIM_AUTO_ASSIGN,
+                # cf. CLAUDE.md) : tick vert/croix rouge sur la vignette pour confirmer/rejeter
+                # sans passer par le dialogue d'assignation complet.
+                sugg_name = person_names[face.suggestion_person_id]
+                pct = round(face.suggestion_score * 100)
+                name = f"{sugg_name} ? ({pct} %)"
+                suggestion = True
+                name_color = "#7aabdb"
             elif face.cluster_id is not None:
                 name = f"Groupe {face.cluster_id}"
             else:
                 name = "Inconnu"
 
-            item = _FaceItem(face, name, self._content)
+            item = _FaceItem(
+                face, name, self._content, suggestion=suggestion, name_color=name_color
+            )
             item.clicked.connect(self._on_item_clicked)
             item.double_clicked.connect(self._on_item_double_clicked)
             item.context_menu_requested.connect(self._on_item_context_menu)
             item.ignore_requested.connect(self._on_ignore_requested)
+            if suggestion:
+                item.suggestion_accept_requested.connect(self._on_suggestion_accept_requested)
+                item.suggestion_reject_requested.connect(self._on_suggestion_reject_requested)
             self._vbox.addWidget(item)
             self._items[face.id] = item
             self._faces[face.id] = face
@@ -897,6 +965,45 @@ class FacePanel(QWidget):
             self._face_db.unignore_face(fid)
             self.set_photo(self._current_photo)
         self._push_undo("Ignorer visage", _undo)
+
+        self.set_photo(self._current_photo)
+
+    def _on_suggestion_accept_requested(self, face_id: int) -> None:
+        """Confirme la suggestion en attente : alloue la personne à tout le groupe
+        (même effet que le bouton "Confirmer" de la liste de vérification par personne)."""
+        face = self._faces.get(face_id)
+        if face is None or face.cluster_id is None or face.suggestion_person_id is None:
+            return
+        cluster_id = face.cluster_id
+        person_id = face.suggestion_person_id
+        self._face_db.accept_cluster_suggestion(cluster_id)
+
+        def _undo(cid=cluster_id, pid=person_id):
+            self._face_db.unassign_person_from_cluster(pid, cid)
+            self.person_assigned.emit()
+            self.set_photo(self._current_photo)
+        self._push_undo("Confirmer suggestion", _undo)
+
+        self.person_assigned.emit()
+        self.set_photo(self._current_photo)
+
+    def _on_suggestion_reject_requested(self, face_id: int) -> None:
+        """Rejette la suggestion en attente (vide suggestion_person_id/score du groupe,
+        sans recalculer immédiatement une autre personne — contrairement au rejet
+        depuis la vue de vérification par personne)."""
+        face = self._faces.get(face_id)
+        if face is None or face.cluster_id is None:
+            return
+        cluster_id = face.cluster_id
+        person_id = face.suggestion_person_id
+        score = face.suggestion_score
+        self._face_db.clear_cluster_suggestion(cluster_id)
+
+        def _undo(cid=cluster_id, pid=person_id, sc=score):
+            if pid is not None:
+                self._face_db.set_cluster_suggestions({cid: (pid, sc)})
+            self.set_photo(self._current_photo)
+        self._push_undo("Rejeter suggestion", _undo)
 
         self.set_photo(self._current_photo)
 
