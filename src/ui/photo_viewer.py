@@ -388,6 +388,7 @@ class PhotoViewer(QWidget):
         self._lbl_name.setText(photo.path)
         self._btn_fav.setChecked(photo.is_favorite)
         self._btn_play_video.setVisible(is_video)
+        self.refresh_external_apps()
         self._canvas.set_highlighted_face(None)
         self._update_dup_badge()
         self._reload_pixmap()
@@ -649,21 +650,34 @@ class PhotoViewer(QWidget):
     # ------------------------------------------------------------------ misc
 
     def refresh_external_apps(self) -> None:
-        """Reconstruit les boutons d'applications externes dans la toolbar depuis la config."""
+        """Reconstruit les boutons d'applications externes dans la toolbar depuis la
+        config, filtrés par la portée média de chaque application ("image" / "video"
+        / "both", absente = "both" pour rétrocompatibilité) comparée au media_type de
+        la photo actuellement affichée — une application taguée "vidéo" (ex. VLC)
+        n'apparaît que sur une vidéo, une taguée "photo" que sur une image. Sans
+        photo affichée (ex. au tout premier appel, dans __init__), aucun filtrage
+        n'est appliqué."""
         while self._ext_apps_layout.count():
             item = self._ext_apps_layout.takeAt(0)
             if item.widget():
                 item.widget().deleteLater()
 
         if not self._config:
+            self._ext_apps_container.setVisible(False)
             return
 
+        media_type = self._photo.media_type if self._photo else None
         _icon_provider = QFileIconProvider()
+        shown = 0
         for app in self._config.get("tools.external_apps", []):
             name = app.get("name", "")
             path = app.get("path", "")
+            scope = app.get("media", "both")
             if not path or not os.path.isfile(path):
                 continue
+            if media_type is not None and scope != "both" and scope != media_type:
+                continue
+            shown += 1
             btn = QToolButton()
             btn.setToolTip(f"Ouvrir avec {name}")
             # Nom accessible pour l'automatisation pywinauto (e2e) — même
@@ -680,6 +694,8 @@ class PhotoViewer(QWidget):
             )
             btn.clicked.connect(lambda _checked=False, p=path: self._open_with(p))
             self._ext_apps_layout.addWidget(btn)
+
+        self._ext_apps_container.setVisible(shown > 0)
 
     def _open_with(self, app_path: str) -> None:
         if not self._photo:

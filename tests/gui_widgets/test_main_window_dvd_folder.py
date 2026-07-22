@@ -66,6 +66,38 @@ class TestOpenDvdFolderSingleApp:
         assert popen_calls == [["C:/VLC/vlc.exe", "D:/Photos/MonDVD"]]
 
 
+class TestOpenDvdFolderImageOnlyAppExcluded:
+    """Régression : une application externe taguée média "image" (ex. un
+    éditeur photo) n'a pas de sens pour ouvrir un dossier VIDEO_TS — elle ne
+    doit ni être lancée directement, ni apparaître dans le menu de choix."""
+
+    def test_single_image_scoped_app_shows_information_message(self, qtbot, monkeypatch):
+        fake = _FakeMainWindow(apps=[{"name": "Editeur", "path": "C:/Editeur.exe", "media": "image"}])
+        qtbot.addWidget(fake)
+        exec_calls: list = []
+        monkeypatch.setattr(QMessageBox, "exec", lambda self: exec_calls.append(self) or 0)
+        popen_calls: list = []
+        monkeypatch.setattr("subprocess.Popen", lambda args: popen_calls.append(args))
+
+        MainWindow._open_dvd_folder(fake, "D:/Photos/MonDVD")
+
+        assert len(exec_calls) == 1
+        assert popen_calls == []
+
+    def test_video_scoped_app_launched_among_mixed_apps(self, qtbot, monkeypatch):
+        fake = _FakeMainWindow(apps=[
+            {"name": "Editeur", "path": "C:/Editeur.exe", "media": "image"},
+            {"name": "VLC", "path": "C:/VLC/vlc.exe", "media": "video"},
+        ])
+        qtbot.addWidget(fake)
+        popen_calls: list = []
+        monkeypatch.setattr("subprocess.Popen", lambda args: popen_calls.append(args))
+
+        MainWindow._open_dvd_folder(fake, "D:/Photos/MonDVD")
+
+        assert popen_calls == [["C:/VLC/vlc.exe", "D:/Photos/MonDVD"]]
+
+
 class TestExternalAppsMenu:
     def test_menu_has_one_action_per_app(self, qtbot):
         fake = _FakeMainWindow(apps=[])

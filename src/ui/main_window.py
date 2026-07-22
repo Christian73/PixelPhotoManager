@@ -1055,8 +1055,16 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
         dlg.recluster_needed.connect(self._run_clustering)
         dlg.exec()
 
+    _MEDIA_SCOPE_LABELS = {"image": "Photo", "video": "Vidéo", "both": "Les deux"}
+
     def _open_external_apps_dialog(self) -> None:
-        """Dialogue de configuration des applications externes accessibles depuis le viewer."""
+        """Dialogue de configuration des applications externes accessibles depuis le viewer.
+
+        Chaque application est taguée d'une portée média (photo / vidéo / les
+        deux) qui détermine dans quel cas son icône apparaît dans la barre de
+        la visionneuse (PhotoViewer.refresh_external_apps) — une entrée sans
+        clé "media" (config antérieure à cette fonctionnalité) est traitée
+        comme "both", donc reste visible partout comme avant."""
         apps: list = list(self._config.get("tools.external_apps", []))
 
         dlg = QDialog(self)
@@ -1070,7 +1078,8 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
 
         lst = QListWidget(dlg)
         for app in apps:
-            lst.addItem(f"{app['name']}   —   {app['path']}")
+            label = self._MEDIA_SCOPE_LABELS.get(app.get("media", "both"), "Les deux")
+            lst.addItem(f"{app['name']}   —   {app['path']}   [{label}]")
 
         btn_row = QHBoxLayout()
         btn_add = QPushButton("Ajouter…")
@@ -1098,9 +1107,18 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
                 dlg, "Nom de l'application",
                 "Nom affiché dans l'infobulle :", text=default_name
             )
-            if ok and name.strip():
-                apps.append({"name": name.strip(), "path": path})
-                lst.addItem(f"{name.strip()}   —   {path}")
+            if not (ok and name.strip()):
+                return
+            media_label, ok = QInputDialog.getItem(
+                dlg, "Type de média",
+                "Afficher l'icône de cette application pour :",
+                ["Les deux", "Photo", "Vidéo"], 0, False
+            )
+            if not ok:
+                return
+            media = {"Photo": "image", "Vidéo": "video", "Les deux": "both"}[media_label]
+            apps.append({"name": name.strip(), "path": path, "media": media})
+            lst.addItem(f"{name.strip()}   —   {path}   [{media_label}]")
 
         def _del() -> None:
             row = lst.currentRow()
@@ -1317,16 +1335,28 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
         liste que celle utilisée par le viewer pour ouvrir une photo — cf.
         PhotoViewer._open_with). On lui passe le dossier lui-même (et non le
         sous-dossier VIDEO_TS) : VLC et la plupart des lecteurs détectent
-        VIDEO_TS à l'intérieur d'un dossier passé en argument."""
-        apps: list = list(self._config.get("tools.external_apps", []))
+        VIDEO_TS à l'intérieur d'un dossier passé en argument. Seules les
+        applications taguées "vidéo" ou "les deux" sont proposées ici — une
+        application taguée "photo" (ex. un éditeur d'images) n'a pas de sens
+        pour ouvrir un dossier VIDEO_TS."""
+        all_apps: list = list(self._config.get("tools.external_apps", []))
+        apps = [a for a in all_apps if a.get("media", "both") != "image"]
         if not apps:
             box = QMessageBox(self)
             box.setIcon(QMessageBox.Information)
             box.setWindowTitle("Aucune application externe configurée")
-            box.setText(
-                "Configurez d'abord une application externe (ex. VLC) via le menu "
-                "Outils › Applications externes… pour pouvoir ouvrir ce dossier."
-            )
+            if all_apps:
+                box.setText(
+                    "Aucune application externe configurée n'est compatible avec "
+                    "la vidéo (toutes sont limitées aux photos). Configurez-en une "
+                    "(ex. VLC) via le menu Outils › Applications externes… pour "
+                    "pouvoir ouvrir ce dossier."
+                )
+            else:
+                box.setText(
+                    "Configurez d'abord une application externe (ex. VLC) via le menu "
+                    "Outils › Applications externes… pour pouvoir ouvrir ce dossier."
+                )
             btn_configure = box.addButton("Configurer…", QMessageBox.AcceptRole)
             box.addButton(QMessageBox.Cancel)
             box.exec()

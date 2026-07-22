@@ -144,7 +144,20 @@ DVD (`VIDEO_TS` en enfant direct, insensible à la casse). Deux usages :
   externe » quand un dossier sélectionné ne contient aucune photo cataloguée mais est
   une copie de DVD — cas résiduel (DVD non encore scanné, ou copie incomplète sans
   `.VOB` exploitable). Réutilise `tools.external_apps` (même config que
-  `PhotoViewer._open_with`) via `subprocess.Popen([app_path, folder_path])`.
+  `PhotoViewer._open_with`) via `subprocess.Popen([app_path, folder_path])` ; ne
+  propose que les applications de portée `"video"`/`"both"` (cf. ci-dessous),
+  jamais celles limitées à `"image"`.
+
+Chaque entrée de `tools.external_apps` (menu Outils › Applications externes…,
+`main_window.py::_open_external_apps_dialog`) porte une portée média optionnelle
+`"media"` : `"image"`, `"video"` ou `"both"` (absente = `"both"`, rétrocompatible avec
+les configs antérieures à cette fonctionnalité). `PhotoViewer.refresh_external_apps()`
+compare cette portée au `media_type` de la photo affichée pour ne montrer l'icône de
+l'application dans la barre de la visionneuse que si elle est pertinente (ex. VLC en
+`"video"` n'apparaît plus quand on visionne une photo fixe) ; le conteneur
+`_ext_apps_container` est masqué entièrement si aucune application ne correspond.
+`refresh_external_apps()` est appelé à chaque `set_photo()` (navigation) en plus du
+changement de config, pour recalculer ce filtrage à chaque photo affichée.
 
 ### Retouches non destructives
 

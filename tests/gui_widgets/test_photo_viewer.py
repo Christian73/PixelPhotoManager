@@ -46,3 +46,72 @@ class TestFavoriteToggle:
             viewer._toggle_fav_from_menu()
         assert photo.is_favorite is True
         assert viewer._btn_fav.isChecked() is True
+
+
+class _FakeConfig:
+    def __init__(self, apps):
+        self._apps = apps
+
+    def get(self, key, default=None):
+        assert key == "tools.external_apps"
+        return self._apps
+
+
+class TestExternalAppsMediaScope:
+    """Régression : l'icône VLC apparaissait dans la barre de la visionneuse
+    même en visionnant une photo fixe (signalé par l'utilisateur). Chaque
+    application externe porte désormais une portée média ("image"/"video"/
+    "both", absente = "both" pour les configs pré-existantes) comparée au
+    media_type de la photo affichée dans refresh_external_apps()."""
+
+    def _app(self, tmp_path, name="App", media=None):
+        exe = tmp_path / f"{name}.exe"
+        exe.write_bytes(b"")
+        app = {"name": name, "path": str(exe)}
+        if media is not None:
+            app["media"] = media
+        return app
+
+    def test_video_scoped_app_hidden_for_still_photo(self, viewer, tmp_path):
+        app = self._app(tmp_path, "VLC", media="video")
+        viewer._config = _FakeConfig([app])
+        viewer._photo = _photo("C:/lib/photo.jpg", media_type="image")
+
+        viewer.refresh_external_apps()
+
+        assert viewer._ext_apps_layout.count() == 0
+        assert viewer._ext_apps_container.isVisible() is False
+
+    def test_video_scoped_app_shown_for_video(self, viewer, tmp_path):
+        app = self._app(tmp_path, "VLC", media="video")
+        viewer._config = _FakeConfig([app])
+        viewer._photo = _photo("C:/lib/clip.mp4", media_type="video")
+
+        viewer.refresh_external_apps()
+
+        assert viewer._ext_apps_layout.count() == 1
+        assert viewer._ext_apps_container.isVisible() is True
+
+    def test_image_scoped_app_hidden_for_video(self, viewer, tmp_path):
+        app = self._app(tmp_path, "Editeur", media="image")
+        viewer._config = _FakeConfig([app])
+        viewer._photo = _photo("C:/lib/clip.mp4", media_type="video")
+
+        viewer.refresh_external_apps()
+
+        assert viewer._ext_apps_layout.count() == 0
+        assert viewer._ext_apps_container.isVisible() is False
+
+    def test_legacy_app_without_media_key_shown_for_both(self, viewer, tmp_path):
+        """Rétrocompatibilité : une entrée de config antérieure à cette
+        fonctionnalité n'a pas de clé "media" -> traitée comme "both"."""
+        app = self._app(tmp_path, "Ancien")
+        viewer._config = _FakeConfig([app])
+
+        viewer._photo = _photo("C:/lib/photo.jpg", media_type="image")
+        viewer.refresh_external_apps()
+        assert viewer._ext_apps_layout.count() == 1
+
+        viewer._photo = _photo("C:/lib/clip.mp4", media_type="video")
+        viewer.refresh_external_apps()
+        assert viewer._ext_apps_layout.count() == 1
