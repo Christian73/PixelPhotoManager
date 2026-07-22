@@ -29,6 +29,10 @@ class _FakeConfig:
 class _FakeMainWindow(QWidget):
     """Porte uniquement les attributs lus par _open_dvd_folder et consorts."""
 
+    # Réutilise l'implémentation réelle (ne dépend que de self pour le
+    # QMessageBox.warning en cas d'échec, sans autre attribut MainWindow).
+    _launch_external_app = MainWindow._launch_external_app
+
     def __init__(self, apps):
         super().__init__()
         self._config = _FakeConfig(apps)

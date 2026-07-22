@@ -47,6 +47,8 @@ class TestEmptyMessage:
 
     def test_show_empty_message_displays_text_and_action(self, qtbot, tmp_path):
         grid = _make_grid(qtbot, tmp_path)
+        grid.show()
+        qtbot.waitExposed(grid)
         calls: list = []
 
         grid.show_empty_message("Copie de DVD détectée", "Ouvrir", lambda: calls.append(1))
@@ -59,6 +61,8 @@ class TestEmptyMessage:
 
     def test_show_empty_message_without_action_hides_button(self, qtbot, tmp_path):
         grid = _make_grid(qtbot, tmp_path)
+        grid.show()
+        qtbot.waitExposed(grid)
 
         grid.show_empty_message("Dossier vide")
 
@@ -67,6 +71,8 @@ class TestEmptyMessage:
 
     def test_clear_empty_message_hides_overlay(self, qtbot, tmp_path):
         grid = _make_grid(qtbot, tmp_path)
+        grid.show()
+        qtbot.waitExposed(grid)
         grid.show_empty_message("Copie de DVD détectée", "Ouvrir", lambda: None)
 
         grid.clear_empty_message()
@@ -75,6 +81,8 @@ class TestEmptyMessage:
 
     def test_set_photos_clears_previous_empty_message(self, qtbot, tmp_path):
         grid = _make_grid(qtbot, tmp_path)
+        grid.show()
+        qtbot.waitExposed(grid)
         grid.show_empty_message("Copie de DVD détectée", "Ouvrir", lambda: None)
 
         grid.set_photos([_photo("C:/lib/a.jpg")])

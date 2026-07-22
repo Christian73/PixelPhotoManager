@@ -61,10 +61,16 @@ _RENAMED_NAME = "sous_dossier_renomme"
 _EXTRA_PHOTO_NAME = "extra_photo_e2e.jpg"
 
 
-def _find_tree_item(window, text: str, *, exact: bool = True, timeout: float = 15.0):
+def _find_tree_item(window, text: str, *, exact: bool = False, timeout: float = 15.0):
     """Repère un `QTreeWidgetItem` de l'arbre de dossiers de la sidebar par
     son texte — aucun helper existant ne cible `control_type="TreeItem"`
-    (`click_list_item` ne gère que les `QListWidget`)."""
+    (`click_list_item` ne gère que les `QListWidget`).
+
+    `exact=False` par défaut : `Sidebar.refresh_folders`/`_populate_subfolders`
+    (sidebar.py) suffixent systématiquement le libellé d'un dossier avec son
+    nombre de photos dès que `get_recursive_photo_counts` a tourné une fois
+    (0 inclus, jamais `None` — catalog.py::get_recursive_photo_counts), donc
+    le libellé n'est jamais le nom de dossier nu mais toujours "nom (N)"."""
     deadline = time.monotonic() + timeout
     last_exc: Exception | None = None
     while time.monotonic() < deadline:

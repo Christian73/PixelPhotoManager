@@ -72,7 +72,9 @@ class TestExternalAppsMediaScope:
             app["media"] = media
         return app
 
-    def test_video_scoped_app_hidden_for_still_photo(self, viewer, tmp_path):
+    def test_video_scoped_app_hidden_for_still_photo(self, viewer, qtbot, tmp_path):
+        viewer.show()
+        qtbot.waitExposed(viewer)
         app = self._app(tmp_path, "VLC", media="video")
         viewer._config = _FakeConfig([app])
         viewer._photo = _photo("C:/lib/photo.jpg", media_type="image")
@@ -82,7 +84,9 @@ class TestExternalAppsMediaScope:
         assert viewer._ext_apps_layout.count() == 0
         assert viewer._ext_apps_container.isVisible() is False
 
-    def test_video_scoped_app_shown_for_video(self, viewer, tmp_path):
+    def test_video_scoped_app_shown_for_video(self, viewer, qtbot, tmp_path):
+        viewer.show()
+        qtbot.waitExposed(viewer)
         app = self._app(tmp_path, "VLC", media="video")
         viewer._config = _FakeConfig([app])
         viewer._photo = _photo("C:/lib/clip.mp4", media_type="video")
@@ -92,7 +96,9 @@ class TestExternalAppsMediaScope:
         assert viewer._ext_apps_layout.count() == 1
         assert viewer._ext_apps_container.isVisible() is True
 
-    def test_image_scoped_app_hidden_for_video(self, viewer, tmp_path):
+    def test_image_scoped_app_hidden_for_video(self, viewer, qtbot, tmp_path):
+        viewer.show()
+        qtbot.waitExposed(viewer)
         app = self._app(tmp_path, "Editeur", media="image")
         viewer._config = _FakeConfig([app])
         viewer._photo = _photo("C:/lib/clip.mp4", media_type="video")
