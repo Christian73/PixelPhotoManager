@@ -480,6 +480,13 @@ Le bouton **✏ Annotations** en haut de la fenêtre (à côté du bouton EXIF, 
 
 L'historique conserve les **20 dernières actions** en mémoire, et jusqu'à **50 états** sont sauvegardés sur disque — ils sont restaurés à la prochaine ouverture de la photo.
 
+### Réinitialiser toutes les retouches
+
+En bas du panneau de retouche, deux boutons complémentaires :
+
+- **Réinitialiser toutes les retouches** — supprime d'un coup toutes les retouches et l'historique de la photo courante, sans demander de confirmation. Le fichier original sur le disque n'est jamais modifié.
+- **Remettre toutes les retouches** — remet en place les retouches supprimées par le dernier **Réinitialiser**. Il se désactive automatiquement dès qu'une nouvelle retouche est appliquée après la réinitialisation (l'état sauvegardé n'est plus restaurable dans ce cas).
+
 ---
 
 ## 8. Albums et favoris

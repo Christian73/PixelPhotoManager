@@ -28,3 +28,9 @@ tests/e2e/.artifacts/
 # Rapport pytest-cov (+ fichiers par processus du mode parallel/e2e)
 .coverage
 .coverage.*
+
+# Checkpoints de couverture intermédiaires (base/e2e/combiné, cf. CLAUDE.md) — nommés hors du
+# préfixe ".coverage." pour ne pas être ramassés par un "coverage combine" sans argument
+coverage_base.dat
+coverage_e2e.dat
+coverage_combined.dat

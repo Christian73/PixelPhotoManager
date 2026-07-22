@@ -78,7 +78,12 @@ traitée, comme les autres retouches — sauf si le calque est masqué via le bo
   <li>Cliquez <b>Appliquer</b> pour enregistrer.</li>
   <li><kbd>Ctrl</kbd>+<kbd>Z</kbd> / <kbd>Ctrl</kbd>+<kbd>Y</kbd> — undo/redo persistant
       entre les sessions (50 états max par photo).</li>
-  <li><b>Réinitialiser</b> — revient à l'original sans supprimer l'historique.</li>
+  <li><b>Réinitialiser toutes les retouches</b> — supprime d'un coup toutes les retouches
+      et l'historique de la photo (sans confirmation), pour repartir de l'original. Le fichier
+      sur disque n'est jamais modifié.</li>
+  <li><b>Remettre toutes les retouches</b> — remet en place les retouches supprimées par le
+      dernier <b>Réinitialiser</b> sur cette photo. Ce bouton se désactive dès qu'une nouvelle
+      retouche est appliquée après le reset (l'instantané n'est plus valable).</li>
 </ul>
 
 <h3>Export</h3>
