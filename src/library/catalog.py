@@ -199,6 +199,14 @@ class Catalog:
             # déjà présents en base (ex. créés avant l'ajout de la dissolution
             # systématique dans delete_photo/delete_photos).
             self._dissolve_singleton_duplicate_groups(conn)
+            # Filet de sécurité au démarrage : purge les entrées album_photos
+            # orphelines (photo supprimée du catalogue sans passer par delete_photo/
+            # delete_photos, ex. cleanup_asset_dirs ou migration de chemins avant
+            # correction) — sinon get_albums() surcompte des photos qui n'existent
+            # plus.
+            conn.execute(
+                "DELETE FROM album_photos WHERE photo_id NOT IN (SELECT id FROM photos)"
+            )
             conn.commit()
 
     def _migrate_video_fields(self, conn) -> None:
@@ -263,6 +271,7 @@ class Catalog:
                 if norm_path != path or norm_dir != (directory or ""):
                     to_update.append((norm_path, norm_dir, rid))
         for rid in to_delete:
+            conn.execute("DELETE FROM album_photos WHERE photo_id=?", (rid,))
             conn.execute("DELETE FROM photos WHERE id=?", (rid,))
         if to_update:
             conn.executemany(
@@ -333,6 +342,34 @@ class Catalog:
                 (folder, like_pattern),
             ).fetchone()
         return row[0] if row else 0
+
+    def get_recursive_photo_counts(self, folders: list[str]) -> dict[str, int]:
+        """Retourne pour chaque dossier de folders son nombre de photos (et vidéos),
+        lui-même inclus ses sous-dossiers. Une seule requête groupée par dossier exact
+        (pas une requête récursive par dossier demandé) — utilisé pour peupler l'arbre
+        de la sidebar sans multiplier les allers-retours SQLite à chaque niveau."""
+        if not folders:
+            return {}
+        normed = [os.path.normpath(f) for f in folders]
+        conditions = []
+        params: list[str] = []
+        for f in normed:
+            conditions.append("directory=? OR directory LIKE ?")
+            params.extend([f, f + os.sep + "%"])
+        with self._guard() as conn:
+            rows = conn.execute(
+                f"SELECT directory, COUNT(*) FROM photos WHERE {' OR '.join(conditions)} "
+                "GROUP BY directory",
+                params,
+            ).fetchall()
+        counts = {f: 0 for f in normed}
+        for directory, cnt in rows:
+            if not directory:
+                continue
+            for f in normed:
+                if directory == f or directory.startswith(f + os.sep):
+                    counts[f] += cnt
+        return counts
 
     def get_photos_in_folder(self, folder: str) -> list[PhotoInfo]:
         folder = os.path.normpath(folder)
@@ -589,6 +626,11 @@ class Catalog:
                 if any(part.endswith("_assets") for part in Path(r[0]).parts)
             ]
             if to_delete:
+                conn.executemany(
+                    "DELETE FROM album_photos WHERE photo_id IN "
+                    "(SELECT id FROM photos WHERE path=?)",
+                    [(p,) for p in to_delete],
+                )
                 conn.executemany("DELETE FROM photos WHERE path=?",
                                  [(p,) for p in to_delete])
                 conn.commit()

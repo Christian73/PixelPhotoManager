@@ -263,7 +263,16 @@ class Sidebar(QWidget):
         self._icon_bytes_cache: dict[tuple, bytes] = {}
         self._folder_order_mode: str = "alpha"   # "alpha" | "chrono"
         self._folder_order_dir: str = "asc"       # "asc" | "desc"
+        self._folder_count_provider = None   # Callable[[list[str]], dict[str, int]] | None
         self._setup_ui()
+
+    def set_folder_count_provider(self, provider) -> None:
+        """Injecte la fonction de comptage récursif (typiquement
+        Catalog.get_recursive_photo_counts) utilisée pour afficher le nombre de
+        photos/vidéos à côté de chaque dossier de l'arbre. Sidebar ne dépend ainsi
+        pas directement de Catalog — cohérent avec le fait que refresh_folders()
+        ne reçoit déjà que des chemins, jamais d'objet catalogue."""
+        self._folder_count_provider = provider
 
     def _setup_ui(self) -> None:
         layout = QVBoxLayout(self)
@@ -512,8 +521,13 @@ class Sidebar(QWidget):
 
     def refresh_folders(self, folders: list[str]) -> None:
         self._folder_tree.clear()
+        counts = self._folder_count_provider(list(folders)) if self._folder_count_provider else {}
         for folder in self._sort_folder_paths(list(folders)):
-            root_item = QTreeWidgetItem([os.path.basename(folder) or folder])
+            label = os.path.basename(folder) or folder
+            count = counts.get(os.path.normpath(folder))
+            if count is not None:
+                label = f"{label} ({count})"
+            root_item = QTreeWidgetItem([label])
             root_item.setData(0, Qt.UserRole, folder)
             root_item.setToolTip(0, folder)
             # Placeholder : rend le nœud dépliable sans toucher le disque.
@@ -553,8 +567,17 @@ class Sidebar(QWidget):
             else:
                 def key(e):
                     return e.name.lower()
-            for entry in sorted(dirs, key=key, reverse=reverse):
-                child = QTreeWidgetItem([entry.name])
+            sorted_dirs = sorted(dirs, key=key, reverse=reverse)
+            counts = (
+                self._folder_count_provider([e.path for e in sorted_dirs])
+                if self._folder_count_provider else {}
+            )
+            for entry in sorted_dirs:
+                label = entry.name
+                count = counts.get(os.path.normpath(entry.path))
+                if count is not None:
+                    label = f"{label} ({count})"
+                child = QTreeWidgetItem([label])
                 child.setData(0, Qt.UserRole, entry.path)
                 child.setToolTip(0, entry.path)
                 parent_item.addChild(child)

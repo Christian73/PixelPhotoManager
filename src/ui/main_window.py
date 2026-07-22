@@ -467,6 +467,7 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
         self._splitter.setCollapsible(0, False)
 
         self._sidebar = Sidebar()
+        self._sidebar.set_folder_count_provider(self._catalog.get_recursive_photo_counts)
         self._left_stack.addWidget(self._sidebar)   # index 0 — mode grille
 
         self._edit_panel = EditPanel()

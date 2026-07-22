@@ -400,6 +400,21 @@ class TestCleanupAssetDirs:
         assert deleted == [os.path.normpath(r"C:\photos\LR_assets\preview.jpg")]
         assert [p.filename for p in catalog.get_all_photos()] == ["real.jpg"]
 
+    def test_updates_album_photo_count(self, tmp_path):
+        # Non-régression : une photo dans un dossier *_assets et ajoutée à un
+        # album laissait une entrée album_photos orpheline après cleanup,
+        # gonflant AlbumInfo.photo_count au-delà des photos réellement présentes.
+        catalog = Catalog(db_path=tmp_path / "catalog.db")
+        album = catalog.create_album("Vacances")
+        asset_photo = catalog.add_or_update_photo(_make_photo(r"C:\photos\LR_assets\preview.jpg"))
+        real_photo = catalog.add_or_update_photo(_make_photo(r"C:\photos\real.jpg"))
+        catalog.add_photo_to_album(album.id, asset_photo.id)
+        catalog.add_photo_to_album(album.id, real_photo.id)
+
+        catalog.cleanup_asset_dirs()
+
+        assert catalog.get_albums()[0].photo_count == 1
+
 
 class TestCounts:
     def test_count_photos_in_folder_is_recursive(self, tmp_path):
@@ -410,6 +425,34 @@ class TestCounts:
 
         assert catalog.count_photos_in_folder(r"C:\lib") == 2
         assert catalog.count_photos_in_folder(r"C:\other") == 1
+
+    def test_get_recursive_photo_counts_sums_subfolders_per_requested_root(self, tmp_path):
+        catalog = Catalog(db_path=tmp_path / "catalog.db")
+        catalog.add_or_update_photo(_make_photo(r"C:\lib\a.jpg"))
+        catalog.add_or_update_photo(_make_photo(r"C:\lib\sub\b.jpg"))
+        catalog.add_or_update_photo(_make_photo(r"C:\lib\sub\deeper\c.jpg"))
+        catalog.add_or_update_photo(_make_photo(r"C:\other\d.jpg"))
+
+        counts = catalog.get_recursive_photo_counts([r"C:\lib", r"C:\lib\sub", r"C:\other"])
+
+        assert counts == {
+            os.path.normpath(r"C:\lib"): 3,
+            os.path.normpath(r"C:\lib\sub"): 2,
+            os.path.normpath(r"C:\other"): 1,
+        }
+
+    def test_get_recursive_photo_counts_zero_for_folder_without_photos(self, tmp_path):
+        catalog = Catalog(db_path=tmp_path / "catalog.db")
+        catalog.add_or_update_photo(_make_photo(r"C:\lib\a.jpg"))
+
+        counts = catalog.get_recursive_photo_counts([r"C:\empty"])
+
+        assert counts == {os.path.normpath(r"C:\empty"): 0}
+
+    def test_get_recursive_photo_counts_empty_input(self, tmp_path):
+        catalog = Catalog(db_path=tmp_path / "catalog.db")
+
+        assert catalog.get_recursive_photo_counts([]) == {}
 
     def test_get_stats(self, tmp_path):
         catalog = Catalog(db_path=tmp_path / "catalog.db")
@@ -613,6 +656,28 @@ class TestAlbumCrud:
         catalog.delete_photos([p1.path, p2.path])
 
         assert catalog.get_albums()[0].photo_count == 0
+
+    def test_startup_purges_preexisting_orphaned_album_photos(self, tmp_path):
+        # Non-régression : des entrées album_photos orphelines (photo_id sans
+        # ligne photos correspondante, ex. créées avant le correctif de
+        # cleanup_asset_dirs) doivent être purgées par le filet de sécurité au
+        # démarrage, sinon AlbumInfo.photo_count reste gonflé indéfiniment.
+        catalog = Catalog(db_path=tmp_path / "catalog.db")
+        album = catalog.create_album("Vacances")
+        real_photo = catalog.add_or_update_photo(_make_photo("C:/photos/a.jpg"))
+        catalog.add_photo_to_album(album.id, real_photo.id)
+        conn = sqlite3.connect(catalog._db_path)
+        conn.execute(
+            "INSERT INTO album_photos (album_id, photo_id) VALUES (?, ?)",
+            (album.id, real_photo.id + 999),
+        )
+        conn.commit()
+        conn.close()
+        assert catalog.get_albums()[0].photo_count == 2  # orphelin compté avant purge
+
+        catalog2 = Catalog(db_path=tmp_path / "catalog.db")
+
+        assert catalog2.get_albums()[0].photo_count == 1
 
     def test_add_photos_to_album_batch(self, tmp_path):
         catalog = Catalog(db_path=tmp_path / "catalog.db")
