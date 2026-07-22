@@ -16,6 +16,7 @@ installer/harvested_*.wxs
 installer/*.msi
 installer/*.wixpdb
 installer/*.log
+installer/Installer-avec-log.cmd
 
 #
 .VSCodeCounter

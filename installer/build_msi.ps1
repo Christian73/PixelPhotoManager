@@ -9,7 +9,7 @@
     2. Genere les bitmaps de l'installeur (banner.bmp, dialog.bmp).
     3. Lance heat.exe pour inventorier dist\PixelPhotoManager\.
     4. Compile avec candle.exe et lie avec light.exe.
-    5. Produit : installer\PixelPhotoManager-Setup.msi
+    5. Produit : installer\PixelPhotoManager-Setup-<version>.msi
 
     Lancer depuis le repertoire du projet ou depuis installer\ :
         powershell -ExecutionPolicy Bypass -File installer\build_msi.ps1
@@ -20,7 +20,6 @@ $ErrorActionPreference = "Stop"
 $InstallerDir = $PSScriptRoot
 $ProjectRoot  = Split-Path -Parent $InstallerDir
 $DistDir      = Join-Path $ProjectRoot "dist\PixelPhotoManager"
-$OutputMsi    = Join-Path $InstallerDir "PixelPhotoManager-Setup.msi"
 $ObjDir       = Join-Path $InstallerDir "obj"
 $VersionFile  = Join-Path $ProjectRoot "VERSION"
 
@@ -38,6 +37,9 @@ if (-not (Test-Path $VersionFile)) {
     $ProductVersion = (Get-Content $VersionFile -Raw).Trim()
 }
 Write-Host "Version MSI : $ProductVersion"
+
+# Nom de sortie versionne (ex: PixelPhotoManager-Setup-1.0.1.msi)
+$OutputMsi = Join-Path $InstallerDir "PixelPhotoManager-Setup-$ProductVersion.msi"
 
 # ── Localiser WiX v3 ─────────────────────────────────────────────────────────
 function Find-Wix3 {
@@ -143,6 +145,26 @@ $wixobjs = Get-ChildItem -Path $ObjDir -Filter "*.wixobj" |
     -nologo
 if ($LASTEXITCODE -ne 0) { throw "light.exe a echoue" }
 
+# ── Script compagnon : installation avec journal detaille ────────────────────
+# msiexec ne journalise rien par defaut au double-clic sur le MSI. Ce .cmd,
+# genere a cote du MSI, lance l'installation avec /L*v (log verbeux complet) —
+# a utiliser a la place du MSI quand une installation echoue silencieusement.
+$MsiFileName = Split-Path -Leaf $OutputMsi
+$LogScript   = Join-Path $InstallerDir "Installer-avec-log.cmd"
+$logScriptContent = @"
+@echo off
+setlocal
+cd /d "%~dp0"
+set "MSI=$MsiFileName"
+set "LOG=install-$ProductVersion.log"
+echo Installation de %MSI% avec journal detaille...
+msiexec /i "%MSI%" /L*v "%LOG%"
+echo.
+echo Journal ecrit dans : %CD%\%LOG%
+pause
+"@
+Set-Content -Path $LogScript -Value $logScriptContent -Encoding ASCII
+
 # ── Resultat ──────────────────────────────────────────────────────────────────
 $size = (Get-Item $OutputMsi).Length / 1MB
 Write-Host ""
@@ -150,4 +172,5 @@ Write-Host "============================================================"
 Write-Host "  MSI cree avec succes !"
 Write-Host "  $OutputMsi"
 Write-Host ("  Taille : {0:F0} Mo" -f $size)
+Write-Host "  Pour installer avec journal detaille : $LogScript"
 Write-Host "============================================================"
