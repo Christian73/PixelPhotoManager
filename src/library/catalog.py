@@ -347,20 +347,22 @@ class Catalog:
         """Retourne pour chaque dossier de folders son nombre de photos (et vidéos),
         lui-même inclus ses sous-dossiers. Une seule requête groupée par dossier exact
         (pas une requête récursive par dossier demandé) — utilisé pour peupler l'arbre
-        de la sidebar sans multiplier les allers-retours SQLite à chaque niveau."""
+        de la sidebar sans multiplier les allers-retours SQLite à chaque niveau.
+
+        Piège vécu : une première version filtrait la requête avec un WHERE construit
+        d'une condition "directory=? OR directory LIKE ?" par dossier demandé — un
+        dossier avec plusieurs centaines de sous-dossiers dépasse alors la profondeur
+        d'arbre d'expression maximale de SQLite (1000, sqlite3.OperationalError:
+        "Expression tree is too large"). La requête groupe donc désormais sur TOUTE
+        la table (une ligne par dossier distinct, pas par photo), et le filtrage par
+        préfixe se fait en Python — coût négligeable même sur une grosse bibliothèque
+        (le nombre de dossiers distincts reste très inférieur au nombre de photos)."""
         if not folders:
             return {}
         normed = [os.path.normpath(f) for f in folders]
-        conditions = []
-        params: list[str] = []
-        for f in normed:
-            conditions.append("directory=? OR directory LIKE ?")
-            params.extend([f, f + os.sep + "%"])
         with self._guard() as conn:
             rows = conn.execute(
-                f"SELECT directory, COUNT(*) FROM photos WHERE {' OR '.join(conditions)} "
-                "GROUP BY directory",
-                params,
+                "SELECT directory, COUNT(*) FROM photos GROUP BY directory"
             ).fetchall()
         counts = {f: 0 for f in normed}
         for directory, cnt in rows:

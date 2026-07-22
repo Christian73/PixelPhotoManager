@@ -454,6 +454,24 @@ class TestCounts:
 
         assert catalog.get_recursive_photo_counts([]) == {}
 
+    def test_get_recursive_photo_counts_many_folders_does_not_hit_sqlite_expression_limit(
+        self, tmp_path
+    ):
+        # Non-régression : la version d'origine construisait un WHERE avec une
+        # condition "directory=? OR directory LIKE ?" par dossier demandé — un
+        # dossier avec plusieurs centaines de sous-dossiers (ex. _populate_subfolders
+        # de la sidebar appelé sur un dossier à 1500 enfants) dépassait la profondeur
+        # d'arbre d'expression maximale de SQLite (1000) et levait
+        # "sqlite3.OperationalError: Expression tree is too large".
+        catalog = Catalog(db_path=tmp_path / "catalog.db")
+        many_folders = [rf"C:\lib\sub{i}" for i in range(1500)]
+        catalog.add_or_update_photo(_make_photo(rf"{many_folders[3]}\a.jpg"))
+
+        counts = catalog.get_recursive_photo_counts(many_folders)
+
+        assert counts[os.path.normpath(many_folders[3])] == 1
+        assert counts[os.path.normpath(many_folders[0])] == 0
+
     def test_get_stats(self, tmp_path):
         catalog = Catalog(db_path=tmp_path / "catalog.db")
         catalog.add_or_update_photo(_make_photo(r"C:\lib\a.jpg", file_size=100))
