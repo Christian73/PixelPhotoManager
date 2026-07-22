@@ -15,3 +15,18 @@ def is_hidden_path(path: str) -> bool:
         return bool(os.stat(path).st_file_attributes & 0x2)
     except (AttributeError, OSError):
         return False
+
+
+def find_dvd_video_ts(folder: str) -> "str | None":
+    """Retourne le chemin du sous-dossier VIDEO_TS si folder est une copie de
+    DVD (VIDEO_TS attendu en enfant direct, structure standard des copies de
+    DVD), sinon None. Recherche insensible à la casse. Un dossier illisible
+    ou inexistant renvoie None plutôt que de lever une exception."""
+    try:
+        with os.scandir(folder) as it:
+            for entry in it:
+                if entry.is_dir() and entry.name.upper() == "VIDEO_TS":
+                    return entry.path
+    except OSError:
+        pass
+    return None

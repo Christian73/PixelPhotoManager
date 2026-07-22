@@ -16,6 +16,7 @@ from PySide6.QtWidgets import (
 
 from src.core.event_bus import bus
 from src.core.models import AlbumInfo, PersonInfo
+from src.library.fs_utils import find_dvd_video_ts
 from src.ui.people_panel import _face_bytes, _load_edit_rotations
 
 logger = logging.getLogger(__name__)
@@ -519,6 +520,20 @@ class Sidebar(QWidget):
             return sorted(paths, key=key, reverse=reverse)
         return sorted(paths, key=lambda p: (os.path.basename(p) or p).lower(), reverse=reverse)
 
+    def _mark_if_dvd_copy(self, item: QTreeWidgetItem, path: str, count) -> None:
+        """Badge « copie de DVD » (icône disque + tooltip) si path contient un
+        sous-dossier VIDEO_TS. Restreint aux dossiers sans photo cataloguée
+        (count vide/nul) : c'est justement le cas où le dossier semblerait
+        vide sans cette indication, et ça évite un os.scandir supplémentaire
+        par dossier affiché — cf. le commentaire de _populate_subfolders sur
+        le coût d'un scandir par enfant sur un volume réseau."""
+        if count:
+            return
+        if find_dvd_video_ts(path) is None:
+            return
+        item.setIcon(0, self.style().standardIcon(QStyle.SP_DriveCDIcon))
+        item.setToolTip(0, "Copie de DVD (VIDEO_TS)")
+
     def refresh_folders(self, folders: list[str]) -> None:
         self._folder_tree.clear()
         counts = self._folder_count_provider(list(folders)) if self._folder_count_provider else {}
@@ -530,6 +545,7 @@ class Sidebar(QWidget):
             root_item = QTreeWidgetItem([label])
             root_item.setData(0, Qt.UserRole, folder)
             root_item.setToolTip(0, folder)
+            self._mark_if_dvd_copy(root_item, folder, count)
             # Placeholder : rend le nœud dépliable sans toucher le disque.
             # Les sous-dossiers sont chargés à la demande dans _on_folder_expanded.
             root_item.addChild(QTreeWidgetItem([""]))
@@ -580,6 +596,7 @@ class Sidebar(QWidget):
                 child = QTreeWidgetItem([label])
                 child.setData(0, Qt.UserRole, entry.path)
                 child.setToolTip(0, entry.path)
+                self._mark_if_dvd_copy(child, entry.path, count)
                 parent_item.addChild(child)
                 # Placeholder → rend le nœud dépliable
                 child.addChild(QTreeWidgetItem([""]))

@@ -40,6 +40,60 @@ class TestSetPhotos:
         assert grid.get_selected() == []
 
 
+class TestEmptyMessage:
+    """show_empty_message/clear_empty_message — utilisé par MainWindow pour
+    signaler un dossier vide de photos cataloguées mais contenant en réalité
+    une copie de DVD (VIDEO_TS), avec une action pour l'ouvrir en externe."""
+
+    def test_show_empty_message_displays_text_and_action(self, qtbot, tmp_path):
+        grid = _make_grid(qtbot, tmp_path)
+        calls: list = []
+
+        grid.show_empty_message("Copie de DVD détectée", "Ouvrir", lambda: calls.append(1))
+
+        assert grid._empty_overlay.isVisible()
+        assert grid._empty_label.text() == "Copie de DVD détectée"
+        assert grid._empty_action_btn.isVisible()
+        grid._empty_action_btn.click()
+        assert calls == [1]
+
+    def test_show_empty_message_without_action_hides_button(self, qtbot, tmp_path):
+        grid = _make_grid(qtbot, tmp_path)
+
+        grid.show_empty_message("Dossier vide")
+
+        assert grid._empty_overlay.isVisible()
+        assert not grid._empty_action_btn.isVisible()
+
+    def test_clear_empty_message_hides_overlay(self, qtbot, tmp_path):
+        grid = _make_grid(qtbot, tmp_path)
+        grid.show_empty_message("Copie de DVD détectée", "Ouvrir", lambda: None)
+
+        grid.clear_empty_message()
+
+        assert not grid._empty_overlay.isVisible()
+
+    def test_set_photos_clears_previous_empty_message(self, qtbot, tmp_path):
+        grid = _make_grid(qtbot, tmp_path)
+        grid.show_empty_message("Copie de DVD détectée", "Ouvrir", lambda: None)
+
+        grid.set_photos([_photo("C:/lib/a.jpg")])
+
+        assert not grid._empty_overlay.isVisible()
+
+    def test_second_action_replaces_first_connection(self, qtbot, tmp_path):
+        """Un second show_empty_message ne doit pas empiler les connexions du
+        signal clicked (sinon un clic déclenche N callbacks après N appels)."""
+        grid = _make_grid(qtbot, tmp_path)
+        calls: list = []
+        grid.show_empty_message("Message 1", "Ouvrir", lambda: calls.append("first"))
+        grid.show_empty_message("Message 2", "Ouvrir", lambda: calls.append("second"))
+
+        grid._empty_action_btn.click()
+
+        assert calls == ["second"]
+
+
 class TestCellClickSelection:
     def test_plain_click_selects_single_photo_and_emits_signal(self, qtbot, tmp_path):
         grid = _make_grid(qtbot, tmp_path)

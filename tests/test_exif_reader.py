@@ -283,5 +283,5 @@ class TestVideoMetadataReader:
 
 class TestVideoExt:
     def test_known_extensions(self):
-        assert {".mp4", ".mov", ".mkv"} <= VIDEO_EXT
-        assert len(VIDEO_EXT) == 13
+        assert {".mp4", ".mov", ".mkv", ".vob"} <= VIDEO_EXT
+        assert len(VIDEO_EXT) == 14

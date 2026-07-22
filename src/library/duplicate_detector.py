@@ -62,7 +62,7 @@ _ORB_MAX_MEAN_DIFF = 25.0  # écart de pixels (0-255) après recalage par
 # nettement les deux cas.
 
 _VIDEO_EXT = {'.mp4', '.mov', '.avi', '.mkv', '.wmv', '.webm',
-              '.m4v', '.3gp', '.flv', '.ts', '.mts', '.mpg', '.mpeg'}
+              '.m4v', '.3gp', '.flv', '.ts', '.mts', '.mpg', '.mpeg', '.vob'}
 
 
 # ── helpers ────────────────────────────────────────────────────────────────────

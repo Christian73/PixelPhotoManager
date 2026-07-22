@@ -99,6 +99,29 @@ class TestScanDiscovery:
         paths = catalog.get_all_paths_under(str(photos))
         assert all("visible.jpg" in p for p in paths)
 
+    def test_dvd_copy_vob_cataloged_as_video(self, qtbot, env):
+        """Une copie de DVD (VIDEO_TS/AUDIO_TS) est parcourue comme n'importe
+        quel autre dossier : les .VOB sont de vraies vidéos (VIDEO_EXT),
+        cataloguées avec media_type="video" ; .IFO/.BUP (métadonnées de
+        navigation, pas du média) restent ignorés faute d'extension supportée,
+        sans exclusion de dossier dédiée."""
+        catalog, cache, photos = env
+        _make_jpg(photos / "visible.jpg")
+        dvd = photos / "MonDVD"
+        (dvd / "VIDEO_TS").mkdir(parents=True)
+        (dvd / "VIDEO_TS" / "VTS_01_1.VOB").write_bytes(b"x")
+        (dvd / "VIDEO_TS" / "VIDEO_TS.IFO").write_bytes(b"x")
+        (dvd / "AUDIO_TS").mkdir(parents=True)
+
+        batches, removed, total = _run_scan(qtbot, catalog, cache, [str(photos)])
+
+        assert total == 2
+        all_photos = [p for b in batches for p in b]
+        vob = next(p for p in all_photos if p.path.lower().endswith(".vob"))
+        assert vob.media_type == "video"
+        paths = catalog.get_all_paths_under(str(photos))
+        assert not any(p.lower().endswith(".ifo") for p in paths)
+
     def test_hidden_file_excluded(self, qtbot, env):
         catalog, cache, photos = env
         _make_jpg(photos / ".secret.jpg")

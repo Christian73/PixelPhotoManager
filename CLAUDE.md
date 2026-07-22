@@ -111,7 +111,9 @@ bus.emit('library.photo_selected', photo=photo_info)
 ### Support vidéo
 
 `src/library/exif_reader.py` expose :
-- `VIDEO_EXT` — ensemble des 13 extensions vidéo supportées : `.mp4 .mov .avi .mkv .wmv .webm .m4v .3gp .flv .ts .mts .mpg .mpeg`
+- `VIDEO_EXT` — ensemble des 14 extensions vidéo supportées : `.mp4 .mov .avi .mkv .wmv .webm .m4v .3gp .flv .ts .mts .mpg .mpeg .vob`
+  (`.vob` = flux d'une copie de DVD, dossier `VIDEO_TS` — copie littérale dans
+  `src/library/duplicate_detector.py::_VIDEO_EXT`, à maintenir en parallèle)
 - `VideoMetadataReader.read(path)` — lit résolution/fps/durée via `cv2.VideoCapture`, date = `os.stat(path).st_mtime`
 
 `src/core/models.py` — `PhotoInfo` dispose de deux champs supplémentaires :
@@ -121,6 +123,28 @@ bus.emit('library.photo_selected', photo=photo_info)
 `catalog.db` comporte les colonnes `media_type` et `duration` (migration automatique au démarrage via `_migrate_video_fields()`).
 
 Le panneau de retouche est **ignoré pour les vidéos** : `main_window.show_viewer()` et `_navigate_photo()` vérifient `photo.media_type == "video"` et gardent `_left_stack` à l'index 0 (sidebar) au lieu de 1 (panneau retouche).
+
+### Copies de DVD (dossiers VIDEO_TS/AUDIO_TS)
+
+Un dossier « copie de DVD » (arborescence `VIDEO_TS`/`AUDIO_TS` standard) est parcouru
+par le scanner comme n'importe quel autre dossier — pas d'exclusion dédiée. Les `.VOB`
+(flux vidéo réels) sont cataloguées normalement via `VIDEO_EXT` ; les `.IFO`/`.BUP`
+(métadonnées de navigation, pas du média) restent ignorés faute d'extension supportée.
+
+`src/library/fs_utils.py::find_dvd_video_ts(folder)` détecte, purement côté filesystem
+(un `os.scandir` des enfants directs, aucune persistance), si `folder` est une copie de
+DVD (`VIDEO_TS` en enfant direct, insensible à la casse). Deux usages :
+- `src/ui/sidebar.py::_mark_if_dvd_copy()` pose une icône disque sur le nœud de l'arbre —
+  restreint aux dossiers **sans photo cataloguée** (`count` vide/nul) pour éviter un
+  `os.scandir` de plus par dossier affiché ; devenu rare en pratique depuis que les
+  `.VOB` sont cataloguées (le dossier n'a alors plus l'air vide), mais reste utile avant
+  le premier scan d'un dossier nouvellement ajouté.
+- `main_window.py::_on_photo_query_ready()` affiche un message dans la grille
+  (`ThumbnailGrid.show_empty_message()`) avec un bouton « Ouvrir avec un lecteur
+  externe » quand un dossier sélectionné ne contient aucune photo cataloguée mais est
+  une copie de DVD — cas résiduel (DVD non encore scanné, ou copie incomplète sans
+  `.VOB` exploitable). Réutilise `tools.external_apps` (même config que
+  `PhotoViewer._open_with`) via `subprocess.Popen([app_path, folder_path])`.
 
 ### Retouches non destructives
 

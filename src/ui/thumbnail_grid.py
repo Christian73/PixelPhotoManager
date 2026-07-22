@@ -10,7 +10,7 @@ from PySide6.QtCore import Qt, Signal, QRunnable, QThreadPool, QObject, Slot, QP
 from PySide6.QtGui import QPixmap, QColor, QPainter, QFont, QDrag
 from PySide6.QtWidgets import (
     QScrollArea, QScrollBar, QWidget, QLabel, QVBoxLayout, QSizePolicy,
-    QMenu, QApplication,
+    QMenu, QApplication, QPushButton,
 )
 
 from src.ui.loading_label import LoadingLabel
@@ -497,6 +497,26 @@ class ThumbnailGrid(QScrollArea):
         )
         self._date_label.hide()
 
+        # État vide avec message + action (ex. dossier "copie de DVD" sans
+        # photo cataloguée) — générique, sans connaissance du cas d'usage :
+        # l'appelant fournit le texte et le callback du bouton.
+        self._empty_overlay = QWidget(self.viewport())
+        self._empty_overlay.setStyleSheet(
+            "QWidget { background-color: rgba(40,40,40,220); border-radius: 10px; }"
+        )
+        _empty_layout = QVBoxLayout(self._empty_overlay)
+        _empty_layout.setContentsMargins(24, 20, 24, 20)
+        _empty_layout.setSpacing(12)
+        self._empty_label = QLabel("", self._empty_overlay)
+        self._empty_label.setWordWrap(True)
+        self._empty_label.setAlignment(Qt.AlignCenter)
+        self._empty_label.setStyleSheet("QLabel { color: white; font-size: 14px; }")
+        self._empty_label.setMaximumWidth(320)
+        _empty_layout.addWidget(self._empty_label)
+        self._empty_action_btn = QPushButton("", self._empty_overlay)
+        _empty_layout.addWidget(self._empty_action_btn)
+        self._empty_overlay.hide()
+
         # Ascenseur de navigation rapide (mode ruban uniquement)
         # La barre est fournie de l'extérieur via bind_ribbon_nav_bar()
         # et placée dans le layout parent — pas en overlay sur le viewport.
@@ -511,6 +531,7 @@ class ThumbnailGrid(QScrollArea):
     # ══════════════════════════════════════════════════════════════════ données
 
     def set_photos(self, photos: list[PhotoInfo]) -> None:
+        self.clear_empty_message()
         self._selected.clear()
         self._cancel_pending_workers()
         self._dematerialize_all()
@@ -588,6 +609,7 @@ class ThumbnailGrid(QScrollArea):
                 return
 
     def clear(self) -> None:
+        self.clear_empty_message()
         self._selected.clear()
         self._cancel_pending_workers()
         self._dematerialize_all()
@@ -1041,6 +1063,45 @@ class ThumbnailGrid(QScrollArea):
         self._date_label.move(12, 12)
         self._date_label.show()
         self._date_label.raise_()
+
+    # ══════════════════════════════════════════════════════════════════ état vide
+
+    def show_empty_message(self, text: str, action_label: str = None, action_callback=None) -> None:
+        """Affiche un message centré par-dessus la grille (ex. dossier vide de
+        photos mais contenant en réalité une copie de DVD). Effacé automatiquement
+        par set_photos()/clear() ; l'appelant le redemande si la condition tient
+        toujours après le prochain affichage."""
+        self._empty_label.setText(text)
+        if action_label and action_callback is not None:
+            self._empty_action_btn.setText(action_label)
+            try:
+                self._empty_action_btn.clicked.disconnect()
+            except (TypeError, RuntimeError):
+                pass
+            self._empty_action_btn.clicked.connect(action_callback)
+            self._empty_action_btn.show()
+        else:
+            self._empty_action_btn.hide()
+        self._empty_overlay.adjustSize()
+        self._reposition_empty_overlay()
+        self._empty_overlay.show()
+        self._empty_overlay.raise_()
+
+    def clear_empty_message(self) -> None:
+        self._empty_overlay.hide()
+
+    def _reposition_empty_overlay(self) -> None:
+        if not self._empty_overlay.isVisible():
+            return
+        size = self._empty_overlay.sizeHint()
+        vp = self.viewport().rect()
+        x = max(0, (vp.width() - size.width()) // 2)
+        y = max(0, (vp.height() - size.height()) // 2)
+        self._empty_overlay.setGeometry(x, y, size.width(), size.height())
+
+    def resizeEvent(self, event) -> None:
+        super().resizeEvent(event)
+        self._reposition_empty_overlay()
 
     # ══════════════════════════════════════════════════════════════════ molette
 

@@ -4,6 +4,7 @@ import ctypes
 import logging
 import os
 import shutil
+import subprocess
 import time
 from datetime import datetime
 from pathlib import Path
@@ -16,7 +17,7 @@ from PySide6.QtWidgets import (
     QRadioButton, QScrollBar, QSplitter, QStackedWidget, QStatusBar, QToolBar,
     QLineEdit, QSlider, QLabel, QPushButton,
     QFileDialog, QInputDialog, QListWidget, QListWidgetItem,
-    QMessageBox, QProgressBar, QSizePolicy,
+    QMessageBox, QProgressBar, QSizePolicy, QMenu,
 )
 
 from src.core.config import Config
@@ -29,6 +30,7 @@ from src.library.scanner import LibraryScanner
 from src.library.duplicate_detector import DuplicateDetectorThread
 from src.library.dedup_cache import DedupCache
 from src.library.exif_reader import preserve_file_dates
+from src.library.fs_utils import find_dvd_video_ts
 from src.core.app_version import get_app_version
 from src.core.update_checker import UpdateCheckThread, STATUS_UPDATE_AVAILABLE
 from src.faces.face_database import FaceDatabase
@@ -1269,8 +1271,14 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
         self._viewer.set_zoom(value / 100.0)
         self._zoom_pct_label.setText(f"{value}%")
 
-    def _start_photo_query(self, fn, context_key: str, album_id: int | None = None) -> None:
-        """Lance une requête photo en arrière-plan et met à jour la grille à l'arrivée."""
+    def _start_photo_query(
+        self, fn, context_key: str, album_id: int | None = None, folder_path: str | None = None
+    ) -> None:
+        """Lance une requête photo en arrière-plan et met à jour la grille à l'arrivée.
+        folder_path : chemin réel du dossier sélectionné (seulement pour la sidebar
+        « Dossiers », distinct de context_key qui sert aussi de libellé d'affichage
+        pour les autres vues) — permet de détecter une copie de DVD sans confondre
+        avec un nom d'album qui coïnciderait par hasard avec un chemin du disque."""
         self._cancel_grid_display_ops()
         # Paramètres de tri résolus ici (thread UI : lectures de Config),
         # tri exécuté dans le thread avec la requête.
@@ -1279,18 +1287,80 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
             fn, context_key, key_fn, reverse, self
         )
         self._photo_query_thread.photos_ready.connect(
-            lambda photos, ctx, aid=album_id: self._on_photo_query_ready(photos, ctx, aid)
+            lambda photos, ctx, aid=album_id, fp=folder_path: self._on_photo_query_ready(photos, ctx, aid, fp)
         )
         self._photo_query_thread.start()
 
-    def _on_photo_query_ready(self, photos: list, context_key: str, album_id: int | None = None) -> None:
+    def _on_photo_query_ready(
+        self, photos: list, context_key: str, album_id: int | None = None, folder_path: str | None = None
+    ) -> None:
         self._current_photos   = photos
         self._current_paths    = {p.path for p in photos}
         self._current_context  = context_key
         self._current_album_id = album_id
         self._grid.set_album_context(album_id)
         self._grid.set_photos(photos)
+        if folder_path and not photos:
+            video_ts = find_dvd_video_ts(folder_path)
+            if video_ts:
+                self._grid.show_empty_message(
+                    "Ce dossier ne contient aucune photo cataloguée, mais semble être "
+                    "une copie de DVD (dossier VIDEO_TS).",
+                    "Ouvrir avec un lecteur externe",
+                    lambda _checked=False, fp=folder_path: self._open_dvd_folder(fp),
+                )
         self._update_status()
+
+    def _open_dvd_folder(self, folder_path: str) -> None:
+        """Ouvre un dossier « copie de DVD » dans une application externe déjà
+        configurée par l'utilisateur (menu Outils › Applications externes…, même
+        liste que celle utilisée par le viewer pour ouvrir une photo — cf.
+        PhotoViewer._open_with). On lui passe le dossier lui-même (et non le
+        sous-dossier VIDEO_TS) : VLC et la plupart des lecteurs détectent
+        VIDEO_TS à l'intérieur d'un dossier passé en argument."""
+        apps: list = list(self._config.get("tools.external_apps", []))
+        if not apps:
+            box = QMessageBox(self)
+            box.setIcon(QMessageBox.Information)
+            box.setWindowTitle("Aucune application externe configurée")
+            box.setText(
+                "Configurez d'abord une application externe (ex. VLC) via le menu "
+                "Outils › Applications externes… pour pouvoir ouvrir ce dossier."
+            )
+            btn_configure = box.addButton("Configurer…", QMessageBox.AcceptRole)
+            box.addButton(QMessageBox.Cancel)
+            box.exec()
+            if box.clickedButton() is btn_configure:
+                self._open_external_apps_dialog()
+            return
+
+        if len(apps) == 1:
+            self._launch_external_app(apps[0].get("path", ""), folder_path)
+            return
+
+        self._external_apps_menu(apps, folder_path).exec(self.cursor().pos())
+
+    def _external_apps_menu(self, apps: list, target_path: str) -> QMenu:
+        """Construit (sans l'afficher) le menu de choix d'application externe
+        pour target_path — extrait de _open_dvd_folder pour rester testable
+        sans passer par un QMenu.exec() modal."""
+        menu = QMenu(self)
+        for app in apps:
+            name = app.get("name", "")
+            path = app.get("path", "")
+            menu.addAction(name, lambda _checked=False, p=path: self._launch_external_app(p, target_path))
+        return menu
+
+    def _launch_external_app(self, app_path: str, target_path: str) -> None:
+        try:
+            subprocess.Popen([app_path, target_path])
+        except Exception as exc:
+            logger.warning("Impossible de lancer '%s' : %s", app_path, exc)
+            QMessageBox.warning(
+                self,
+                "Impossible de lancer l'application",
+                f"Échec du lancement de :\n{app_path}\n\n{exc}",
+            )
 
     def _sort_params_for_context(self, context: str) -> tuple:
         """Résout les paramètres de tri (key_fn, reverse) du réglage "Ordre
@@ -1352,6 +1422,7 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
         self._start_photo_query(
             lambda: self._catalog.get_photos_in_folder(folder),
             folder,
+            folder_path=folder,
         )
 
     @Slot(object)
