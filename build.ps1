@@ -6,7 +6,7 @@
     Packaging complet de PixelPhotoManager : EXE PyInstaller puis MSI WiX.
 .DESCRIPTION
     Etape 1 — PyInstaller : produit dist\PixelPhotoManager\ (one-dir)
-    Etape 2 — WiX v3     : produit installer\PixelPhotoManager-Setup.msi
+    Etape 2 — WiX v3     : produit installer\PixelPhotoManager-Setup-<version>.msi
 
     Usage :
         .\build.ps1                    # EXE + MSI (demande le numero de version)
