@@ -124,6 +124,48 @@ bus.emit('library.photo_selected', photo=photo_info)
 
 Le panneau de retouche est **ignoré pour les vidéos** : `main_window.show_viewer()` et `_navigate_photo()` vérifient `photo.media_type == "video"` et gardent `_left_stack` à l'index 0 (sidebar) au lieu de 1 (panneau retouche).
 
+### Décodage image — RAW et HEIC/HEIF
+
+`src/library/image_loader.py::open_image(path)` est le **point de décodage image
+unique** du projet — tous les sites qui ouvraient auparavant un fichier via
+`PIL.Image.open(path)` directement (thumbnail_cache, viewer_pixmaps, exif_reader,
+faces/detector) doivent passer par lui à la place. Ne pas recréer un appel direct
+`Image.open()` sur un chemin de fichier utilisateur (un `Image.open(io.BytesIO(...))`
+sur des octets déjà décodés reste légitime, ex. `viewer_pixmaps._apply_edit_to_base`).
+
+- `RAW_EXT = {.cr2 .nef .arw .dng .orf .rw2}`, `is_raw_available()` (import
+  `rawpy` caché, coûteux). RAW décodé via l'aperçu JPEG embarqué par l'appareil
+  (`rawpy.imread(path).extract_thumb()`, rapide, conserve l'EXIF d'origine) avec
+  repli sur `raw.postprocess(half_size=True)` (dématriçage réduit, plus lent) si
+  aucun aperçu exploitable — export d'un RAW = résolution de cet aperçu, limite
+  documentée du produit.
+- HEIC/HEIF : `register_heif_opener()` de `pillow-heif` enregistré au **niveau
+  module** (pas dans une fonction) — les workers `ProcessPoolExecutor` (spawn,
+  `faces/detector.py`) ré-importent les modules sans jamais passer par `main()`,
+  un enregistrement paresseux ne s'exécuterait donc jamais pour eux. Une fois
+  enregistré, `Image.open()` lit le HEIC de façon transparente partout (y
+  compris hors de `image_loader`, ex. les fallbacks PIL de
+  `duplicate_detector.py`) — aucune exclusion dédiée n'est nécessaire pour HEIC,
+  contrairement au RAW ci-dessous.
+- `safe_temp_suffix(path)` — à utiliser partout où un fichier temporaire est
+  écrit via `PIL.Image.save()` à partir d'une image décodée depuis un chemin
+  RAW ou HEIC : force `.jpg` (RAW n'est jamais ré-savable par PIL, HEIC pas
+  forcément selon la version de `pillow-heif`).
+- Détection de doublons (`duplicate_detector.py`) exclut `RAW_EXT` (import direct
+  depuis `image_loader`, à ne pas dupliquer localement — contrairement à
+  `_VIDEO_EXT`, historiquement dupliqué) du prélèvement Tier 1 : sans ça, ni
+  `cv2.imread` ni le simple `PIL.Image.open` des fallbacks ne savent décoder un
+  RAW, qui serait alors classé « corrompu » et proposé à la suppression.
+- `faces/detector.py::_exif_corrected()` force la conversion en JPEG temporaire
+  (`needs_format_conversion`) pour toute extension RAW/HEIC, **même si**
+  l'orientation EXIF est déjà normale et le chemin ASCII — sans ce déclencheur
+  inconditionnel, un RAW/HEIC correctement orienté (le cas le plus courant)
+  passait tel quel à `cv2.imread()`, qui ne sait pas le décoder : 0 visage
+  détecté en silence sur la quasi-totalité des photos RAW.
+- `scanner.py::SUPPORTED_EXT` n'inclut `RAW_EXT` que si `is_raw_available()` ;
+  `ExifReader.SUPPORTED` inclut `.heic`/`.heif` inconditionnellement (pillow-heif
+  fait partie du cœur, pas une dépendance optionnelle isolée dans un plugin).
+
 ### Copies de DVD (dossiers VIDEO_TS/AUDIO_TS)
 
 Un dossier « copie de DVD » (arborescence `VIDEO_TS`/`AUDIO_TS` standard) est parcouru
@@ -181,6 +223,22 @@ Pour les vidéos, `generate()` délègue à `_generate_video_thumb()` : `cv2.Vid
 - Signaux : `rescan_requested(str)`, `folder_removed(str)`, `folder_added(str)`.
 - Le re-scan forcé passe par `LibraryScanner.scan(folders, force=True)` → `ScanThread(force=True)` → `known = {}` (bypass du cache mtime).
 - `folder_removed` est traité par `MainWindow._on_folder_removed()` : confirmation (nombre de photos affecté) puis `_purge_catalog_for_folder()` supprime les photos du catalogue, les vignettes (`ThumbnailCache.invalidate`) et les visages/`indexed_photos` (`FaceDatabase.delete_for_path`) pour ce dossier. Les fichiers restent intacts sur le disque.
+
+### Suppression — toujours via la corbeille Windows
+
+`src/library/trash.py` est le **point unique** de suppression d'un fichier
+utilisateur : `move_to_trash(path)` (wrapper `send2trash`, `os.path.normpath`,
+lève `FileNotFoundError` si absent) et `is_trash_available()`. Règle absolue :
+l'application n'efface **jamais** définitivement un fichier utilisateur — en cas
+d'échec (lecteur réseau, volume sans corbeille → `TrashPermissionError`/`OSError`),
+l'exception remonte à l'appelant, qui doit informer l'utilisateur que le fichier
+n'a **pas** été supprimé (jamais de repli `unlink`/`rmtree` silencieux). Sites
+concernés : `background_workers.py::_DeleteWorkerThread` (grille, visionneuse,
+fichiers corrompus), `sidebar.py::_delete_folder` (suppression de dossier, dans
+un QThread — un `rmtree` direct bloquerait le thread UI), `face_backup_dialog.py`
+(suppression d'une archive de sauvegarde). Les fichiers **temporaires internes**
+de l'application (tempfile, dossiers `_restore_tmp…`) restent en `unlink` direct —
+non concernés par cette règle, ce ne sont pas des fichiers utilisateur.
 
 ### Détection de doublons — continue et incrémentale
 
@@ -270,6 +328,21 @@ SQLite embarqué, zéro configuration. Le catalogue est dans `%LOCALAPPDATA%\Pix
 
 Piège : l'index `idx_faces_suggestion` (faces.db) doit être créé **après** les migrations dans `_init_db` — la colonne `suggestion_person_id` n'existe pas dans `_CREATE_FACES`, seulement via `ALTER TABLE`.
 
+**Ordre des colonnes de `photos`** (`catalog.py::_CREATE_PHOTOS`) : `_photo_from_row()`
+unpacke la ligne **positionnellement** (`*rest` pour les colonnes ajoutées après
+`media_type`/`duration`) — toute nouvelle colonne s'ajoute **en fin** de
+`_CREATE_PHOTOS` (et de la migration `ALTER TABLE` correspondante), jamais au
+milieu, sous peine de décaler silencieusement tous les champs suivants sur une
+base migrée depuis une version antérieure.
+
+**Pas de nouvelle colonne éditable par l'utilisateur dans le `DO UPDATE`** de
+`add_or_update_photo()` (`ON CONFLICT(path) DO UPDATE SET ...`) : `tags` et
+`rating` sont volontairement **absents** de cette clause (comme `is_favorite`
+avant eux) — un re-scan forcé (`FolderManagerDialog` → `scan(force=True)`) doit
+reconstruire les champs EXIF/fichier mais ne jamais écraser une donnée saisie par
+l'utilisateur. Toute future colonne du même genre (éditable en dehors du scan)
+suit ce même pattern : présente dans l'`INSERT`, absente du `DO UPDATE`.
+
 ---
 
 ## Dépendances notables
@@ -284,6 +357,9 @@ Piège : l'index `idx_faces_suggestion` (faces.db) doit être créé **après** 
 | imagehash | Détection de doublons perceptuels |
 | folium | Carte OpenStreetMap |
 | reportlab | Export PDF |
+| send2trash | Suppression via la corbeille Windows (`src/library/trash.py`) |
+| pillow-heif | Décodage HEIC/HEIF (`src/library/image_loader.py`) |
+| rawpy | Décodage RAW — CR2/NEF/ARW/DNG/ORF/RW2 (`src/library/image_loader.py`) |
 
 Les dépendances IA (PyTorch, DeepFace, Real-ESRGAN…) sont **optionnelles** et commentées dans `requirements.txt`. Ne pas les imposer au cœur de l'application — les isoler dans des plugins.
 
@@ -298,3 +374,11 @@ Les dépendances IA (PyTorch, DeepFace, Real-ESRGAN…) sont **optionnelles** et
 Le pack de modèles `buffalo_l` (détection SCRFD + embedding ArcFace, ~340 Mo) est lui aussi embarqué dans le bundle, sous `insightface_root/models/buffalo_l` (`pixelphotomanager.spec`, source = `~/.insightface/models/buffalo_l` de la machine de build — il faut donc avoir lancé l'appli au moins une fois en mode dev pour l'avoir en cache localement avant de builder). `src/faces/detector.py::_insightface_root()` pointe `FaceAnalysis(root=...)` dessus en mode figé. Sans ça, `insightface` tente de télécharger le pack depuis GitHub au 1er lancement sur chaque poste — silencieux et invisible tant qu'il y a un accès Internet, mais **totalement bloquant sans accès à github.com** (pare-feu, poste isolé) : reconnaissance faciale inopérante à 100 % (0 visage détecté, quel que soit le nombre de photos), avec un nouveau essai de téléchargement complet à *chaque photo* puisque le modèle n'est jamais mis en cache.
 
 `main.py` redirige `sys.stdout`/`sys.stderr` vers `os.devnull` au tout début s'ils valent `None` (cas d'un exe `console=False` : toute bibliothèque qui y écrit, comme `tqdm` utilisé par `insightface` pendant un téléchargement, plante avec `AttributeError: 'NoneType' object has no attribute 'write'`). Ce crash était particulièrement pernicieux avec le téléchargement du pack `buffalo_l` : la requête HTTP aboutissait bien (200 OK), mais `tqdm` plantait pendant l'écriture de la barre de progression, interrompant le flux **avant** l'écriture du fichier sur le disque — le modèle n'était donc jamais mis en cache, et le run suivant retentait un téléchargement complet, en boucle.
+
+`pillow-heif` et `rawpy` (décodage HEIC/RAW, cf. `src/library/image_loader.py`)
+figurent eux aussi dans `_with_data` (`collect_all`) de `pixelphotomanager.spec` —
+jamais dans `excludes` — pour embarquer leurs bibliothèques natives (libheif,
+libraw). Contrairement au pack `buffalo_l` d'insightface, aucune copie manuelle
+supplémentaire n'est nécessaire : `collect_all()` seul suffit pour ces deux
+packages (vérifié par un `collect_all()` à blanc : datas/binaries non vides pour
+les deux).
