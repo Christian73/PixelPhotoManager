@@ -13,7 +13,10 @@ import insightface
 ROOT = Path(SPECPATH)
 
 # Packages avec ressources intégrées (templates, polices, plugins)
-_with_data = ["PIL", "folium", "reportlab", "insightface"]
+# pillow_heif/rawpy : DLLs natives (libheif, libraw) embarquées via
+# collect_all — jamais dans excludes (cf. src/library/image_loader.py,
+# point de décodage unique RAW/HEIC).
+_with_data = ["PIL", "folium", "reportlab", "insightface", "pillow_heif", "rawpy"]
 
 datas, binaries, hiddenimports = [], [], []
 for pkg in _with_data:

@@ -285,6 +285,36 @@ class TestLoadGrayTiffBypassesCv2:
         assert img.shape[:2] == (30, 40)
 
 
+class TestRawFilesNeverFlaggedCorrupted:
+    """Un .cr2 (ni PIL ni cv2.imread ne peuvent le décoder sans rawpy — non
+    monkeypatché ici) doit être exclu du prélèvement de _detect() comme les
+    vidéos (_VIDEO_EXT), pas classé « corrompu » et proposé à la suppression.
+    Style test_tiff_never_reaches_cv2_imread : contenu délibérément non
+    décodable, pour vérifier l'exclusion en amont plutôt que le décodage."""
+
+    def test_raw_file_excluded_from_corrupted_and_from_groups(self, tmp_path):
+        from tools.test_env.generate_library import build_library
+
+        manifest = build_library(tmp_path / "lib")
+        raw_path = tmp_path / "lib" / "photo.cr2"
+        raw_path.write_bytes(b"pas un vrai CR2")
+        paths = [str(p) for p in manifest.images] + [str(raw_path)]
+
+        thread = DuplicateDetectorThread(
+            paths, cache_db_path=str(tmp_path / "dedup_cache.db"),
+        )
+        received = {}
+        thread.finished.connect(lambda groups: received.update(groups=groups))
+        thread._detect()
+
+        assert "groups" in received
+        members_by_path = {
+            p: gid for gid, members in received["groups"].items() for p in members
+        }
+        assert str(raw_path) not in members_by_path
+        assert str(raw_path) not in thread.corrupted_paths
+
+
 class TestMergeUnionFind:
     def test_merge_two_new_paths_creates_group(self):
         group_of: dict = {}

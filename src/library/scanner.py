@@ -10,11 +10,12 @@ from PySide6.QtCore import QThread, Signal
 from src.library.exif_reader import ExifReader, VideoMetadataReader, VIDEO_EXT
 from src.library.catalog import Catalog
 from src.library.thumbnail_cache import ThumbnailCache
+from src.library.image_loader import RAW_EXT, is_raw_available
 from src.core.models import PhotoInfo
 
 logger = logging.getLogger(__name__)
 
-SUPPORTED_EXT = ExifReader.SUPPORTED | VIDEO_EXT
+SUPPORTED_EXT = ExifReader.SUPPORTED | VIDEO_EXT | (RAW_EXT if is_raw_available() else set())
 
 
 # Ré-export : implémentation partagée (cf. fs_utils), alias conservé pour les

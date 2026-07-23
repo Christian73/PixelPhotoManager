@@ -144,15 +144,22 @@ def _exif_corrected(image_path: str, extra_rotation: int = 0):
                         cv2.imwrite(temp_path, frame)
                         result_path = temp_path
         else:
-            from PIL import Image, ImageOps
-            with Image.open(image_path) as img:
+            from PIL import ImageOps
+            from src.library.image_loader import RAW_EXT, open_image, safe_temp_suffix
+            # RAW/HEIC : cv2.imread ne sait pas les décoder — une conversion
+            # JPEG est nécessaire même quand orientation/rotation/ascii sont
+            # déjà corrects, sinon detect_and_embed reçoit le fichier
+            # d'origine non lisible par cv2.
+            ext = os.path.splitext(image_path)[1].lower()
+            needs_format_conversion = ext in RAW_EXT or ext in (".heic", ".heif")
+            with open_image(image_path) as img:
                 orientation = img.getexif().get(274, 1)
                 needs_exif = orientation not in (None, 1)
-                if needs_exif or needs_rotation or needs_ascii:
+                if needs_exif or needs_rotation or needs_ascii or needs_format_conversion:
                     corrected = ImageOps.exif_transpose(img) if needs_exif else img.copy()
                     if needs_rotation:
                         corrected = corrected.rotate(-extra_rotation, expand=True)
-                    suffix = os.path.splitext(image_path)[1] or ".jpg"
+                    suffix = safe_temp_suffix(image_path)
                     fd, temp_path = tempfile.mkstemp(suffix=suffix)
                     os.close(fd)
                     corrected.save(temp_path, quality=95)
@@ -202,14 +209,15 @@ def _resized_for_detection(image_path: str):
     scale = 1.0
     try:
         from PIL import Image
-        with Image.open(image_path) as img:
+        from src.library.image_loader import open_image, safe_temp_suffix
+        with open_image(image_path) as img:
             w, h = img.size
             max_dim = max(w, h)
             if max_dim > _MAX_DETECT_DIM:
                 scale = _MAX_DETECT_DIM / max_dim
                 new_w, new_h = int(w * scale), int(h * scale)
                 resized = img.resize((new_w, new_h), Image.LANCZOS)
-                suffix = os.path.splitext(image_path)[1] or ".jpg"
+                suffix = safe_temp_suffix(image_path)
                 fd, temp_path = tempfile.mkstemp(suffix=suffix)
                 os.close(fd)
                 resized.save(temp_path, quality=92)

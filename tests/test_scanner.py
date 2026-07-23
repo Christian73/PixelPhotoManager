@@ -148,6 +148,22 @@ class TestScanDiscovery:
         assert total == 1
         assert batches[0][0].width == 0
 
+    def test_raw_file_discovered_when_rawpy_available(self, qtbot, env):
+        from src.library.image_loader import is_raw_available
+        if not is_raw_available():
+            pytest.skip("rawpy non installé")
+        catalog, cache, photos = env
+        (photos / "photo.cr2").write_bytes(b"pas un vrai CR2")
+        batches, removed, total = _run_scan(qtbot, catalog, cache, [str(photos)])
+        assert total == 1
+        assert batches[0][0].media_type == "image"
+
+    def test_heic_file_discovered(self, qtbot, env):
+        catalog, cache, photos = env
+        (photos / "photo.heic").write_bytes(b"pas un vrai HEIC")
+        batches, removed, total = _run_scan(qtbot, catalog, cache, [str(photos)])
+        assert total == 1
+
     def test_empty_folder(self, qtbot, env):
         catalog, cache, photos = env
         batches, removed, total = _run_scan(qtbot, catalog, cache, [str(photos)])
@@ -273,3 +289,14 @@ class TestSupportedExt:
         assert ".jpg" in SUPPORTED_EXT
         assert ".mp4" in SUPPORTED_EXT
         assert ".txt" not in SUPPORTED_EXT
+
+    def test_heic_always_supported(self):
+        assert ".heic" in SUPPORTED_EXT
+        assert ".heif" in SUPPORTED_EXT
+
+    def test_raw_supported_only_when_rawpy_available(self):
+        from src.library.image_loader import is_raw_available, RAW_EXT
+        if is_raw_available():
+            assert RAW_EXT <= SUPPORTED_EXT
+        else:
+            assert not (RAW_EXT & SUPPORTED_EXT)

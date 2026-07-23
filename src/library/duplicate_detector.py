@@ -24,6 +24,7 @@ from PySide6.QtCore import QThread, Signal
 
 from src.core.cpu_throttle import throttled_worker_count, lower_current_thread_priority
 from src.library.dedup_cache import DedupCache
+from src.library.image_loader import RAW_EXT
 
 logger = logging.getLogger(__name__)
 
@@ -253,6 +254,7 @@ class DuplicateDetectorThread(QThread):
         paths = [
             p for p in self._paths
             if os.path.isfile(p) and Path(p).suffix.lower() not in _VIDEO_EXT
+            and Path(p).suffix.lower() not in RAW_EXT
         ]
         total = len(paths)
         if total == 0:

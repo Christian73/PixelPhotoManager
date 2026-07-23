@@ -58,7 +58,8 @@ def _build_pixmap(photo: PhotoInfo, edit: EditInfo | None) -> "tuple[QPixmap, in
         return _build_video_pixmap(photo.path)
     try:
         from PIL import Image, ImageOps
-        with Image.open(photo.path) as img:
+        from src.library.image_loader import open_image
+        with open_image(photo.path) as img:
             img = ImageOps.exif_transpose(img)
             orig_w, orig_h = img.size   # dimensions EXIF-corrigées (référence pour les bbox)
             if max(orig_w, orig_h) > _PREVIEW_MAX_PX:
@@ -137,7 +138,8 @@ def _build_base_image(photo: PhotoInfo) -> "tuple[bytes, int, int] | None":
         return _build_video_base_image(photo.path)
     try:
         from PIL import Image, ImageOps
-        with Image.open(photo.path) as img:
+        from src.library.image_loader import open_image
+        with open_image(photo.path) as img:
             img = ImageOps.exif_transpose(img)
             orig_w, orig_h = img.size
             if max(orig_w, orig_h) > _PREVIEW_MAX_PX:

@@ -89,7 +89,7 @@ def _parse_subsec(value: str) -> int:
 
 
 class ExifReader:
-    SUPPORTED = {".jpg", ".jpeg", ".png", ".tiff", ".tif", ".webp", ".bmp", ".gif"}
+    SUPPORTED = {".jpg", ".jpeg", ".png", ".tiff", ".tif", ".webp", ".bmp", ".gif", ".heic", ".heif"}
 
     @staticmethod
     def read(path: str) -> dict:
@@ -109,9 +109,11 @@ class ExifReader:
             "gps_lon": None,
         }
         try:
-            from PIL import Image, ImageOps, ExifTags
+            from PIL import ImageOps, ExifTags
 
-            with Image.open(path) as img:
+            from src.library.image_loader import open_image
+
+            with open_image(path) as img:
                 img = ImageOps.exif_transpose(img)
                 result["width"], result["height"] = img.size
 

@@ -126,7 +126,9 @@ class ThumbnailCache:
         try:
             from PIL import Image, ImageOps
 
-            with Image.open(photo_path) as img:
+            from src.library.image_loader import open_image
+
+            with open_image(photo_path) as img:
                 img = ImageOps.exif_transpose(img)
                 if edit is not None and edit.is_modified():
                     # Downscale intermédiaire pour accélérer le traitement
