@@ -17,5 +17,7 @@ parallel = true
 #   2026-07-20  45,8 % → 48,84 % (refactor modularisation N1-N5, seuil 48)
 #   2026-07-21  48,84 % → 49,23 % (correctif file d'attente suppressions, seuil 49)
 #   2026-07-23  49,23 % → 51,41 % (optimisations réactivité perçue + tests, seuil 51)
-fail_under = 51
+#   2026-07-23  51,41 % → 59,84 % (campagne 80 % phase 1 : dialogues + workers, seuil 59)
+#   2026-07-23  59,84 % → 67,63 % (campagne 80 % phase 2 : vues visages + sidebar, seuil 67)
+fail_under = 67
 precision = 0
