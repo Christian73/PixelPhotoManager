@@ -95,6 +95,52 @@ def _fmt_icon(ratio: float | None, iw: int = 24, ih: int = 18) -> QPixmap:
 # 4 poignées de coin : TL(0), TR(1), BR(2), BL(3)
 
 
+class _RatingStars(QWidget):
+    """5 étoiles cliquables (barre d'outils de la visionneuse). Re-cliquer sur
+    la note déjà affichée la retire (rating → 0)."""
+
+    rating_clicked = Signal(int)   # 0-5
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._rating = 0
+        self._btns: list[QPushButton] = []
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+        for i in range(1, 6):
+            btn = QPushButton("☆")
+            btn.setFlat(True)
+            btn.setFixedWidth(20)
+            btn.setStyleSheet(
+                "QPushButton { color: #ccc; border: none; font-size: 14px; }"
+                "QPushButton:hover { color: #ffd200; }"
+            )
+            btn.setToolTip(f"Noter {i} étoile{'s' if i > 1 else ''}")
+            btn.clicked.connect(lambda _checked=False, n=i: self._on_star_clicked(n))
+            layout.addWidget(btn)
+            self._btns.append(btn)
+
+    def _on_star_clicked(self, n: int) -> None:
+        new_rating = 0 if n == self._rating else n
+        self.set_rating(new_rating)
+        self.rating_clicked.emit(new_rating)
+
+    @property
+    def rating(self) -> int:
+        return self._rating
+
+    def set_rating(self, rating: int) -> None:
+        self._rating = max(0, min(5, int(rating)))
+        for i, btn in enumerate(self._btns, start=1):
+            btn.setText("★" if i <= self._rating else "☆")
+            btn.setStyleSheet(
+                "QPushButton { color: %s; border: none; font-size: 14px; }"
+                "QPushButton:hover { color: #ffd200; }"
+                % ("#ffd200" if i <= self._rating else "#ccc")
+            )
+
+
 # Nombre d'images de base (JPEG 1024 px, ~300 Ko pièce) conservées en mémoire :
 # la photo courante + les voisines préchargées → navigation instantanée dans
 # les deux sens sans relire le fichier original.
@@ -219,11 +265,15 @@ class PhotoViewer(QWidget):
         tb_layout.addWidget(self._lbl_name, stretch=1)
 
         self._btn_fav = QPushButton("♡")
-        self._btn_fav.setToolTip("Marquer comme favori  (F)")
+        self._btn_fav.setToolTip("Marquer comme favori")
         self._btn_fav.setFixedWidth(32)
         self._btn_fav.setCheckable(True)
         self._btn_fav.clicked.connect(self._toggle_favorite)
         tb_layout.addWidget(self._btn_fav)
+
+        self._rating_stars = _RatingStars()
+        self._rating_stars.rating_clicked.connect(self._on_rating_clicked)
+        tb_layout.addWidget(self._rating_stars)
 
         # Conteneur des boutons d'applications externes (reconstruit par refresh_external_apps)
         self._ext_apps_container = QWidget()
@@ -234,13 +284,13 @@ class PhotoViewer(QWidget):
         tb_layout.addWidget(self._ext_apps_container)
 
         self._btn_fit = QPushButton("⊡")
-        self._btn_fit.setToolTip("Ajuster à la fenêtre  (0)")
+        self._btn_fit.setToolTip("Ajuster à la fenêtre  (F)")
         self._btn_fit.setFixedWidth(32)
         self._btn_fit.clicked.connect(self.zoom_fit)
         tb_layout.addWidget(self._btn_fit)
 
         self._btn_100 = QPushButton("1:1")
-        self._btn_100.setToolTip("Zoom 100%  (1)")
+        self._btn_100.setToolTip("Zoom 100%  (Z)")
         self._btn_100.setFixedWidth(36)
         self._btn_100.clicked.connect(self.zoom_100)
         tb_layout.addWidget(self._btn_100)
@@ -408,6 +458,7 @@ class PhotoViewer(QWidget):
         self._edit = None if is_video else (edit or self._db.load(photo.path))
         self._lbl_name.setText(photo.path)
         self._btn_fav.setChecked(photo.is_favorite)
+        self._rating_stars.set_rating(photo.rating)
         self._btn_play_video.setVisible(is_video)
         self.refresh_external_apps()
         self._canvas.set_highlighted_face(None)
@@ -868,6 +919,15 @@ class PhotoViewer(QWidget):
             self._btn_fav.setText("★" if checked else "♡")
             self.favorite_toggle_requested.emit(self._photo)
 
+    def _set_rating(self, rating: int) -> None:
+        if self._photo:
+            self._photo.rating = rating
+            self._rating_stars.set_rating(rating)
+            self.rating_change_requested.emit([self._photo], rating)
+
+    def _on_rating_clicked(self, rating: int) -> None:
+        self._set_rating(rating)
+
     def keyPressEvent(self, event: QKeyEvent) -> None:
         key = event.key()
         if key == Qt.Key_Escape:
@@ -907,9 +967,13 @@ class PhotoViewer(QWidget):
                         self.remove_from_album_requested.emit([photo])
                     else:
                         self.delete_requested.emit([photo])
-        elif key == Qt.Key_0:
+        elif key == Qt.Key_F:
             self.zoom_fit()
-        elif key == Qt.Key_1:
+        elif key == Qt.Key_Z:
             self.zoom_100()
+        elif key in (Qt.Key_0, Qt.Key_1, Qt.Key_2, Qt.Key_3, Qt.Key_4, Qt.Key_5):
+            if not self._canvas._crop_mode and not self._canvas._red_eye_mode \
+                    and not self._canvas._face_add_mode and not self._canvas._annotation_mode:
+                self._set_rating(key - Qt.Key_0)
         else:
             super().keyPressEvent(event)

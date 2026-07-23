@@ -218,6 +218,69 @@ class TestFavoriteToggleFromMenu:
         assert photo.is_favorite is False
 
 
+class TestRatingChangeFromMenu:
+    def test_emit_rating_change_forwards_photos_and_rating(self, qtbot, tmp_path):
+        grid = _make_grid(qtbot, tmp_path)
+        p1, p2 = _photo("C:/lib/a.jpg"), _photo("C:/lib/b.jpg")
+        grid.set_photos([p1, p2])
+
+        with qtbot.waitSignal(grid.rating_change_requested, timeout=1000) as blocker:
+            grid._emit_rating_change([p1, p2], 4)
+        assert blocker.args == [[p1, p2], 4]
+
+
+class TestRefreshRating:
+    def test_refresh_rating_updates_photo_and_cell(self, qtbot, tmp_path):
+        grid = _make_grid(qtbot, tmp_path)
+        photo = _photo("C:/lib/a.jpg")
+        grid.set_photos([photo])
+        cell = grid._make_cell(photo)
+        grid._materialized[0] = cell
+        qtbot.addWidget(cell)
+
+        grid.refresh_rating({photo.path: 3})
+
+        assert photo.rating == 3
+        assert cell.photo.rating == 3
+
+    def test_refresh_rating_ignores_unrelated_paths(self, qtbot, tmp_path):
+        grid = _make_grid(qtbot, tmp_path)
+        photo = _photo("C:/lib/a.jpg")
+        grid.set_photos([photo])
+
+        grid.refresh_rating({"C:/lib/other.jpg": 5})
+
+        assert photo.rating == 0
+
+
+class TestRatingBadge:
+    def test_set_rating_redraws_pixmap_when_already_loaded(self, qtbot, tmp_path):
+        from PySide6.QtGui import QPixmap
+
+        grid = _make_grid(qtbot, tmp_path)
+        photo = _photo("C:/lib/a.jpg")
+        cell = grid._make_cell(photo)
+        qtbot.addWidget(cell)
+        cell._set_pixmap(QPixmap(40, 40))
+
+        cell.set_rating(4)
+
+        assert cell.photo.rating == 4
+        assert cell._pixmap is not None  # badge redessiné sans planter
+
+    def test_set_pixmap_with_rating_does_not_crash(self, qtbot, tmp_path):
+        """_add_rating_badge doit s'appliquer sans erreur pour chaque note 1-5."""
+        from PySide6.QtGui import QPixmap
+
+        grid = _make_grid(qtbot, tmp_path)
+        for n in range(1, 6):
+            photo = _photo(f"C:/lib/r{n}.jpg", rating=n)
+            cell = grid._make_cell(photo)
+            qtbot.addWidget(cell)
+            cell._set_pixmap(QPixmap(40, 40))
+            assert cell._pixmap is not None
+
+
 class TestRemovePhotos:
     def test_remove_photos_updates_list_and_selection(self, qtbot, tmp_path):
         grid = _make_grid(qtbot, tmp_path)

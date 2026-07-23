@@ -42,9 +42,13 @@ CREATE TABLE IF NOT EXISTS photos (
     indexed_at TEXT DEFAULT CURRENT_TIMESTAMP,
     media_type TEXT DEFAULT 'image',
     duration REAL DEFAULT 0.0,
-    duplicate_group_id INTEGER
+    duplicate_group_id INTEGER,
+    rating INTEGER DEFAULT 0
 )
 """
+# ⚠ Toute nouvelle colonne s'ajoute EN FIN de _CREATE_PHOTOS (et via ALTER TABLE
+# en migration) : _photo_from_row unpacke positionnellement avec *rest — l'ordre
+# des colonnes d'une base neuve doit correspondre à celui d'une base migrée.
 
 _CREATE_ALBUMS = """
 CREATE TABLE IF NOT EXISTS albums (
@@ -80,7 +84,8 @@ def _photo_from_row(row) -> PhotoInfo:
         has_gps, gps_lat, gps_lon, is_favorite, tags, _indexed_at,
         media_type, duration, *rest
     ) = row
-    duplicate_group_id = rest[0] if rest else None
+    duplicate_group_id = rest[0] if len(rest) > 0 else None
+    rating = int(rest[1] or 0) if len(rest) > 1 else 0
 
     dt = None
     if date_taken:
@@ -109,6 +114,7 @@ def _photo_from_row(row) -> PhotoInfo:
         gps_lat=gps_lat,
         gps_lon=gps_lon,
         is_favorite=bool(is_favorite),
+        rating=rating,
         tags=tags.split(",") if tags else [],
         id=id_,
         media_type=media_type or "image",
@@ -186,11 +192,15 @@ class Catalog:
             self._migrate_normalize_paths(conn)
             self._migrate_video_fields(conn)
             self._migrate_duplicate_fields(conn)
+            self._migrate_rating_field(conn)
             conn.execute(
                 "CREATE INDEX IF NOT EXISTS idx_photos_dup_group ON photos(duplicate_group_id)"
             )
             conn.execute(
                 "CREATE INDEX IF NOT EXISTS idx_photos_favorite ON photos(is_favorite)"
+            )
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_photos_rating ON photos(rating)"
             )
             conn.execute(
                 "CREATE INDEX IF NOT EXISTS idx_photos_media_type ON photos(media_type)"
@@ -244,6 +254,12 @@ class Catalog:
         except Exception:
             pass  # colonne déjà présente
 
+    def _migrate_rating_field(self, conn) -> None:
+        try:
+            conn.execute("ALTER TABLE photos ADD COLUMN rating INTEGER DEFAULT 0")
+        except Exception:
+            pass  # colonne déjà présente
+
     def _migrate_normalize_paths(self, conn) -> None:
         """Normalise les séparateurs de chemin dans les données existantes.
         Supprime les doublons qui apparaissent après normalisation (garde le premier vu)."""
@@ -289,8 +305,8 @@ class Catalog:
                      file_size, file_mtime, camera_make, camera_model, lens_model,
                      iso, exposure_time, aperture, focal_length,
                      has_gps, gps_lat, gps_lon, is_favorite, tags,
-                     media_type, duration)
-                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                     media_type, duration, rating)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                 ON CONFLICT(path) DO UPDATE SET
                     filename=excluded.filename,
                     directory=excluded.directory,
@@ -321,7 +337,7 @@ class Catalog:
                     photo.iso, photo.exposure_time, photo.aperture, photo.focal_length,
                     int(photo.has_gps), photo.gps_lat, photo.gps_lon,
                     int(photo.is_favorite), tags_str,
-                    photo.media_type, photo.duration,
+                    photo.media_type, photo.duration, int(photo.rating),
                 ),
             )
             conn.commit()

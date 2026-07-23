@@ -4,12 +4,19 @@
 catalogue réel : PhotoInfo est synthétique, instancié en process."""
 import pytest
 
+from PySide6.QtCore import Qt
+from PySide6.QtGui import QKeyEvent
+
 from src.core.models import PhotoInfo
 from src.ui.photo_viewer import PhotoViewer
 
 
 def _photo(path: str, **kw) -> PhotoInfo:
     return PhotoInfo(path=str(path), **kw)
+
+
+def _key(key) -> QKeyEvent:
+    return QKeyEvent(QKeyEvent.KeyPress, key, Qt.NoModifier)
 
 
 @pytest.fixture
@@ -46,6 +53,83 @@ class TestFavoriteToggle:
             viewer._toggle_fav_from_menu()
         assert photo.is_favorite is True
         assert viewer._btn_fav.isChecked() is True
+
+
+class TestRatingStars:
+    def test_star_click_emits_and_updates_display(self, viewer, qtbot):
+        photo = _photo("C:/lib/a.jpg", rating=0)
+        viewer._photo = photo
+
+        with qtbot.waitSignal(viewer.rating_change_requested, timeout=1000) as blocker:
+            viewer._rating_stars._on_star_clicked(3)
+        assert blocker.args == [[photo], 3]
+        assert photo.rating == 3
+        assert viewer._rating_stars._rating == 3
+
+    def test_reclicking_same_star_removes_rating(self, viewer, qtbot):
+        photo = _photo("C:/lib/a.jpg")
+        viewer._photo = photo
+        viewer._set_rating(4)
+
+        with qtbot.waitSignal(viewer.rating_change_requested, timeout=1000) as blocker:
+            viewer._rating_stars._on_star_clicked(4)
+        assert blocker.args == [[photo], 0]
+        assert photo.rating == 0
+
+    def test_set_photo_updates_stars_display(self, viewer):
+        photo = _photo("C:/lib/a.jpg", rating=2)
+        viewer.set_photo(photo)
+        assert viewer._rating_stars._rating == 2
+
+
+class TestRatingViaKeyboard:
+    @pytest.mark.parametrize("n", [1, 2, 3, 4, 5])
+    def test_number_keys_set_rating(self, viewer, qtbot, n):
+        photo = _photo("C:/lib/a.jpg")
+        viewer._photo = photo
+
+        key = getattr(Qt, f"Key_{n}")
+        with qtbot.waitSignal(viewer.rating_change_requested, timeout=1000) as blocker:
+            viewer.keyPressEvent(_key(key))
+        assert blocker.args == [[photo], n]
+        assert photo.rating == n
+
+    def test_key_0_removes_rating(self, viewer, qtbot):
+        photo = _photo("C:/lib/a.jpg", rating=3)
+        viewer._photo = photo
+
+        with qtbot.waitSignal(viewer.rating_change_requested, timeout=1000) as blocker:
+            viewer.keyPressEvent(_key(Qt.Key_0))
+        assert blocker.args == [[photo], 0]
+        assert photo.rating == 0
+
+    def test_rating_shortcut_ignored_in_crop_mode(self, viewer, qtbot):
+        """Les touches 0-5 ne doivent pas noter une photo pendant un recadrage
+        (le canvas peut avoir sa propre interprétation de ces touches)."""
+        photo = _photo("C:/lib/a.jpg")
+        viewer._photo = photo
+        viewer._canvas._crop_mode = True
+
+        received = []
+        viewer.rating_change_requested.connect(lambda *a: received.append(a))
+        viewer.keyPressEvent(_key(Qt.Key_3))
+
+        assert received == []
+        assert photo.rating == 0
+
+
+class TestZoomShortcuts:
+    def test_f_key_calls_zoom_fit(self, viewer, qtbot, monkeypatch):
+        called = []
+        monkeypatch.setattr(viewer, "zoom_fit", lambda: called.append(True))
+        viewer.keyPressEvent(_key(Qt.Key_F))
+        assert called == [True]
+
+    def test_z_key_calls_zoom_100(self, viewer, qtbot, monkeypatch):
+        called = []
+        monkeypatch.setattr(viewer, "zoom_100", lambda: called.append(True))
+        viewer.keyPressEvent(_key(Qt.Key_Z))
+        assert called == [True]
 
 
 class _FakeConfig:

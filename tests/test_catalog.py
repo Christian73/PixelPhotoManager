@@ -162,6 +162,44 @@ class TestMigrateDuplicateFields:
         Catalog(db_path=db_path)
 
 
+class TestMigrateRatingField:
+    def test_adds_rating_column_without_crashing(self, tmp_path):
+        db_path = tmp_path / "catalog.db"
+        # Schéma post-migration doublons mais pré-migration notation.
+        conn = sqlite3.connect(str(db_path))
+        conn.execute(
+            """
+            CREATE TABLE photos (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                path TEXT UNIQUE NOT NULL,
+                filename TEXT, directory TEXT,
+                date_taken TEXT, width INTEGER, height INTEGER,
+                file_size INTEGER, file_mtime REAL,
+                camera_make TEXT, camera_model TEXT, lens_model TEXT,
+                iso INTEGER, exposure_time TEXT, aperture REAL, focal_length REAL,
+                has_gps INTEGER DEFAULT 0, gps_lat REAL, gps_lon REAL,
+                is_favorite INTEGER DEFAULT 0, tags TEXT,
+                indexed_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                media_type TEXT DEFAULT 'image', duration REAL DEFAULT 0.0,
+                duplicate_group_id INTEGER
+            )
+            """
+        )
+        conn.execute(
+            "INSERT INTO photos (path, filename, directory) VALUES (?,?,?)",
+            (os.path.normpath("C:/photos/a.jpg"), "a.jpg", os.path.normpath("C:/photos")),
+        )
+        conn.commit()
+        conn.close()
+
+        catalog = Catalog(db_path=db_path)
+
+        photo = catalog.get_photo_by_path(os.path.normpath("C:/photos/a.jpg"))
+        assert photo.rating == 0
+        catalog.set_rating(photo.id, 4)
+        assert catalog.get_photo_by_path(os.path.normpath("C:/photos/a.jpg")).rating == 4
+
+
 class TestPhotoCrud:
     def test_add_or_update_photo_inserts_then_updates(self, tmp_path):
         catalog = Catalog(db_path=tmp_path / "catalog.db")
@@ -188,6 +226,18 @@ class TestPhotoCrud:
         rescanned = catalog.add_or_update_photo(_make_photo("C:/photos/a.jpg", width=50))
 
         assert rescanned.is_favorite is True
+
+    def test_add_or_update_photo_preserves_rating_across_rescan(self, tmp_path):
+        """rating n'est volontairement PAS dans le ON CONFLICT DO UPDATE (même
+        raisonnement que is_favorite) : un re-scan ne doit jamais écraser une
+        note déjà posée par l'utilisateur."""
+        catalog = Catalog(db_path=tmp_path / "catalog.db")
+        saved = catalog.add_or_update_photo(_make_photo("C:/photos/a.jpg"))
+        catalog.set_rating(saved.id, 3)
+
+        rescanned = catalog.add_or_update_photo(_make_photo("C:/photos/a.jpg", width=50))
+
+        assert rescanned.rating == 3
 
     def test_search_matches_filename_and_camera(self, tmp_path):
         catalog = Catalog(db_path=tmp_path / "catalog.db")
@@ -761,6 +811,64 @@ class TestAlbumCrud:
         videos = catalog.get_videos()
 
         assert [p.filename for p in videos] == ["b.mp4"]
+
+
+class TestRating:
+    def test_set_rating_clamps_to_0_5_range(self, tmp_path):
+        catalog = Catalog(db_path=tmp_path / "catalog.db")
+        photo = catalog.add_or_update_photo(_make_photo("C:/photos/a.jpg"))
+
+        catalog.set_rating(photo.id, 3)
+        assert catalog.get_photo_by_path(photo.path).rating == 3
+
+        catalog.set_rating(photo.id, 99)
+        assert catalog.get_photo_by_path(photo.path).rating == 5
+
+        catalog.set_rating(photo.id, -7)
+        assert catalog.get_photo_by_path(photo.path).rating == 0
+
+    def test_set_rating_for_ids_applies_to_all(self, tmp_path):
+        catalog = Catalog(db_path=tmp_path / "catalog.db")
+        photos = [
+            catalog.add_or_update_photo(_make_photo(f"C:/photos/{n}.jpg"))
+            for n in "abc"
+        ]
+
+        catalog.set_rating_for_ids([photos[0].id, photos[2].id], 5)
+
+        ratings = {p.path: p.rating for p in catalog.get_all_photos()}
+        assert ratings[photos[0].path] == 5
+        assert ratings[photos[1].path] == 0
+        assert ratings[photos[2].path] == 5
+
+    def test_set_rating_for_ids_empty_list_is_noop(self, tmp_path):
+        catalog = Catalog(db_path=tmp_path / "catalog.db")
+        catalog.add_or_update_photo(_make_photo("C:/photos/a.jpg"))
+
+        catalog.set_rating_for_ids([], 5)  # ne doit pas lever
+
+        assert catalog.get_all_photos()[0].rating == 0
+
+    def test_get_photos_min_rating_filters_and_orders(self, tmp_path):
+        catalog = Catalog(db_path=tmp_path / "catalog.db")
+        p1 = catalog.add_or_update_photo(_make_photo("C:/photos/a.jpg"))
+        p2 = catalog.add_or_update_photo(_make_photo("C:/photos/b.jpg"))
+        p3 = catalog.add_or_update_photo(_make_photo("C:/photos/c.jpg"))
+        catalog.set_rating(p1.id, 2)
+        catalog.set_rating(p2.id, 5)
+        catalog.set_rating(p3.id, 0)
+
+        at_least_1 = catalog.get_photos_min_rating(1)
+        at_least_3 = catalog.get_photos_min_rating(3)
+
+        assert {p.filename for p in at_least_1} == {"a.jpg", "b.jpg"}
+        assert [p.filename for p in at_least_3] == ["b.jpg"]
+
+    def test_get_photos_min_rating_default_excludes_unrated(self, tmp_path):
+        catalog = Catalog(db_path=tmp_path / "catalog.db")
+        catalog.add_or_update_photo(_make_photo("C:/photos/a.jpg"))
+
+        assert catalog.get_photos_min_rating() == []
 
 
 class TestIncrementalScanHelpers:

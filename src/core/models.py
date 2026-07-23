@@ -28,6 +28,7 @@ class PhotoInfo:
     gps_lat: Optional[float] = None
     gps_lon: Optional[float] = None
     is_favorite: bool = False
+    rating: int = 0             # note 0-5 étoiles (0 = non notée)
     tags: list[str] = field(default_factory=list)
     id: Optional[int] = None
     media_type: str = "image"   # "image" or "video"

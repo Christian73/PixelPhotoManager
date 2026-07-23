@@ -7,7 +7,7 @@ from datetime import datetime as _dt
 from pathlib import Path
 
 from PySide6.QtCore import Qt, Signal, QRunnable, QThreadPool, QObject, Slot, QPoint, QRect, QTimer, QMimeData, QByteArray
-from PySide6.QtGui import QPixmap, QColor, QPainter, QFont, QDrag
+from PySide6.QtGui import QPixmap, QColor, QPainter, QFont, QFontMetrics, QDrag
 from PySide6.QtWidgets import (
     QScrollArea, QScrollBar, QWidget, QLabel, QVBoxLayout, QSizePolicy,
     QMenu, QApplication, QPushButton,
@@ -103,6 +103,7 @@ class _ThumbWorker(QRunnable):
 
 _DUP_BADGE_W = 22
 _DUP_BADGE_H = 16
+_RATING_BADGE_H = 16
 
 
 class ThumbnailCell(QWidget):
@@ -217,6 +218,8 @@ class ThumbnailCell(QWidget):
             scaled = self._add_duplicate_badge(scaled)
         else:
             self._dup_badge_rect = None
+        if self._photo.rating > 0:
+            scaled = self._add_rating_badge(scaled, self._photo.rating)
         self._img_label.setPixmap(scaled)
 
     def _add_duplicate_badge(self, pixmap: QPixmap) -> QPixmap:
@@ -234,6 +237,25 @@ class ThumbnailCell(QWidget):
         f.setBold(True)
         p.setFont(f)
         p.drawText(QRect(x, y, _DUP_BADGE_W, _DUP_BADGE_H), Qt.AlignCenter, "⧉")
+        p.end()
+        return result
+
+    def _add_rating_badge(self, pixmap: QPixmap, rating: int) -> QPixmap:
+        result = QPixmap(pixmap)
+        p = QPainter(result)
+        p.setRenderHint(QPainter.Antialiasing)
+        text = "★" * rating
+        f = QFont()
+        f.setPixelSize(11)
+        f.setBold(True)
+        p.setFont(f)
+        w = QFontMetrics(f).horizontalAdvance(text) + 8
+        x, y = 2, result.height() - _RATING_BADGE_H - 2
+        p.setBrush(QColor(0, 0, 0, 170))
+        p.setPen(Qt.NoPen)
+        p.drawRoundedRect(x, y, w, _RATING_BADGE_H, 4, 4)
+        p.setPen(QColor(255, 210, 0))
+        p.drawText(QRect(x, y, w, _RATING_BADGE_H), Qt.AlignCenter, text)
         p.end()
         return result
 
@@ -294,6 +316,11 @@ class ThumbnailCell(QWidget):
 
     def set_duplicate_group(self, group_id) -> None:
         self._photo.duplicate_group_id = group_id
+        if self._pixmap is not None:
+            self._set_pixmap(self._pixmap)
+
+    def set_rating(self, rating: int) -> None:
+        self._photo.rating = rating
         if self._pixmap is not None:
             self._set_pixmap(self._pixmap)
 
@@ -1309,9 +1336,21 @@ class ThumbnailGrid(QScrollArea):
             if cell.photo.path in assignments:
                 cell.set_duplicate_group(assignments[cell.photo.path])
 
+    def refresh_rating(self, ratings: dict) -> None:
+        """Met à jour les badges de notation. ratings = {path: rating (0-5)}."""
+        for photo in self._photos:
+            if photo.path in ratings:
+                photo.rating = ratings[photo.path]
+        for cell in self._materialized.values():
+            if cell.photo.path in ratings:
+                cell.set_rating(ratings[cell.photo.path])
+
     def _toggle_favorite_from_menu(self, photo: PhotoInfo) -> None:
         photo.is_favorite = not photo.is_favorite
         self.favorite_toggle_requested.emit(photo)
+
+    def _emit_rating_change(self, photos: list[PhotoInfo], rating: int) -> None:
+        self.rating_change_requested.emit(photos, rating)
 
     @Slot(object, object)
     def _on_right_click(self, photo: PhotoInfo, pos) -> None:

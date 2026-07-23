@@ -851,6 +851,10 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
             self._on_album_selected(_SPECIAL_VIDEOS)
             self._sidebar.select_album_item(_SPECIAL_VIDEOS)
             return
+        elif vtype == "rated":
+            self._on_album_selected(_SPECIAL_RATED)
+            self._sidebar.select_album_item(_SPECIAL_RATED)
+            return
         elif vtype == "album":
             album_id = saved.get("value")
             album = next((a for a in albums if a.id == album_id), None)
@@ -1488,6 +1492,14 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
             self._grid_nav_bar.hide()
             self.show_grid()
             self._start_photo_query(self._catalog.get_videos, "Vidéos")
+        elif data == _SPECIAL_RATED:
+            self._grid.set_ribbon_mode(False)
+            self._grid.set_date_overlay_visible(False)
+            self._grid_nav_bar.hide()
+            self.show_grid()
+            self._start_photo_query(
+                lambda: self._catalog.get_photos_min_rating(1), "Notées"
+            )
         elif data == _SPECIAL_FILENAME:
             query = self._sidebar.filter_text
             if not query:
@@ -2523,6 +2535,8 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
             return {"type": "favorites"}
         if ctx == "Vidéos":
             return {"type": "videos"}
+        if ctx == "Notées":
+            return {"type": "rated"}
         if ctx.startswith(f"{_PERSON_CTX_PREFIX}cluster_"):
             return {"type": "all"}   # vue transitoire, pas de restauration
         if ctx.startswith(_PERSON_CTX_PREFIX):

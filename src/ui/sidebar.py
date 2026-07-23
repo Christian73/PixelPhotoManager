@@ -24,6 +24,7 @@ logger = logging.getLogger(__name__)
 _SPECIAL_ALL    = "__all__"
 _SPECIAL_FAV    = "__favorites__"
 _SPECIAL_VIDEOS = "__videos__"
+_SPECIAL_RATED  = "__rated__"
 
 
 _MIME_PHOTOS = 'application/x-pixelphoto-paths'
@@ -452,6 +453,10 @@ class Sidebar(QWidget):
         item_vid = QListWidgetItem("▶ Vidéos")
         item_vid.setData(Qt.UserRole, _SPECIAL_VIDEOS)
         self._albums_list.addItem(item_vid)
+
+        item_rated = QListWidgetItem("★ Notées")
+        item_rated.setData(Qt.UserRole, _SPECIAL_RATED)
+        self._albums_list.addItem(item_rated)
 
         item_fn = QListWidgetItem("🔍 Par nom de fichier")
         item_fn.setData(Qt.UserRole, _SPECIAL_FILENAME)
