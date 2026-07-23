@@ -494,6 +494,171 @@ class Catalog:
             )
             conn.commit()
 
+    def set_rating(self, photo_id: int, rating: int) -> None:
+        """Note 0-5 étoiles (0 = retirer la note)."""
+        rating = max(0, min(5, int(rating)))
+        with self._guard() as conn:
+            conn.execute(
+                "UPDATE photos SET rating=? WHERE id=?", (rating, photo_id)
+            )
+            conn.commit()
+
+    def set_rating_for_ids(self, photo_ids: list[int], rating: int) -> None:
+        """Applique la même note à plusieurs photos en une transaction."""
+        if not photo_ids:
+            return
+        rating = max(0, min(5, int(rating)))
+        with self._guard() as conn:
+            conn.executemany(
+                "UPDATE photos SET rating=? WHERE id=?",
+                [(rating, pid) for pid in photo_ids],
+            )
+            conn.commit()
+
+    def get_photos_min_rating(self, min_rating: int = 1) -> list[PhotoInfo]:
+        """Photos notées au moins min_rating étoiles, tri chronologique DESC."""
+        with self._guard() as conn:
+            rows = conn.execute(
+                "SELECT * FROM photos WHERE rating >= ?"
+                " ORDER BY COALESCE(date_taken, datetime(file_mtime, 'unixepoch')) DESC",
+                (max(1, int(min_rating)),),
+            ).fetchall()
+        return [_photo_from_row(r) for r in rows]
+
+    def get_all_tags(self) -> list[str]:
+        """Liste dédoublonnée et triée de tous les tags utilisés dans le catalogue."""
+        with self._guard() as conn:
+            rows = conn.execute(
+                "SELECT DISTINCT tags FROM photos WHERE tags IS NOT NULL AND tags != ''"
+            ).fetchall()
+        all_tags: set[str] = set()
+        for (tags_str,) in rows:
+            all_tags.update(t.strip() for t in tags_str.split(",") if t.strip())
+        return sorted(all_tags)
+
+    def set_tags(self, photo_id: int, tags: list[str]) -> None:
+        """Remplace la liste complète de tags d'une photo."""
+        tags_str = ",".join(_normalize_tags(tags))
+        with self._guard() as conn:
+            conn.execute("UPDATE photos SET tags=? WHERE id=?", (tags_str, photo_id))
+            conn.commit()
+
+    def add_tags_to_photos(self, photo_ids: list[int], tags: list[str]) -> None:
+        """Ajoute des tags (union, sans doublon) à chaque photo listée."""
+        new_tags = _normalize_tags(tags)
+        if not photo_ids or not new_tags:
+            return
+        with self._guard() as conn:
+            placeholders = ",".join("?" * len(photo_ids))
+            rows = conn.execute(
+                f"SELECT id, tags FROM photos WHERE id IN ({placeholders})",
+                photo_ids,
+            ).fetchall()
+            updates = []
+            for pid, existing in rows:
+                current = existing.split(",") if existing else []
+                merged = _normalize_tags(current + new_tags)
+                updates.append((",".join(merged), pid))
+            conn.executemany("UPDATE photos SET tags=? WHERE id=?", updates)
+            conn.commit()
+
+    def remove_tag_from_photos(self, photo_ids: list[int], tag: str) -> None:
+        """Retire un tag précis de chaque photo listée (les autres tags survivent)."""
+        if not photo_ids:
+            return
+        with self._guard() as conn:
+            placeholders = ",".join("?" * len(photo_ids))
+            rows = conn.execute(
+                f"SELECT id, tags FROM photos WHERE id IN ({placeholders})",
+                photo_ids,
+            ).fetchall()
+            updates = []
+            for pid, existing in rows:
+                current = existing.split(",") if existing else []
+                remaining = [t for t in current if t != tag]
+                updates.append((",".join(remaining), pid))
+            conn.executemany("UPDATE photos SET tags=? WHERE id=?", updates)
+            conn.commit()
+
+    def get_photos_by_tag(self, tag: str) -> list[PhotoInfo]:
+        """Photos portant exactement ce tag (pas de correspondance de sous-chaîne)."""
+        with self._guard() as conn:
+            rows = conn.execute(
+                "SELECT * FROM photos WHERE ',' || tags || ',' LIKE '%,' || ? || ',%'"
+                " ORDER BY COALESCE(date_taken, datetime(file_mtime, 'unixepoch')) DESC",
+                (tag,),
+            ).fetchall()
+        return [_photo_from_row(r) for r in rows]
+
+    def get_distinct_cameras(self) -> list[str]:
+        """Liste triée des appareils distincts (« marque modèle »), pour préremplir
+        le combo appareil de la recherche avancée."""
+        with self._guard() as conn:
+            rows = conn.execute(
+                "SELECT DISTINCT camera_make, camera_model FROM photos"
+                " WHERE COALESCE(camera_model, '') != ''"
+            ).fetchall()
+        labels: set[str] = set()
+        for make, model in rows:
+            label = f"{make} {model}".strip() if make else (model or "").strip()
+            if label:
+                labels.add(label)
+        return sorted(labels)
+
+    def search_advanced(self, criteria: dict) -> list[PhotoInfo]:
+        """Recherche multi-critères (dates, appareil, dossier, note min, tags,
+        favoris, type média). La personne n'est PAS un critère SQL ici — deux
+        bases séparées (catalog.db / faces.db), l'intersection avec
+        face_db.get_photos_for_person() se fait côté appelant (MainWindow)."""
+        clauses: list[str] = []
+        params: list = []
+        date_expr = "COALESCE(date_taken, datetime(file_mtime, 'unixepoch'))"
+
+        date_from = criteria.get("date_from")
+        if date_from:
+            clauses.append(f"{date_expr} >= ?")
+            params.append(str(date_from))
+        date_to = criteria.get("date_to")
+        if date_to:
+            clauses.append(f"{date_expr} <= ?")
+            params.append(f"{date_to}T23:59:59")
+
+        camera = criteria.get("camera")
+        if camera:
+            clauses.append("(camera_make || ' ' || camera_model) LIKE ?")
+            params.append(f"%{camera}%")
+
+        directory = criteria.get("directory")
+        if directory:
+            d = os.path.normpath(directory)
+            clauses.append("(directory = ? OR directory LIKE ?)")
+            params.extend([d, d + os.sep + "%"])
+
+        min_rating = criteria.get("min_rating")
+        if min_rating:
+            clauses.append("rating >= ?")
+            params.append(int(min_rating))
+
+        if criteria.get("favorites_only"):
+            clauses.append("is_favorite=1")
+
+        media_type = criteria.get("media_type")
+        if media_type:
+            clauses.append("media_type = ?")
+            params.append(media_type)
+
+        for tag in criteria.get("tags") or []:
+            clauses.append("',' || tags || ',' LIKE '%,' || ? || ',%'")
+            params.append(tag)
+
+        where = " AND ".join(clauses) if clauses else "1=1"
+        with self._guard() as conn:
+            rows = conn.execute(
+                f"SELECT * FROM photos WHERE {where} ORDER BY {date_expr} DESC",
+                params,
+            ).fetchall()
+        return [_photo_from_row(r) for r in rows]
+
     def get_albums(self) -> list[AlbumInfo]:
         with self._guard() as conn:
             rows = conn.execute(

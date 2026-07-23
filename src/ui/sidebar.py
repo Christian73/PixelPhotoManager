@@ -269,6 +269,7 @@ class Sidebar(QWidget):
     person_clear_requested  = Signal(object)  # PersonInfo dont on efface le nom
     tree_state_changed     = Signal(list)     # list[str] — chemins dépliés
     persons_thumbnails_ready = Signal()       # vignettes de visages des personnes connues chargées
+    advanced_search_requested = Signal()      # bouton loupe à côté du filtre
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -300,12 +301,30 @@ class Sidebar(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
 
+        filter_row = QHBoxLayout()
+        filter_row.setContentsMargins(0, 0, 0, 0)
+        filter_row.setSpacing(0)
+
         self._filter_box = QLineEdit()
         self._filter_box.setPlaceholderText("🔍  Filtrer dossiers, personnes et fichiers…")
         self._filter_box.setClearButtonEnabled(True)
         self._filter_box.setStyleSheet("padding: 4px 6px; background: #2a2a2a; color: #ddd; border: none; border-bottom: 1px solid #444;")
         self._filter_box.textChanged.connect(self._apply_filter)
-        layout.addWidget(self._filter_box)
+        filter_row.addWidget(self._filter_box)
+
+        self._btn_advanced_search = QPushButton("🔎")
+        self._btn_advanced_search.setFlat(True)
+        self._btn_advanced_search.setFixedWidth(28)
+        self._btn_advanced_search.setToolTip("Recherche avancée… (Ctrl+F)")
+        self._btn_advanced_search.setStyleSheet(
+            "QPushButton { background: #2a2a2a; color: #ddd; border: none;"
+            " border-bottom: 1px solid #444; font-size: 13px; }"
+            "QPushButton:hover { background: #3a3a3a; }"
+        )
+        self._btn_advanced_search.clicked.connect(self.advanced_search_requested.emit)
+        filter_row.addWidget(self._btn_advanced_search)
+
+        layout.addLayout(filter_row)
 
         self._splitter = QSplitter(Qt.Vertical)
 

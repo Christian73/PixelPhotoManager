@@ -50,6 +50,8 @@ from src.ui.duplicate_grid import DuplicateGrid
 from src.ui.face_panel import FacePanel
 from src.ui.exif_panel import ExifPanel
 from src.ui.people_panel import MergePersonsDialog, PeopleDialog
+from src.ui.tag_dialog import TagEditDialog, TagsPrepLoader
+from src.ui.advanced_search_dialog import AdvancedSearchDialog, AdvancedSearchPrepLoader
 from src.ui.settings_dialog import SettingsDialog
 from src.ui.display_order_dialog import DisplayOrderDialog
 from src.ui.face_backup_dialog import FaceBackupDialog
@@ -226,6 +228,11 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
         act_add = QAction("Ajouter un dossier…", self)
         act_add.triggered.connect(self.open_folder_dialog)
         m_file.addAction(act_add)
+        m_file.addSeparator()
+        act_advanced_search = QAction("Recherche avancée…", self)
+        act_advanced_search.setShortcut(QKeySequence("Ctrl+F"))
+        act_advanced_search.triggered.connect(self._open_advanced_search)
+        m_file.addAction(act_advanced_search)
         m_file.addSeparator()
         act_quit = QAction("Quitter", self)
         act_quit.setShortcut(QKeySequence("Ctrl+Q"))
@@ -675,6 +682,7 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
         self._sidebar.person_selected.connect(self._on_person_selected)
         self._sidebar.identify_requested.connect(self.show_face_clusters)
         self._sidebar.duplicates_requested.connect(self.show_duplicate_grid)
+        self._sidebar.advanced_search_requested.connect(self._open_advanced_search)
         self._sidebar.person_merge_requested.connect(self._on_person_merge_requested)
         self._sidebar.person_rename_requested.connect(self._on_person_rename_requested)
         self._sidebar.person_clear_requested.connect(self._on_person_clear_requested)
@@ -2138,6 +2146,98 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
         if photo.id is not None:
             self._catalog.set_favorite(photo.id, photo.is_favorite)
 
+    def _on_rating_change_requested(self, photos: list, rating: int) -> None:
+        """Persiste la note demandée par la grille (menu contextuel, éventuellement
+        multi-sélection) ou la visionneuse (étoiles / clavier 0-5 / menu contextuel),
+        puis rafraîchit les badges de la grille — la grille et la visionneuse ne
+        partagent pas forcément la même instance de PhotoInfo pour un chemin donné."""
+        ids = [p.id for p in photos if p.id is not None]
+        if ids:
+            self._catalog.set_rating_for_ids(ids, rating)
+        self._grid.refresh_rating({p.path: rating for p in photos})
+
+    def _on_edit_tags_requested(self, photos: list) -> None:
+        """Ouvre le dialogue d'édition des mots-clés pour la sélection (menu
+        contextuel grille ou visionneuse) — précharge la liste des tags déjà
+        connus du catalogue dans un thread avant l'ouverture (pattern
+        _AssignPrepLoader de face_panel.py), pour ne jamais bloquer l'UI le
+        temps de la requête."""
+        if not photos:
+            return
+        QApplication.setOverrideCursor(Qt.BusyCursor)
+        t = TagsPrepLoader(self._catalog, self)
+        t.ready.connect(lambda all_tags, photos=photos: self._continue_edit_tags(photos, all_tags))
+        t.finished.connect(t.deleteLater)
+        t.start()
+
+    def _continue_edit_tags(self, photos: list, all_tags: list) -> None:
+        QApplication.restoreOverrideCursor()
+        dlg = TagEditDialog(photos, all_tags, parent=self)
+        if dlg.exec() != QDialog.Accepted:
+            return
+        to_add, to_remove = dlg.result_add_remove()
+        ids = [p.id for p in photos if p.id is not None]
+        if not ids:
+            return
+        if to_add:
+            self._catalog.add_tags_to_photos(ids, to_add)
+        for tag in to_remove:
+            self._catalog.remove_tag_from_photos(ids, tag)
+
+        for p in photos:
+            merged = list(p.tags)
+            for t in to_add:
+                if t not in merged:
+                    merged.append(t)
+            p.tags = [t for t in merged if t not in to_remove]
+
+        current = self._viewer.current_photo()
+        if current is not None and self._exif_panel.isVisible():
+            match = next((p for p in photos if p.path == current.path), None)
+            if match is not None:
+                current.tags = match.tags
+                self._exif_panel.set_tags(current.tags)
+
+    def _open_advanced_search(self) -> None:
+        """Ouvre le dialogue de recherche avancée (menu Fichier › Recherche
+        avancée…, Ctrl+F, ou bouton loupe de la sidebar) — précharge appareils/
+        personnes/tags dans un thread avant l'ouverture (pattern
+        _AssignPrepLoader de face_panel.py), pour ne jamais bloquer l'UI."""
+        QApplication.setOverrideCursor(Qt.BusyCursor)
+        t = AdvancedSearchPrepLoader(self._catalog, self)
+        t.ready.connect(self._continue_advanced_search)
+        t.finished.connect(t.deleteLater)
+        t.start()
+
+    def _continue_advanced_search(self, cameras: list, persons: list, all_tags: list) -> None:
+        QApplication.restoreOverrideCursor()
+        folders = self._config.get_scan_folders()
+        dlg = AdvancedSearchDialog(cameras, persons, all_tags, folders, parent=self)
+        if dlg.exec() != QDialog.Accepted:
+            return
+        criteria = dlg.get_criteria()
+        person_id = dlg.get_person_id()
+        self._grid.set_ribbon_mode(False)
+        self._grid.set_date_overlay_visible(False)
+        self._grid_nav_bar.hide()
+        self.show_grid()
+        self._start_photo_query(
+            lambda c=criteria, pid=person_id: self._run_advanced_search(c, pid),
+            "Recherche avancée",
+        )
+
+    def _run_advanced_search(self, criteria: dict, person_id: "int | None") -> list:
+        """Exécute la recherche avancée (sur le thread de _PhotoQueryThread) :
+        critères SQL via Catalog.search_advanced(), puis intersection Python
+        avec les photos de la personne sélectionnée — catalog.db et faces.db
+        sont deux bases séparées, sans JOIN possible entre elles (cf.
+        CLAUDE.md), d'où cette intersection côté appelant plutôt qu'en SQL."""
+        photos = self._catalog.search_advanced(criteria)
+        if person_id is not None:
+            person_paths = set(self._face_db.get_photos_for_person(person_id))
+            photos = [p for p in photos if p.path in person_paths]
+        return photos
+
     def _on_remove_from_album_requested(self, photos: list) -> None:
         """Retire les photos de l'album affiché (touche Del / menu contextuel en
         contexte album, grille ou visionneuse) : ne touche ni au fichier disque
@@ -2568,7 +2668,7 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
                 return {"type": "person", "value": int(ctx[len(_PERSON_CTX_PREFIX):])}
             except ValueError:
                 return {"type": "all"}
-        if ctx.startswith("Fichiers : "):
+        if ctx.startswith("Fichiers : ") or ctx.startswith("Mot-clé : ") or ctx == "Recherche avancée":
             return {"type": "all"}   # filtre éphémère
         if ctx and os.path.isdir(ctx):
             return {"type": "folder", "value": ctx}

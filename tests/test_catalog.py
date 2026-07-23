@@ -6,6 +6,7 @@ brut, sans passer par Catalog), le CRUD de base, les groupes de doublons,
 `cleanup_asset_dirs` et les comptages."""
 import os
 import sqlite3
+from datetime import datetime
 
 from src.core.models import PhotoInfo
 from src.library.catalog import Catalog
@@ -972,6 +973,128 @@ class TestTags:
         catalog.set_tags(photo.id, ["famille", "vacances", "plage"])
 
         matches = catalog.get_photos_by_tag("vacances")
+
+        assert [p.filename for p in matches] == ["a.jpg"]
+
+
+class TestGetDistinctCameras:
+    def test_returns_sorted_deduplicated_labels(self, tmp_path):
+        catalog = Catalog(db_path=tmp_path / "catalog.db")
+        catalog.add_or_update_photo(
+            _make_photo("C:/photos/a.jpg", camera_make="Canon", camera_model="EOS R5")
+        )
+        catalog.add_or_update_photo(
+            _make_photo("C:/photos/b.jpg", camera_make="Canon", camera_model="EOS R5")
+        )
+        catalog.add_or_update_photo(
+            _make_photo("C:/photos/c.jpg", camera_make="Fujifilm", camera_model="X100V")
+        )
+
+        assert catalog.get_distinct_cameras() == ["Canon EOS R5", "Fujifilm X100V"]
+
+    def test_ignores_photos_without_camera_model(self, tmp_path):
+        catalog = Catalog(db_path=tmp_path / "catalog.db")
+        catalog.add_or_update_photo(_make_photo("C:/photos/a.jpg"))
+
+        assert catalog.get_distinct_cameras() == []
+
+
+class TestSearchAdvanced:
+    def test_no_criteria_returns_everything(self, tmp_path):
+        catalog = Catalog(db_path=tmp_path / "catalog.db")
+        catalog.add_or_update_photo(_make_photo("C:/photos/a.jpg"))
+        catalog.add_or_update_photo(_make_photo("C:/photos/b.jpg"))
+
+        assert len(catalog.search_advanced({})) == 2
+
+    def test_date_range_is_inclusive(self, tmp_path):
+        catalog = Catalog(db_path=tmp_path / "catalog.db")
+        catalog.add_or_update_photo(
+            _make_photo("C:/photos/a.jpg", date_taken=datetime(2024, 6, 15, 10, 0, 0))
+        )
+        catalog.add_or_update_photo(
+            _make_photo("C:/photos/b.jpg", date_taken=datetime(2024, 1, 1, 10, 0, 0))
+        )
+
+        matches = catalog.search_advanced({"date_from": "2024-06-01", "date_to": "2024-06-30"})
+
+        assert [p.filename for p in matches] == ["a.jpg"]
+
+    def test_camera_filter_matches_make_and_model(self, tmp_path):
+        catalog = Catalog(db_path=tmp_path / "catalog.db")
+        catalog.add_or_update_photo(
+            _make_photo("C:/photos/a.jpg", camera_make="Canon", camera_model="EOS R5")
+        )
+        catalog.add_or_update_photo(
+            _make_photo("C:/photos/b.jpg", camera_make="Fujifilm", camera_model="X100V")
+        )
+
+        matches = catalog.search_advanced({"camera": "Canon"})
+
+        assert [p.filename for p in matches] == ["a.jpg"]
+
+    def test_directory_filter_is_recursive(self, tmp_path):
+        catalog = Catalog(db_path=tmp_path / "catalog.db")
+        catalog.add_or_update_photo(_make_photo("C:/photos/2024/a.jpg"))
+        catalog.add_or_update_photo(_make_photo("C:/photos/2024/sub/b.jpg"))
+        catalog.add_or_update_photo(_make_photo("C:/photos/2023/c.jpg"))
+
+        matches = catalog.search_advanced({"directory": "C:/photos/2024"})
+
+        assert {p.filename for p in matches} == {"a.jpg", "b.jpg"}
+
+    def test_min_rating_filter(self, tmp_path):
+        catalog = Catalog(db_path=tmp_path / "catalog.db")
+        p1 = catalog.add_or_update_photo(_make_photo("C:/photos/a.jpg"))
+        p2 = catalog.add_or_update_photo(_make_photo("C:/photos/b.jpg"))
+        catalog.set_rating(p1.id, 4)
+        catalog.set_rating(p2.id, 2)
+
+        matches = catalog.search_advanced({"min_rating": 3})
+
+        assert [p.filename for p in matches] == ["a.jpg"]
+
+    def test_favorites_only_filter(self, tmp_path):
+        catalog = Catalog(db_path=tmp_path / "catalog.db")
+        p1 = catalog.add_or_update_photo(_make_photo("C:/photos/a.jpg"))
+        catalog.add_or_update_photo(_make_photo("C:/photos/b.jpg"))
+        catalog.set_favorite(p1.id, True)
+
+        matches = catalog.search_advanced({"favorites_only": True})
+
+        assert [p.filename for p in matches] == ["a.jpg"]
+
+    def test_media_type_filter(self, tmp_path):
+        catalog = Catalog(db_path=tmp_path / "catalog.db")
+        catalog.add_or_update_photo(_make_photo("C:/photos/a.jpg", media_type="video"))
+        catalog.add_or_update_photo(_make_photo("C:/photos/b.jpg", media_type="image"))
+
+        matches = catalog.search_advanced({"media_type": "video"})
+
+        assert [p.filename for p in matches] == ["a.jpg"]
+
+    def test_tags_filter_requires_all_listed_tags(self, tmp_path):
+        catalog = Catalog(db_path=tmp_path / "catalog.db")
+        p1 = catalog.add_or_update_photo(_make_photo("C:/photos/a.jpg"))
+        p2 = catalog.add_or_update_photo(_make_photo("C:/photos/b.jpg"))
+        catalog.set_tags(p1.id, ["vacances", "plage"])
+        catalog.set_tags(p2.id, ["vacances"])
+
+        matches = catalog.search_advanced({"tags": ["vacances", "plage"]})
+
+        assert [p.filename for p in matches] == ["a.jpg"]
+
+    def test_combined_criteria(self, tmp_path):
+        catalog = Catalog(db_path=tmp_path / "catalog.db")
+        p1 = catalog.add_or_update_photo(
+            _make_photo("C:/photos/a.jpg", camera_make="Canon", camera_model="EOS R5")
+        )
+        catalog.add_or_update_photo(
+            _make_photo("C:/photos/b.jpg", camera_make="Canon", camera_model="EOS R5")
+        )
+        catalog.set_rating(p1.id, 5)
+
+        matches = catalog.search_advanced({"camera": "Canon", "min_rating": 5})
 
         assert [p.filename for p in matches] == ["a.jpg"]
 
