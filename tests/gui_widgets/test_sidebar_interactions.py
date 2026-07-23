@@ -454,15 +454,40 @@ class TestSplitterAndFolderOps:
         assert blocker.args == [str(old), str(tmp_path / "nouveau")]
         assert (tmp_path / "nouveau").is_dir()
 
-    def test_delete_folder_confirmed(self, sidebar, tmp_path, qtbot, monkeypatch):
+    def _fake_trash(self, monkeypatch):
+        """Simule la corbeille (un vrai send2trash polluerait celle de
+        l'utilisateur) et interdit tout shutil.rmtree direct dans sidebar."""
+        import shutil
+        import src.library.trash as trash_module
+        calls = []
+        real_rmtree = shutil.rmtree   # capturé AVANT le patch global du module
+
+        def _fake(path):
+            calls.append(os.path.normpath(path))
+            real_rmtree(path)
+
+        monkeypatch.setattr(trash_module, "move_to_trash", _fake)
+        # shutil est un module partagé : ce patch couvre aussi sidebar.shutil
+        monkeypatch.setattr(
+            shutil, "rmtree",
+            lambda *a, **k: pytest.fail("shutil.rmtree appelé au lieu de la corbeille"),
+        )
+        return calls
+
+    def test_delete_folder_confirmed_goes_through_trash(
+        self, sidebar, tmp_path, qtbot, monkeypatch
+    ):
         doomed = tmp_path / "condamné"; doomed.mkdir()
         (doomed / "x.txt").write_text("x")
+        calls = self._fake_trash(monkeypatch)
         monkeypatch.setattr(QMessageBox, "exec", lambda self: QMessageBox.Yes)
 
-        with qtbot.waitSignal(sidebar.folder_deleted, timeout=1000) as blocker:
+        # La mise à la corbeille part dans un _FolderTrashThread réel
+        with qtbot.waitSignal(sidebar.folder_deleted, timeout=3000) as blocker:
             sidebar._delete_folder(str(doomed))
 
         assert blocker.args == [str(doomed)]
+        assert calls == [os.path.normpath(str(doomed))]
         assert not doomed.exists()
 
     def test_delete_folder_cancelled(self, sidebar, tmp_path, monkeypatch):
@@ -473,5 +498,33 @@ class TestSplitterAndFolderOps:
 
         sidebar._delete_folder(str(doomed))
 
+        assert fired == []
+        assert doomed.exists()
+
+    def test_delete_folder_trash_failure_keeps_folder(
+        self, sidebar, tmp_path, qtbot, monkeypatch
+    ):
+        """Corbeille indisponible → message d'erreur explicite, dossier intact,
+        folder_deleted jamais émis."""
+        import src.library.trash as trash_module
+        doomed = tmp_path / "réseau"; doomed.mkdir()
+        monkeypatch.setattr(QMessageBox, "exec", lambda self: QMessageBox.Yes)
+
+        def _boom(path):
+            raise OSError("volume sans corbeille")
+
+        monkeypatch.setattr(trash_module, "move_to_trash", _boom)
+        errors = []
+        monkeypatch.setattr(
+            QMessageBox, "critical",
+            staticmethod(lambda *a, **k: errors.append(a[2])),
+        )
+        fired = []
+        sidebar.folder_deleted.connect(fired.append)
+
+        sidebar._delete_folder(str(doomed))
+        qtbot.waitUntil(lambda: len(errors) == 1, timeout=3000)
+
+        assert "n'a PAS été supprimé" in errors[0]
         assert fired == []
         assert doomed.exists()

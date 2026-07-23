@@ -1962,9 +1962,11 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
         if not self._config.get("ui.delete_no_confirm", False):
             n = len(photos)
             if n == 1:
-                msg = f"Supprimer définitivement « {photos[0].filename} » ?\n\nCette action est irréversible."
+                msg = (f"Envoyer « {photos[0].filename} » à la corbeille Windows ?\n\n"
+                       f"Le fichier restera récupérable depuis la corbeille.")
             else:
-                msg = f"Supprimer définitivement {n} fichiers sélectionnés ?\n\nCette action est irréversible."
+                msg = (f"Envoyer les {n} fichiers sélectionnés à la corbeille Windows ?\n\n"
+                       f"Ils resteront récupérables depuis la corbeille.")
             box = QMessageBox(QMessageBox.Warning, "Confirmer la suppression", msg,
                               QMessageBox.Yes | QMessageBox.Cancel, self)
             box.setDefaultButton(QMessageBox.Cancel)

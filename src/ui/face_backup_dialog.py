@@ -464,14 +464,15 @@ class FaceBackupDialog(QDialog):
         reply = QMessageBox.question(
             self,
             "Supprimer la sauvegarde",
-            f"Supprimer définitivement :\n\n  {_parse_ts(zip_path)} ?",
+            f"Envoyer à la corbeille :\n\n  {_parse_ts(zip_path)} ?",
             QMessageBox.Yes | QMessageBox.Cancel,
             QMessageBox.Cancel,
         )
         if reply != QMessageBox.Yes:
             return
         try:
-            zip_path.unlink()
+            from src.library.trash import move_to_trash
+            move_to_trash(str(zip_path))
         except Exception as exc:
             QMessageBox.warning(self, "Erreur", f"Impossible de supprimer :\n{exc}")
             return

@@ -89,6 +89,8 @@ a = Analysis(
         "piexif",
         # Hashing perceptuel (détection doublons)
         "imagehash",
+        # Corbeille Windows (src/library/trash.py)
+        "send2trash",
         # Stdlib (SQLite embarqué dans Python, mais on force l'inclusion)
         "sqlite3", "_sqlite3",
         # Encodages utilisés par le logging / les chemins Windows

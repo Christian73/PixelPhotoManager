@@ -564,8 +564,8 @@ class DuplicatesController:
             "Supprimer les fichiers corrompus",
             f"{n} fichier{'s' if n != 1 else ''} semble{'nt' if n != 1 else ''} corrompu"
             f"{'s' if n != 1 else ''}.\n\n"
-            f"Supprimer définitivement {'ce fichier' if n == 1 else 'ces fichiers'} ?\n\n"
-            "Cette action est irréversible.",
+            f"Envoyer {'ce fichier' if n == 1 else 'ces fichiers'} à la corbeille Windows ?\n\n"
+            "Ils resteront récupérables depuis la corbeille.",
             QMessageBox.Yes | QMessageBox.Cancel,
             QMessageBox.Cancel,
         )

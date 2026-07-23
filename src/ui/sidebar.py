@@ -151,6 +151,24 @@ class _FaceIconLoader(QThread):
                     pass
 
 
+class _FolderTrashThread(QThread):
+    """Envoie un dossier entier à la corbeille hors du thread UI."""
+
+    done = Signal(str, str)   # (path, message d'erreur — vide si succès)
+
+    def __init__(self, path: str, parent=None) -> None:
+        super().__init__(parent)
+        self._path = path
+
+    def run(self) -> None:
+        try:
+            from src.library.trash import move_to_trash
+            move_to_trash(self._path)
+            self.done.emit(self._path, "")
+        except Exception as e:
+            self.done.emit(self._path, str(e))
+
+
 class _SingleFaceIconLoader(QThread):
     """Charge le crop d'un seul visage en arrière-plan pour mettre à jour une icône."""
 
@@ -835,8 +853,9 @@ class Sidebar(QWidget):
         box = QMessageBox(
             QMessageBox.Warning,
             "Confirmer la suppression",
-            f"Supprimer définitivement le dossier « {folder_name} » et tout son contenu ?\n\n"
-            f"Cette action est irréversible. Tous les fichiers seront supprimés du disque.",
+            f"Envoyer le dossier « {folder_name} » et tout son contenu "
+            f"à la corbeille Windows ?\n\n"
+            f"Le dossier restera récupérable depuis la corbeille.",
             QMessageBox.Yes | QMessageBox.Cancel,
             self,
         )
@@ -844,11 +863,24 @@ class Sidebar(QWidget):
         box.button(QMessageBox.Yes).setText("Supprimer")
         if box.exec() != QMessageBox.Yes:
             return
-        try:
-            shutil.rmtree(path)
-        except Exception as e:
-            QMessageBox.critical(self, "Erreur",
-                                 f"Impossible de supprimer le dossier :\n{e}")
+        # Mise à la corbeille dans un thread : sur un gros dossier (ou un
+        # volume lent) l'opération dépasse largement les 50 ms de la règle
+        # « l'UI ne bloque jamais » — l'ancien shutil.rmtree la violait déjà.
+        QApplication.setOverrideCursor(Qt.BusyCursor)
+        self._trash_thread = _FolderTrashThread(path, self)
+        self._trash_thread.done.connect(self._on_folder_trashed)
+        self._trash_thread.finished.connect(self._trash_thread.deleteLater)
+        self._trash_thread.start()
+
+    @Slot(str, str)
+    def _on_folder_trashed(self, path: str, error: str) -> None:
+        QApplication.restoreOverrideCursor()
+        if error:
+            QMessageBox.critical(
+                self, "Erreur",
+                f"Impossible d'envoyer le dossier à la corbeille :\n{error}\n\n"
+                f"Le dossier n'a PAS été supprimé.",
+            )
             return
         self.folder_deleted.emit(path)
 

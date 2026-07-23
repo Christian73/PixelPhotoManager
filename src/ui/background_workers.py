@@ -7,8 +7,6 @@ d'implémentation de MainWindow, pas une API de plugin."""
 
 import logging
 import os
-from pathlib import Path
-
 from PySide6.QtCore import QThread, Signal
 
 from src.faces.clusterer import reset_clustering_cache
@@ -75,10 +73,11 @@ class _PhotoQueryThread(QThread):
 
 
 class _DeleteWorkerThread(QThread):
-    """Supprime les fichiers disque puis purge catalogue/vignettes/visages en
-    lot, hors du thread UI (règle CLAUDE.md : l'UI ne bloque jamais). L'ancienne
-    boucle synchrone dans _on_delete_requested (unlink + 3 allers-retours
-    SQLite par photo) gelait l'UI plusieurs secondes sur une multi-sélection."""
+    """Envoie les fichiers à la corbeille Windows puis purge catalogue/
+    vignettes/visages en lot, hors du thread UI (règle CLAUDE.md : l'UI ne
+    bloque jamais). Jamais d'unlink définitif : si la corbeille est
+    indisponible (lecteur réseau…), le fichier est laissé intact, son chemin
+    part dans errors et le catalogue n'est PAS purgé pour lui."""
 
     progress        = Signal(int, int)     # fait, total (libellé barre d'état)
     finished_delete = Signal(list, list)   # deleted_paths: list[str], errors: list[str]
@@ -92,14 +91,22 @@ class _DeleteWorkerThread(QThread):
         self._face_db     = face_db
 
     def run(self) -> None:
+        from src.library.trash import move_to_trash
         deleted: list[str] = []
         errors:  list[str] = []
         for i, path in enumerate(self._paths):
             try:
-                Path(path).unlink(missing_ok=True)
+                move_to_trash(path)
+                deleted.append(path)
+            except FileNotFoundError:
+                # Déjà absent du disque : purger quand même le catalogue
+                # (équivalent de l'ancien missing_ok=True).
                 deleted.append(path)
             except Exception as e:
-                errors.append(f"{os.path.basename(path)} : {e}")
+                errors.append(
+                    f"{os.path.basename(path)} : mise à la corbeille impossible"
+                    f" ({e}) — le fichier n'a PAS été supprimé."
+                )
             self.progress.emit(i + 1, len(self._paths))
         if deleted:
             try:

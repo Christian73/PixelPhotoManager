@@ -30,6 +30,9 @@ reportlab>=4.1.0
 # Monitoring système (RSS mémoire pour le journal de threads)
 psutil>=5.9.0
 
+# Suppression via la corbeille Windows (jamais d'effacement définitif direct)
+Send2Trash>=1.8.2
+
 # Packaging
 pyinstaller>=6.4.0
 
