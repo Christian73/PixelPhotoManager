@@ -632,6 +632,15 @@ class ExifPanel(QWidget):
         header.setFixedHeight(36)
         root.addWidget(header)
 
+        self._tags_label = QLabel()
+        self._tags_label.setWordWrap(True)
+        self._tags_label.setStyleSheet(
+            "background: #24384a; color: #9cc4e4; padding: 6px 10px;"
+            "border-bottom: 1px solid #444; font-size: 12px;"
+        )
+        self._tags_label.setVisible(False)
+        root.addWidget(self._tags_label)
+
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
@@ -688,10 +697,21 @@ class ExifPanel(QWidget):
         else:
             self._populate_from_image_data(data, path)
 
+    def set_tags(self, tags: list) -> None:
+        """Affiche les mots-clés (données catalogue, pas EXIF fichier) en tête
+        du panneau — alimenté par MainWindow, indépendamment du chargement
+        asynchrone des métadonnées EXIF."""
+        if tags:
+            self._tags_label.setText("🏷  " + ", ".join(tags))
+            self._tags_label.setVisible(True)
+        else:
+            self._tags_label.setVisible(False)
+
     def clear(self) -> None:
         self._current_path = ""
         self._is_video = False
         self._btn_edit.setEnabled(False)
+        self._tags_label.setVisible(False)
         self._clear()
 
     # ------------------------------------------------------------------ private

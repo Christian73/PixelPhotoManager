@@ -192,6 +192,8 @@ class PhotoViewer(QWidget):
     force_redetect_requested    = Signal(object)  # PhotoInfo — menu contextuel
     folder_grid_requested       = Signal(object)  # PhotoInfo — menu contextuel : grille du dossier
     favorite_toggle_requested   = Signal(object)  # PhotoInfo — bascule favori demandée
+    rating_change_requested     = Signal(list, int)  # list[PhotoInfo], note 0-5 — changement de note demandé
+    edit_tags_requested         = Signal(list)    # list[PhotoInfo] — édition des mots-clés demandée
     annotation_added             = Signal(object)  # dict annotation ajoutée
     annotation_deleted           = Signal(str)     # id de l'annotation supprimée
     annotation_deleted_multi     = Signal(object)  # list[str] ids supprimés (suppression groupée)
@@ -856,6 +858,12 @@ class PhotoViewer(QWidget):
 
         fav_label = "Retirer des favoris" if photo.is_favorite else "Marquer comme favori"
         menu.addAction(fav_label, self._toggle_fav_from_menu)
+        rating_menu = menu.addMenu("Noter")
+        for n in range(1, 6):
+            rating_menu.addAction("★" * n, lambda n=n: self._set_rating(n))
+        rating_menu.addSeparator()
+        rating_menu.addAction("Retirer la note", lambda: self._set_rating(0))
+        menu.addAction("Mots-clés…", lambda: self.edit_tags_requested.emit([photo]))
         menu.addAction("Renommer…", lambda: self.rename_requested.emit(photo))
         menu.addAction("Déplacer vers…", lambda: self.move_requested.emit(photo))
         menu.addAction("Enregistrer l'image traitée sur le disque",

@@ -75,6 +75,7 @@ class _FolderTree(QTreeWidget):
 
 _SPECIAL_PERSON   = "__person__"    # préfixe pour l'identifiant de contexte personne
 _SPECIAL_FILENAME = "__filename__"  # album virtuel "Par nom de fichier"
+_SPECIAL_TAG = "__tag__"            # album virtuel "Par mot-clé"
 
 
 class _BadgeButton(QPushButton):
@@ -481,6 +482,11 @@ class Sidebar(QWidget):
         item_fn.setToolTip("Afficher les photos dont le nom de fichier contient le texte du filtre")
         self._albums_list.addItem(item_fn)
 
+        item_tag = QListWidgetItem("🏷 Par mot-clé")
+        item_tag.setData(Qt.UserRole, _SPECIAL_TAG)
+        item_tag.setToolTip("Afficher les photos portant exactement le mot-clé du filtre")
+        self._albums_list.addItem(item_tag)
+
     # ── filtrage live ──────────────────────────────────────────────────────────
 
     @Slot(str)
@@ -695,9 +701,10 @@ class Sidebar(QWidget):
 
     def refresh_albums(self, albums: list[AlbumInfo]) -> None:
         self._albums = albums
-        # Remove existing album items (keep the 4 special ones at top)
-        while self._albums_list.count() > 4:
-            self._albums_list.takeItem(4)
+        # Remove existing album items (keep the 6 special ones at top : Chronologie,
+        # Favoris, Vidéos, Notées, Par nom de fichier, Par mot-clé)
+        while self._albums_list.count() > 6:
+            self._albums_list.takeItem(6)
         for album in albums:
             item = QListWidgetItem(f"📁 {album.name} ({album.photo_count})")
             item.setData(Qt.UserRole, album)

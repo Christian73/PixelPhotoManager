@@ -76,6 +76,20 @@ CREATE TABLE IF NOT EXISTS persons (
 """
 
 
+def _normalize_tags(tags: list[str]) -> list[str]:
+    """Nettoie une liste de tags : strip, rejette vide/contenant une virgule
+    (la virgule sert de séparateur au stockage), dédoublonne en préservant l'ordre."""
+    cleaned: list[str] = []
+    seen: set[str] = set()
+    for t in tags:
+        t = t.strip()
+        if not t or "," in t or t in seen:
+            continue
+        seen.add(t)
+        cleaned.append(t)
+    return cleaned
+
+
 def _photo_from_row(row) -> PhotoInfo:
     (
         id_, path, filename, directory, date_taken, width, height,
@@ -325,7 +339,6 @@ class Catalog:
                     has_gps=excluded.has_gps,
                     gps_lat=excluded.gps_lat,
                     gps_lon=excluded.gps_lon,
-                    tags=excluded.tags,
                     media_type=excluded.media_type,
                     duration=excluded.duration,
                     indexed_at=CURRENT_TIMESTAMP

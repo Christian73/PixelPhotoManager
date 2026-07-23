@@ -37,7 +37,10 @@ from src.faces.face_database import FaceDatabase
 from src.faces.face_indexer import FaceIndexThread, SingleFaceReindexThread, RetryFaceIndexThread, ForceRedetectThread, TFWarmUpThread, SimilaritySearchThread
 from src.faces.clusterer import ClusterThread
 from src.processing.edit_database import EditDatabase
-from src.ui.sidebar import Sidebar, _SPECIAL_ALL, _SPECIAL_FAV, _SPECIAL_VIDEOS, _SPECIAL_FILENAME
+from src.ui.sidebar import (
+    Sidebar, _SPECIAL_ALL, _SPECIAL_FAV, _SPECIAL_VIDEOS, _SPECIAL_RATED,
+    _SPECIAL_FILENAME, _SPECIAL_TAG,
+)
 from src.ui.thumbnail_grid import ThumbnailGrid
 from src.ui.photo_viewer import PhotoViewer
 from src.ui.edit_panel import EditPanel, MarkedSlider
@@ -495,6 +498,8 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
         self._grid.create_album_with_requested.connect(self._on_create_album_with)
         self._grid.retry_face_index_requested.connect(self._on_retry_face_index_requested)
         self._grid.favorite_toggle_requested.connect(self._on_favorite_toggle_requested)
+        self._grid.rating_change_requested.connect(self._on_rating_change_requested)
+        self._grid.edit_tags_requested.connect(self._on_edit_tags_requested)
 
         self._grid_nav_bar = QWidget()
         self._grid_nav_bar.setStyleSheet("background: rgba(0,0,0,200);")
@@ -541,6 +546,8 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
         self._viewer.remove_from_album_requested.connect(self._on_remove_from_album_requested)
         self._viewer.force_redetect_requested.connect(self._on_force_redetect_requested)
         self._viewer.favorite_toggle_requested.connect(self._on_favorite_toggle_requested)
+        self._viewer.rating_change_requested.connect(self._on_rating_change_requested)
+        self._viewer.edit_tags_requested.connect(self._on_edit_tags_requested)
         self._viewer.folder_grid_requested.connect(
             lambda photo: self._navigate_to_photo_path(photo.path)
         )
@@ -1241,6 +1248,7 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
             photo = self._viewer.current_photo()
             if photo:
                 self._exif_panel.set_photo(photo.path)
+                self._exif_panel.set_tags(photo.tags)
         else:
             self._exif_panel.hide()
             if not self._face_panel.isVisible():
@@ -1277,6 +1285,7 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
             self._face_panel.set_photo(photo.path)
         if self._exif_panel.isVisible():
             self._exif_panel.set_photo(photo.path)
+            self._exif_panel.set_tags(photo.tags)
         self._update_viewer_status(photo)
         self._update_nav_arrows()
         self._prefetch_viewer_neighbors()
@@ -1511,6 +1520,18 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
             self._start_photo_query(
                 lambda q=query: self._catalog.search(q),
                 f"Fichiers : {query}",
+            )
+        elif data == _SPECIAL_TAG:
+            query = self._sidebar.filter_text
+            if not query:
+                return
+            self._grid.set_ribbon_mode(False)
+            self._grid.set_date_overlay_visible(False)
+            self._grid_nav_bar.hide()
+            self.show_grid()
+            self._start_photo_query(
+                lambda q=query: self._catalog.get_photos_by_tag(q),
+                f"Mot-clé : {query}",
             )
         elif isinstance(data, AlbumInfo) and data.id:
             album_id   = data.id
@@ -1860,6 +1881,7 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
             self._face_panel.set_photo(photo.path)
         if self._exif_panel.isVisible():
             self._exif_panel.set_photo(photo.path)
+            self._exif_panel.set_tags(photo.tags)
         self._update_viewer_status(photo)
         self._update_nav_arrows()
         self._prefetch_viewer_neighbors()

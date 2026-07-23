@@ -445,6 +445,8 @@ class ThumbnailGrid(QScrollArea):
     create_album_with_requested = Signal(list)    # list[PhotoInfo] — créer nouvel album
     retry_face_index_requested = Signal(object)   # PhotoInfo — retenter l'identification des visages
     favorite_toggle_requested = Signal(object)    # PhotoInfo — bascule favori demandée
+    rating_change_requested  = Signal(list, int)  # list[PhotoInfo], note 0-5 — changement de note demandé
+    edit_tags_requested       = Signal(list)      # list[PhotoInfo] — édition des mots-clés demandée
 
     def __init__(self, cache: ThumbnailCache, parent=None):
         super().__init__(parent)
@@ -1365,6 +1367,16 @@ class ThumbnailGrid(QScrollArea):
         menu.addSeparator()
         fav_label = "Retirer des favoris" if photo.is_favorite else "Marquer comme favori"
         menu.addAction(fav_label, lambda: self._toggle_favorite_from_menu(photo))
+        rating_menu = menu.addMenu("Noter")
+        for n in range(1, 6):
+            rating_menu.addAction(
+                "★" * n, lambda p=photos, n=n: self._emit_rating_change(p, n)
+            )
+        rating_menu.addSeparator()
+        rating_menu.addAction(
+            "Retirer la note", lambda p=photos: self._emit_rating_change(p, 0)
+        )
+        menu.addAction("Mots-clés…", lambda p=photos: self.edit_tags_requested.emit(p))
         menu.addAction("Renommer l'image", lambda: self.rename_requested.emit(photo))
         menu.addAction("Déplacer vers…", lambda: self.move_requested.emit(photo))
         menu.addAction("Enregistrer l'image traitée sur le disque",

@@ -16,7 +16,7 @@ from src.core.models import AlbumInfo, PersonInfo
 from src.ui.people_panel import _face_bytes
 from src.ui.sidebar import (
     Sidebar, _FaceIconLoader, _SingleFaceIconLoader, _MIME_PHOTOS,
-    _SPECIAL_ALL, _SPECIAL_FILENAME,
+    _SPECIAL_ALL, _SPECIAL_FILENAME, _SPECIAL_TAG,
 )
 
 
@@ -230,24 +230,25 @@ class TestFilter:
 
 class TestAlbums:
     def test_special_albums_present(self, sidebar):
-        keys = [sidebar._albums_list.item(i).data(Qt.UserRole) for i in range(4)]
+        keys = [sidebar._albums_list.item(i).data(Qt.UserRole) for i in range(6)]
         assert keys[0] == _SPECIAL_ALL
-        assert keys[3] == _SPECIAL_FILENAME
+        assert keys[4] == _SPECIAL_FILENAME
+        assert keys[5] == _SPECIAL_TAG
 
     def test_refresh_albums_keeps_specials(self, sidebar):
         albums = [AlbumInfo(name="Été", id=1, photo_count=12)]
         sidebar.refresh_albums(albums)
         sidebar.refresh_albums(albums)   # idempotent : pas de doublon
 
-        assert sidebar._albums_list.count() == 5
-        assert "Été (12)" in sidebar._albums_list.item(4).text()
+        assert sidebar._albums_list.count() == 7
+        assert "Été (12)" in sidebar._albums_list.item(6).text()
 
     def test_album_clicked_emits_data(self, sidebar, qtbot):
         album = AlbumInfo(name="Été", id=1, photo_count=2)
         sidebar.refresh_albums([album])
 
         with qtbot.waitSignal(sidebar.album_selected, timeout=1000) as blocker:
-            sidebar._on_album_clicked(sidebar._albums_list.item(4))
+            sidebar._on_album_clicked(sidebar._albums_list.item(6))
 
         assert blocker.args[0] is album
 

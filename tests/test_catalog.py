@@ -239,6 +239,19 @@ class TestPhotoCrud:
 
         assert rescanned.rating == 3
 
+    def test_add_or_update_photo_preserves_tags_across_rescan(self, tmp_path):
+        """tags n'est volontairement plus dans le ON CONFLICT DO UPDATE (retiré
+        en même temps que la fonctionnalité Mots-clés, même raisonnement que
+        is_favorite/rating) : un re-scan forcé ne doit jamais effacer les tags
+        déjà posés par l'utilisateur."""
+        catalog = Catalog(db_path=tmp_path / "catalog.db")
+        saved = catalog.add_or_update_photo(_make_photo("C:/photos/a.jpg"))
+        catalog.set_tags(saved.id, ["vacances", "famille"])
+
+        rescanned = catalog.add_or_update_photo(_make_photo("C:/photos/a.jpg", width=50))
+
+        assert rescanned.tags == ["vacances", "famille"]
+
     def test_search_matches_filename_and_camera(self, tmp_path):
         catalog = Catalog(db_path=tmp_path / "catalog.db")
         catalog.add_or_update_photo(_make_photo("C:/photos/sunset.jpg", camera_make="Canon"))
@@ -869,6 +882,98 @@ class TestRating:
         catalog.add_or_update_photo(_make_photo("C:/photos/a.jpg"))
 
         assert catalog.get_photos_min_rating() == []
+
+
+class TestTags:
+    def test_set_tags_round_trip(self, tmp_path):
+        catalog = Catalog(db_path=tmp_path / "catalog.db")
+        photo = catalog.add_or_update_photo(_make_photo("C:/photos/a.jpg"))
+
+        catalog.set_tags(photo.id, ["vacances", "plage"])
+
+        assert catalog.get_photo_by_path(photo.path).tags == ["vacances", "plage"]
+
+    def test_set_tags_strips_dedupes_and_rejects_empty_or_comma(self, tmp_path):
+        catalog = Catalog(db_path=tmp_path / "catalog.db")
+        photo = catalog.add_or_update_photo(_make_photo("C:/photos/a.jpg"))
+
+        catalog.set_tags(
+            photo.id, [" vacances ", "vacances", "", "  ", "a,b", "plage"]
+        )
+
+        assert catalog.get_photo_by_path(photo.path).tags == ["vacances", "plage"]
+
+    def test_set_tags_replaces_previous_list(self, tmp_path):
+        catalog = Catalog(db_path=tmp_path / "catalog.db")
+        photo = catalog.add_or_update_photo(_make_photo("C:/photos/a.jpg"))
+        catalog.set_tags(photo.id, ["vacances"])
+
+        catalog.set_tags(photo.id, ["famille"])
+
+        assert catalog.get_photo_by_path(photo.path).tags == ["famille"]
+
+    def test_get_all_tags_deduplicated_and_sorted(self, tmp_path):
+        catalog = Catalog(db_path=tmp_path / "catalog.db")
+        p1 = catalog.add_or_update_photo(_make_photo("C:/photos/a.jpg"))
+        p2 = catalog.add_or_update_photo(_make_photo("C:/photos/b.jpg"))
+        catalog.set_tags(p1.id, ["plage", "vacances"])
+        catalog.set_tags(p2.id, ["vacances", "famille"])
+
+        assert catalog.get_all_tags() == ["famille", "plage", "vacances"]
+
+    def test_add_tags_to_photos_unions_without_duplicating(self, tmp_path):
+        catalog = Catalog(db_path=tmp_path / "catalog.db")
+        p1 = catalog.add_or_update_photo(_make_photo("C:/photos/a.jpg"))
+        p2 = catalog.add_or_update_photo(_make_photo("C:/photos/b.jpg"))
+        catalog.set_tags(p1.id, ["vacances"])
+
+        catalog.add_tags_to_photos([p1.id, p2.id], ["vacances", "plage"])
+
+        assert catalog.get_photo_by_path(p1.path).tags == ["vacances", "plage"]
+        assert catalog.get_photo_by_path(p2.path).tags == ["vacances", "plage"]
+
+    def test_add_tags_to_photos_empty_list_is_noop(self, tmp_path):
+        catalog = Catalog(db_path=tmp_path / "catalog.db")
+        photo = catalog.add_or_update_photo(_make_photo("C:/photos/a.jpg"))
+
+        catalog.add_tags_to_photos([], ["vacances"])
+        catalog.add_tags_to_photos([photo.id], [])
+
+        assert catalog.get_photo_by_path(photo.path).tags == []
+
+    def test_remove_tag_from_photos_keeps_other_tags(self, tmp_path):
+        catalog = Catalog(db_path=tmp_path / "catalog.db")
+        p1 = catalog.add_or_update_photo(_make_photo("C:/photos/a.jpg"))
+        p2 = catalog.add_or_update_photo(_make_photo("C:/photos/b.jpg"))
+        catalog.set_tags(p1.id, ["vacances", "plage"])
+        catalog.set_tags(p2.id, ["vacances"])
+
+        catalog.remove_tag_from_photos([p1.id, p2.id], "vacances")
+
+        assert catalog.get_photo_by_path(p1.path).tags == ["plage"]
+        assert catalog.get_photo_by_path(p2.path).tags == []
+
+    def test_get_photos_by_tag_exact_match_not_substring(self, tmp_path):
+        """'vacances' ne doit pas matcher 'vacances2024' (correspondance
+        d'élément exact, pas de sous-chaîne)."""
+        catalog = Catalog(db_path=tmp_path / "catalog.db")
+        p1 = catalog.add_or_update_photo(_make_photo("C:/photos/a.jpg"))
+        p2 = catalog.add_or_update_photo(_make_photo("C:/photos/b.jpg"))
+        catalog.set_tags(p1.id, ["vacances"])
+        catalog.set_tags(p2.id, ["vacances2024"])
+
+        matches = catalog.get_photos_by_tag("vacances")
+
+        assert [p.filename for p in matches] == ["a.jpg"]
+
+    def test_get_photos_by_tag_matches_among_several_tags(self, tmp_path):
+        catalog = Catalog(db_path=tmp_path / "catalog.db")
+        photo = catalog.add_or_update_photo(_make_photo("C:/photos/a.jpg"))
+        catalog.set_tags(photo.id, ["famille", "vacances", "plage"])
+
+        matches = catalog.get_photos_by_tag("vacances")
+
+        assert [p.filename for p in matches] == ["a.jpg"]
 
 
 class TestIncrementalScanHelpers:
