@@ -231,3 +231,42 @@ class TestRemovePhotos:
 
         assert p1 not in grid._photos
         assert grid.get_selected() == [p2]
+
+
+class TestLoadingIndicator:
+    """set_loading — retour visuel immédiat quand une requête photo démarre
+    (clic dossier/album dans la sidebar) : l'indicateur "Chargement…" n'apparaît
+    qu'après 150 ms (pas de clignotement sur les requêtes rapides) et est masqué
+    automatiquement dès que set_photos() livre le résultat."""
+
+    def test_indicator_appears_after_delay(self, qtbot, tmp_path):
+        grid = _make_grid(qtbot, tmp_path)
+        grid.show()
+        qtbot.waitExposed(grid)
+
+        grid.set_loading(True)
+        assert not grid._loading_label.isVisible()   # différé de 150 ms
+
+        qtbot.waitUntil(lambda: grid._loading_label.isVisible(), timeout=2000)
+
+    def test_fast_query_never_shows_indicator(self, qtbot, tmp_path):
+        grid = _make_grid(qtbot, tmp_path)
+        grid.show()
+        qtbot.waitExposed(grid)
+
+        grid.set_loading(True)
+        grid.set_photos([_photo("C:/lib/a.jpg")])    # réponse avant les 150 ms
+
+        assert not grid._loading_label.isVisible()
+        assert not grid._loading_delay_timer.isActive()
+
+    def test_set_photos_hides_visible_indicator(self, qtbot, tmp_path):
+        grid = _make_grid(qtbot, tmp_path)
+        grid.show()
+        qtbot.waitExposed(grid)
+        grid.set_loading(True)
+        qtbot.waitUntil(lambda: grid._loading_label.isVisible(), timeout=2000)
+
+        grid.set_photos([_photo("C:/lib/a.jpg")])
+
+        assert not grid._loading_label.isVisible()

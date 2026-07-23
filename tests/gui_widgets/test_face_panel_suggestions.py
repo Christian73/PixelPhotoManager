@@ -114,9 +114,11 @@ class TestAcceptRejectSuggestion:
         )
         _load_and_settle(qtbot, panel, photo)
 
-        panel._items[face_id]._btn_accept.click()
-        with qtbot.waitSignal(panel._data_loader.data_ready, timeout=2000):
-            pass
+        # L'écriture (accept_cluster_suggestion) part dans un _DbWriteWorker ;
+        # person_assigned est émis sur le thread UI une fois le worker terminé,
+        # donc après le commit — on attend ce signal avant de lire la DB.
+        with qtbot.waitSignal(panel.person_assigned, timeout=2000):
+            panel._items[face_id]._btn_accept.click()
 
         conn = sqlite3.connect(face_db._db_path)
         try:

@@ -237,6 +237,11 @@ Dans `src/ui/face_panel.py`, la popup d'assignation de nom (`_AssignDialog`) est
 
 Toute opération > 50 ms passe dans un `QThread`. Les signaux PySide6 (`pyqtSignal`) sont le seul moyen de communiquer du thread secondaire vers l'UI.
 
+Corollaire : **chaque action utilisateur a un retour visuel immédiat**, même quand le résultat réel arrive en asynchrone. Mécanismes en place (2026-07) :
+- **Visionneuse** — `PhotoViewer._base_lru` : LRU (8 entrées) des images de base 1024 px, clé = chemin. `prefetch()` (appelé par `MainWindow._prefetch_viewer_neighbors()` après chaque navigation) précharge les voisines ±1/±2 → prev/next instantané. Sur cache froid, la vignette de la grille (`thumb_cache.get_ram`) sert de placeholder immédiat (flou bref, jamais d'écran noir). `_apply_edit_to_base` a un fast path sans retouche (décodage JPEG direct par Qt, sans aller-retour PIL). Le cache est invalidé quand le fichier change sur disque (`invalidate_base_cache` : export écrasant, réécriture EXIF).
+- **Grille** — `ThumbnailGrid.set_loading(True)` au départ d'une requête photo (`_start_photo_query`) : indicateur « Chargement… » différé de 150 ms (pas de clignotement si la requête répond vite), masqué par `set_photos()`/`clear()`.
+- **Panneau Visages** — curseur occupé pendant `_AssignPrepLoader` (préparation du dialogue d'assignation) ; après validation du dialogue, le libellé du/des visage(s) est mis à jour **optimistiquement** et l'écriture DB (assignation + dédup + consommation Picasa, potentiellement longue sur un gros groupe) part dans un `_DbWriteWorker` — le rafraîchissement complet (`person_assigned` + `set_photo`) n'a lieu qu'à la fin du worker. Le compte de « Visages ignorés » est calculé dans `_FacesDataLoader` (plus de requête DB sur le thread UI à chaque navigation).
+
 ---
 
 ## Système de plugins

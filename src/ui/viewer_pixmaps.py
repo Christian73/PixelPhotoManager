@@ -128,7 +128,7 @@ def _build_base_image(photo: PhotoInfo) -> "tuple[bytes, int, int] | None":
     """
     Charge l'image (ou la première frame vidéo), applique la correction EXIF et réduit
     à _PREVIEW_MAX_PX. Retourne (jpeg_bytes, orig_w, orig_h) SANS retouche.
-    Résultat mis en cache dans PhotoViewer._base_cache : évite de relire le fichier
+    Résultat mis en cache dans PhotoViewer._base_lru : évite de relire le fichier
     complet à chaque mouvement de slider (preview de retouche).
     """
     from pathlib import Path as _Path
@@ -160,6 +160,13 @@ def _apply_edit_to_base(base_bytes: bytes, edit: "EditInfo | None") -> "QPixmap 
     Aucune lecture disque — remplace _build_pixmap pour les previews.
     """
     try:
+        if edit is None or not edit.is_modified():
+            # Aucune retouche : décodage JPEG direct par Qt, sans l'aller-retour
+            # PIL (décodage + ré-encodage) — chemin chaud de la navigation.
+            pixmap = QPixmap()
+            pixmap.loadFromData(base_bytes)
+            if not pixmap.isNull():
+                return pixmap
         from PIL import Image
         img = Image.open(io.BytesIO(base_bytes))
         if edit and edit.is_modified():

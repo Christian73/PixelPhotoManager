@@ -530,7 +530,7 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
         self._stack.addWidget(_grid_container)
 
         # Index 1 — Visionneuse (avec panneau Visages rétractable à gauche)
-        self._viewer = PhotoViewer(config=self._config)
+        self._viewer = PhotoViewer(config=self._config, thumb_cache=self._thumb_cache)
         self._viewer.closed.connect(self._on_viewer_closed)
         self._viewer.navigate.connect(self._navigate_photo)
         self._viewer.zoom_changed.connect(self._on_viewer_zoom_changed)
@@ -1275,6 +1275,20 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
             self._exif_panel.set_photo(photo.path)
         self._update_viewer_status(photo)
         self._update_nav_arrows()
+        self._prefetch_viewer_neighbors()
+
+    def _prefetch_viewer_neighbors(self) -> None:
+        """Précharge l'image de base des photos voisines de celle affichée dans
+        la visionneuse (les plus proches d'abord) : prev/next devient instantané."""
+        idx = self._current_photo_index
+        photos = self._current_photos
+        neighbors = [
+            photos[i]
+            for i in (idx - 1, idx + 1, idx - 2, idx + 2)
+            if 0 <= i < len(photos)
+        ]
+        if neighbors:
+            self._viewer.prefetch(neighbors)
 
     @Slot(float)
     def _on_viewer_zoom_changed(self, zoom: float) -> None:
@@ -1298,6 +1312,9 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
         pour les autres vues) — permet de détecter une copie de DVD sans confondre
         avec un nom d'album qui coïnciderait par hasard avec un chemin du disque."""
         self._cancel_grid_display_ops()
+        # Retour visuel immédiat au clic (l'indicateur ne s'affiche réellement
+        # que si la requête dépasse 150 ms) ; masqué par grid.set_photos().
+        self._grid.set_loading(True)
         # Paramètres de tri résolus ici (thread UI : lectures de Config),
         # tri exécuté dans le thread avec la requête.
         key_fn, reverse = self._sort_params_for_context(context_key)
@@ -1833,6 +1850,7 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
             self._exif_panel.set_photo(photo.path)
         self._update_viewer_status(photo)
         self._update_nav_arrows()
+        self._prefetch_viewer_neighbors()
 
     def toggle_sidebar(self) -> None:
         self._left_stack.setVisible(not self._left_stack.isVisible())
@@ -1892,6 +1910,8 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
     @Slot(str)
     def _on_exif_photo_saved(self, photo_path: str) -> None:
         """Mise à jour du catalogue après modification EXIF (date_taken peut avoir changé)."""
+        # Fichier réécrit sur disque : oublier l'image de base en cache du viewer.
+        self._viewer.invalidate_base_cache(photo_path)
         for photo in self._current_photos:
             if photo.path == photo_path:
                 try:
@@ -2351,6 +2371,10 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
                 # et rafraîchir l'UI pour éviter une double application au prochain chargement
                 self._edit_db.delete(photo.path)
                 self._thumb_cache.invalidate(photo.path)
+                # Le fichier sur disque a changé : l'image de base en cache du
+                # viewer ne correspond plus (elle montrerait la version sans
+                # retouche alors qu'elles sont désormais baked dans le fichier).
+                self._viewer.invalidate_base_cache(photo.path)
                 self._viewer.update_edit(EditInfo())
                 self._edit_panel.set_photo(photo)
 

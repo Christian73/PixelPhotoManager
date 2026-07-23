@@ -16,5 +16,6 @@ parallel = true
 #   2026-07-19  29 % → 36 % (phases 1+2) → 45,8 % (phases 3+4, seuil 45)
 #   2026-07-20  45,8 % → 48,84 % (refactor modularisation N1-N5, seuil 48)
 #   2026-07-21  48,84 % → 49,23 % (correctif file d'attente suppressions, seuil 49)
-fail_under = 49
+#   2026-07-23  49,23 % → 51,41 % (optimisations réactivité perçue + tests, seuil 51)
+fail_under = 51
 precision = 0

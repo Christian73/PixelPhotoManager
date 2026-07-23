@@ -121,3 +121,87 @@ class TestExternalAppsMediaScope:
         viewer._photo = _photo("C:/lib/clip.mp4", media_type="video")
         viewer.refresh_external_apps()
         assert viewer._ext_apps_layout.count() == 1
+
+
+class _FakeThumbCache:
+    """Simule ThumbnailCache.get_ram : retourne toujours le même pixmap."""
+
+    def __init__(self, pixmap):
+        self._px = pixmap
+
+    def get_ram(self, path):
+        return self._px
+
+
+class TestBaseImageCache:
+    """Cache LRU des images de base + placeholder vignette (réactivité perçue) :
+    la navigation prev/next affiche instantanément une photo préchargée, et une
+    photo froide montre la vignette de la grille plutôt qu'un écran noir."""
+
+    def _make_jpg(self, tmp_path, name):
+        from PIL import Image
+        p = tmp_path / name
+        Image.new("RGB", (64, 48), color=(200, 40, 40)).save(p)
+        return str(p)
+
+    def test_placeholder_from_thumb_cache_is_immediate(self, qtbot):
+        from PySide6.QtCore import Qt
+        from PySide6.QtGui import QPixmap
+        px = QPixmap(32, 32)
+        px.fill(Qt.darkGray)
+        v = PhotoViewer(thumb_cache=_FakeThumbCache(px))
+        qtbot.addWidget(v)
+
+        # Chemin inexistant : le chargement de base échouera (résultat None) —
+        # seule la vignette placeholder s'affiche, et ce dès le retour de set_photo.
+        v.set_photo(_photo("C:/nulle/part/photo.jpg", width=640, height=480))
+
+        assert v._canvas._pixmap is not None
+        assert not v._canvas._pixmap.isNull()
+
+    def test_base_load_populates_lru(self, qtbot, tmp_path):
+        v = PhotoViewer()
+        qtbot.addWidget(v)
+        p1 = self._make_jpg(tmp_path, "a.jpg")
+
+        v.set_photo(_photo(p1))
+
+        qtbot.waitUntil(lambda: p1 in v._base_lru, timeout=3000)
+        assert p1 not in v._loading_paths
+
+    def test_prefetch_neighbors_makes_navigation_instant(self, qtbot, tmp_path):
+        v = PhotoViewer()
+        qtbot.addWidget(v)
+        p1 = self._make_jpg(tmp_path, "a.jpg")
+        p2 = self._make_jpg(tmp_path, "b.jpg")
+
+        v.prefetch([_photo(p1), _photo(p2)])
+        qtbot.waitUntil(
+            lambda: p1 in v._base_lru and p2 in v._base_lru, timeout=3000
+        )
+
+        # Cache chaud : l'affichage est synchrone (aucun thread, pas d'attente)
+        v.set_photo(_photo(p2))
+        assert v._canvas._pixmap is not None
+        assert not v._canvas._pixmap.isNull()
+
+    def test_lru_stays_bounded_and_evicts_oldest(self, qtbot):
+        from src.ui.photo_viewer import _BASE_LRU_MAX
+        v = PhotoViewer()
+        qtbot.addWidget(v)
+
+        for i in range(_BASE_LRU_MAX + 3):
+            v._on_base_ready(f"C:/lib/p{i}.jpg", (b"jpeg", 10, 10))
+
+        assert len(v._base_lru) == _BASE_LRU_MAX
+        assert "C:/lib/p0.jpg" not in v._base_lru
+        assert f"C:/lib/p{_BASE_LRU_MAX + 2}.jpg" in v._base_lru
+
+    def test_invalidate_base_cache_forgets_path(self, qtbot):
+        v = PhotoViewer()
+        qtbot.addWidget(v)
+        v._on_base_ready("C:/lib/x.jpg", (b"jpeg", 10, 10))
+
+        v.invalidate_base_cache("C:/lib/x.jpg")
+
+        assert "C:/lib/x.jpg" not in v._base_lru

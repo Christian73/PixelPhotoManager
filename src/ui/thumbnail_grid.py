@@ -517,6 +517,26 @@ class ThumbnailGrid(QScrollArea):
         _empty_layout.addWidget(self._empty_action_btn)
         self._empty_overlay.hide()
 
+        # Indicateur "Chargement…" pendant une requête photo (dossier/album
+        # sélectionné) : retour visuel immédiat au clic dans la sidebar. Différé
+        # de 150 ms pour ne pas clignoter quand la requête répond vite.
+        self._loading_label = QLabel("Chargement…", self.viewport())
+        self._loading_label.setAttribute(Qt.WA_TransparentForMouseEvents)
+        self._loading_label.setStyleSheet(
+            "QLabel {"
+            "  color: white;"
+            "  font-size: 15px;"
+            "  background-color: rgba(0,0,0,170);"
+            "  border-radius: 8px;"
+            "  padding: 8px 22px;"
+            "}"
+        )
+        self._loading_label.hide()
+        self._loading_delay_timer = QTimer(self)
+        self._loading_delay_timer.setSingleShot(True)
+        self._loading_delay_timer.setInterval(150)
+        self._loading_delay_timer.timeout.connect(self._show_loading_label)
+
         # Ascenseur de navigation rapide (mode ruban uniquement)
         # La barre est fournie de l'extérieur via bind_ribbon_nav_bar()
         # et placée dans le layout parent — pas en overlay sur le viewport.
@@ -528,9 +548,31 @@ class ThumbnailGrid(QScrollArea):
         self._nav_settle_timer.setInterval(500)
         self._nav_settle_timer.timeout.connect(self._on_nav_settled)
 
+    # ══════════════════════════════════════════════════════════════════ chargement
+
+    def set_loading(self, on: bool) -> None:
+        """Affiche (après 150 ms) ou masque l'indicateur "Chargement…" — appelé
+        par main_window quand une requête photo démarre/aboutit. set_photos()
+        et clear() le masquent aussi automatiquement."""
+        if on:
+            self._loading_delay_timer.start()
+        else:
+            self._loading_delay_timer.stop()
+            self._loading_label.hide()
+
+    def _show_loading_label(self) -> None:
+        self._loading_label.adjustSize()
+        vp = self.viewport().rect()
+        x = max(0, (vp.width() - self._loading_label.width()) // 2)
+        y = max(0, (vp.height() - self._loading_label.height()) // 2)
+        self._loading_label.move(x, y)
+        self._loading_label.show()
+        self._loading_label.raise_()
+
     # ══════════════════════════════════════════════════════════════════ données
 
     def set_photos(self, photos: list[PhotoInfo]) -> None:
+        self.set_loading(False)
         self.clear_empty_message()
         self._selected.clear()
         self._cancel_pending_workers()
@@ -609,6 +651,7 @@ class ThumbnailGrid(QScrollArea):
                 return
 
     def clear(self) -> None:
+        self.set_loading(False)
         self.clear_empty_message()
         self._selected.clear()
         self._cancel_pending_workers()

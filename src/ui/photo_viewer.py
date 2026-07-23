@@ -95,20 +95,34 @@ def _fmt_icon(ratio: float | None, iw: int = 24, ih: int = 18) -> QPixmap:
 # 4 poignées de coin : TL(0), TR(1), BR(2), BL(3)
 
 
+# Nombre d'images de base (JPEG 1024 px, ~300 Ko pièce) conservées en mémoire :
+# la photo courante + les voisines préchargées → navigation instantanée dans
+# les deux sens sans relire le fichier original.
+_BASE_LRU_MAX = 8
+
+
 class _BaseLoader(QThread):
-    """Charge _build_base_image dans un thread secondaire.
+    """Charge _build_base_image dans un thread secondaire, pour une ou plusieurs
+    photos (photo courante, ou préchargement des voisines pour la navigation).
     Nécessaire pour les vidéos : cv2.VideoCapture peut marshaler des appels COM
     sur le thread UI (STA Windows) et provoquer des freezes si appelé directement."""
 
     base_ready = Signal(str, object)   # (photo_path, tuple[bytes,int,int] | None)
 
-    def __init__(self, photo: "PhotoInfo", parent=None) -> None:
+    def __init__(self, photos: "list[PhotoInfo]", parent=None) -> None:
         super().__init__(parent)
-        self._photo = photo
+        self._photos = list(photos)
+        self._stop_flag = False
+
+    def stop(self) -> None:
+        self._stop_flag = True
 
     def run(self) -> None:
-        result = _build_base_image(self._photo)
-        self.base_ready.emit(self._photo.path, result)
+        for photo in self._photos:
+            if self._stop_flag:
+                break
+            result = _build_base_image(photo)
+            self.base_ready.emit(photo.path, result)
 
 
 class PhotoViewer(QWidget):
@@ -141,19 +155,29 @@ class PhotoViewer(QWidget):
     annotation_resized            = Signal(str, object)  # (id, dict annotation à jour)
     annotation_grouped            = Signal(object)  # dict[id, annotation à jour] (groupe/dégroupe)
 
-    def __init__(self, config=None, parent=None):
+    def __init__(self, config=None, thumb_cache=None, parent=None):
         super().__init__(parent)
         self._config = config
+        # Cache de vignettes de la grille (optionnel) : sert de placeholder
+        # immédiat pendant le chargement de l'image de base — l'utilisateur voit
+        # tout de suite la photo (floue) au lieu d'un écran noir.
+        self._thumb_cache = thumb_cache
         self._photo: PhotoInfo | None = None
         self._edit: EditInfo | None = None
         self._db = EditDatabase()
-        # Cache de l'image de base (1024px, sans retouche) pour la photo courante.
-        # Évite de relire le fichier complet à chaque preview de slider.
-        self._base_cache: "tuple[bytes, int, int] | None" = None
-        # Thread de chargement de l'image de base (images et vidéos).
-        # Le chargement est asynchrone pour éviter de bloquer le thread UI,
-        # particulièrement critique pour les vidéos (cv2.VideoCapture + COM).
-        self._base_loader: "_BaseLoader | None" = None
+        # Cache LRU des images de base (1024px, sans retouche), clé = chemin.
+        # Photo courante + voisines préchargées : évite de relire le fichier
+        # complet à chaque preview de slider ET à chaque navigation prev/next.
+        from collections import OrderedDict
+        self._base_lru: "OrderedDict[str, tuple[bytes, int, int]]" = OrderedDict()
+        # Chemins dont l'image de base est en cours de chargement (courante ou
+        # préchargée) — évite les chargements en double.
+        self._loading_paths: set[str] = set()
+        # Threads de chargement actifs (images et vidéos). Le chargement est
+        # asynchrone pour éviter de bloquer le thread UI, particulièrement
+        # critique pour les vidéos (cv2.VideoCapture + COM). Les résultats des
+        # chargements « dépassés » par la navigation alimentent quand même le LRU.
+        self._base_loaders: "list[_BaseLoader]" = []
         # Album affiché lorsque la visionneuse a été ouverte depuis sa grille
         # (ou None) : détermine si le menu contextuel propose "Retirer de
         # l'album" et si la touche Del retire de l'album plutôt que d'effacer
@@ -376,12 +400,9 @@ class PhotoViewer(QWidget):
 
     def set_photo(self, photo: PhotoInfo, edit: EditInfo | None = None) -> None:
         self._preview_timer.stop()
-        # Annuler un chargement de base image en cours (navigation rapide)
-        if self._base_loader and self._base_loader.isRunning():
-            self._base_loader.base_ready.disconnect()
-            self._base_loader.quit()
-            self._base_loader = None
-        self._base_cache = None  # invalide le cache pour la nouvelle photo
+        # Les chargements en vol ne sont pas annulés : leurs résultats alimentent
+        # le LRU (utile si l'utilisateur revient en arrière) ; _on_base_ready
+        # n'affiche que le résultat correspondant à la photo courante.
         self._photo = photo
         is_video = photo.media_type == "video"
         self._edit = None if is_video else (edit or self._db.load(photo.path))
@@ -440,30 +461,78 @@ class PhotoViewer(QWidget):
         self._canvas.set_edit(self._edit)
         self._canvas.set_annotations(self._edit.annotations if self._edit else [])
 
-        if self._base_cache is not None:
+        cached = self._base_lru.get(self._photo.path)
+        if cached is not None:
             # Cache chaud : appliquer les retouches et afficher immédiatement
-            base_bytes, orig_w, orig_h = self._base_cache
+            self._base_lru.move_to_end(self._photo.path)
+            base_bytes, orig_w, orig_h = cached
             pixmap = _apply_edit_to_base(base_bytes, self._edit)
             self._canvas.set_orig_size(orig_w, orig_h)
             self._canvas.set_pixmap(pixmap)
             return
 
-        # Cache froid : lancer le chargement en arrière-plan (image ou vidéo)
-        # Afficher un état vide pendant le chargement
-        self._canvas.set_orig_size(0, 0)
-        self._canvas.set_pixmap(None)
-        if self._base_loader and self._base_loader.isRunning():
-            return  # déjà en cours pour cette photo
-        self._base_loader = _BaseLoader(self._photo, self)
-        self._base_loader.base_ready.connect(self._on_base_ready)
-        self._base_loader.start()
+        # Cache froid : afficher immédiatement la vignette de la grille en
+        # placeholder (floue mais instantanée — retour visuel sans écran noir),
+        # puis lancer le chargement de l'image de base en arrière-plan.
+        placeholder = (
+            self._thumb_cache.get_ram(self._photo.path)
+            if self._thumb_cache is not None else None
+        )
+        if placeholder is not None and not placeholder.isNull():
+            self._canvas.set_orig_size(self._photo.width or 0, self._photo.height or 0)
+            self._canvas.set_pixmap(placeholder)
+        else:
+            self._canvas.set_orig_size(0, 0)
+            self._canvas.set_pixmap(None)
+        self._start_base_loader([self._photo])
+
+    def prefetch(self, photos: "list[PhotoInfo]") -> None:
+        """Précharge en arrière-plan l'image de base des photos données (les
+        voisines de la photo affichée, fournies par main_window après chaque
+        navigation) : le passage à la photo suivante/précédente devient
+        instantané. Ignore ce qui est déjà en cache ou en cours de chargement."""
+        self._start_base_loader(photos)
+
+    def _start_base_loader(self, photos: "list[PhotoInfo]") -> None:
+        todo = [
+            p for p in photos
+            if p is not None
+            and p.path not in self._base_lru
+            and p.path not in self._loading_paths
+        ]
+        if not todo:
+            return
+        for p in todo:
+            self._loading_paths.add(p.path)
+        loader = _BaseLoader(todo, self)
+        loader.base_ready.connect(self._on_base_ready)
+        loader.finished.connect(loader.deleteLater)
+        loader.finished.connect(self._reap_base_loaders)
+        self._base_loaders.append(loader)
+        loader.start()
+
+    @Slot()
+    def _reap_base_loaders(self) -> None:
+        alive = []
+        for t in self._base_loaders:
+            try:
+                if t.isRunning():
+                    alive.append(t)
+            except RuntimeError:
+                pass  # objet C++ déjà détruit par deleteLater
+        self._base_loaders = alive
 
     @Slot(str, object)
     def _on_base_ready(self, path: str, result: object) -> None:
         """Reçoit le résultat du chargement de base image/vidéo depuis _BaseLoader."""
+        self._loading_paths.discard(path)
+        if result is not None:
+            self._base_lru[path] = result
+            self._base_lru.move_to_end(path)
+            while len(self._base_lru) > _BASE_LRU_MAX:
+                self._base_lru.popitem(last=False)
         if self._photo is None or self._photo.path != path:
-            return  # navigation entre-temps — résultat obsolète
-        self._base_cache = result
+            return  # préchargement d'une voisine, ou navigation entre-temps
         if result is None:
             return
         base_bytes, orig_w, orig_h = result
@@ -471,6 +540,14 @@ class PhotoViewer(QWidget):
         self._canvas.set_edit(self._edit)
         self._canvas.set_orig_size(orig_w, orig_h)
         self._canvas.set_pixmap(pixmap)
+
+    def invalidate_base_cache(self, path: "str | None" = None) -> None:
+        """Oublie l'image de base en cache pour un chemin (fichier modifié sur
+        disque), ou tout le cache si path est None."""
+        if path is None:
+            self._base_lru.clear()
+        else:
+            self._base_lru.pop(path, None)
 
     def refresh_name(self) -> None:
         if self._photo:
@@ -510,9 +587,10 @@ class PhotoViewer(QWidget):
         existing = self._edit.crop if self._edit else None
         # Si un crop est déjà appliqué, afficher l'image sans ce crop pour que
         # l'utilisateur puisse repositionner la zone sur l'image complète.
-        if existing and self._photo and self._edit and self._base_cache:
+        cached = self._base_lru.get(self._photo.path) if self._photo else None
+        if existing and self._photo and self._edit and cached:
             edit_no_crop = EditInfo.from_dict({**self._edit.to_dict(), 'crop': None})
-            base_bytes, _, _ = self._base_cache
+            base_bytes, _, _ = cached
             pixmap = _apply_edit_to_base(base_bytes, edit_no_crop)
             if pixmap:
                 self._canvas.set_pixmap(pixmap)
