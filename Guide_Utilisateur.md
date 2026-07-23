@@ -13,7 +13,7 @@
 5. [Mode chronologie (vue en ruban)](#5-mode-chronologie-vue-en-ruban)
 6. [Visualiser une photo ou une vidéo](#6-visualiser-une-photo-ou-une-vidéo)
 7. [Retoucher une photo](#7-retoucher-une-photo)
-8. [Albums et favoris](#8-albums-et-favoris)
+8. [Albums, favoris, notation et mots-clés](#8-albums-favoris-notation-et-mots-clés)
 9. [Recherche et filtrage](#9-recherche-et-filtrage)
 10. [Déplacer des photos](#10-déplacer-des-photos)
 11. [Enregistrer et exporter vos photos](#11-enregistrer-et-exporter-vos-photos)
@@ -78,7 +78,7 @@ Menu **Fichier › Quitter** (**Ctrl + Q**).
 
 | Menu | Contenu |
 |---|---|
-| **Fichier** | Ajouter un dossier…, Quitter |
+| **Fichier** | Ajouter un dossier…, Recherche avancée… (Ctrl+F), Quitter |
 | **Affichage** | Afficher/masquer sidebar (F9), Plein écran (F11), Diaporama (F5), Ordre d'affichage… |
 | **Outils** | Dossiers…, État des doublons…, Synchroniser dates de création avec l'EXIF…, Journal des threads…, Historique des problèmes…, Applications externes…, Paramètres |
 | **Visages** | Importer depuis Picasa…, Réinitialiser et réindexer…, Regrouper les visages…, Visualisation des erreurs…, Sauvegarder la reconnaissance…, Gérer les sauvegardes…, Compteurs… |
@@ -171,6 +171,10 @@ Les vidéos sont représentées dans la grille par une vignette extraite automat
 
 Une photo faisant partie d'un groupe de doublons détecté (voir [section 14](#14-détection-des-doublons)) affiche un badge **⧉** orange sur sa vignette. Cliquer dessus ouvre une popup **« Doublons de cette photo »** listant les autres exemplaires (nom + dossier) ; un double-clic sur un élément de la liste navigue directement vers ce fichier.
 
+### Badge de notation
+
+Une photo notée (voir [Notation](#notation) ci-dessous) affiche un badge d'étoiles (ex. « ★★★ ») en bas à gauche de sa vignette.
+
 ### Ouvrir une photo ou une vidéo
 
 **Double-clic** sur une vignette → ouvre la visionneuse.
@@ -181,6 +185,8 @@ Une photo faisant partie d'un groupe de doublons détecté (voir [section 14](#1
 |---|---|
 | **Ouvrir** | Ouvre la photo dans la visionneuse |
 | **Marquer comme favori / Retirer des favoris** | Gère l'état favori |
+| **Noter** | Sous-menu ★ à ★★★★★ pour noter la sélection, ou **Retirer la note** |
+| **Mots-clés…** | Ouvre le dialogue d'édition des mots-clés pour la sélection (voir [Mots-clés](#mots-clés) ci-dessous) |
 | **Renommer l'image** | Renomme le fichier sur le disque |
 | **Déplacer vers…** | Déplace le fichier vers un autre dossier surveillé |
 | **Enregistrer l'image traitée sur le disque** | Ouvre le dialogue d'enregistrement (voir [section 11](#11-enregistrer-et-exporter-vos-photos)) |
@@ -189,17 +195,17 @@ Une photo faisant partie d'un groupe de doublons détecté (voir [section 14](#1
 | **Révéler dans l'Explorateur** | Ouvre le dossier contenant la photo |
 | **Retenter l'identification des visages** | *(affiché uniquement si la photo est en erreur de détection faciale)* relance l'analyse pour ce seul fichier |
 | **Retirer de l'album / Retirer les photos de l'album** | *(vue album uniquement)* Retire la ou les photos de l'album affiché — fichiers et catalogue intacts |
-| **Effacer le fichier… / Effacer les fichiers…** | Supprime définitivement le ou les fichiers après confirmation |
+| **Effacer le fichier… / Effacer les fichiers…** | Envoie le ou les fichiers à la **corbeille Windows** (récupérables) après confirmation |
 
 > Le clic droit s'applique à **toute la sélection en cours** (Ctrl+Clic / Shift+Clic) pour Renommer/Déplacer/Ajouter à un album/Effacer, pas seulement à la vignette cliquée.
 
 ### Supprimer des photos
 
-Sélectionnez une ou plusieurs photos, puis appuyez sur la touche **Suppr** (ou clic droit › Effacer le(s) fichier(s)…). Une confirmation est demandée. La suppression est **définitive** (pas de corbeille).
+Sélectionnez une ou plusieurs photos, puis appuyez sur la touche **Suppr** (ou clic droit › Effacer le(s) fichier(s)…). Une confirmation est demandée. Les fichiers sont envoyés à la **corbeille Windows** (récupérables depuis celle-ci), jamais effacés définitivement. Si la corbeille est indisponible (lecteur réseau, volume sans corbeille…), le fichier n'est **pas** supprimé et un message l'indique.
 
 La suppression s'exécute en arrière-plan : l'interface reste utilisable pendant l'opération, et la barre de statut affiche la progression (« Suppression… n/total ») sur les grosses sélections.
 
-> **Dans un album** : la touche **Suppr** (grille comme visionneuse) **retire** la ou les photos de l'album au lieu de supprimer les fichiers — voir [Retirer des photos d'un album](#8-albums-et-favoris).
+> **Dans un album** : la touche **Suppr** (grille comme visionneuse) **retire** la ou les photos de l'album au lieu de supprimer les fichiers — voir [Retirer des photos d'un album](#8-albums-favoris-notation-et-mots-clés).
 
 ### Renommer une photo
 
@@ -251,14 +257,16 @@ Double-cliquez sur une vignette dans la grille.
 | Action | Résultat |
 |---|---|
 | Curseur **Zoom** (barre de statut) | Ajuste le zoom de 10 % à 400 % |
-| **0** | Ajuster à la fenêtre (fit) |
-| **1** | Zoom 100 % (1 pixel photo = 1 pixel écran) |
+| **F** | Ajuster à la fenêtre (fit) |
+| **Z** | Zoom 100 % (1 pixel photo = 1 pixel écran) |
 | **⊡** (barre d'outils) | Ajuster à la fenêtre |
 | **1:1** (barre d'outils) | Zoom 100 % |
 | **Ctrl + Molette** | Zoom avant/arrière |
 | Cliquer-glisser | Déplacer l'image dans la fenêtre |
 
 > En **mode recadrage**, la molette de la souris sert à zoomer. En **mode normal**, elle passe à la photo suivante ou précédente.
+
+> Les touches **0** à **5** notent la photo affichée (voir [Notation](#notation)) — elles ne servent plus au zoom.
 
 ### Panneau EXIF
 
@@ -302,7 +310,11 @@ Si une photo contient des coordonnées GPS, faites un **clic droit** dans la vis
 
 ### Marquer comme favori
 
-Cliquez sur le bouton **♡** dans la barre d'outils de la visionneuse (ou la touche **F**). L'étoile pleine **★** indique un favori actif.
+Cliquez sur le bouton **♡** dans la barre d'outils de la visionneuse. L'étoile pleine **★** indique un favori actif.
+
+### Noter une photo
+
+Cliquez sur l'une des 5 étoiles de la barre d'outils de la visionneuse (à côté du bouton favori), ou utilisez les touches **1** à **5** au clavier. Cliquer à nouveau sur la note déjà attribuée (ou appuyer sur **0**) la retire. Voir [Notation](#notation) pour les autres façons de noter (menu contextuel, badge de vignette, album « ★ Notées »).
 
 ### Applications externes
 
@@ -313,6 +325,8 @@ Si vous avez configuré des applications tierces (voir [section 16](#16-autres-o
 | Option | Effet |
 |---|---|
 | **Marquer comme favori / Retirer des favoris** | Gère l'état favori |
+| **Noter** | Sous-menu ★ à ★★★★★ pour noter la photo, ou **Retirer la note** |
+| **Mots-clés…** | Ouvre le dialogue d'édition des mots-clés pour la photo (voir [Mots-clés](#mots-clés)) |
 | **Renommer…** | Renomme le fichier sur le disque |
 | **Déplacer vers…** | Déplace le fichier vers un autre dossier |
 | **Enregistrer l'image traitée sur le disque** | Ouvre le dialogue d'enregistrement (voir [section 11](#11-enregistrer-et-exporter-vos-photos)) |
@@ -320,7 +334,7 @@ Si vous avez configuré des applications tierces (voir [section 16](#16-autres-o
 | **Afficher le dossier dans la grille** | Retourne à la grille de photos, en affichant le dossier contenant la photo courante et en la sélectionnant |
 | **Localiser sur la carte** | Ouvre OpenStreetMap à la position GPS (grisé si pas de GPS) |
 | **Forcer une nouvelle détection sans limite de taille** | Relance la détection de visages sur cette photo en ignorant le filtre de taille minimale, sans perdre les identifications déjà faites |
-| **Effacer le fichier…** | Supprime définitivement le fichier après confirmation |
+| **Effacer le fichier…** | Envoie le fichier à la **corbeille Windows** (récupérable) après confirmation |
 | **Retirer de l'album** | *(remplace « Effacer le fichier… » quand la photo est ouverte depuis un album)* Retire la photo de l'album — fichier et catalogue intacts |
 
 > Comme dans la grille, la touche **Suppr** dans la visionneuse retire la photo de l'album si elle a été ouverte depuis un album, et supprime le fichier sinon.
@@ -489,13 +503,27 @@ En bas du panneau de retouche, deux boutons complémentaires :
 
 ---
 
-## 8. Albums et favoris
+## 8. Albums, favoris, notation et mots-clés
 
 ### Favoris
 
 - Dans la **grille** : clic droit sur une vignette › **Marquer comme favori**.
-- Dans la **visionneuse** : cliquez sur **♡** (ou touche **F**).
+- Dans la **visionneuse** : cliquez sur **♡**.
 - Pour voir tous vos favoris : cliquez sur **♡ Favoris** dans la section Albums de la sidebar.
+
+### Notation
+
+- Dans la **grille** : clic droit sur une sélection › **Noter** › choisissez de ★ à ★★★★★, ou **Retirer la note**.
+- Dans la **visionneuse** : cliquez sur l'une des 5 étoiles de la barre d'outils, ou utilisez les touches **1** à **5** (**0** pour retirer la note).
+- Une photo notée affiche un badge d'étoiles (ex. « ★★★ ») en bas à gauche de sa vignette dans la grille.
+- Pour voir toutes les photos notées : cliquez sur **★ Notées** dans la section Albums de la sidebar (note ≥ 1 ; pour filtrer sur une note minimale précise, utilisez la [recherche avancée](#recherche-avancée)).
+
+### Mots-clés
+
+- Dans la **grille** ou la **visionneuse** : clic droit sur une sélection › **Mots-clés…** ouvre un dialogue d'édition avec complétion sur les mots-clés déjà utilisés dans la bibliothèque.
+- Les mots-clés d'une photo s'affichent en tête du panneau EXIF (section 6).
+- Les mots-clés sont **conservés** lors d'un re-scan forcé du dossier (comme les favoris et les notes) — jamais écrasés par les métadonnées du fichier.
+- Pour voir toutes les photos portant un mot-clé donné : tapez-le dans le filtre de la sidebar puis cliquez sur **🏷 Par mot-clé** dans la section Albums (correspondance exacte du mot-clé, pas une recherche partielle).
 
 ### Albums spéciaux (toujours présents, non supprimables)
 
@@ -505,6 +533,8 @@ En bas du panneau de retouche, deux boutons complémentaires :
 | **Favoris** | ♡ | Photos marquées comme favorites |
 | **Vidéos** | ▶ | Toutes les vidéos de la bibliothèque |
 | **Par nom de fichier** | 🔍 | Résultat du texte tapé dans le filtre de la sidebar (voir [section 9](#9-recherche-et-filtrage)) |
+| **Notées** | ★ | Photos ayant une note ≥ 1 (voir [Notation](#notation) ci-dessus) |
+| **Par mot-clé** | 🏷 | Photos portant le mot-clé tapé dans le filtre de la sidebar (voir [Mots-clés](#mots-clés) ci-dessus) |
 
 ### Créer un album personnalisé
 
@@ -529,11 +559,11 @@ Dans la vue d'un album personnalisé :
 - Seul le lien avec l'album est supprimé : **le fichier et la photo restent intacts** sur le disque, dans le catalogue et dans la vue de leur dossier.
 - Le même comportement s'applique dans la **visionneuse** ouverte depuis l'album (touche **Suppr** ou clic droit › **Retirer de l'album**).
 
-> Pour supprimer réellement un fichier du disque, faites-le depuis la vue de son **dossier** (ou une autre vue non-album), où **Suppr** conserve son sens habituel de suppression définitive.
+> Pour supprimer réellement un fichier du disque, faites-le depuis la vue de son **dossier** (ou une autre vue non-album), où **Suppr** conserve son sens habituel d'envoi à la corbeille.
 
 ### Supprimer un album
 
-Clic droit sur un album personnalisé dans la sidebar › **Supprimer l'album…** — une confirmation précise le nombre de photos concernées et rappelle que **les photos restent intactes** dans le catalogue et sur le disque, seul l'album est supprimé. *(Les 4 albums spéciaux ne proposent pas cette option.)*
+Clic droit sur un album personnalisé dans la sidebar › **Supprimer l'album…** — une confirmation précise le nombre de photos concernées et rappelle que **les photos restent intactes** dans le catalogue et sur le disque, seul l'album est supprimé. *(Les 6 albums spéciaux ne proposent pas cette option.)*
 
 ### Accéder à un album
 
@@ -548,6 +578,25 @@ Le champ de filtrage se trouve en haut de la **sidebar** (placeholder *« 🔍 F
 - Tapez un terme : il filtre **instantanément** (à chaque frappe, sans délai) l'arborescence des **dossiers** et la liste des **personnes** identifiées dans la sidebar.
 - Le même texte alimente l'album spécial **🔍 Par nom de fichier**, qui recherche dans le **catalogue complet** par nom de fichier, marque d'appareil ou modèle d'appareil (une photo peut donc apparaître dans ce résultat même si le terme tapé correspond à son appareil photo plutôt qu'à son nom de fichier).
 - Un bouton **✕** intégré au champ efface le filtre.
+
+### Recherche avancée
+
+Pour combiner plusieurs critères à la fois, ouvrez le dialogue **Recherche avancée** : menu **Fichier › Recherche avancée…** (**Ctrl+F**), ou le bouton **🔎** à côté du champ de filtre de la sidebar.
+
+Critères disponibles, combinables librement :
+
+| Critère | Détail |
+|---|---|
+| **Plage de dates** | Date de début / date de fin |
+| **Appareil** | Marque/modèle, liste préchargée depuis les photos déjà cataloguées |
+| **Personne** | Une personne identifiée (voir [section 13](#13-reconnaissance-faciale)) |
+| **Dossier** | Un dossier surveillé, recherche récursive dans ses sous-dossiers |
+| **Note minimale** | ★ à ★★★★★ |
+| **Mots-clés** | Un ou plusieurs mots-clés (complétion sur les mots-clés existants) |
+| **Favoris uniquement** | Case à cocher |
+| **Type de média** | Photos, vidéos, ou les deux |
+
+Les résultats s'affichent dans la grille, comme pour n'importe quel autre contexte (dossier, album, personne…). La recherche s'exécute en arrière-plan ; les listes du dialogue (appareils, personnes, mots-clés) sont préchargées avant son ouverture pour rester réactives.
 
 ---
 
@@ -748,7 +797,7 @@ Le bouton **Dupliquées** de la sidebar (avec un badge indiquant le nombre de gr
 Un fichier qui ne peut pas être lu pendant l'analyse (JPEG endommagé, copie interrompue…) n'est pas ignoré silencieusement : il est comptabilisé et signalé (compteur ⚠ dans **Outils › État des doublons…**, bouton **Voir la liste…**). Cette liste propose deux actions :
 
 - **Réparer…** — après confirmation, tente de ré-enregistrer une copie propre de chaque fichier via un décodeur plus tolérant que celui utilisé pour l'analyse (PIL en mode tolérant aux troncatures, puis le codec JPEG de Qt). L'original est sauvegardé au préalable dans un dossier caché `.tmp_originals` à côté du fichier, et les dates Windows de modification **et** de création sont préservées à l'identique sur la copie réparée. Un bilan indique le nombre de fichiers réparés ; ceux qui n'ont pas pu l'être (corruption trop importante pour les décodeurs disponibles) sont listés dans un fichier texte horodaté (`fichiers_corrompus_AAAAMMJJ_HHMMSS.txt`), dont l'emplacement reste accessible via **Outils › Historique des problèmes…** (voir [section 16](#16-autres-outils)).
-- **Supprimer…** — après confirmation (action irréversible), supprime définitivement les fichiers sélectionnés du disque et les retire du catalogue, des vignettes et des visages associés.
+- **Supprimer…** — après confirmation, envoie les fichiers sélectionnés à la **corbeille Windows** (récupérables) et les retire du catalogue, des vignettes et des visages associés.
 
 ---
 
@@ -810,6 +859,7 @@ Dialogue à deux catégories :
 | Raccourci | Action |
 |---|---|
 | **Ctrl + Q** | Quitter l'application |
+| **Ctrl + F** | Recherche avancée… |
 | **F1** | Ouvrir l'aide |
 | **F9** | Afficher/masquer la sidebar |
 | **F11** | Plein écran |
@@ -838,11 +888,12 @@ Dialogue à deux catégories :
 | **← / ↑** | Photo précédente |
 | **→ / ↓** | Photo suivante |
 | **I** | Afficher/masquer le panneau EXIF |
-| **0** | Ajuster à la fenêtre |
-| **1** | Zoom 100 % |
+| **F** | Ajuster à la fenêtre |
+| **Z** | Zoom 100 % |
 | **Ctrl + Molette** | Zoom avant / arrière |
 | **Échap** | Retour à la grille |
-| **F** | Marquer/retirer des favoris |
+| **1** à **5** | Noter la photo (★ à ★★★★★) |
+| **0** | Retirer la note |
 
 ### Diaporama
 
@@ -908,12 +959,12 @@ Dans chaque dossier de photos, un sous-dossier caché **`.tmp_originals`** peut 
 ### Formats supportés
 
 **Images :**
-`.jpg` · `.jpeg` · `.png` · `.tiff` · `.tif` · `.webp` · `.bmp` · `.gif` · `.heic` · `.raw` · `.cr2` · `.nef` · `.arw` · `.dng`
+`.jpg` · `.jpeg` · `.png` · `.tiff` · `.tif` · `.webp` · `.bmp` · `.gif` · `.heic` · `.heif` · `.cr2` · `.nef` · `.arw` · `.dng` · `.orf` · `.rw2`
 
 **Vidéos :**
 `.mp4` · `.mov` · `.avi` · `.mkv` · `.wmv` · `.webm` · `.m4v` · `.3gp` · `.flv` · `.ts` · `.mts` · `.mpg` · `.mpeg`
 
-*(La disponibilité des formats RAW dépend des pilotes installés sur le système.)*
+> **RAW et HEIC/HEIF** : le décodage est intégré à l'application (bibliothèques `rawpy` et `pillow-heif`), aucun pilote ni logiciel tiers n'est nécessaire. Pour un fichier RAW, l'affichage et l'export utilisent l'aperçu JPEG intégré par l'appareil photo (pas le dématriçage complet du capteur) — la résolution disponible est donc celle de cet aperçu.
 
 ---
 
