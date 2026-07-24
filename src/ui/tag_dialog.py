@@ -92,7 +92,7 @@ class TagEditDialog(QDialog):
         layout.addWidget(scroll_area)
 
         buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
-        buttons.accepted.connect(self.accept)
+        buttons.accepted.connect(self._accept)
         buttons.rejected.connect(self.reject)
         layout.addWidget(buttons)
 
@@ -122,6 +122,13 @@ class TagEditDialog(QDialog):
             return
         self._add_chip(tag, Qt.Checked)
         self._input.clear()
+
+    def _accept(self) -> None:
+        """Le clic sur OK ne passe pas par returnPressed : sans ce commit
+        explicite, un mot-clé encore tapé dans le champ (non validé par
+        Entrée) était perdu silencieusement à la fermeture."""
+        self._add_tag_from_input()
+        self.accept()
 
     def result_add_remove(self) -> tuple[list[str], list[str]]:
         """Renvoie (tags_à_ajouter, tags_à_retirer) — les chips laissées à

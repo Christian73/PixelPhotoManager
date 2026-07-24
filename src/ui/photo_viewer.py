@@ -15,6 +15,7 @@ from PySide6.QtGui import (
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
     QLabel, QSizePolicy, QToolButton, QButtonGroup, QMenu, QFileIconProvider, QTextEdit,
+    QComboBox,
 )
 
 from src.core.models import PhotoInfo, EditInfo
@@ -141,6 +142,74 @@ class _RatingStars(QWidget):
             )
 
 
+class _TagDropdown(QComboBox):
+    """Liste déroulante toujours présente des mots-clés du catalogue (barre
+    d'outils de la visionneuse) — pas seulement ceux de la photo courante.
+    Les mots-clés actifs sur la photo affichée sont triés en tête de liste,
+    en jaune (#ffd200) sur fond bleu (#2a5a8a, couleur du bouton Exporter).
+    Sélectionner une entrée bascule ce mot-clé sur la photo courante (ajout
+    si absent, retrait si déjà présent) ; la case reprend systématiquement
+    son texte de substitution après sélection (elle liste tous les
+    mots-clés, elle n'en "contient" pas un seul comme une combo classique)."""
+
+    tag_toggled = Signal(str, bool)  # (tag, added) — True = ajouté, False = retiré
+
+    _ACTIVE_FG = "#ffd200"
+    _ACTIVE_BG = "#2a5a8a"
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setEditable(False)
+        self.setToolTip("Aucun mot-clé")
+        self.setFixedWidth(150)
+        # Le triangle CSS habituel (::down-arrow avec des bordures en biseau)
+        # ne se dessine pas ici : ce sous-contrôle bascule en mode "image
+        # personnalisée" dès qu'on le stylise, et sans image valide fournie
+        # il retombe sur un pictogramme d'image cassée (rectangle gris plein)
+        # plutôt qu'une vraie flèche, quel que soit le style Qt actif. Plus
+        # simple et fiable : la flèche fait partie du texte affiché (comme
+        # l'icône 🏷) et le sous-contrôle natif est réduit à zéro.
+        self.setStyleSheet(
+            "QComboBox { color: #ccc; background: rgba(255,255,255,25);"
+            " border: 1px solid rgba(255,255,255,60); border-radius: 8px;"
+            " padding: 1px 8px; font-size: 11px; }"
+            "QComboBox:hover { border: 1px solid rgba(255,255,255,90); }"
+            "QComboBox::drop-down { width: 0; border: none; }"
+            "QComboBox QAbstractItemView { outline: none; }"
+        )
+        self._active: set[str] = set()
+        self._set_placeholder()
+        self.activated.connect(self._on_activated)
+
+    def _set_placeholder(self) -> None:
+        n = len(self._active)
+        label = "🏷 Mots-clés" if not n else f"🏷 Mots-clés ({n})"
+        self.setPlaceholderText(f"{label}  ▾")
+
+    def set_tags(self, all_tags: list[str], active_tags: list[str]) -> None:
+        self._active = set(active_tags)
+        self.blockSignals(True)
+        self.clear()
+        ordered = sorted(self._active) + sorted(t for t in all_tags if t not in self._active)
+        for tag in ordered:
+            self.addItem(tag)
+            idx = self.count() - 1
+            self.setItemData(idx, tag, Qt.UserRole)
+            if tag in self._active:
+                self.setItemData(idx, QColor(self._ACTIVE_FG), Qt.ForegroundRole)
+                self.setItemData(idx, QColor(self._ACTIVE_BG), Qt.BackgroundRole)
+        self.setCurrentIndex(-1)
+        self.blockSignals(False)
+        self._set_placeholder()
+        self.setToolTip(", ".join(sorted(self._active)) if self._active else "Aucun mot-clé")
+
+    def _on_activated(self, index: int) -> None:
+        tag = self.itemData(index, Qt.UserRole)
+        self.setCurrentIndex(-1)
+        if tag:
+            self.tag_toggled.emit(tag, tag not in self._active)
+
+
 # Nombre d'images de base (JPEG 1024 px, ~300 Ko pièce) conservées en mémoire :
 # la photo courante + les voisines préchargées → navigation instantanée dans
 # les deux sens sans relire le fichier original.
@@ -194,6 +263,7 @@ class PhotoViewer(QWidget):
     favorite_toggle_requested   = Signal(object)  # PhotoInfo — bascule favori demandée
     rating_change_requested     = Signal(list, int)  # list[PhotoInfo], note 0-5 — changement de note demandé
     edit_tags_requested         = Signal(list)    # list[PhotoInfo] — édition des mots-clés demandée
+    tag_toggle_requested        = Signal(object, str, bool)  # (PhotoInfo, tag, added) — entrée cliquée dans la liste déroulante de la barre d'outils
     annotation_added             = Signal(object)  # dict annotation ajoutée
     annotation_deleted           = Signal(str)     # id de l'annotation supprimée
     annotation_deleted_multi     = Signal(object)  # list[str] ids supprimés (suppression groupée)
@@ -213,6 +283,9 @@ class PhotoViewer(QWidget):
         self._photo: PhotoInfo | None = None
         self._edit: EditInfo | None = None
         self._db = EditDatabase()
+        # Liste complète des mots-clés du catalogue (pas seulement ceux de la
+        # photo courante) — alimente _tag_dropdown, cf. set_available_tags().
+        self._all_tags: list[str] = []
         # Cache LRU des images de base (1024px, sans retouche), clé = chemin.
         # Photo courante + voisines préchargées : évite de relire le fichier
         # complet à chaque preview de slider ET à chaque navigation prev/next.
@@ -281,6 +354,10 @@ class PhotoViewer(QWidget):
         self._rating_stars = _RatingStars()
         self._rating_stars.rating_clicked.connect(self._on_rating_clicked)
         tb_layout.addWidget(self._rating_stars)
+
+        self._tag_dropdown = _TagDropdown()
+        self._tag_dropdown.tag_toggled.connect(self._on_tag_dropdown_toggled)
+        tb_layout.addWidget(self._tag_dropdown)
 
         # Conteneur des boutons d'applications externes (reconstruit par refresh_external_apps)
         self._ext_apps_container = QWidget()
@@ -449,6 +526,23 @@ class PhotoViewer(QWidget):
     def current_photo(self) -> "PhotoInfo | None":
         return self._photo
 
+    def refresh_tags(self) -> None:
+        """Redessine la liste déroulante de mots-clés depuis `self._photo.tags`
+        (sans changer la liste complète des mots-clés du catalogue) — à
+        appeler après une mutation externe de `photo.tags` qui ne repasse pas
+        par `set_photo()`. Si la liste complète a pu changer (ex. nouveau
+        mot-clé créé), préférer `set_available_tags()`."""
+        if self._photo is not None:
+            self._tag_dropdown.set_tags(self._all_tags, self._photo.tags)
+
+    def set_available_tags(self, all_tags: list[str]) -> None:
+        """Liste complète des mots-clés définis dans le catalogue — à
+        réappeler chaque fois qu'elle change (nouveau mot-clé créé, dernier
+        photo d'un mot-clé supprimée…). Restyle aussitôt _tag_dropdown avec
+        les mots-clés actifs de la photo courante."""
+        self._all_tags = list(all_tags)
+        self.refresh_tags()
+
     def set_album_context(self, album_id: int | None) -> None:
         """Indique si la photo affichée provient d'un album (et lequel), pour
         proposer "Retirer de l'album" et faire pointer la touche Del dessus
@@ -466,6 +560,7 @@ class PhotoViewer(QWidget):
         self._lbl_name.setText(photo.path)
         self._btn_fav.setChecked(photo.is_favorite)
         self._rating_stars.set_rating(photo.rating)
+        self._tag_dropdown.set_tags(self._all_tags, photo.tags)
         self._btn_play_video.setVisible(is_video)
         self.refresh_external_apps()
         self._canvas.set_highlighted_face(None)
@@ -863,11 +958,6 @@ class PhotoViewer(QWidget):
 
         fav_label = "Retirer des favoris" if photo.is_favorite else "Marquer comme favori"
         menu.addAction(fav_label, self._toggle_fav_from_menu)
-        rating_menu = menu.addMenu("Noter")
-        for n in range(1, 6):
-            rating_menu.addAction("★" * n, lambda n=n: self._set_rating(n))
-        rating_menu.addSeparator()
-        rating_menu.addAction("Retirer la note", lambda: self._set_rating(0))
         menu.addAction("Mots-clés…", lambda: self.edit_tags_requested.emit([photo]))
         menu.addAction("Renommer…", lambda: self.rename_requested.emit(photo))
         menu.addAction("Déplacer vers…", lambda: self.move_requested.emit(photo))
@@ -940,6 +1030,17 @@ class PhotoViewer(QWidget):
 
     def _on_rating_clicked(self, rating: int) -> None:
         self._set_rating(rating)
+
+    def _on_tag_dropdown_toggled(self, tag: str, added: bool) -> None:
+        if self._photo is None:
+            return
+        if added:
+            if tag not in self._photo.tags:
+                self._photo.tags = self._photo.tags + [tag]
+        else:
+            self._photo.tags = [t for t in self._photo.tags if t != tag]
+        self._tag_dropdown.set_tags(self._all_tags, self._photo.tags)
+        self.tag_toggle_requested.emit(self._photo, tag, added)
 
     def keyPressEvent(self, event: QKeyEvent) -> None:
         key = event.key()

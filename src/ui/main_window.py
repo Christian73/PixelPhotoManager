@@ -39,7 +39,7 @@ from src.faces.clusterer import ClusterThread
 from src.processing.edit_database import EditDatabase
 from src.ui.sidebar import (
     Sidebar, _SPECIAL_ALL, _SPECIAL_FAV, _SPECIAL_VIDEOS, _SPECIAL_RATED,
-    _SPECIAL_FILENAME, _SPECIAL_TAG,
+    _SPECIAL_FILENAME, _SPECIAL_TAG, _SPECIAL_TAG_ITEM_PREFIX,
 )
 from src.ui.thumbnail_grid import ThumbnailGrid
 from src.ui.photo_viewer import PhotoViewer
@@ -374,9 +374,17 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
         lay.addWidget(spacer)
 
         # --- Boutons contextuels (masqués par défaut) ---
+        # Jaune #ffd200 partagé avec le coeur favori et les étoiles de notation
+        # (PhotoViewer._btn_fav / _RatingStars) : même code couleur "actif" que
+        # ces boutons de la barre d'outils de la visionneuse.
+        _toggle_active_style = (
+            "QPushButton:checked { color: #ffd200; }"
+        )
+
         self._btn_faces_toggle = QPushButton("Visages")
         self._btn_faces_toggle.setCheckable(True)
         self._btn_faces_toggle.setToolTip("Afficher / masquer les visages de la photo")
+        self._btn_faces_toggle.setStyleSheet(_toggle_active_style)
         self._btn_faces_toggle.toggled.connect(self._on_faces_toggle)
         self._btn_faces_toggle.setVisible(False)
         lay.addWidget(self._btn_faces_toggle)
@@ -385,6 +393,7 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
         self._btn_exif_toggle = QPushButton("EXIF")
         self._btn_exif_toggle.setCheckable(True)
         self._btn_exif_toggle.setToolTip("Afficher / masquer les métadonnées EXIF")
+        self._btn_exif_toggle.setStyleSheet(_toggle_active_style)
         self._btn_exif_toggle.toggled.connect(self._on_exif_toggle)
         self._btn_exif_toggle.setVisible(False)
         lay.addWidget(self._btn_exif_toggle)
@@ -392,6 +401,7 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
 
         self._btn_annotations_toggle = QPushButton("✏ Annotations")
         self._btn_annotations_toggle.setCheckable(True)
+        self._btn_annotations_toggle.setStyleSheet(_toggle_active_style)
         # setChecked() avant connect() : évite de déclencher _on_annotations_toggle
         # ici, alors que self._viewer n'existe pas encore (_setup_central() pas encore appelé).
         self._btn_annotations_toggle.setChecked(True)   # actif par défaut
@@ -555,6 +565,7 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
         self._viewer.favorite_toggle_requested.connect(self._on_favorite_toggle_requested)
         self._viewer.rating_change_requested.connect(self._on_rating_change_requested)
         self._viewer.edit_tags_requested.connect(self._on_edit_tags_requested)
+        self._viewer.tag_toggle_requested.connect(self._on_viewer_tag_toggle_requested)
         self._viewer.folder_grid_requested.connect(
             lambda photo: self._navigate_to_photo_path(photo.path)
         )
@@ -818,6 +829,9 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
         folders = self._config.get_scan_folders()
         albums = self._catalog.get_albums()
         self._sidebar.refresh_albums(albums)
+        all_tags = self._catalog.get_all_tags()
+        self._sidebar.refresh_tags(all_tags)
+        self._viewer.set_available_tags(all_tags)
         self._sidebar.set_folder_order(
             self._config.get("display_order.folder_mode", "alpha"),
             self._config.get("display_order.folder_dir", "asc"),
@@ -1541,6 +1555,16 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
                 lambda q=query: self._catalog.get_photos_by_tag(q),
                 f"Mot-clé : {query}",
             )
+        elif isinstance(data, str) and data.startswith(_SPECIAL_TAG_ITEM_PREFIX):
+            tag = data[len(_SPECIAL_TAG_ITEM_PREFIX):]
+            self._grid.set_ribbon_mode(False)
+            self._grid.set_date_overlay_visible(False)
+            self._grid_nav_bar.hide()
+            self.show_grid()
+            self._start_photo_query(
+                lambda t=tag: self._catalog.get_photos_by_tag(t),
+                f"Mot-clé : {tag}",
+            )
         elif isinstance(data, AlbumInfo) and data.id:
             album_id   = data.id
             album_name = data.name
@@ -2080,6 +2104,7 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
             # Rafraîchir immédiatement les compteurs d'albums : le watcher
             # n'émettra plus pour cette suppression (notify_self_deletions).
             self._sidebar.refresh_albums(self._catalog.get_albums())
+            self._sidebar.refresh_tags(self._catalog.get_all_tags())
 
             # Dissoudre les groupes de doublons devenus des singletons (ou vides)
             # suite à cette suppression : sinon la carte reste affichée dans
@@ -2183,6 +2208,10 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
             self._catalog.add_tags_to_photos(ids, to_add)
         for tag in to_remove:
             self._catalog.remove_tag_from_photos(ids, tag)
+        if to_add or to_remove:
+            all_tags = self._catalog.get_all_tags()
+            self._sidebar.refresh_tags(all_tags)
+            self._viewer.set_available_tags(all_tags)
 
         for p in photos:
             merged = list(p.tags)
@@ -2192,11 +2221,28 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
             p.tags = [t for t in merged if t not in to_remove]
 
         current = self._viewer.current_photo()
-        if current is not None and self._exif_panel.isVisible():
+        if current is not None:
             match = next((p for p in photos if p.path == current.path), None)
             if match is not None:
                 current.tags = match.tags
-                self._exif_panel.set_tags(current.tags)
+                self._viewer.refresh_tags()
+                if self._exif_panel.isVisible():
+                    self._exif_panel.set_tags(current.tags)
+
+    def _on_viewer_tag_toggle_requested(self, photo: PhotoInfo, tag: str, added: bool) -> None:
+        """Entrée de la liste déroulante de mots-clés cliquée dans la barre
+        d'outils de la visionneuse (PhotoViewer._tag_dropdown) — photo.tags a
+        déjà été mis à jour de façon optimiste par le viewer lui-même avant
+        l'émission du signal."""
+        if photo.id is None:
+            return
+        if added:
+            self._catalog.add_tags_to_photos([photo.id], [tag])
+        else:
+            self._catalog.remove_tag_from_photos([photo.id], tag)
+        self._sidebar.refresh_tags(self._catalog.get_all_tags())
+        if self._exif_panel.isVisible():
+            self._exif_panel.set_tags(photo.tags)
 
     def _open_advanced_search(self) -> None:
         """Ouvre le dialogue de recherche avancée (menu Fichier › Recherche

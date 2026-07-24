@@ -75,7 +75,8 @@ class _FolderTree(QTreeWidget):
 
 _SPECIAL_PERSON   = "__person__"    # préfixe pour l'identifiant de contexte personne
 _SPECIAL_FILENAME = "__filename__"  # album virtuel "Par nom de fichier"
-_SPECIAL_TAG = "__tag__"            # album virtuel "Par mot-clé"
+_SPECIAL_TAG = "__tag__"            # album virtuel "Par mot-clé" (en-tête du groupe)
+_SPECIAL_TAG_ITEM_PREFIX = "__tag__:"  # préfixe des sous-éléments un-mot-clé-par-ligne
 
 
 class _BadgeButton(QPushButton):
@@ -456,6 +457,7 @@ class Sidebar(QWidget):
 
         self._albums: list[AlbumInfo] = []
         self._persons: list[PersonInfo] = []
+        self._tag_items_count = 0
 
         self._add_special_albums()
 
@@ -503,7 +505,7 @@ class Sidebar(QWidget):
 
         item_tag = QListWidgetItem("🏷 Par mot-clé")
         item_tag.setData(Qt.UserRole, _SPECIAL_TAG)
-        item_tag.setToolTip("Afficher les photos portant exactement le mot-clé du filtre")
+        item_tag.setToolTip("Les mots-clés existants apparaissent ci-dessous, un par ligne")
         self._albums_list.addItem(item_tag)
 
     # ── filtrage live ──────────────────────────────────────────────────────────
@@ -721,13 +723,30 @@ class Sidebar(QWidget):
     def refresh_albums(self, albums: list[AlbumInfo]) -> None:
         self._albums = albums
         # Remove existing album items (keep the 6 special ones at top : Chronologie,
-        # Favoris, Vidéos, Notées, Par nom de fichier, Par mot-clé)
-        while self._albums_list.count() > 6:
-            self._albums_list.takeItem(6)
+        # Favoris, Vidéos, Notées, Par nom de fichier, Par mot-clé — plus les
+        # sous-éléments de mots-clés déjà insérés par refresh_tags juste après eux).
+        base = 6 + self._tag_items_count
+        while self._albums_list.count() > base:
+            self._albums_list.takeItem(base)
         for album in albums:
             item = QListWidgetItem(f"📁 {album.name} ({album.photo_count})")
             item.setData(Qt.UserRole, album)
             self._albums_list.addItem(item)
+
+    def refresh_tags(self, tags: list[str]) -> None:
+        """Reconstruit les sous-éléments (un par mot-clé existant) sous l'en-tête
+        « Par mot-clé », juste avant les albums utilisateur. Sélectionner l'un
+        de ces sous-éléments affiche directement les photos portant ce mot-clé
+        (cf. main_window._on_album_selected, préfixe _SPECIAL_TAG_ITEM_PREFIX)."""
+        base = 6
+        while self._tag_items_count > 0:
+            self._albums_list.takeItem(base)
+            self._tag_items_count -= 1
+        for i, tag in enumerate(tags):
+            item = QListWidgetItem(f"      🏷 {tag}")
+            item.setData(Qt.UserRole, _SPECIAL_TAG_ITEM_PREFIX + tag)
+            self._albums_list.insertItem(base + i, item)
+        self._tag_items_count = len(tags)
 
     def select_album_item(self, data) -> None:
         """Sélectionne silencieusement un album dans la liste (sans émettre de signal)."""

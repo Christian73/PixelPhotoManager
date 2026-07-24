@@ -16,7 +16,7 @@ from src.core.models import AlbumInfo, PersonInfo
 from src.ui.people_panel import _face_bytes
 from src.ui.sidebar import (
     Sidebar, _FaceIconLoader, _SingleFaceIconLoader, _MIME_PHOTOS,
-    _SPECIAL_ALL, _SPECIAL_FILENAME, _SPECIAL_TAG,
+    _SPECIAL_ALL, _SPECIAL_FILENAME, _SPECIAL_TAG, _SPECIAL_TAG_ITEM_PREFIX,
 )
 
 
@@ -251,6 +251,30 @@ class TestAlbums:
             sidebar._on_album_clicked(sidebar._albums_list.item(6))
 
         assert blocker.args[0] is album
+
+    def test_refresh_tags_inserts_items_between_specials_and_albums(self, sidebar):
+        sidebar.refresh_tags(["travail", "vacances"])
+        assert sidebar._albums_list.item(6).data(Qt.UserRole) == _SPECIAL_TAG_ITEM_PREFIX + "travail"
+        assert sidebar._albums_list.item(7).data(Qt.UserRole) == _SPECIAL_TAG_ITEM_PREFIX + "vacances"
+
+        album = AlbumInfo(name="Été", id=1, photo_count=2)
+        sidebar.refresh_albums([album])
+        assert sidebar._albums_list.item(8).data(Qt.UserRole) is album
+
+        # Un second refresh_tags avec une liste différente remplace les anciens
+        # sous-éléments sans laisser de doublon ni déplacer les albums.
+        sidebar.refresh_tags(["voyage"])
+        assert sidebar._albums_list.item(6).data(Qt.UserRole) == _SPECIAL_TAG_ITEM_PREFIX + "voyage"
+        assert sidebar._albums_list.item(7).data(Qt.UserRole) is album
+        assert sidebar._albums_list.count() == 8
+
+    def test_tag_item_clicked_emits_prefixed_data(self, sidebar, qtbot):
+        sidebar.refresh_tags(["vacances"])
+
+        with qtbot.waitSignal(sidebar.album_selected, timeout=1000) as blocker:
+            sidebar._on_album_clicked(sidebar._albums_list.item(6))
+
+        assert blocker.args[0] == _SPECIAL_TAG_ITEM_PREFIX + "vacances"
 
     def test_select_album_item_silently(self, sidebar):
         album = AlbumInfo(name="Été", id=1)
