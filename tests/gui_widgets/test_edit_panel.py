@@ -107,6 +107,59 @@ class TestEditPanelUndoRedo:
         assert panel2._undo_stack, "l'historique doit être rechargé depuis la DB"
 
 
+class TestEditPanelContentMinWidth:
+    """Régression : la grille de boutons de traitement à 2 colonnes (Contraste,
+    Vignette… en colonne 2) ne doit jamais être coupée par la QScrollArea qui
+    l'héberge. Bug réel observé (pas un artefact de l'automation e2e) :
+    `QScrollArea` ne propage pas le `minimumSizeHint()` de son contenu vers le
+    sien (cf. commentaire sur `scroll.setMinimumWidth` dans
+    `edit_panel.py::_setup_ui`) — sans plancher explicite, un panneau aussi
+    étroit que la sidebar laissait la colonne 2 partiellement hors du viewport
+    visible : invisible et inatteignable au clic pour un utilisateur réel, pas
+    seulement pour un test automatisé. `content_min_width()` est le contrat
+    que `main_window.py::_ensure_left_pane_min_width()` s'appuie dessus pour
+    dimensionner le splitter ; ce test vérifie directement ce contrat, sans
+    dépendre du splitter ni de l'automation OS (contrairement au scénario e2e
+    `test_edit_treatments_extended.py`, qui clique via UIA Invoke — donc
+    aveugle à un défaut de géométrie visuelle)."""
+
+    def _make_panel(self, qtbot) -> EditPanel:
+        panel = EditPanel()
+        qtbot.addWidget(panel)
+        panel.show()
+        qtbot.waitExposed(panel)
+        return panel
+
+    def test_content_min_width_avoids_horizontal_clipping(self, qtbot):
+        panel = self._make_panel(qtbot)
+        panel.resize(panel.content_min_width(), 600)
+        qtbot.wait(50)
+
+        viewport_width = panel._scroll.viewport().width()
+        inner_min_width = panel._scroll_inner.minimumSizeHint().width()
+        assert viewport_width >= inner_min_width, (
+            f"content_min_width() ({panel.content_min_width()}) est insuffisant : "
+            f"le viewport ({viewport_width}px) reste plus étroit que le contenu "
+            f"({inner_min_width}px) — la colonne 2 de boutons serait coupée"
+        )
+
+    def test_content_min_width_keeps_second_column_buttons_in_viewport(self, qtbot):
+        panel = self._make_panel(qtbot)
+        panel.resize(panel.content_min_width(), 600)
+        qtbot.wait(50)
+
+        viewport_width = panel._scroll.viewport().width()
+        # Colonne 2 de la grille (idx impair dans _TREATMENTS, cf. _setup_ui :
+        # grid.addWidget(btn, idx // 2, idx % 2)) — Contraste/Vignette dans
+        # l'ordre actuel de _TREATMENTS.
+        for name, btn in panel._treatment_buttons.items():
+            right_edge = btn.geometry().right()
+            assert right_edge <= viewport_width, (
+                f"le bouton {name!r} déborde du viewport de la QScrollArea "
+                f"({right_edge}px > {viewport_width}px) — colonne clippée"
+            )
+
+
 class TestEditPanelResetRestore:
     def _make_panel(self, qtbot) -> EditPanel:
         panel = EditPanel()

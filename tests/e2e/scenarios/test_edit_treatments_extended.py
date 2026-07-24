@@ -21,6 +21,7 @@ import pytest
 from tests.e2e.conftest import (
     find_checkbox,
     find_dialog_button,
+    invoke_button,
     open_photo_in_viewer,
     query_one,
     wait_for_condition,
@@ -106,7 +107,18 @@ def test_edit_treatments_extended(isolated_app):
     open_photo_in_viewer(window, photo)
 
     # ---- Contraste : dialogue générique à un seul slider ----
-    find_dialog_button(window, ["Contraste"], exact=True, timeout=15.0).click_input()
+    # invoke_button (pattern UIA Invoke), pas click_input() : ce premier clic
+    # suit immédiatement open_photo_in_viewer(), qui vient de faire passer
+    # _left_stack sur l'EditPanel de façon synchrone (show_viewer()) — la
+    # fenêtre n'a pas forcément eu le temps de devenir réellement le
+    # premier-plan OS avant qu'un clic souris simulé n'atteigne l'écran (même
+    # cause que le piège documenté sur FolderManagerDialog, cf. docstring
+    # d'invoke_button) : confirmé empiriquement (instrumentation temporaire)
+    # que click_input() ici n'ouvre jamais le dialogue (ni exception, ni log),
+    # alors que le bouton retrouvé a un rectangle et un état valides. Le
+    # bouton reste visible après invocation (pas de fermeture de dialogue à
+    # cet endroit) → wait_gone=False.
+    invoke_button(window, ["Contraste"], exact=True, timeout=15.0, wait_gone=False)
     sliders = _wait_for_n_sliders(window, 1)
     _set_slider(sliders[0], 0.6)
     find_dialog_button(window, ["Valider"], exact=True, timeout=20.0).click_input()
@@ -117,7 +129,13 @@ def test_edit_treatments_extended(isolated_app):
     )
 
     # ---- Couleurs : saturation + RVB (révélés par « Fonctions avancées… ») ----
-    find_dialog_button(window, ["Couleurs"], exact=True, timeout=15.0).click_input()
+    # invoke_button, même raison que pour Contraste : ce clic suit immédiatement
+    # la fermeture du dialogue Contraste (Valider), qui rend le focus OS à la
+    # fenêtre principale — même fenêtre de fragilité que la toute première
+    # ouverture après open_photo_in_viewer (confirmé empiriquement : cette même
+    # classe de clic a échoué de façon flottante sur Vignette lors d'une
+    # exécution ultérieure de ce test, cf. commentaire sur Vignette plus bas).
+    invoke_button(window, ["Couleurs"], exact=True, timeout=15.0, wait_gone=False)
     sliders = _wait_for_n_sliders(window, 1)
     _set_slider(sliders[0], -0.3)   # saturation, toujours le 1er slider du dialogue
     find_checkbox(window, "Fonctions avancées…", timeout=10.0).click_input()
@@ -137,7 +155,9 @@ def test_edit_treatments_extended(isolated_app):
     )
 
     # ---- Redresser : dialogue générique, slider « Angle (°) » ----
-    find_dialog_button(window, ["Redresser"], exact=True, timeout=15.0).click_input()
+    # invoke_button : suit la fermeture du dialogue Couleurs (Valider), même
+    # fragilité que ci-dessus.
+    invoke_button(window, ["Redresser"], exact=True, timeout=15.0, wait_gone=False)
     sliders = _wait_for_n_sliders(window, 1)
     _set_slider(sliders[0], 5.0)
     find_dialog_button(window, ["Valider"], exact=True, timeout=20.0).click_input()
@@ -149,7 +169,10 @@ def test_edit_treatments_extended(isolated_app):
 
     # ---- Vignette : dialogue dédié, slider « Intensité » uniquement (jamais
     # les poignées de géométrie sur le canevas, hors périmètre) ----
-    find_dialog_button(window, ["Vignette"], exact=True, timeout=15.0).click_input()
+    # invoke_button : suit la fermeture du dialogue Redresser (Valider), même
+    # fragilité que ci-dessus — c'est précisément ce clic qui a échoué (par
+    # intermittence, timing OS) lors du diagnostic initial de ce fichier.
+    invoke_button(window, ["Vignette"], exact=True, timeout=15.0, wait_gone=False)
     sliders = _wait_for_n_sliders(window, 1)
     _set_slider(sliders[0], 0.5)
     find_dialog_button(window, ["Valider"], exact=True, timeout=20.0).click_input()
@@ -160,17 +183,26 @@ def test_edit_treatments_extended(isolated_app):
     )
 
     # ---- Rotation / Miroir : boutons directs, persistance immédiate ----
-    find_dialog_button(window, ["↻", "+90°"], timeout=10.0).click_input()
+    # invoke_button pour la rotation seulement : suit la fermeture du dialogue
+    # Vignette (Valider), même fragilité. Miroir H/V/Réinitialiser qui suivent
+    # n'ouvrent ni ne ferment de fenêtre entre eux (la fenêtre principale garde
+    # le premier-plan OS en continu) : click_input reste fiable pour eux.
+    invoke_button(window, ["↻", "+90°"], timeout=10.0, wait_gone=False)
     wait_for_condition(
         lambda: _column(edits_db, photo, "rotation") == 90,
         timeout=20.0, message="la rotation +90° n'a pas été persistée",
     )
-    find_dialog_button(window, ["Miroir H"], exact=True, timeout=10.0).click_input()
+    # invoke_button pour Miroir H/V/Réinitialiser : click_input s'est avéré
+    # flottant sur des enchaînements rapides de boutons directs du même genre
+    # (constaté empiriquement sur Miroir V lors du diagnostic de ce fichier,
+    # sans transition de fenêtre identifiable comme cause — flakiness générale
+    # de SendInput sur cet environnement plutôt qu'un piège structurel isolé).
+    invoke_button(window, ["Miroir H"], exact=True, timeout=10.0, wait_gone=False)
     wait_for_condition(
         lambda: _column(edits_db, photo, "flip_h") == 1,
         timeout=20.0, message="le miroir horizontal n'a pas été persisté",
     )
-    find_dialog_button(window, ["Miroir V"], exact=True, timeout=10.0).click_input()
+    invoke_button(window, ["Miroir V"], exact=True, timeout=10.0, wait_gone=False)
     wait_for_condition(
         lambda: _column(edits_db, photo, "flip_v") == 1,
         timeout=20.0, message="le miroir vertical n'a pas été persisté",
@@ -178,7 +210,7 @@ def test_edit_treatments_extended(isolated_app):
 
     # ---- Réinitialiser toutes les retouches : sans confirmation (réversible), ligne supprimée ----
     # Libellé sur 2 lignes (edit_panel.py) : UIA renvoie le \n littéral dans window_text().
-    find_dialog_button(window, ["Réinitialiser\ntoutes les retouches"], exact=True, timeout=10.0).click_input()
+    invoke_button(window, ["Réinitialiser\ntoutes les retouches"], exact=True, timeout=10.0, wait_gone=False)
     wait_for_condition(
         lambda: not _row_exists(edits_db, photo),
         timeout=20.0, message="la réinitialisation n'a pas supprimé la ligne photo_edits",
@@ -187,7 +219,7 @@ def test_edit_treatments_extended(isolated_app):
     # ---- Régression GammaCurveWidget (commit 34d8c5e) : le simple RENDU du
     # widget plantait avec un NameError avant correctif — reproduire la
     # séquence réelle des deux cases à cocher, pas un glissé de point. ----
-    find_dialog_button(window, ["Luminosité"], exact=True, timeout=15.0).click_input()
+    invoke_button(window, ["Luminosité"], exact=True, timeout=15.0, wait_gone=False)
     find_checkbox(window, "Fonctions avancées…", timeout=10.0).click_input()
     find_checkbox(window, "très avancées", timeout=10.0).click_input()
 

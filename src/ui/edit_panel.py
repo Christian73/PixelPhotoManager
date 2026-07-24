@@ -159,7 +159,7 @@ class EditPanel(QWidget):
 
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
-        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         inner = QWidget()
         inner_layout = QVBoxLayout(inner)
         inner_layout.setSpacing(8)
@@ -525,7 +525,33 @@ class EditPanel(QWidget):
         inner_layout.addWidget(grp_geo)
         inner_layout.addStretch()
         scroll.setWidget(inner)
+        self._scroll = scroll
+        self._scroll_inner = inner
+        # QScrollArea ne propage jamais le minimumSizeHint() de son widget
+        # interne vers le sien (comportement voulu pour permettre un contenu
+        # plus grand que la vue) — sans ce plancher explicite, rien n'empêche
+        # le splitter de comprimer le panneau sous la largeur requise par la
+        # grille de boutons à 2 colonnes, rendant la 2e colonne (Contraste,
+        # Vignette, Annotations…) invisible et inatteignable au clic. Valeur
+        # posée ici à titre de filet de sécurité minimal ; le calcul faisant
+        # foi pour le splitter est `content_min_width()`, interrogé à la
+        # demande car le style Qt applicatif (`app.setStyleSheet` dans
+        # main.py) n'est pleinement résolu qu'après le premier affichage —
+        # une valeur figée ici, avant le show(), sous-estime la largeur
+        # réelle des boutons une fois stylés.
+        scroll.setMinimumWidth(inner.minimumSizeHint().width() + 2 * scroll.frameWidth() + 4)
         root.addWidget(scroll, stretch=1)
+
+    def content_min_width(self) -> int:
+        """Largeur minimale, recalculée à la demande, pour afficher la
+        grille de boutons de traitement (2 colonnes) sans troncature ni
+        recours à la scrollbar horizontale — cf. commentaire sur
+        `scroll.setMinimumWidth` dans `_setup_ui` pour pourquoi ce calcul
+        ne peut pas être figé une fois pour toutes à la construction."""
+        margins = self.layout().contentsMargins()
+        return (self._scroll_inner.minimumSizeHint().width()
+                + 2 * self._scroll.frameWidth()
+                + margins.left() + margins.right() + 4)
 
     def _make_treatment_button(self, name: str, icon_px: QPixmap,
                                 sliders_def: list) -> QToolButton:

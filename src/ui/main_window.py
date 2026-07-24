@@ -179,7 +179,16 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
         # Déféré : laisse window.show() s'exécuter avant de charger la bibliothèque.
         QTimer.singleShot(0, self._load_library)
         _sw = self._config.get("ui.sidebar_width", 280)
-        QTimer.singleShot(0, lambda: self._splitter.setSizes([_sw, max(1, self._splitter.width() - _sw)]))
+
+        def _apply_initial_splitter_sizes() -> None:
+            self._splitter.setSizes([_sw, max(1, self._splitter.width() - _sw)])
+            # Si la visionneuse a déjà été ouverte avant que ce timer différé
+            # ne se déclenche (ex. tests e2e enchaînant vite), le setSizes()
+            # ci-dessus écraserait silencieusement l'ajustement déjà fait par
+            # _ensure_left_pane_min_width() lors de l'ouverture — reforcer ici.
+            self._ensure_left_pane_min_width()
+
+        QTimer.singleShot(0, _apply_initial_splitter_sizes)
         QTimer.singleShot(0, self._restore_splitter_states)
         # Migration des groupes de doublons + comptage pour le badge, en thread
         # (au premier lancement après upgrade elle charge tous les groupes —
@@ -1305,6 +1314,7 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
         if not is_video:
             self._edit_panel.set_photo(photo)
         self._left_stack.setCurrentIndex(0 if is_video else 1)
+        self._ensure_left_pane_min_width()
         if self._face_panel.isVisible():
             self._face_panel.set_photo(photo.path)
         if self._exif_panel.isVisible():
@@ -1934,6 +1944,23 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
             return
         self.show_grid()
 
+    def _ensure_left_pane_min_width(self) -> None:
+        """QStackedWidget ne déclenche pas de relayout du QSplitter quand sa
+        page courante change — sans cet appel, si la page qui vient de
+        devenir courante (typiquement EditPanel) a un besoin minimal en
+        largeur supérieur à ce que le splitter lui a déjà alloué (ex. resté
+        calé sur la largeur, plus petite, de la sidebar), elle reste
+        comprimée sous ce minimum : sa 2e colonne de boutons de traitement
+        devient invisible et inatteignable au clic, silencieusement."""
+        sizes = self._splitter.sizes()
+        if len(sizes) != 2:
+            return
+        needed = max(self._left_stack.minimumSizeHint().width(), self._edit_panel.content_min_width())
+        if sizes[0] >= needed:
+            return
+        delta = needed - sizes[0]
+        self._splitter.setSizes([needed, max(1, sizes[1] - delta)])
+
     def show_viewer(self, photo: PhotoInfo) -> None:
         is_video = photo.media_type == "video"
         self._viewer.set_album_context(self._current_album_id)
@@ -1942,6 +1969,7 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
             self._edit_panel.set_photo(photo)
         self._stack.setCurrentIndex(1)
         self._left_stack.setCurrentIndex(0 if is_video else 1)
+        self._ensure_left_pane_min_width()
         self._viewer.setFocus()
         self._lbl_thumb_size.hide()
         self._thumb_slider.hide()
