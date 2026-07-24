@@ -167,19 +167,33 @@ class _TagDropdown(QComboBox):
         # personnalisée" dès qu'on le stylise, et sans image valide fournie
         # il retombe sur un pictogramme d'image cassée (rectangle gris plein)
         # plutôt qu'une vraie flèche, quel que soit le style Qt actif. Plus
-        # simple et fiable : la flèche fait partie du texte affiché (comme
-        # l'icône 🏷) et le sous-contrôle natif est réduit à zéro.
+        # simple et fiable : la flèche est un label superposé au bord droit
+        # (positionné dans resizeEvent) et le sous-contrôle natif est réduit
+        # à zéro. WA_TransparentForMouseEvents laisse les clics traverser
+        # jusqu'au QComboBox en dessous (sinon la flèche capterait le clic
+        # et empêcherait l'ouverture de la liste).
         self.setStyleSheet(
             "QComboBox { color: #ccc; background: rgba(255,255,255,25);"
             " border: 1px solid rgba(255,255,255,60); border-radius: 8px;"
-            " padding: 1px 8px; font-size: 11px; }"
+            " padding: 1px 18px 1px 8px; font-size: 11px; }"
             "QComboBox:hover { border: 1px solid rgba(255,255,255,90); }"
             "QComboBox::drop-down { width: 0; border: none; }"
             "QComboBox QAbstractItemView { outline: none; }"
         )
+        self._arrow_label = QLabel("▾", self)
+        self._arrow_label.setStyleSheet("color: #ccc; background: transparent; font-size: 11px;")
+        self._arrow_label.setAttribute(Qt.WA_TransparentForMouseEvents)
         self._active: set[str] = set()
         self._set_placeholder()
         self.activated.connect(self._on_activated)
+
+    def resizeEvent(self, event) -> None:
+        super().resizeEvent(event)
+        self._arrow_label.adjustSize()
+        margin = 8
+        x = self.width() - self._arrow_label.width() - margin
+        y = (self.height() - self._arrow_label.height()) // 2
+        self._arrow_label.move(x, y)
 
     def _set_placeholder(self) -> None:
         n = len(self._active)
@@ -189,7 +203,7 @@ class _TagDropdown(QComboBox):
             label = f"🏷 {next(iter(self._active))}"
         else:
             label = f"🏷 Mots-clés ({n})"
-        self.setPlaceholderText(f"{label}  ▾")
+        self.setPlaceholderText(label)
 
     def set_tags(self, all_tags: list[str], active_tags: list[str]) -> None:
         self._active = set(active_tags)
