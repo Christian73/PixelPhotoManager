@@ -458,6 +458,8 @@ class Sidebar(QWidget):
         self._albums: list[AlbumInfo] = []
         self._persons: list[PersonInfo] = []
         self._tag_items_count = 0
+        self._tags_collapsed = False
+        self._tag_names_cache: list[str] = []
 
         self._add_special_albums()
 
@@ -503,9 +505,9 @@ class Sidebar(QWidget):
         item_fn.setToolTip("Afficher les photos dont le nom de fichier contient le texte du filtre")
         self._albums_list.addItem(item_fn)
 
-        item_tag = QListWidgetItem("🏷 Par mot-clé")
+        item_tag = QListWidgetItem(self._tag_header_label())
         item_tag.setData(Qt.UserRole, _SPECIAL_TAG)
-        item_tag.setToolTip("Les mots-clés existants apparaissent ci-dessous, un par ligne")
+        item_tag.setToolTip("Cliquer pour replier/déplier la liste des mots-clés existants")
         self._albums_list.addItem(item_tag)
 
     # ── filtrage live ──────────────────────────────────────────────────────────
@@ -737,16 +739,29 @@ class Sidebar(QWidget):
         """Reconstruit les sous-éléments (un par mot-clé existant) sous l'en-tête
         « Par mot-clé », juste avant les albums utilisateur. Sélectionner l'un
         de ces sous-éléments affiche directement les photos portant ce mot-clé
-        (cf. main_window._on_album_selected, préfixe _SPECIAL_TAG_ITEM_PREFIX)."""
+        (cf. main_window._on_album_selected, préfixe _SPECIAL_TAG_ITEM_PREFIX).
+        Si la section est repliée (_tags_collapsed), les sous-éléments sont
+        mémorisés dans _tag_names_cache mais pas insérés dans la liste — ils
+        réapparaissent tels quels au prochain dépli, sans nouveau refresh_tags."""
+        self._tag_names_cache = tags
+        self._render_tag_subitems()
+
+    def _tag_header_label(self) -> str:
+        arrow = "▸" if self._tags_collapsed else "▾"
+        return f"{arrow} 🏷 Par mot-clé"
+
+    def _render_tag_subitems(self) -> None:
         base = 6
         while self._tag_items_count > 0:
             self._albums_list.takeItem(base)
             self._tag_items_count -= 1
-        for i, tag in enumerate(tags):
+        if self._tags_collapsed:
+            return
+        for i, tag in enumerate(self._tag_names_cache):
             item = QListWidgetItem(f"      🏷 {tag}")
             item.setData(Qt.UserRole, _SPECIAL_TAG_ITEM_PREFIX + tag)
             self._albums_list.insertItem(base + i, item)
-        self._tag_items_count = len(tags)
+        self._tag_items_count = len(self._tag_names_cache)
 
     def select_album_item(self, data) -> None:
         """Sélectionne silencieusement un album dans la liste (sans émettre de signal)."""
@@ -793,9 +808,13 @@ class Sidebar(QWidget):
             self.folder_selected.emit(path)
 
     def _on_album_clicked(self, item: QListWidgetItem) -> None:
+        data = item.data(Qt.UserRole)
+        if data == _SPECIAL_TAG:
+            self._tags_collapsed = not self._tags_collapsed
+            item.setText(self._tag_header_label())
+            self._render_tag_subitems()
         self._folder_tree.clearSelection()
         self._persons_list.clearSelection()
-        data = item.data(Qt.UserRole)
         self.album_selected.emit(data)
 
     def _album_context_menu(self, pos) -> None:

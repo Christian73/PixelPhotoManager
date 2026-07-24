@@ -276,6 +276,37 @@ class TestAlbums:
 
         assert blocker.args[0] == _SPECIAL_TAG_ITEM_PREFIX + "vacances"
 
+    def test_tag_header_click_toggles_collapse(self, sidebar):
+        sidebar.refresh_tags(["travail", "vacances"])
+        assert sidebar._albums_list.count() == 8  # 6 spéciaux + 2 mots-clés
+        assert sidebar._albums_list.item(5).text().startswith("▾")
+
+        sidebar._on_album_clicked(sidebar._albums_list.item(5))
+        assert sidebar._albums_list.count() == 6  # sous-éléments masqués
+        assert sidebar._albums_list.item(5).text().startswith("▸")
+
+        sidebar._on_album_clicked(sidebar._albums_list.item(5))
+        assert sidebar._albums_list.count() == 8  # redéplié
+        assert sidebar._albums_list.item(5).text().startswith("▾")
+        assert sidebar._albums_list.item(6).data(Qt.UserRole) == _SPECIAL_TAG_ITEM_PREFIX + "travail"
+
+    def test_collapsed_tags_stay_hidden_across_refresh_tags(self, sidebar):
+        sidebar.refresh_tags(["travail"])
+        sidebar._on_album_clicked(sidebar._albums_list.item(5))  # replie
+        assert sidebar._albums_list.count() == 6
+
+        sidebar.refresh_tags(["voyage", "été"])
+        assert sidebar._albums_list.count() == 6  # toujours replié, pas de sous-éléments insérés
+
+        sidebar._on_album_clicked(sidebar._albums_list.item(5))  # déplie
+        assert sidebar._albums_list.count() == 8
+        assert sidebar._albums_list.item(6).data(Qt.UserRole) == _SPECIAL_TAG_ITEM_PREFIX + "voyage"
+
+    def test_tag_header_click_still_emits_album_selected(self, sidebar, qtbot):
+        with qtbot.waitSignal(sidebar.album_selected, timeout=1000) as blocker:
+            sidebar._on_album_clicked(sidebar._albums_list.item(5))
+        assert blocker.args[0] == _SPECIAL_TAG
+
     def test_select_album_item_silently(self, sidebar):
         album = AlbumInfo(name="Été", id=1)
         sidebar.refresh_albums([album])
