@@ -172,20 +172,30 @@ class _TagDropdown(QComboBox):
         # à zéro. WA_TransparentForMouseEvents laisse les clics traverser
         # jusqu'au QComboBox en dessous (sinon la flèche capterait le clic
         # et empêcherait l'ouverture de la liste).
+        self._arrow_label = QLabel("▾", self)
+        self._arrow_label.setStyleSheet("color: #ccc; background: transparent; font-size: 11px;")
+        self._arrow_label.setAttribute(Qt.WA_TransparentForMouseEvents)
+        self._active: set[str] = set()
+        self._apply_style()
+        self._set_placeholder()
+        self.activated.connect(self._on_activated)
+
+    def _apply_style(self) -> None:
+        # Vu au travers de setPlaceholderText (currentIndex reste -1 en
+        # permanence, cf. docstring de classe) : le "color" du QSS ci-dessous
+        # colore bien le texte de substitution, pas seulement un texte
+        # sélectionné classique — d'où la nécessité de regénérer toute la
+        # feuille de style pour changer sa couleur (une simple règle
+        # QComboBox[prop] n'était pas plus simple ici).
+        color = self._ACTIVE_FG if len(self._active) == 1 else "#ccc"
         self.setStyleSheet(
-            "QComboBox { color: #ccc; background: rgba(255,255,255,25);"
+            f"QComboBox {{ color: {color}; background: rgba(255,255,255,25);"
             " border: 1px solid rgba(255,255,255,60); border-radius: 8px;"
             " padding: 1px 18px 1px 8px; font-size: 11px; }"
             "QComboBox:hover { border: 1px solid rgba(255,255,255,90); }"
             "QComboBox::drop-down { width: 0; border: none; }"
             "QComboBox QAbstractItemView { outline: none; }"
         )
-        self._arrow_label = QLabel("▾", self)
-        self._arrow_label.setStyleSheet("color: #ccc; background: transparent; font-size: 11px;")
-        self._arrow_label.setAttribute(Qt.WA_TransparentForMouseEvents)
-        self._active: set[str] = set()
-        self._set_placeholder()
-        self.activated.connect(self._on_activated)
 
     def resizeEvent(self, event) -> None:
         super().resizeEvent(event)
@@ -196,6 +206,7 @@ class _TagDropdown(QComboBox):
         self._arrow_label.move(x, y)
 
     def _set_placeholder(self) -> None:
+        self._apply_style()
         n = len(self._active)
         if n == 0:
             label = "🏷 Mots-clés"
