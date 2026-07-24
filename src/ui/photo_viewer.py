@@ -113,7 +113,7 @@ class _RatingStars(QWidget):
             btn.setFlat(True)
             btn.setFixedWidth(20)
             btn.setStyleSheet(
-                "QPushButton { color: #ccc; border: none; font-size: 14px; }"
+                "QPushButton { color: #ccc; border: none; padding: 0; font-size: 14px; }"
                 "QPushButton:hover { color: #ffd200; }"
             )
             btn.setToolTip(f"Noter {i} étoile{'s' if i > 1 else ''}")
@@ -135,7 +135,7 @@ class _RatingStars(QWidget):
         for i, btn in enumerate(self._btns, start=1):
             btn.setText("★" if i <= self._rating else "☆")
             btn.setStyleSheet(
-                "QPushButton { color: %s; border: none; font-size: 14px; }"
+                "QPushButton { color: %s; border: none; padding: 0; font-size: 14px; }"
                 "QPushButton:hover { color: #ffd200; }"
                 % ("#ffd200" if i <= self._rating else "#ccc")
             )
@@ -270,6 +270,11 @@ class PhotoViewer(QWidget):
         self._btn_fav.setToolTip("Marquer comme favori")
         self._btn_fav.setFixedWidth(32)
         self._btn_fav.setCheckable(True)
+        self._btn_fav.setStyleSheet(
+            "QPushButton { color: #ccc; border: none; padding: 0; font-size: 16px; }"
+            "QPushButton:checked { color: #ffd200; }"
+            "QPushButton:hover { color: #ffd200; }"
+        )
         self._btn_fav.clicked.connect(self._toggle_favorite)
         tb_layout.addWidget(self._btn_fav)
 
@@ -924,7 +929,7 @@ class PhotoViewer(QWidget):
     def _toggle_favorite(self, checked: bool) -> None:
         if self._photo:
             self._photo.is_favorite = checked
-            self._btn_fav.setText("★" if checked else "♡")
+            self._btn_fav.setText("♥" if checked else "♡")
             self.favorite_toggle_requested.emit(self._photo)
 
     def _set_rating(self, rating: int) -> None:
