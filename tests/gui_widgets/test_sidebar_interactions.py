@@ -17,6 +17,7 @@ from src.ui.people_panel import _face_bytes
 from src.ui.sidebar import (
     Sidebar, _FaceIconLoader, _SingleFaceIconLoader, _MIME_PHOTOS,
     _SPECIAL_ALL, _SPECIAL_FILENAME, _SPECIAL_TAG, _SPECIAL_TAG_ITEM_PREFIX,
+    _SPECIAL_RATED, _SPECIAL_RATED_ITEM_PREFIX,
 )
 
 
@@ -229,83 +230,179 @@ class TestFilter:
 # albums
 
 class TestAlbums:
+    # Disposition par défaut (rien de replié, aucun mot-clé/album) : 0 Chronologie,
+    # 1 Favoris, 2 Vidéos, 3 en-tête "Par notes", 4-8 les 5 niveaux d'étoiles
+    # (5 à 1), 9 "Par nom de fichier", 10 en-tête "Par mot-clé" — soit 11 éléments
+    # spéciaux au total avant les mots-clés/albums.
+
     def test_special_albums_present(self, sidebar):
-        keys = [sidebar._albums_list.item(i).data(Qt.UserRole) for i in range(6)]
+        keys = [sidebar._albums_list.item(i).data(Qt.UserRole) for i in range(11)]
         assert keys[0] == _SPECIAL_ALL
-        assert keys[4] == _SPECIAL_FILENAME
-        assert keys[5] == _SPECIAL_TAG
+        assert keys[3] == _SPECIAL_RATED
+        assert keys[4:9] == [_SPECIAL_RATED_ITEM_PREFIX + str(n) for n in (5, 4, 3, 2, 1)]
+        assert keys[9] == _SPECIAL_FILENAME
+        assert keys[10] == _SPECIAL_TAG
 
     def test_refresh_albums_keeps_specials(self, sidebar):
         albums = [AlbumInfo(name="Été", id=1, photo_count=12)]
         sidebar.refresh_albums(albums)
         sidebar.refresh_albums(albums)   # idempotent : pas de doublon
 
-        assert sidebar._albums_list.count() == 7
-        assert "Été (12)" in sidebar._albums_list.item(6).text()
+        assert sidebar._albums_list.count() == 12
+        assert "Été (12)" in sidebar._albums_list.item(11).text()
 
     def test_album_clicked_emits_data(self, sidebar, qtbot):
         album = AlbumInfo(name="Été", id=1, photo_count=2)
         sidebar.refresh_albums([album])
 
         with qtbot.waitSignal(sidebar.album_selected, timeout=1000) as blocker:
-            sidebar._on_album_clicked(sidebar._albums_list.item(6))
+            sidebar._on_album_clicked(sidebar._albums_list.item(11))
 
         assert blocker.args[0] is album
 
     def test_refresh_tags_inserts_items_between_specials_and_albums(self, sidebar):
         sidebar.refresh_tags(["travail", "vacances"])
-        assert sidebar._albums_list.item(6).data(Qt.UserRole) == _SPECIAL_TAG_ITEM_PREFIX + "travail"
-        assert sidebar._albums_list.item(7).data(Qt.UserRole) == _SPECIAL_TAG_ITEM_PREFIX + "vacances"
+        assert sidebar._albums_list.item(11).data(Qt.UserRole) == _SPECIAL_TAG_ITEM_PREFIX + "travail"
+        assert sidebar._albums_list.item(12).data(Qt.UserRole) == _SPECIAL_TAG_ITEM_PREFIX + "vacances"
 
         album = AlbumInfo(name="Été", id=1, photo_count=2)
         sidebar.refresh_albums([album])
-        assert sidebar._albums_list.item(8).data(Qt.UserRole) is album
+        assert sidebar._albums_list.item(13).data(Qt.UserRole) is album
 
         # Un second refresh_tags avec une liste différente remplace les anciens
         # sous-éléments sans laisser de doublon ni déplacer les albums.
         sidebar.refresh_tags(["voyage"])
-        assert sidebar._albums_list.item(6).data(Qt.UserRole) == _SPECIAL_TAG_ITEM_PREFIX + "voyage"
-        assert sidebar._albums_list.item(7).data(Qt.UserRole) is album
-        assert sidebar._albums_list.count() == 8
+        assert sidebar._albums_list.item(11).data(Qt.UserRole) == _SPECIAL_TAG_ITEM_PREFIX + "voyage"
+        assert sidebar._albums_list.item(12).data(Qt.UserRole) is album
+        assert sidebar._albums_list.count() == 13
 
     def test_tag_item_clicked_emits_prefixed_data(self, sidebar, qtbot):
         sidebar.refresh_tags(["vacances"])
 
         with qtbot.waitSignal(sidebar.album_selected, timeout=1000) as blocker:
-            sidebar._on_album_clicked(sidebar._albums_list.item(6))
+            sidebar._on_album_clicked(sidebar._albums_list.item(11))
 
         assert blocker.args[0] == _SPECIAL_TAG_ITEM_PREFIX + "vacances"
 
     def test_tag_header_click_toggles_collapse(self, sidebar):
         sidebar.refresh_tags(["travail", "vacances"])
-        assert sidebar._albums_list.count() == 8  # 6 spéciaux + 2 mots-clés
-        assert sidebar._albums_list.item(5).text().startswith("▾")
+        assert sidebar._albums_list.count() == 13  # 11 spéciaux (dont 5 notes) + 2 mots-clés
+        assert sidebar._albums_list.item(10).text().startswith("▾")
 
-        sidebar._on_album_clicked(sidebar._albums_list.item(5))
-        assert sidebar._albums_list.count() == 6  # sous-éléments masqués
-        assert sidebar._albums_list.item(5).text().startswith("▸")
+        sidebar._on_album_clicked(sidebar._albums_list.item(10))
+        assert sidebar._albums_list.count() == 11  # sous-éléments masqués
+        assert sidebar._albums_list.item(10).text().startswith("▸")
 
-        sidebar._on_album_clicked(sidebar._albums_list.item(5))
-        assert sidebar._albums_list.count() == 8  # redéplié
-        assert sidebar._albums_list.item(5).text().startswith("▾")
-        assert sidebar._albums_list.item(6).data(Qt.UserRole) == _SPECIAL_TAG_ITEM_PREFIX + "travail"
+        sidebar._on_album_clicked(sidebar._albums_list.item(10))
+        assert sidebar._albums_list.count() == 13  # redéplié
+        assert sidebar._albums_list.item(10).text().startswith("▾")
+        assert sidebar._albums_list.item(11).data(Qt.UserRole) == _SPECIAL_TAG_ITEM_PREFIX + "travail"
 
     def test_collapsed_tags_stay_hidden_across_refresh_tags(self, sidebar):
         sidebar.refresh_tags(["travail"])
-        sidebar._on_album_clicked(sidebar._albums_list.item(5))  # replie
-        assert sidebar._albums_list.count() == 6
+        sidebar._on_album_clicked(sidebar._albums_list.item(10))  # replie
+        assert sidebar._albums_list.count() == 11
 
         sidebar.refresh_tags(["voyage", "été"])
-        assert sidebar._albums_list.count() == 6  # toujours replié, pas de sous-éléments insérés
+        assert sidebar._albums_list.count() == 11  # toujours replié, pas de sous-éléments insérés
 
-        sidebar._on_album_clicked(sidebar._albums_list.item(5))  # déplie
-        assert sidebar._albums_list.count() == 8
-        assert sidebar._albums_list.item(6).data(Qt.UserRole) == _SPECIAL_TAG_ITEM_PREFIX + "voyage"
+        sidebar._on_album_clicked(sidebar._albums_list.item(10))  # déplie
+        assert sidebar._albums_list.count() == 13
+        assert sidebar._albums_list.item(11).data(Qt.UserRole) == _SPECIAL_TAG_ITEM_PREFIX + "voyage"
 
     def test_tag_header_click_still_emits_album_selected(self, sidebar, qtbot):
         with qtbot.waitSignal(sidebar.album_selected, timeout=1000) as blocker:
-            sidebar._on_album_clicked(sidebar._albums_list.item(5))
+            sidebar._on_album_clicked(sidebar._albums_list.item(10))
         assert blocker.args[0] == _SPECIAL_TAG
+
+    def test_rated_item_clicked_emits_prefixed_data(self, sidebar, qtbot):
+        with qtbot.waitSignal(sidebar.album_selected, timeout=1000) as blocker:
+            sidebar._on_album_clicked(sidebar._albums_list.item(6))  # 3e niveau : "3 étoiles ou plus"
+
+        assert blocker.args[0] == _SPECIAL_RATED_ITEM_PREFIX + "3"
+
+    def test_rated_header_click_toggles_collapse(self, sidebar):
+        assert sidebar._albums_list.count() == 11
+
+        sidebar._on_album_clicked(sidebar._albums_list.item(3))
+        assert sidebar._albums_list.count() == 6  # 5 niveaux masqués
+        assert sidebar._albums_list.item(3).text().startswith("▸")
+        assert sidebar._albums_list.item(4).data(Qt.UserRole) == _SPECIAL_FILENAME
+        assert sidebar._albums_list.item(5).data(Qt.UserRole) == _SPECIAL_TAG
+
+        sidebar._on_album_clicked(sidebar._albums_list.item(3))
+        assert sidebar._albums_list.count() == 11  # redéplié
+        assert sidebar._albums_list.item(3).text().startswith("▾")
+        assert sidebar._albums_list.item(4).data(Qt.UserRole) == _SPECIAL_RATED_ITEM_PREFIX + "5"
+
+    def test_rated_header_click_still_emits_album_selected(self, sidebar, qtbot):
+        with qtbot.waitSignal(sidebar.album_selected, timeout=1000) as blocker:
+            sidebar._on_album_clicked(sidebar._albums_list.item(3))
+        assert blocker.args[0] == _SPECIAL_RATED
+
+    def test_tag_insertion_index_follows_collapsed_ratings(self, sidebar):
+        sidebar._on_album_clicked(sidebar._albums_list.item(3))  # replie les notes
+        sidebar.refresh_tags(["travail"])
+
+        assert sidebar._albums_list.item(5).data(Qt.UserRole) == _SPECIAL_TAG
+        assert sidebar._albums_list.item(6).data(Qt.UserRole) == _SPECIAL_TAG_ITEM_PREFIX + "travail"
+
+    def test_rated_items_have_no_context_menu(self, sidebar, monkeypatch):
+        import src.ui.sidebar as sidebar_module
+
+        def _boom(*a, **k):
+            raise AssertionError("aucun menu ne devrait s'ouvrir sur un niveau de notation")
+        monkeypatch.setattr(sidebar_module, "QMenu", _boom)
+
+        for i in range(3, 9):  # en-tête "Par notes" + ses 5 sous-éléments
+            pos = sidebar._albums_list.visualItemRect(sidebar._albums_list.item(i)).center()
+            sidebar._album_context_menu(pos)  # ne doit pas lever
+
+    def test_tag_context_menu_emits_delete_requested(self, sidebar, monkeypatch, qtbot):
+        # QMenu.exec() ouvre une vraie boucle modale bloquante que PySide6
+        # n'expose pas comme un slot Python remplaçable (contrairement à
+        # QMessageBox.exec, réimplémenté côté PySide6 — cf. test_delete_folder_*) :
+        # monkeypatcher QMenu.exec directement ne fonctionne pas (le call C++
+        # d'origine reste résolu). On remplace donc la classe QMenu du module
+        # sidebar par un doublon qui capture l'action sans jamais bloquer.
+        import src.ui.sidebar as sidebar_module
+        captured: dict[str, object] = {}
+
+        class _FakeMenu:
+            def __init__(self, *a, **k):
+                pass
+
+            def addAction(self, text, callback):
+                captured[text] = callback
+
+            def exec(self, *a, **k):
+                pass
+
+        monkeypatch.setattr(sidebar_module, "QMenu", _FakeMenu)
+
+        sidebar.refresh_tags(["vacances"])
+        tag_item = sidebar._albums_list.item(11)
+        pos = sidebar._albums_list.visualItemRect(tag_item).center()
+
+        sidebar._album_context_menu(pos)
+        assert len(captured) == 1
+        (label, callback), = captured.items()
+        assert "Supprimer" in label
+
+        with qtbot.waitSignal(sidebar.tag_delete_requested, timeout=1000) as blocker:
+            callback()
+
+        assert blocker.args[0] == "vacances"
+
+    def test_special_album_has_no_context_menu(self, sidebar, monkeypatch):
+        import src.ui.sidebar as sidebar_module
+
+        def _boom(*a, **k):
+            raise AssertionError("aucun menu ne devrait s'ouvrir sur un album spécial")
+        monkeypatch.setattr(sidebar_module, "QMenu", _boom)
+
+        pos = sidebar._albums_list.visualItemRect(sidebar._albums_list.item(0)).center()
+        sidebar._album_context_menu(pos)  # ne doit pas lever
 
     def test_select_album_item_silently(self, sidebar):
         album = AlbumInfo(name="Été", id=1)

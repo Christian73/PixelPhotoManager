@@ -7,12 +7,13 @@ TagEditDialog est remplacé par un double de test (jamais de vrai exec()
 bloquant) ; TagsPrepLoader (vrai QThread, parenté à un QWidget vivant le temps
 du test) est laissé réel pour couvrir la plomberie cross-thread."""
 import pytest
-from PySide6.QtWidgets import QDialog, QWidget
+from PySide6.QtWidgets import QDialog, QMessageBox, QWidget
 
 from src.core.models import PhotoInfo
 from src.library.catalog import Catalog
 import src.ui.main_window as main_window_module
 from src.ui.main_window import MainWindow
+from src.ui.sidebar import _SPECIAL_ALL
 
 
 def _photo(path: str, **kw) -> PhotoInfo:
@@ -34,9 +35,29 @@ class _FakeExifPanel:
 class _FakeViewer:
     def __init__(self, photo=None):
         self._photo = photo
+        self.available_tags = None
+        self.refresh_tags_calls = 0
 
     def current_photo(self):
         return self._photo
+
+    def set_available_tags(self, tags) -> None:
+        self.available_tags = list(tags)
+
+    def refresh_tags(self) -> None:
+        self.refresh_tags_calls += 1
+
+
+class _FakeSidebar:
+    def __init__(self):
+        self.refreshed_tags = None
+        self.selected = None
+
+    def refresh_tags(self, tags) -> None:
+        self.refreshed_tags = list(tags)
+
+    def select_album_item(self, data) -> None:
+        self.selected = data
 
 
 class _FakeTagDialog:
@@ -59,12 +80,21 @@ class _FakeTagDialog:
 class _FakeMainWindow(QWidget):
     _on_edit_tags_requested = MainWindow._on_edit_tags_requested
     _continue_edit_tags = MainWindow._continue_edit_tags
+    _on_tag_delete_requested = MainWindow._on_tag_delete_requested
 
-    def __init__(self, catalog, current_photo=None, exif_visible: bool = False):
+    def __init__(self, catalog, current_photo=None, exif_visible: bool = False,
+                 current_context: str = "Toutes les photos"):
         super().__init__()
         self._catalog = catalog
         self._viewer = _FakeViewer(current_photo)
         self._exif_panel = _FakeExifPanel(exif_visible)
+        self._sidebar = _FakeSidebar()
+        self._current_context = current_context
+        self.show_all_photos_calls = 0
+
+    def _show_all_photos(self) -> None:
+        self.show_all_photos_calls += 1
+        self._current_context = "Toutes les photos"
 
 
 @pytest.fixture(autouse=True)
@@ -162,3 +192,91 @@ class TestOnEditTagsRequested:
         qtbot.waitUntil(
             lambda: catalog.get_photo_by_path(photo.path).tags == ["plage"], timeout=2000
         )
+
+
+class TestOnTagDeleteRequested:
+    def test_confirmed_removes_tag_from_catalog_and_refreshes_sidebar_and_viewer(
+        self, qtbot, tmp_path, monkeypatch
+    ):
+        monkeypatch.setattr(QMessageBox, "question", lambda *a, **k: QMessageBox.Yes)
+        catalog = Catalog(db_path=tmp_path / "catalog.db")
+        saved = catalog.add_or_update_photo(_photo("C:/photos/a.jpg", tags=["vacances", "été"]))
+        photo = catalog.get_photo_by_path(saved.path)
+
+        fake = _FakeMainWindow(catalog)
+        qtbot.addWidget(fake)
+        fake._on_tag_delete_requested("vacances")
+
+        assert catalog.get_photo_by_path(photo.path).tags == ["été"]
+        assert fake._sidebar.refreshed_tags == ["été"]
+        assert fake._viewer.available_tags == ["été"]
+
+    def test_cancelled_leaves_catalog_untouched(self, qtbot, tmp_path, monkeypatch):
+        monkeypatch.setattr(QMessageBox, "question", lambda *a, **k: QMessageBox.No)
+        catalog = Catalog(db_path=tmp_path / "catalog.db")
+        saved = catalog.add_or_update_photo(_photo("C:/photos/a.jpg", tags=["vacances"]))
+        photo = catalog.get_photo_by_path(saved.path)
+
+        fake = _FakeMainWindow(catalog)
+        qtbot.addWidget(fake)
+        fake._on_tag_delete_requested("vacances")
+
+        assert catalog.get_photo_by_path(photo.path).tags == ["vacances"]
+        assert fake._sidebar.refreshed_tags is None
+
+    def test_redirects_to_all_photos_when_viewing_deleted_tag_album(
+        self, qtbot, tmp_path, monkeypatch
+    ):
+        monkeypatch.setattr(QMessageBox, "question", lambda *a, **k: QMessageBox.Yes)
+        catalog = Catalog(db_path=tmp_path / "catalog.db")
+        catalog.add_or_update_photo(_photo("C:/photos/a.jpg", tags=["vacances"]))
+
+        fake = _FakeMainWindow(catalog, current_context="Mot-clé : vacances")
+        qtbot.addWidget(fake)
+        fake._on_tag_delete_requested("vacances")
+
+        assert fake._sidebar.selected == _SPECIAL_ALL
+        assert fake.show_all_photos_calls == 1
+
+    def test_does_not_redirect_when_viewing_a_different_context(
+        self, qtbot, tmp_path, monkeypatch
+    ):
+        monkeypatch.setattr(QMessageBox, "question", lambda *a, **k: QMessageBox.Yes)
+        catalog = Catalog(db_path=tmp_path / "catalog.db")
+        catalog.add_or_update_photo(_photo("C:/photos/a.jpg", tags=["vacances"]))
+
+        fake = _FakeMainWindow(catalog, current_context="Mot-clé : été")
+        qtbot.addWidget(fake)
+        fake._on_tag_delete_requested("vacances")
+
+        assert fake._sidebar.selected is None
+        assert fake.show_all_photos_calls == 0
+
+    def test_updates_current_photo_and_visible_exif_panel(self, qtbot, tmp_path, monkeypatch):
+        monkeypatch.setattr(QMessageBox, "question", lambda *a, **k: QMessageBox.Yes)
+        catalog = Catalog(db_path=tmp_path / "catalog.db")
+        saved = catalog.add_or_update_photo(_photo("C:/photos/a.jpg", tags=["vacances", "été"]))
+        photo = catalog.get_photo_by_path(saved.path)
+        current = _photo(photo.path, tags=["vacances", "été"])
+
+        fake = _FakeMainWindow(catalog, current_photo=current, exif_visible=True)
+        qtbot.addWidget(fake)
+        fake._on_tag_delete_requested("vacances")
+
+        assert current.tags == ["été"]
+        assert fake._viewer.refresh_tags_calls == 1
+        assert fake._exif_panel.tags_set == ["été"]
+
+    def test_current_photo_without_tag_is_untouched(self, qtbot, tmp_path, monkeypatch):
+        monkeypatch.setattr(QMessageBox, "question", lambda *a, **k: QMessageBox.Yes)
+        catalog = Catalog(db_path=tmp_path / "catalog.db")
+        catalog.add_or_update_photo(_photo("C:/photos/a.jpg", tags=["vacances"]))
+        current = _photo("C:/photos/other.jpg", tags=["été"])
+
+        fake = _FakeMainWindow(catalog, current_photo=current, exif_visible=True)
+        qtbot.addWidget(fake)
+        fake._on_tag_delete_requested("vacances")
+
+        assert current.tags == ["été"]
+        assert fake._viewer.refresh_tags_calls == 0
+        assert fake._exif_panel.tags_set is None

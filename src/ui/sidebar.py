@@ -77,6 +77,7 @@ _SPECIAL_PERSON   = "__person__"    # préfixe pour l'identifiant de contexte pe
 _SPECIAL_FILENAME = "__filename__"  # album virtuel "Par nom de fichier"
 _SPECIAL_TAG = "__tag__"            # album virtuel "Par mot-clé" (en-tête du groupe)
 _SPECIAL_TAG_ITEM_PREFIX = "__tag__:"  # préfixe des sous-éléments un-mot-clé-par-ligne
+_SPECIAL_RATED_ITEM_PREFIX = "__rated__:"  # préfixe des sous-éléments note minimale (1 à 5)
 
 
 class _BadgeButton(QPushButton):
@@ -256,6 +257,7 @@ class Sidebar(QWidget):
     folder_selected    = Signal(str)
     album_selected     = Signal(object)   # AlbumInfo | str (special key)
     album_delete_requested = Signal(object)  # AlbumInfo à supprimer
+    tag_delete_requested = Signal(str)    # mot-clé à retirer de toutes les photos
     scan_requested     = Signal(str)
     folder_removed     = Signal(str)
     folder_created     = Signal(str)      # chemin du nouveau sous-dossier créé
@@ -460,6 +462,8 @@ class Sidebar(QWidget):
         self._tag_items_count = 0
         self._tags_collapsed = False
         self._tag_names_cache: list[str] = []
+        self._rated_items_count = 0
+        self._ratings_collapsed = False
 
         self._add_special_albums()
 
@@ -496,9 +500,11 @@ class Sidebar(QWidget):
         item_vid.setData(Qt.UserRole, _SPECIAL_VIDEOS)
         self._albums_list.addItem(item_vid)
 
-        item_rated = QListWidgetItem("★ Notées")
+        item_rated = QListWidgetItem(self._rated_header_label())
         item_rated.setData(Qt.UserRole, _SPECIAL_RATED)
+        item_rated.setToolTip("Cliquer pour replier/déplier les niveaux de notation")
         self._albums_list.addItem(item_rated)
+        self._render_rated_subitems()
 
         item_fn = QListWidgetItem("🔍 Par nom de fichier")
         item_fn.setData(Qt.UserRole, _SPECIAL_FILENAME)
@@ -725,9 +731,10 @@ class Sidebar(QWidget):
     def refresh_albums(self, albums: list[AlbumInfo]) -> None:
         self._albums = albums
         # Remove existing album items (keep the 6 special ones at top : Chronologie,
-        # Favoris, Vidéos, Notées, Par nom de fichier, Par mot-clé — plus les
-        # sous-éléments de mots-clés déjà insérés par refresh_tags juste après eux).
-        base = 6 + self._tag_items_count
+        # Favoris, Vidéos, Par notes, Par nom de fichier, Par mot-clé — plus les
+        # sous-éléments de notes et de mots-clés déjà insérés juste après leurs
+        # en-têtes respectifs).
+        base = 6 + self._rated_items_count + self._tag_items_count
         while self._albums_list.count() > base:
             self._albums_list.takeItem(base)
         for album in albums:
@@ -751,7 +758,7 @@ class Sidebar(QWidget):
         return f"{arrow} 🏷 Par mot-clé"
 
     def _render_tag_subitems(self) -> None:
-        base = 6
+        base = 6 + self._rated_items_count
         while self._tag_items_count > 0:
             self._albums_list.takeItem(base)
             self._tag_items_count -= 1
@@ -762,6 +769,24 @@ class Sidebar(QWidget):
             item.setData(Qt.UserRole, _SPECIAL_TAG_ITEM_PREFIX + tag)
             self._albums_list.insertItem(base + i, item)
         self._tag_items_count = len(self._tag_names_cache)
+
+    def _rated_header_label(self) -> str:
+        arrow = "▸" if self._ratings_collapsed else "▾"
+        return f"{arrow} ★ Par notes"
+
+    def _render_rated_subitems(self) -> None:
+        base = 4
+        while self._rated_items_count > 0:
+            self._albums_list.takeItem(base)
+            self._rated_items_count -= 1
+        if self._ratings_collapsed:
+            return
+        for i, n in enumerate(range(5, 0, -1)):
+            item = QListWidgetItem(f"      {'★' * n}{'☆' * (5 - n)}")
+            item.setData(Qt.UserRole, _SPECIAL_RATED_ITEM_PREFIX + str(n))
+            item.setToolTip(f"Photos notées {n} étoile(s) ou plus")
+            self._albums_list.insertItem(base + i, item)
+        self._rated_items_count = 5
 
     def select_album_item(self, data) -> None:
         """Sélectionne silencieusement un album dans la liste (sans émettre de signal)."""
@@ -813,6 +838,10 @@ class Sidebar(QWidget):
             self._tags_collapsed = not self._tags_collapsed
             item.setText(self._tag_header_label())
             self._render_tag_subitems()
+        elif data == _SPECIAL_RATED:
+            self._ratings_collapsed = not self._ratings_collapsed
+            item.setText(self._rated_header_label())
+            self._render_rated_subitems()
         self._folder_tree.clearSelection()
         self._persons_list.clearSelection()
         self.album_selected.emit(data)
@@ -821,13 +850,19 @@ class Sidebar(QWidget):
         item = self._albums_list.itemAt(pos)
         if not item:
             return
-        album = item.data(Qt.UserRole)
-        if not isinstance(album, AlbumInfo):
-            return   # albums spéciaux (Chronologie, Favoris, Vidéos…) : non supprimables
-        menu = QMenu(self)
-        menu.addAction("Supprimer l'album…",
-                       lambda: self.album_delete_requested.emit(album))
-        menu.exec(self._albums_list.mapToGlobal(pos))
+        data = item.data(Qt.UserRole)
+        if isinstance(data, AlbumInfo):
+            menu = QMenu(self)
+            menu.addAction("Supprimer l'album…",
+                           lambda: self.album_delete_requested.emit(data))
+            menu.exec(self._albums_list.mapToGlobal(pos))
+        elif isinstance(data, str) and data.startswith(_SPECIAL_TAG_ITEM_PREFIX):
+            tag = data[len(_SPECIAL_TAG_ITEM_PREFIX):]
+            menu = QMenu(self)
+            menu.addAction("Supprimer ce mot-clé…",
+                           lambda: self.tag_delete_requested.emit(tag))
+            menu.exec(self._albums_list.mapToGlobal(pos))
+        # autres albums spéciaux (Chronologie, Favoris, Vidéos…) : pas de menu
 
     def _folder_context_menu(self, pos) -> None:
         item = self._folder_tree.itemAt(pos)

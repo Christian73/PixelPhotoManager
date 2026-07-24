@@ -314,7 +314,7 @@ Cliquez sur le bouton **♡** dans la barre d'outils de la visionneuse. L'étoil
 
 ### Noter une photo
 
-Cliquez sur l'une des 5 étoiles de la barre d'outils de la visionneuse (à côté du bouton favori), ou utilisez les touches **1** à **5** au clavier. Cliquer à nouveau sur la note déjà attribuée (ou appuyer sur **0**) la retire. Voir [Notation](#notation) pour les autres façons de noter (menu contextuel, badge de vignette, album « ★ Notées »).
+Cliquez sur l'une des 5 étoiles de la barre d'outils de la visionneuse (à côté du bouton favori), ou utilisez les touches **1** à **5** au clavier. Cliquer à nouveau sur la note déjà attribuée (ou appuyer sur **0**) la retire. Voir [Notation](#notation) pour les autres façons de noter (menu contextuel, badge de vignette, album « ★ Par notes »).
 
 ### Applications externes
 
@@ -516,7 +516,7 @@ En bas du panneau de retouche, deux boutons complémentaires :
 - Dans la **grille** : clic droit sur une sélection › **Noter** › choisissez de ★ à ★★★★★, ou **Retirer la note**.
 - Dans la **visionneuse** : cliquez sur l'une des 5 étoiles de la barre d'outils, ou utilisez les touches **1** à **5** (**0** pour retirer la note).
 - Une photo notée affiche un badge d'étoiles (ex. « ★★★ ») en bas à gauche de sa vignette dans la grille.
-- Pour voir toutes les photos notées : cliquez sur **★ Notées** dans la section Albums de la sidebar (note ≥ 1 ; pour filtrer sur une note minimale précise, utilisez la [recherche avancée](#recherche-avancée)).
+- Pour voir les photos notées : dans la section Albums de la sidebar, **★ Par notes** est repliable/dépliable — cliquez sur l'en-tête pour lister toutes les photos notées (≥ 1 étoile), ou dépliez-le et choisissez un niveau (5★ à 1★) pour n'afficher que les photos notées au moins ce nombre d'étoiles. La [recherche avancée](#recherche-avancée) permet aussi de filtrer sur une note minimale précise.
 
 ### Mots-clés
 
@@ -533,7 +533,7 @@ En bas du panneau de retouche, deux boutons complémentaires :
 | **Favoris** | ♡ | Photos marquées comme favorites |
 | **Vidéos** | ▶ | Toutes les vidéos de la bibliothèque |
 | **Par nom de fichier** | 🔍 | Résultat du texte tapé dans le filtre de la sidebar (voir [section 9](#9-recherche-et-filtrage)) |
-| **Notées** | ★ | Photos ayant une note ≥ 1 (voir [Notation](#notation) ci-dessus) |
+| **Par notes** | ★ | Repliable — en-tête : photos notées ≥ 1 ; 5 sous-niveaux (5★ à 1★) pour une note minimale précise (voir [Notation](#notation) ci-dessus) |
 | **Par mot-clé** | 🏷 | Photos portant le mot-clé tapé dans le filtre de la sidebar (voir [Mots-clés](#mots-clés) ci-dessus) |
 
 ### Créer un album personnalisé

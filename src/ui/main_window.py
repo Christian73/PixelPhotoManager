@@ -40,6 +40,7 @@ from src.processing.edit_database import EditDatabase
 from src.ui.sidebar import (
     Sidebar, _SPECIAL_ALL, _SPECIAL_FAV, _SPECIAL_VIDEOS, _SPECIAL_RATED,
     _SPECIAL_FILENAME, _SPECIAL_TAG, _SPECIAL_TAG_ITEM_PREFIX,
+    _SPECIAL_RATED_ITEM_PREFIX,
 )
 from src.ui.thumbnail_grid import ThumbnailGrid
 from src.ui.photo_viewer import PhotoViewer
@@ -684,6 +685,7 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
         self._sidebar.folder_selected.connect(self._on_folder_selected)
         self._sidebar.album_selected.connect(self._on_album_selected)
         self._sidebar.album_delete_requested.connect(self._on_album_delete_requested)
+        self._sidebar.tag_delete_requested.connect(self._on_tag_delete_requested)
         self._sidebar.scan_requested.connect(self._on_scan_requested)
         self._sidebar.folder_removed.connect(self._on_folder_removed)
         self._sidebar.folder_created.connect(self._on_folder_created)
@@ -1529,7 +1531,17 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
             self._grid_nav_bar.hide()
             self.show_grid()
             self._start_photo_query(
-                lambda: self._catalog.get_photos_min_rating(1), "Notées"
+                lambda: self._catalog.get_photos_min_rating(1), "Par notes"
+            )
+        elif isinstance(data, str) and data.startswith(_SPECIAL_RATED_ITEM_PREFIX):
+            n = int(data[len(_SPECIAL_RATED_ITEM_PREFIX):])
+            self._grid.set_ribbon_mode(False)
+            self._grid.set_date_overlay_visible(False)
+            self._grid_nav_bar.hide()
+            self.show_grid()
+            self._start_photo_query(
+                lambda n=n: self._catalog.get_photos_min_rating(n),
+                f"Par notes : {n}★ et plus",
             )
         elif data == _SPECIAL_FILENAME:
             query = self._sidebar.filter_text
@@ -1796,6 +1808,39 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
             self._sidebar.select_album_item(_SPECIAL_ALL)
             self._show_all_photos()
         self._sidebar.refresh_albums(self._catalog.get_albums())
+
+    @Slot(str)
+    def _on_tag_delete_requested(self, tag: str) -> None:
+        photos = self._catalog.get_photos_by_tag(tag)
+        reply = QMessageBox.question(
+            self, "Supprimer le mot-clé",
+            f"Supprimer le mot-clé « {tag} » ({len(photos)} photo(s)) ?\n\n"
+            "Le mot-clé sera retiré de toutes les photos concernées. Les photos "
+            "et les autres mots-clés restent intacts.",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No,
+        )
+        if reply != QMessageBox.Yes:
+            return
+        ids = [p.id for p in photos if p.id is not None]
+        self._catalog.remove_tag_from_photos(ids, tag)
+        for p in photos:
+            p.tags = [t for t in p.tags if t != tag]
+
+        all_tags = self._catalog.get_all_tags()
+        self._sidebar.refresh_tags(all_tags)
+        self._viewer.set_available_tags(all_tags)
+
+        if self._current_context == f"Mot-clé : {tag}":
+            self._sidebar.select_album_item(_SPECIAL_ALL)
+            self._show_all_photos()
+
+        current = self._viewer.current_photo()
+        if current is not None and tag in current.tags:
+            current.tags = [t for t in current.tags if t != tag]
+            self._viewer.refresh_tags()
+            if self._exif_panel.isVisible():
+                self._exif_panel.set_tags(current.tags)
 
     def _on_add_to_album(self, photos: list) -> None:
         albums = self._catalog.get_albums()
@@ -2705,7 +2750,7 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
             return {"type": "favorites"}
         if ctx == "Vidéos":
             return {"type": "videos"}
-        if ctx == "Notées":
+        if ctx == "Par notes":
             return {"type": "rated"}
         if ctx.startswith(f"{_PERSON_CTX_PREFIX}cluster_"):
             return {"type": "all"}   # vue transitoire, pas de restauration
@@ -2714,7 +2759,10 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
                 return {"type": "person", "value": int(ctx[len(_PERSON_CTX_PREFIX):])}
             except ValueError:
                 return {"type": "all"}
-        if ctx.startswith("Fichiers : ") or ctx.startswith("Mot-clé : ") or ctx == "Recherche avancée":
+        if (
+            ctx.startswith("Fichiers : ") or ctx.startswith("Mot-clé : ")
+            or ctx.startswith("Par notes : ") or ctx == "Recherche avancée"
+        ):
             return {"type": "all"}   # filtre éphémère
         if ctx and os.path.isdir(ctx):
             return {"type": "folder", "value": ctx}
