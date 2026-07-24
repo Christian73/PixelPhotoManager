@@ -209,6 +209,23 @@ Les retouches ne modifient jamais les fichiers originaux. Les ajustements sont s
 - L'historique est rechargé depuis la DB à l'ouverture d'une photo → undo/redo persistant entre sessions
 - Le bouton **Appliquer** dans `EditPanel` déclenche `EditDatabase.save()`
 
+**Piège largeur minimale** : la grille de boutons de traitement (2 colonnes —
+Contraste, Vignette… en colonne 2) est hébergée dans une `QScrollArea`, qui ne
+propage jamais le `minimumSizeHint()` de son widget interne vers le sien
+(comportement Qt voulu, pour permettre un contenu plus grand que la vue). Sans
+plancher explicite (`scroll.setMinimumWidth(...)` posé dans `_setup_ui`,
+doublé par `EditPanel.content_min_width()` recalculé à la demande — le style
+Qt applicatif n'est pleinement résolu qu'après le premier affichage, une
+valeur figée à la construction sous-estime la largeur réelle des boutons une
+fois stylés), rien n'empêche le splitter de comprimer le panneau sous cette
+largeur : la colonne 2 devient invisible et inatteignable au clic,
+silencieusement, pour un utilisateur réel (pas seulement un artefact
+d'automation e2e). `main_window.py::_ensure_left_pane_min_width()` interroge
+`content_min_width()` pour dimensionner le splitter — appelé aussi au
+changement de page du `QStackedWidget` gauche, qui ne déclenche pas de
+relayout de lui-même. Test de régression dédié (géométrie directe, sans
+automation OS) : `tests/gui_widgets/test_edit_panel.py::TestEditPanelContentMinWidth`.
+
 ### Cache vignettes à trois niveaux
 
 `src/library/thumbnail_cache.py` — RAM LRU (500 entrées, ~50 Mo) → SQLite → génération à la demande dans un thread. Ne jamais générer de vignettes dans le thread UI.
