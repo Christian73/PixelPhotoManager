@@ -36,15 +36,32 @@ class TagsPrepLoader(QThread):
             self.ready.emit([])
 
 
+class _TagChip(QCheckBox):
+    """Case tristate au cycle de clic restreint à 2 états. Qt.PartiallyChecked
+    n'est utilisé que comme état *initial* d'affichage (mot-clé présent sur
+    une partie seulement de la sélection multi-photos) — sans cette
+    surcharge, le cycle par défaut de QCheckBox.nextCheckState (Unchecked →
+    PartiallyChecked → Checked → Unchecked → …) fait réapparaître l'état
+    tiers après un second clic, ce qui ressemble à un 3e état indésirable
+    même en sélection d'une seule photo."""
+
+    def nextCheckState(self) -> None:
+        if self.checkState() == Qt.Checked:
+            self.setCheckState(Qt.Unchecked)
+        else:
+            self.setCheckState(Qt.Checked)
+
+
 class TagEditDialog(QDialog):
     """Édite les tags d'une sélection de photos.
 
-    Les tags déjà présents sur la sélection apparaissent en chips (cases à
-    cocher) : coché si le tag est sur *toutes* les photos sélectionnées, état
-    tiers (Qt.PartiallyChecked) s'il n'est que sur une partie — cliquer sur une
-    chip tierce la fait basculer vers un état plein (Qt et non tiers, cf.
-    QCheckBox.nextCheckState). Un champ avec autocomplétion permet d'ajouter un
-    nouveau tag (existant dans le catalogue ou inédit)."""
+    Tous les mots-clés du catalogue apparaissent en chips (cases à cocher),
+    pas seulement ceux déjà présents sur la sélection : coché si le mot-clé
+    est sur *toutes* les photos sélectionnées, décoché s'il n'est sur
+    aucune, état tiers (Qt.PartiallyChecked) s'il n'est que sur une partie —
+    cliquer sur une chip tierce la fait basculer vers un état plein (cf.
+    _TagChip.nextCheckState). Un champ avec autocomplétion permet d'ajouter
+    un nouveau tag (existant dans le catalogue ou inédit)."""
 
     def __init__(
         self, photos: list[PhotoInfo], all_tags: list[str], parent: QWidget | None = None
@@ -81,7 +98,8 @@ class TagEditDialog(QDialog):
         self._chips_layout.setContentsMargins(4, 4, 4, 4)
         self._chips_layout.setSpacing(2)
 
-        for tag in sorted(self._union_tags()):
+        tags_to_show = set(self._all_tags) | self._union_tags() if self._photos else set()
+        for tag in sorted(tags_to_show):
             self._add_chip(tag, self._initial_state(tag))
 
         scroll_area = QScrollArea()
@@ -103,14 +121,18 @@ class TagEditDialog(QDialog):
         return union
 
     def _initial_state(self, tag: str) -> Qt.CheckState:
-        on_all = all(tag in p.tags for p in self._photos)
-        return Qt.Checked if on_all else Qt.PartiallyChecked
+        present = sum(1 for p in self._photos if tag in p.tags)
+        if present == 0:
+            return Qt.Unchecked
+        if present == len(self._photos):
+            return Qt.Checked
+        return Qt.PartiallyChecked
 
     def _add_chip(self, tag: str, state: Qt.CheckState) -> None:
         if tag in self._chips:
             self._chips[tag].setCheckState(Qt.Checked)
             return
-        cb = QCheckBox(tag)
+        cb = _TagChip(tag)
         cb.setTristate(True)
         cb.setCheckState(state)
         self._chips_layout.addWidget(cb)
@@ -133,12 +155,16 @@ class TagEditDialog(QDialog):
     def result_add_remove(self) -> tuple[list[str], list[str]]:
         """Renvoie (tags_à_ajouter, tags_à_retirer) — les chips laissées à
         l'état tiers (non touchées par l'utilisateur) n'apparaissent dans
-        aucune des deux listes."""
+        aucune des deux listes. Un mot-clé du catalogue jamais présent sur la
+        sélection et laissé décoché n'est pas non plus reporté en retrait
+        (ce serait un retrait sans effet, mais ça éviterait quand même une
+        écriture DB par mot-clé du catalogue à chaque validation)."""
+        union = self._union_tags()
         to_add, to_remove = [], []
         for tag, cb in self._chips.items():
             state = cb.checkState()
             if state == Qt.Checked:
                 to_add.append(tag)
-            elif state == Qt.Unchecked:
+            elif state == Qt.Unchecked and tag in union:
                 to_remove.append(tag)
         return to_add, to_remove

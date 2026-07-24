@@ -46,6 +46,49 @@ class TestTagEditDialogChips:
 
         assert dlg._chips == {}
 
+    def test_catalog_tag_absent_from_selection_is_shown_unchecked(self, qtbot):
+        photo = _photo("C:/lib/a.jpg", tags=["vacances"])
+        dlg = TagEditDialog([photo], all_tags=["vacances", "famille"])
+        qtbot.addWidget(dlg)
+
+        assert dlg._chips["famille"].checkState() == Qt.Unchecked
+
+
+class TestTagChipClickCycle:
+    def test_checked_chip_click_goes_directly_to_unchecked(self, qtbot):
+        photo = _photo("C:/lib/a.jpg", tags=["vacances"])
+        dlg = TagEditDialog([photo], all_tags=[])
+        qtbot.addWidget(dlg)
+        chip = dlg._chips["vacances"]
+        assert chip.checkState() == Qt.Checked
+
+        chip.nextCheckState()
+        assert chip.checkState() == Qt.Unchecked
+
+    def test_click_cycle_never_revisits_partially_checked(self, qtbot):
+        photo = _photo("C:/lib/a.jpg", tags=["vacances"])
+        dlg = TagEditDialog([photo], all_tags=[])
+        qtbot.addWidget(dlg)
+        chip = dlg._chips["vacances"]
+
+        seen = set()
+        for _ in range(4):
+            chip.nextCheckState()
+            seen.add(chip.checkState())
+
+        assert Qt.PartiallyChecked not in seen
+
+    def test_partial_chip_click_goes_directly_to_checked(self, qtbot):
+        p1 = _photo("C:/lib/a.jpg", tags=["vacances"])
+        p2 = _photo("C:/lib/b.jpg", tags=[])
+        dlg = TagEditDialog([p1, p2], all_tags=[])
+        qtbot.addWidget(dlg)
+        chip = dlg._chips["vacances"]
+        assert chip.checkState() == Qt.PartiallyChecked
+
+        chip.nextCheckState()
+        assert chip.checkState() == Qt.Checked
+
 
 class TestTagEditDialogAddTag:
     def test_typing_and_returning_adds_a_checked_chip(self, qtbot):
@@ -106,6 +149,15 @@ class TestTagEditDialogResult:
         to_add, to_remove = dlg.result_add_remove()
         assert to_add == []
         assert to_remove == ["vacances"]
+
+    def test_catalog_tag_never_present_and_left_unchecked_is_not_reported(self, qtbot):
+        photo = _photo("C:/lib/a.jpg", tags=["vacances"])
+        dlg = TagEditDialog([photo], all_tags=["vacances", "famille"])
+        qtbot.addWidget(dlg)
+
+        to_add, to_remove = dlg.result_add_remove()
+        assert to_add == ["vacances"]
+        assert to_remove == []
 
     def test_new_tag_is_returned_in_to_add(self, qtbot):
         photo = _photo("C:/lib/a.jpg")

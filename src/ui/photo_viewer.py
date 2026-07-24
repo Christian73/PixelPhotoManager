@@ -183,7 +183,12 @@ class _TagDropdown(QComboBox):
 
     def _set_placeholder(self) -> None:
         n = len(self._active)
-        label = "🏷 Mots-clés" if not n else f"🏷 Mots-clés ({n})"
+        if n == 0:
+            label = "🏷 Mots-clés"
+        elif n == 1:
+            label = f"🏷 {next(iter(self._active))}"
+        else:
+            label = f"🏷 Mots-clés ({n})"
         self.setPlaceholderText(f"{label}  ▾")
 
     def set_tags(self, all_tags: list[str], active_tags: list[str]) -> None:
