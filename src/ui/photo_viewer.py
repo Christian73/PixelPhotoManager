@@ -991,7 +991,7 @@ class PhotoViewer(QWidget):
         menu.addAction("Mots-clés…", lambda: self.edit_tags_requested.emit([photo]))
         menu.addAction("Renommer…", lambda: self.rename_requested.emit(photo))
         menu.addAction("Déplacer vers…", lambda: self.move_requested.emit(photo))
-        menu.addAction("Enregistrer l'image traitée sur le disque",
+        menu.addAction("Enregistrer l'image traitée sur le disque\tCtrl+S",
                        lambda: self.save_requested.emit(photo))
         menu.addSeparator()
         menu.addAction("Révéler dans l'Explorateur",
@@ -1016,10 +1016,10 @@ class PhotoViewer(QWidget):
                        lambda: self.force_redetect_requested.emit(photo))
         menu.addSeparator()
         if self._album_id is not None:
-            menu.addAction("Retirer de l'album",
+            menu.addAction("Retirer de l'album\tSuppr",
                            lambda: self.remove_from_album_requested.emit([photo]))
         else:
-            menu.addAction("Effacer le fichier…", lambda: self.delete_requested.emit([photo]))
+            menu.addAction("Effacer le fichier…\tSuppr", lambda: self.delete_requested.emit([photo]))
 
         menu.exec(pos)
 
@@ -1111,6 +1111,11 @@ class PhotoViewer(QWidget):
                         self.remove_from_album_requested.emit([photo])
                     else:
                         self.delete_requested.emit([photo])
+        elif key == Qt.Key_S and event.modifiers() == Qt.ControlModifier:
+            photo = self.current_photo()
+            if photo and not self._canvas._crop_mode and not self._canvas._red_eye_mode \
+                    and not self._canvas._face_add_mode:
+                self.save_requested.emit(photo)
         elif key == Qt.Key_F:
             self.zoom_fit()
         elif key == Qt.Key_Z:

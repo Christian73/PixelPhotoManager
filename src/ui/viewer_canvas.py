@@ -2204,7 +2204,7 @@ class _Canvas(QWidget):
                 self.confirm_annotation_draft()
             elif self._annotation_selected_ids:
                 menu = QMenu(self)
-                menu.addAction("Effacer", self.delete_selected_annotation)
+                menu.addAction("Effacer\tSuppr", self.delete_selected_annotation)
                 if len(self._annotation_selected_ids) >= 2:
                     menu.addAction("Grouper", self.group_selected_annotations)
                 if any(

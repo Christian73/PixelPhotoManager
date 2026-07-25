@@ -1379,7 +1379,7 @@ class ThumbnailGrid(QScrollArea):
         menu.addAction("Mots-clés…", lambda p=photos: self.edit_tags_requested.emit(p))
         menu.addAction("Renommer l'image", lambda: self.rename_requested.emit(photo))
         menu.addAction("Déplacer vers…", lambda: self.move_requested.emit(photo))
-        menu.addAction("Enregistrer l'image traitée sur le disque",
+        menu.addAction("Enregistrer l'image traitée sur le disque\tCtrl+S",
                        lambda: self.save_requested.emit(photo))
         menu.addSeparator()
         n = len(photos)
@@ -1402,10 +1402,10 @@ class ThumbnailGrid(QScrollArea):
             # l'effacement du fichier, même en multi-sélection (même règle que la
             # visionneuse et que la touche Del, cf. _emit_delete_or_remove).
             rm_lbl = "Retirer les photos de l'album" if n > 1 else "Retirer de l'album"
-            menu.addAction(rm_lbl, lambda p=photos: self.remove_from_album_requested.emit(p))
+            menu.addAction(rm_lbl + "\tSuppr", lambda p=photos: self.remove_from_album_requested.emit(p))
         else:
             del_lbl = "Effacer les fichiers…" if n > 1 else "Effacer le fichier…"
-            menu.addAction(del_lbl, lambda p=photos: self.delete_requested.emit(p))
+            menu.addAction(del_lbl + "\tSuppr", lambda p=photos: self.delete_requested.emit(p))
         menu.exec(pos)
 
     def _emit_delete_or_remove(self, photos: list) -> None:
@@ -1417,6 +1417,11 @@ class ThumbnailGrid(QScrollArea):
             self.remove_from_album_requested.emit(photos)
         else:
             self.delete_requested.emit(photos)
+
+    def _emit_save_for_single(self, photos: list) -> None:
+        """Ctrl+S : n'a de sens que pour une photo unique et non ambiguë."""
+        if len(photos) == 1:
+            self.save_requested.emit(photos[0])
 
     def keyPressEvent(self, event) -> None:
         if self._ribbon_mode:
@@ -1439,6 +1444,16 @@ class ThumbnailGrid(QScrollArea):
                         self._emit_delete_or_remove([self._photos[center_idx]])
                 event.accept()
                 return
+            elif key == Qt.Key_S and event.modifiers() == Qt.ControlModifier:
+                selected = self.get_selected()
+                if selected:
+                    self._emit_save_for_single(selected)
+                else:
+                    center_idx = self._ribbon_offset + self._center_pos()
+                    if 0 <= center_idx < len(self._photos):
+                        self._emit_save_for_single([self._photos[center_idx]])
+                event.accept()
+                return
             else:
                 super().keyPressEvent(event)
                 return
@@ -1450,5 +1465,7 @@ class ThumbnailGrid(QScrollArea):
             selected = self.get_selected()
             if selected:
                 self._emit_delete_or_remove(selected)
+        elif event.key() == Qt.Key_S and event.modifiers() == Qt.ControlModifier:
+            self._emit_save_for_single(self.get_selected())
         else:
             super().keyPressEvent(event)
