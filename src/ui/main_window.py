@@ -2605,6 +2605,7 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
             edit = self._edit_db.load(photo.path)
             with Image.open(photo.path) as img:
                 img = ImageOps.exif_transpose(img)
+                orig_w, orig_h = img.size
                 if edit.is_modified():
                     img = ImageAdjuster.apply_all(img, edit)
                 if self._annotations_globally_visible and edit.annotations:
@@ -2626,6 +2627,7 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
                 # et rafraîchir l'UI pour éviter une double application au prochain chargement
                 self._edit_db.delete(photo.path)
                 self._thumb_cache.invalidate(photo.path)
+                self._remap_face_bboxes_after_save(photo.path, edit, orig_w, orig_h)
                 # Le fichier sur disque a changé : l'image de base en cache du
                 # viewer ne correspond plus (elle montrerait la version sans
                 # retouche alors qu'elles sont désormais baked dans le fichier).
@@ -2641,6 +2643,47 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
                                  f"Impossible de sauver l'image :\n{e}")
         finally:
             QApplication.restoreOverrideCursor()
+
+    def _remap_face_bboxes_after_save(
+        self, photo_path: str, edit: EditInfo, orig_w: int, orig_h: int,
+    ) -> None:
+        """Après un enregistrement qui écrase le fichier d'origine : le crop et
+        la rotation/redressement éventuels sont désormais bakés dans les pixels,
+        donc les bboxes de visages stockées (calculées sur l'image d'origine)
+        ne pointent plus au bon endroit — les recaler dans le nouveau repère
+        (cf. GeometryProcessor.transform_bboxes) ou les purger si tombées hors
+        cadre (recadrage qui exclut le visage)."""
+        if not (edit.rotation or edit.straighten or edit.flip_h or edit.flip_v or edit.crop):
+            return
+        from src.processing.geometry import GeometryProcessor
+
+        faces = self._face_db.get_faces_for_photo(photo_path)
+        if not faces:
+            return
+
+        by_detected_rotation: dict = {}
+        for f in faces:
+            by_detected_rotation.setdefault(f.detected_rotation % 360, []).append(f)
+
+        updates: dict = {}
+        deletions: list = []
+        for det_rot, group in by_detected_rotation.items():
+            size = (orig_h, orig_w) if det_rot in (90, 270) else (orig_w, orig_h)
+            bboxes = [(f.bbox_x, f.bbox_y, f.bbox_w, f.bbox_h) for f in group]
+            results, _final_size = GeometryProcessor.transform_bboxes(
+                bboxes, size,
+                rotation=edit.rotation, straighten=edit.straighten,
+                flip_h=edit.flip_h, flip_v=edit.flip_v, crop=edit.crop,
+                pre_rotation=det_rot,
+            )
+            for f, res in zip(group, results):
+                if res is None:
+                    deletions.append(f.id)
+                else:
+                    updates[f.id] = res
+
+        if updates or deletions:
+            self._face_db.remap_bboxes_after_save(photo_path, updates, deletions)
 
     @Slot()
     def _on_export_clicked(self) -> None:

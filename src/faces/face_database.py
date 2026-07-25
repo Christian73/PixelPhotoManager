@@ -429,32 +429,43 @@ class FaceDatabase:
         Otherwise (all faces small — old scanned photo, distant group) base is used.
         Fallback to _AUTO_IGNORE_MIN_SIDE if image dimensions cannot be read.
 
-        force_no_limit=True ("Forcer une nouvelle détection sans limite de taille") :
-        - le seuil d'auto-ignorance (ci-dessus) est entièrement court-circuité, aucune
-          face ne ressort avec ignored=1 (le filtre dur de detector.py::detect_and_embed
-          reste, lui, inchangé — CLAUDE.md interdit d'y toucher) ;
-        - les visages ajoutés manuellement (embedding NULL, pinned=1, cf. add_manual_face)
-          ne sont jamais supprimés : ils n'ont jamais été vus par InsightFace, une
-          nouvelle détection ne peut donc pas les retrouver ;
-        - les visages auto-détectés déjà identifiés (person_id non NULL) sont, eux,
-          effacés puis réinsérés comme les autres détections ; leur identification est
-          reportée sur la nouvelle face dont la bboxe recouvre le mieux l'ancienne
-          (IoU > _IOU_THRESHOLD), pour respecter "les visages identifiés le restent".
+        "Les visages identifiés le restent" est un invariant appliqué à *tout* appel
+        (pas seulement force_no_limit) : les visages ajoutés manuellement (embedding
+        NULL, pinned=1, cf. add_manual_face) ne sont jamais supprimés — ils n'ont
+        jamais été vus par InsightFace, une nouvelle détection ne peut donc pas les
+        retrouver — et les visages auto-détectés déjà identifiés (person_id non NULL)
+        sont effacés puis réinsérés comme les autres détections, leur identification
+        étant reportée sur la nouvelle face dont la bboxe recouvre le mieux l'ancienne
+        (IoU > _IOU_THRESHOLD). Sans quoi une simple ré-analyse (ex. SingleFaceReindexThread
+        après chaque rotation 90° en aperçu, avant même tout enregistrement) effacerait
+        silencieusement toute identification sur la photo.
+
+        force_no_limit=True ("Forcer une nouvelle détection sans limite de taille") ne
+        change que le seuil d'auto-ignorance (ci-dessus), entièrement court-circuité
+        dans ce mode, aucune face ne ressort alors avec ignored=1 (le filtre dur de
+        detector.py::detect_and_embed reste, lui, inchangé — CLAUDE.md interdit d'y
+        toucher).
         """
         photo_path = os.path.normpath(photo_path)
         with self._guard() as conn:
-            preserved_ids = []
-            if force_no_limit:
-                preserved_ids = conn.execute(
-                    "SELECT bbox_x, bbox_y, bbox_w, bbox_h, person_id, pinned"
-                    " FROM faces"
-                    " WHERE photo_path=? AND person_id IS NOT NULL"
-                    "   AND NOT (embedding IS NULL AND pinned=1)",
-                    (photo_path,),
-                ).fetchall()
-            delete_sql = "DELETE FROM faces WHERE photo_path=?"
-            if force_no_limit:
-                delete_sql += " AND NOT (embedding IS NULL AND pinned=1)"
+            # embedding IS NOT NULL exclut à la fois les visages ajoutés manuellement
+            # (pinned=1, jamais retrouvables par une nouvelle détection) et les
+            # placeholders Picasa (bbox large englobant tête/buste, pas une vraie
+            # détection ArcFace) — ces derniers ont leur propre mécanisme de
+            # préservation, plus adapté (centre-dans-région), via
+            # _apply_picasa_annotations()/"still_pending" ci-dessous ; les mélanger
+            # à cette réassociation par IoU stricte risquerait un score IoU trop
+            # bas (formes très différentes) et une correspondance manquée.
+            preserved_ids = conn.execute(
+                "SELECT bbox_x, bbox_y, bbox_w, bbox_h, person_id, pinned"
+                " FROM faces"
+                " WHERE photo_path=? AND person_id IS NOT NULL AND embedding IS NOT NULL",
+                (photo_path,),
+            ).fetchall()
+            delete_sql = (
+                "DELETE FROM faces WHERE photo_path=?"
+                " AND NOT (embedding IS NULL AND pinned=1)"
+            )
             conn.execute(delete_sql, (photo_path,))
             # Un succès efface toute erreur précédente (timeout/crash) : la photo
             # a été réellement analysée, elle n'a plus besoin d'attention.
@@ -522,9 +533,8 @@ class FaceDatabase:
                     (photo_path, x, y, w, h, blob,
                      1 if low_quality else 0, score),
                 )
-                if force_no_limit:
-                    new_faces.append((cur.lastrowid, x, y, w, h))
-            if force_no_limit and preserved_ids:
+                new_faces.append((cur.lastrowid, x, y, w, h))
+            if preserved_ids:
                 for pbx, pby, pbw, pbh, pid, ppinned in preserved_ids:
                     best_id, best_iou = None, 0.0
                     for face_id, x, y, w, h in new_faces:
@@ -2448,6 +2458,34 @@ class FaceDatabase:
             )
             conn.executemany(
                 "DELETE FROM face_index_errors WHERE photo_path=?", params
+            )
+            conn.commit()
+
+    def remap_bboxes_after_save(
+        self, photo_path: str, updates: dict, deletions: list,
+    ) -> None:
+        """Après enregistrement d'une photo retouchée qui écrase le fichier
+        d'origine (crop/rotation/redressement désormais bakés dans les pixels) :
+        recale les bboxes des visages existants dans le nouveau repère pixel
+        (`updates` = {face_id: (x, y, w, h)}) et purge ceux tombés hors cadre
+        (`deletions` = [face_id, ...]). Remet aussi indexed_photos.rotation à 0 :
+        le fichier est maintenant dans son orientation finale, plus de rotation
+        de détection à compenser pour reconstruire une vignette (cf.
+        detected_rotation, src/ui/face_panel.py)."""
+        photo_path = os.path.normpath(photo_path)
+        with self._guard() as conn:
+            for face_id, (x, y, w, h) in updates.items():
+                conn.execute(
+                    "UPDATE faces SET bbox_x=?, bbox_y=?, bbox_w=?, bbox_h=? WHERE id=?",
+                    (x, y, w, h, face_id),
+                )
+            if deletions:
+                conn.executemany(
+                    "DELETE FROM faces WHERE id=?", [(fid,) for fid in deletions]
+                )
+            conn.execute(
+                "UPDATE indexed_photos SET rotation=0 WHERE photo_path=?",
+                (photo_path,),
             )
             conn.commit()
 

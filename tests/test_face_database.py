@@ -289,6 +289,62 @@ class TestSaveFacesForceNoLimit:
         assert by_x[400][1] == 0, "force_no_limit doit court-circuiter l'auto-ignore"
 
 
+class TestSaveFacesPreservesIdentificationByDefault:
+    """Régression 2026-07 : SingleFaceReindexThread (déclenché après chaque
+    rotation 90° en aperçu, avant tout enregistrement) appelle save_faces avec
+    force_no_limit=False. La réassociation par IoU était auparavant réservée à
+    force_no_limit=True, donc une simple rotation effaçait silencieusement
+    toute identification existante — corrigé en rendant la préservation
+    inconditionnelle."""
+
+    def test_person_id_survives_reindex_without_force_no_limit(self, tmp_path):
+        photo = tmp_path / "photo.jpg"
+        _make_image(photo, (1000, 600))
+        db = FaceDatabase(db_path=tmp_path / "faces.db")
+        db.save_faces(str(photo), [
+            {"bbox": (100, 100, 130, 130), "embedding": _base_vec(0), "det_score": 0.9},
+        ])
+        norm_path = os.path.normpath(str(photo))
+        face_id = _raw_query_one(db, "SELECT id FROM faces WHERE photo_path=?", (norm_path,))[0]
+        db.assign_person_to_face(face_id, person_id=42)
+
+        # Ré-analyse après rotation (comme SingleFaceReindexThread), bbox
+        # légèrement décalée par la nouvelle détection, force_no_limit par défaut.
+        db.save_faces(str(photo), [
+            {"bbox": (105, 105, 130, 130), "embedding": _base_vec(0), "det_score": 0.9},
+        ])
+
+        rows = _raw_query_all(
+            db, "SELECT bbox_x, person_id FROM faces WHERE photo_path=?", (norm_path,),
+        )
+        by_x = {x: pid for x, pid in rows}
+        assert by_x.get(105) == 42, (
+            "l'identification ne doit pas être perdue lors d'une ré-analyse "
+            "sans force_no_limit (ex. après une simple rotation en aperçu)"
+        )
+
+    def test_manually_pinned_face_survives_reindex(self, tmp_path):
+        """Un visage ajouté manuellement (embedding NULL, pinned=1) n'est
+        jamais retrouvable par une nouvelle détection : il doit rester
+        intact, jamais supprimé par le DELETE de save_faces."""
+        photo = tmp_path / "photo.jpg"
+        _make_image(photo, (1000, 600))
+        db = FaceDatabase(db_path=tmp_path / "faces.db")
+        norm_path = os.path.normpath(str(photo))
+        pinned_id = _raw_insert_face(
+            db, norm_path, person_id=99, bbox=(700, 400, 60, 60), pinned=1,
+        )
+
+        db.save_faces(str(photo), [
+            {"bbox": (100, 100, 130, 130), "embedding": _base_vec(0), "det_score": 0.9},
+        ])
+
+        row = _raw_query_one(
+            db, "SELECT person_id, pinned FROM faces WHERE id=?", (pinned_id,),
+        )
+        assert row == (99, 1), "le visage épinglé manuellement a été effacé par la ré-analyse"
+
+
 class TestGetAllPersonCentroids:
     def test_returns_average_embedding_per_person(self, tmp_path):
         db = FaceDatabase(db_path=tmp_path / "faces.db")
