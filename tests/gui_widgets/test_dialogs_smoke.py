@@ -105,6 +105,44 @@ class TestHelpDialog:
         qtbot.addWidget(dlg)
         dlg.close()   # closeEvent : déconnexion sans exception
 
+    def test_search_finds_text_in_current_tab(self, qtbot):
+        """"RANSAC" n'apparaît que dans doublons.html (cf. help_content/), même
+        en comparaison insensible à la casse (find() par défaut) — chercher ce
+        terme en étant déjà sur cet onglet ne doit pas en changer."""
+        from src.ui.help_dialog import HelpDialog
+        dlg = HelpDialog(tab="Doublons")
+        qtbot.addWidget(dlg)
+        dlg._search_edit.setText("RANSAC")
+        tabs = dlg._tabs
+        assert tabs.tabText(tabs.currentIndex()) == "Doublons"
+        assert tabs.currentWidget().textCursor().selectedText() == "RANSAC"
+
+    def test_search_switches_to_tab_containing_match(self, qtbot):
+        from src.ui.help_dialog import HelpDialog
+        dlg = HelpDialog()  # démarre sur "Vue d'ensemble"
+        qtbot.addWidget(dlg)
+        tabs = dlg._tabs
+        assert tabs.tabText(tabs.currentIndex()) == "Vue d'ensemble"
+
+        dlg._search_edit.setText("RANSAC")
+        assert tabs.tabText(tabs.currentIndex()) == "Doublons"
+
+    def test_search_not_found_flags_the_search_box(self, qtbot):
+        from src.ui.help_dialog import HelpDialog
+        dlg = HelpDialog()
+        qtbot.addWidget(dlg)
+        dlg._search_edit.setText("zzz_terme_absent_de_toute_page_aide_zzz")
+        assert dlg._search_edit.styleSheet() != ""
+
+    def test_search_cleared_resets_style(self, qtbot):
+        from src.ui.help_dialog import HelpDialog
+        dlg = HelpDialog()
+        qtbot.addWidget(dlg)
+        dlg._search_edit.setText("zzz_terme_absent_de_toute_page_aide_zzz")
+        assert dlg._search_edit.styleSheet() != ""
+        dlg._search_edit.setText("")
+        assert dlg._search_edit.styleSheet() == ""
+
 
 # ------------------------------------------------------------------ FaceCountersDialog
 

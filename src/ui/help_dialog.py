@@ -13,8 +13,9 @@ import sys
 from pathlib import Path
 
 from PySide6.QtCore import Qt
+from PySide6.QtGui import QKeySequence, QShortcut, QTextCursor
 from PySide6.QtWidgets import (
-    QDialog, QVBoxLayout, QTabWidget, QTextBrowser, QDialogButtonBox,
+    QDialog, QVBoxLayout, QTabWidget, QTextBrowser, QDialogButtonBox, QLineEdit,
 )
 
 from src.core.app_version import get_app_version
@@ -68,6 +69,8 @@ QTextBrowser {
 }
 """
 
+_SEARCH_NOT_FOUND_STYLE = "QLineEdit { background: #5a2a2a; color: #fff; }"
+
 _TABWIDGET_STYLE = """
 QTabWidget::pane {
     border: 1px solid #444;
@@ -109,6 +112,17 @@ class HelpDialog(QDialog):
         layout.setContentsMargins(8, 8, 8, 8)
         layout.setSpacing(6)
 
+        self._search_edit = QLineEdit()
+        self._search_edit.setPlaceholderText("Rechercher dans l'aide…  (Entrée : occurrence suivante)")
+        self._search_edit.setClearButtonEnabled(True)
+        self._search_edit.textChanged.connect(lambda text: self._search(text, continue_search=False))
+        self._search_edit.returnPressed.connect(
+            lambda: self._search(self._search_edit.text(), continue_search=True)
+        )
+        layout.addWidget(self._search_edit)
+        self._search_shortcut = QShortcut(QKeySequence.Find, self)
+        self._search_shortcut.activated.connect(self._focus_search)
+
         tabs = QTabWidget()
         tabs.setStyleSheet(_TABWIDGET_STYLE)
         self._about_browser: QTextBrowser | None = None
@@ -134,6 +148,7 @@ class HelpDialog(QDialog):
                     break
 
         layout.addWidget(tabs)
+        self._tabs = tabs
 
         # Pas de parent : WA_DeleteOnClose peut détruire ce dialogue avant que la
         # vérification réseau (jusqu'à 5s) ne se termine — un QThread parenté serait
@@ -156,6 +171,50 @@ class HelpDialog(QDialog):
         except (RuntimeError, TypeError):
             pass
         super().closeEvent(event)
+
+    def _focus_search(self) -> None:
+        self._search_edit.setFocus()
+        self._search_edit.selectAll()
+
+    @staticmethod
+    def _search_current_tab_from(browser: QTextBrowser, text: str, *, from_top: bool) -> bool:
+        if from_top:
+            cursor = browser.textCursor()
+            cursor.movePosition(QTextCursor.Start)
+            browser.setTextCursor(cursor)
+        return browser.find(text)
+
+    def _search(self, text: str, *, continue_search: bool) -> None:
+        """Cherche `text` dans l'onglet courant puis, s'il est absent,
+        dans les onglets suivants (recherche circulaire, un seul onglet
+        actif à la fois donc pas de vue "tous onglets" possible sans
+        dupliquer le contenu). `continue_search=True` (Entrée) poursuit
+        depuis la position courante ; toute autre frappe repart du début
+        de l'onglet affiché — cohérent avec le comportement `Ctrl+F` d'un
+        navigateur."""
+        self._search_edit.setStyleSheet("")
+        if not text:
+            return
+        tabs = self._tabs
+        n = tabs.count()
+        start_index = tabs.currentIndex()
+
+        browser = tabs.widget(start_index)
+        if self._search_current_tab_from(browser, text, from_top=not continue_search):
+            return
+        for offset in range(1, n):
+            index = (start_index + offset) % n
+            browser = tabs.widget(index)
+            if self._search_current_tab_from(browser, text, from_top=True):
+                tabs.setCurrentIndex(index)
+                return
+        # Rien trouvé dans aucun onglet en repartant du suivant : dernière
+        # chance sur l'onglet de départ depuis son début (cas "Entrée" qui
+        # vient de dépasser la dernière occurrence de cet onglet — la boucle
+        # ci-dessus l'a sauté puisqu'elle commence à offset=1).
+        if continue_search and self._search_current_tab_from(tabs.widget(start_index), text, from_top=True):
+            return
+        self._search_edit.setStyleSheet(_SEARCH_NOT_FOUND_STYLE)
 
     def _on_version_checked(self, status: str, version: str, html_url: str) -> None:
         if self._about_browser is None:
