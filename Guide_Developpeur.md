@@ -845,6 +845,16 @@ objectif : pouvoir corriger l'aide sans toucher au code. `_load_tab_html()` rés
 `__VERSION_CHECK__`. **Toute modification du contenu d'aide passe par ces fichiers HTML, jamais
 par du texte en dur dans `help_dialog.py`.**
 
+Barre de recherche (`self._search_edit`, `HelpDialog._search()`) : cherche dans l'onglet
+`QTextBrowser` courant via `QTextBrowser.find()` (Qt, insensible à la casse et **substring**, cf.
+piège rencontré en test — "ORB" matche aussi "c**orb**eille") puis, si absent, dans les onglets
+suivants par ordre circulaire à partir de l'onglet courant — bascule automatiquement dessus si
+trouvé (`tabs.setCurrentIndex`). `continue_search=True` (Entrée, `returnPressed`) poursuit depuis
+la position du curseur ; toute autre frappe (`textChanged`) repart du début de l'onglet affiché.
+Raccourci `Ctrl+F` (`QShortcut(QKeySequence.Find, self)`, portée fenêtre — n'entre pas en conflit
+avec le `Ctrl+F` global de la fenêtre principale car `HelpDialog` est modal) donne le focus au
+champ. Aucun résultat dans aucun onglet → `_SEARCH_NOT_FOUND_STYLE` (fond rouge) sur le champ.
+
 ---
 
 ## 7. Composants processing

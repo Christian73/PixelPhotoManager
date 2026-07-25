@@ -103,6 +103,10 @@ Au démarrage, l'application interroge en arrière-plan la page des releases Git
 
 L'onglet **À propos** (menu **Aide › À propos**) effectue la même vérification à chaque ouverture et affiche l'un des trois résultats : « ✓ Vous disposez de la dernière version », l'alerte de mise à jour disponible avec son lien, ou un message d'erreur si la vérification est impossible (pas de connexion).
 
+### Rechercher dans l'aide
+
+La fenêtre **Aide…** (F1) dispose d'une barre de recherche en haut, au-dessus des onglets. Tapez un terme : l'onglet affiché est parcouru en premier, puis les onglets suivants si le terme n'y figure pas — l'onglet contenant la première occurrence trouvée est automatiquement sélectionné et le passage correspondant surligné. Appuyez sur **Entrée** pour passer à l'occurrence suivante (recherche circulaire sur l'ensemble des onglets). **Ctrl+F**, quand la fenêtre d'aide a le focus, place le curseur dans la barre de recherche. Si le terme est introuvable dans aucun onglet, le champ passe en rouge.
+
 ---
 
 ## 3. Gérer vos dossiers
