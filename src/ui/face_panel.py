@@ -105,8 +105,8 @@ class _FacesDataLoader(QThread):
     des clés entières en str par PySide6 lors des connexions cross-thread.
     """
     # photo_path, faces, person_names_items [(int,str)], cluster_persons_items [(int,int)],
-    # probable_items [(face_id, (person_id, score))], ignored_count
-    data_ready = Signal(str, list, list, list, list, int)
+    # probable_items [(face_id, (person_id, score))], ignored_count, edit_rotation
+    data_ready = Signal(str, list, list, list, list, int, int)
 
     def __init__(self, face_db: "FaceDatabase", catalog, photo_path: str, parent=None) -> None:
         super().__init__(parent)
@@ -169,16 +169,22 @@ class _FacesDataLoader(QThread):
                 self._face_db.get_ignored_faces_for_photo(self._photo_path)
             )
 
+            # Rotation de retouche en attente (non baked) : influence le rendu de la
+            # vignette (cf. _FacePanelLoader) sans toucher aux bbox stockées — fait
+            # partie de la clé de validité du cache de vignettes (cf. _thumb_cache).
+            edit_rotation = _load_edit_rotations([self._photo_path]).get(self._photo_path, 0)
+
             self.data_ready.emit(
                 self._photo_path, faces,
                 person_names_items,
                 list(cluster_persons.items()),
                 probable_items,
                 ignored_count,
+                edit_rotation,
             )
         except Exception:
             logger.exception("[FacesDataLoader] exception during load")
-            self.data_ready.emit(self._photo_path, [], [], [], [], 0)
+            self.data_ready.emit(self._photo_path, [], [], [], [], 0, 0)
 
 
 class _AssignPrepLoader(QThread):
@@ -547,6 +553,12 @@ class FacePanel(QWidget):
         self._current_photo:   str = ""
         self._selected_face_id: int | None = None
         self._undo_stack:      list[tuple[str, object]] = []
+        # face_id → ((bbox_x, bbox_y, bbox_w, bbox_h, detected_rotation, edit_rotation), PNG)
+        # clé de géométrie complète : un visage réindexé (rotation 90° avant enregistrement,
+        # cf. SingleFaceReindexThread) peut changer de bbox/rotation sous le même face_id ;
+        # sans la comparer, on réafficherait un ancien cadrage périmé.
+        self._thumb_cache:      dict[int, tuple[tuple, bytes]] = {}
+        self._last_edit_rotation: int = 0
         self._setup_ui()
 
     # ------------------------------------------------------------------ setup
@@ -618,10 +630,16 @@ class FacePanel(QWidget):
             self.set_photo(self._current_photo)
 
     def set_photo(self, photo_path: str) -> None:
-        """Charger et afficher les visages de la photo (asynchrone)."""
+        """Charger et afficher les visages de la photo (asynchrone).
+
+        Un rafraîchissement de la même photo (après identification, ignorer,
+        etc.) réutilise les vignettes déjà décodées (cf. _thumb_cache) : seuls
+        les visages nouveaux (ajout manuel) n'ont pas encore de bbox inchangée
+        en cache et sont donc les seuls à repasser par _FacePanelLoader."""
         if photo_path != self._current_photo:
             self._undo_stack.clear()
             self.undo_stack_changed.emit(False)
+            self._thumb_cache.clear()
         self._current_photo = photo_path
         self._btn_add_face.setEnabled(bool(photo_path))
         self._stop_loader()
@@ -669,7 +687,7 @@ class FacePanel(QWidget):
 
     # ------------------------------------------------------------------ data loading
 
-    @Slot(str, list, list, list, list, int)
+    @Slot(str, list, list, list, list, int, int)
     def _on_faces_data_ready(
         self,
         photo_path: str,
@@ -678,6 +696,7 @@ class FacePanel(QWidget):
         cluster_persons_items: list,
         probable_items: list,
         ignored_count: int,
+        edit_rotation: int,
     ) -> None:
         if photo_path != self._current_photo:
             return  # navigation entre-temps
@@ -689,6 +708,7 @@ class FacePanel(QWidget):
         probable: dict[int, tuple[int, float]] = {int(k): v for k, v in probable_items}
         self._cluster_persons = cluster_persons
         self._person_names = person_names
+        self._last_edit_rotation = edit_rotation
 
         self._clear()
 
@@ -772,9 +792,25 @@ class FacePanel(QWidget):
             self._vbox.addWidget(item)
             self._items[face.id] = item
             self._faces[face.id] = face
-            loader_items.append((face.id, face))
+            geom_key = (
+                face.bbox_x, face.bbox_y, face.bbox_w, face.bbox_h,
+                face.detected_rotation, edit_rotation,
+            )
+            cached = self._thumb_cache.get(face.id)
+            if cached is not None and cached[0] == geom_key:
+                item.set_image(cached[1])
+            else:
+                loader_items.append((face.id, face))
 
-        # Charger les vignettes en arrière-plan
+        # Le bbox/rotation d'un visage existant ne change jamais après une
+        # identification — seules les entrées disparues (dédup, ignorer) sont à purger.
+        live_ids = {f.id for f in faces_sorted}
+        for stale_id in list(self._thumb_cache):
+            if stale_id not in live_ids:
+                del self._thumb_cache[stale_id]
+
+        # Charger en arrière-plan uniquement les vignettes pas encore en cache
+        # (visage nouveau : ajout manuel, ou 1er affichage de cette photo).
         if loader_items:
             self._loader = _FacePanelLoader(loader_items, self)
             self._loader.ready.connect(self._on_face_ready)
@@ -1178,6 +1214,13 @@ class FacePanel(QWidget):
     # ------------------------------------------------------------------ internal
 
     def _on_face_ready(self, face_id: int, data: bytes) -> None:
+        face = self._faces.get(face_id)
+        if face is not None:
+            geom_key = (
+                face.bbox_x, face.bbox_y, face.bbox_w, face.bbox_h,
+                face.detected_rotation, self._last_edit_rotation,
+            )
+            self._thumb_cache[face_id] = (geom_key, data)
         item = self._items.get(face_id)
         if item:
             item.set_image(data)

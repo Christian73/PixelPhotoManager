@@ -156,10 +156,11 @@ class TestFacesDataLoader:
 
         loader.run()
 
-        path, faces, names, cluster_persons, probable, ignored_count = results[0]
+        path, faces, names, cluster_persons, probable, ignored_count, edit_rotation = results[0]
         assert [f.id for f in faces] == [fid]
         assert dict(names) == {alice.id: "Alice"}
         assert ignored_count == 1
+        assert edit_rotation == 0
 
     def test_run_error_emits_empty(self, qtbot):
         loader = _FacesDataLoader(None, None, "C:/x.jpg")
@@ -168,7 +169,58 @@ class TestFacesDataLoader:
 
         loader.run()
 
-        assert results[0][1:] == ([], [], [], [], 0)
+        assert results[0][1:] == ([], [], [], [], 0, 0)
+
+
+class TestThumbnailCacheReuse:
+    """Un rafraîchissement du panneau sur la même photo (après identification,
+    ignorer, etc.) ne doit redécoder que les vignettes dont la géométrie a
+    réellement changé — pas l'ensemble des visages de la photo."""
+
+    def test_second_load_same_photo_reuses_cached_thumbnails(self, qtbot, env, tmp_path):
+        face_db, catalog = env
+        photo = _make_photo(tmp_path)
+        fid1 = _raw_insert_face(face_db, photo, bbox=(10, 10, 60, 60))
+        fid2 = _raw_insert_face(face_db, photo, bbox=(90, 10, 60, 60))
+        panel = _make_panel(qtbot, env)
+
+        _load(qtbot, panel, photo)
+        assert set(panel._thumb_cache) == {fid1, fid2}
+
+        # Simule le rafraîchissement déclenché après une identification : même
+        # photo, aucune bbox n'a changé -> rien à redécoder, pas de loader créé.
+        panel.set_photo(photo)
+        _wait_refresh(qtbot, panel)
+
+        assert panel._loader is None
+
+    def test_changed_bbox_forces_redecode_of_that_face_only(self, qtbot, env, tmp_path):
+        """Simule une ré-indexation (rotation) qui recale la bbox d'un seul
+        visage sous le même face_id : seule sa vignette repasse par le loader."""
+        face_db, catalog = env
+        photo = _make_photo(tmp_path)
+        fid1 = _raw_insert_face(face_db, photo, bbox=(10, 10, 60, 60))
+        fid2 = _raw_insert_face(face_db, photo, bbox=(90, 10, 60, 60))
+        panel = _make_panel(qtbot, env)
+        _load(qtbot, panel, photo)
+
+        conn = sqlite3.connect(face_db._db_path)
+        conn.execute("UPDATE faces SET bbox_x=200 WHERE id=?", (fid1,))
+        conn.commit()
+        conn.close()
+
+        panel.set_photo(photo)
+        with qtbot.waitSignal(panel._data_loader.data_ready, timeout=3000):
+            pass
+
+        assert panel._loader is not None
+        assert [fid for fid, _ in panel._loader._items] == [fid1]
+
+        # Laisser le loader réel se terminer avant la fin du test (cf. piège
+        # QThread jetable dans CLAUDE.md — un thread encore vivant à la
+        # destruction du widget déclenche un fail-fast Qt).
+        loader = panel._loader
+        qtbot.waitUntil(lambda: not loader.isRunning(), timeout=3000)
 
 
 class TestAssignPrepLoader:
