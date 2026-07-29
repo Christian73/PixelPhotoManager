@@ -296,6 +296,49 @@ class TestRemovePhotos:
         assert grid.get_selected() == [p2]
 
 
+class TestScrollToPhoto:
+    """scroll_to_photo en mode normal (hors ruban) : retour de la visionneuse
+    vers la grille, la vignette de la dernière photo affichée doit redevenir
+    visible sans défilement inutile si elle l'est déjà."""
+
+    def test_offscreen_photo_scrolls_into_view(self, qtbot, tmp_path):
+        grid = _make_grid(qtbot, tmp_path)
+        grid.resize(300, 200)
+        grid.show()
+        qtbot.waitExposed(grid)
+        grid.set_thumbnail_size(80)
+        photos = [_photo(f"C:/lib/p{i}.jpg") for i in range(60)]
+        grid.set_photos(photos)
+        last = photos[-1]
+
+        grid.scroll_to_photo(last.path)
+
+        idx = len(photos) - 1
+        rect = grid._container.cell_rect(idx)
+        vbar = grid.verticalScrollBar()
+        assert vbar.value() > 0
+        assert rect.top() >= vbar.value()
+        assert rect.bottom() <= vbar.value() + grid.viewport().height()
+
+    def test_already_visible_photo_does_not_scroll(self, qtbot, tmp_path):
+        grid = _make_grid(qtbot, tmp_path)
+        grid.resize(300, 400)
+        grid.show()
+        qtbot.waitExposed(grid)
+        photos = [_photo(f"C:/lib/p{i}.jpg") for i in range(3)]
+        grid.set_photos(photos)
+
+        grid.scroll_to_photo(photos[0].path)
+
+        assert grid.verticalScrollBar().value() == 0
+
+    def test_unknown_path_is_noop(self, qtbot, tmp_path):
+        grid = _make_grid(qtbot, tmp_path)
+        grid.set_photos([_photo("C:/lib/a.jpg")])
+
+        grid.scroll_to_photo("C:/lib/missing.jpg")   # ne doit pas lever
+
+
 class TestLoadingIndicator:
     """set_loading — retour visuel immédiat quand une requête photo démarre
     (clic dossier/album dans la sidebar) : l'indicateur "Chargement…" n'apparaît

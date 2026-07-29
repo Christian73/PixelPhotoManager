@@ -701,6 +701,12 @@ class PersonClusterView(QWidget):
 
     # ------------------------------------------------------------------ sélection (visages confirmés)
 
+    def select_all(self) -> None:
+        """Sélectionne tous les visages confirmés de la grille (Ctrl+A)."""
+        self._selection = set(self._flat_order)
+        self._last_clicked = self._flat_order[-1] if self._flat_order else None
+        self._apply_selection_style()
+
     @Slot(int, bool, bool)
     def _on_thumb_clicked(self, face_id: int, ctrl_held: bool, shift_held: bool) -> None:
         if shift_held and self._last_clicked is not None and self._last_clicked in self._flat_cards:

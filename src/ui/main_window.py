@@ -1934,6 +1934,7 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
         """Bouton ← dans la visionneuse : retourne à l'écran d'origine."""
         target = self._viewer_back_target
         self._viewer_back_target = "grid"
+        last_photo = self._viewer.current_photo()
         if target == "person_cluster_view":
             person = self._person_cluster_view.current_person
             if person:
@@ -1943,6 +1944,12 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
             self.show_duplicate_grid()
             return
         self.show_grid()
+        # Retour visuel : la dernière photo affichée dans la visionneuse
+        # redevient repérable immédiatement dans la grille (visible + sélectionnée),
+        # centrée en vue chronologique (mode ruban).
+        if last_photo is not None:
+            self._grid.scroll_to_photo(last_photo.path)
+            self._grid.select_photo(last_photo.path)
 
     def _ensure_left_pane_min_width(self) -> None:
         """QStackedWidget ne déclenche pas de relayout du QSplitter quand sa
@@ -2972,6 +2979,8 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
         elif key == Qt.Key_A and modifiers == Qt.ControlModifier:
             if self._stack.currentIndex() == 0:
                 self._grid.select_all()
+            elif self._stack.currentWidget() is self._person_cluster_view:
+                self._person_cluster_view.select_all()
         elif in_viewer and key == Qt.Key_Right and not self._viewer._canvas._crop_mode:
             self._navigate_photo(-1)   # plus récente
         elif in_viewer and key == Qt.Key_Left and not self._viewer._canvas._crop_mode:

@@ -662,16 +662,27 @@ class ThumbnailGrid(QScrollArea):
         self.selection_changed.emit(self.get_selected())
 
     def scroll_to_photo(self, path: str) -> None:
-        """Centre le ruban sur la photo path. Sans effet si pas en mode ruban."""
-        if not self._ribbon_mode or not self._r_cols:
-            return
+        """Ramène la vignette de path dans la zone visible : centrée en mode
+        ruban (chronologique), défilement minimal juste suffisant sinon."""
         idx = next((i for i, p in enumerate(self._photos) if p.path == path), None)
         if idx is None:
             return
-        self._ribbon_offset = idx - self._center_pos()
-        self._clamp_ribbon_offset()
-        self._update_ribbon_cells()
-        self._update_date_overlay()
+        if self._ribbon_mode:
+            if not self._r_cols:
+                return
+            self._ribbon_offset = idx - self._center_pos()
+            self._clamp_ribbon_offset()
+            self._update_ribbon_cells()
+            self._update_date_overlay()
+        else:
+            rect = self._container.cell_rect(idx)
+            vbar = self.verticalScrollBar()
+            vp_h = max(1, self.viewport().height())
+            spacing = self._container.spacing
+            if rect.top() < vbar.value():
+                vbar.setValue(rect.top() - spacing)
+            elif rect.bottom() > vbar.value() + vp_h:
+                vbar.setValue(rect.bottom() - vp_h + spacing)
 
     def refresh_photo(self, photo_path: str, edit) -> None:
         for cell in self._materialized.values():

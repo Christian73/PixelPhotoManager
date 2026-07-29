@@ -361,6 +361,29 @@ class TestPersonClusterView:
         view._on_thumb_clicked(f3, False, True)     # Shift : plage f0→f3
         assert view._selection == {f0, f1, f2, f3}
 
+    def test_select_all_selects_every_confirmed_face(self, qtbot, env, tmp_path):
+        view, face_db, catalog = _make_view(qtbot, env)
+        alice, fids = self._seed_confirmed(face_db, catalog, tmp_path, n=4)
+        view.set_person(PersonInfo(name="Alice", id=alice.id))
+        _wait_loaders(qtbot, view)
+
+        view.select_all()
+
+        assert view._selection == set(fids)
+        assert all(
+            thumb.styleSheet() == thumb._STYLE_SELECTED
+            for thumb in view._flat_cards.values()
+        )
+
+    def test_select_all_on_empty_person_is_noop(self, qtbot, env):
+        view, face_db, catalog = _make_view(qtbot, env)
+        alice = catalog.create_person("Alice")
+        view.set_person(PersonInfo(name="Alice", id=alice.id))
+
+        view.select_all()   # ne doit pas lever malgré _flat_order vide
+
+        assert view._selection == set()
+
     def test_remove_flat_thumbs_to_empty_state(self, qtbot, env, tmp_path):
         view, face_db, catalog = _make_view(qtbot, env)
         alice, fids = self._seed_confirmed(face_db, catalog, tmp_path, n=2)
