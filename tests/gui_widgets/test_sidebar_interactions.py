@@ -10,7 +10,7 @@ import os
 import pytest
 from PIL import Image
 from PySide6.QtCore import QMimeData, QPointF, Qt
-from PySide6.QtWidgets import QInputDialog, QMessageBox
+from PySide6.QtWidgets import QAbstractItemView, QInputDialog, QMessageBox
 
 from src.core.models import AlbumInfo, PersonInfo
 from src.ui.people_panel import _face_bytes
@@ -143,6 +143,19 @@ class TestFolderTreeBasics:
 
         assert sidebar._folder_tree.currentItem().data(0, Qt.UserRole) == root
         assert fired == []
+
+    def test_select_folder_item_centers_scroll(self, sidebar, tmp_path, qtbot, monkeypatch):
+        root = _make_tree(tmp_path, {})
+        sidebar.refresh_folders([root])
+        item = sidebar._folder_tree.topLevelItem(0)
+        calls = []
+        monkeypatch.setattr(sidebar._folder_tree, "scrollToItem",
+                             lambda it, hint: calls.append((it, hint)))
+
+        sidebar.select_folder_item(root)
+        qtbot.wait(20)   # singleShot(0) du centrage différé
+
+        assert calls == [(item, QAbstractItemView.PositionAtCenter)]
 
 
 class TestFolderDrop:
@@ -346,6 +359,32 @@ class TestAlbums:
 
         assert sidebar._albums_list.item(5).data(Qt.UserRole) == _SPECIAL_TAG
         assert sidebar._albums_list.item(6).data(Qt.UserRole) == _SPECIAL_TAG_ITEM_PREFIX + "travail"
+
+    def test_tag_header_click_emits_section_collapse_changed(self, sidebar, qtbot):
+        with qtbot.waitSignal(sidebar.section_collapse_changed, timeout=1000) as blocker:
+            sidebar._on_album_clicked(sidebar._albums_list.item(10))
+        assert blocker.args == ["tags", True]
+
+        with qtbot.waitSignal(sidebar.section_collapse_changed, timeout=1000) as blocker:
+            sidebar._on_album_clicked(sidebar._albums_list.item(10))
+        assert blocker.args == ["tags", False]
+
+    def test_rated_header_click_emits_section_collapse_changed(self, sidebar, qtbot):
+        with qtbot.waitSignal(sidebar.section_collapse_changed, timeout=1000) as blocker:
+            sidebar._on_album_clicked(sidebar._albums_list.item(3))
+        assert blocker.args == ["ratings", True]
+
+    def test_set_section_collapsed_state_restores_at_startup(self, sidebar):
+        sidebar.set_section_collapsed_state(ratings_collapsed=True, tags_collapsed=True)
+        sidebar.refresh_tags(["travail"])
+
+        # notes ET mots-clés repliés dès la construction : plus de sous-éléments
+        # (0 Chronologie, 1 Favoris, 2 Vidéos, 3 "Par notes", 4 "Par nom de
+        # fichier", 5 "Par mot-clé" — sans les 5 niveaux ni le mot-clé "travail")
+        assert sidebar._albums_list.count() == 6
+        assert sidebar._albums_list.item(3).text().startswith("▸")
+        assert sidebar._albums_list.item(5).data(Qt.UserRole) == _SPECIAL_TAG
+        assert sidebar._albums_list.item(5).text().startswith("▸")
 
     def test_rated_items_have_no_context_menu(self, sidebar, monkeypatch):
         import src.ui.sidebar as sidebar_module

@@ -8,7 +8,7 @@ import subprocess
 from PySide6.QtCore import Signal, Qt, QRect, QSize, QUrl, QThread, QTimer, Slot
 from PySide6.QtGui import QColor, QFont, QIcon, QPainter, QPalette, QPixmap
 from PySide6.QtWidgets import (
-    QApplication, QStyle, QStyleOptionViewItem, QStyledItemDelegate,
+    QAbstractItemView, QApplication, QStyle, QStyleOptionViewItem, QStyledItemDelegate,
     QWidget, QVBoxLayout, QHBoxLayout, QSplitter,
     QTreeWidget, QTreeWidgetItem, QListWidget, QListWidgetItem,
     QPushButton, QLabel, QLineEdit, QMenu, QInputDialog, QMessageBox, QFileDialog,
@@ -271,6 +271,7 @@ class Sidebar(QWidget):
     person_rename_requested = Signal(object)  # PersonInfo à renommer
     person_clear_requested  = Signal(object)  # PersonInfo dont on efface le nom
     tree_state_changed     = Signal(list)     # list[str] — chemins dépliés
+    section_collapse_changed = Signal(str, bool)  # ("ratings"|"tags", replié ?)
     persons_thumbnails_ready = Signal()       # vignettes de visages des personnes connues chargées
     advanced_search_requested = Signal()      # bouton loupe à côté du filtre
 
@@ -504,6 +505,7 @@ class Sidebar(QWidget):
         item_rated.setData(Qt.UserRole, _SPECIAL_RATED)
         item_rated.setToolTip("Cliquer pour replier/déplier les niveaux de notation")
         self._albums_list.addItem(item_rated)
+        self._rated_header_item = item_rated
         self._render_rated_subitems()
 
         item_fn = QListWidgetItem("🔍 Par nom de fichier")
@@ -515,6 +517,7 @@ class Sidebar(QWidget):
         item_tag.setData(Qt.UserRole, _SPECIAL_TAG)
         item_tag.setToolTip("Cliquer pour replier/déplier la liste des mots-clés existants")
         self._albums_list.addItem(item_tag)
+        self._tag_header_item = item_tag
 
     # ── filtrage live ──────────────────────────────────────────────────────────
 
@@ -555,6 +558,16 @@ class Sidebar(QWidget):
             item.setHidden(bool(q) and q not in name.lower())
 
     # ── persistance des positions de bordures ──────────────────────────────
+
+    def set_section_collapsed_state(self, ratings_collapsed: bool, tags_collapsed: bool) -> None:
+        """Restaure l'état plié/déplié de "Par notes"/"Par mot-clé" mémorisé en
+        config (appeler avant refresh_tags(), au démarrage)."""
+        self._ratings_collapsed = ratings_collapsed
+        self._tags_collapsed = tags_collapsed
+        self._rated_header_item.setText(self._rated_header_label())
+        self._tag_header_item.setText(self._tag_header_label())
+        self._render_rated_subitems()
+        self._render_tag_subitems()
 
     def set_tree_expanded_paths(self, paths: list[str]) -> None:
         """Initialise l'état mémorisé depuis la config (appeler avant refresh_folders)."""
@@ -814,6 +827,15 @@ class Sidebar(QWidget):
                 self._folder_tree.blockSignals(True)
                 self._folder_tree.setCurrentItem(item)
                 self._folder_tree.blockSignals(False)
+                # Différé : au premier affichage, la géométrie de l'arbre
+                # (lignes/scrollbar) n'est pas encore résolue au moment de cet
+                # appel (cf. _ensure_left_pane_min_width, même piège de layout).
+                QTimer.singleShot(
+                    0,
+                    lambda it=item: self._folder_tree.scrollToItem(
+                        it, QAbstractItemView.PositionAtCenter
+                    ),
+                )
                 return True
             for i in range(item.childCount()):
                 if _search(item.child(i)):
@@ -838,10 +860,12 @@ class Sidebar(QWidget):
             self._tags_collapsed = not self._tags_collapsed
             item.setText(self._tag_header_label())
             self._render_tag_subitems()
+            self.section_collapse_changed.emit("tags", self._tags_collapsed)
         elif data == _SPECIAL_RATED:
             self._ratings_collapsed = not self._ratings_collapsed
             item.setText(self._rated_header_label())
             self._render_rated_subitems()
+            self.section_collapse_changed.emit("ratings", self._ratings_collapsed)
         self._folder_tree.clearSelection()
         self._persons_list.clearSelection()
         self.album_selected.emit(data)

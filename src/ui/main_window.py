@@ -711,6 +711,9 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
         self._sidebar.tree_state_changed.connect(
             lambda paths: self._config.set("ui.folder_tree_expanded", paths)
         )
+        self._sidebar.section_collapse_changed.connect(
+            lambda key, collapsed: self._config.set(f"ui.{key}_collapsed", collapsed)
+        )
         bus.on("album.create_requested", self._on_album_create)
 
     def _setup_statusbar(self) -> None:
@@ -838,6 +841,10 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
 
     def _load_library(self) -> None:
         folders = self._config.get_scan_folders()
+        self._sidebar.set_section_collapsed_state(
+            self._config.get("ui.ratings_collapsed", False),
+            self._config.get("ui.tags_collapsed", False),
+        )
         albums = self._catalog.get_albums()
         self._sidebar.refresh_albums(albums)
         all_tags = self._catalog.get_all_tags()
