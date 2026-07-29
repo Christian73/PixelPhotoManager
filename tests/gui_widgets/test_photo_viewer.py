@@ -289,3 +289,30 @@ class TestBaseImageCache:
         v.invalidate_base_cache("C:/lib/x.jpg")
 
         assert "C:/lib/x.jpg" not in v._base_lru
+
+
+class TestNavPositionLabel:
+    def test_set_nav_position_shows_index_out_of_total(self, viewer):
+        viewer.set_nav_position(3, 12)
+        assert viewer._nav_position_label.text() == "3 / 12"
+
+    def test_set_nav_position_blank_when_total_zero(self, viewer):
+        viewer.set_nav_position(1, 12)
+        viewer.set_nav_position(0, 0)
+        assert viewer._nav_position_label.text() == ""
+
+    def test_label_hidden_during_crop_mode_and_restored_after_cancel(self, viewer):
+        viewer.set_nav_position(1, 5)
+        viewer.enter_crop_mode()
+        assert viewer._nav_position_label.isHidden()
+
+        viewer.cancel_crop()
+        assert not viewer._nav_position_label.isHidden()
+
+    def test_label_hidden_during_face_add_mode_and_restored_after_cancel(self, viewer):
+        viewer.set_nav_position(1, 5)
+        viewer.enter_face_add_mode()
+        assert viewer._nav_position_label.isHidden()
+
+        viewer.cancel_face_add_mode()
+        assert not viewer._nav_position_label.isHidden()

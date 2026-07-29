@@ -453,6 +453,10 @@ class PhotoViewer(QWidget):
 
         nav_layout.addStretch()
 
+        self._nav_position_label = QLabel("")
+        self._nav_position_label.setStyleSheet("color: white; font-size: 13px;")
+        nav_layout.addWidget(self._nav_position_label)
+
         # Boutons de format de recadrage (masqués hors mode crop)
         self._btn_play_video = QPushButton("▶  Ouvrir la vidéo")
         self._btn_play_video.setToolTip("Ouvrir dans le lecteur vidéo par défaut")
@@ -782,6 +786,7 @@ class PhotoViewer(QWidget):
         self._canvas.set_aspect_ratio(_CROP_FORMAT_DATA[idx][2] if idx >= 0 else None)
         self._btn_prev.hide()
         self._btn_next.hide()
+        self._nav_position_label.hide()
         self._crop_format_widget.show()
         self._btn_crop_confirm.show()
         self._btn_crop_cancel.show()
@@ -796,6 +801,9 @@ class PhotoViewer(QWidget):
         self._btn_prev.setVisible(has_prev)
         self._btn_next.setVisible(has_next)
 
+    def set_nav_position(self, current: int, total: int) -> None:
+        self._nav_position_label.setText(f"{current} / {total}" if total > 0 else "")
+
     def cancel_crop(self) -> None:
         self._canvas.cancel_crop()
         self._crop_format_widget.hide()
@@ -803,6 +811,7 @@ class PhotoViewer(QWidget):
         self._btn_crop_cancel.hide()
         self._btn_prev.show()
         self._btn_next.show()
+        self._nav_position_label.show()
         # Restaurer l'image avec le crop appliqué (on avait affiché l'image sans crop)
         self._reload_pixmap()
         self.crop_mode_ended.emit()
@@ -813,6 +822,7 @@ class PhotoViewer(QWidget):
         self._btn_crop_cancel.hide()
         self._btn_prev.show()
         self._btn_next.show()
+        self._nav_position_label.show()
         self.crop_ready.emit(quad)
         self.crop_mode_ended.emit()
 
@@ -822,6 +832,7 @@ class PhotoViewer(QWidget):
         self._canvas.enter_face_add_mode()
         self._btn_prev.hide()
         self._btn_next.hide()
+        self._nav_position_label.hide()
         self._btn_face_confirm.show()
         self._btn_face_cancel.show()
 
@@ -831,6 +842,7 @@ class PhotoViewer(QWidget):
         self._btn_face_cancel.hide()
         self._btn_prev.show()
         self._btn_next.show()
+        self._nav_position_label.show()
         self.face_add_mode_ended.emit()
 
     def cancel_face_add_mode(self) -> None:
@@ -839,6 +851,7 @@ class PhotoViewer(QWidget):
         self._btn_face_cancel.hide()
         self._btn_prev.show()
         self._btn_next.show()
+        self._nav_position_label.show()
         self.face_add_mode_ended.emit()
 
     def _on_face_add_confirmed(self, bbox: tuple) -> None:

@@ -1305,6 +1305,7 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
             has_prev=self._current_photo_index < n - 1,  # il y a des photos plus anciennes
             has_next=self._current_photo_index > 0,       # il y a des photos plus récentes
         )
+        self._viewer.set_nav_position(self._current_photo_index + 1, n)
 
     @Slot(int)
     def _navigate_photo(self, delta: int) -> None:
