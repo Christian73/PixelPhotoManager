@@ -157,7 +157,7 @@ def test_save_options_and_settings(isolated_app):
 
     thumb = find_thumbnail(window, str(save_photo), timeout=30.0)
     right_click_element(thumb)
-    click_context_menu_item(window, "Enregistrer l'image traitée sur le disque", exact=True, timeout=10.0)
+    click_context_menu_item(window, "Enregistrer l'image traitée sur le disque\tCtrl+S", exact=True, timeout=10.0)
     find_dialog_button(window, ["Enregistrer"], exact=True, timeout=10.0).click_input()
     wait_for_condition(
         lambda: backup_dir.is_dir() and any(
@@ -172,7 +172,7 @@ def test_save_options_and_settings(isolated_app):
 
     thumb1 = find_thumbnail(window, str(photo1), timeout=30.0)
     right_click_element(thumb1)
-    click_context_menu_item(window, "Effacer le fichier…", exact=True, timeout=10.0)
+    click_context_menu_item(window, "Effacer le fichier…\tSuppr", exact=True, timeout=10.0)
     click_yes(window)
     wait_for_condition(
         lambda: query_one(catalog_db, "SELECT COUNT(*) FROM photos WHERE path=?", (str(photo1),)) == 0,
@@ -182,7 +182,7 @@ def test_save_options_and_settings(isolated_app):
 
     thumb2 = find_thumbnail(window, str(photo2), timeout=15.0)
     right_click_element(thumb2)
-    click_context_menu_item(window, "Effacer le fichier…", exact=True, timeout=10.0)
+    click_context_menu_item(window, "Effacer le fichier…\tSuppr", exact=True, timeout=10.0)
     find_checkbox(window, "Ne plus demander", timeout=10.0).click_input()
     click_yes(window)
     wait_for_condition(
@@ -196,7 +196,7 @@ def test_save_options_and_settings(isolated_app):
 
     thumb3 = find_thumbnail(window, str(photo3), timeout=15.0)
     right_click_element(thumb3)
-    click_context_menu_item(window, "Effacer le fichier…", exact=True, timeout=10.0)
+    click_context_menu_item(window, "Effacer le fichier…\tSuppr", exact=True, timeout=10.0)
     with pytest.raises(LookupError):
         find_dialog_button(window, ["Oui", "Yes", "&Oui", "&Yes"], timeout=3.0)
     wait_for_condition(

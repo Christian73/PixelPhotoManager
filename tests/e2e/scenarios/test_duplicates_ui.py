@@ -125,7 +125,7 @@ def test_duplicates_ui(isolated_app):
     # ---- 4. Suppression d'un exemplaire du groupe recadré : effet de bord ----
     thumb = find_thumbnail(window, manifest.crop_duplicate_pair[0], timeout=15.0)
     right_click_element(thumb)
-    click_context_menu_item(window, "Effacer le fichier…", exact=True, timeout=10.0)
+    click_context_menu_item(window, "Effacer le fichier…\tSuppr", exact=True, timeout=10.0)
     click_yes(window)
     wait_for_condition(
         lambda: query_one(
