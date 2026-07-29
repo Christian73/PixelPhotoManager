@@ -17,28 +17,29 @@ def throttled_worker_count(minimum: int = 1) -> int:
 
 
 def lower_current_thread_priority() -> None:
-    """Windows : abaisse la priorité du thread OS courant
-    (THREAD_PRIORITY_BELOW_NORMAL) pour laisser le premier plan répondre.
-    À utiliser dans QThread.run() (threads secondaires) et comme
-    `initializer` de ThreadPoolExecutor (chaque worker thread s'auto-abaisse
-    à son démarrage). No-op silencieux si indisponible."""
+    """Windows : abaisse la priorité du thread OS courant au minimum
+    (THREAD_PRIORITY_IDLE) pour laisser le premier plan répondre — le thread
+    ne s'exécute quasiment que quand le CPU est autrement inactif. À utiliser
+    dans QThread.run() (threads secondaires) et comme `initializer` de
+    ThreadPoolExecutor (chaque worker thread s'auto-abaisse à son démarrage).
+    No-op silencieux si indisponible."""
     try:
         import ctypes
-        THREAD_PRIORITY_BELOW_NORMAL = -1
+        THREAD_PRIORITY_IDLE = -15
         handle = ctypes.windll.kernel32.GetCurrentThread()
-        ctypes.windll.kernel32.SetThreadPriority(handle, THREAD_PRIORITY_BELOW_NORMAL)
+        ctypes.windll.kernel32.SetThreadPriority(handle, THREAD_PRIORITY_IDLE)
     except Exception:
         pass
 
 
 def lower_current_process_priority() -> None:
-    """Abaisse la priorité du process courant via psutil
-    (BELOW_NORMAL_PRIORITY_CLASS). À utiliser comme `initializer` de
+    """Abaisse la priorité du process courant au minimum via psutil
+    (IDLE_PRIORITY_CLASS). À utiliser comme `initializer` de
     ProcessPoolExecutor : chaque worker est un process dédié sans UI, donc
     abaisser tout le process (contrairement au process principal, où ça
     pénaliserait aussi l'UI) est sûr. No-op silencieux si indisponible."""
     try:
         import psutil
-        psutil.Process().nice(psutil.BELOW_NORMAL_PRIORITY_CLASS)
+        psutil.Process().nice(psutil.IDLE_PRIORITY_CLASS)
     except Exception:
         pass
