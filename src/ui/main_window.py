@@ -21,6 +21,11 @@ from PySide6.QtWidgets import (
 )
 
 from src.core.config import Config
+from src.core.cpu_throttle import (
+    DEFAULT_BACKGROUND_CPU,
+    note_user_activity,
+    set_background_cpu_level,
+)
 from src.core.event_bus import bus
 from src.core.models import PhotoInfo, AlbumInfo, PersonInfo, EditInfo
 from src.library.catalog import Catalog
@@ -107,6 +112,7 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
     ):
         super().__init__()
         self._config = config
+        self._apply_background_cpu_level()
         self._catalog = catalog
         self._thumb_cache = thumb_cache
         self._scanner = scanner
@@ -179,6 +185,13 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
         self._connect_scanner()
         self._setup_folder_watcher()
 
+        # Filtre posé sur l'application entière (et non sur `self`) : il doit
+        # aussi voir les événements des dialogues modaux et de la visionneuse
+        # plein écran, qui ne sont pas des enfants de la fenêtre principale.
+        app = QApplication.instance()
+        if app is not None:
+            app.installEventFilter(self)
+
         # Déféré : laisse window.show() s'exécuter avant de charger la bibliothèque.
         QTimer.singleShot(0, self._load_library)
         _sw = self._config.get("ui.sidebar_width", 280)
@@ -200,6 +213,45 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
         self._dup_migration_thread.done.connect(self._sidebar.update_duplicates_badge)
         self._dup_migration_thread.start()
         QTimer.singleShot(0, self._start_update_check)
+
+    # --------------------------------------------------- activité utilisateur
+
+    def _apply_background_cpu_level(self) -> None:
+        """Applique le niveau de bridage CPU des traitements de fond.
+
+        Appelé au tout début de __init__, donc avant le démarrage du moindre
+        thread : sans ça, cpu_throttle lirait la configuration paresseusement au
+        premier `throttle_tick()`, c'est-à-dire depuis un thread de fond, ce qui
+        instancierait Config() hors du thread UI."""
+        set_background_cpu_level(
+            self._config.get("performance.background_cpu", DEFAULT_BACKGROUND_CPU)
+        )
+
+    # Volontairement limité au clic, à la touche et à la molette (cf. docstring
+    # de note_user_activity) : MouseMove passerait ici des centaines de fois par
+    # seconde pour un simple survol, alors que le filtre est appelé pour *tout*
+    # événement de *tout* objet de l'application.
+    _ACTIVITY_EVENTS = frozenset({
+        QEvent.Type.MouseButtonPress,
+        QEvent.Type.KeyPress,
+        QEvent.Type.Wheel,
+    })
+
+    def eventFilter(self, obj, event):
+        """Alimente l'horodatage d'activité utilisateur de cpu_throttle.
+
+        Sans ce filtre, `_last_activity` reste figé à l'heure d'import du module
+        et `user_is_idle()` renvoie True en permanence passé IDLE_GRACE_SECONDS :
+        `effective_cpu_ratio()` vaut alors toujours 1.0 et le cycle de service ne
+        bride jamais rien, quel que soit le niveau choisi dans les paramètres."""
+        if event.type() in self._ACTIVITY_EVENTS:
+            note_user_activity()
+        # Filtre purement passif : toujours False, l'événement doit poursuivre
+        # sa route vers son destinataire. `return False` plutôt que
+        # `super().eventFilter(...)` — la chaîne d'héritage ne surcharge pas
+        # eventFilter (QObject renvoie False), et c'est un appel de moins sur un
+        # chemin traversé par *tous* les événements de l'application.
+        return False
 
     # ------------------------------------------------------------------ setup
 

@@ -1,15 +1,17 @@
 # Copyright 2026 Christian Guyot
 # SPDX-License-Identifier: Apache-2.0
-"""Tests (Layer 2) pour SettingsDialog — pages Reconnaissance de visages et
-Lecteur vidéo. Config est un singleton de classe : chaque test le réinitialise
-et redirige _CONFIG_FILE vers tmp_path (même convention que test_config.py)."""
+"""Tests (Layer 2) pour SettingsDialog — pages Reconnaissance de visages,
+Lecteur vidéo et Performances. Config est un singleton de classe : chaque test le
+réinitialise et redirige _CONFIG_FILE vers tmp_path (même convention que
+test_config.py)."""
 import pytest
 from PySide6.QtWidgets import QFileDialog
 
 import src.core.config as config_module
+from src.core import cpu_throttle
 from src.core.config import Config
 from src.ui.settings_dialog import (
-    SettingsDialog, _FaceRecognitionPage, _VideoPlayerPage,
+    SettingsDialog, _FaceRecognitionPage, _PerformancePage, _VideoPlayerPage,
 )
 
 
@@ -20,6 +22,16 @@ def config(tmp_path, monkeypatch):
     monkeypatch.setattr(config_module, "APP_DATA_DIR", tmp_path)
     yield Config()
     Config._instance = None
+
+
+@pytest.fixture(autouse=True)
+def _restore_cpu_ratio():
+    """_PerformancePage.apply() écrit la globale `_ratio` de cpu_throttle
+    (application immédiate aux threads déjà lancés) — la restaurer pour ne pas
+    contaminer les autres tests de la suite."""
+    saved = cpu_throttle._ratio
+    yield
+    cpu_throttle._ratio = saved
 
 
 class TestFaceRecognitionPage:
@@ -128,6 +140,68 @@ class TestVideoPlayerPage:
         assert config.get("video.player_path") == ""
 
 
+class TestPerformancePage:
+    def test_default_level_is_medium(self, qtbot, config):
+        page = _PerformancePage(config)
+        qtbot.addWidget(page)
+
+        assert page.selected_level() == "medium"
+
+    def test_saved_level_restored(self, qtbot, config):
+        config.set("performance.background_cpu", "low")
+        page = _PerformancePage(config)
+        qtbot.addWidget(page)
+
+        assert page.selected_level() == "low"
+
+    def test_unknown_saved_level_falls_back_to_default(self, qtbot, config):
+        """Valeur écrite à la main dans config.json, ou clé d'une version
+        ultérieure : ne doit ni planter ni laisser la page sans sélection."""
+        config.set("performance.background_cpu", "turbo")
+        page = _PerformancePage(config)
+        qtbot.addWidget(page)
+
+        assert page.selected_level() == "medium"
+        assert page._grp.checkedButton() is not None
+
+    def test_every_level_has_a_radio(self, qtbot, config):
+        page = _PerformancePage(config)
+        qtbot.addWidget(page)
+
+        keys = {key for key, _, _ in page._CHOICES}
+        assert keys == set(cpu_throttle.BACKGROUND_CPU_LEVELS)
+
+    def test_apply_persists_and_takes_effect_immediately(self, qtbot, config):
+        """Les threads de fond relisent le ratio à chaque throttle_tick() : le
+        changement doit s'appliquer sans les redémarrer."""
+        page = _PerformancePage(config)
+        qtbot.addWidget(page)
+        page._grp.button(0).setChecked(True)      # "low"
+
+        page.apply()
+
+        assert config.get("performance.background_cpu") == "low"
+        assert cpu_throttle.background_cpu_ratio() == pytest.approx(0.25)
+
+    def test_apply_max_level_disables_throttling(self, qtbot, config):
+        page = _PerformancePage(config)
+        qtbot.addWidget(page)
+        page._grp.button(2).setChecked(True)      # "max"
+
+        page.apply()
+
+        assert config.get("performance.background_cpu") == "max"
+        assert cpu_throttle.background_cpu_ratio() == pytest.approx(1.0)
+
+    def test_no_selection_falls_back_to_default(self, qtbot, config):
+        page = _PerformancePage(config)
+        qtbot.addWidget(page)
+        page._grp.setExclusive(False)
+        page._grp.checkedButton().setChecked(False)
+
+        assert page.selected_level() == "medium"
+
+
 class TestSettingsDialog:
     def test_category_list_switches_pages(self, qtbot, config):
         dlg = SettingsDialog(config)
@@ -135,8 +209,20 @@ class TestSettingsDialog:
         assert dlg._stack.currentWidget() is dlg._page_faces
 
         dlg._category_list.setCurrentRow(1)
-
         assert dlg._stack.currentWidget() is dlg._page_video
+
+        dlg._category_list.setCurrentRow(2)
+        assert dlg._stack.currentWidget() is dlg._page_perf
+
+    def test_accept_applies_performance_level(self, qtbot, config):
+        dlg = SettingsDialog(config)
+        qtbot.addWidget(dlg)
+        dlg._page_perf._grp.button(0).setChecked(True)    # "low"
+
+        dlg._on_accept()
+
+        assert config.get("performance.background_cpu") == "low"
+        assert cpu_throttle.background_cpu_ratio() == pytest.approx(0.25)
 
     def test_accept_without_change_does_not_emit_recluster(self, qtbot, config):
         dlg = SettingsDialog(config)

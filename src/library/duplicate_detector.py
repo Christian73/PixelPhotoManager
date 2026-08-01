@@ -12,9 +12,12 @@ Deux niveaux de détection :
       S'exécute uniquement sur les photos non groupées par le Tier 1.
       Filtre préalable par ratio d'aire pour éviter les paires impossibles.
 """
+import bisect
 import logging
 import os
+import threading
 import time
+from collections import OrderedDict
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from functools import partial
@@ -22,7 +25,12 @@ from pathlib import Path
 
 from PySide6.QtCore import QThread, Signal
 
-from src.core.cpu_throttle import throttled_worker_count, lower_current_thread_priority
+from src.core.cpu_throttle import (
+    limit_cv2_threads,
+    lower_current_thread_priority,
+    throttle_tick,
+    throttled_worker_count,
+)
 from src.library.dedup_cache import DedupCache
 from src.library.image_loader import RAW_EXT
 
@@ -61,6 +69,8 @@ _ORB_MAX_MEAN_DIFF = 25.0  # écart de pixels (0-255) après recalage par
 # texturé mais sujet différent) donnaient 38 et 42 — c'est le seul des
 # signaux testés (nombre d'inliers, ratio inliers/good) qui sépare
 # nettement les deux cas.
+
+_GRAY_CACHE_SIZE = 32  # images de travail Tier 2 gardées décodées (cf. _GrayImageCache)
 
 _VIDEO_EXT = {'.mp4', '.mov', '.avi', '.mkv', '.wmv', '.webm',
               '.m4v', '.3gp', '.flv', '.ts', '.mts', '.mpg', '.mpeg', '.vob'}
@@ -109,6 +119,47 @@ def _load_gray(path: str, max_dim: int) -> "np.ndarray | None":
         return img
     except Exception:
         return None
+
+
+class _GrayImageCache:
+    """LRU thread-safe des images de travail du Tier 2 (niveaux de gris,
+    réduites à `_ORB_LOAD_SIZE`), chargées **à la demande**.
+
+    Ces images ne servent qu'à l'ultime vérification d'une paire (recalage par
+    homographie puis comparaison pixel, cf. `_ORB_MAX_MEAN_DIFF`), atteinte
+    seulement par les rares paires qui ont déjà passé le ratio test de Lowe et
+    le seuil d'inliers RANSAC. Les garder toutes décodées dans `desc_list`
+    coûtait, sur une bibliothèque de 65 000 photos, un décodage JPEG par photo
+    à chaque démarrage (~80 s de CPU) et une empreinte mémoire de plusieurs
+    dizaines de Go — pour un tableau dont on n'utilisait qu'une poignée
+    d'entrées. Rechargées depuis le fichier d'origine via `_load_gray()`, qui
+    est exactement la fonction ayant servi à calculer les keypoints : mêmes
+    dimensions, donc homographie et masque de recouvrement restent valides."""
+
+    def __init__(self, capacity: int = _GRAY_CACHE_SIZE) -> None:
+        self._capacity = capacity
+        self._lock = threading.Lock()
+        self._items: "OrderedDict[str, object]" = OrderedDict()
+
+    def get(self, path: str):
+        """Image en niveaux de gris, ou None si le fichier est illisible.
+        Deux threads peuvent décoder le même chemin simultanément (le verrou
+        n'est pas tenu pendant le décodage, qui est long) : sans conséquence,
+        le résultat est identique et le second écrase le premier."""
+        with self._lock:
+            img = self._items.get(path)
+            if img is not None:
+                self._items.move_to_end(path)
+                return img
+        img = _load_gray(path, _ORB_LOAD_SIZE)
+        if img is None:
+            return None
+        with self._lock:
+            self._items[path] = img
+            self._items.move_to_end(path)
+            while len(self._items) > self._capacity:
+                self._items.popitem(last=False)
+        return img
 
 
 def _merge(group_of: dict[str, int], path_a: str, path_b: str,
@@ -231,6 +282,16 @@ class DuplicateDetectorThread(QThread):
 
     def run(self) -> None:
         self.setPriority(QThread.LowestPriority)
+        # setPriority() ci-dessus ne descend qu'à THREAD_PRIORITY_LOWEST (-2) :
+        # insuffisant pour la boucle O(N²) du Tier 1, qui est la partie
+        # mono-thread la plus lourde de toute la détection et tourne
+        # précisément sur ce thread-ci (les ThreadPoolExecutor, eux, passent
+        # déjà lower_current_thread_priority en initializer).
+        lower_current_thread_priority()
+        # Réglage global au process (cf. docstring) : sans lui, chacun de nos
+        # workers « throttlés » peut à lui seul occuper les 16 cœurs via le
+        # pool interne d'OpenCV.
+        limit_cv2_threads(1)
         try:
             self._detect()
         except Exception as e:
@@ -332,9 +393,15 @@ class DuplicateDetectorThread(QThread):
                     std = arr.std()
                     if std > 1e-6:
                         arr /= std
-                    return path, h, d, arr, mtime, None
+                    result = (path, h, d, arr, mtime, None)
                 except Exception as exc:
-                    return path, None, None, None, None, exc
+                    result = (path, None, None, None, None, exc)
+                # Cycle de service pris ici, dans le worker qui vient de
+                # consommer le CPU, et non côté consommateur (`as_completed`)
+                # : toutes les futures sont soumises d'avance, ralentir la
+                # boucle de collecte ne ralentirait donc pas le pool d'un iota.
+                throttle_tick(lambda: self._cancelled)
+                return result
 
             done = cache_hits
             if cache_hits:
@@ -493,6 +560,36 @@ class DuplicateDetectorThread(QThread):
                             return
                     _merge(group_of, path_i, path_j, next_group)
 
+            # Persistance incrémentale de la complétude des comparaisons : les
+            # lignes 0..i étant traitées dans l'ordre, une fois la ligne i
+            # terminée, `new_list[0..i]` a été comparé à *tout* le reste (les
+            # lignes précédentes ont chacune couvert leurs paires avec i).
+            # Sans ce jalonnement, une passe interrompue (fermeture de
+            # l'application) ne persistait rien du tout et repartait de zéro au
+            # démarrage suivant — soit, sur une grosse bibliothèque, une heure
+            # de CPU rejouée à chaque session, indéfiniment.
+            #
+            # Le jalon reste volontairement en retard d'un instantané sur la
+            # progression réelle : les groupes formés ne sont persistés dans le
+            # catalogue que via `partial_results`, traité en asynchrone sur le
+            # thread UI. Marquer une ligne « comparée » avant que ses fusions
+            # n'aient été diffusées risquerait de perdre définitivement un
+            # groupe (la paire ne serait plus jamais réévaluée). En ne jalonnant
+            # que jusqu'à l'indice du snapshot *précédent*, on laisse au moins
+            # un intervalle complet (_LIVE_SNAPSHOT_INTERVAL) à l'UI pour
+            # l'avoir traité.
+            stored_upto = -1     # dernier indice de new_list persisté
+            snapshot_idx = -1    # indice atteint lors du dernier partial_results
+
+            def _checkpoint_tier1(upto: int) -> None:
+                nonlocal stored_upto
+                if upto <= stored_upto:
+                    return
+                cache.store_compared_tier1(
+                    [(p, mtimes[p]) for p, _ in new_list[stored_upto + 1:upto + 1]]
+                )
+                stored_upto = upto
+
             last_emit = time.monotonic()
             last_snapshot = last_emit
             for i in range(n):
@@ -504,6 +601,7 @@ class DuplicateDetectorThread(QThread):
                     _compare_pair(path_i, hash_i, path_j, hash_j)
                 for path_j, hash_j in old_list:
                     _compare_pair(path_i, hash_i, path_j, hash_j)
+                throttle_tick(lambda: self._cancelled)
 
                 now = time.monotonic()
                 if now - last_emit >= _PROGRESS_INTERVAL:
@@ -517,9 +615,11 @@ class DuplicateDetectorThread(QThread):
                                 i + 1, n, n_groups)
                 if now - last_snapshot >= _LIVE_SNAPSHOT_INTERVAL:
                     last_snapshot = now
+                    _checkpoint_tier1(snapshot_idx)
+                    snapshot_idx = i
                     self.partial_results.emit(_renumber(group_of), sorted(self._corrupted))
 
-            cache.store_compared_tier1([(p, mtimes[p]) for p, _ in new_list])
+            _checkpoint_tier1(n - 1)
 
             # ── Tier 2 : ORB + RANSAC sur les photos non groupées ──────────────────
             unmatched = [p for p in paths if p not in group_of]
@@ -575,42 +675,106 @@ class DuplicateDetectorThread(QThread):
                            f"Tier 2 — extraction ORB ({n} photos)…")
 
         orb = cv2.ORB_create(nfeatures=_ORB_MAX_KP)
+        gray_cache = _GrayImageCache()
 
-        # Réutilisation du cache : reconstruit (kp, des, image de travail) sans
-        # redécoder le fichier original ni relancer orb.detectAndCompute().
-        desc_list: list[tuple[str, object, object, int, object]] = []  # (path, kp, des, area, img)
+        # ── Sélection paresseuse : déterminer quoi charger, avant de charger ───
+        # Une paire n'est évaluée que si au moins un de ses deux membres est
+        # nouveau ou modifié depuis la dernière passe complète (les paires
+        # ancien×ancien sont sautées plus bas) et que le préfiltre par ratio
+        # d'aire ne l'écarte pas d'emblée. Ces deux critères ne dépendent que
+        # de métadonnées (mtime, dimensions) : les évaluer *avant* de toucher
+        # aux features évite de reconstruire toute la bibliothèque à chaque
+        # démarrage pour finalement ne comparer aucune paire — sur 65 000
+        # photos, plusieurs Go lus en base, un décodage JPEG et ~300 objets
+        # cv2.KeyPoint par photo, systématiquement, dans le cas nominal où
+        # rien n'a changé.
+        orb_meta = cache.get_orb_meta(unmatched)
+        compared_tier2 = cache.get_compared_tier2(unmatched)
+
         mtimes2: dict[str, float] = {}
-        cached_orb = cache.get_orb_features(unmatched)
+        cached_paths: list[str] = []
         to_compute: list[str] = []
+        old_paths_set: set[str] = set()
         for path in unmatched:
+            try:
+                current_mtime = os.path.getmtime(path)
+            except OSError:
+                continue  # disparu depuis le Tier 1
+            mtimes2[path] = current_mtime
+            meta = orb_meta.get(path)
+            if meta is not None and abs(meta[0] - current_mtime) < 1.0:
+                cached_paths.append(path)
+            else:
+                to_compute.append(path)
+            cached_cmp = compared_tier2.get(path)
+            if cached_cmp is not None and abs(cached_cmp - current_mtime) < 1.0:
+                old_paths_set.add(path)
+
+        new_paths_set = {p for p in mtimes2 if p not in old_paths_set}
+        if not new_paths_set:
+            logger.info(
+                "Tier 2 : aucune photo nouvelle ou modifiée parmi les %d non groupées, "
+                "aucune paire à évaluer.", n,
+            )
+            return
+
+        # Aire de chaque photo, connue sans rien charger : dimensions réelles
+        # relevées par le Tier 1, ou celles mémorisées avec les features.
+        def _area_of(path: str) -> int:
+            d = dims.get(path)
+            if d is not None:
+                return d[0] * d[1]
+            meta = orb_meta.get(path)
+            return meta[1] * meta[2] if meta is not None else 0
+
+        areas = {path: _area_of(path) for path in mtimes2}
+
+        # Une photo ancienne n'est utile que si son aire tombe dans la fenêtre
+        # [a/F, a·F] d'au moins une photo nouvelle — sinon le préfiltre par
+        # ratio d'aire de la boucle de comparaison écarterait de toute façon
+        # chacune de ses paires. Aire inconnue (0) : la boucle désactive alors
+        # le préfiltre, donc tout devient candidat, on ne peut rien exclure.
+        new_areas = sorted(areas[p] for p in new_paths_set)
+        keep_everything = new_areas and new_areas[0] <= 0
+
+        def _is_needed(path: str) -> bool:
+            if keep_everything or path in new_paths_set:
+                return True
+            a = areas[path]
+            if a <= 0:
+                return True
+            lo = bisect.bisect_left(new_areas, a / _ORB_AREA_FACTOR)
+            hi = bisect.bisect_right(new_areas, a * _ORB_AREA_FACTOR)
+            return lo < hi
+
+        cached_paths = [p for p in cached_paths if _is_needed(p)]
+        to_compute = [p for p in to_compute if _is_needed(p)]
+
+        # ── Chargement des features des seules photos retenues ────────────────
+        desc_list: list[tuple[str, object, object, int]] = []  # (path, pts, des, area)
+        cached_orb = cache.get_orb_descriptors(cached_paths)
+        for path in cached_paths:
             row = cached_orb.get(path)
             if row is not None:
-                mtime_cached, w, h, kp_blob, des_blob, img_blob = row
+                _mtime, w, h, kp_blob, des_blob = row
                 try:
-                    current_mtime = os.path.getmtime(path)
-                except OSError:
-                    current_mtime = None
-                if current_mtime is not None and abs(mtime_cached - current_mtime) < 1.0:
-                    try:
-                        des = np.frombuffer(des_blob, dtype=np.uint8).reshape(-1, 32)
-                        pts = np.frombuffer(kp_blob, dtype=np.float32).reshape(-1, 2)
-                        img = cv2.imdecode(
-                            np.frombuffer(img_blob, dtype=np.uint8), cv2.IMREAD_GRAYSCALE
-                        )
-                        if img is not None and des.shape[0] > 0 and len(pts) == des.shape[0]:
-                            kp = [cv2.KeyPoint(float(x), float(y), 1.0) for x, y in pts]
-                            mtimes2[path] = current_mtime
-                            desc_list.append((path, kp, des, w * h, img))
-                            continue
-                    except Exception as exc:
-                        logger.debug("dedup_cache : ligne ORB corrompue pour %s (%s), recalcul.",
-                                    path, exc)
+                    des = np.frombuffer(des_blob, dtype=np.uint8).reshape(-1, 32)
+                    pts = np.frombuffer(kp_blob, dtype=np.float32).reshape(-1, 2)
+                except Exception as exc:
+                    logger.debug("dedup_cache : ligne ORB corrompue pour %s (%s), recalcul.",
+                                 path, exc)
+                else:
+                    if des.shape[0] > 0 and len(pts) == des.shape[0]:
+                        desc_list.append((path, pts, des, w * h))
+                        continue
             to_compute.append(path)
 
-        cache_hits = n - len(to_compute)
+        cache_hits = len(desc_list)
+        total_needed = cache_hits + len(to_compute)
         logger.info(
-            "Tier 2 : %d/%d features ORB réutilisées du cache, %d à calculer…",
-            cache_hits, n, len(to_compute),
+            "Tier 2 : %d/%d photos concernées par au moins une paire à évaluer "
+            "(%d features réutilisées du cache, %d à calculer)…",
+            total_needed, n, cache_hits, len(to_compute),
         )
 
         pending_orb: list[tuple] = []
@@ -621,9 +785,10 @@ class DuplicateDetectorThread(QThread):
                 idx = cache_hits + i
                 if idx % 10 == 0:
                     self.progress.emit(
-                        phase1_total + idx * (grand_total - phase1_total) // (n * 2),
+                        phase1_total
+                        + idx * (grand_total - phase1_total) // (max(1, total_needed) * 2),
                         grand_total,
-                        f"Tier 2 — ORB descripteurs {idx}/{n}…",
+                        f"Tier 2 — ORB descripteurs {idx}/{total_needed}…",
                     )
                     if pending_orb:
                         cache.store_orb_features(pending_orb)
@@ -659,16 +824,17 @@ class DuplicateDetectorThread(QThread):
                         except Exception:
                             w, h = img.shape[1], img.shape[0]
                     mtimes2[path] = mtime
-                    desc_list.append((path, kp, des, w * h, img))
-
-                    ok, buf = cv2.imencode(".jpg", img, [cv2.IMWRITE_JPEG_QUALITY, 90])
-                    if ok:
-                        kp_xy = np.array([k.pt for k in kp], dtype=np.float32).tobytes()
-                        pending_orb.append(
-                            (path, mtime, w, h, kp_xy, des.tobytes(), buf.tobytes())
-                        )
+                    # Seules les coordonnées des keypoints sont conservées : le
+                    # reste de l'algorithme ne lit que `.pt` (cf. _compare_chunk),
+                    # et un tableau (N,2) float32 remplace avantageusement ~300
+                    # objets cv2.KeyPoint par photo — que le cache devait de
+                    # toute façon reconstruire un à un à chaque démarrage.
+                    pts = np.array([k.pt for k in kp], dtype=np.float32)
+                    desc_list.append((path, pts, des, w * h))
+                    pending_orb.append((path, mtime, w, h, pts.tobytes(), des.tobytes()))
                 except Exception as exc:
                     logger.debug("ORB descripteur échoué %s : %s", os.path.basename(path), exc)
+                throttle_tick(lambda: self._cancelled)
         finally:
             # Persiste tout ce qui a été calculé jusqu'ici, y compris en cas
             # d'annulation (return ci-dessus) — c'est ce qui rend le scan reprenable.
@@ -685,18 +851,12 @@ class DuplicateDetectorThread(QThread):
             f"Tier 2 — comparaison ORB ({m} photos)…",
         )
 
-        # Complétude des comparaisons (incrémentalité) : un chemin déjà comparé
-        # à tout le reste lors d'une passe complète antérieure (mtime inchangé
-        # depuis) est « ancien » — les paires ancien×ancien sont sautées plus
-        # bas, sans perturber le tri par aire ni le préfiltre _ORB_AREA_FACTOR
-        # (qui reste calculé sur la liste complète, triée, inchangée).
-        compared_tier2 = cache.get_compared_tier2([path for path, *_ in desc_list])
-        old_paths_set: set[str] = set()
-        for path, *_rest in desc_list:
-            cached_mtime = compared_tier2.get(path)
-            if cached_mtime is not None and abs(cached_mtime - mtimes2[path]) < 1.0:
-                old_paths_set.add(path)
-        new_paths_set = {path for path, *_ in desc_list if path not in old_paths_set}
+        # `old_paths_set` / `new_paths_set` ont été établis plus haut, sur
+        # l'ensemble des photos non groupées et non plus sur `desc_list` — ce
+        # dernier ne contient désormais que les photos réellement impliquées
+        # dans une paire à évaluer. Seuls les chemins effectivement présents
+        # dans desc_list peuvent être marqués « comparés » en fin de passe.
+        new_paths_set &= {path for path, *_ in desc_list}
 
         # Tri par aire croissante : accélère le prefiltre (photos similaires proches)
         desc_list.sort(key=lambda x: x[3])
@@ -718,7 +878,7 @@ class DuplicateDetectorThread(QThread):
         # pour une même ligne (tous les appels partagent path_i), donc paralléliser
         # ne change jamais le résultat final (juste, potentiellement, les ids de
         # groupe intermédiaires, renumérotés de toute façon en fin de _detect()).
-        def _compare_chunk(items, des_i=None, kp_i=None, img_i=None, path_i=""):
+        def _compare_chunk(items, des_i=None, pts_i=None, path_i=""):
             # BFMatcher local au worker plutôt qu'une instance partagée entre
             # threads du pool : le thread-safety de cv2.BFMatcher.knnMatch()
             # n'est pas documenté par OpenCV, et un objet natif partagé appelé
@@ -727,7 +887,7 @@ class DuplicateDetectorThread(QThread):
             # est négligeable face au travail du lot (plusieurs comparaisons ORB).
             local_bf = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=False)
             results = []
-            for path_j, kp_j, des_j, img_j in items:
+            for path_j, pts_j, des_j in items:
                 # Lecture directe du flag (pas _is_cancelled(), qui émet le
                 # signal `cancelled` à chaque appel) : permet d'interrompre un
                 # lot en cours d'item en item plutôt que d'attendre qu'il aille
@@ -741,6 +901,7 @@ class DuplicateDetectorThread(QThread):
                 # plusieurs secondes de plus que nécessaire.
                 if self._cancelled:
                     break
+                throttle_tick(lambda: self._cancelled)
                 # Discriminant le plus simple et le moins cher d'abord (lookup
                 # dict), avant tout le pipeline ORB (knnMatch + RANSAC +
                 # warpPerspective + absdiff) qui est de loin le plus coûteux de
@@ -769,12 +930,8 @@ class DuplicateDetectorThread(QThread):
                         results.append((path_j, False))
                         continue
 
-                    src_pts = np.float32(
-                        [kp_i[m1.queryIdx].pt for m1 in good]
-                    ).reshape(-1, 1, 2)
-                    dst_pts = np.float32(
-                        [kp_j[m1.trainIdx].pt for m1 in good]
-                    ).reshape(-1, 1, 2)
+                    src_pts = pts_i[[m1.queryIdx for m1 in good]].reshape(-1, 1, 2)
+                    dst_pts = pts_j[[m1.trainIdx for m1 in good]].reshape(-1, 1, 2)
 
                     H, mask = cv2.findHomography(src_pts, dst_pts, cv2.RANSAC, 5.0)
                     if mask is None:
@@ -793,6 +950,18 @@ class DuplicateDetectorThread(QThread):
                     # réellement. Vérification supplémentaire : recaler j sur i
                     # via l'homographie trouvée et exiger que les pixels
                     # concordent sur la zone de recouvrement (cf. _ORB_MAX_MEAN_DIFF).
+                    #
+                    # Les deux images de travail ne sont décodées qu'ici, au
+                    # seul endroit qui en a besoin : y parvenir suppose d'avoir
+                    # déjà passé le ratio test de Lowe *et* le seuil d'inliers
+                    # RANSAC, ce que ne font que de vrais quasi-doublons — une
+                    # infime minorité des paires évaluées (cf. _GrayImageCache).
+                    img_i = gray_cache.get(path_i)
+                    img_j = gray_cache.get(path_j)
+                    if img_i is None or img_j is None:
+                        results.append((path_j, False))
+                        continue
+
                     h_i, w_i = img_i.shape[:2]
                     warped = cv2.warpPerspective(img_j, H, (w_i, h_i))
                     valid = cv2.warpPerspective(
@@ -818,12 +987,32 @@ class DuplicateDetectorThread(QThread):
             max_workers=n_workers, initializer=lower_current_thread_priority
         )
         cancelled_mid_flight = False
+        # Jalonnement de la complétude des comparaisons, même raisonnement
+        # qu'au Tier 1 (`_checkpoint_tier1`) : la ligne i traitée, les lignes
+        # 0..i ont couvert toutes leurs paires ; on ne persiste toutefois que
+        # jusqu'à l'indice du snapshot précédent, pour laisser à l'UI le temps
+        # d'avoir écrit les groupes correspondants dans le catalogue.
+        stored_upto2 = -1
+        snapshot_idx2 = -1
+
+        def _checkpoint_tier2(upto: int) -> None:
+            nonlocal stored_upto2
+            if upto <= stored_upto2:
+                return
+            rows = [
+                (path, mtimes2[path])
+                for path, *_ in desc_list[stored_upto2 + 1:upto + 1]
+                if path in new_paths_set
+            ]
+            cache.store_compared_tier2(rows)
+            stored_upto2 = upto
+
         try:
             for i in range(m):
                 if self._is_cancelled():
                     cancelled_mid_flight = True
                     break
-                path_i, kp_i, des_i, area_i, img_i = desc_list[i]
+                path_i, pts_i, des_i, area_i = desc_list[i]
 
                 now = time.monotonic()
                 if now - last_emit >= _PROGRESS_INTERVAL:
@@ -837,11 +1026,13 @@ class DuplicateDetectorThread(QThread):
                                 i + 1, m, pairs_checked)
                 if now - last_snapshot >= _LIVE_SNAPSHOT_INTERVAL:
                     last_snapshot = now
+                    _checkpoint_tier2(snapshot_idx2)
+                    snapshot_idx2 = i
                     self.partial_results.emit(_renumber(group_of), sorted(self._corrupted))
 
                 candidates = []
                 for j in range(i + 1, m):
-                    path_j, kp_j, des_j, area_j, img_j = desc_list[j]
+                    path_j, pts_j, des_j, area_j = desc_list[j]
 
                     # Prefiltre ratio d'aire : sortie anticipée (liste triée — area_j ≥ area_i)
                     if area_i > 0 and area_j / area_i > _ORB_AREA_FACTOR:
@@ -857,7 +1048,7 @@ class DuplicateDetectorThread(QThread):
                     if gi is not None and gi == gj:
                         continue
 
-                    candidates.append((path_j, kp_j, des_j, img_j))
+                    candidates.append((path_j, pts_j, des_j))
 
                 if not candidates:
                     continue
@@ -865,7 +1056,7 @@ class DuplicateDetectorThread(QThread):
                 pairs_checked += len(candidates)
                 chunk_size = max(1, -(-len(candidates) // n_workers))  # ceil division
                 chunks = [candidates[k:k + chunk_size] for k in range(0, len(candidates), chunk_size)]
-                worker = partial(_compare_chunk, des_i=des_i, kp_i=kp_i, img_i=img_i, path_i=path_i)
+                worker = partial(_compare_chunk, des_i=des_i, pts_i=pts_i, path_i=path_i)
                 futures = [executor.submit(worker, chunk) for chunk in chunks]
                 for future in futures:
                     if self._is_cancelled():
@@ -905,7 +1096,7 @@ class DuplicateDetectorThread(QThread):
             return
 
         logger.info("Tier 2 : %d paire(s) vérifiées par ORB/RANSAC.", pairs_checked)
-        cache.store_compared_tier2([(path, mtimes2[path]) for path in new_paths_set])
+        _checkpoint_tier2(m - 1)
 
 
 # ── rapport HTML ────────────────────────────────────────────────────────────────

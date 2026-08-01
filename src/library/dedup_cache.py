@@ -44,6 +44,16 @@ CREATE TABLE IF NOT EXISTS fingerprints (
     micro      BLOB NOT NULL
 );
 
+-- image_jpeg : colonne héritée, conservée pour ne pas invalider les caches
+-- existants (leur reconstruction coûte des heures) mais **plus jamais lue** ni
+-- écrite depuis que le Tier 2 recharge son image de travail à la demande
+-- depuis le fichier d'origine (cf. duplicate_detector._GrayImageCache) : la
+-- relire systématiquement coûtait un décodage JPEG par photo à chaque
+-- démarrage, pour une image qui ne sert qu'aux rares paires atteignant la
+-- vérification post-RANSAC. Placée en dernière colonne : SQLite stocke le
+-- débordement d'un enregistrement en fin de record, les SELECT ci-dessous
+-- (qui ne la demandent pas) n'ont donc pas à parcourir les pages de
+-- débordement.
 CREATE TABLE IF NOT EXISTS orb_features (
     path         TEXT PRIMARY KEY,
     file_mtime   REAL NOT NULL,
@@ -161,29 +171,53 @@ class DedupCache:
 
     # ── Tier 2 : ORB features ────────────────────────────────────────────────
 
-    def get_orb_features(self, paths: list[str]) -> dict[str, tuple]:
-        """{path: (file_mtime, width, height, keypoints_xy_blob, descriptors_blob, image_jpeg_blob)}"""
+    def get_orb_meta(self, paths: list[str]) -> dict[str, tuple[float, int, int]]:
+        """{path: (file_mtime, width, height)} — métadonnées seules, sans le
+        moindre blob. Sert au Tier 2 à décider *avant* tout chargement quelles
+        photos participent réellement à une paire à évaluer (validité du cache
+        + aire pour le préfiltre `_ORB_AREA_FACTOR`), pour ne charger ensuite
+        que celles-là via `get_orb_descriptors()`."""
+        result: dict[str, tuple[float, int, int]] = {}
+        for chunk in _chunks(paths, _IN_CLAUSE_CHUNK):
+            placeholders = ",".join("?" * len(chunk))
+            rows = self._conn.execute(
+                f"SELECT path, file_mtime, width, height "
+                f"FROM orb_features WHERE path IN ({placeholders})",
+                chunk,
+            ).fetchall()
+            for path, mtime, w, h in rows:
+                result[path] = (mtime, w, h)
+        return result
+
+    def get_orb_descriptors(self, paths: list[str]) -> dict[str, tuple]:
+        """{path: (file_mtime, width, height, keypoints_xy_blob, descriptors_blob)}
+
+        La colonne héritée `image_jpeg` n'est volontairement pas sélectionnée
+        (cf. commentaire du schéma)."""
         result: dict[str, tuple] = {}
         for chunk in _chunks(paths, _IN_CLAUSE_CHUNK):
             placeholders = ",".join("?" * len(chunk))
             rows = self._conn.execute(
-                f"SELECT path, file_mtime, width, height, keypoints_xy, descriptors, image_jpeg "
+                f"SELECT path, file_mtime, width, height, keypoints_xy, descriptors "
                 f"FROM orb_features WHERE path IN ({placeholders})",
                 chunk,
             ).fetchall()
-            for path, mtime, w, h, kp_xy, des, img in rows:
-                result[path] = (mtime, w, h, kp_xy, des, img)
+            for path, mtime, w, h, kp_xy, des in rows:
+                result[path] = (mtime, w, h, kp_xy, des)
         return result
 
     def store_orb_features(self, rows: list[tuple]) -> None:
-        """rows : (path, file_mtime, width, height, keypoints_xy_blob, descriptors_blob, image_jpeg_blob)"""
+        """rows : (path, file_mtime, width, height, keypoints_xy_blob, descriptors_blob)
+
+        `image_jpeg` est écrite vide : colonne héritée NOT NULL, plus jamais
+        lue (cf. commentaire du schéma)."""
         if not rows:
             return
         self._conn.executemany(
             """
             INSERT OR REPLACE INTO orb_features
                 (path, file_mtime, width, height, keypoints_xy, descriptors, image_jpeg)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, x'')
             """,
             rows,
         )

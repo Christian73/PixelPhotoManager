@@ -553,6 +553,92 @@ class TestDedupCachePersistence:
             conn.close()
         assert 0 < n_fp < len(paths)
 
+    def _cancel_during_comparison(self, tmp_path, monkeypatch, after_snapshots: int):
+        """Lance un scan et l'annule pendant la *boucle de comparaison* du Tier 1
+        (et non pendant le calcul des empreintes, déjà couvert ci-dessus).
+
+        Les deux intervalles sont mis à 0 : sur une bibliothèque de test, la
+        boucle se termine en bien moins que leurs valeurs réelles et aucun
+        instantané ne serait émis avant la fin. Retourne (chemins, base de
+        cache, derniers groupes diffusés)."""
+        import src.library.duplicate_detector as dd
+        monkeypatch.setattr(dd, "_PROGRESS_INTERVAL", 0)
+        monkeypatch.setattr(dd, "_LIVE_SNAPSHOT_INTERVAL", 0)
+
+        manifest = build_library(tmp_path / "lib")
+        paths = [str(p) for p in manifest.images]
+        cache_db = str(tmp_path / "dedup_cache.db")
+
+        thread = DuplicateDetectorThread(paths, cache_db_path=cache_db)
+        state = {"snapshots": 0, "groups": {}}
+
+        def _on_partial(groups, corrupted):
+            state["snapshots"] += 1
+            state["groups"] = groups
+            if state["snapshots"] >= after_snapshots:
+                thread.cancel()
+
+        thread.partial_results.connect(_on_partial)
+        thread._detect()
+
+        assert state["snapshots"] >= after_snapshots, "annulation jamais déclenchée"
+        return paths, cache_db, state["groups"]
+
+    def test_cancellation_mid_comparison_checkpoints_compared_tier1(
+        self, tmp_path, monkeypatch
+    ):
+        """Régression : `compared_tier1` n'était écrite qu'une fois la boucle de
+        comparaison *entièrement* terminée. Une passe interrompue (fermeture de
+        l'application) ne persistait donc aucune comparaison et repartait de zéro
+        au démarrage suivant — sur une grosse bibliothèque, la même heure de CPU
+        rejouée à chaque session, indéfiniment."""
+        paths, cache_db, _ = self._cancel_during_comparison(
+            tmp_path, monkeypatch, after_snapshots=3
+        )
+
+        import sqlite3
+        conn = sqlite3.connect(cache_db)
+        try:
+            n_compared = conn.execute("SELECT COUNT(*) FROM compared_tier1").fetchone()[0]
+        finally:
+            conn.close()
+
+        # Strictement entre les deux : « > 0 » est le correctif lui-même,
+        # « < len(paths) » vérifie qu'on a bien annulé en cours de route (sinon
+        # le test passerait aussi sur un scan complet, sans rien prouver).
+        assert 0 < n_compared < len(paths)
+
+    def test_resumed_scan_finds_the_same_groups(self, tmp_path, monkeypatch):
+        """La reprise ne doit pas seulement être rapide : elle doit aboutir au
+        même résultat qu'une passe ininterrompue. Le jalon est volontairement en
+        retard d'un instantané sur la progression réelle, précisément pour
+        qu'aucune fusion diffusée trop tard ne soit perdue."""
+        paths, cache_db, partial_groups = self._cancel_during_comparison(
+            tmp_path, monkeypatch, after_snapshots=3
+        )
+
+        # Reprise : seed_groups = ce que le catalogue contient à ce stade,
+        # c'est-à-dire le dernier instantané diffusé (cf. _on_partial dans
+        # main_window_duplicates.py).
+        seed_groups = {p: gid for gid, members in partial_groups.items() for p in members}
+        resumed = DuplicateDetectorThread(
+            paths, seed_groups=seed_groups, cache_db_path=cache_db
+        )
+        got_resumed = {}
+        resumed.finished.connect(lambda groups: got_resumed.update(groups=groups))
+        resumed._detect()
+        assert "groups" in got_resumed
+
+        # Référence : la même bibliothèque scannée d'un seul tenant, cache neuf.
+        reference = DuplicateDetectorThread(
+            paths, cache_db_path=str(tmp_path / "dedup_cache_ref.db")
+        )
+        got_ref = {}
+        reference.finished.connect(lambda groups: got_ref.update(groups=groups))
+        reference._detect()
+
+        assert _grouping_as_sets(got_resumed["groups"]) == _grouping_as_sets(got_ref["groups"])
+
     def test_full_catalog_scan_false_skips_purge(self, tmp_path):
         manifest = build_library(tmp_path / "lib")
         all_paths = [str(p) for p in manifest.images]
