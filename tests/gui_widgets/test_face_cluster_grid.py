@@ -10,7 +10,8 @@ import sqlite3
 
 import pytest
 from PIL import Image
-from PySide6.QtWidgets import QDialog
+from PySide6.QtCore import Qt
+from PySide6.QtWidgets import QDialog, QPushButton
 
 from src.core.models import FaceInfo, PersonInfo
 from src.faces.face_database import FaceDatabase, _enc
@@ -94,6 +95,83 @@ class TestProgressPopup:
         assert popup._lbl_pct.text() == ""
 
         popup.center_on_parent()   # ne doit pas lever
+
+    def test_cancel_button_emits_signal(self, qtbot):
+        from PySide6.QtWidgets import QWidget
+        parent = QWidget()
+        qtbot.addWidget(parent)
+        popup = _ProgressPopup(parent)
+        qtbot.addWidget(popup)
+        received = []
+        popup.cancel_requested.connect(lambda: received.append(True))
+
+        btn = next(b for b in popup.findChildren(QPushButton) if b.text() == "Annuler")
+        btn.click()
+
+        assert received == [True]
+
+    def test_popup_is_draggable(self, qtbot):
+        """Fenêtre sans cadre : le glisser-déposer doit la déplacer (elle était fixe)."""
+        from PySide6.QtCore import QPoint, QPointF, QEvent
+        from PySide6.QtGui import QMouseEvent
+        from PySide6.QtWidgets import QWidget
+
+        parent = QWidget()
+        qtbot.addWidget(parent)
+        popup = _ProgressPopup(parent)
+        qtbot.addWidget(popup)
+        popup.move(100, 100)
+        start = popup.pos()
+
+        def _evt(kind, global_pt, button, buttons):
+            local = QPointF(popup.mapFromGlobal(global_pt.toPoint()))
+            return QMouseEvent(kind, local, global_pt, button, buttons,
+                               Qt.KeyboardModifier.NoModifier)
+
+        grab = QPointF(popup.frameGeometry().topLeft() + QPoint(40, 12))
+        popup.mousePressEvent(_evt(QEvent.Type.MouseButtonPress, grab,
+                                   Qt.MouseButton.LeftButton, Qt.MouseButton.LeftButton))
+        popup.mouseMoveEvent(_evt(QEvent.Type.MouseMove, grab + QPointF(60, 35),
+                                  Qt.MouseButton.NoButton, Qt.MouseButton.LeftButton))
+        popup.mouseReleaseEvent(_evt(QEvent.Type.MouseButtonRelease, grab + QPointF(60, 35),
+                                     Qt.MouseButton.LeftButton, Qt.MouseButton.NoButton))
+
+        assert popup.pos() == start + QPoint(60, 35)
+        assert popup._drag_offset is None
+
+        # Après relâchement, un mouvement seul ne déplace plus la fenêtre.
+        moved = popup.pos()
+        popup.mouseMoveEvent(_evt(QEvent.Type.MouseMove, grab + QPointF(200, 200),
+                                  Qt.MouseButton.NoButton, Qt.MouseButton.LeftButton))
+        assert popup.pos() == moved
+
+
+class TestProgressCancel:
+    """Bouton Annuler de la popup → FaceClusterGrid._on_progress_cancelled()."""
+
+    def test_requests_interruption_and_resets_ui(self, qtbot, grid):
+        class _FakeThread:
+            def __init__(self):
+                self.interrupted = False
+
+            def isRunning(self):
+                return True
+
+            def cancel(self):
+                self.interrupted = True
+
+        fake_thread = _FakeThread()
+        grid._refresh_thread = fake_thread
+        grid._progress_popup = _ProgressPopup(grid)
+        qtbot.addWidget(grid._progress_popup)
+        grid._progress_widget.setVisible(True)
+
+        grid._on_progress_cancelled()
+
+        assert fake_thread.interrupted
+        assert grid._progress_popup is None
+        assert not grid._progress_widget.isVisible()
+        assert grid._lbl_title.text() == "Analyse annulée"
 
 
 # ---------------------------------------------------------------------------

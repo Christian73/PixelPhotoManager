@@ -55,13 +55,22 @@ from src.ui.face_cluster_workers import (  # noqa: E402,F401
 )
 
 class _ProgressPopup(QDialog):
-    """Dialogue modal-less affiché pendant le calcul Union-Find."""
+    """
+    Dialogue modal-less affiché pendant le calcul Union-Find.
+
+    Sans cadre (pas de barre de titre système) : le déplacement est assuré
+    par un glisser-déposer sur n'importe quelle zone vide de la popup
+    (cf. mousePressEvent/mouseMoveEvent).
+    """
+
+    cancel_requested = Signal()
 
     def __init__(self, parent: QWidget) -> None:
         super().__init__(parent, Qt.WindowType.Tool | Qt.WindowType.FramelessWindowHint)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, False)
         self.setWindowModality(Qt.WindowModality.NonModal)
         self.setFixedWidth(380)
+        self._drag_offset: "QPoint | None" = None
 
         self.setStyleSheet(
             "QDialog { background: #252535; border: 1px solid #445; border-radius: 8px; }"
@@ -76,6 +85,8 @@ class _ProgressPopup(QDialog):
         lbl_title.setStyleSheet(
             "font-weight: bold; font-size: 13px; color: #eee; background: transparent;"
         )
+        lbl_title.setCursor(Qt.CursorShape.SizeAllCursor)
+        lbl_title.setToolTip("Glisser pour déplacer la fenêtre")
         vbox.addWidget(lbl_title)
 
         self._lbl_phase = QLabel("Initialisation…")
@@ -103,6 +114,46 @@ class _ProgressPopup(QDialog):
         self._lbl_pct.setStyleSheet("font-size: 11px; color: #888; background: transparent;")
         bar_row.addWidget(self._lbl_pct)
         vbox.addLayout(bar_row)
+
+        btn_row = QHBoxLayout()
+        btn_row.addStretch()
+        btn_cancel = QPushButton("Annuler")
+        btn_cancel.setFixedHeight(24)
+        btn_cancel.setStyleSheet(
+            "QPushButton { background: #3a3a4a; color: #ddd; border: 1px solid #556; "
+            "border-radius: 4px; padding: 2px 12px; }"
+            "QPushButton:hover { background: #454558; }"
+        )
+        btn_cancel.clicked.connect(self.cancel_requested)
+        btn_row.addWidget(btn_cancel)
+        vbox.addLayout(btn_row)
+
+    # -------------------------------------------------------------- déplacement
+    # Fenêtre sans cadre : Qt ne fournit aucun déplacement natif, on l'implémente
+    # à la main (offset mémorisé au clic, move() à chaque mouvement).
+
+    def mousePressEvent(self, event) -> None:
+        if event.button() == Qt.MouseButton.LeftButton:
+            self._drag_offset = (
+                event.globalPosition().toPoint() - self.frameGeometry().topLeft()
+            )
+            event.accept()
+            return
+        super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event) -> None:
+        if self._drag_offset is not None and (event.buttons() & Qt.MouseButton.LeftButton):
+            self.move(event.globalPosition().toPoint() - self._drag_offset)
+            event.accept()
+            return
+        super().mouseMoveEvent(event)
+
+    def mouseReleaseEvent(self, event) -> None:
+        if self._drag_offset is not None and event.button() == Qt.MouseButton.LeftButton:
+            self._drag_offset = None
+            event.accept()
+            return
+        super().mouseReleaseEvent(event)
 
     def update_progress(self, current: int, total: int, message: str) -> None:
         self._lbl_phase.setText(message)
@@ -335,6 +386,7 @@ class FaceClusterGrid(QWidget):
         # Arrêter un refresh précédent encore en cours et libérer le thread Qt enfant
         if self._refresh_thread is not None:
             if self._refresh_thread.isRunning():
+                self._refresh_thread.cancel()
                 try:
                     self._refresh_thread.data_ready.disconnect()
                     self._refresh_thread.initial_ready.disconnect()
@@ -377,6 +429,7 @@ class FaceClusterGrid(QWidget):
             self._progress_popup = None
         self._progress_popup = _ProgressPopup(self)
         self._progress_popup.update_progress(0, 100, "Initialisation…")
+        self._progress_popup.cancel_requested.connect(self._on_progress_cancelled)
         self._progress_popup.show()
         self._progress_popup.center_on_parent()
 
@@ -509,6 +562,24 @@ class FaceClusterGrid(QWidget):
         self._restore_scroll_on_build = True
         self._build_from_data(self._cached_data)
 
+    @Slot()
+    def _on_progress_cancelled(self) -> None:
+        """Bouton Annuler de la popup de progression : interrompt l'analyse en cours.
+
+        Le thread vérifie son drapeau _cancelled à intervalles réguliers ; si
+        l'annulation survient pendant l'Union-Find (la partie longue), il ne
+        s'arrête pas net : il termine avec les fusions déjà trouvées et émet
+        quand même data_ready peu après (résultat partiel mais valide, marqué
+        `was_cancelled`). Ce signal reste donc connecté — _on_data_ready
+        remplacera ce message dès qu'il arrive."""
+        if self._refresh_thread is not None and self._refresh_thread.isRunning():
+            self._refresh_thread.cancel()
+        if self._progress_popup is not None:
+            self._progress_popup.close()
+            self._progress_popup = None
+        self._progress_widget.setVisible(False)
+        self._lbl_title.setText("Analyse annulée")
+
     @Slot(int, int, str)
     def _on_progress(self, current: int, total: int, message: str) -> None:
         if self._progress_popup is not None:
@@ -632,7 +703,15 @@ class FaceClusterGrid(QWidget):
             parts.append(f"{n_groups} groupe{'s' if n_groups > 1 else ''}")
         if n_solos > 0:
             parts.append(f"{n_solos} visage{'s isolés' if n_solos > 1 else ' isolé'}")
-        suffix = " — analyse en cours…" if is_partial else ""
+        if is_partial:
+            suffix = " — analyse en cours…"
+        elif data.get("was_cancelled"):
+            # Annulation pendant l'Union-Find : certains groupes qui auraient
+            # fusionné plus tard restent séparés (rien n'est jamais fusionné à
+            # tort, juste pas encore découvert) — cf. _compute_cluster_groups_bg.
+            suffix = " — analyse interrompue, regroupement partiel"
+        else:
+            suffix = ""
         self._lbl_title.setText(", ".join(parts) + suffix)
 
         available = self._scroll.viewport().width()

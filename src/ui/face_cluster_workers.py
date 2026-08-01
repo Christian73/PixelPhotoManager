@@ -34,6 +34,11 @@ from src.ui.people_panel import (
 
 logger = logging.getLogger(__name__)
 
+
+class _AnalysisCancelled(Exception):
+    """Levée depuis uf_progress() pour interrompre le Union-Find en cours de bloc."""
+
+
 _CARD_IMG     = 130
 _CARD_W       = 148
 _CARD_SPACING  = 10
@@ -56,7 +61,12 @@ def _compute_cluster_groups_bg(
     Calcul en blocs de _UF_CHUNK lignes : à chaque itération on multiplie un bloc
     de lignes par toutes les lignes suivantes (triangle supérieur) via BLAS.
     RAM pic ≈ _UF_CHUNK × n × 4 octets au lieu de n² × 4 — scalable jusqu'à ~80k.
-    progress_cb(chunk_start) est appelé au début de chaque bloc."""
+    progress_cb(chunk_start) est appelé au début de chaque bloc ; s'il lève
+    _AnalysisCancelled (annulation utilisateur, cf. FaceClusterGrid), la boucle
+    s'arrête à ce point — les fusions déjà trouvées dans les blocs précédents
+    sont conservées et renvoyées telles quelles (résultat partiel mais valide :
+    aucune fusion n'est jamais défaite, seules celles pas encore découvertes
+    manquent)."""
     parent = {cid: cid for cid in cluster_ids}
 
     def find(x: int) -> int:
@@ -73,42 +83,45 @@ def _compute_cluster_groups_bg(
     valid = [(cid, embeddings[cid]) for cid in cluster_ids if cid in embeddings]
 
     try:
-        import numpy as np
-        if valid:
-            ids_arr = [cid for cid, _ in valid]
-            m = len(ids_arr)
-            mat = np.array([e for _, e in valid], dtype=np.float32)  # (m, dim)
-            norms = np.linalg.norm(mat, axis=1, keepdims=True)
-            mat /= np.where(norms > 1e-8, norms, 1.0)
+        try:
+            import numpy as np
+            if valid:
+                ids_arr = [cid for cid, _ in valid]
+                m = len(ids_arr)
+                mat = np.array([e for _, e in valid], dtype=np.float32)  # (m, dim)
+                norms = np.linalg.norm(mat, axis=1, keepdims=True)
+                mat /= np.where(norms > 1e-8, norms, 1.0)
 
-            for chunk_start in range(0, m, _UF_CHUNK):
+                for chunk_start in range(0, m, _UF_CHUNK):
+                    if progress_cb is not None:
+                        progress_cb(chunk_start)
+                    if chunk_start + 1 >= m:
+                        break
+                    chunk_end = min(chunk_start + _UF_CHUNK, m)
+                    # Bloc courant vs toutes les lignes suivantes (triangle supérieur)
+                    chunk = mat[chunk_start:chunk_end]     # (_UF_CHUNK, dim)
+                    rest  = mat[chunk_start + 1:]          # (m - chunk_start - 1, dim)
+                    sims  = chunk @ rest.T                 # (_UF_CHUNK, m - chunk_start - 1)
+                    rows, cols = np.nonzero(sims >= _SIM_GROUP)
+                    for r, c in zip(rows.tolist(), cols.tolist()):
+                        i_abs = chunk_start + int(r)
+                        j_abs = chunk_start + 1 + int(c)
+                        if j_abs > i_abs:                  # triangle supérieur uniquement
+                            union(ids_arr[i_abs], ids_arr[j_abs])
+        except ImportError:
+            ids = list(cluster_ids)
+            for i, ci in enumerate(ids):
                 if progress_cb is not None:
-                    progress_cb(chunk_start)
-                if chunk_start + 1 >= m:
-                    break
-                chunk_end = min(chunk_start + _UF_CHUNK, m)
-                # Bloc courant vs toutes les lignes suivantes (triangle supérieur)
-                chunk = mat[chunk_start:chunk_end]     # (_UF_CHUNK, dim)
-                rest  = mat[chunk_start + 1:]          # (m - chunk_start - 1, dim)
-                sims  = chunk @ rest.T                 # (_UF_CHUNK, m - chunk_start - 1)
-                rows, cols = np.nonzero(sims >= _SIM_GROUP)
-                for r, c in zip(rows.tolist(), cols.tolist()):
-                    i_abs = chunk_start + int(r)
-                    j_abs = chunk_start + 1 + int(c)
-                    if j_abs > i_abs:                  # triangle supérieur uniquement
-                        union(ids_arr[i_abs], ids_arr[j_abs])
-    except ImportError:
-        ids = list(cluster_ids)
-        for i, ci in enumerate(ids):
-            if progress_cb is not None:
-                progress_cb(i)
-            ei = embeddings.get(ci)
-            if not ei:
-                continue
-            for cj in ids[i + 1:]:
-                ej = embeddings.get(cj)
-                if ej and _cosine_sim(ei, ej) >= _SIM_GROUP:
-                    union(ci, cj)
+                    progress_cb(i)
+                ei = embeddings.get(ci)
+                if not ei:
+                    continue
+                for cj in ids[i + 1:]:
+                    ej = embeddings.get(cj)
+                    if ej and _cosine_sim(ei, ej) >= _SIM_GROUP:
+                        union(ci, cj)
+    except _AnalysisCancelled:
+        pass   # arrêt anticipé : on garde les fusions déjà trouvées
 
     groups: dict[int, list[int]] = {}
     for cid in cluster_ids:
@@ -242,6 +255,15 @@ class _ClusterRefreshThread(QThread):
         super().__init__(parent)
         self._face_db = face_db
         self._catalog = catalog
+        self._cancelled = False
+
+    def cancel(self) -> None:
+        """Demande l'arrêt (bouton Annuler de la popup). Drapeau simple, pas
+        QThread.requestInterruption() : isInterruptionRequested() ne renvoie
+        True que si le thread a été démarré via start() (d->running côté Qt),
+        ce qui casserait les tests qui appellent run() en synchrone (cf.
+        CLAUDE.md, piège coverage/QThread)."""
+        self._cancelled = True
 
     def run(self) -> None:
         try:
@@ -288,6 +310,9 @@ class _ClusterRefreshThread(QThread):
                 "is_partial":                True,
             })
 
+            if self._cancelled:
+                return
+
             # ── Phase 2 : embeddings (groupes non-isolés seulement pour UF) ─
             # L'Union-Find est lancé uniquement sur les clusters à face_count > 1
             # (les visages isolés restent des singletons). Cela réduit la taille
@@ -308,6 +333,9 @@ class _ClusterRefreshThread(QThread):
             # UF en blocs : nombre de blocs ≤ 100 pour la barre de progression
             n_uf_steps = min(max(m_emb // _UF_CHUNK, 1), 100) if m_emb else 0
             N          = step + 3 + n_uf_steps + 1
+
+            if self._cancelled:
+                return
 
             # ── Phase 2 : personnes connues ───────────────────────────────
             step += 1
@@ -331,6 +359,8 @@ class _ClusterRefreshThread(QThread):
 
             def uf_progress(chunk_start: int) -> None:
                 nonlocal step, _last_uf_pct
+                if self._cancelled:
+                    raise _AnalysisCancelled()
                 pct = chunk_start * 100 // m_emb if m_emb else 100
                 if pct != _last_uf_pct:
                     _last_uf_pct = pct
@@ -347,6 +377,9 @@ class _ClusterRefreshThread(QThread):
                     f"{n_ns} groupes — regroupement désactivé (limite : {UNION_FIND_MAX})")
                 raw_groups: dict[int, list[int]] = {cid: [cid] for cid in cluster_ids}
             else:
+                # _compute_cluster_groups_bg absorbe elle-même _AnalysisCancelled
+                # et renvoie les fusions déjà trouvées : pas de try/except ici,
+                # on continue toujours avec un résultat (complet ou partiel).
                 raw_groups = _compute_cluster_groups_bg(
                     non_solo_ids, non_solo_embeddings, uf_progress
                 )
@@ -359,6 +392,12 @@ class _ClusterRefreshThread(QThread):
                 raw_groups.values(),
                 key=lambda g: (-len(g), -sum(face_counts.get(c, 0) for c in g)),
             )
+
+            # Pas de `if self._cancelled: return` ici : au-delà de ce point, la
+            # suite (étiquettes + suggestions) est rapide (vectorisée, pas de
+            # boucle O(n²)) — autant la finir et livrer un résultat (complet ou
+            # partiel si l'annulation a interrompu l'Union-Find ci-dessus)
+            # plutôt que de tout jeter silencieusement.
 
             # ── Phase 2 : étiquettes des groupes multi-clusters (vectorisé) ─
             step += 1
@@ -462,6 +501,7 @@ class _ClusterRefreshThread(QThread):
                 "person_cluster_embeddings": person_cluster_embeddings,
                 "is_partial":                False,
                 "n_promoted":                len(strong),
+                "was_cancelled":             self._cancelled,
             })
         except Exception:
             logger.exception("_ClusterRefreshThread: erreur inattendue")

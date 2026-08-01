@@ -13,7 +13,7 @@ from src.core.models import PersonInfo
 from src.faces.face_database import FaceDatabase, _enc
 from src.library.catalog import Catalog
 from src.ui.face_cluster_workers import (
-    _ClusterRefreshThread, _PersonsLoader,
+    _AnalysisCancelled, _ClusterRefreshThread, _PersonsLoader,
     _compute_all_suggestions_bg, _compute_cluster_groups_bg,
     _compute_suggestion_bg,
 )
@@ -87,6 +87,45 @@ class TestComputeClusterGroups:
 
     def test_empty_input(self):
         assert _compute_cluster_groups_bg([], {}) == {}
+
+    def test_cancellation_absorbed_returns_partial_result(self):
+        # uf_progress lève _AnalysisCancelled dès le 1er bloc (annulation utilisateur) —
+        # la fonction l'avale en interne et renvoie les fusions déjà trouvées (ici :
+        # aucune) au lieu de laisser l'exception se propager à l'appelant, pour que
+        # le thread puisse terminer et livrer un résultat partiel (cf. bouton Annuler).
+        def cb(chunk_start):
+            raise _AnalysisCancelled()
+
+        groups = _compute_cluster_groups_bg(
+            [1, 2], {1: _emb(0.0), 2: _emb(0.0)}, progress_cb=cb
+        )
+
+        assert sorted(groups.values()) == [[1], [2]]
+
+    def test_partial_unions_preserved_when_cancelled_mid_computation(self):
+        # 500 vecteurs identiques (angle 0) suivis de 100 vecteurs identiques entre
+        # eux mais orthogonaux aux 500 premiers. Le 1er bloc (chunk_start=0) compare
+        # déjà tout i<500 contre tout j>i via BLAS (y compris les 100 suivants) : les
+        # 500 premiers se retrouvent donc tous fusionnés en un seul groupe dès ce
+        # bloc. Les 100 derniers, eux, ne se comparent qu'entre eux au 2e bloc
+        # (chunk_start=500) — si l'annulation survient juste avant ce bloc, ils
+        # doivent rester des singletons : la fusion déjà trouvée pour les 500
+        # premiers n'est jamais défaite par l'arrêt anticipé.
+        ids = list(range(600))
+        embeddings = {cid: _emb(0.0) for cid in range(500)}
+        embeddings.update({cid: _emb(math.pi / 2) for cid in range(500, 600)})
+
+        def cb(chunk_start):
+            if chunk_start >= 500:
+                raise _AnalysisCancelled()
+
+        groups = _compute_cluster_groups_bg(ids, embeddings, progress_cb=cb)
+
+        merged = [g for g in groups.values() if len(g) > 1]
+        assert len(merged) == 1
+        assert sorted(merged[0]) == list(range(500))
+        for cid in range(500, 600):
+            assert groups[cid] == [cid]
 
 
 # ---------------------------------------------------------------------------
@@ -261,6 +300,23 @@ class TestClusterRefreshThread:
 
         assert col.final[0]["groups_sorted"] == [[5]]
         assert col.final[0]["group_labels"][5] == ("", "")
+
+    def test_cancel_stops_before_data_ready(self, qtbot, tmp_path):
+        """Annuler la popup appelle cancel() : le thread doit s'arrêter sans
+        jamais émettre data_ready (cf. bouton Annuler)."""
+        face_db, catalog = self._dbs(tmp_path)
+        for cid, angle in [(1, 0.0), (2, 0.0), (3, math.pi / 2)]:
+            for k in range(2):
+                _raw_insert_face(face_db, f"C:/p{cid}_{k}.jpg",
+                                 cluster_id=cid, embedding=_emb(angle))
+        t = _ClusterRefreshThread(face_db, catalog)
+        col = _Collector(t)
+        t.cancel()
+
+        t.run()
+
+        assert col.initial  # phase 1 déjà émise avant le 1er point de contrôle
+        assert col.final == []
 
 
 # ---------------------------------------------------------------------------
