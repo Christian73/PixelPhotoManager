@@ -33,7 +33,12 @@ BACKGROUND_CPU_LEVELS: dict[str, float] = {
     "medium": 0.60,
     "max": 1.00,
 }
-DEFAULT_BACKGROUND_CPU = "medium"
+# "low" par défaut : les analyses de fond (doublons, visages) sont permanentes
+# et sans échéance, alors que la réactivité de l'interface, elle, se remarque
+# immédiatement. Qui veut avancer plus vite peut monter le niveau dans les
+# paramètres — l'inverse (découvrir un bridage à poser) suppose de comprendre
+# d'où vient la lenteur.
+DEFAULT_BACKGROUND_CPU = "low"
 
 # Délai d'inactivité de l'utilisateur au-delà duquel le bridage est levé : si
 # personne ne se sert de l'application, autant finir le travail de fond vite.

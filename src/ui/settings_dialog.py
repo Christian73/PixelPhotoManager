@@ -246,10 +246,10 @@ class _PerformancePage(QWidget):
 
     # (clé de BACKGROUND_CPU_LEVELS, libellé, description)
     _CHOICES = [
-        ("low",    "Économe",
+        ("low",    "Économe (recommandé)",
          "Priorité à la réactivité et au silence du ventilateur.\n"
          "Les analyses de fond prennent nettement plus longtemps."),
-        ("medium", "Équilibré (recommandé)",
+        ("medium", "Équilibré",
          "Compromis entre avancement des analyses et confort d'utilisation."),
         ("max",    "Maximum",
          "Aucun bridage : les analyses vont aussi vite que possible,\n"
