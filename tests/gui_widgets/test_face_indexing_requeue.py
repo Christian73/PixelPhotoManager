@@ -85,10 +85,14 @@ class _FakeMainWindow:
         self._face_db = object()
         self._catalog = object()
         self.clustering_calls = 0
+        self.similarity_calls = 0
         self.new_indexers: list = []
 
     def _run_clustering(self):
         self.clustering_calls += 1
+
+    def _schedule_similarity_search(self):
+        self.similarity_calls += 1
 
     def _on_face_progress(self, *a, **k):
         pass

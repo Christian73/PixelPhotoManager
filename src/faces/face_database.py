@@ -273,6 +273,22 @@ class FaceDatabase:
                     "et marquées pour re-indexation",
                     len(bad_paths),
                 )
+            # Migration : purger les suggestions résiduelles posées sur des visages
+            # déjà identifiés. Elles sont invisibles (get_persons_pending_count
+            # exige person_id IS NULL) mais bloquent définitivement leur cluster :
+            # tous les producteurs de suggestions filtrent sur
+            # `suggestion_person_id IS NULL`. Origine : la branche « en attente »
+            # de set_cluster_suggestions ne vérifiait pas person_id (corrigé).
+            cur = conn.execute(
+                "UPDATE faces SET suggestion_person_id=NULL, suggestion_score=NULL"
+                " WHERE suggestion_person_id IS NOT NULL AND person_id IS NOT NULL"
+            )
+            if cur.rowcount:
+                logger.info(
+                    "Migration: %d suggestion(s) résiduelle(s) purgée(s) "
+                    "sur des visages déjà identifiés",
+                    cur.rowcount,
+                )
             # Migration : rattraper les annotations Picasa restées consumed=0
             # alors que la personne a en fait été identifiée après coup (suggestion
             # acceptée, identification manuelle...) sur un visage qui chevauche
@@ -770,9 +786,14 @@ class FaceDatabase:
         pending = {cid: v for cid, v in suggestions.items() if cid not in auto}
         with self._guard() as conn:
             for cluster_id, (person_id, score) in pending.items():
+                # `person_id IS NULL` est indispensable : sans lui, un cluster
+                # partiellement (ou entièrement) identifié se retrouvait avec une
+                # suggestion posée sur des visages déjà nommés — invisible dans
+                # l'UI, mais bloquant pour toujours toute suggestion ultérieure
+                # sur ce cluster (garde `suggestion_person_id IS NULL` ci-dessous).
                 conn.execute(
                     "UPDATE faces SET suggestion_person_id=?, suggestion_score=?"
-                    " WHERE cluster_id=?"
+                    " WHERE cluster_id=? AND person_id IS NULL"
                     "   AND suggestion_person_id IS NULL",
                     (person_id, score, cluster_id),
                 )
@@ -1624,6 +1645,12 @@ class FaceDatabase:
         directement si le score atteint _SIM_AUTO_ASSIGN — cf. set_cluster_suggestions).
 
         Retourne (suggestions_créées, clusters_vérifiés).
+
+        Comparaison vectorisée (un seul produit matriciel clusters × personnes).
+        La version boucle-sur-boucle appelait `_cosine_sim` une fois par couple —
+        sur une bibliothèque réelle (22 000 groupes × 490 personnes, soit ~11 M
+        d'appels allouant chacun deux tableaux numpy) le passage durait plusieurs
+        minutes, ce qui interdisait de la déclencher automatiquement.
         """
         # 1. Tous les embeddings de clusters non identifiés sans suggestion existante
         with self._guard() as conn:
@@ -1660,23 +1687,72 @@ class FaceDatabase:
             return 0, total
 
         # 3. Pour chaque cluster, trouver la meilleure personne
-        suggestions: "dict[int, tuple[int, float]]" = {}
-        for i, (cid, face_embs) in enumerate(cid_to_embs.items()):
-            if progress_cb:
-                progress_cb(i + 1, total)
-            centroid = _centroid(face_embs)
-            best_sim, best_pid = 0.0, None
-            for pid, pc in person_centroids.items():
-                sim = _cosine_sim(centroid, pc)
-                if sim > best_sim:
-                    best_sim, best_pid = sim, pid
-            if best_pid is not None and best_sim >= _SIM_SUGGEST:
-                suggestions[cid] = (best_pid, best_sim)
+        suggestions = self._best_person_per_cluster(
+            cid_to_embs, person_centroids, progress_cb
+        )
 
         if suggestions:
             self.set_cluster_suggestions(suggestions)
 
         return len(suggestions), total
+
+    @staticmethod
+    def _best_person_per_cluster(
+        cid_to_embs: "dict[int, list]",
+        person_centroids: "dict[int, list]",
+        progress_cb: "Callable[[int, int], None] | None" = None,
+    ) -> "dict[int, tuple[int, float]]":
+        """{cluster_id: (person_id, score)} pour les clusters atteignant _SIM_SUGGEST.
+
+        Extrait de find_similar_to_persons pour être testable sans base."""
+        total = len(cid_to_embs)
+        cids = list(cid_to_embs)
+        pids = list(person_centroids)
+        try:
+            import numpy as np
+        except ImportError:                       # repli scalaire (cf. _cosine_sim)
+            suggestions: "dict[int, tuple[int, float]]" = {}
+            for i, cid in enumerate(cids):
+                if progress_cb:
+                    progress_cb(i + 1, total)
+                centroid = _centroid(cid_to_embs[cid])
+                best_sim, best_pid = 0.0, None
+                for pid in pids:
+                    sim = _cosine_sim(centroid, person_centroids[pid])
+                    if sim > best_sim:
+                        best_sim, best_pid = sim, pid
+                if best_pid is not None and best_sim >= _SIM_SUGGEST:
+                    suggestions[cid] = (best_pid, best_sim)
+            return suggestions
+
+        def _unit(mat):
+            norms = np.linalg.norm(mat, axis=1, keepdims=True)
+            return mat / np.where(norms > 1e-8, norms, 1.0)
+
+        persons = _unit(np.array([person_centroids[p] for p in pids], dtype=np.float32))
+
+        suggestions = {}
+        # Par tranches : borne la mémoire du produit matriciel (une bibliothèque
+        # réelle dépasse les 20 000 clusters) et donne de quoi rendre compte de
+        # l'avancement, la progression étant sinon invisible jusqu'à la fin.
+        chunk = 512
+        for start in range(0, total, chunk):
+            block = cids[start:start + chunk]
+            centroids = _unit(np.array(
+                [np.mean(np.array(cid_to_embs[c], dtype=np.float32), axis=0)
+                 for c in block],
+                dtype=np.float32,
+            ))
+            sims = centroids @ persons.T
+            best_idx = sims.argmax(axis=1)
+            best_sim = sims[np.arange(len(block)), best_idx]
+            for offset, cid in enumerate(block):
+                score = float(best_sim[offset])
+                if score >= _SIM_SUGGEST:
+                    suggestions[cid] = (pids[int(best_idx[offset])], score)
+            if progress_cb:
+                progress_cb(min(start + chunk, total), total)
+        return suggestions
 
     def ignore_face(self, face_id: int) -> None:
         """Mark a single face as ignored."""

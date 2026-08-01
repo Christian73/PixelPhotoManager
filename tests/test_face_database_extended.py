@@ -14,7 +14,7 @@ import pytest
 from PIL import Image
 
 from src.core.models import PersonInfo
-from src.faces.face_database import FaceDatabase, _enc
+from src.faces.face_database import FaceDatabase, _SIM_SUGGEST, _enc
 
 # ------------------------------------------------------------------ helpers
 
@@ -242,6 +242,124 @@ class TestClusterSuggestions:
         created, checked = db.find_similar_to_persons()
         assert created == 0
         assert checked == 1
+
+    def test_pending_suggestion_never_lands_on_an_identified_face(self, db):
+        """Régression : la branche « en attente » de set_cluster_suggestions
+        oubliait `AND person_id IS NULL`, contrairement à sa docstring. Un
+        cluster partiellement identifié se retrouvait avec une suggestion posée
+        sur ses visages déjà nommés — invisible dans l'UI (les vues de
+        suggestions filtrent sur person_id IS NULL) mais bloquant pour toujours
+        toute suggestion ultérieure sur ce cluster, puisque tous les
+        producteurs gardent `suggestion_person_id IS NULL`. Cause racine des
+        2 290 suggestions résiduelles trouvées en base réelle."""
+        named = _insert_face(db, "n.jpg", cluster_id=1, person_id=3,
+                             embedding=_base_vec(0))
+        free = _insert_face(db, "f.jpg", cluster_id=1, embedding=_base_vec(0))
+
+        db.set_cluster_suggestions({1: (9, 0.65)})
+
+        assert _q1(db, "SELECT suggestion_person_id, suggestion_score"
+                       " FROM faces WHERE id=?", (named,)) == (None, None)
+        assert _q1(db, "SELECT suggestion_person_id FROM faces WHERE id=?",
+                   (free,))[0] == 9
+
+    def test_startup_purges_suggestions_left_on_identified_faces(self, tmp_path):
+        """Les suggestions résiduelles déjà en base (posées avant le correctif
+        ci-dessus) sont purgées à l'ouverture — sinon elles gèlent définitivement
+        leur cluster."""
+        db = FaceDatabase(db_path=tmp_path / "faces.db")
+        stale = _insert_face(db, "n.jpg", cluster_id=1, person_id=3,
+                             suggestion_person_id=9)
+        legit = _insert_face(db, "f.jpg", cluster_id=2, suggestion_person_id=9)
+
+        reopened = FaceDatabase(db_path=tmp_path / "faces.db")
+
+        assert _q1(reopened, "SELECT suggestion_person_id FROM faces WHERE id=?",
+                   (stale,))[0] is None
+        assert _q1(reopened, "SELECT suggestion_person_id FROM faces WHERE id=?",
+                   (legit,))[0] == 9
+
+
+class TestBestPersonPerCluster:
+    """Le cœur vectorisé de find_similar_to_persons : c'est lui qui décide quels
+    groupes deviennent « en attente de vérification ». Testé sans base — la
+    bascule entre paliers, elle, est du ressort de set_cluster_suggestions."""
+
+    def _run(self, cid_to_embs, person_centroids, **kw):
+        return FaceDatabase._best_person_per_cluster(
+            cid_to_embs, person_centroids, **kw
+        )
+
+    def test_keeps_only_clusters_above_the_suggestion_threshold(self):
+        # vec(0) et vec(1) sont quasi orthogonaux : similarité ~0.02, très en
+        # dessous de _SIM_SUGGEST.
+        res = self._run(
+            {1: [_base_vec(0)], 2: [_base_vec(1)]},
+            {9: _base_vec(0)},
+        )
+
+        assert set(res) == {1}
+        pid, score = res[1]
+        assert pid == 9
+        assert score >= _SIM_SUGGEST
+
+    def test_picks_the_closest_person(self):
+        res = self._run(
+            {1: [_similar_vec(_base_vec(2), seed=1)]},
+            {7: _base_vec(0), 8: _base_vec(2), 9: _base_vec(1)},
+        )
+
+        assert res[1][0] == 8
+
+    def test_averages_the_embeddings_of_the_cluster(self):
+        """Le score porte sur le centroïde du groupe, pas sur son meilleur
+        visage : un groupe hétérogène dont un seul membre correspond ne franchit
+        pas le seuil, alors que le même visage seul le franchit."""
+        person = {9: _base_vec(0)}
+
+        alone = self._run({1: [_base_vec(0)]}, person)
+        diluted = self._run(
+            {1: [_base_vec(0), _base_vec(1), _base_vec(2), _base_vec(3)]}, person
+        )
+
+        assert 1 in alone
+        assert 1 not in diluted
+
+    def test_no_person_no_suggestion(self):
+        assert self._run({1: [_base_vec(0)]}, {}) == {}
+
+    def test_progress_reports_reach_the_total(self):
+        calls: list = []
+        self._run({i: [_base_vec(0)] for i in range(3)}, {9: _base_vec(0)},
+                  progress_cb=lambda i, t: calls.append((i, t)))
+
+        assert calls[-1] == (3, 3)
+
+    def test_scalar_fallback_agrees_with_the_vectorised_path(self, monkeypatch):
+        """Le repli sans numpy (branche ImportError) doit classer les mêmes
+        groupes — c'est lui qui s'exécute si l'import échoue au runtime."""
+        import builtins
+        cid_to_embs = {1: [_base_vec(0)], 2: [_base_vec(1)], 3: [_base_vec(2)]}
+        persons = {9: _base_vec(0), 8: _base_vec(2)}
+        expected = self._run(cid_to_embs, persons)
+
+        real_import = builtins.__import__
+
+        def _no_numpy(name, *a, **k):
+            if name == "numpy":
+                raise ImportError("numpy indisponible")
+            return real_import(name, *a, **k)
+
+        monkeypatch.setattr(builtins, "__import__", _no_numpy)
+        try:
+            fallback = self._run(cid_to_embs, persons)
+        finally:
+            monkeypatch.undo()      # ne pas laisser le patch actif pendant les asserts
+
+        assert set(fallback) == set(expected)
+        for cid in expected:
+            assert fallback[cid][0] == expected[cid][0]
+            assert fallback[cid][1] == pytest.approx(expected[cid][1], abs=1e-5)
 
 
 # ------------------------------------------------------------------ representative faces

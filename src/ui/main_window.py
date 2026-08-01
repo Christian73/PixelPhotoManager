@@ -175,6 +175,14 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
         self._face_panel_refresh_timer = QTimer()
         self._face_panel_refresh_timer.setSingleShot(True)
         self._face_panel_refresh_timer.setInterval(3000)
+        # Debounce de la recherche de visages similaires : chaque identification
+        # déplace le centroïde d'une personne et peut rendre de nouveaux groupes
+        # proposables, mais on identifie souvent en rafale — un seul passage à la
+        # fin de la série suffit (cf. _schedule_similarity_search).
+        self._similarity_debounce = QTimer()
+        self._similarity_debounce.setSingleShot(True)
+        self._similarity_debounce.setInterval(30000)
+        self._similarity_debounce.timeout.connect(self._start_similarity_search)
 
         self._setup_window()
         self._setup_menu()
@@ -394,6 +402,13 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
         self._act_cluster_faces = QAction("Regrouper les visages…", self)
         self._act_cluster_faces.triggered.connect(self._start_clustering_with_confirm)
         m_faces.addAction(self._act_cluster_faces)
+        self._act_similarity = QAction("Rechercher des visages similaires…", self)
+        self._act_similarity.setToolTip(
+            "Compare les groupes non identifiés aux personnes déjà nommées et "
+            "propose les correspondances à vérifier"
+        )
+        self._act_similarity.triggered.connect(self._start_similarity_search_manually)
+        m_faces.addAction(self._act_similarity)
         m_faces.addSeparator()
         act_index_errors = QAction("Visualisation des erreurs…", self)
         act_index_errors.setToolTip(
@@ -668,6 +683,9 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
         self._face_panel.face_highlighted.connect(self._on_face_highlighted)
         self._face_panel.all_faces_toggled.connect(self._on_all_faces_toggled)
         self._face_panel.person_assigned.connect(self._update_persons_counts)
+        # Identifier depuis la visionneuse déplace aussi un centroïde de personne :
+        # même déclencheur (différé) que depuis la vue des groupes.
+        self._face_panel.person_assigned.connect(self._schedule_similarity_search)
         self._face_panel.cover_face_set.connect(self._on_cover_face_set)
         self._face_panel.person_cluster_requested.connect(
             self._on_face_panel_person_cluster_requested

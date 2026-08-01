@@ -209,12 +209,43 @@ class FacesController:
         else:
             self._start_face_indexing()
 
+    def _schedule_similarity_search(self) -> None:
+        """Programme une recherche de similarité après une identification.
+
+        Nommer ou assigner une personne déplace son centroïde : des groupes
+        jusque-là sous le seuil de suggestion peuvent le franchir. C'est le seul
+        événement, hors nouvelles photos, qui change le résultat de la recherche
+        — sans ce déclencheur, une bibliothèque entièrement indexée ne produisait
+        plus jamais de « visage en attente de vérification ».
+
+        Le timer est à un coup et relancé à chaque appel : une série
+        d'identifications ne provoque qu'un seul passage, 30 s après la dernière.
+        """
+        self._similarity_debounce.start()
+
+    def _start_similarity_search_manually(self) -> None:
+        """Entrée Visages › Rechercher des visages similaires… — même traitement,
+        mais avec un retour explicite si un passage est déjà en cours (l'appelant
+        est ici l'utilisateur, pas un enchaînement automatique)."""
+        self._similarity_debounce.stop()
+        if hasattr(self, "_similarity_thread") and self._similarity_thread.isRunning():
+            QMessageBox.information(
+                self,
+                "Recherche en cours",
+                "Une recherche de visages similaires est déjà en cours.\n"
+                "Suivez sa progression dans la barre de statut.",
+            )
+            return
+        self._start_similarity_search()
+
     def _start_similarity_search(self) -> None:
         """Compare les centroïdes des groupes non identifiés aux personnes nommées.
 
-        Déclenché automatiquement par _on_clustering_finished() juste après
-        qu'un regroupement a formé de nouveaux groupes — aucune interaction
-        utilisateur, juste un message dans la barre de statut à la fin.
+        Déclenché automatiquement à la fin de chaque regroupement, à la fin d'une
+        passe d'indexation qui n'a rien trouvé de nouveau (sinon le regroupement
+        s'en charge), et après une identification (cf.
+        _schedule_similarity_search) — aucune interaction utilisateur, juste un
+        message dans la barre de statut à la fin.
         """
         if hasattr(self, "_similarity_thread") and self._similarity_thread.isRunning():
             return
@@ -371,7 +402,13 @@ class FacesController:
     def _on_face_indexing_finished(self, indexed: int, faces: int) -> None:
         self._lbl_action.setText("")
         if faces > 0:
-            self._run_clustering()
+            self._run_clustering()          # enchaîne lui-même sur la similarité
+        else:
+            # Rien de nouveau à regrouper, mais les personnes nommées depuis le
+            # dernier passage ont pu rendre des groupes existants proposables :
+            # sur une bibliothèque déjà entièrement indexée, c'est le seul point
+            # d'entrée automatique qui reste.
+            self._schedule_similarity_search()
         if self._face_index_pending:
             self._face_index_pending = False
             self._start_face_indexing()
@@ -450,12 +487,12 @@ class FacesController:
         self._face_cluster_grid.refresh()
         if self._face_panel.isVisible():
             self._face_panel_refresh_timer.start()
-        if n_clusters > 0:
-            # De nouveaux groupes viennent d'être formés : on compare aussitôt
-            # leurs centroïdes aux personnes nommées, sans interaction utilisateur.
-            self._start_similarity_search()
-        else:
-            self._lbl_action.setText("")
+        self._lbl_action.setText("")
+        # Systématique, y compris quand n_clusters == 0 : le regroupement rend la
+        # main sans rien faire dès que le nombre de visages non identifiés n'a pas
+        # bougé (clusterer._run_clustering), alors que les groupes déjà formés,
+        # eux, restent à comparer aux personnes nommées entre-temps.
+        self._start_similarity_search()
 
     @Slot()
     def _on_face_unavailable(self) -> None:
@@ -484,6 +521,7 @@ class FacesController:
         self._refresh_persons()
         self._face_cluster_grid.remove_clusters([cluster_id])
         self._refresh_face_panel_if_visible()
+        self._schedule_similarity_search()
 
     @Slot(int, int)
     def _on_cluster_assigned(self, cluster_id: int, person_id: int) -> None:
@@ -491,6 +529,7 @@ class FacesController:
         self._update_persons_counts()
         self._face_cluster_grid.remove_clusters([cluster_id])
         self._refresh_face_panel_if_visible()
+        self._schedule_similarity_search()
 
     @Slot(list, str)
     def _on_clusters_named(self, cluster_ids: list, name: str) -> None:
@@ -500,6 +539,7 @@ class FacesController:
         self._refresh_persons()  # nouvelle personne créée → rebuild complet
         self._face_cluster_grid.remove_clusters(cluster_ids)
         self._refresh_face_panel_if_visible()
+        self._schedule_similarity_search()
 
     @Slot(list, int)
     def _on_clusters_assigned(self, cluster_ids: list, person_id: int) -> None:
@@ -508,6 +548,7 @@ class FacesController:
         self._update_persons_counts()
         self._face_cluster_grid.remove_clusters(cluster_ids)
         self._refresh_face_panel_if_visible()
+        self._schedule_similarity_search()
 
     @Slot(int)
     def _on_cluster_ignored(self, _cluster_id: int) -> None:
