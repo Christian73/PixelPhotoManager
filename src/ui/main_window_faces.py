@@ -780,6 +780,7 @@ class FacesController:
     def _on_single_reindex_finished(self, photo_path: str, _face_count: int) -> None:
         if self._face_panel.isVisible():
             self._face_panel.set_photo(photo_path)
+        self._drain_pending_reindex()
 
     def _on_retry_face_index_requested(self, photo: PhotoInfo) -> None:
         """Menu contextuel "Retenter l'identification des visages" sur un fichier
@@ -858,7 +859,9 @@ class FacesController:
             return
         if self._force_redetect_thread is not None:
             self._force_redetect_thread.deleteLater()
-        self._force_redetect_thread = ForceRedetectThread(self._face_db, photo.path, self)
+        self._force_redetect_thread = ForceRedetectThread(
+            self._face_db, photo.path, self, edit_db=self._edit_db,
+        )
         self._force_redetect_thread.finished.connect(self._on_force_redetect_finished)
         self._force_redetect_thread.cluster_requested.connect(self._run_clustering)
         self._lbl_action.setText(f"Nouvelle détection sans limite de taille : {photo.filename}…")

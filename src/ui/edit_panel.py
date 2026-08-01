@@ -885,24 +885,44 @@ class EditPanel(QWidget):
     def undo(self) -> None:
         if not self._undo_stack:
             return
+        before = self._edit.rotation
         prev_edit, op_label = self._undo_stack.pop()
         self._redo_stack.append((copy.copy(self._edit), op_label))
         self._edit = prev_edit
         self.edits_changed.emit(copy.copy(self._edit))
         self._save("undo")
         self._update_undo_buttons()
+        self._emit_rotation_if_changed(before)
 
     def redo(self) -> None:
         if not self._redo_stack:
             return
+        before = self._edit.rotation
         prev_edit, op_label = self._redo_stack.pop()
         self._undo_stack.append((copy.copy(self._edit), op_label))
         self._edit = prev_edit
         self.edits_changed.emit(copy.copy(self._edit))
         self._save("redo")
         self._update_undo_buttons()
+        self._emit_rotation_if_changed(before)
 
     # ------------------------------------------------------------------ private
+
+    def _emit_rotation_if_changed(self, before: float) -> None:
+        """Émet rotation_stepped si la rotation vient de changer.
+
+        Les boutons ↻/↺ émettent eux-mêmes ; ce helper couvre les chemins qui
+        changent la rotation sans passer par eux (undo, redo, reset_all,
+        restore_all). Sans ça, indexed_photos.rotation reste figé sur
+        l'orientation de la dernière détection alors que la photo est revenue à
+        une autre : la re-détection ne retrouve plus qu'une partie des visages
+        et aucune action de l'UI ne permet d'en sortir."""
+        if not self._photo:
+            return
+        after = int(self._edit.rotation) % 360
+        if int(before) % 360 == after:
+            return
+        self.rotation_stepped.emit(self._photo.path, after)
 
     def _save(self, operation: str) -> None:
         if self._photo:
@@ -954,6 +974,7 @@ class EditPanel(QWidget):
         Pas de confirmation : l'action est réversible via restore_all()."""
         if not self._photo:
             return
+        before = self._edit.rotation
         self._reset_snapshots[os.path.normpath(self._photo.path)] = copy.copy(self._edit)
         self._db.delete(self._photo.path)
         self._edit = EditInfo()
@@ -962,6 +983,7 @@ class EditPanel(QWidget):
         self._update_undo_buttons()
         self.edits_changed.emit(copy.copy(self._edit))
         self.photo_saved.emit(self._photo.path, copy.copy(self._edit))
+        self._emit_rotation_if_changed(before)
 
     def restore_all(self) -> None:
         """Remet en place les retouches supprimées par le dernier reset_all() sur cette photo."""
@@ -971,12 +993,14 @@ class EditPanel(QWidget):
         if snapshot is None:
             self._update_undo_buttons()
             return
+        before = self._edit.rotation
         self._edit = snapshot
         self._undo_stack.clear()
         self._redo_stack.clear()
         self._save("restore_all")
         self._update_undo_buttons()
         self.edits_changed.emit(copy.copy(self._edit))
+        self._emit_rotation_if_changed(before)
 
     def _rotate_cw(self) -> None:
         self._checkpoint("Rotation +90°")

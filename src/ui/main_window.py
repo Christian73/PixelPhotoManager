@@ -114,6 +114,9 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
         self._edit_db = EditDatabase()
         self._face_indexer: FaceIndexThread | None = None
         self._reindex_thread: SingleFaceReindexThread | None = None
+        # Dernière rotation demandée pendant qu'une re-détection tournait déjà
+        # (photo_path, rotation) — relancée par _drain_pending_reindex().
+        self._pending_reindex: "tuple[str, int] | None" = None
         self._retry_face_thread: RetryFaceIndexThread | None = None
         self._duplicate_thread: DuplicateDetectorThread | None = None
         self._live_corrupted_paths: list[str] = []
@@ -2086,7 +2089,17 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
         if not is_available():
             return
         if self._reindex_thread and self._reindex_thread.isRunning():
+            # Détection déjà en cours (plusieurs secondes sur une photo 24 Mpx) :
+            # mémoriser la DERNIÈRE rotation demandée et la relancer à la fin.
+            # L'abandonner laissait indexed_photos.rotation figé sur une
+            # orientation intermédiaire (deux clics rapides sur ↻), et la
+            # détection ne retrouvait plus qu'une partie des visages.
+            self._pending_reindex = (photo_path, rotation)
             return
+        self._pending_reindex = None
+        self._start_single_reindex(photo_path, rotation)
+
+    def _start_single_reindex(self, photo_path: str, rotation: int) -> None:
         if self._reindex_thread is not None:
             self._reindex_thread.deleteLater()
         self._reindex_thread = SingleFaceReindexThread(
@@ -2095,6 +2108,21 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
         self._reindex_thread.finished.connect(self._on_single_reindex_finished)
         self._reindex_thread.cluster_requested.connect(self._run_clustering)
         self._reindex_thread.start()
+
+    def _drain_pending_reindex(self) -> None:
+        """Relance la dernière rotation demandée pendant qu'une détection tournait.
+
+        Appelé à la fin de SingleFaceReindexThread. Le signal `finished` est émis
+        depuis run(), donc avant que le thread soit réellement terminé : on
+        réessaie tant qu'il tourne encore plutôt que de deleteLater() un QThread
+        vivant (fail-fast Qt)."""
+        if self._pending_reindex is None:
+            return
+        if self._reindex_thread is not None and self._reindex_thread.isRunning():
+            QTimer.singleShot(50, self._drain_pending_reindex)
+            return
+        pending, self._pending_reindex = self._pending_reindex, None
+        self._start_single_reindex(*pending)
 
     @Slot(list)
     def _on_delete_requested(self, photos: list) -> None:

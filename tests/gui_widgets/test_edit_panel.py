@@ -107,6 +107,68 @@ class TestEditPanelUndoRedo:
         assert panel2._undo_stack, "l'historique doit être rechargé depuis la DB"
 
 
+class TestRotationStepped:
+    """Régression : `rotation_stepped` resynchronise l'index des visages avec
+    l'orientation réellement affichée. Il n'était émis que par les boutons ↻/↺ —
+    un Ctrl+Z (ou un reset/restore) ramenant la rotation à 0° laissait
+    `indexed_photos.rotation` figé sur l'ancienne valeur, et la re-détection
+    tournait pour toujours dans une orientation périmée (cas réel : 2 visages
+    retrouvés sur 8, même en détection forcée)."""
+
+    def _make_panel(self, qtbot, tmp_path) -> tuple[EditPanel, str]:
+        panel = EditPanel()
+        qtbot.addWidget(panel)
+        path = str(tmp_path / "photo1.jpg")
+        panel.set_photo(_photo(path))
+        return panel, path
+
+    def test_undo_of_rotation_emits_rotation_stepped(self, qtbot, tmp_path):
+        panel, path = self._make_panel(qtbot, tmp_path)
+        received: list = []
+        panel.rotation_stepped.connect(lambda p, r: received.append((p, r)))
+
+        panel._rotate_cw()               # 0° → 90° (émis par le bouton)
+        assert received == [(path, 90)]
+
+        panel.undo()                     # 90° → 0° : doit réémettre
+        assert received == [(path, 90), (path, 0)]
+
+    def test_redo_of_rotation_emits_rotation_stepped(self, qtbot, tmp_path):
+        panel, path = self._make_panel(qtbot, tmp_path)
+        panel._rotate_cw()
+        panel.undo()
+        received: list = []
+        panel.rotation_stepped.connect(lambda p, r: received.append((p, r)))
+
+        panel.redo()                     # 0° → 90°
+        assert received == [(path, 90)]
+
+    def test_reset_and_restore_all_emit_rotation_stepped(self, qtbot, tmp_path):
+        panel, path = self._make_panel(qtbot, tmp_path)
+        panel._rotate_cw()
+        received: list = []
+        panel.rotation_stepped.connect(lambda p, r: received.append((p, r)))
+
+        panel.reset_all()                # 90° → 0°
+        assert received == [(path, 0)]
+
+        panel.restore_all()              # 0° → 90°
+        assert received == [(path, 0), (path, 90)]
+
+    def test_undo_without_rotation_change_is_silent(self, qtbot, tmp_path):
+        """Un undo qui ne touche pas à la rotation ne doit pas relancer de
+        détection (coûteuse) : pas d'émission."""
+        panel, path = self._make_panel(qtbot, tmp_path)
+        received: list = []
+        panel.rotation_stepped.connect(lambda p, r: received.append((p, r)))
+
+        panel._push_undo("Luminosité")
+        panel._edit.brightness = 0.4
+        panel.undo()
+
+        assert received == []
+
+
 class TestEditPanelContentMinWidth:
     """Régression : la grille de boutons de traitement à 2 colonnes (Contraste,
     Vignette… en colonne 2) ne doit jamais être coupée par la QScrollArea qui
