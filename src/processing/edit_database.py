@@ -128,8 +128,16 @@ class EditDatabase:
         # visionneuse — ouvrir une connexion neuve à chaque flèche coûtait
         # plus cher que la requête elle-même.
         self._tls = threading.local()
+        # Instantané de all_edits(), invalidé par toute écriture (cf. _invalidate_cache).
+        # Toutes les écritures passent par ce singleton : l'instantané ne peut pas
+        # se désynchroniser dans le dos de l'application.
+        self._all_edits_cache: "dict[str, EditInfo] | None" = None
         self._init_db()
         self._initialized = True
+
+    def _invalidate_cache(self) -> None:
+        """À appeler dans toute méthode qui écrit dans photo_edits, sous _lock."""
+        self._all_edits_cache = None
 
     # ------------------------------------------------------------------ init
 
@@ -212,51 +220,78 @@ class EditDatabase:
                     ).fetchone()
                 if row is None:
                     return EditInfo()
-                _curve_pts = row["gamma_curve_points"]
-                return EditInfo(
-                    brightness=row["brightness"],
-                    contrast=row["contrast"],
-                    saturation=row["saturation"],
-                    gamma=row["gamma"],
-                    gamma_use_curve=bool(row["gamma_use_curve"]) if row["gamma_use_curve"] is not None else False,
-                    gamma_curve_points=(
-                        [(float(x), float(y)) for x, y in json.loads(_curve_pts)]
-                        if _curve_pts else [(0.0, 0.0), (0.5, 0.5), (1.0, 1.0)]
-                    ),
-                    sharpness=row["sharpness"],
-                    noise_reduction=row["noise_reduction"],
-                    rotation=row["rotation"],
-                    straighten=row["straighten"] or 0.0,
-                    flip_h=bool(row["flip_h"]),
-                    flip_v=bool(row["flip_v"]),
-                    crop=tuple(json.loads(row["crop"])) if row["crop"] else None,
-                    bw=bool(row["bw"]),
-                    bw_red=row["bw_red"],
-                    bw_green=row["bw_green"],
-                    bw_blue=row["bw_blue"],
-                    color_red=row["color_red"] or 0.0,
-                    color_green=row["color_green"] or 0.0,
-                    color_blue=row["color_blue"] or 0.0,
-                    red_eye_regions=(
-                        [tuple(r) for r in json.loads(row["red_eye_regions"])]
-                        if row["red_eye_regions"] else []
-                    ),
-                    vignette_strength=float(row["vignette_strength"] or 0.0),
-                    vignette_color=str(row["vignette_color"] or "black"),
-                    vignette_cx=float(row["vignette_cx"] if row["vignette_cx"] is not None else 0.5),
-                    vignette_cy=float(row["vignette_cy"] if row["vignette_cy"] is not None else 0.5),
-                    vignette_rx1=float(row["vignette_rx1"] if row["vignette_rx1"] is not None else 0.4),
-                    vignette_ry1=float(row["vignette_ry1"] if row["vignette_ry1"] is not None else 0.4),
-                    vignette_rx2=float(row["vignette_rx2"] if row["vignette_rx2"] is not None else 0.8),
-                    vignette_ry2=float(row["vignette_ry2"] if row["vignette_ry2"] is not None else 0.8),
-                    vignette_angle=float(row["vignette_angle"] if row["vignette_angle"] is not None else 0.0),
-                    annotations=(
-                        json.loads(row["annotations"]) if row["annotations"] else []
-                    ),
-                )
+                return self._edit_from_row(row)
             except Exception as e:
                 logger.error(f"Erreur lecture retouches {photo_path}: {e}")
                 return EditInfo()
+
+    def all_edits(self) -> dict[str, EditInfo]:
+        """Toutes les retouches en cours, indexées par chemin normalisé.
+
+        La table ne contient que les photos effectivement retouchées (save()
+        supprime la ligne quand plus rien n'est modifié) : le dictionnaire reste
+        donc petit, et une seule requête suffit à alimenter toute une grille —
+        au lieu d'un SELECT par vignette affichée.
+
+        Résultat mémorisé et invalidé par les écritures : la grille le redemande
+        à chaque changement de dossier/album, sur le thread UI."""
+        with self._lock:
+            if self._all_edits_cache is not None:
+                return dict(self._all_edits_cache)
+            try:
+                with self._connect() as conn:
+                    rows = conn.execute("SELECT * FROM photo_edits").fetchall()
+                edits = {row["photo_path"]: self._edit_from_row(row) for row in rows}
+            except Exception as e:
+                logger.error("Erreur lecture de l'ensemble des retouches : %s", e)
+                return {}
+            self._all_edits_cache = edits
+            return dict(edits)
+
+    @staticmethod
+    def _edit_from_row(row) -> EditInfo:
+        _curve_pts = row["gamma_curve_points"]
+        return EditInfo(
+            brightness=row["brightness"],
+            contrast=row["contrast"],
+            saturation=row["saturation"],
+            gamma=row["gamma"],
+            gamma_use_curve=bool(row["gamma_use_curve"]) if row["gamma_use_curve"] is not None else False,
+            gamma_curve_points=(
+                [(float(x), float(y)) for x, y in json.loads(_curve_pts)]
+                if _curve_pts else [(0.0, 0.0), (0.5, 0.5), (1.0, 1.0)]
+            ),
+            sharpness=row["sharpness"],
+            noise_reduction=row["noise_reduction"],
+            rotation=row["rotation"],
+            straighten=row["straighten"] or 0.0,
+            flip_h=bool(row["flip_h"]),
+            flip_v=bool(row["flip_v"]),
+            crop=tuple(json.loads(row["crop"])) if row["crop"] else None,
+            bw=bool(row["bw"]),
+            bw_red=row["bw_red"],
+            bw_green=row["bw_green"],
+            bw_blue=row["bw_blue"],
+            color_red=row["color_red"] or 0.0,
+            color_green=row["color_green"] or 0.0,
+            color_blue=row["color_blue"] or 0.0,
+            red_eye_regions=(
+                [tuple(r) for r in json.loads(row["red_eye_regions"])]
+                if row["red_eye_regions"] else []
+            ),
+            vignette_strength=float(row["vignette_strength"] or 0.0),
+            vignette_color=str(row["vignette_color"] or "black"),
+            vignette_cx=float(row["vignette_cx"] if row["vignette_cx"] is not None else 0.5),
+            vignette_cy=float(row["vignette_cy"] if row["vignette_cy"] is not None else 0.5),
+            vignette_rx1=float(row["vignette_rx1"] if row["vignette_rx1"] is not None else 0.4),
+            vignette_ry1=float(row["vignette_ry1"] if row["vignette_ry1"] is not None else 0.4),
+            vignette_rx2=float(row["vignette_rx2"] if row["vignette_rx2"] is not None else 0.8),
+            vignette_ry2=float(row["vignette_ry2"] if row["vignette_ry2"] is not None else 0.8),
+            vignette_angle=float(row["vignette_angle"] if row["vignette_angle"] is not None else 0.0),
+            annotations=(
+                json.loads(row["annotations"]) if row["annotations"] else []
+            ),
+        )
 
     def save(self, photo_path: str, edit: EditInfo, operation: str = "edit") -> bool:
         """Sauvegarde l'état courant et l'enregistre dans l'historique.
@@ -266,6 +301,9 @@ class EditDatabase:
         la sauvegarde comme acquise (ex. avant d'émettre un signal photo_saved)."""
         photo_path = os.path.normpath(photo_path)
         with self._lock:
+            # Invalidé avant l'écriture, pas après : un échec en cours de route
+            # laisse ainsi l'instantané périmé écarté plutôt que conservé.
+            self._invalidate_cache()
             try:
                 with self._connect() as conn:
                     if not edit.is_modified():
@@ -355,6 +393,7 @@ class EditDatabase:
         """Supprime l'état courant et tout l'historique pour cette photo."""
         photo_path = os.path.normpath(photo_path)
         with self._lock:
+            self._invalidate_cache()
             try:
                 with self._connect() as conn:
                     conn.execute(
@@ -372,6 +411,7 @@ class EditDatabase:
         old_path = os.path.normpath(old_path)
         new_path = os.path.normpath(new_path)
         with self._lock:
+            self._invalidate_cache()
             try:
                 with self._connect() as conn:
                     conn.execute(

@@ -15,7 +15,7 @@ from PySide6.QtWidgets import (
 
 from src.ui.loading_label import LoadingLabel
 from src.core.models import PhotoInfo
-from src.library.thumbnail_cache import ThumbnailCache
+from src.library.thumbnail_cache import ThumbnailCache, edit_signature
 
 logger = logging.getLogger(__name__)
 
@@ -71,7 +71,10 @@ _INERTIA_STOP     = 0.08  # seuil d'arrêt
 
 class _ThumbSignals(QObject):
     # Utilise 'object' (PyObject) pour garantir le marshaling cross-thread en PySide6.
-    ready = Signal(str, object)  # photo_path, jpeg_bytes (Python bytes)
+    # 3e argument : empreinte des retouches appliquées à la vignette produite —
+    # transmise plutôt que relue côté UI, sinon deux retouches rapprochées
+    # pourraient faire ranger le pixmap de la première sous l'empreinte de la seconde.
+    ready = Signal(str, object, str)  # photo_path, jpeg_bytes (Python bytes), edit_sig
 
 
 class _ThumbWorker(QRunnable):
@@ -81,22 +84,23 @@ class _ThumbWorker(QRunnable):
         self._path = photo_path
         self._cache = cache
         self._edit = edit
+        self._sig = edit_signature(edit)
         self._signals_ref = weakref.ref(signals)
         self.setAutoDelete(True)
 
     def run(self) -> None:
         try:
-            # Vérifier DB avant de relancer PIL — évite le décodage JPEG si déjà en cache
-            if self._edit is None:
-                data = self._cache.get_bytes(self._path)
-            else:
-                data = None
+            # Vérifier DB avant de relancer PIL — évite le décodage JPEG si déjà
+            # en cache. L'empreinte garantit qu'on ne réutilise pas une vignette
+            # produite avec un autre état de retouches (ni l'inverse : une
+            # vignette retouchée déjà en cache n'est pas régénérée pour rien).
+            data = self._cache.get_bytes(self._path, self._sig)
             if data is None:
                 data = self._cache.generate(self._path, self._edit)
             if data:
                 signals = self._signals_ref()
                 if signals is not None:
-                    signals.ready.emit(self._path, data)
+                    signals.ready.emit(self._path, data, self._sig)
         except Exception:
             logger.debug(f"Erreur génération vignette {self._path}", exc_info=True)
 
@@ -113,10 +117,14 @@ class ThumbnailCell(QWidget):
     drag_started     = Signal(object)
     duplicate_clicked = Signal(object)  # PhotoInfo — clic sur le badge de doublon
 
-    def __init__(self, photo: PhotoInfo, cache: ThumbnailCache, size: int, parent=None):
+    def __init__(self, photo: PhotoInfo, cache: ThumbnailCache, size: int, parent=None,
+                 edit=None):
         super().__init__(parent)
         self._photo = photo
         self._cache = cache
+        # Retouches en cours sur cette photo (None = aucune) : la vignette doit
+        # les refléter (rotation, recadrage…), cf. ThumbnailGrid._edits.
+        self._edit  = edit
         self._size  = size
         self._selected = False
         self._pixmap: QPixmap | None = None
@@ -151,11 +159,12 @@ class ThumbnailCell(QWidget):
         self._load_requested = True
         # Vérifier uniquement le cache RAM dans le thread UI (non bloquant).
         # La vérification DB et la génération PIL sont déléguées au worker.
-        pixmap = self._cache.get_ram(self._photo.path)
+        pixmap = self._cache.get_ram(self._photo.path, edit_signature(self._edit))
         if pixmap:
             self._set_pixmap(pixmap)
         else:
-            worker = _ThumbWorker(self._photo.path, self._cache, self._signals)
+            worker = _ThumbWorker(self._photo.path, self._cache, self._signals,
+                                  self._edit)
             from pathlib import Path as _P
             from src.library.exif_reader import VIDEO_EXT as _VE
             pool = (_get_video_thumb_pool()
@@ -183,17 +192,27 @@ class ThumbnailCell(QWidget):
         self._worker_pool = None
 
     def reload_with_edit(self, edit) -> None:
-        self._cache.invalidate(self._photo.path)
+        """Régénère la vignette pour un nouvel état de retouches.
+
+        Pas d'invalidate() du cache : l'entrée stockée porte l'empreinte de
+        l'ancien état, elle ne peut donc pas être resservie pour le nouveau, et
+        generate() la remplacera (clé primaire = chemin)."""
+        self._edit = edit
         worker = _ThumbWorker(self._photo.path, self._cache, self._signals, edit)
         _get_thumb_pool().start(worker)
 
-    @Slot(str, object)
-    def _on_thumb_ready(self, path: str, data: object) -> None:
+    @Slot(str, object, str)
+    def _on_thumb_ready(self, path: str, data: object, edit_sig: str) -> None:
         if path == self._photo.path:
             pixmap = QPixmap()
             pixmap.loadFromData(QByteArray(data))
             if not pixmap.isNull():
-                self._cache.store_pixmap(path, pixmap)
+                self._cache.store_pixmap(path, pixmap, edit_sig)
+                if edit_sig != edit_signature(self._edit):
+                    # Résultat d'une génération devancée par une retouche plus
+                    # récente : mis en cache (il est valide pour son empreinte),
+                    # mais pas affiché — le worker en cours a le dernier mot.
+                    return
                 self._set_pixmap(pixmap)
             else:
                 logger.warning("Pixmap null pour %s", path)
@@ -470,6 +489,13 @@ class ThumbnailGrid(QScrollArea):
         # non exclues) — pilote l'affichage de "Retenter l'identification des visages"
         # dans le menu contextuel. Mis à jour par MainWindow.set_index_error_paths().
         self._index_error_paths: set[str] = set()
+        # Retouches en cours, par chemin normalisé — les vignettes doivent les
+        # refléter (rotation, recadrage…). Rechargées en une requête à chaque
+        # set_photos() via le fournisseur posé par MainWindow, et maintenues au
+        # coup par coup par refresh_photo() : une grille virtualisée n'a aucune
+        # cellule à rafraîchir pour une photo hors champ au moment de la retouche.
+        self._edits: dict[str, object] = {}
+        self._edit_provider = None
 
         # ── Mode ruban ──
         self._ribbon_mode   = False
@@ -600,12 +626,35 @@ class ThumbnailGrid(QScrollArea):
 
     # ══════════════════════════════════════════════════════════════════ données
 
+    def set_edit_provider(self, provider) -> None:
+        """Fournisseur des retouches en cours : callable() -> dict[chemin, EditInfo].
+
+        Interrogé à chaque set_photos() plutôt qu'injecté par l'appelant : la
+        grille est repeuplée depuis une douzaine d'endroits différents, dont
+        aucun n'aurait à connaître les retouches."""
+        self._edit_provider = provider
+        self._reload_edits()
+
+    def _reload_edits(self) -> None:
+        if self._edit_provider is None:
+            return
+        try:
+            self._edits = {
+                os.path.normpath(p): e for p, e in self._edit_provider().items()
+            }
+        except Exception:
+            logger.debug("Erreur de lecture des retouches pour la grille", exc_info=True)
+
+    def _edit_for(self, photo_path: str):
+        return self._edits.get(os.path.normpath(photo_path))
+
     def set_photos(self, photos: list[PhotoInfo]) -> None:
         self.set_loading(False)
         self.clear_empty_message()
         self._selected.clear()
         self._cancel_pending_workers()
         self._dematerialize_all()
+        self._reload_edits()
         self._photos = list(photos)
         self._by_path = {p.path: p for p in self._photos}
         if self._ribbon_mode:
@@ -685,8 +734,20 @@ class ThumbnailGrid(QScrollArea):
                 vbar.setValue(rect.bottom() - vp_h + spacing)
 
     def refresh_photo(self, photo_path: str, edit) -> None:
+        """Prend acte d'un nouvel état de retouches pour une photo.
+
+        La table est mise à jour dans tous les cas — c'est elle qui fera
+        régénérer la vignette à la prochaine matérialisation de la cellule si la
+        photo n'est pas à l'écran (grille virtualisée : au moment où
+        l'utilisateur retouche depuis la visionneuse, sa cellule n'existe le plus
+        souvent pas)."""
+        key = os.path.normpath(photo_path)
+        if edit is not None and edit.is_modified():
+            self._edits[key] = edit
+        else:
+            self._edits.pop(key, None)
         for cell in self._materialized.values():
-            if cell.photo.path == photo_path:
+            if os.path.normpath(cell.photo.path) == key:
                 cell.reload_with_edit(edit)
                 return
 
@@ -1244,7 +1305,7 @@ class ThumbnailGrid(QScrollArea):
     def _make_cell(self, photo: PhotoInfo, size: int | None = None) -> ThumbnailCell:
         if size is None:
             size = self._thumb_size
-        cell = ThumbnailCell(photo, self._cache, size)
+        cell = ThumbnailCell(photo, self._cache, size, edit=self._edit_for(photo.path))
         cell.double_clicked.connect(self.photo_activated.emit)
         cell.right_clicked.connect(self._on_right_click)
         cell.clicked.connect(self._on_cell_clicked)

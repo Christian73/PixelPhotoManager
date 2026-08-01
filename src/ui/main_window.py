@@ -568,6 +568,9 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
 
         # Index 0 — Grille photos (avec barre de contexte masquée par défaut)
         self._grid = ThumbnailGrid(self._thumb_cache)
+        # Les vignettes reflètent les retouches non destructives (rotation,
+        # recadrage…) : la grille relit la table à chaque changement de contenu.
+        self._grid.set_edit_provider(self._edit_db.all_edits)
         self._grid.photo_activated.connect(self._on_photo_activated)
         self._grid.selection_changed.connect(self._on_selection_changed)
         self._grid.rename_requested.connect(self._on_rename_requested)

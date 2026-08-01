@@ -13,7 +13,13 @@ import time
 from PIL import Image
 
 from src.core.models import EditInfo
-from src.library.thumbnail_cache import ThumbnailCache
+from src.library.thumbnail_cache import ThumbnailCache, edit_signature
+
+
+def _thumb_size(data: bytes) -> tuple[int, int]:
+    import io
+    with Image.open(io.BytesIO(data)) as thumb:
+        return thumb.size
 
 
 def _make_photo(tmp_path, name="a.jpg", size=(64, 48), color=(200, 50, 50)):
@@ -104,6 +110,79 @@ class TestGetBytes:
     def test_returns_none_for_unknown_path(self, tmp_path):
         cache = _make_cache(tmp_path)
         assert cache.get_bytes(str(tmp_path / "never_generated.jpg")) is None
+
+
+class TestEditSignature:
+    """Une retouche ne touche pas au fichier : file_mtime ne peut donc pas
+    signaler qu'une vignette en cache est périmée après une rotation ou un
+    recadrage. C'est le rôle de cette empreinte."""
+
+    def test_no_edit_and_unmodified_edit_share_the_empty_signature(self):
+        assert edit_signature(None) == ""
+        assert edit_signature(EditInfo()) == ""
+
+    def test_rotation_and_crop_each_change_the_signature(self):
+        base = edit_signature(EditInfo())
+        rotated = edit_signature(EditInfo(rotation=90))
+        cropped = edit_signature(EditInfo(crop=(0.1, 0.1, 0.5, 0.5)))
+
+        assert rotated != base
+        assert cropped != base
+        assert rotated != cropped
+
+    def test_same_edit_gives_the_same_signature(self):
+        assert edit_signature(EditInfo(rotation=90)) == edit_signature(EditInfo(rotation=90))
+
+
+class TestEditedThumbnailCaching:
+    def test_unedited_thumbnail_is_a_miss_for_a_rotated_photo(self, tmp_path):
+        """Le bug : la vignette d'origine restait servie après une rotation,
+        indéfiniment (le fichier, lui, n'a pas changé)."""
+        cache = _make_cache(tmp_path)
+        photo = _make_photo(tmp_path)
+        cache.generate(photo)
+
+        assert cache.get_bytes(photo, edit_signature(EditInfo(rotation=90))) is None
+        assert cache.get_bytes(photo) is not None   # toujours valide sans retouche
+
+    def test_thumbnail_generated_with_an_edit_is_reused_for_that_edit(self, tmp_path):
+        """…et n'est pas régénérée à chaque affichage : sans ça, toute photo
+        retouchée repasserait par un décodage PIL complet à chaque défilement."""
+        cache = _make_cache(tmp_path)
+        photo = _make_photo(tmp_path)
+        edit = EditInfo(rotation=90)
+
+        data = cache.generate(photo, edit)
+
+        assert cache.get_bytes(photo, edit_signature(edit)) == data
+        assert cache.get_bytes(photo) is None       # ≠ état sans retouche
+
+    def test_rotated_thumbnail_really_is_rotated(self, tmp_path):
+        """Garde-fou : l'empreinte ne servirait à rien si generate() ne tenait
+        pas compte de la retouche. Une photo 64×48 tournée de 90° donne une
+        vignette plus haute que large."""
+        cache = _make_cache(tmp_path)
+        photo = _make_photo(tmp_path, size=(64, 48))
+
+        plain = _thumb_size(cache.generate(photo))
+        rotated = _thumb_size(cache.generate(photo, EditInfo(rotation=90)))
+
+        assert plain[0] > plain[1]
+        assert rotated[1] > rotated[0]
+
+    def test_edit_removed_returns_to_the_unedited_thumbnail(self, tmp_path):
+        """Annulation/reset : la vignette doit revenir à l'image d'origine,
+        et l'ancienne entrée retouchée ne doit plus être servie."""
+        cache = _make_cache(tmp_path)
+        photo = _make_photo(tmp_path, size=(64, 48))
+        rotated_sig = edit_signature(EditInfo(rotation=90))
+        cache.generate(photo, EditInfo(rotation=90))
+
+        plain = cache.generate(photo, EditInfo())
+
+        assert _thumb_size(plain)[0] > _thumb_size(plain)[1]
+        assert cache.get_bytes(photo) == plain
+        assert cache.get_bytes(photo, rotated_sig) is None
 
 
 class TestMovePhoto:

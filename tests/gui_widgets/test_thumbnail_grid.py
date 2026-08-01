@@ -3,15 +3,25 @@
 """Tests de widget Qt isolés (Layer 2, pytest-qt) pour ThumbnailGrid — pas de
 catalogue ni de bibliothèque réelle : ThumbnailCache et les PhotoInfo sont
 entièrement synthétiques, instanciés en process."""
+import io
+
+from PIL import Image
 from PySide6.QtCore import Qt
 
-from src.core.models import PhotoInfo
-from src.library.thumbnail_cache import ThumbnailCache
-from src.ui.thumbnail_grid import ThumbnailGrid
+from src.core.models import EditInfo, PhotoInfo
+from src.library.thumbnail_cache import ThumbnailCache, edit_signature
+from src.ui.thumbnail_grid import ThumbnailCell, ThumbnailGrid
 
 
 def _photo(path: str, **kw) -> PhotoInfo:
     return PhotoInfo(path=path, **kw)
+
+
+def _jpeg_bytes(size=(32, 24)) -> bytes:
+    """Octets JPEG valides — ce que le worker de vignette émet."""
+    buf = io.BytesIO()
+    Image.new("RGB", size, (10, 120, 200)).save(buf, format="JPEG")
+    return buf.getvalue()
 
 
 def _make_grid(qtbot, tmp_path) -> ThumbnailGrid:
@@ -376,3 +386,123 @@ class TestLoadingIndicator:
         grid.set_photos([_photo("C:/lib/a.jpg")])
 
         assert not grid._loading_label.isVisible()
+
+
+class TestEditedThumbnails:
+    """Une photo tournée/recadrée dans la visionneuse doit apparaître retouchée
+    dans la grille. Difficulté : la grille est virtualisée — au moment de la
+    retouche, la cellule de la photo n'existe le plus souvent pas, il n'y a donc
+    rien à rafraîchir. L'état est mémorisé dans grid._edits et transmis à la
+    cellule au moment où elle est (re)construite."""
+
+    def test_refresh_photo_records_edit_without_materialized_cell(self, qtbot, tmp_path):
+        grid = _make_grid(qtbot, tmp_path)
+        grid.set_photos([_photo("C:/lib/a.jpg")])
+        grid._dematerialize_all()
+        edit = EditInfo(rotation=90)
+
+        grid.refresh_photo("C:/lib/a.jpg", edit)
+
+        assert grid._edit_for("C:/lib/a.jpg") is edit
+
+    def test_cell_built_later_receives_the_recorded_edit(self, qtbot, tmp_path):
+        """Le cœur du correctif : la cellule créée après coup connaît la retouche
+        et demandera donc la vignette retouchée, pas celle d'origine."""
+        grid = _make_grid(qtbot, tmp_path)
+        photo = _photo("C:/lib/a.jpg")
+        grid.set_photos([photo])
+        edit = EditInfo(rotation=90)
+        grid.refresh_photo(photo.path, edit)
+
+        cell = grid._make_cell(photo)
+        qtbot.addWidget(cell)
+
+        assert cell._edit is edit
+
+    def test_reset_removes_the_recorded_edit(self, qtbot, tmp_path):
+        """Annulation des retouches : la cellule suivante doit repartir de zéro."""
+        grid = _make_grid(qtbot, tmp_path)
+        photo = _photo("C:/lib/a.jpg")
+        grid.set_photos([photo])
+        grid.refresh_photo(photo.path, EditInfo(rotation=90))
+
+        grid.refresh_photo(photo.path, EditInfo())
+
+        assert grid._edit_for(photo.path) is None
+        cell = grid._make_cell(photo)
+        qtbot.addWidget(cell)
+        assert cell._edit is None
+
+    def test_edits_are_keyed_on_normalized_paths(self, qtbot, tmp_path):
+        """La visionneuse et le catalogue ne livrent pas toujours le chemin avec
+        les mêmes séparateurs — sans normalisation, la retouche serait enregistrée
+        sous une clé que _edit_for() ne retrouve jamais."""
+        grid = _make_grid(qtbot, tmp_path)
+        edit = EditInfo(rotation=90)
+
+        grid.refresh_photo("C:/lib/sub/a.jpg", edit)
+
+        assert grid._edit_for("C:\\lib\\sub\\a.jpg") is edit
+
+    def test_set_photos_reloads_edits_from_provider(self, qtbot, tmp_path):
+        """Au démarrage comme à chaque changement de dossier, les retouches déjà
+        enregistrées en base doivent être reprises — sans quoi une photo retouchée
+        lors d'une session précédente réapparaîtrait non retouchée."""
+        grid = _make_grid(qtbot, tmp_path)
+        edit = EditInfo(rotation=90)
+        grid.set_edit_provider(lambda: {"C:\\lib\\a.jpg": edit})
+
+        grid.set_photos([_photo("C:/lib/a.jpg")])
+
+        assert grid._edit_for("C:/lib/a.jpg") is edit
+
+    def test_provider_failure_does_not_break_the_grid(self, qtbot, tmp_path):
+        """Une base de retouches illisible ne doit pas empêcher d'afficher les
+        photos (dégradation : vignettes non retouchées)."""
+        grid = _make_grid(qtbot, tmp_path)
+        grid._edit_provider = lambda: (_ for _ in ()).throw(RuntimeError("db down"))
+
+        grid.set_photos([_photo("C:/lib/a.jpg")])
+
+        assert len(grid._photos) == 1
+        assert grid._edit_for("C:/lib/a.jpg") is None
+
+
+class TestCellEditSignature:
+    """ThumbnailCell — l'empreinte de retouches accompagne la vignette de bout en
+    bout (demande au cache, génération, mise en cache, affichage)."""
+
+    def _cell(self, qtbot, tmp_path, edit):
+        cache = ThumbnailCache(db_path=tmp_path / "thumbs.db")
+        cell = ThumbnailCell(_photo("C:/lib/a.jpg"), cache, 128, edit=edit)
+        qtbot.addWidget(cell)
+        return cell
+
+    def test_ready_result_from_a_superseded_edit_is_not_displayed(self, qtbot, tmp_path):
+        """L'utilisateur enchaîne deux rotations : le résultat de la première ne
+        doit pas écraser l'affichage de la seconde (elles arrivent dans un ordre
+        non garanti, deux workers distincts)."""
+        cell = self._cell(qtbot, tmp_path, EditInfo(rotation=180))
+        data = _jpeg_bytes()
+
+        cell._on_thumb_ready("C:/lib/a.jpg", data, edit_signature(EditInfo(rotation=90)))
+
+        assert cell._pixmap is None
+        # …mais le résultat périmé reste mis en cache pour son empreinte
+        assert cell._cache.get_ram("C:/lib/a.jpg", edit_signature(EditInfo(rotation=90)))
+
+    def test_ready_result_for_the_current_edit_is_displayed(self, qtbot, tmp_path):
+        cell = self._cell(qtbot, tmp_path, EditInfo(rotation=90))
+
+        cell._on_thumb_ready("C:/lib/a.jpg", _jpeg_bytes(),
+                             edit_signature(EditInfo(rotation=90)))
+
+        assert cell._pixmap is not None
+
+    def test_reload_with_edit_updates_the_cell_state(self, qtbot, tmp_path):
+        cell = self._cell(qtbot, tmp_path, None)
+        edit = EditInfo(rotation=90)
+
+        cell.reload_with_edit(edit)
+
+        assert cell._edit is edit

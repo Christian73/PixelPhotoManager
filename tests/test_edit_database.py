@@ -94,6 +94,66 @@ class TestDelete(BaseEditDatabaseTest):
         db.delete("C:/photos/never_saved.jpg")  # ne doit pas lever
 
 
+class TestAllEdits(BaseEditDatabaseTest):
+    """all_edits() alimente la grille de vignettes (une seule requête pour toute
+    la bibliothèque, plutôt qu'un load() par photo affichée). Son cache mémoire
+    doit être invalidé par toute écriture, sinon la grille continuerait
+    d'afficher l'état d'avant la retouche."""
+
+    def test_empty_when_nothing_saved(self, tmp_path):
+        db = self._make_db(tmp_path)
+        assert db.all_edits() == {}
+
+    def test_returns_every_saved_edit_keyed_on_normalized_path(self, tmp_path):
+        db = self._make_db(tmp_path)
+        db.save("C:/photos/a.jpg", EditInfo(rotation=90))
+        db.save("C:/photos/b.jpg", EditInfo(brightness=0.2))
+
+        edits = db.all_edits()
+
+        assert set(edits) == {os.path.normpath("C:/photos/a.jpg"),
+                              os.path.normpath("C:/photos/b.jpg")}
+        assert edits[os.path.normpath("C:/photos/a.jpg")].rotation == 90
+
+    def test_save_invalidates_the_cache(self, tmp_path):
+        db = self._make_db(tmp_path)
+        db.save("C:/photos/a.jpg", EditInfo(rotation=90))
+        db.all_edits()                                    # remplit le cache
+
+        db.save("C:/photos/a.jpg", EditInfo(rotation=180))
+
+        assert db.all_edits()[os.path.normpath("C:/photos/a.jpg")].rotation == 180
+
+    def test_delete_invalidates_the_cache(self, tmp_path):
+        db = self._make_db(tmp_path)
+        db.save("C:/photos/a.jpg", EditInfo(rotation=90))
+        db.all_edits()
+
+        db.delete("C:/photos/a.jpg")
+
+        assert db.all_edits() == {}
+
+    def test_rename_invalidates_the_cache(self, tmp_path):
+        db = self._make_db(tmp_path)
+        db.save("C:/photos/old.jpg", EditInfo(rotation=90))
+        db.all_edits()
+
+        db.rename_photo("C:/photos/old.jpg", "C:/photos/new.jpg")
+
+        assert set(db.all_edits()) == {os.path.normpath("C:/photos/new.jpg")}
+
+    def test_caller_cannot_corrupt_the_cache(self, tmp_path):
+        """Le dict retourné est une copie : la grille le remanie (clés
+        normalisées, entrées retirées par refresh_photo) sans que ça affecte
+        l'appel suivant."""
+        db = self._make_db(tmp_path)
+        db.save("C:/photos/a.jpg", EditInfo(rotation=90))
+
+        db.all_edits().clear()
+
+        assert len(db.all_edits()) == 1
+
+
 class TestRenamePhoto(BaseEditDatabaseTest):
     def test_rename_propagates_to_current_state_and_history(self, tmp_path):
         db = self._make_db(tmp_path)

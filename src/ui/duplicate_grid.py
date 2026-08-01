@@ -145,14 +145,14 @@ class _DuplicateCard(QFrame):
         self._worker = worker
         _get_thumb_pool().start(worker)
 
-    @Slot(str, object)
-    def _on_thumb_ready(self, path: str, data: object) -> None:
+    @Slot(str, object, str)
+    def _on_thumb_ready(self, path: str, data: object, edit_sig: str) -> None:
         if path != self._cover_path:
             return
         pixmap = QPixmap()
         pixmap.loadFromData(QByteArray(data))
         if not pixmap.isNull():
-            self._cache.store_pixmap(path, pixmap)
+            self._cache.store_pixmap(path, pixmap, edit_sig)
             self.set_thumbnail(pixmap)
 
     def set_thumbnail(self, pix: "QPixmap | None") -> None:
