@@ -75,6 +75,21 @@ src/
 ├── ui/            Fenêtre principale, grille, visionneuse, sidebar, panneaux
 │                  folder_manager_dialog.py : dialogue Outils › Dossiers…
 │                  exif_panel.py            : panneau EXIF dans la visionneuse
+│                  theme.py                 : feuille de style sombre globale
+│                    (`app_stylesheet(check_icon)`, posée par main() sur la
+│                    QApplication). Tout contrôle dont l'indicateur est dessiné
+│                    par le style — case à cocher, bouton radio… — doit y avoir
+│                    ses règles `::indicator` : dès qu'une feuille de style
+│                    applicative existe, Qt bascule sur QStyleSheetStyle et un
+│                    sous-contrôle sans règle est rendu avec des couleurs par
+│                    défaut invisibles sur fond #1e1e1e (cas vécu : pastille de
+│                    QRadioButton cochée strictement identique au fond). Les
+│                    copies locales de `_RADIO_STYLE` (display_order_dialog,
+│                    people_panel, export_dialogs, reset_faces_dialog) datent
+│                    d'avant et restent prioritaires — ne pas en créer de
+│                    nouvelle. Test : tests/gui_widgets/test_theme.py mesure le
+│                    contraste réel du rendu (grab()), pas la présence d'une
+│                    chaîne.
 │                  Découpage 2026-07 (les gros fichiers délèguent à des modules
 │                  dédiés, noms historiques ré-exportés depuis le module d'origine) :
 │                  - main_window.py  → background_workers.py (7 QThreads),
