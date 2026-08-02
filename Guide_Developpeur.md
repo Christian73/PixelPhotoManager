@@ -84,6 +84,7 @@ PixelPhotoManager/
 │   │   ├── edit_sliders.py        # Widgets slider du panneau de retouche (MarkedSlider/EditSlider)
 │   │   ├── edit_icons.py          # Icônes dessinées (QPixmap) des boutons de retouche
 │   │   ├── treatment_dialogs.py   # Dialogues de correction (Luminosité, Couleurs, Vignette…)
+│   │   ├── frame_dialog.py        # Galerie de cadres décoratifs (aperçus + réglages)
 │   │   ├── annotation_renderer.py # Rendu QPainter du calque d'annotations (aperçu + export)
 │   │   ├── export_dialogs.py      # Dialogues Enregistrer/Exporter
 │   │   ├── exif_panel.py          # Panneau EXIF (toggle avec touche I)
@@ -115,6 +116,7 @@ PixelPhotoManager/
 │   │
 │   ├── processing/                # Traitement image
 │   │   ├── adjustments.py         # ImageAdjuster.apply_all()
+│   │   ├── frames.py              # Cadres décoratifs (9 motifs rendus procéduralement)
 │   │   ├── geometry.py            # Rotation, redressement, recadrage
 │   │   ├── annotation_geometry.py # Géométrie des formes d'annotation (hit-test, bbox, redimensionnement)
 │   │   └── edit_database.py       # Persistence des retouches (SQLite), inclut EditInfo.annotations
@@ -887,6 +889,67 @@ Transformations géométriques via Pillow :
 - `apply_flip(img, flip_h, flip_v)` : `Image.FLIP_LEFT_RIGHT` / `Image.FLIP_TOP_BOTTOM`.
 - `apply_crop(img, quad_tuple)` : recadrage par les 8 coordonnées relatives.
 
+### `frames.py` — Cadres décoratifs
+
+9 motifs (`FRAME_TYPES`) rendus **procéduralement** en PIL/NumPy, sans aucun fichier d'image
+externe : entourage uni, simple, double, feuilles de vigne, roses, sculpture bois, métallique,
+reflets, fleurs.
+
+```python
+from src.processing import frames
+
+framed = frames.apply_frame(image, edit)          # image + cadre
+b      = frames.border_px(edit, w, h)             # épaisseur du cadre, en px
+box    = frames.content_box(edit, fw, fh)         # (x0, y0, x1, y1) de la photo dans le pixmap
+thumb  = frames.frame_preview(image, edit, 160)   # vignette pour la galerie du dialogue
+```
+
+**Invariant central** : `apply_frame()` colle la photo **en dernier** sur un canevas agrandi —
+le cadre ne recouvre jamais un pixel de l'image, il s'ajoute autour. Corollaire : le pixmap
+affiché est plus grand que la photo, et toute coordonnée relative (recadrage, yeux rouges,
+vignette, annotations, bbox de visage) se rapporte au **contenu**, pas au pixmap.
+`viewer_canvas._img_rect()` retire donc la bordure via `content_box()`, inverse exact de
+`border_px()` — un pixel d'écart décalerait tous les outils interactifs.
+
+Toutes les largeurs sont des **fractions du petit côté** de la photo (exposées en pourcentage
+dans l'UI) : un réglage rend identiquement sur une vignette et sur un export pleine résolution.
+`ImageAdjuster.apply_all(image, edit, with_frame=True)` pose le cadre en dernier ; l'export
+(`main_window.py`) passe `with_frame=False` puis appelle `apply_frame()` lui-même **après**
+`composite_annotations_pil()`, les annotations étant en coordonnées de contenu.
+
+| Ensemble | Motifs | Réglages exposés |
+|---|---|---|
+| `PARAMETRIC_FRAMES` | plain, simple, double | Largeurs + couleur |
+| `STYLED_FRAMES` | simple, double | En plus : `COLOR_STYLES` (uni/dégradé/pailleté) + `frame_color2` |
+| — | plain seul | Second cadre facultatif (`frame_inner_enabled`) + ferronnerie |
+
+`plain` est le seul motif **sans relief** (aplat strict, pas de `_bevel()` : le noir demandé
+doit rester un vrai noir). Il accepte en plus un **second cadre** peint *par-dessus* la photo
+(`_draw_inner_overlay`, après le `paste`) — seule dérogation à l'invariant ci-dessus, la bande
+d'image visible entre les deux cadres étant l'effet recherché. Ce second cadre n'entre donc pas
+dans `border_px()`/`content_box()` : `inner_overlay_px()` est un calcul d'affichage, jamais une
+donnée de géométrie.
+
+**Ferronnerie du second cadre** (`INNER_MOTIFS` : `line`, `corners`, `scrolls`, `twist`,
+`studs`), dimensionnée par `frame_inner_ornament` (borné à `[INNER_ORNAMENT_MIN,
+INNER_ORNAMENT_MAX]`) et rendue en relief ou en aplat (`frame_inner_relief`). Trois règles :
+
+- `line` est le **défaut** et ignore relief comme ornements : aplat strict dessiné directement
+  sur le canevas à pleine résolution, pour qu'une base migrée rende exactement le cadre d'avant
+  la fonctionnalité. Relief et curseur ne concernent que `ORNAMENTED_MOTIFS`, et `FrameDialog`
+  masque les deux réglages pour `line`.
+- Les ornements se développent **vers l'intérieur** depuis la ligne. Leur calque
+  (`_inner_motif_layer`) fait exactement la taille de la photo et est collé en
+  `(border, border)` : le débordement sur le cadre extérieur est impossible par construction.
+- Le calque est rendu à résolution de travail bornée × suréchantillonnage puis réduit une seule
+  fois (~0,8 s sur un export 6000 × 4000, contre 0,43 s pour `line`). Un échec de rendu est
+  rattrapé par un simple anneau, jamais par la perte du cadre.
+
+Côté UI, `src/ui/frame_dialog.py::FrameDialog` affiche une galerie d'aperçus de la photo
+courante (un par motif, rendus dans un `_TileLoader(QThread)` réutilisant une image de base
+décodée une seule fois) et n'émet `preview` que pour l'aperçu temps réel — `EditPanel` ne
+modifie `self._edit` qu'à la validation, pour que `_push_undo` empile bien l'état d'avant.
+
 ### `edit_database.py` — `EditDatabase`
 
 Interface d'accès à `edits.db`. Thread-safe (verrou par opération).
@@ -1567,6 +1630,23 @@ else:
 2. **`src/processing/adjustments.py`** — Ajouter la méthode statique dans `ImageAdjuster` et l'appeler dans `apply_all()` à la bonne position dans l'ordre.
 3. **`src/ui/edit_panel.py`** — Ajouter un tuple dans `_TREATMENTS` (label, icône, sliders_def).
 4. **`src/processing/edit_database.py`** — Ajouter la colonne SQL via une migration `ALTER TABLE` dans `_init_db()` (pattern du `_MIGRATE_STRAIGHTEN` existant).
+
+> Une entrée de plus dans `_TREATMENTS` ajoute une ligne à la grille 2 colonnes du panneau :
+> vérifier `EditPanel.content_min_width()` (cf. `tests/gui_widgets/test_edit_panel.py::TestEditPanelContentMinWidth`),
+> sans quoi la colonne 2 peut devenir inatteignable au clic.
+
+### Ajouter un motif de cadre
+
+1. **`src/processing/frames.py`** — Ajouter le couple `(clé, libellé)` dans `FRAME_TYPES`, puis
+   le rendu dans `_band_array()` (bande NumPy en relief) ou `_ornament_layer()` (motif dessiné).
+   L'ajouter à `PARAMETRIC_FRAMES`/`STYLED_FRAMES` seulement s'il expose les réglages
+   correspondants.
+2. Ne rien changer à `border_px()`/`content_box()` : ils restent inverses l'un de l'autre, et
+   toute la géométrie interactive en dépend.
+3. **`tests/test_frames.py`** — Vérifier au minimum que le pixel central de la photo est
+   intact et que la bande extérieure ne déborde pas dans le contenu.
+4. Le dialogue (`frame_dialog.py`) découvre les motifs via `FRAME_TYPES` : aucune modification
+   n'y est nécessaire pour qu'un nouveau motif apparaisse dans la galerie.
 
 ### Ajouter un nouveau type de média
 

@@ -77,6 +77,11 @@ class _FakeController:
     def _start_face_indexing(self):
         pass
 
+    def _schedule_similarity_search(self):
+        """Appelée par le code testé (`_on_face_indexing_finished`) : on délègue
+        à la vraie implémentation, c'est elle qui doit armer le timer."""
+        MainWindow._schedule_similarity_search(self)
+
     # --- dépendances de _on_clustering_finished ------------------------
     def _refresh_persons(self):
         pass

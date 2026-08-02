@@ -21,5 +21,7 @@ parallel = true
 #   2026-07-23  59,84 % → 67,63 % (campagne 80 % phase 2 : vues visages + sidebar, seuil 67)
 #   2026-07-24  67,63 % → 78,90 % (RAW/HEIC, recherche avancée, tags + tests associés, seuil 78)
 #   2026-07-25  78,90 % → 80,06 % (fix clipping EditPanel + fiabilisation e2e click_input, seuil 79)
-fail_under = 79
+#   2026-08-02  80,06 % → 80,42 % (cadres décoratifs : frames.py 96 %, frame_dialog.py 75 %,
+#               ferronnerie + largeur des menus, seuil 80 — marge volontairement étroite)
+fail_under = 80
 precision = 0

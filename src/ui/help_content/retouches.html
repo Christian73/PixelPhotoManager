@@ -49,6 +49,49 @@ une base SQLite séparée et appliqués à la volée à l'affichage et à l'expo
       (ou <kbd>Échap</kbd>) — quitte le mode sans rien perdre.</li>
 </ul>
 
+<h3>Cadre décoratif</h3>
+<p>Le bouton <b>Cadre</b> ouvre une galerie d'aperçus de la photo courante, un par motif.
+Le cadre s'ajoute <b>autour</b> de la photo : il ne recouvre aucun pixel de l'image, qui
+sort simplement plus grande à l'export.</p>
+<table>
+  <tr><th>Motif</th><th>Description</th></tr>
+  <tr><td><b>Entourage uni</b></td><td>Aplat d'une seule couleur, sans relief (noir, blanc ou couleur libre)</td></tr>
+  <tr><td><b>Simple</b> / <b>Double</b></td><td>Moulure en relief, une ou deux bandes séparées par un intervalle</td></tr>
+  <tr><td><b>Feuilles de vigne</b>, <b>Roses</b>, <b>Fleurs</b></td><td>Entourages végétaux dessinés</td></tr>
+  <tr><td><b>Sculpture bois</b>, <b>Métallique</b>, <b>Reflets</b></td><td>Matières imitées (bois gravé, métal brossé, verre)</td></tr>
+</table>
+<ul>
+  <li><b>Épaisseur</b> (ou <b>Cadre extérieur</b>), <b>Intervalle</b> et <b>Cadre intérieur</b>
+      se règlent en pourcentage du petit côté de la photo : un même réglage rend pareil sur
+      une vignette et sur un export pleine résolution.</li>
+  <li><b>Style de remplissage</b> (uni, dégradé, pailleté) et <b>seconde couleur</b> : réservés
+      aux motifs Simple et Double.</li>
+</ul>
+
+<h4>Second cadre de l'entourage uni</h4>
+<p>Pour le seul <b>Entourage uni</b>, cochez <b>Second cadre par-dessus la photo</b> : une ligne est tracée
+<i>sur</i> la photo, à distance du bord. C'est la seule exception au principe ci-dessus —
+la bande d'image restée visible entre les deux cadres est justement l'effet recherché.
+<b>Intervalle</b> règle cette distance, <b>Second cadre</b> son épaisseur.</p>
+<p>Cette ligne peut prendre une forme de <b>ferronnerie</b> :</p>
+<table>
+  <tr><th>Ferronnerie</th><th>Effet</th></tr>
+  <tr><td><b>Ligne simple</b></td><td>Trait net (choix par défaut)</td></tr>
+  <tr><td><b>Volutes d'angle</b></td><td>Enroulements forgés dans les quatre coins</td></tr>
+  <tr><td><b>Rinceaux courants</b></td><td>Volutes d'angle + motifs répétés le long des côtés</td></tr>
+  <tr><td><b>Barreau torsadé</b></td><td>Barre vrillée, fleurons aux angles et au milieu des côtés</td></tr>
+  <tr><td><b>Clous forgés</b></td><td>Rangée de clous à tête ronde, plus gros aux angles</td></tr>
+</table>
+<ul>
+  <li><b>Rendu</b> — <b>Relief léger</b> (ombre et lumière sur le métal) ou <b>Aplat strict</b>
+      (silhouette pleine, plus graphique). Sans effet sur la ligne simple, toujours en aplat.</li>
+  <li><b>Ornements</b> — taille des motifs, de 40&nbsp;% à 250&nbsp;%. Les ornements se
+      développent vers l'intérieur de la photo : ils ne débordent jamais sur le cadre extérieur.</li>
+</ul>
+<p class="tip">Les aperçus de la galerie se mettent à jour avec vos réglages, et la
+visionneuse montre le résultat en direct. Rien n'est enregistré tant que vous n'avez pas
+cliqué <b>Valider</b> puis <b>Appliquer</b>.</p>
+
 <h3>Annotations</h3>
 <p>Calque de dessin et de texte non destructif, superposé à la photo — indépendant des
 corrections tonales et de la géométrie.</p>

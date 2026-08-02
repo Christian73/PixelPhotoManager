@@ -1708,6 +1708,12 @@ class FaceDatabase:
         total = len(cid_to_embs)
         cids = list(cid_to_embs)
         pids = list(person_centroids)
+        # Aucune personne nommée : rien à proposer. Garde indispensable avant la
+        # branche numpy — `np.array([])` est 1-D et `_unit()` y demande `axis=1`
+        # (AxisError). L'appelant filtre déjà ce cas, mais l'helper est appelé
+        # directement ailleurs (tests, futurs appelants).
+        if not cids or not pids:
+            return {}
         try:
             import numpy as np
         except ImportError:                       # repli scalaire (cf. _cosine_sim)

@@ -355,7 +355,7 @@ Ouvrez une photo dans la visionneuse. Le panneau **Retouche** apparaît automati
 
 > Le panneau de retouche n'est pas disponible pour les vidéos.
 
-> **Un seul outil actif à la fois** : sélectionner un nouvel outil (Recadrer, Yeux rouges, Annotations, Luminosité, Contraste, Couleurs, Vignette, Redresser…) valide automatiquement le travail en cours dans l'outil précédent puis le referme — inutile de valider manuellement avant de changer d'outil.
+> **Un seul outil actif à la fois** : sélectionner un nouvel outil (Recadrer, Yeux rouges, Annotations, Cadre, Luminosité, Contraste, Couleurs, Vignette, Redresser…) valide automatiquement le travail en cours dans l'outil précédent puis le referme — inutile de valider manuellement avant de changer d'outil.
 
 ---
 
@@ -451,6 +451,45 @@ Corrige l'inclinaison de l'horizon. Plage : **-10° à +10°**.
 2. Cliquez directement sur chaque œil affecté dans la photo — un cercle de correction apparaît.
 3. Ajustez le curseur **Taille** si besoin (0,5 % à 8 % de la plus petite dimension de l'image).
 4. **Effacer tout** supprime toutes les corrections posées ; **Terminé** (ou **Échap**) quitte le mode sans rien perdre.
+
+---
+
+### Cadre décoratif
+
+Le bouton **Cadre** ouvre une galerie d'aperçus de la photo courante, un par motif. Cliquez un aperçu pour choisir le motif ; l'aperçu de la visionneuse se met à jour en direct.
+
+| Motif | Description |
+|---|---|
+| **Entourage uni** | Aplat d'une seule couleur, sans relief (noir, blanc ou couleur libre) |
+| **Simple** / **Double** | Moulure en relief, une ou deux bandes séparées par un intervalle |
+| **Feuilles de vigne**, **Roses**, **Fleurs** | Entourages végétaux dessinés |
+| **Sculpture bois**, **Métallique**, **Reflets** | Matières imitées (bois gravé, métal brossé, verre) |
+
+> Le cadre s'ajoute **autour** de la photo : il ne recouvre aucun pixel de l'image, qui sort simplement plus grande à l'export.
+
+**Réglages** (disponibles pour Entourage uni, Simple et Double) :
+- **Épaisseur** (nommée **Cadre extérieur** pour Simple et Double), **Intervalle** et **Cadre intérieur** se règlent en pourcentage du petit côté de la photo — un même réglage rend donc pareil sur une vignette et sur un export pleine résolution.
+- **Couleur** : raccourcis noir et blanc, ou sélecteur de couleur libre.
+- **Style de remplissage** (uni, dégradé, pailleté) et **seconde couleur** : réservés aux motifs Simple et Double.
+
+#### Second cadre de l'entourage uni
+
+Pour le seul **Entourage uni**, cochez **Second cadre par-dessus la photo** : une ligne est tracée *sur* la photo, à distance du bord. C'est la seule exception au principe ci-dessus — la bande d'image restée visible entre les deux cadres est justement l'effet recherché. **Intervalle** règle cette distance et **Second cadre** son épaisseur.
+
+Cette ligne peut prendre une forme de **ferronnerie** :
+
+| Ferronnerie | Effet |
+|---|---|
+| **Ligne simple** | Trait net (choix par défaut) |
+| **Volutes d'angle** | Enroulements forgés dans les quatre coins |
+| **Rinceaux courants** | Volutes d'angle + motifs répétés le long des côtés |
+| **Barreau torsadé** | Barre vrillée, fleurons aux angles et au milieu des côtés |
+| **Clous forgés** | Rangée de clous à tête ronde, plus gros aux angles |
+
+- **Rendu** : **Relief léger** (ombre et lumière sur le métal) ou **Aplat strict** (silhouette pleine, plus graphique). Sans effet sur la ligne simple, toujours rendue en aplat.
+- **Ornements** : taille des motifs, de 40 % à 250 %. Les ornements se développent vers l'intérieur de la photo — ils ne débordent jamais sur le cadre extérieur.
+
+> Rien n'est enregistré tant que vous n'avez pas cliqué **Valider** dans la galerie, puis **Appliquer** dans le panneau de retouche.
 
 ---
 

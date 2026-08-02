@@ -484,17 +484,22 @@ class TestCellEditSignature:
         non garanti, deux workers distincts)."""
         cell = self._cell(qtbot, tmp_path, EditInfo(rotation=180))
         data = _jpeg_bytes()
+        # Le chemin émis est celui du worker, donc celui de PhotoInfo — normalisé
+        # par __post_init__ (séparateurs Windows). Passer le littéral en «/» ferait
+        # échouer la garde `path == self._photo.path` et le test passerait pour de
+        # mauvaises raisons (rien de stocké, rien d'affiché).
+        path = cell._photo.path
 
-        cell._on_thumb_ready("C:/lib/a.jpg", data, edit_signature(EditInfo(rotation=90)))
+        cell._on_thumb_ready(path, data, edit_signature(EditInfo(rotation=90)))
 
         assert cell._pixmap is None
         # …mais le résultat périmé reste mis en cache pour son empreinte
-        assert cell._cache.get_ram("C:/lib/a.jpg", edit_signature(EditInfo(rotation=90)))
+        assert cell._cache.get_ram(path, edit_signature(EditInfo(rotation=90)))
 
     def test_ready_result_for_the_current_edit_is_displayed(self, qtbot, tmp_path):
         cell = self._cell(qtbot, tmp_path, EditInfo(rotation=90))
 
-        cell._on_thumb_ready("C:/lib/a.jpg", _jpeg_bytes(),
+        cell._on_thumb_ready(cell._photo.path, _jpeg_bytes(),
                              edit_signature(EditInfo(rotation=90)))
 
         assert cell._pixmap is not None
