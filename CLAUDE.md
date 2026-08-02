@@ -94,7 +94,7 @@ src/
 │                  dédiés, noms historiques ré-exportés depuis le module d'origine) :
 │                  - main_window.py  → background_workers.py (7 QThreads),
 │                    export_dialogs.py, reset_faces_dialog.py, duplicates_popup.py,
-│                    ui_utils.py (fmt_size)
+│                    ui_utils.py (fmt_size, largeur des menus — cf. plus bas)
 │                  - photo_viewer.py → viewer_canvas.py (_Canvas + _InlineTextEdit),
 │                    viewer_pixmaps.py (_build_pixmap & co., utilisé par slideshow)
 │                  - edit_panel.py   → edit_sliders.py (MarkedSlider/EditSlider),
@@ -240,6 +240,116 @@ d'automation e2e). `main_window.py::_ensure_left_pane_min_width()` interroge
 changement de page du `QStackedWidget` gauche, qui ne déclenche pas de
 relayout de lui-même. Test de régression dédié (géométrie directe, sans
 automation OS) : `tests/gui_widgets/test_edit_panel.py::TestEditPanelContentMinWidth`.
+`content_min_width()` compte aussi la largeur de l'ascenseur vertical
+(`_vertical_scrollbar_width()`) : le contenu du panneau dépasse toujours la
+hauteur disponible, la barre est donc présente en pratique et mange d'autant le
+viewport — ajouter un traitement à `_TREATMENTS` (donc une ligne de grille) a
+suffi à faire ressortir la colonne 2 sans elle.
+
+### Cadres décoratifs
+
+`src/processing/frames.py` — 9 motifs (`FRAME_TYPES` : entourage uni, simple, double,
+feuilles de vigne, roses, sculpture bois, métallique, reflets, fleurs), rendus
+procéduralement en PIL/numpy, sans aucun fichier d'image externe. Réglages
+(`PARAMETRIC_FRAMES` = plain/simple/double) : style de couleur (`COLOR_STYLES` : uni,
+dégradé, pailleté), largeur extérieure, intervalle, largeur intérieure — toutes les
+largeurs sont des **fractions du petit côté** de la photo (exposées en pourcentage dans
+l'UI, `EditSlider` ayant une échelle interne figée à 100).
+
+`plain` (« Entourage uni ») est le seul motif **sans relief** : aplat strict de
+`frame_color` (raccourcis noir/blanc via `QUICK_COLORS` dans le dialogue), sans biseau
+ni liseré — c'est ce qui le distingue de `simple`. Il est donc dans `PARAMETRIC_FRAMES`
+(largeur + couleur réglables) mais **pas** dans `STYLED_FRAMES` = simple/double (les
+seuls à exposer `COLOR_STYLES` et `frame_color2`). Ne pas lui appliquer `_bevel()` : le
+noir demandé ne serait plus un vrai noir.
+
+`plain` accepte en plus un **second cadre facultatif** (`frame_inner_enabled`, colonne
+`edits.db` ajoutée par `_MIGRATE_FRAME`, désactivé par défaut) réutilisant `frame_gap` et
+`frame_inner_width`. C'est la **seule** dérogation à l'invariant ci-dessous : il est peint
+PAR-DESSUS la photo (`_draw_inner_overlay`, après le `paste`), à `frame_gap` du bord, la
+bande d'image laissée visible entre les deux cadres étant l'effet recherché. Il n'entre
+donc **pas** dans `border_px()`/`content_box()` (le canevas ne grandit que du cadre
+extérieur) et la géométrie des outils interactifs reste celle de la photo entière —
+`inner_overlay_px()` est un calcul d'affichage, jamais une donnée de géométrie.
+
+Ce second cadre porte une **ferronnerie** (`INNER_MOTIFS` : `line` ligne simple,
+`corners` volutes d'angle, `scrolls` rinceaux courants, `twist` barreau torsadé,
+`studs` clous forgés — colonnes `frame_inner_motif`/`frame_inner_relief`/
+`frame_inner_ornament`), rendue en relief léger ou en aplat strict et dimensionnée par
+le curseur « Ornements » (facteur borné à `[INNER_ORNAMENT_MIN, INNER_ORNAMENT_MAX]`,
+exposé en pourcentage). Trois règles à respecter :
+- `line` est le **défaut** et reste un aplat strict : il ignore `frame_inner_relief` et
+  est dessiné directement sur le canevas à pleine résolution (aucun flou de
+  redimensionnement) — une base migrée doit rendre exactement le cadre d'avant la
+  fonctionnalité. Relief et curseur ne concernent donc que `ORNAMENTED_MOTIFS`, et le
+  dialogue masque les deux réglages pour `line`.
+- Les ornements se développent **vers l'intérieur** depuis la ligne : ils restent dans
+  la photo, laissent propre la bande de `frame_gap` et n'entrent jamais dans
+  `border_px()`/`content_box()`. Leur calque (`_inner_motif_layer`) fait exactement la
+  taille de la photo et est collé en `(border, border)` — c'est ce qui rend le
+  débordement impossible par construction.
+- Le calque est rendu à résolution de travail bornée × suréchantillonnage puis réduit
+  une seule fois (même approche que `_ornament_layer`) : ~0,8 s sur un export
+  6000 × 4000, contre 0,43 s pour `line`. Un échec de rendu est rattrapé par un simple
+  anneau (`_draw_inner_overlay`), jamais par la perte du cadre.
+
+**Invariant** : `apply_frame()` colle la photo **en dernier** sur un canevas agrandi —
+le cadre ne recouvre jamais un pixel de l'image, il s'ajoute autour. Corollaire : le
+pixmap affiché est plus grand que la photo, et toute coordonnée relative (recadrage,
+yeux rouges, vignette, annotations, bbox de visage) se rapporte au **contenu**, pas au
+pixmap. `viewer_canvas._img_rect()` retire donc la bordure (`_frame_border_px()` →
+`frames.content_box()`, inverse exact de `border_px()` — un pixel d'écart décalerait
+tous les outils). Ne jamais recalculer une position à partir de `self._pixmap.width()`
+dans le canvas : passer par `_img_rect()`.
+
+`ImageAdjuster.apply_all(image, edit, with_frame=True)` pose le cadre en dernier.
+L'export (`main_window.py`) passe `with_frame=False` puis appelle `apply_frame()`
+lui-même **après** `composite_annotations_pil()` — les annotations sont en coordonnées
+de contenu, elles doivent être composées avant l'agrandissement.
+
+UI : `src/ui/frame_dialog.py::FrameDialog` — galerie d'aperçus de la photo courante
+(un par motif, rendus dans un `_TileLoader(QThread)` réutilisant une image de base
+décodée une seule fois), réglages visibles seulement pour les motifs paramétriques
+(style de remplissage et seconde couleur réservés à `STYLED_FRAMES` ; ferronnerie
+réservée au second cadre de `plain`, relief et « Ornements » aux `ORNAMENTED_MOTIFS`), aperçu
+temps réel via `preview` → `EditPanel._on_preview`. Le panneau ne modifie `self._edit`
+qu'à la validation, pour que `_push_undo` empile bien l'état d'avant.
+
+### Menus — largeur des popups et énumération des sous-menus
+
+`src/ui/ui_utils.py` expose `install_menu_width_fix(menu_ou_barre)` : à l'ouverture
+du popup (`aboutToShow`), la largeur nécessaire est recalculée
+(`menu_required_width()`) et posée en `minimumWidth`. Sans ça, le style natif
+Windows réserve la colonne du raccourci au plus juste et un libellé long passe
+**sous** son raccourci (cas vécu : « Exporter la sélection vers un dossier… » +
+`Ctrl+Shift+E`). Le calcul additionne le chrome de l'item — mesuré en interrogeant
+le style lui-même (`sizeFromContents(CT_MenuItem)` sur un texte de largeur connue,
+ce qui capte aussi le padding d'une feuille de style) — puis libellé + séparation +
+raccourci. Il reste donc calé sur le `sizeHint` de Qt pour les menus sans
+raccourci, qui ne sont pas élargis.
+
+La séparation libellé ↔ raccourci est fixée par `_SHORTCUT_GAP_EM` (4 largeurs de
+« M ») : c'est le seul réglage à toucher pour aérer ou resserrer la colonne des
+raccourcis. Le raccourci étant aligné à droite du popup, toute largeur ajoutée là
+se retrouve intégralement dans cet espace ; les menus sans raccourci n'en voient
+rien. Test : `test_menu_width.py::TestMenuRequiredWidth::test_shortcut_column_is_aired`.
+
+À brancher sur **chaque** menu susceptible d'afficher un raccourci — via
+`QAction.setShortcut()` comme via la convention « Libellé\tTouche » des menus
+contextuels : la barre de menus (`main_window.py`, un seul appel couvre ses menus
+et leurs sous-menus) et chaque `QMenu(self)` contextuel. Les sous-menus sont
+branchés à la volée à l'ouverture de leur parent, donc les menus reconstruits
+dynamiquement (Noter, applications externes…) sont couverts sans appel dédié.
+Ne pas remplacer `QMenu(self)` par une fabrique maison : plusieurs tests
+substituent `QMenu` dans l'espace de noms du module pour intercepter `exec()`
+(`tests/gui_widgets/test_album_mode_no_delete.py`).
+
+**Piège PySide6 6.11** : `QAction.menu()` renvoie un wrapper dont la collecte
+**détruit le QMenu C++** (sous-menu vidé, puis `RuntimeError: Internal C++ object
+already deleted` au prochain accès). Énumérer les sous-menus d'un QMenu/QMenuBar
+uniquement via `findChildren(QMenu, Qt.FindDirectChildrenOnly)`
+(`ui_utils._submenus()`), jamais via `QAction.menu()`. Test :
+`tests/gui_widgets/test_menu_width.py`.
 
 ### Cache vignettes à trois niveaux
 

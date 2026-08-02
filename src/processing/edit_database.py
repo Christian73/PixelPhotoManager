@@ -75,6 +75,21 @@ _MIGRATE_VIGNETTE_V2 = [
 _MIGRATE_ANNOTATIONS = (
     "ALTER TABLE photo_edits ADD COLUMN annotations TEXT DEFAULT NULL"
 )
+_MIGRATE_FRAME = [
+    "ALTER TABLE photo_edits ADD COLUMN frame_type        TEXT DEFAULT 'none'",
+    "ALTER TABLE photo_edits ADD COLUMN frame_width       REAL DEFAULT 0.05",
+    "ALTER TABLE photo_edits ADD COLUMN frame_inner_width REAL DEFAULT 0.015",
+    "ALTER TABLE photo_edits ADD COLUMN frame_gap         REAL DEFAULT 0.02",
+    "ALTER TABLE photo_edits ADD COLUMN frame_style       TEXT DEFAULT 'solid'",
+    "ALTER TABLE photo_edits ADD COLUMN frame_color       TEXT DEFAULT '#f2f2f2'",
+    "ALTER TABLE photo_edits ADD COLUMN frame_color2      TEXT DEFAULT '#8c8c8c'",
+    "ALTER TABLE photo_edits ADD COLUMN frame_inner_color TEXT DEFAULT '#303030'",
+    "ALTER TABLE photo_edits ADD COLUMN frame_gap_color   TEXT DEFAULT '#ffffff'",
+    "ALTER TABLE photo_edits ADD COLUMN frame_inner_enabled INTEGER DEFAULT 0",
+    "ALTER TABLE photo_edits ADD COLUMN frame_inner_motif    TEXT DEFAULT 'line'",
+    "ALTER TABLE photo_edits ADD COLUMN frame_inner_relief   INTEGER DEFAULT 1",
+    "ALTER TABLE photo_edits ADD COLUMN frame_inner_ornament REAL DEFAULT 1.0",
+]
 
 _CREATE_HISTORY = """
 CREATE TABLE IF NOT EXISTS edit_history (
@@ -179,6 +194,11 @@ class EditDatabase:
                 conn.execute(_MIGRATE_ANNOTATIONS)
             except sqlite3.OperationalError:
                 pass
+            for _sql in _MIGRATE_FRAME:
+                try:
+                    conn.execute(_sql)
+                except sqlite3.OperationalError:
+                    pass
             self._migrate_normalize_paths(conn)
             conn.commit()
 
@@ -291,6 +311,26 @@ class EditDatabase:
             annotations=(
                 json.loads(row["annotations"]) if row["annotations"] else []
             ),
+            frame_type=str(row["frame_type"] or "none"),
+            frame_width=float(row["frame_width"] if row["frame_width"] is not None else 0.05),
+            frame_inner_width=float(
+                row["frame_inner_width"] if row["frame_inner_width"] is not None else 0.015
+            ),
+            frame_gap=float(row["frame_gap"] if row["frame_gap"] is not None else 0.02),
+            frame_style=str(row["frame_style"] or "solid"),
+            frame_color=str(row["frame_color"] or "#f2f2f2"),
+            frame_color2=str(row["frame_color2"] or "#8c8c8c"),
+            frame_inner_color=str(row["frame_inner_color"] or "#303030"),
+            frame_gap_color=str(row["frame_gap_color"] or "#ffffff"),
+            frame_inner_enabled=bool(row["frame_inner_enabled"]),
+            frame_inner_motif=str(row["frame_inner_motif"] or "line"),
+            frame_inner_relief=bool(
+                row["frame_inner_relief"] if row["frame_inner_relief"] is not None else 1
+            ),
+            frame_inner_ornament=float(
+                row["frame_inner_ornament"]
+                if row["frame_inner_ornament"] is not None else 1.0
+            ),
         )
 
     def save(self, photo_path: str, edit: EditInfo, operation: str = "edit") -> bool:
@@ -325,9 +365,16 @@ class EditDatabase:
                                  vignette_rx1, vignette_ry1,
                                  vignette_rx2, vignette_ry2,
                                  vignette_angle, annotations,
+                                 frame_type, frame_width, frame_inner_width,
+                                 frame_gap, frame_style, frame_color, frame_color2,
+                                 frame_inner_color, frame_gap_color,
+                                 frame_inner_enabled, frame_inner_motif,
+                                 frame_inner_relief, frame_inner_ornament,
                                  modified_at)
                             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                                    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                                    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                                    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                                    CURRENT_TIMESTAMP)
                             """,
                             (
                                 photo_path,
@@ -349,6 +396,14 @@ class EditDatabase:
                                 edit.vignette_rx2, edit.vignette_ry2,
                                 edit.vignette_angle,
                                 json.dumps(edit.annotations) if edit.annotations else None,
+                                edit.frame_type, edit.frame_width, edit.frame_inner_width,
+                                edit.frame_gap, edit.frame_style,
+                                edit.frame_color, edit.frame_color2,
+                                edit.frame_inner_color, edit.frame_gap_color,
+                                int(edit.frame_inner_enabled),
+                                edit.frame_inner_motif,
+                                int(edit.frame_inner_relief),
+                                edit.frame_inner_ornament,
                             ),
                         )
                     conn.execute(

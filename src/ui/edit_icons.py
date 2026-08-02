@@ -201,6 +201,41 @@ def _icon_flip_v(size: int = _ICON_SIZE) -> QPixmap:
     return px
 
 
+def _icon_frame(size: int = _ICON_SIZE) -> QPixmap:
+    """Cadre doré avec passe-partout clair autour d'une photo bleutée."""
+    px, p = _base_pixmap(size)
+    pad = max(1, size // 14)
+    outer = size - 2 * pad
+    band = max(3, size // 9)
+
+    # Moulure extérieure (dégradé doré en biseau)
+    grad = QLinearGradient(pad, pad, pad + outer, pad + outer)
+    grad.setColorAt(0.0, QColor(238, 208, 128))
+    grad.setColorAt(0.5, QColor(186, 142, 58))
+    grad.setColorAt(1.0, QColor(120, 84, 26))
+    p.setBrush(grad)
+    p.setPen(QPen(QColor(90, 62, 18), 1))
+    p.drawRect(pad, pad, outer, outer)
+
+    # Passe-partout clair
+    p.setBrush(QColor(238, 236, 228))
+    p.setPen(QPen(QColor(170, 168, 158), 1))
+    p.drawRect(pad + band, pad + band, outer - 2 * band, outer - 2 * band)
+
+    # Photo
+    inner = pad + band + max(2, size // 16)
+    side = size - 2 * inner
+    photo = QLinearGradient(inner, inner, inner, inner + side)
+    photo.setColorAt(0.0, QColor(66, 120, 180))
+    photo.setColorAt(1.0, QColor(150, 176, 120))
+    p.setBrush(photo)
+    p.setPen(QPen(QColor(40, 60, 90), 1))
+    p.drawRect(inner, inner, side, side)
+
+    p.end()
+    return px
+
+
 def _icon_vignette(size: int = _ICON_SIZE) -> QPixmap:
     """Carré gris avec dégradé radial sombre aux coins — effet vignette."""
     px, p = _base_pixmap(size)

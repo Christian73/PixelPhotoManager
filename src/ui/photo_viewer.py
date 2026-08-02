@@ -25,6 +25,7 @@ from src.processing.annotation_geometry import catmull_rom_to_bezier_segments
 from src.ui.annotation_renderer import (
     render_annotations, hit_test_annotations, annotation_screen_bounds,
 )
+from src.ui.ui_utils import install_menu_width_fix
 
 logger = logging.getLogger(__name__)
 
@@ -998,6 +999,7 @@ class PhotoViewer(QWidget):
             return
         photo = self._photo
         menu = QMenu(self)
+        install_menu_width_fix(menu)
 
         fav_label = "Retirer des favoris" if photo.is_favorite else "Marquer comme favori"
         menu.addAction(fav_label, self._toggle_fav_from_menu)

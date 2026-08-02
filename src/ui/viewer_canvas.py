@@ -24,6 +24,7 @@ from src.core.models import PhotoInfo, EditInfo
 from src.processing.edit_database import EditDatabase
 from src.processing.adjustments import ImageAdjuster
 from src.processing.annotation_geometry import catmull_rom_to_bezier_segments
+from src.ui.ui_utils import install_menu_width_fix
 from src.ui.annotation_renderer import (
     render_annotations, hit_test_annotations, annotation_screen_bounds,
 )
@@ -252,14 +253,33 @@ class _Canvas(QWidget):
 
     # ------------------------------------------------------------------ crop helpers
 
+    def _frame_border_px(self) -> int:
+        """Épaisseur du cadre décoratif dans le pixmap affiché (0 si aucun cadre).
+
+        Le cadre fait partie du pixmap (posé par ImageAdjuster.apply_all) mais
+        n'est PAS de l'image : toutes les coordonnées relatives manipulées ici
+        (recadrage, annotations, vignette, bbox de visage) se rapportent au seul
+        contenu photo, d'où le retrait de cette bordure dans _img_rect()."""
+        if not self._pixmap:
+            return 0
+        edit = self._current_edit
+        if edit is None or getattr(edit, "frame_type", "none") in (None, "", "none"):
+            return 0
+        from src.processing.frames import content_box
+        x, _y, w, _h = content_box(edit, self._pixmap.width(), self._pixmap.height())
+        return int(round(x)) if w > 0 else 0
+
     def _img_rect(self) -> QRectF:
-        """Rect en coordonnées entières — identique à ce que drawPixmap dessine réellement."""
+        """Rect du CONTENU photo à l'écran, en coordonnées entières — identique à
+        ce que drawPixmap dessine réellement, moins le cadre décoratif éventuel."""
         if not self._pixmap:
             return QRectF()
+        b = self._frame_border_px()
         return QRectF(
-            int(self._offset.x()), int(self._offset.y()),
-            int(self._pixmap.width()  * self._zoom),
-            int(self._pixmap.height() * self._zoom),
+            int(self._offset.x() + b * self._zoom),
+            int(self._offset.y() + b * self._zoom),
+            int((self._pixmap.width()  - 2 * b) * self._zoom),
+            int((self._pixmap.height() - 2 * b) * self._zoom),
         )
 
     def _handle_positions(self) -> dict[int, QPointF]:
@@ -733,15 +753,17 @@ class _Canvas(QWidget):
         if dw_crop <= 0 or dh_crop <= 0 or self._zoom <= 0:
             return None
 
-        # 1) écran → espace pixmap (post-rotation, post-crop)
-        sx = self._pixmap.width()  / dw_crop
-        sy = self._pixmap.height() / dh_crop
+        # 1) écran → espace image (post-rotation, post-crop) ; _img_rect exclut
+        #    déjà le cadre décoratif, qui n'appartient pas à l'image.
+        ir = self._img_rect()
+        sx = ir.width()  / dw_crop
+        sy = ir.height() / dh_crop
         if sx <= 0 or sy <= 0:
             return None
-        bx = (rect.x() - self._offset.x()) / (sx * self._zoom)
-        by = (rect.y() - self._offset.y()) / (sy * self._zoom)
-        bw = rect.width()  / (sx * self._zoom)
-        bh = rect.height() / (sy * self._zoom)
+        bx = (rect.x() - ir.x()) / sx
+        by = (rect.y() - ir.y()) / sy
+        bw = rect.width()  / sx
+        bh = rect.height() / sy
 
         # 2) undo crop → espace post-rotation
         bx += cx_rel * dw_postrot
@@ -977,7 +999,8 @@ class _Canvas(QWidget):
         """Rayon du curseur yeux rouges en pixels écran."""
         if not self._pixmap:
             return 20.0
-        return self._red_eye_radius * min(self._pixmap.width(), self._pixmap.height()) * self._zoom
+        ir = self._img_rect()   # rayon relatif au contenu photo, cadre exclu
+        return self._red_eye_radius * min(ir.width(), ir.height())
 
     def _draw_red_eye_overlay(self, p: QPainter) -> None:
         if not self._red_eye_mouse or not self._pixmap:
@@ -1494,9 +1517,18 @@ class _Canvas(QWidget):
         ir = self._img_rect()
         if ir.width() <= 0 or ir.height() <= 0:
             return
+        # Le flou échantillonne le fond en supposant qu'il recouvre exactement la
+        # zone cible : avec un cadre, il faut donc lui donner le seul contenu.
+        # (recadrage seulement si une annotation floute réellement — la copie a
+        #  un coût, et paintEvent passe ici à chaque rafraîchissement)
+        b = self._frame_border_px()
+        background = self._pixmap
+        if b > 0 and any(float(a.get("blur", 0.0) or 0.0) >= 0.5 for a in self._annotations):
+            background = self._pixmap.copy(
+                b, b, self._pixmap.width() - 2 * b, self._pixmap.height() - 2 * b)
         p.save()
         p.translate(ir.x(), ir.y())
-        render_annotations(p, self._annotations, ir.width(), ir.height(), background=self._pixmap)
+        render_annotations(p, self._annotations, ir.width(), ir.height(), background=background)
         p.restore()
 
     def _draw_annotation_tool_overlay(self, p: QPainter) -> None:
@@ -1665,14 +1697,13 @@ class _Canvas(QWidget):
                 dw = cw * dw
                 dh = ch * dh
 
-        # Mise à l'échelle pixmap puis zoom
-        sx = self._pixmap.width()  / dw
-        sy = self._pixmap.height() / dh
-        x = self._offset.x() + bx * sx * self._zoom
-        y = self._offset.y() + by * sy * self._zoom
-        w = bw * sx * self._zoom
-        h = bh * sy * self._zoom
-        return QRectF(x, y, w, h)
+        # Mise à l'échelle vers l'emprise écran du contenu photo (hors cadre)
+        ir = self._img_rect()
+        if dw <= 0 or dh <= 0 or ir.width() <= 0 or ir.height() <= 0:
+            return None
+        sx = ir.width()  / dw
+        sy = ir.height() / dh
+        return QRectF(ir.x() + bx * sx, ir.y() + by * sy, bw * sx, bh * sy)
 
     def _draw_one_face_rect(self, p: QPainter, rect: "QRectF") -> None:
         p.fillRect(rect, QColor(74, 159, 212, 45))
@@ -1929,10 +1960,13 @@ class _Canvas(QWidget):
                 pos = event.position()
                 ir  = self._img_rect()
                 if ir.contains(pos) and ir.width() > 0 and ir.height() > 0:
-                    px = max(0, min(self._pixmap.width()  - 1,
-                                   int((pos.x() - ir.x()) * self._pixmap.width()  / ir.width())))
-                    py = max(0, min(self._pixmap.height() - 1,
-                                   int((pos.y() - ir.y()) * self._pixmap.height() / ir.height())))
+                    # Coordonnées pixmap : le contenu photo commence après le
+                    # cadre décoratif (b = 0 quand il n'y en a pas).
+                    b  = self._frame_border_px()
+                    cw = self._pixmap.width()  - 2 * b
+                    ch = self._pixmap.height() - 2 * b
+                    px = b + max(0, min(cw - 1, int((pos.x() - ir.x()) * cw / ir.width())))
+                    py = b + max(0, min(ch - 1, int((pos.y() - ir.y()) * ch / ir.height())))
                     c = self._pixmap.toImage().pixelColor(px, py)
                     self.pixel_sampled.emit(c.red(), c.green(), c.blue())
             self._wb_pick_mode = False
@@ -2204,6 +2238,7 @@ class _Canvas(QWidget):
                 self.confirm_annotation_draft()
             elif self._annotation_selected_ids:
                 menu = QMenu(self)
+                install_menu_width_fix(menu)
                 menu.addAction("Effacer\tSuppr", self.delete_selected_annotation)
                 if len(self._annotation_selected_ids) >= 2:
                     menu.addAction("Grouper", self.group_selected_annotations)

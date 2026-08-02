@@ -68,7 +68,9 @@ _THUMB_SIZES = [110, 180, 250, 350]
 
 # Classes extraites de ce fichier (2026-07) — importées sous leurs noms
 # historiques : elles restent des détails d'implémentation de MainWindow.
-from src.ui.ui_utils import fmt_size as _fmt_size  # noqa: E402
+from src.ui.ui_utils import (  # noqa: E402
+    fmt_size as _fmt_size, install_menu_width_fix,
+)
 from src.ui.background_workers import (  # noqa: E402
     _CatalogLoadThread, _DeleteWorkerThread, _DupMigrationThread,
     _PersonsRefreshThread, _PhotoQueryThread, _ResetWorkerThread,
@@ -445,6 +447,9 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
         act_about = QAction("À propos", self)
         act_about.triggered.connect(self._show_about)
         m_help.addAction(act_about)
+
+        # Élargit les popups quand le style laisse le raccourci mordre sur le libellé.
+        install_menu_width_fix(mb)
 
         lay.addWidget(mb)
 
@@ -1523,6 +1528,7 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
         pour target_path — extrait de _open_dvd_folder pour rester testable
         sans passer par un QMenu.exec() modal."""
         menu = QMenu(self)
+        install_menu_width_fix(menu)
         for app in apps:
             name = app.get("name", "")
             path = app.get("path", "")
@@ -2723,9 +2729,15 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
                 img = ImageOps.exif_transpose(img)
                 orig_w, orig_h = img.size
                 if edit.is_modified():
-                    img = ImageAdjuster.apply_all(img, edit)
+                    # Cadre exclu ici : les annotations sont en coordonnées
+                    # normalisées de la PHOTO, elles doivent être composées avant
+                    # que le cadre n'agrandisse l'image autour (cf. apply_all).
+                    img = ImageAdjuster.apply_all(img, edit, with_frame=False)
                 if self._annotations_globally_visible and edit.annotations:
                     img = composite_annotations_pil(img, edit.annotations)
+                if edit.frame_type != "none":
+                    from src.processing.frames import apply_frame
+                    img = apply_frame(img, edit)
                 if img.mode not in ("RGB", "RGBA"):
                     img = img.convert("RGB")
                 if Path(dest).suffix.lower() == ".png":
@@ -2853,7 +2865,8 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
                     with Image.open(photo.path) as img:
                         img = ImageOps.exif_transpose(img)
                         if edit.is_modified():
-                            img = ImageAdjuster.apply_all(img, edit)
+                            # Cadre posé après les annotations, cf. _export_image.
+                            img = ImageAdjuster.apply_all(img, edit, with_frame=False)
                         # Redimensionnement si nécessaire
                         if max_pixels is not None:
                             w, h = img.size
@@ -2865,6 +2878,9 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
                                 )
                         if self._annotations_globally_visible and edit.annotations:
                             img = composite_annotations_pil(img, edit.annotations)
+                        if edit.frame_type != "none":
+                            from src.processing.frames import apply_frame
+                            img = apply_frame(img, edit)
                         if img.mode not in ("RGB", "RGBA"):
                             img = img.convert("RGB")
                         if img.mode == "RGBA":

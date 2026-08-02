@@ -129,9 +129,9 @@ class EditSlider(QWidget):
         layout = QHBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
 
-        lbl = QLabel(label)
-        lbl.setFixedWidth(110)
-        layout.addWidget(lbl)
+        self._name_lbl = QLabel(label)
+        self._name_lbl.setFixedWidth(110)
+        layout.addWidget(self._name_lbl)
 
         _fmt = lambda v, s=self._scale, d=self._decimals: f"{v / s:.{d}f}"
         self._slider = MarkedSlider(Qt.Horizontal, fmt=_fmt)
@@ -170,6 +170,10 @@ class EditSlider(QWidget):
             self.set_value(self._default),
             self.value_changed.emit(self._default),
         ))
+
+    def set_label(self, label: str) -> None:
+        """Change le libellé (un même curseur peut servir à plusieurs réglages)."""
+        self._name_lbl.setText(label)
 
     def _fmt(self, v: float) -> str:
         return f"{v:.{self._decimals}f}"

@@ -268,6 +268,58 @@ class TestEditPanelResetRestore:
         panel2.set_photo(photo)
         assert panel2.get_edit().brightness == 0.4, "la restauration doit être persistée en DB"
 
+    def test_reset_all_then_restore_all_keeps_step_by_step_undo(self, qtbot, tmp_path):
+        """Régression : après reset_all() + restore_all(), les retouches doivent
+        pouvoir être défaites une par une (l'historique était perdu)."""
+        panel = self._make_panel(qtbot)
+        photo = _photo(str(tmp_path / "photo1.jpg"))
+        panel.set_photo(photo)
+
+        panel._checkpoint("Luminosité")
+        panel._push_undo("Luminosité")
+        panel._edit.brightness = 0.4
+        panel._save("brightness")
+
+        panel._checkpoint("Contraste")
+        panel._push_undo("Contraste")
+        panel._edit.contrast = 0.2
+        panel._save("contrast")
+
+        panel.reset_all()
+        panel.restore_all()
+
+        assert panel._btn_undo.isEnabled(), "l'undo doit rester disponible après restauration"
+        assert len(panel._undo_stack) == 2
+
+        panel.undo()          # défait le contraste
+        assert panel._edit.contrast == 0.0
+        assert panel._edit.brightness == 0.4
+        panel.undo()          # défait la luminosité
+        assert panel._edit.brightness == 0.0
+        assert not panel._btn_undo.isEnabled()
+
+    def test_restore_all_repopulates_persistent_history(self, qtbot, tmp_path):
+        """L'historique DB effacé par reset_all() est réinjecté par restore_all()
+        → l'undo pas-à-pas survit à un redémarrage."""
+        panel = self._make_panel(qtbot)
+        photo = _photo(str(tmp_path / "photo1.jpg"))
+        panel.set_photo(photo)
+
+        panel._checkpoint("Luminosité")
+        panel._push_undo("Luminosité")
+        panel._edit.brightness = 0.4
+        panel._save("brightness")
+
+        panel.reset_all()
+        panel.restore_all()
+
+        panel2 = self._make_panel(qtbot)
+        panel2.set_photo(photo)          # recharge l'historique depuis la DB
+        assert panel2.get_edit().brightness == 0.4
+        assert panel2._undo_stack, "l'historique doit être rechargeable depuis la DB"
+        panel2.undo()
+        assert panel2.get_edit().brightness == 0.0
+
     def test_restore_all_without_prior_reset_is_a_noop(self, qtbot, tmp_path):
         panel = self._make_panel(qtbot)
         photo = _photo(str(tmp_path / "photo1.jpg"))

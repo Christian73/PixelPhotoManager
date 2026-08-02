@@ -129,7 +129,8 @@ class EditPanel(QWidget):
         self._edit = EditInfo()
         self._undo_stack: list[EditInfo] = []
         self._redo_stack: list[EditInfo] = []
-        self._reset_snapshots: dict[str, EditInfo] = {}  # path normalisé -> état avant reset_all()
+        # path normalisé -> (état avant reset_all(), pile d'undo d'avant le reset)
+        self._reset_snapshots: dict[str, tuple] = {}
         self._db = EditDatabase()
         self._red_eye_active = False
         self._annotation_active = False
@@ -142,6 +143,7 @@ class EditPanel(QWidget):
         self._annotation_selected_ids: set = set()
         self._active_color_dlg: "CouleursTreatmentDialog | None" = None
         self._active_vignette_dlg: "VignetteTreatmentDialog | None" = None
+        self._active_frame_dlg: "QDialog | None" = None
         self._active_generic_dlg: "QDialog | None" = None    # Luminosité/Contraste/Redresser… non modal
         self._active_generic_dlg_title: "str | None" = None
         self._treatment_buttons: dict = {}   # nom de traitement -> QToolButton (surbrillance active/inactive)
@@ -176,8 +178,12 @@ class EditPanel(QWidget):
             btn = self._make_treatment_button(name, icon_fn(), sliders_def)
             self._treatment_buttons[name] = btn
             grid.addWidget(btn, idx // 2, idx % 2)
+        # Les deux boutons suivants poursuivent le remplissage de la grille :
+        # leur position dépend du nombre de traitements (une case en dur
+        # écraserait le dernier bouton dès qu'un traitement est ajouté).
+        _next = len(_TREATMENTS)
 
-        # Bouton Yeux rouges — ligne 2 (ligne 1 = Couleurs | Vignette)
+        # Bouton Yeux rouges
         self._btn_red_eye = QToolButton()
         self._btn_red_eye.setText("Yeux rouges")
         self._btn_red_eye.setIcon(QIcon(_icon_red_eye()))
@@ -188,9 +194,9 @@ class EditPanel(QWidget):
         self._btn_red_eye.setToolTip("Corriger les yeux rouges — cliquez sur chaque œil")
         self._btn_red_eye.setCheckable(True)
         self._btn_red_eye.clicked.connect(self._toggle_red_eye_mode)
-        grid.addWidget(self._btn_red_eye, 2, 0)
+        grid.addWidget(self._btn_red_eye, _next // 2, _next % 2)
 
-        # Bouton Annotations — ligne 2, colonne 1
+        # Bouton Annotations
         self._btn_annotations = QToolButton()
         self._btn_annotations.setText("Annotations")
         self._btn_annotations.setIcon(QIcon(_icon_ann_pen()))
@@ -201,7 +207,7 @@ class EditPanel(QWidget):
         self._btn_annotations.setToolTip("Dessiner / écrire par-dessus la photo (calque séparé)")
         self._btn_annotations.setCheckable(True)
         self._btn_annotations.clicked.connect(self._toggle_annotation_mode)
-        grid.addWidget(self._btn_annotations, 2, 1)
+        grid.addWidget(self._btn_annotations, (_next + 1) // 2, (_next + 1) % 2)
         inner_layout.addLayout(grid)
 
         # Panneau de contrôle yeux rouges (masqué hors mode)
@@ -551,7 +557,20 @@ class EditPanel(QWidget):
         margins = self.layout().contentsMargins()
         return (self._scroll_inner.minimumSizeHint().width()
                 + 2 * self._scroll.frameWidth()
+                + self._vertical_scrollbar_width()
                 + margins.left() + margins.right() + 4)
+
+    def _vertical_scrollbar_width(self) -> int:
+        """Largeur prise par l'ascenseur vertical de la QScrollArea.
+
+        Le contenu du panneau dépasse toujours la hauteur disponible : la barre
+        verticale est présente en pratique et mange autant de largeur au
+        viewport. Sans elle dans le calcul, la 2e colonne de boutons ressort de
+        quelques pixels hors du viewport — exactement le défaut que
+        content_min_width() est censé empêcher."""
+        if self._scroll.verticalScrollBarPolicy() == Qt.ScrollBarAlwaysOff:
+            return 0
+        return self._scroll.verticalScrollBar().sizeHint().width()
 
     def _make_treatment_button(self, name: str, icon_px: QPixmap,
                                 sliders_def: list) -> QToolButton:
@@ -639,6 +658,8 @@ class EditPanel(QWidget):
             self._active_color_dlg.accept()
         if current != "Vignette" and self._active_vignette_dlg is not None:
             self._active_vignette_dlg.accept()
+        if current != "Cadre" and self._active_frame_dlg is not None:
+            self._active_frame_dlg.accept()
         if current != self._active_generic_dlg_title and self._active_generic_dlg is not None:
             self._active_generic_dlg.accept()
 
@@ -665,6 +686,9 @@ class EditPanel(QWidget):
             return
         if title == "Vignette":
             self._open_vignette_treatment()
+            return
+        if title == "Cadre":
+            self._open_frame_treatment()
             return
 
         original = copy.copy(self._edit)
@@ -840,6 +864,52 @@ class EditPanel(QWidget):
         dlg.show()
         dlg.raise_()
 
+    # Attributs de cadre recopiés entre le dialogue et l'état du panneau.
+    _FRAME_ATTRS = (
+        "frame_type", "frame_width", "frame_inner_width", "frame_gap",
+        "frame_style", "frame_color", "frame_color2", "frame_inner_color",
+        "frame_gap_color", "frame_inner_enabled", "frame_inner_motif",
+        "frame_inner_relief", "frame_inner_ornament",
+    )
+
+    def _open_frame_treatment(self) -> None:
+        if self._active_frame_dlg is not None:
+            self._active_frame_dlg.raise_()
+            self._active_frame_dlg.activateWindow()
+            return
+
+        from src.ui.frame_dialog import FrameDialog
+
+        original = copy.copy(self._edit)
+        photo_path = self._photo.path if self._photo else None
+        dlg = FrameDialog(self._edit, photo_path=photo_path, parent=self)
+        # Aperçu en direct : l'EditInfo du dialogue (copie complète de l'état du
+        # panneau) part telle quelle vers la visionneuse. self._edit n'est pas
+        # touché avant validation, pour que _push_undo empile bien l'état d'avant.
+        dlg.preview.connect(self._on_preview)
+        dlg._panel = self
+        self._active_frame_dlg = dlg
+
+        def _finish(accepted: bool) -> None:
+            self._active_frame_dlg = None
+            self._highlight_treatment_button("Cadre", False)
+            if accepted:
+                self._checkpoint("Cadre")
+                self._push_undo("Cadre")
+                new_edit = dlg.get_edit()
+                for attr in self._FRAME_ATTRS:
+                    setattr(self._edit, attr, getattr(new_edit, attr))
+                self.edits_changed.emit(copy.copy(self._edit))
+                self._save("Cadre")
+            else:
+                self._edit = original
+                self.edits_changed.emit(copy.copy(self._edit))
+
+        dlg.accepted.connect(lambda: _finish(True))
+        dlg.rejected.connect(lambda: _finish(False))
+        dlg.show()
+        dlg.raise_()
+
     def _on_vignette_preview(self, edit: EditInfo) -> None:
         """Mise à jour depuis le slider d'intensité ou bouton couleur du dialogue."""
         self._edit.vignette_strength = edit.vignette_strength
@@ -938,6 +1008,11 @@ class EditPanel(QWidget):
         if self._photo:
             self._db.push_history(self._photo.path, self._edit, op_label)
 
+    def _checkpoint_state(self, edit: EditInfo, op_label: str) -> None:
+        """Comme _checkpoint(), mais pour un état arbitraire (réinjection d'historique)."""
+        if self._photo:
+            self._db.push_history(self._photo.path, edit, op_label)
+
     def _push_undo(self, op_label: str) -> None:
         self._undo_stack.append((copy.copy(self._edit), op_label))
         if len(self._undo_stack) > _UNDO_MAX:
@@ -975,7 +1050,12 @@ class EditPanel(QWidget):
         if not self._photo:
             return
         before = self._edit.rotation
-        self._reset_snapshots[os.path.normpath(self._photo.path)] = copy.copy(self._edit)
+        # L'historique est sauvegardé avec l'état : restore_all() doit rendre les
+        # retouches ET la possibilité de les défaire une par une (sinon un
+        # reset + restauration écrase définitivement l'historique de la photo).
+        self._reset_snapshots[os.path.normpath(self._photo.path)] = (
+            copy.copy(self._edit), list(self._undo_stack),
+        )
         self._db.delete(self._photo.path)
         self._edit = EditInfo()
         self._undo_stack.clear()
@@ -993,10 +1073,16 @@ class EditPanel(QWidget):
         if snapshot is None:
             self._update_undo_buttons()
             return
+        prev_edit, prev_history = snapshot
         before = self._edit.rotation
-        self._edit = snapshot
-        self._undo_stack.clear()
+        self._edit = prev_edit
+        self._undo_stack = list(prev_history)
         self._redo_stack.clear()
+        # reset_all() a effacé edit_history en DB : on la réinsère avant _save()
+        # (qui y empile l'état courant) pour que l'undo pas-à-pas reste possible,
+        # y compris après redémarrage de l'application.
+        for hist_edit, op_label in self._undo_stack:
+            self._checkpoint_state(hist_edit, op_label)
         self._save("restore_all")
         self._update_undo_buttons()
         self.edits_changed.emit(copy.copy(self._edit))

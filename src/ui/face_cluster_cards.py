@@ -27,6 +27,7 @@ from PySide6.QtWidgets import (
 from src.core.models import PersonInfo
 from src.faces.face_database import FaceDatabase
 from src.ui.loading_label import LoadingLabel
+from src.ui.ui_utils import install_menu_width_fix
 from src.ui.people_panel import (
     _AssignDialog, _AvatarLoader, _cosine_sim, _SIM_WEAK, _SIM_STRONG,
 )
@@ -251,6 +252,7 @@ class _ClusterCard(QFrame):
             n_selected = len(self._selected_ids_ref) if self._selected_ids_ref else 0
             bulk = self._is_selected and n_selected > 1
             menu = QMenu(self)
+            install_menu_width_fix(menu)
             act_associate = None
             if bulk:
                 act_associate = menu.addAction(f"Associer ({n_selected} sélectionnés)")

@@ -18,6 +18,7 @@ from src.core.event_bus import bus
 from src.core.models import AlbumInfo, PersonInfo
 from src.library.fs_utils import find_dvd_video_ts
 from src.ui.people_panel import _face_bytes, _load_edit_rotations
+from src.ui.ui_utils import install_menu_width_fix
 
 logger = logging.getLogger(__name__)
 
@@ -877,12 +878,14 @@ class Sidebar(QWidget):
         data = item.data(Qt.UserRole)
         if isinstance(data, AlbumInfo):
             menu = QMenu(self)
+            install_menu_width_fix(menu)
             menu.addAction("Supprimer l'album…",
                            lambda: self.album_delete_requested.emit(data))
             menu.exec(self._albums_list.mapToGlobal(pos))
         elif isinstance(data, str) and data.startswith(_SPECIAL_TAG_ITEM_PREFIX):
             tag = data[len(_SPECIAL_TAG_ITEM_PREFIX):]
             menu = QMenu(self)
+            install_menu_width_fix(menu)
             menu.addAction("Supprimer ce mot-clé…",
                            lambda: self.tag_delete_requested.emit(tag))
             menu.exec(self._albums_list.mapToGlobal(pos))
@@ -894,6 +897,7 @@ class Sidebar(QWidget):
             return
         path = item.data(0, Qt.UserRole)
         menu = QMenu(self)
+        install_menu_width_fix(menu)
         menu.addAction("Scanner maintenant", lambda: self.scan_requested.emit(path))
         menu.addAction("Supprimer des dossiers surveillés",
                        lambda: self.folder_removed.emit(path))
@@ -1270,6 +1274,7 @@ class Sidebar(QWidget):
         if not isinstance(person, PersonInfo):
             return
         menu = QMenu(self)
+        install_menu_width_fix(menu)
         menu.addAction("Renommer…",
                        lambda: self.person_rename_requested.emit(person))
         menu.addAction("Fusionner avec…",

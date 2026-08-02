@@ -16,6 +16,7 @@ from PySide6.QtWidgets import (
 from src.ui.loading_label import LoadingLabel
 from src.core.models import PhotoInfo
 from src.library.thumbnail_cache import ThumbnailCache, edit_signature
+from src.ui.ui_utils import install_menu_width_fix
 
 logger = logging.getLogger(__name__)
 
@@ -1435,6 +1436,7 @@ class ThumbnailGrid(QScrollArea):
             photos = [photo]
 
         menu = QMenu(self)
+        install_menu_width_fix(menu)
         menu.addAction("Ouvrir", lambda: self.photo_activated.emit(photo))
         menu.addSeparator()
         fav_label = "Retirer des favoris" if photo.is_favorite else "Marquer comme favori"

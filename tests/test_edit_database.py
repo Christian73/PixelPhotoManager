@@ -260,6 +260,80 @@ class TestSingletonAndReinit(BaseEditDatabaseTest):
         assert db2.load("C:/photos/a.jpg").brightness == 0.2
 
 
+class TestFramePersistence(BaseEditDatabaseTest):
+    """Les 13 colonnes frame_* sont arrivées par migration : elles doivent
+    survivre à l'aller-retour DB comme à l'ouverture d'une base antérieure."""
+
+    _FRAME = dict(
+        frame_type="double", frame_width=0.07, frame_inner_width=0.02,
+        frame_gap=0.03, frame_style="glitter", frame_color="#123456",
+        frame_color2="#abcdef", frame_inner_color="#111111",
+        frame_gap_color="#eeeeee", frame_inner_enabled=True,
+        frame_inner_motif="scrolls", frame_inner_relief=False,
+        frame_inner_ornament=1.7,
+    )
+
+    def test_round_trip_keeps_every_field(self, tmp_path):
+        db = self._make_db(tmp_path)
+        assert db.save("C:/photos/a.jpg", EditInfo(**self._FRAME))
+        loaded = db.load("C:/photos/a.jpg")
+        for attr, value in self._FRAME.items():
+            assert getattr(loaded, attr) == value, attr
+
+    def test_frame_is_seen_by_all_edits(self, tmp_path):
+        """all_edits() alimente l'invalidation des vignettes : un cadre doit y
+        apparaître, sinon la grille garderait une vignette sans cadre."""
+        db = self._make_db(tmp_path)
+        db.save("C:/photos/a.jpg", EditInfo(**self._FRAME))
+        assert db.all_edits()[os.path.normpath("C:/photos/a.jpg")].frame_style == "glitter"
+
+    def test_history_keeps_the_frame(self, tmp_path):
+        db = self._make_db(tmp_path)
+        db.save("C:/photos/a.jpg", EditInfo(**self._FRAME))
+        history = db.get_history("C:/photos/a.jpg")
+        assert history and history[-1][0].frame_type == "double"
+
+    def test_pre_migration_database_is_upgraded(self, tmp_path):
+        """Base créée avant la fonctionnalité Cadre : les colonnes manquantes
+        sont ajoutées au démarrage, sans perdre les retouches existantes."""
+        from src.processing import edit_database as ed
+
+        db_path = tmp_path / "edits.db"
+        conn = sqlite3.connect(str(db_path))
+        conn.execute(ed._CREATE_EDITS)
+        conn.execute(ed._CREATE_HISTORY)
+        # Toutes les migrations SAUF celle des cadres : l'état exact d'une base
+        # de la version précédente.
+        for stmt in (ed._MIGRATE_STRAIGHTEN, *ed._MIGRATE_GAMMA_CURVE,
+                     *ed._MIGRATE_COLOR_CHANNELS, ed._MIGRATE_RED_EYE,
+                     *ed._MIGRATE_VIGNETTE, *ed._MIGRATE_VIGNETTE_V2,
+                     ed._MIGRATE_ANNOTATIONS):
+            try:
+                conn.execute(stmt)
+            except sqlite3.OperationalError:
+                pass   # colonne déjà dans _CREATE_EDITS
+        conn.execute("INSERT INTO photo_edits (photo_path, brightness) VALUES (?, ?)",
+                     ("C:\\photos\\a.jpg", 0.4))
+        conn.commit()
+        conn.close()
+
+        db = EditDatabase(db_path=db_path)
+        loaded = db.load("C:/photos/a.jpg")
+        assert loaded.brightness == 0.4          # retouche existante préservée
+        assert loaded.frame_type == "none"       # défaut, pas de cadre hérité
+        # Ferronnerie du second cadre : une ligne existante n'a aucune valeur
+        # pour ces colonnes (NULL) — la lecture doit rendre les défauts du modèle.
+        assert loaded.frame_inner_motif == "line"
+        assert loaded.frame_inner_relief is True
+        assert loaded.frame_inner_ornament == 1.0
+
+        db.save("C:/photos/a.jpg", EditInfo(brightness=0.4, **self._FRAME))
+        reloaded = db.load("C:/photos/a.jpg")
+        assert reloaded.frame_color == "#123456"
+        assert reloaded.frame_inner_motif == "scrolls"
+        assert reloaded.frame_inner_relief is False
+
+
 class TestLoadExceptionPath:
     def test_load_on_unreadable_db_returns_empty_edit_info(self, tmp_path):
         EditDatabase._instances = {}

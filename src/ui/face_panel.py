@@ -19,6 +19,7 @@ from PySide6.QtWidgets import (
 from src.core.models import FaceInfo
 from src.faces.face_database import FaceDatabase
 from src.ui.loading_label import LoadingLabel
+from src.ui.ui_utils import install_menu_width_fix
 from src.ui.people_panel import (
     _AssignDialog, _cosine_sim, _face_bytes, _load_edit_rotations,
     _SIM_STRONG, _SIM_WEAK,
@@ -824,6 +825,7 @@ class FacePanel(QWidget):
         """Construit et affiche le menu contextuel d'un visage.
         Appelé depuis le panneau (via _on_item_context_menu) et depuis la visionneuse."""
         menu = QMenu(self)
+        install_menu_width_fix(menu)
         act_identify = menu.addAction("Identifier cette personne…")
         act_identify.setToolTip(
             "Sépare ce visage de son groupe et l'attache à une personne nommée"

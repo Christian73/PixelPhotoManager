@@ -29,6 +29,7 @@ from PySide6.QtWidgets import (
 from src.core.models import FaceInfo, PersonInfo
 from src.faces.face_database import FaceDatabase
 from src.ui.loading_label import LoadingLabel
+from src.ui.ui_utils import install_menu_width_fix
 from src.ui.people_panel import _AssignDialog, _face_bytes, _load_edit_rotations
 
 logger = logging.getLogger(__name__)
@@ -624,6 +625,7 @@ class PersonClusterView(QWidget):
         if cluster_id is None:
             return
         menu = QMenu(self)
+        install_menu_width_fix(menu)
         menu.setStyleSheet(_MENU_STYLE)
         act_accept = menu.addAction("✓ Accepter cette suggestion")
         act_reject = menu.addAction("✗ Rejeter cette suggestion")
@@ -752,6 +754,7 @@ class PersonClusterView(QWidget):
         lbl_photos = f"les {np} photo(s)" if np > 1 else "cette photo"
 
         menu = QMenu(self)
+        install_menu_width_fix(menu)
         menu.setStyleSheet(_MENU_STYLE)
         act_reassign = menu.addAction(f"Réassigner {n} visage{s} à une autre personne…")
         act_unassign = menu.addAction(f"Dé-associer {n} visage{s} de la personne")

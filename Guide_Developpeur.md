@@ -99,7 +99,7 @@ PixelPhotoManager/
 │   │   ├── thread_journal_dialog.py  # Outils › Journal des threads…
 │   │   ├── settings_dialog.py     # Outils › Paramètres
 │   │   ├── loading_label.py       # Indicateur de chargement générique
-│   │   ├── ui_utils.py            # fmt_size() et utilitaires UI partagés
+│   │   ├── ui_utils.py            # fmt_size(), install_menu_width_fix(), utilitaires UI
 │   │   ├── help_dialog.py         # Dialogue Aide/À propos (contenu dans help_content/*.html)
 │   │   ├── face_panel.py          # Panneau visages dans la visionneuse
 │   │   ├── people_panel.py        # Vue « Personnes » (groupes non identifiés) + assignation
@@ -572,7 +572,8 @@ doit importer directement le module dédié**, pas le ré-export.
     `_DeleteWorkerThread`, `_DupMigrationThread`, `_PersonsRefreshThread`, `_ResuggestThread`,
     `_ResetWorkerThread`.
   - `export_dialogs.py` (`_ExportDialog`, `_SaveOptionsDialog`), `reset_faces_dialog.py`
-    (`_ResetFacesDialog`), `duplicates_popup.py` (`_DuplicatesPopup`), `ui_utils.py` (`fmt_size`).
+    (`_ResetFacesDialog`), `duplicates_popup.py` (`_DuplicatesPopup`), `ui_utils.py`
+    (`fmt_size`, `install_menu_width_fix`).
   - `main_window_faces.py::FacesController` et `main_window_duplicates.py::DuplicatesController`
     — deux **mixins** apportant respectivement toutes les méthodes `_on_*`/`_show_*`/`_start_*`
     liées aux visages et aux doublons. `class MainWindow(QMainWindow, FacesController,
@@ -808,10 +809,15 @@ EditPanel
 
 **`reset_all()` / `restore_all()`** : `reset_all()` supprime toutes les retouches sans confirmation
 (l'ancien `QMessageBox.question` a été retiré) mais conserve un instantané dans
-`self._reset_snapshots: dict[str, EditInfo]` (clé = chemin normalisé) avant de vider l'état.
-`restore_all()` réapplique cet instantané. Le snapshot est invalidé (`.pop(...)`) dès qu'une
-nouvelle retouche est poussée via `_push_undo()` après le reset, pour qu'un `restore_all()`
-tardif n'écrase jamais silencieusement une retouche faite entre-temps.
+`self._reset_snapshots: dict[str, tuple[EditInfo, list]]` (clé = chemin normalisé) avant de vider
+l'état. L'instantané contient **l'état courant ET la pile d'undo** : `reset_all()` efface aussi
+`edit_history` en DB (`EditDatabase.delete`), donc sans ça une restauration rendait bien les
+retouches mais plus la possibilité de les défaire une par une. `restore_all()` réapplique l'état,
+restaure `_undo_stack` et réinjecte l'historique en DB (`_checkpoint_state` par entrée, avant le
+`_save("restore_all")` final) pour que l'undo pas-à-pas survive aussi à un redémarrage.
+Le snapshot est invalidé (`.pop(...)`) dès qu'une nouvelle retouche est poussée via `_push_undo()`
+après le reset, pour qu'un `restore_all()` tardif n'écrase jamais silencieusement une retouche
+faite entre-temps.
 
 **Ordre d'application des retouches** (dans `ImageAdjuster.apply_all`) :
 

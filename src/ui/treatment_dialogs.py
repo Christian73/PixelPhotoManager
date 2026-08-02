@@ -25,8 +25,8 @@ logger = logging.getLogger(__name__)
 
 from src.ui.edit_sliders import EditSlider, MarkedSlider  # noqa: E402
 from src.ui.edit_icons import (  # noqa: E402
-    _icon_brightness, _icon_contrast, _icon_saturation, _icon_vignette,
-    _TOGGLE_BTN_STYLE,
+    _icon_brightness, _icon_contrast, _icon_frame, _icon_saturation,
+    _icon_vignette, _TOGGLE_BTN_STYLE,
 )
 
 class TreatmentDialog(QDialog):
@@ -642,6 +642,7 @@ _TREATMENTS: list[tuple] = [
     ("Contraste",  _icon_contrast,   [("Contraste",  "contrast",   -1.0, 1.0, 2)]),
     ("Couleurs",   _icon_saturation, [("Saturation", "saturation", -1.0, 1.0, 2)]),
     ("Vignette",   _icon_vignette,   []),   # dialogue dédié — sliders_def ignoré
+    ("Cadre",      _icon_frame,      []),   # dialogue dédié — cf. frame_dialog.py
 ]
 
 # Même surbrillance que le bouton Annotations : visible autour de l'icône tant
