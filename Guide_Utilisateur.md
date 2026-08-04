@@ -743,6 +743,10 @@ La barre disparaît automatiquement après 5 secondes d'inactivité et réappara
 | **Espace** | Pause / Reprendre |
 | **Échap** | Quitter le diaporama |
 
+### Économiseur d'écran
+
+Tant que le diaporama est ouvert, **l'économiseur d'écran et la mise en veille de l'écran sont désactivés** — regarder défiler les photos sans toucher au clavier ni à la souris passerait sinon pour de l'inactivité aux yeux de Windows. Le réglage habituel reprend automatiquement à la fermeture du diaporama (y compris en cas de fermeture de l'application).
+
 ---
 
 ## 13. Reconnaissance faciale

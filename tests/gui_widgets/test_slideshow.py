@@ -238,6 +238,46 @@ class TestSlideshowWindowWithPhotos:
         assert win._index == 0
         win.close()
 
+    def test_screensaver_inhibited_until_close(self, qtbot, tmp_path, monkeypatch):
+        """Le diaporama inhibe l'économiseur d'écran tant qu'il est ouvert."""
+        from src.core import screensaver_guard as sg
+        calls: list[int] = []
+        monkeypatch.setattr(sg, "_set_execution_state",
+                            lambda flags: calls.append(flags) or True)
+
+        win = SlideshowWindow([_photo(tmp_path, "p.jpg")])
+        qtbot.addWidget(win)
+        assert win._screensaver.active is True
+        assert calls[0] & sg.ES_DISPLAY_REQUIRED
+
+        win.close()
+        assert win._screensaver.active is False
+        assert calls[-1] == sg.ES_CONTINUOUS
+
+    def test_native_screensaver_request_is_refused(self, qtbot, tmp_path):
+        import ctypes.wintypes
+
+        import shiboken6
+
+        from src.core import screensaver_guard as sg
+
+        win = SlideshowWindow([_photo(tmp_path, "p.jpg")])
+        qtbot.addWidget(win)
+
+        msg = ctypes.wintypes.MSG()
+        msg.message = sg.WM_SYSCOMMAND
+        msg.wParam = sg.SC_SCREENSAVE
+        # QWidget.nativeEvent (appelé par super() sur le chemin « non traité »)
+        # refuse une adresse entière brute : passer un VoidPtr, comme Qt.
+        ptr = shiboken6.VoidPtr(ctypes.addressof(msg))
+        handled, _ = win.nativeEvent(b"windows_generic_MSG", ptr)
+        assert handled is True
+
+        msg.wParam = 0xF010   # SC_MOVE : laissé au traitement normal
+        handled, _ = win.nativeEvent(b"windows_generic_MSG", ptr)
+        assert handled is False
+        win.close()
+
     def test_preload_cache_used(self, qtbot, tmp_path):
         photos = [_photo(tmp_path, f"p{i}.jpg") for i in range(2)]
         win = SlideshowWindow(photos, start_index=1)

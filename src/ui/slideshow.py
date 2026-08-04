@@ -12,6 +12,7 @@ from PySide6.QtWidgets import (
 )
 
 from src.core.models import PhotoInfo
+from src.core.screensaver_guard import ScreensaverGuard, is_screensaver_command
 from src.ui.photo_viewer import _build_pixmap
 
 logger = logging.getLogger(__name__)
@@ -189,6 +190,9 @@ class SlideshowWindow(QWidget):
     Contrôles overlay (apparaissent au mouvement souris, masqués après 5 s)
     -----------------------------------------------------------------------
     ◀  plus ancienne  |  [−][Xs][+]  |  ⏸/▶  |  ▶  plus récente  |  ✕
+
+    Tant que la fenêtre est ouverte, l'économiseur d'écran et la veille de
+    l'écran sont inhibés (cf. `src/core/screensaver_guard.py`).
     """
 
     def __init__(
@@ -209,6 +213,14 @@ class SlideshowWindow(QWidget):
         self._load_thread:    _LoadThread | None = None
         self._preload_thread: _LoadThread | None = None
         self._preload_cache:  dict[int, QPixmap] = {}
+
+        # Regarder un diaporama sans toucher au clavier ni à la souris est de
+        # l'inactivité pour Windows : sans ce garde, l'économiseur d'écran (ou
+        # l'extinction du moniteur) finit par recouvrir les photos. Maintenu
+        # pour toute la durée de la fenêtre, pause comprise — une photo laissée
+        # affichée volontairement doit rester visible.
+        self._screensaver = ScreensaverGuard()
+        self._screensaver.inhibit()
 
         self.setWindowTitle("Diaporama")
         self.setStyleSheet("background: black;")
@@ -491,6 +503,14 @@ class SlideshowWindow(QWidget):
         self._show_overlay()
         super().mouseMoveEvent(event)
 
+    def nativeEvent(self, event_type, message):
+        """Refuse la demande de lancement de l'économiseur d'écran adressée à
+        la fenêtre au premier plan — second verrou, complémentaire de
+        `ScreensaverGuard` (cf. `src/core/screensaver_guard.py`)."""
+        if is_screensaver_command(event_type, message):
+            return True, 0
+        return super().nativeEvent(event_type, message)
+
     def keyPressEvent(self, event: QKeyEvent) -> None:
         key = event.key()
         if key == Qt.Key_Escape:
@@ -508,6 +528,7 @@ class SlideshowWindow(QWidget):
             super().keyPressEvent(event)
 
     def closeEvent(self, event) -> None:
+        self._screensaver.release()
         self._advance_timer.stop()
         self._hide_timer.stop()
         self._kb_widget.stop()

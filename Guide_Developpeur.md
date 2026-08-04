@@ -51,6 +51,7 @@ PixelPhotoManager/
 │   │   ├── event_bus.py           # Bus d'événements pub/sub
 │   │   ├── models.py              # Dataclasses (PhotoInfo, EditInfo…)
 │   │   ├── cpu_throttle.py        # Limite CPU (~15% cœurs) + priorité OS abaissée (dedup/visages)
+│   │   ├── screensaver_guard.py   # Inhibition économiseur d'écran / veille écran (diaporama)
 │   │   ├── thread_journal.py      # Journal JSONL des threads de fond (Outils › Journal des threads…)
 │   │   ├── update_checker.py      # Vérification de version via l'API releases GitHub
 │   │   ├── problems_history.py    # Historique des analyses de doublons avec fichiers corrompus
@@ -318,6 +319,41 @@ pool = ProcessPoolExecutor(max_workers=n, initializer=lower_current_process_prio
 `lower_current_thread_priority()` (Windows `SetThreadPriority(THREAD_PRIORITY_BELOW_NORMAL)`) et
 `lower_current_process_priority()` (via `psutil`, `BELOW_NORMAL_PRIORITY_CLASS`) s'utilisent comme
 `initializer` d'un pool, pour que chaque worker démarre déjà à priorité réduite.
+
+---
+
+### `screensaver_guard.py` — Inhibition de l'économiseur d'écran
+
+Utilisé par le diaporama (`src/ui/slideshow.py`) : regarder défiler des photos sans toucher au
+clavier ni à la souris est de l'inactivité pour Windows, l'économiseur d'écran finirait par
+recouvrir le diaporama. Deux verrous, aucun ne suffisant seul :
+
+```python
+from src.core.screensaver_guard import ScreensaverGuard, is_screensaver_command
+
+self._screensaver = ScreensaverGuard()
+self._screensaver.inhibit()      # à la construction de la fenêtre
+self._screensaver.release()      # dans closeEvent
+
+def nativeEvent(self, event_type, message):        # second verrou
+    if is_screensaver_command(event_type, message):
+        return True, 0                             # « message traité » → annule le lancement
+    return super().nativeEvent(event_type, message)
+```
+
+1. `ScreensaverGuard` → `SetThreadExecutionState(ES_CONTINUOUS | ES_DISPLAY_REQUIRED |
+   ES_SYSTEM_REQUIRED)` : réarme le compteur d'inactivité de **l'affichage** (extinction du
+   moniteur, veille machine). Idempotent dans les deux sens ; no-op silencieux hors Windows.
+   **L'état est propre au thread appelant** : `inhibit()` et `release()` doivent être appelés
+   depuis le même thread (le thread UI).
+2. `is_screensaver_command()` → filtrage de `WM_SYSCOMMAND`/`SC_SCREENSAVE` : l'économiseur
+   d'écran, lui, dépend du compteur d'inactivité **utilisateur**, distinct du précédent. Windows
+   prévient la fenêtre au premier plan avant de le lancer. Toute anomalie de lecture du message
+   renvoie `False` (le message suit son traitement normal).
+
+Piège de test : `QWidget.nativeEvent()` (appelé par `super()` sur le chemin « non traité »)
+refuse une adresse entière brute et exige un `shiboken6.VoidPtr` — cf.
+`tests/gui_widgets/test_slideshow.py::test_native_screensaver_request_is_refused`.
 
 ---
 
