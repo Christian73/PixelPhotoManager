@@ -462,19 +462,30 @@ Le bouton **Cadre** ouvre une galerie d'aperçus de la photo courante, un par mo
 |---|---|
 | **Entourage uni** | Aplat d'une seule couleur, sans relief (noir, blanc ou couleur libre) |
 | **Simple** / **Double** | Moulure en relief, une ou deux bandes séparées par un intervalle |
-| **Feuilles de vigne**, **Roses**, **Fleurs** | Entourages végétaux dessinés |
-| **Sculpture bois**, **Métallique**, **Reflets** | Matières imitées (bois gravé, métal brossé, verre) |
+| **Baroque doré** | Acanthes et coquilles sculptées dans une doucine dorée, à l'or usé |
+| **Oves et perles** | Frise classique : oves et fers de lance, rang de perles et olives |
+| **Grecque** | Méandre grec continu, rosaces aux angles |
+| **Art déco** | Gradins argentés, chevrons et barrettes des années 1930 |
+| **Sculpture bois** | Noyer creusé de godrons et de filets, veinage apparent |
+| **Feuilles de vigne**, **Roses**, **Fleurs** | Entourages végétaux sculptés (bronze patiné, laque carmin, porcelaine peinte) |
+| **Métallique**, **Reflets** | Matières imitées (métal brossé et rivets, laque vernie) |
 
-> Le cadre s'ajoute **autour** de la photo : il ne recouvre aucun pixel de l'image, qui sort simplement plus grande à l'export.
+> Le cadre s'ajoute **autour** de la photo : il ne recouvre aucun pixel de l'image, qui sort simplement plus grande à l'export. Deux exceptions, décrites ci-dessous : les entourages végétaux, dont quelques motifs mordent sur le bord de l'image, et le second cadre de l'entourage uni.
 
-**Réglages** (disponibles pour Entourage uni, Simple et Double) :
-- **Épaisseur** (nommée **Cadre extérieur** pour Simple et Double), **Intervalle** et **Cadre intérieur** se règlent en pourcentage du petit côté de la photo — un même réglage rend donc pareil sur une vignette et sur un export pleine résolution.
-- **Couleur** : raccourcis noir et blanc, ou sélecteur de couleur libre.
+Les motifs sont sculptés, pas dessinés : chacun est éclairé comme une vraie moulure (lumière venant du haut à gauche, ombres dans les creux, patine et usure de la dorure). Ils demandent donc un peu d'épaisseur pour se lire — choisir l'un d'eux **remonte automatiquement** l'épaisseur si elle est trop faible, et chaque vignette de la galerie montre exactement le cadre obtenu en cliquant dessus.
+
+**Réglages** :
+- **Épaisseur** (nommée **Cadre extérieur** pour Simple et Double) : disponible pour tous les motifs. **Intervalle** et **Cadre intérieur** : pour Entourage uni, Simple et Double. Tous se règlent en pourcentage du petit côté de la photo — un même réglage rend donc pareil sur une vignette et sur un export pleine résolution.
+- **Couleur** : raccourcis noir et blanc, ou sélecteur de couleur libre (Entourage uni, Simple, Double).
 - **Style de remplissage** (uni, dégradé, pailleté) et **seconde couleur** : réservés aux motifs Simple et Double.
+
+#### Entourages végétaux qui débordent
+
+Sur **Feuilles de vigne**, **Roses** et **Fleurs**, quelques sarments, roses ou bouquets passent *par-dessus* le bord de la photo, avec leur ombre portée, comme sur un cadre sculpté qui mord sur la toile. Ils sont volontairement irréguliers — un débordement à intervalle régulier redeviendrait une frise — et restent accrochés au bandeau : le centre de l'image n'est jamais touché. Rien à régler, c'est le motif qui l'apporte ; le recadrage, les yeux rouges, les annotations et les visages continuent de travailler sur la photo entière.
 
 #### Second cadre de l'entourage uni
 
-Pour le seul **Entourage uni**, cochez **Second cadre par-dessus la photo** : une ligne est tracée *sur* la photo, à distance du bord. C'est la seule exception au principe ci-dessus — la bande d'image restée visible entre les deux cadres est justement l'effet recherché. **Intervalle** règle cette distance et **Second cadre** son épaisseur.
+Pour le seul **Entourage uni**, cochez **Second cadre par-dessus la photo** : une ligne est tracée *sur* la photo, à distance du bord — la bande d'image restée visible entre les deux cadres est justement l'effet recherché. **Intervalle** règle cette distance et **Second cadre** son épaisseur.
 
 Cette ligne peut prendre une forme de **ferronnerie** :
 

@@ -73,13 +73,15 @@ class TestGeometry:
 
 
 class TestApplyFrame:
-    @pytest.mark.parametrize("kind", ALL_KINDS)
+    @pytest.mark.parametrize("kind", [k for k in ALL_KINDS
+                                      if k not in frames.SPILL_FRAMES])
     def test_photo_is_never_covered(self, kind):
         """Le cadre s'ajoute autour : la zone contenu reste pixel pour pixel la photo.
 
-        Seule dérogation, sur activation explicite : le second cadre de « plain »
-        (frame_inner_enabled, cf. TestPlainInnerFrame) — désactivé par défaut,
-        donc l'invariant vaut bien pour tous les motifs tels qu'ils sortent d'ici."""
+        Deux dérogations, toutes deux d'affichage et sans effet sur la géométrie :
+        le second cadre de « plain » (frame_inner_enabled, cf. TestPlainInnerFrame),
+        désactivé par défaut, et les débordements des trois cadres végétaux
+        (`SPILL_FRAMES`, cf. TestSpill) — exclus du paramétrage ci-dessus."""
         photo = _photo()
         e = _edit(kind)
         out = frames.apply_frame(photo, e)
@@ -142,6 +144,208 @@ class TestApplyFrame:
     def test_preview_is_bounded(self):
         preview = frames.frame_preview(_photo(600, 400), _edit("roses"), size=80)
         assert max(preview.size) <= 80 + 2 * frames.border_px(_edit("roses"), 80, 80)
+
+
+class TestSpill:
+    """Débordements des trois cadres végétaux sur la photo.
+
+    Seconde dérogation à l'invariant « le cadre s'ajoute autour », demandée pour
+    le réalisme : une treille sculptée mord sur la toile. Comme le second cadre
+    de « plain », c'est purement d'affichage — la géométrie dont dépendent les
+    outils interactifs (recadrage, yeux rouges, visages, annotations) reste celle
+    de la photo entière.
+    """
+
+    PHOTO = (400, 300)
+    COLOR = (20, 200, 40)
+
+    def _render(self, kind, **kw):
+        photo = _photo(*self.PHOTO, color=self.COLOR)
+        e = _edit(kind, frame_width=0.10, **kw)
+        return frames.apply_frame(photo, e).convert("RGB"), e
+
+    @staticmethod
+    def _colors(img):
+        """Histogramme {couleur: nombre de pixels} de la zone examinée."""
+        return {color: n for n, color in img.getcolors(img.width * img.height)}
+
+    def test_spill_frames_are_exactly_the_ones_with_a_spiller(self):
+        assert frames.SPILL_FRAMES == set(frames._SPILLERS)
+        assert frames.SPILL_FRAMES < set(ALL_KINDS)
+
+    @pytest.mark.parametrize("kind", sorted(frames.SPILL_FRAMES))
+    def test_motifs_reach_over_the_photo(self, kind):
+        """Sans ça la fonctionnalité n'existe pas : la photo unie doit porter de
+        la matière du cadre."""
+        out, e = self._render(kind)
+        b = frames.border_px(e, *self.PHOTO)
+        content = out.crop((b, b, b + self.PHOTO[0], b + self.PHOTO[1]))
+        hist = self._colors(content)
+        covered = sum(n for color, n in hist.items() if color != self.COLOR)
+        assert covered > 200, f"{kind} : {covered} pixels débordés"
+
+    @pytest.mark.parametrize("kind", sorted(frames.SPILL_FRAMES))
+    def test_geometry_is_untouched(self, kind):
+        """Un débordement n'agrandit pas le canevas et ne décale pas le contenu."""
+        out, e = self._render(kind)
+        b = frames.border_px(e, *self.PHOTO)
+        assert out.size == (self.PHOTO[0] + 2 * b, self.PHOTO[1] + 2 * b)
+        assert frames.content_box(e, *out.size) == (b, b, 400.0, 300.0)
+
+    @pytest.mark.parametrize("kind", sorted(frames.SPILL_FRAMES))
+    def test_the_photo_keeps_its_centre(self, kind):
+        """Les motifs restent accrochés au bandeau : ils mordent sur la bordure
+        de l'image, ils ne l'envahissent pas. Marge de deux largeurs de bandeau,
+        ombre portée comprise."""
+        out, e = self._render(kind)
+        b = frames.border_px(e, *self.PHOTO)
+        m = b * 2
+        centre = out.crop((b + m, b + m,
+                           b + self.PHOTO[0] - m, b + self.PHOTO[1] - m))
+        assert set(self._colors(centre)) == {self.COLOR}
+
+    @pytest.mark.parametrize("kind", sorted(frames.SPILL_FRAMES))
+    def test_rendering_is_deterministic(self, kind):
+        """Deux rendus de la même photo doivent coïncider : l'aperçu de la
+        galerie, la vignette de la grille et l'export montrent le même cadre."""
+        first, _ = self._render(kind)
+        second, _ = self._render(kind)
+        assert first.tobytes() == second.tobytes()
+
+    @pytest.mark.parametrize("kind", sorted(frames.SPILL_FRAMES))
+    def test_failure_costs_the_spill_but_never_the_frame(self, kind, monkeypatch):
+        def boom(*a, **kw):
+            raise ValueError("débordement cassé")
+
+        monkeypatch.setattr(frames, "_render_spill", boom)
+        out, e = self._render(kind)
+        b = frames.border_px(e, *self.PHOTO)
+        assert out.size == (self.PHOTO[0] + 2 * b, self.PHOTO[1] + 2 * b)
+        content = out.crop((b, b, b + self.PHOTO[0], b + self.PHOTO[1]))
+        assert set(self._colors(content)) == {self.COLOR}          # photo intacte
+        assert len(self._colors(out.crop((0, 0, out.width, b)))) > 1  # bandeau peint
+
+    def test_other_decorated_frames_never_spill(self):
+        """Le débordement est réservé aux trois cadres végétaux : ailleurs, il
+        rendrait illisible une frise géométrique (grecque, art déco…)."""
+        for kind in ("baroque", "greek", "artdeco", "pearl"):
+            out, e = self._render(kind)
+            b = frames.border_px(e, *self.PHOTO)
+            content = out.crop((b, b, b + self.PHOTO[0], b + self.PHOTO[1]))
+            assert set(self._colors(content)) == {self.COLOR}, kind
+
+
+DECOR_KINDS = [k for k in ALL_KINDS if k not in frames.PARAMETRIC_FRAMES]
+
+
+def _luma(pixel) -> float:
+    r, g, b = pixel[:3]
+    return 0.299 * r + 0.587 * g + 0.114 * b
+
+
+def _band_row(img, y: int, x0: int, x1: int) -> list:
+    return [_luma(img.getpixel((x, y))) for x in range(x0, x1)]
+
+
+def _stdev(values) -> float:
+    n = len(values)
+    mean = sum(values) / n
+    return (sum((v - mean) ** 2 for v in values) / n) ** 0.5
+
+
+class TestReliefEngine:
+    """Le moteur de relief : profil de moulure, ornements gravés, éclairage.
+
+    Ce qui distingue un cadre travaillé d'un aplat coloré n'est pas le dessin
+    mais la LUMIÈRE — un motif plaqué en couleur reste plat. Ces tests vérifient
+    donc des propriétés de rendu (variation le long de la moulure, sens de
+    l'éclairage), pas la présence de telle ou telle fonction.
+    """
+
+    @pytest.mark.parametrize("kind", DECOR_KINDS)
+    def test_ornaments_break_the_uniformity_along_the_moulding(self, kind):
+        """Un motif décoratif doit varier LE LONG du bandeau.
+
+        Une moulure sans ornement ne varie qu'avec la distance au bord : chaque
+        ligne parallèle à un côté y est constante. Une frise sculptée casse cette
+        constance — c'est la signature mesurable de l'ornement, et le test qui
+        échouerait si un motif retombait sur un simple dégradé de bordure.
+        """
+        photo = _photo(420, 320, (90, 90, 90))
+        e = _edit(kind, frame_width=0.14)
+        out = frames.apply_frame(photo, e).convert("RGB")
+        b = frames.border_px(e, photo.width, photo.height)
+        x0, x1 = b * 2, out.width - b * 2
+        best = max(_stdev(_band_row(out, int(b * f), x0, x1)) for f in (0.3, 0.5, 0.7))
+        assert best > 3.0, f"{kind} : bandeau uniforme le long du côté ({best:.2f})"
+
+    @pytest.mark.parametrize("kind", DECOR_KINDS)
+    def test_rendering_is_deterministic(self, kind):
+        """Le grain et l'usure sont tirés d'un générateur ensemencé : deux rendus
+        de la même photo doivent être identiques, sinon l'aperçu de la galerie ne
+        correspondrait pas à l'export."""
+        photo = _photo(200, 150)
+        e = _edit(kind, frame_width=0.12)
+        assert (frames.apply_frame(photo, e).tobytes()
+                == frames.apply_frame(photo, e).tobytes())
+
+    def test_light_comes_from_above(self):
+        """La moulure haute est plus claire que la moulure basse.
+
+        C'est la convention qui fait qu'un relief se lit comme sortant de la
+        surface plutôt que creusé ; inverser la lumière retournerait la
+        perception de tous les cadres d'un coup."""
+        photo = _photo(400, 300, (60, 60, 60))
+        e = _edit("simple", frame_color="#b0b0b0", frame_width=0.12)
+        out = frames.apply_frame(photo, e).convert("RGB")
+        b = frames.border_px(e, photo.width, photo.height)
+        x0, x1 = b * 3, out.width - b * 3
+        top = sum(_band_row(out, int(b * 0.25), x0, x1))
+        bottom = sum(_band_row(out, out.height - 1 - int(b * 0.25), x0, x1))
+        assert top > bottom
+
+    @pytest.mark.parametrize("kind", DECOR_KINDS)
+    def test_every_decorative_kind_declares_a_profile_and_a_material(self, kind):
+        """Un motif ajouté à FRAME_TYPES sans entrée dans _DECOR retomberait sur
+        un aplat gris silencieux."""
+        profile, material, amp = frames._DECOR[kind]
+        assert profile in frames._PROFILE_LUTS
+        assert material in frames._MATERIALS
+        assert 0.0 < amp <= 1.0
+
+    @pytest.mark.parametrize("name", sorted(frames._PROFILE_LUTS))
+    def test_profiles_are_sampled_over_the_whole_band(self, name):
+        ts, hs = frames._PROFILE_LUTS[name]
+        assert ts[0] == pytest.approx(0.0) and ts[-1] == pytest.approx(1.0)
+        assert all(ts[i] <= ts[i + 1] for i in range(len(ts) - 1))   # np.interp l'exige
+        assert all(0.0 <= h <= 1.0 for h in hs)
+
+    def test_painted_motifs_bring_their_own_colours(self):
+        """Roses et fleurs sont peintes : leur bandeau ne peut pas être
+        monochrome comme celui d'un cadre doré ou d'un bois."""
+        photo = _photo(400, 300)
+        e = _edit("flowers", frame_width=0.14)
+        out = frames.apply_frame(photo, e).convert("RGB")
+        b = frames.border_px(e, photo.width, photo.height)
+        hues = {out.getpixel((x, int(b * 0.55))) for x in range(b * 2, out.width - b * 2)}
+        saturated = [c for c in hues if max(c) - min(c) > 60]
+        assert len(saturated) > 20
+
+
+class TestSuggestedWidth:
+    """Un cadre sculpté n'existe pas sous une certaine épaisseur."""
+
+    @pytest.mark.parametrize("kind", DECOR_KINDS)
+    def test_decorative_kinds_get_a_floor(self, kind):
+        assert frames.suggested_width(kind, 0.02) == frames.DECOR_MIN_WIDTH
+
+    @pytest.mark.parametrize("kind", DECOR_KINDS)
+    def test_a_wider_choice_is_never_reduced(self, kind):
+        assert frames.suggested_width(kind, 0.25) == 0.25
+
+    @pytest.mark.parametrize("kind", sorted(frames.PARAMETRIC_FRAMES) + ["none"])
+    def test_adjustable_frames_keep_the_user_value(self, kind):
+        assert frames.suggested_width(kind, 0.01) == 0.01
 
 
 class TestPlainFrame:
@@ -271,8 +475,11 @@ class TestPlainInnerFrame:
 
     def test_only_plain_gets_the_overlay(self):
         """Le drapeau est ignoré par les autres motifs (leur cadre intérieur est
-        déjà dans le bandeau, hors de la photo)."""
-        for kind in ("double", "simple", "vine"):
+        déjà dans le bandeau, hors de la photo).
+
+        Témoins pris hors de `SPILL_FRAMES` : les cadres végétaux posent, eux,
+        de la matière sur la photo — pour une tout autre raison (cf. TestSpill)."""
+        for kind in ("double", "simple", "baroque"):
             e = _edit(kind, frame_inner_enabled=True, frame_gap=0.04,
                       frame_inner_width=0.02)
             assert frames.inner_overlay_px(e, 400, 300) == (0, 0), kind
@@ -281,6 +488,11 @@ class TestPlainInnerFrame:
             b = frames.border_px(e, *self.PHOTO)
             content = out.crop((b, b, b + 400, b + 300))
             assert content.tobytes() == photo.tobytes(), kind
+        for kind in sorted(frames.SPILL_FRAMES):
+            assert frames.inner_overlay_px(_edit(kind, frame_inner_enabled=True,
+                                                frame_gap=0.04,
+                                                frame_inner_width=0.02),
+                                           400, 300) == (0, 0), kind
 
     def test_survives_a_thumbnail_sized_render(self):
         """Fractions du petit côté : le second cadre existe encore sur un aperçu."""

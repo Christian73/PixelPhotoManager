@@ -408,7 +408,7 @@ Toutes les retouches sont stockées dans la base de données et appliquées à l
 
 Les retouches disponibles sont les suivantes : ajustement de la luminosité, du contraste et de la saturation via des sliders en temps réel ; correction gamma ; recadrage libre ou selon des ratios prédéfinis (10×15, 13×18 paysage/portrait) ; rotation ±90° et redressement de l'horizon (−10° à +10°) ; miroir horizontal et vertical ; netteté et réduction du bruit ; conversion en noir et blanc avec mixage des canaux R/G/B par sliders indépendants.
 
-**Cadres décoratifs** — Neuf motifs (entourage uni, simple, double, feuilles de vigne, roses, sculpture bois, métallique, reflets, fleurs) rendus **procéduralement** en PIL/NumPy, sans aucun fichier d'image externe : le rendu est donc net à toute résolution et ne pèse rien dans le packaging. Le cadre s'ajoute **autour** de la photo (le canevas est agrandi, aucun pixel de l'image n'est recouvert) ; toutes les largeurs sont exprimées en fraction du petit côté, si bien qu'un même réglage rend identiquement sur une vignette et sur un export pleine résolution. L'entourage uni accepte en plus un second cadre facultatif peint par-dessus la photo, avec motifs de ferronnerie (volutes d'angle, rinceaux, barreau torsadé, clous forgés) en relief léger ou en aplat.
+**Cadres décoratifs** — Treize motifs (entourage uni, simple, double, baroque doré, oves et perles, grecque, art déco, sculpture bois, feuilles de vigne, roses, fleurs, métallique, reflets) rendus **procéduralement** en PIL/NumPy, sans aucun fichier d'image externe : le rendu est donc net à toute résolution et ne pèse rien dans le packaging. Les dix motifs décoratifs ne sont pas dessinés mais **sculptés** : chaque ornement est gravé dans une carte de hauteur (profil de moulure + motifs ciselés) puis éclairé — diffus, spéculaire, occlusion des creux, patine et usure de la dorure — ce qui leur donne la matière d'un vrai cadre plutôt qu'un aplat coloré. Ils demandent une épaisseur minimale pour se lire, appliquée automatiquement au choix du motif. Le cadre s'ajoute **autour** de la photo (le canevas est agrandi, aucun pixel de l'image n'est recouvert) ; toutes les largeurs sont exprimées en fraction du petit côté, si bien qu'un même réglage rend identiquement sur une vignette et sur un export pleine résolution. Deux effets dérogent volontairement à ce principe, sans jamais toucher à la géométrie de la photo : les trois entourages végétaux laissent quelques motifs déborder sur le bord de l'image, avec leur ombre portée, comme un cadre sculpté qui mord sur la toile ; et l'entourage uni accepte un second cadre facultatif peint par-dessus la photo, avec motifs de ferronnerie (volutes d'angle, rinceaux, barreau torsadé, clous forgés) en relief léger ou en aplat.
 
 ### 4.4 Reconnaissance faciale
 
@@ -472,7 +472,7 @@ PixelPhotoManager/
 │   │
 │   ├── processing/              ← Traitements image
 │   │   ├── adjustments.py       ← Luminosité, contraste, N&B mixage...
-│   │   ├── frames.py            ← Cadres décoratifs (9 motifs procéduraux)
+│   │   ├── frames.py            ← Cadres décoratifs (13 motifs procéduraux)
 │   │   ├── geometry.py          ← Recadrage, rotation
 │   │   └── edit_database.py     ← Persistence retouches (SQLite)
 │   │

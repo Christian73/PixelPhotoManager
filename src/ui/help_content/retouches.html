@@ -52,25 +52,43 @@ une base SQLite séparée et appliqués à la volée à l'affichage et à l'expo
 <h3>Cadre décoratif</h3>
 <p>Le bouton <b>Cadre</b> ouvre une galerie d'aperçus de la photo courante, un par motif.
 Le cadre s'ajoute <b>autour</b> de la photo : il ne recouvre aucun pixel de l'image, qui
-sort simplement plus grande à l'export.</p>
+sort simplement plus grande à l'export. Deux exceptions, décrites plus bas : les
+entourages végétaux, dont quelques motifs mordent sur le bord de l'image, et le second
+cadre de l'entourage uni.</p>
 <table>
   <tr><th>Motif</th><th>Description</th></tr>
   <tr><td><b>Entourage uni</b></td><td>Aplat d'une seule couleur, sans relief (noir, blanc ou couleur libre)</td></tr>
   <tr><td><b>Simple</b> / <b>Double</b></td><td>Moulure en relief, une ou deux bandes séparées par un intervalle</td></tr>
-  <tr><td><b>Feuilles de vigne</b>, <b>Roses</b>, <b>Fleurs</b></td><td>Entourages végétaux dessinés</td></tr>
-  <tr><td><b>Sculpture bois</b>, <b>Métallique</b>, <b>Reflets</b></td><td>Matières imitées (bois gravé, métal brossé, verre)</td></tr>
+  <tr><td><b>Baroque doré</b></td><td>Acanthes et coquilles sculptées dans une doucine dorée, à l'or usé</td></tr>
+  <tr><td><b>Oves et perles</b></td><td>Frise classique : oves et fers de lance, rang de perles et olives</td></tr>
+  <tr><td><b>Grecque</b></td><td>Méandre grec continu, rosaces aux angles</td></tr>
+  <tr><td><b>Art déco</b></td><td>Gradins argentés, chevrons et barrettes des années 1930</td></tr>
+  <tr><td><b>Sculpture bois</b></td><td>Noyer creusé de godrons et de filets, veinage apparent</td></tr>
+  <tr><td><b>Feuilles de vigne</b>, <b>Roses</b>, <b>Fleurs</b></td><td>Entourages végétaux sculptés (bronze patiné, laque carmin, porcelaine peinte)</td></tr>
+  <tr><td><b>Métallique</b>, <b>Reflets</b></td><td>Matières imitées (métal brossé et rivets, laque vernie)</td></tr>
 </table>
 <ul>
   <li><b>Épaisseur</b> (ou <b>Cadre extérieur</b>), <b>Intervalle</b> et <b>Cadre intérieur</b>
       se règlent en pourcentage du petit côté de la photo : un même réglage rend pareil sur
       une vignette et sur un export pleine résolution.</li>
+  <li>Les motifs sculptés demandent de l'épaisseur pour se lire : choisir l'un d'eux
+      <b>remonte automatiquement</b> l'épaisseur si elle est trop faible. Chaque vignette de la
+      galerie montre exactement le cadre obtenu en cliquant dessus.</li>
   <li><b>Style de remplissage</b> (uni, dégradé, pailleté) et <b>seconde couleur</b> : réservés
       aux motifs Simple et Double.</li>
 </ul>
 
+<h4>Entourages végétaux qui débordent</h4>
+<p>Sur <b>Feuilles de vigne</b>, <b>Roses</b> et <b>Fleurs</b>, quelques sarments, roses ou
+bouquets passent <i>par-dessus</i> le bord de la photo, avec leur ombre portée, comme sur un
+cadre sculpté qui mord sur la toile. Ils sont volontairement irréguliers — un débordement à
+intervalle régulier redeviendrait une frise — et restent accrochés au bandeau : le centre de
+l'image n'est jamais touché. Rien à régler : c'est le motif qui l'apporte. Le recadrage, les
+yeux rouges, les annotations et les visages continuent de travailler sur la photo entière.</p>
+
 <h4>Second cadre de l'entourage uni</h4>
 <p>Pour le seul <b>Entourage uni</b>, cochez <b>Second cadre par-dessus la photo</b> : une ligne est tracée
-<i>sur</i> la photo, à distance du bord. C'est la seule exception au principe ci-dessus —
+<i>sur</i> la photo, à distance du bord —
 la bande d'image restée visible entre les deux cadres est justement l'effet recherché.
 <b>Intervalle</b> règle cette distance, <b>Second cadre</b> son épaisseur.</p>
 <p>Cette ligne peut prendre une forme de <b>ferronnerie</b> :</p>

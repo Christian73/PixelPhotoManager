@@ -7,14 +7,22 @@ façon à choisir sur pièce plutôt que sur un nom. Les aperçus sont rendus da
 QThread (règle « l'UI ne bloque jamais ») : la photo est décodée et réduite une
 seule fois, puis chaque vignette n'est plus qu'un rendu de cadre (~10 ms).
 
-Les cadres paramétriques (entourage uni, simple, double) ouvrent en plus une
-section de réglages (style et couleurs, largeur extérieure, intervalle, largeur
-intérieure) ; les vignettes concernées sont re-rendues à chaque modification, en
-différé pour ne pas lancer un rendu par pas de curseur.
+L'épaisseur se règle pour TOUS les motifs : un cadre sculpté n'existe qu'à partir
+d'une certaine largeur (sous ~8 % du petit côté, la frise tient dans quelques
+pixels). Choisir un motif décoratif relève donc la largeur à
+``frames.DECOR_MIN_WIDTH`` — visiblement, dans le curseur, et la galerie rend ses
+aperçus avec la même règle : la vignette montre exactement ce qu'on obtient en
+cliquant dessus. Les couleurs et le style de remplissage, eux, restent propres
+aux cadres paramétriques (entourage uni, simple, double).
+
+Les vignettes concernées sont re-rendues à chaque modification, en différé pour
+ne pas lancer un rendu par pas de curseur.
 
 L'entourage uni propose un second cadre facultatif, peint par-dessus la photo
-(case à cocher) : c'est le seul réglage du dialogue qui recouvre une partie de
-l'image, d'où l'activation explicite.
+(case à cocher) : c'est le seul RÉGLAGE du dialogue qui recouvre une partie de
+l'image, d'où l'activation explicite. (Les trois cadres végétaux débordent eux
+aussi sur la photo, mais sans réglage : cela fait partie du motif, cf.
+``frames.SPILL_FRAMES``.)
 """
 import copy
 import logging
@@ -31,14 +39,17 @@ from src.core.models import EditInfo
 from src.processing.frames import (
     COLOR_STYLES, FRAME_TYPES, INNER_MOTIFS, INNER_ORNAMENT_MAX,
     INNER_ORNAMENT_MIN, INNER_RELIEFS, ORNAMENTED_MOTIFS, PARAMETRIC_FRAMES,
-    QUICK_COLORS, STYLED_FRAMES,
+    QUICK_COLORS, STYLED_FRAMES, suggested_width,
 )
 from src.ui.edit_icons import _TOGGLE_BTN_STYLE
 from src.ui.edit_sliders import EditSlider
 
 logger = logging.getLogger(__name__)
 
-_TILE_PX = 132          # côté de l'aperçu photo (le cadre s'ajoute autour)
+# Côté de l'aperçu photo (le cadre s'ajoute autour). Assez grand pour qu'une
+# frise sculptée reste lisible dans la galerie — sous ~150 px, les acanthes et
+# les oves se réduisent à une texture indistincte et le choix se fait à l'aveugle.
+_TILE_PX = 150
 _TILE_COLS = 4
 _PREVIEW_DEBOUNCE_MS = 180
 
@@ -116,6 +127,9 @@ class _TileLoader(QThread):
                 else:
                     e = copy.copy(self._edit)
                     e.frame_type = kind
+                    # Même relèvement de largeur qu'à la sélection : l'aperçu
+                    # doit montrer ce qu'on obtient en cliquant dessus.
+                    e.frame_width = suggested_width(kind, e.frame_width)
                     img = apply_frame(base, e)
                 self.tile_ready.emit(kind, _pil_to_qimage(img))
             except Exception as exc:
@@ -170,10 +184,11 @@ class FrameDialog(QDialog):
         self._loader: _TileLoader | None = None
         self._base_image = None
         self._pending_kinds: list[str] = []
+        self._dirty_kinds: set[str] = set()
 
         self.setWindowTitle("Cadre")
         self.setWindowFlags(Qt.Tool | Qt.WindowStaysOnTopHint)
-        self.setMinimumWidth(620)
+        self.setMinimumWidth(700)
 
         # Un seul rendu après une rafale de mouvements de curseur.
         self._refresh_timer = QTimer(self)
@@ -229,7 +244,11 @@ class FrameDialog(QDialog):
         pl.setContentsMargins(8, 10, 8, 8)
         pl.setSpacing(6)
 
-        style_row = QHBoxLayout()
+        # Couleurs et style de remplissage : réservés aux cadres paramétriques
+        # (un cadre sculpté a le matériau de son motif — or, noyer, laque…).
+        self._style_row_host = QWidget()
+        style_row = QHBoxLayout(self._style_row_host)
+        style_row.setContentsMargins(0, 0, 0, 0)
         style_row.setSpacing(6)
         style_row.addWidget(QLabel("Couleur :"))
         self._style_buttons: dict[str, QPushButton] = {}
@@ -261,7 +280,7 @@ class FrameDialog(QDialog):
                 lambda _checked=False, h=hex_value: self._set_main_color(h))
             style_row.addWidget(btn)
         style_row.addStretch()
-        pl.addLayout(style_row)
+        pl.addWidget(self._style_row_host)
 
         # Les largeurs sont des fractions du petit côté de la photo, exposées en
         # pourcentage (0,1 % de précision — 2 décimales sur une fraction ne
@@ -269,7 +288,8 @@ class FrameDialog(QDialog):
         self._sl_width = EditSlider("Cadre extérieur", 0.5, 25.0,
                                     self._edit.frame_width * 100.0, 1)
         self._sl_width.value_changed.connect(
-            lambda v: self._set_attr("frame_width", v / 100.0, reload_tiles=True))
+            lambda v: self._set_attr("frame_width", v / 100.0, reload_tiles=True,
+                                     tiles=[k for k, _ in FRAME_TYPES]))
         pl.addWidget(self._sl_width)
 
         # Second cadre de l'entourage uni : facultatif (il empiète sur la photo,
@@ -441,12 +461,26 @@ class FrameDialog(QDialog):
         btn.setIconSize(pix.size())
 
     def _refresh_parametric_tiles(self) -> None:
-        self._start_gallery([k for k in PARAMETRIC_FRAMES])
+        """Consomme les vignettes marquées à re-rendre depuis le dernier réglage."""
+        kinds, self._dirty_kinds = sorted(self._dirty_kinds), set()
+        if kinds:
+            self._start_gallery(kinds)
+
+    def _mark_dirty(self, kinds) -> None:
+        self._dirty_kinds |= set(kinds)
+        self._refresh_timer.start()
 
     # ------------------------------------------------------------------ réglages
 
     def _select_kind(self, kind: str) -> None:
         self._edit.frame_type = kind
+        width = suggested_width(kind, self._edit.frame_width)
+        if width != self._edit.frame_width:
+            # Le curseur suit : le réglage reste celui affiché, jamais un
+            # ajustement muet appliqué au moment du rendu.
+            self._edit.frame_width = width
+            self._sl_width.set_value(width * 100.0)
+            self._mark_dirty(PARAMETRIC_FRAMES)
         self._apply_tile_styles(kind)
         self._update_params_visibility()
         self.preview.emit(copy.copy(self._edit))
@@ -484,16 +518,21 @@ class FrameDialog(QDialog):
         self.preview.emit(copy.copy(self._edit))
         self._refresh_timer.start()
 
-    def _set_attr(self, attr: str, value, reload_tiles: bool = False) -> None:
+    def _set_attr(self, attr: str, value, reload_tiles: bool = False, tiles=None) -> None:
         setattr(self._edit, attr, value)
         self.preview.emit(copy.copy(self._edit))
         if reload_tiles:
-            self._refresh_timer.start()
+            # Par défaut seuls les cadres réglables changent d'aspect ; la
+            # largeur, elle, s'applique à tous les motifs.
+            self._mark_dirty(PARAMETRIC_FRAMES if tiles is None else tiles)
 
     def _update_params_visibility(self) -> None:
         kind = self._edit.frame_type
         parametric = kind in PARAMETRIC_FRAMES
-        self._params.setVisible(parametric)
+        # L'épaisseur se règle pour tous les motifs (un cadre sculpté trop mince
+        # perd son décor) ; seules les couleurs sont propres aux paramétriques.
+        self._params.setVisible(kind != "none")
+        self._style_row_host.setVisible(parametric)
         self._double_rows.setVisible(kind == "double")
         # « Entourage uni » est un aplat d'une seule couleur : ni style de
         # remplissage, ni seconde couleur.

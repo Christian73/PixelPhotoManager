@@ -117,7 +117,7 @@ PixelPhotoManager/
 │   │
 │   ├── processing/                # Traitement image
 │   │   ├── adjustments.py         # ImageAdjuster.apply_all()
-│   │   ├── frames.py              # Cadres décoratifs (9 motifs rendus procéduralement)
+│   │   ├── frames.py              # Cadres décoratifs (13 motifs rendus procéduralement)
 │   │   ├── geometry.py            # Rotation, redressement, recadrage
 │   │   ├── annotation_geometry.py # Géométrie des formes d'annotation (hit-test, bbox, redimensionnement)
 │   │   └── edit_database.py       # Persistence des retouches (SQLite), inclut EditInfo.annotations
@@ -927,9 +927,9 @@ Transformations géométriques via Pillow :
 
 ### `frames.py` — Cadres décoratifs
 
-9 motifs (`FRAME_TYPES`) rendus **procéduralement** en PIL/NumPy, sans aucun fichier d'image
-externe : entourage uni, simple, double, feuilles de vigne, roses, sculpture bois, métallique,
-reflets, fleurs.
+13 motifs (`FRAME_TYPES`) rendus **procéduralement** en PIL/NumPy, sans aucun fichier d'image
+externe : entourage uni, simple, double, baroque doré, oves et perles, grecque, art déco,
+sculpture bois, feuilles de vigne, roses, fleurs, métallique, reflets.
 
 ```python
 from src.processing import frames
@@ -947,6 +947,11 @@ vignette, annotations, bbox de visage) se rapporte au **contenu**, pas au pixmap
 `viewer_canvas._img_rect()` retire donc la bordure via `content_box()`, inverse exact de
 `border_px()` — un pixel d'écart décalerait tous les outils interactifs.
 
+Deux dérogations, **toutes deux purement d'affichage** (elles n'entrent ni dans `border_px()`
+ni dans `content_box()`, donc la géométrie des outils reste celle de la photo entière) : le
+second cadre facultatif de `plain` et les débordements des trois cadres végétaux
+(`SPILL_FRAMES`), décrits plus bas.
+
 Toutes les largeurs sont des **fractions du petit côté** de la photo (exposées en pourcentage
 dans l'UI) : un réglage rend identiquement sur une vignette et sur un export pleine résolution.
 `ImageAdjuster.apply_all(image, edit, with_frame=True)` pose le cadre en dernier ; l'export
@@ -955,12 +960,41 @@ dans l'UI) : un réglage rend identiquement sur une vignette et sur un export pl
 
 | Ensemble | Motifs | Réglages exposés |
 |---|---|---|
-| `PARAMETRIC_FRAMES` | plain, simple, double | Largeurs + couleur |
+| tous | les 13 motifs | Largeur extérieure |
+| `PARAMETRIC_FRAMES` | plain, simple, double | En plus : intervalle, cadre intérieur, couleur |
 | `STYLED_FRAMES` | simple, double | En plus : `COLOR_STYLES` (uni/dégradé/pailleté) + `frame_color2` |
 | — | plain seul | Second cadre facultatif (`frame_inner_enabled`) + ferronnerie |
 
-`plain` est le seul motif **sans relief** (aplat strict, pas de `_bevel()` : le noir demandé
-doit rester un vrai noir). Il accepte en plus un **second cadre** peint *par-dessus* la photo
+#### Moteur de relief (les 10 motifs hors `PARAMETRIC_FRAMES`)
+
+Ce qui fait qu'un cadre paraît sculpté n'est pas le dessin mais la lumière : un ornement plaqué
+en couleur reste plat quel que soit son tracé. Le rendu passe donc par une **carte de hauteur**
+(`float32`) en trois temps :
+
+1. **Profil de moulure** — `_PROFILE_SEGMENTS` / `_PROFILE_LUTS` (`ogee`, `cove`, `flat`,
+   `bevel`, `round`, `steps`, `scoop`, `field`) : coupe transversale échantillonnée en LUT 1-D,
+   interpolée par `np.interp` sur `t = dist_au_bord / border`. Les LUT doivent rester
+   croissantes en `t` sur `[0, 1]` (contrainte de `np.interp`). `field` est un champ plat entre
+   deux baguettes : à utiliser quand la sculpture doit porter seule le relief (les trois cadres
+   végétaux), une moulure creusée entrant sinon en concurrence avec les ornements qui la couvrent.
+2. **Ornements gravés** — `_Carver` (`dome` / `flat` / `disc` / `ridge` / `groove`) écrit dans la
+   carte de hauteur, plus un calque RGBA optionnel pour les motifs réellement peints (porcelaine,
+   roses). Le paramètre `edge` grave le sillon de contour du sculpteur : sans lui, deux motifs
+   voisins fusionnent en une masse molle.
+3. **Éclairage** — `_shade_relief()` : normales via `np.gradient`, diffus lambertien + spéculaire
+   Blinn-Phong (`_LIGHT` / `_HALF`, lumière en **haut à gauche**), occlusion de cavité approchée
+   par différence de hauteur floutée, patine dans les creux, usure de la dorure. Matières dans
+   `_MATERIALS` ; `_DECOR[kind] = (profil, matière, amplitude)` — un motif ajouté à `FRAME_TYPES`
+   sans entrée `_DECOR` retomberait silencieusement sur un aplat gris.
+
+`DECOR_MIN_WIDTH` (0,08) + `suggested_width(kind, current)` : un motif sculpté est illisible à la
+largeur par défaut (5 %). Choisir un motif décoratif **remonte visiblement le curseur**
+(`FrameDialog._select_kind`) au lieu d'appliquer un plancher caché au rendu, et `_TileLoader`
+applique la même fonction à chaque vignette — la vignette montre exactement ce qu'on obtient en
+cliquant dessus.
+
+`plain` est le seul motif **sans relief** (aplat strict : il ne passe jamais par le moteur
+ci-dessus, sinon le noir demandé ne serait plus un vrai noir). Il accepte en plus un **second cadre** peint *par-dessus* la photo
 (`_draw_inner_overlay`, après le `paste`) — seule dérogation à l'invariant ci-dessus, la bande
 d'image visible entre les deux cadres étant l'effet recherché. Ce second cadre n'entre donc pas
 dans `border_px()`/`content_box()` : `inner_overlay_px()` est un calcul d'affichage, jamais une
@@ -980,6 +1014,26 @@ INNER_ORNAMENT_MAX]`) et rendue en relief ou en aplat (`frame_inner_relief`). Tr
 - Le calque est rendu à résolution de travail bornée × suréchantillonnage puis réduit une seule
   fois (~0,8 s sur un export 6000 × 4000, contre 0,43 s pour `line`). Un échec de rendu est
   rattrapé par un simple anneau, jamais par la perte du cadre.
+
+#### Débordements des cadres végétaux (`SPILL_FRAMES` : vine, roses, flowers)
+
+Quelques motifs passent **par-dessus la photo** pour que le cadre se lise comme une sculpture qui
+surplombe l'image. Rendu dans un calque RGBA plein canevas (`_spill_array` / `_render_spill`,
+`_SPILLERS[kind]`), collé **après** la photo dans `apply_frame()` — un échec ne coûte que le
+débordement, jamais le cadre.
+
+- Deux choses font la différence entre une sculpture et un autocollant : l'**ombre portée** sur
+  l'image (`_SPILL_SHADOW`, décalée dans l'axe de `_LIGHT`), et le fait que chaque motif reste
+  **accroché** au bandeau (`_spill_stem`, tige courte partant de sous l'arête — droite et longue,
+  elle se lit comme une épingle plantée dans le cadre).
+- « Parfois » est essentiel : un débordement régulier redevient une frise. D'où un tirage par site
+  (`_SPILL_SKIP`) et un espacement de plusieurs largeurs de bandeau (`_SPILL_SPACING`), sur des
+  sites à cheval sur l'arête (`_spill_sites`, `_spill_corners`).
+- La silhouette qui porte l'ombre vient d'un **troisième canal** du `_Carver` (masque `mdraw`),
+  alimenté par les passes qui *ajoutent* de la matière (`dome`/`flat`/`ridge`) — jamais par
+  `groove`, dont les sillons laisseraient des griffures noires en travers de l'image.
+- Coût : ~1,2 s de plus sur un export 6000 × 4000 (seconde gravure + `_shade_relief` + flou), et
+  0,06–0,12 s par vignette de galerie.
 
 Côté UI, `src/ui/frame_dialog.py::FrameDialog` affiche une galerie d'aperçus de la photo
 courante (un par motif, rendus dans un `_TileLoader(QThread)` réutilisant une image de base
