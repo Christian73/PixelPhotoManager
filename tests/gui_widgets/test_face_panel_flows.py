@@ -18,6 +18,7 @@ from src.ui.face_panel import (
     _IgnoredFacesDialog,
 )
 from src.ui.people_panel import _AssignDialog
+from tests.gui_widgets.thread_wait import wait_thread_done
 
 
 def _make_photo(tmp_path, name="p.jpg") -> str:
@@ -68,19 +69,13 @@ def _make_panel(qtbot, env):
 def _wait_refresh(qtbot, panel):
     """Attend le rechargement complet du panneau (données + vignettes) — sans
     quoi un _FacePanelLoader encore vivant au teardown déclenche le fail-fast
-    Qt 0xC0000409 (cf. piège QThread de CLAUDE.md)."""
-    with qtbot.waitSignal(panel._data_loader.data_ready, timeout=3000):
-        pass
-    loader = panel._loader
-    if loader is not None:
-        # Polling : waitSignal(finished) raterait une émission survenue entre
-        # le check isRunning() et le branchement du signal.
-        def _done():
-            try:
-                return not loader.isRunning()
-            except RuntimeError:
-                return True
-        qtbot.waitUntil(_done, timeout=3000)
+    Qt 0xC0000409 (cf. piège QThread de CLAUDE.md).
+
+    Sondage (cf. wait_thread_done) et non waitSignal : les deux threads sont
+    déjà lancés quand on arrive ici, une émission perdue ferait expirer le
+    blocker."""
+    wait_thread_done(qtbot, panel._data_loader)
+    wait_thread_done(qtbot, panel._loader)
 
 
 def _load(qtbot, panel, photo_path):
@@ -210,8 +205,7 @@ class TestThumbnailCacheReuse:
         conn.close()
 
         panel.set_photo(photo)
-        with qtbot.waitSignal(panel._data_loader.data_ready, timeout=3000):
-            pass
+        wait_thread_done(qtbot, panel._data_loader)
 
         assert panel._loader is not None
         assert [fid for fid, _ in panel._loader._items] == [fid1]
@@ -219,8 +213,7 @@ class TestThumbnailCacheReuse:
         # Laisser le loader réel se terminer avant la fin du test (cf. piège
         # QThread jetable dans CLAUDE.md — un thread encore vivant à la
         # destruction du widget déclenche un fail-fast Qt).
-        loader = panel._loader
-        qtbot.waitUntil(lambda: not loader.isRunning(), timeout=3000)
+        wait_thread_done(qtbot, panel._loader)
 
 
 class TestAssignPrepLoader:
@@ -466,8 +459,7 @@ class TestFacePanelInteractions:
         monkeypatch.setattr(_IgnoredFacesDialog, "exec", _fake_exec)
 
         panel._on_show_ignored()
-        with qtbot.waitSignal(panel._data_loader.data_ready, timeout=3000):
-            pass
+        wait_thread_done(qtbot, panel._data_loader)
 
         assert not _ignored_flag(face_db, fid)
         assert panel.can_undo()

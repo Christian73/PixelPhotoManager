@@ -12,6 +12,7 @@ from PIL import Image
 from src.faces.face_database import FaceDatabase, _enc
 from src.library.catalog import Catalog
 from src.ui.face_panel import FacePanel
+from tests.gui_widgets.thread_wait import wait_thread_done
 
 
 def _make_photo(path) -> None:
@@ -61,15 +62,15 @@ def _make_panel(qtbot, tmp_path):
 
 def _load_and_settle(qtbot, panel, photo_path):
     """set_photo() lance ses chargements dans de vrais QThread ; on attend leur
-    achèvement réel (waitSignal) plutôt que d'appeler run() en synchrone, pour
-    couvrir aussi le câblage cross-thread réel (cf. convention CLAUDE.md : garder
-    quelques vrais .start() + waitSignal par module pour la plomberie)."""
+    achèvement réel plutôt que d'appeler run() en synchrone, pour couvrir aussi
+    le câblage cross-thread réel (cf. convention CLAUDE.md : garder quelques
+    vrais .start() par module pour la plomberie).
+
+    Sondage (cf. wait_thread_done) et non waitSignal : les threads sont déjà
+    lancés quand on arrive ici, une émission perdue ferait expirer le blocker."""
     panel.set_photo(photo_path)
-    with qtbot.waitSignal(panel._data_loader.data_ready, timeout=2000):
-        pass
-    if panel._loader is not None:
-        with qtbot.waitSignal(panel._loader.finished, timeout=2000):
-            pass
+    wait_thread_done(qtbot, panel._data_loader, timeout=2000)
+    wait_thread_done(qtbot, panel._loader, timeout=2000)
 
 
 class TestPendingSuggestionDisplay:
@@ -141,8 +142,7 @@ class TestAcceptRejectSuggestion:
         _load_and_settle(qtbot, panel, photo)
 
         panel._items[face_id]._btn_reject.click()
-        with qtbot.waitSignal(panel._data_loader.data_ready, timeout=2000):
-            pass
+        wait_thread_done(qtbot, panel._data_loader, timeout=2000)
 
         conn = sqlite3.connect(face_db._db_path)
         try:
