@@ -53,14 +53,14 @@ Menu **Fichier › Quitter** (**Ctrl + Q**).
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│  [Fichier][Affichage][Outils][Visages][Aide]  [Export]   │
+│  [Fichier][Affichage][Outils][Visages][Aide]  [Export]  │
 ├──────────────────┬──────────────────────────────────────┤
-│                  │                                       │
-│   SIDEBAR        │   ZONE PRINCIPALE                     │
-│                  │   (grille, ruban, ou visionneuse)      │
-│   Dossiers       │                                       │
-│   Albums         │                                       │
-│                  │                                       │
+│                  │                                      │
+│   SIDEBAR        │   ZONE PRINCIPALE                    │
+│                  │   (grille, ruban, ou visionneuse)    │
+│   Dossiers       │                                      │
+│   Albums         │                                      │
+│                  │                                      │
 ├──────────────────┴──────────────────────────────────────┤
 │  Barre de statut          [Taille ────────] [▦]         │
 └─────────────────────────────────────────────────────────┘

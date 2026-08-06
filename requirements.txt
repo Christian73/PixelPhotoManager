@@ -38,6 +38,9 @@ Send2Trash>=1.8.2
 # Packaging
 pyinstaller>=6.4.0
 
+# Documentation (PDF de livraison : tools/make_pdf.py)
+markdown>=3.5                # Markdown -> HTML, le PDF est ensuite rendu par Chrome
+
 # Tests
 pytest>=8.0.0
 pytest-qt>=4.4.0             # tests de widgets Qt isolés (Layer 2, sans automation OS)
