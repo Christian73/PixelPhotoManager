@@ -9,7 +9,7 @@
     2. Genere les bitmaps de l'installeur (banner.bmp, dialog.bmp).
     3. Lance heat.exe pour inventorier dist\PixelPhotoManager\.
     4. Compile avec candle.exe et lie avec light.exe.
-    5. Produit : installer\PixelPhotoManager-Setup-<version>.msi
+    5. Produit : installer\PixelPhotoManager-<version>-x64.msi
 
     Lancer depuis le repertoire du projet ou depuis installer\ :
         powershell -ExecutionPolicy Bypass -File installer\build_msi.ps1
@@ -38,8 +38,8 @@ if (-not (Test-Path $VersionFile)) {
 }
 Write-Host "Version MSI : $ProductVersion"
 
-# Nom de sortie versionne (ex: PixelPhotoManager-Setup-1.0.1.msi)
-$OutputMsi = Join-Path $InstallerDir "PixelPhotoManager-Setup-$ProductVersion.msi"
+# Nom de sortie versionne (ex: PixelPhotoManager-1.0.1-x64.msi)
+$OutputMsi = Join-Path $InstallerDir "PixelPhotoManager-$ProductVersion-x64.msi"
 
 # ── Localiser WiX v3 ─────────────────────────────────────────────────────────
 function Find-Wix3 {
