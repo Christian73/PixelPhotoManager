@@ -1,0 +1,8 @@
+# Dépendances de la couche de tests bout-en-bout (tests/e2e), Windows-only et
+# optionnelles — isolées de requirements.txt comme les autres dépendances
+# lourdes/optionnelles du projet.
+#
+#   .venv\Scripts\pip.exe install -r requirements-test-e2e.txt
+#   .venv\Scripts\python.exe -m pytest tests/e2e -m e2e
+
+pywinauto>=0.6.8

@@ -9,7 +9,13 @@ from src.processing.geometry import GeometryProcessor
 
 class ImageAdjuster:
     @staticmethod
-    def apply_all(image: Image.Image, edit: EditInfo) -> Image.Image:
+    def apply_all(image: Image.Image, edit: EditInfo, with_frame: bool = True) -> Image.Image:
+        """Applique toute la chaîne de retouches, cadre décoratif compris.
+
+        ``with_frame=False`` s'arrête avant le cadre : l'export s'en sert pour
+        composer les annotations dans l'espace de la PHOTO (elles sont stockées
+        en coordonnées normalisées de l'image, sans le cadre) puis pose le cadre
+        lui-même par un appel explicite à ``frames.apply_frame()``."""
         image = GeometryProcessor.apply_rotation(image, edit.rotation)
         if edit.straighten != 0.0:
             image = GeometryProcessor.apply_straighten_with_crop(image, edit.straighten)
@@ -51,6 +57,12 @@ class ImageAdjuster:
                 edit.vignette_angle,
                 edit.vignette_color,
             )
+
+        # Toujours en dernier : le cadre agrandit l'image et doit englober le
+        # résultat de tous les traitements précédents.
+        if with_frame and getattr(edit, "frame_type", "none") not in (None, "", "none"):
+            from src.processing.frames import apply_frame
+            image = apply_frame(image, edit)
 
         return image
 

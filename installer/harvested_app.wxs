@@ -193,6 +193,9 @@
             <Component Id="cmp1D49F04310B16AA9F9F978F31FF366DA" Directory="dirB262A3C1EC64B1E8AB54055F45CD67B0" Guid="*">
                 <File Id="fil4B3FC36DA9E111FC8DE77018A8EA3B90" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\vcruntime140_1.dll" />
             </Component>
+            <Component Id="cmp5AAED7A866CCE3D452A54317538E312A" Directory="dirB262A3C1EC64B1E8AB54055F45CD67B0" Guid="*">
+                <File Id="filE08C829C74A9B2656E668E08BDA9A365" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\VERSION" />
+            </Component>
             <Component Id="cmp739BF9E5C27195C27B62CC4E7EF17A94" Directory="dirB262A3C1EC64B1E8AB54055F45CD67B0" Guid="*">
                 <File Id="fil7425DED7B507C22150F45D1851FA966F" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\_asyncio.pyd" />
             </Component>
@@ -540,6 +543,36 @@
             </Component>
             <Component Id="cmpE75A51580E3764DA07A99A0DAE0845EA" Directory="dir5BFFDA793418F7E56A48CEC8B970CF1F" Guid="*">
                 <File Id="fil46F76C781DFD215C931FA273E44DD40D" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\hdbscan\_prediction_utils.cp311-win_amd64.pyd" />
+            </Component>
+            <Component Id="cmp0FF0A211ADE162E2BA53DDBBC821AD69" Directory="dirA7D67199B6F3411BA88A827D9EEBD175" Guid="*">
+                <File Id="fil784FE974859E2B6DD20CCCB8787A411E" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\help_content\a_propos.html" />
+            </Component>
+            <Component Id="cmp6FF6487B81B4F0DD6C6A3C079916CDB6" Directory="dirA7D67199B6F3411BA88A827D9EEBD175" Guid="*">
+                <File Id="filB74FF50141420E4FA91AA135AA366A2E" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\help_content\diaporama.html" />
+            </Component>
+            <Component Id="cmpC28DF52755421F828B08A2D90436CC29" Directory="dirA7D67199B6F3411BA88A827D9EEBD175" Guid="*">
+                <File Id="fil6E773D0F25BECA43388A5CC7F89C31C3" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\help_content\doublons.html" />
+            </Component>
+            <Component Id="cmpF8BFA7962DDFF7F0C6F79FA9C0C105BE" Directory="dirA7D67199B6F3411BA88A827D9EEBD175" Guid="*">
+                <File Id="fil1E1AFEEFB7DB78385DDF2BF57D0E1F12" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\help_content\navigation.html" />
+            </Component>
+            <Component Id="cmpE51F5613752369AEA1406058DE7DF2B6" Directory="dirA7D67199B6F3411BA88A827D9EEBD175" Guid="*">
+                <File Id="fil68B3BFFC2057DB06AC3AA86BB488BF38" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\help_content\parametres.html" />
+            </Component>
+            <Component Id="cmp7CACE6F6A4D222410B9E21BB71A11EA3" Directory="dirA7D67199B6F3411BA88A827D9EEBD175" Guid="*">
+                <File Id="filA23D70F7D1EE1C7634B8E793CB4C1EC1" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\help_content\raccourcis.html" />
+            </Component>
+            <Component Id="cmp3DD993D5B9E1C818BC95F5C0091719DB" Directory="dirA7D67199B6F3411BA88A827D9EEBD175" Guid="*">
+                <File Id="fil4CCCE26FEC6CF1F6C155F8B49D7FB2AA" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\help_content\retouches.html" />
+            </Component>
+            <Component Id="cmpC77C5B59405478460DD632D5E98682B4" Directory="dirA7D67199B6F3411BA88A827D9EEBD175" Guid="*">
+                <File Id="fil685F7C50905C73E49E36DB261A5B116C" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\help_content\visages.html" />
+            </Component>
+            <Component Id="cmpD41001F4F15E9186A0364FACA0C54A5C" Directory="dirA7D67199B6F3411BA88A827D9EEBD175" Guid="*">
+                <File Id="fil1CFD6ED6AB1B1A82F15877986D9C2FD7" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\help_content\vue_densemble.html" />
+            </Component>
+            <Component Id="cmp32DFF8755B211EC3F4DEF7C1BD8CA33E" Directory="dirA7D67199B6F3411BA88A827D9EEBD175" Guid="*">
+                <File Id="fil39F2ABE5AE887115C2F884E53270D9D9" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\help_content\_style.html" />
             </Component>
             <Component Id="cmp6B1E5851F5529FD48BCDCB2EFDD03FFC" Directory="dirBF570795F4EDABDC0C35C54392FDCA43" Guid="*">
                 <File Id="filD0A7C18C490F0B88B12DD37178FABC30" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\insightface\__init__.py" />
@@ -2094,6 +2127,15 @@
             </Component>
             <Component Id="cmp5D63F2E0E2134D443839C6D1DB7942E5" Directory="dir7CCE5171E7DE7FE9790579C10362E1AF" Guid="*">
                 <File Id="fil0DE7488F34792DE837C37A7C7FD9DA0B" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\PySide6\translations\qt_zh_TW.qm" />
+            </Component>
+            <Component Id="cmp64D1F01121C2EEFDB35A34A6103AD4BB" Directory="dir106C402AFC3F000457CB6A8E44EE66F4" Guid="*">
+                <File Id="filF8396140D65420F0DCEE123C5AAE28F8" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\pythonwin\win32ui.pyd" />
+            </Component>
+            <Component Id="cmpF7541432A3E01EDBC5F1EDC3E11B4AD3" Directory="dir1915685F0C7649E6780B1341CA9A03B0" Guid="*">
+                <File Id="fil07523869A86CF6C8A05BC7BC4D6B26D8" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\pywin32_system32\pythoncom311.dll" />
+            </Component>
+            <Component Id="cmpBB99FB8FDD57C39536E1B9A538F4716A" Directory="dir1915685F0C7649E6780B1341CA9A03B0" Guid="*">
+                <File Id="fil0E49FD3C5513AD5BFFD3DB6B54629B05" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\pywin32_system32\pywintypes311.dll" />
             </Component>
             <Component Id="cmp165FBD450FAFAEB1FC5FCC66DC3D2371" Directory="dir04A84BB6C9BFB80CD7F63510A6C7C83C" Guid="*">
                 <File Id="fil1690CAEBE4CBD4A48B95355812AC5550" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\pywt\_extensions\_cwt.cp311-win_amd64.pyd" />
@@ -6283,6 +6325,27 @@
             <Component Id="cmpFEF988C85EF9DF3B52FE85C0A8F963BA" Directory="dir199BACE3DAC59D509D41CB8B4A448D00" Guid="*">
                 <File Id="fil823EB086E8DE95FBC65A374F202EEEE3" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\wheel-0.47.0.dist-info\licenses\LICENSE.txt" />
             </Component>
+            <Component Id="cmp25893C4FEB1C228A62770F1E94A57D54" Directory="dirC2646008C0BA67B09655C7B1F7A1CA64" Guid="*">
+                <File Id="filECFBBA2C3DD22C6208B1C3D546277B7E" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\win32\win32api.pyd" />
+            </Component>
+            <Component Id="cmpC1CDBBDD5AE27559136E3636856FD65A" Directory="dirC2646008C0BA67B09655C7B1F7A1CA64" Guid="*">
+                <File Id="filEA70E8AA4228A7B1B959F800CE418277" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\win32\win32event.pyd" />
+            </Component>
+            <Component Id="cmp90CD102FE4DE1352BB5EE47C5184A028" Directory="dirC2646008C0BA67B09655C7B1F7A1CA64" Guid="*">
+                <File Id="fil581DAB18FEDEBBE412AB39AC2C7DE5C8" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\win32\win32evtlog.pyd" />
+            </Component>
+            <Component Id="cmp4875B4457C4BB1D9DB30A157EAB1617A" Directory="dirC2646008C0BA67B09655C7B1F7A1CA64" Guid="*">
+                <File Id="fil04E0E00BF8D2A2910F183B1C59E7AC33" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\win32\win32pdh.pyd" />
+            </Component>
+            <Component Id="cmpDC30B1F9B52CBA7A7DFA1EEA9A2207CB" Directory="dirC2646008C0BA67B09655C7B1F7A1CA64" Guid="*">
+                <File Id="fil9139281C82AEDC095F3329AFEEB8BE06" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\win32\win32trace.pyd" />
+            </Component>
+            <Component Id="cmpF4477E6E579E26D33B2C4FC5F594C1FC" Directory="dirC2646008C0BA67B09655C7B1F7A1CA64" Guid="*">
+                <File Id="fil44FE454454FA47373ABAFC90D1B24606" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\win32\_win32sysloader.pyd" />
+            </Component>
+            <Component Id="cmp93E674D96C7907394BAB2DD0F046DE80" Directory="dir3D3D448C62DA6849859AE6F1565B0E28" Guid="*">
+                <File Id="fil78500012E1A7238415F531AD47B49E6B" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\win32com\shell\shell.pyd" />
+            </Component>
             <Component Id="cmp964360F98971EBD50222077231BC22CA" Directory="dirE2CB87727D1C53347EFF7801755E9FE8" Guid="*">
                 <File Id="filF69FD8E3EF5C52B9552D74D59C754F42" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\xyzservices\data\providers.json" />
             </Component>
@@ -6352,6 +6415,11 @@
         </DirectoryRef>
     </Fragment>
     <Fragment>
+        <DirectoryRef Id="dirB262A3C1EC64B1E8AB54055F45CD67B0">
+            <Directory Id="dir083DF0BF5977213AEB1688C012EBCA8E" Name="win32com" />
+        </DirectoryRef>
+    </Fragment>
+    <Fragment>
         <DirectoryRef Id="dirCF910620CFBDAC73620F2C74558C2BE1">
             <Directory Id="dir0A79269EC16F8960DF9971D4F12DB908" Name="tests" />
         </DirectoryRef>
@@ -6378,6 +6446,11 @@
     </Fragment>
     <Fragment>
         <DirectoryRef Id="dirB262A3C1EC64B1E8AB54055F45CD67B0">
+            <Directory Id="dir106C402AFC3F000457CB6A8E44EE66F4" Name="pythonwin" />
+        </DirectoryRef>
+    </Fragment>
+    <Fragment>
+        <DirectoryRef Id="dirB262A3C1EC64B1E8AB54055F45CD67B0">
             <Directory Id="dir1156A9E668048D570A0CF2894E07061C" Name="psutil" />
         </DirectoryRef>
     </Fragment>
@@ -6399,6 +6472,11 @@
     <Fragment>
         <DirectoryRef Id="dir87DC6B703FC7602466DFA9798DCF3D35">
             <Directory Id="dir18DBC89795DBE17CD3157BDB792B5ECD" Name="_repr_html" />
+        </DirectoryRef>
+    </Fragment>
+    <Fragment>
+        <DirectoryRef Id="dirB262A3C1EC64B1E8AB54055F45CD67B0">
+            <Directory Id="dir1915685F0C7649E6780B1341CA9A03B0" Name="pywin32_system32" />
         </DirectoryRef>
     </Fragment>
     <Fragment>
@@ -6589,6 +6667,11 @@
     <Fragment>
         <DirectoryRef Id="dirD8781298F385C6ED4DC60C0717DBABFA">
             <Directory Id="dir3B6FFC7FDE19F5F1009A36B8FCD6E811" Name="North_Dakota" />
+        </DirectoryRef>
+    </Fragment>
+    <Fragment>
+        <DirectoryRef Id="dir083DF0BF5977213AEB1688C012EBCA8E">
+            <Directory Id="dir3D3D448C62DA6849859AE6F1565B0E28" Name="shell" />
         </DirectoryRef>
     </Fragment>
     <Fragment>
@@ -7172,6 +7255,11 @@
         </DirectoryRef>
     </Fragment>
     <Fragment>
+        <DirectoryRef Id="dirB262A3C1EC64B1E8AB54055F45CD67B0">
+            <Directory Id="dirA7D67199B6F3411BA88A827D9EEBD175" Name="help_content" />
+        </DirectoryRef>
+    </Fragment>
+    <Fragment>
         <DirectoryRef Id="dir3794F06778E1BD60DCFF09BA534E174A">
             <Directory Id="dirA855D722F94B54DBA3766C96343EE418" Name="typing" />
         </DirectoryRef>
@@ -7319,6 +7407,11 @@
     <Fragment>
         <DirectoryRef Id="dir8D4E4D05306976EEA8A7DA751C628701">
             <Directory Id="dirC22A98F5EF1F3E2CF729ACD3C5CCB6BF" Name="philox" />
+        </DirectoryRef>
+    </Fragment>
+    <Fragment>
+        <DirectoryRef Id="dirB262A3C1EC64B1E8AB54055F45CD67B0">
+            <Directory Id="dirC2646008C0BA67B09655C7B1F7A1CA64" Name="win32" />
         </DirectoryRef>
     </Fragment>
     <Fragment>

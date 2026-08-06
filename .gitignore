@@ -16,6 +16,22 @@ installer/harvested_*.wxs
 installer/*.msi
 installer/*.wixpdb
 installer/*.log
+installer/Installer-avec-log.cmd
 
-# 
+#
 .VSCodeCounter
+
+# Artefacts des tests de non-régression (bibliothèque synthétique régénérée
+# par tools/test_env/generate_library.py, logs de sessions e2e en échec)
+tests/_generated_library/
+tests/e2e/.artifacts/
+
+# Rapport pytest-cov (+ fichiers par processus du mode parallel/e2e)
+.coverage
+.coverage.*
+
+# Checkpoints de couverture intermédiaires (base/e2e/combiné, cf. CLAUDE.md) — nommés hors du
+# préfixe ".coverage." pour ne pas être ramassés par un "coverage combine" sans argument
+coverage_base.dat
+coverage_e2e.dat
+coverage_combined.dat

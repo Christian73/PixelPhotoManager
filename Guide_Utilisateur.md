@@ -13,7 +13,7 @@
 5. [Mode chronologie (vue en ruban)](#5-mode-chronologie-vue-en-ruban)
 6. [Visualiser une photo ou une vidéo](#6-visualiser-une-photo-ou-une-vidéo)
 7. [Retoucher une photo](#7-retoucher-une-photo)
-8. [Albums et favoris](#8-albums-et-favoris)
+8. [Albums, favoris, notation et mots-clés](#8-albums-favoris-notation-et-mots-clés)
 9. [Recherche et filtrage](#9-recherche-et-filtrage)
 10. [Déplacer des photos](#10-déplacer-des-photos)
 11. [Enregistrer et exporter vos photos](#11-enregistrer-et-exporter-vos-photos)
@@ -71,16 +71,16 @@ Menu **Fichier › Quitter** (**Ctrl + Q**).
 | **Barre de menus** | Fichier, Affichage, Outils, Visages, Aide — voir sections dédiées |
 | **Bouton ⬆ Exporter** | Exporte la photo affichée (visionneuse) ou la sélection (grille) |
 | **Sidebar** | Filtrage, navigation dans les dossiers et albums |
-| **Zone principale** | Grille de vignettes, vue chronologie (ruban), vue Personnes ou visionneuse plein écran |
+| **Zone principale** | Grille de vignettes, vue chronologie (ruban), vue Personnes, vue Doublons ou visionneuse plein écran |
 | **Barre de statut** | Informations sur la sélection, progression du scan, curseur de taille des vignettes |
 
 ### Les cinq menus
 
 | Menu | Contenu |
 |---|---|
-| **Fichier** | Ajouter un dossier…, Quitter |
-| **Affichage** | Afficher/masquer sidebar (F9), Plein écran (F11), Diaporama (F5) |
-| **Outils** | Dossiers…, Détecter les doublons…, Synchroniser dates de création avec l'EXIF…, Journal des threads…, Applications externes…, Paramètres |
+| **Fichier** | Ajouter un dossier…, Recherche avancée… (Ctrl+F), Quitter |
+| **Affichage** | Afficher/masquer sidebar (F9), Plein écran (F11), Diaporama (F5), Ordre d'affichage… |
+| **Outils** | Dossiers…, État des doublons…, Synchroniser dates de création avec l'EXIF…, Journal des threads…, Historique des problèmes…, Applications externes…, Paramètres |
 | **Visages** | Importer depuis Picasa…, Réinitialiser et réindexer…, Regrouper les visages…, Visualisation des erreurs…, Sauvegarder la reconnaissance…, Gérer les sauvegardes…, Compteurs… |
 | **Aide** | Aide… (F1), À propos |
 
@@ -92,6 +92,20 @@ La sidebar peut aussi être redimensionnée en faisant glisser le séparateur ve
 ### Plein écran
 
 **F11** bascule l'application en plein écran.
+
+### Ordre d'affichage
+
+**Affichage › Ordre d'affichage…** ouvre une fenêtre à deux blocs indépendants : **Dossiers** (sidebar) et **Grille de photos**. Pour chacun, choisissez le mode de tri — **Alphabétique** ou **Chronologique** — et le sens — **Croissant** ou **Décroissant**. Les deux blocs sont réglés séparément : par exemple trier les dossiers par ordre alphabétique tout en gardant la grille en ordre chronologique décroissant (photos les plus récentes en premier). Le réglage est mémorisé d'une session à l'autre.
+
+### Vérification des mises à jour
+
+Au démarrage, l'application interroge en arrière-plan la page des releases GitHub du projet. Si une version plus récente est disponible, une popup s'affiche avec le numéro de version et un bouton **Ouvrir la page de téléchargement** ; elle rappelle de lire les notes de version avant d'installer, pour connaître les nouvelles fonctionnalités et vérifier la compatibilité avec votre bibliothèque existante. Si vous êtes déjà à jour, ou en cas d'erreur réseau, rien ne s'affiche.
+
+L'onglet **À propos** (menu **Aide › À propos**) effectue la même vérification à chaque ouverture et affiche l'un des trois résultats : « ✓ Vous disposez de la dernière version », l'alerte de mise à jour disponible avec son lien, ou un message d'erreur si la vérification est impossible (pas de connexion).
+
+### Rechercher dans l'aide
+
+La fenêtre **Aide…** (F1) dispose d'une barre de recherche en haut, au-dessus des onglets. Tapez un terme : l'onglet affiché est parcouru en premier, puis les onglets suivants si le terme n'y figure pas — l'onglet contenant la première occurrence trouvée est automatiquement sélectionné et le passage correspondant surligné. Appuyez sur **Entrée** pour passer à l'occurrence suivante (recherche circulaire sur l'ensemble des onglets). **Ctrl+F**, quand la fenêtre d'aide a le focus, place le curseur dans la barre de recherche. Si le terme est introuvable dans aucun onglet, le champ passe en rouge.
 
 ---
 
@@ -161,6 +175,10 @@ Les vidéos sont représentées dans la grille par une vignette extraite automat
 
 Une photo faisant partie d'un groupe de doublons détecté (voir [section 14](#14-détection-des-doublons)) affiche un badge **⧉** orange sur sa vignette. Cliquer dessus ouvre une popup **« Doublons de cette photo »** listant les autres exemplaires (nom + dossier) ; un double-clic sur un élément de la liste navigue directement vers ce fichier.
 
+### Badge de notation
+
+Une photo notée (voir [Notation](#notation) ci-dessous) affiche un badge d'étoiles (ex. « ★★★ ») en bas à gauche de sa vignette.
+
 ### Ouvrir une photo ou une vidéo
 
 **Double-clic** sur une vignette → ouvre la visionneuse.
@@ -171,6 +189,8 @@ Une photo faisant partie d'un groupe de doublons détecté (voir [section 14](#1
 |---|---|
 | **Ouvrir** | Ouvre la photo dans la visionneuse |
 | **Marquer comme favori / Retirer des favoris** | Gère l'état favori |
+| **Noter** | Sous-menu ★ à ★★★★★ pour noter la sélection, ou **Retirer la note** |
+| **Mots-clés…** | Ouvre le dialogue d'édition des mots-clés pour la sélection (voir [Mots-clés](#mots-clés) ci-dessous) |
 | **Renommer l'image** | Renomme le fichier sur le disque |
 | **Déplacer vers…** | Déplace le fichier vers un autre dossier surveillé |
 | **Enregistrer l'image traitée sur le disque** | Ouvre le dialogue d'enregistrement (voir [section 11](#11-enregistrer-et-exporter-vos-photos)) |
@@ -178,13 +198,18 @@ Une photo faisant partie d'un groupe de doublons détecté (voir [section 14](#1
 | **Créer un nouvel album avec {cette photo\|les N photos sélectionnées}…** | Crée un nouvel album à la volée avec la photo (ou la sélection) |
 | **Révéler dans l'Explorateur** | Ouvre le dossier contenant la photo |
 | **Retenter l'identification des visages** | *(affiché uniquement si la photo est en erreur de détection faciale)* relance l'analyse pour ce seul fichier |
-| **Effacer le fichier…** | Supprime définitivement le fichier après confirmation |
+| **Retirer de l'album / Retirer les photos de l'album** | *(vue album uniquement)* Retire la ou les photos de l'album affiché — fichiers et catalogue intacts |
+| **Effacer le fichier… / Effacer les fichiers…** | Envoie le ou les fichiers à la **corbeille Windows** (récupérables) après confirmation |
 
-> Le clic droit s'applique à **toute la sélection en cours** (Ctrl+Clic / Shift+Clic) pour Renommer/Déplacer/Ajouter à un album, pas seulement à la vignette cliquée.
+> Le clic droit s'applique à **toute la sélection en cours** (Ctrl+Clic / Shift+Clic) pour Renommer/Déplacer/Ajouter à un album/Effacer, pas seulement à la vignette cliquée.
 
 ### Supprimer des photos
 
-Sélectionnez une ou plusieurs photos, puis appuyez sur la touche **Suppr** (ou clic droit › Effacer le fichier…). Une confirmation est demandée. La suppression est **définitive** (pas de corbeille).
+Sélectionnez une ou plusieurs photos, puis appuyez sur la touche **Suppr** (ou clic droit › Effacer le(s) fichier(s)…). Une confirmation est demandée. Les fichiers sont envoyés à la **corbeille Windows** (récupérables depuis celle-ci), jamais effacés définitivement. Si la corbeille est indisponible (lecteur réseau, volume sans corbeille…), le fichier n'est **pas** supprimé et un message l'indique.
+
+La suppression s'exécute en arrière-plan : l'interface reste utilisable pendant l'opération, et la barre de statut affiche la progression (« Suppression… n/total ») sur les grosses sélections.
+
+> **Dans un album** : la touche **Suppr** (grille comme visionneuse) **retire** la ou les photos de l'album au lieu de supprimer les fichiers — voir [Retirer des photos d'un album](#8-albums-favoris-notation-et-mots-clés).
 
 ### Renommer une photo
 
@@ -236,14 +261,16 @@ Double-cliquez sur une vignette dans la grille.
 | Action | Résultat |
 |---|---|
 | Curseur **Zoom** (barre de statut) | Ajuste le zoom de 10 % à 400 % |
-| **0** | Ajuster à la fenêtre (fit) |
-| **1** | Zoom 100 % (1 pixel photo = 1 pixel écran) |
+| **F** | Ajuster à la fenêtre (fit) |
+| **Z** | Zoom 100 % (1 pixel photo = 1 pixel écran) |
 | **⊡** (barre d'outils) | Ajuster à la fenêtre |
 | **1:1** (barre d'outils) | Zoom 100 % |
 | **Ctrl + Molette** | Zoom avant/arrière |
 | Cliquer-glisser | Déplacer l'image dans la fenêtre |
 
 > En **mode recadrage**, la molette de la souris sert à zoomer. En **mode normal**, elle passe à la photo suivante ou précédente.
+
+> Les touches **0** à **5** notent la photo affichée (voir [Notation](#notation)) — elles ne servent plus au zoom.
 
 ### Panneau EXIF
 
@@ -287,7 +314,11 @@ Si une photo contient des coordonnées GPS, faites un **clic droit** dans la vis
 
 ### Marquer comme favori
 
-Cliquez sur le bouton **♡** dans la barre d'outils de la visionneuse (ou la touche **F**). L'étoile pleine **★** indique un favori actif.
+Cliquez sur le bouton **♡** dans la barre d'outils de la visionneuse. L'étoile pleine **★** indique un favori actif.
+
+### Noter une photo
+
+Cliquez sur l'une des 5 étoiles de la barre d'outils de la visionneuse (à côté du bouton favori), ou utilisez les touches **1** à **5** au clavier. Cliquer à nouveau sur la note déjà attribuée (ou appuyer sur **0**) la retire. Voir [Notation](#notation) pour les autres façons de noter (menu contextuel, badge de vignette, album « ★ Par notes »).
 
 ### Applications externes
 
@@ -298,13 +329,19 @@ Si vous avez configuré des applications tierces (voir [section 16](#16-autres-o
 | Option | Effet |
 |---|---|
 | **Marquer comme favori / Retirer des favoris** | Gère l'état favori |
+| **Noter** | Sous-menu ★ à ★★★★★ pour noter la photo, ou **Retirer la note** |
+| **Mots-clés…** | Ouvre le dialogue d'édition des mots-clés pour la photo (voir [Mots-clés](#mots-clés)) |
 | **Renommer…** | Renomme le fichier sur le disque |
 | **Déplacer vers…** | Déplace le fichier vers un autre dossier |
 | **Enregistrer l'image traitée sur le disque** | Ouvre le dialogue d'enregistrement (voir [section 11](#11-enregistrer-et-exporter-vos-photos)) |
 | **Révéler dans l'Explorateur** | Ouvre le dossier contenant la photo |
+| **Afficher le dossier dans la grille** | Retourne à la grille de photos, en affichant le dossier contenant la photo courante et en la sélectionnant |
 | **Localiser sur la carte** | Ouvre OpenStreetMap à la position GPS (grisé si pas de GPS) |
 | **Forcer une nouvelle détection sans limite de taille** | Relance la détection de visages sur cette photo en ignorant le filtre de taille minimale, sans perdre les identifications déjà faites |
-| **Effacer le fichier…** | Supprime définitivement le fichier après confirmation |
+| **Effacer le fichier…** | Envoie le fichier à la **corbeille Windows** (récupérable) après confirmation |
+| **Retirer de l'album** | *(remplace « Effacer le fichier… » quand la photo est ouverte depuis un album)* Retire la photo de l'album — fichier et catalogue intacts |
+
+> Comme dans la grille, la touche **Suppr** dans la visionneuse retire la photo de l'album si elle a été ouverte depuis un album, et supprime le fichier sinon.
 
 ---
 
@@ -317,6 +354,8 @@ Ouvrez une photo dans la visionneuse. Le panneau **Retouche** apparaît automati
 > **Principe non destructif** : les retouches ne modifient jamais le fichier original. Elles sont stockées dans une base de données séparée et appliquées à la volée à l'affichage et à l'export. Vous pouvez toujours récupérer l'original.
 
 > Le panneau de retouche n'est pas disponible pour les vidéos.
+
+> **Un seul outil actif à la fois** : sélectionner un nouvel outil (Recadrer, Yeux rouges, Annotations, Cadre, Luminosité, Contraste, Couleurs, Vignette, Redresser…) valide automatiquement le travail en cours dans l'outil précédent puis le referme — inutile de valider manuellement avant de changer d'outil.
 
 ---
 
@@ -406,6 +445,100 @@ Corrige l'inclinaison de l'horizon. Plage : **-10° à +10°**.
 
 ---
 
+### Yeux rouges
+
+1. Cliquez sur **Yeux rouges** dans le panneau de retouche.
+2. Cliquez directement sur chaque œil affecté dans la photo — un cercle de correction apparaît.
+3. Ajustez le curseur **Taille** si besoin (0,5 % à 8 % de la plus petite dimension de l'image).
+4. **Effacer tout** supprime toutes les corrections posées ; **Terminé** (ou **Échap**) quitte le mode sans rien perdre.
+
+---
+
+### Cadre décoratif
+
+Le bouton **Cadre** ouvre une galerie d'aperçus de la photo courante, un par motif. Cliquez un aperçu pour choisir le motif ; l'aperçu de la visionneuse se met à jour en direct.
+
+| Motif | Description |
+|---|---|
+| **Entourage uni** | Aplat d'une seule couleur, sans relief (noir, blanc ou couleur libre) |
+| **Simple** / **Double** | Moulure en relief, une ou deux bandes séparées par un intervalle |
+| **Baroque doré** | Acanthes et coquilles sculptées dans une doucine dorée, à l'or usé |
+| **Oves et perles** | Frise classique : oves et fers de lance, rang de perles et olives |
+| **Grecque** | Méandre grec continu, rosaces aux angles |
+| **Art déco** | Gradins argentés, chevrons et barrettes des années 1930 |
+| **Sculpture bois** | Noyer creusé de godrons et de filets, veinage apparent |
+| **Feuilles de vigne**, **Roses**, **Fleurs** | Entourages végétaux sculptés (bronze patiné, laque carmin, porcelaine peinte) |
+| **Métallique**, **Reflets** | Matières imitées (métal brossé et rivets, laque vernie) |
+
+> Le cadre s'ajoute **autour** de la photo : il ne recouvre aucun pixel de l'image, qui sort simplement plus grande à l'export. Deux exceptions, décrites ci-dessous : les entourages végétaux, dont quelques motifs mordent sur le bord de l'image, et le second cadre de l'entourage uni.
+
+Les motifs sont sculptés, pas dessinés : chacun est éclairé comme une vraie moulure (lumière venant du haut à gauche, ombres dans les creux, patine et usure de la dorure). Ils demandent donc un peu d'épaisseur pour se lire — choisir l'un d'eux **remonte automatiquement** l'épaisseur si elle est trop faible, et chaque vignette de la galerie montre exactement le cadre obtenu en cliquant dessus.
+
+**Réglages** :
+- **Épaisseur** (nommée **Cadre extérieur** pour Simple et Double) : disponible pour tous les motifs. **Intervalle** et **Cadre intérieur** : pour Entourage uni, Simple et Double. Tous se règlent en pourcentage du petit côté de la photo — un même réglage rend donc pareil sur une vignette et sur un export pleine résolution.
+- **Couleur** : raccourcis noir et blanc, ou sélecteur de couleur libre (Entourage uni, Simple, Double).
+- **Style de remplissage** (uni, dégradé, pailleté) et **seconde couleur** : réservés aux motifs Simple et Double.
+
+#### Entourages végétaux qui débordent
+
+Sur **Feuilles de vigne**, **Roses** et **Fleurs**, quelques sarments, roses ou bouquets passent *par-dessus* le bord de la photo, avec leur ombre portée, comme sur un cadre sculpté qui mord sur la toile. Ils sont volontairement irréguliers — un débordement à intervalle régulier redeviendrait une frise — et restent accrochés au bandeau : le centre de l'image n'est jamais touché. Rien à régler, c'est le motif qui l'apporte ; le recadrage, les yeux rouges, les annotations et les visages continuent de travailler sur la photo entière.
+
+#### Second cadre de l'entourage uni
+
+Pour le seul **Entourage uni**, cochez **Second cadre par-dessus la photo** : une ligne est tracée *sur* la photo, à distance du bord — la bande d'image restée visible entre les deux cadres est justement l'effet recherché. **Intervalle** règle cette distance et **Second cadre** son épaisseur.
+
+Cette ligne peut prendre une forme de **ferronnerie** :
+
+| Ferronnerie | Effet |
+|---|---|
+| **Ligne simple** | Trait net (choix par défaut) |
+| **Volutes d'angle** | Enroulements forgés dans les quatre coins |
+| **Rinceaux courants** | Volutes d'angle + motifs répétés le long des côtés |
+| **Barreau torsadé** | Barre vrillée, fleurons aux angles et au milieu des côtés |
+| **Clous forgés** | Rangée de clous à tête ronde, plus gros aux angles |
+
+- **Rendu** : **Relief léger** (ombre et lumière sur le métal) ou **Aplat strict** (silhouette pleine, plus graphique). Sans effet sur la ligne simple, toujours rendue en aplat.
+- **Ornements** : taille des motifs, de 40 % à 250 %. Les ornements se développent vers l'intérieur de la photo — ils ne débordent jamais sur le cadre extérieur.
+
+> Rien n'est enregistré tant que vous n'avez pas cliqué **Valider** dans la galerie, puis **Appliquer** dans le panneau de retouche.
+
+---
+
+### Annotations
+
+Calque de dessin et de texte **non destructif**, superposé à la photo — indépendant des corrections tonales et de la géométrie, et conservé séparément dans les retouches de la photo.
+
+1. Cliquez sur **Annotations** dans le panneau de retouche.
+
+**Outils disponibles :**
+
+| Outil | Effet |
+|---|---|
+| Stylo | Trait libre à main levée |
+| Ligne | Ligne droite entre deux points |
+| Courbe | Cliquez les points de passage successifs, **double-clic** pour valider le tracé |
+| Rectangle | Forme rectangulaire (contour et/ou remplissage) |
+| Ellipse | Forme elliptique (contour et/ou remplissage) |
+| Texte | Zone de texte éditable directement sur la photo |
+| Sélection | Sélectionne un élément existant pour le déplacer, le redimensionner ou modifier son style |
+
+**Style** (panneau qui s'adapte à l'outil sélectionné) :
+- **Couleur** du trait ou du texte, **épaisseur** du trait (% de l'image).
+- Pour les formes : **couleur de remplissage**, **opacité**, et **flou** de la photo sous la forme.
+- Pour le texte : police, taille (% de l'image), **G** (gras), **I** (italique), couleur.
+
+**Modifier ou supprimer :**
+- Avec l'outil **Sélection**, cliquez un élément pour le sélectionner (poignées de redimensionnement), ou faites-le glisser pour le déplacer.
+- **Double-clic** sur un texte existant : rouvre l'éditeur en place.
+- **Supprimer la sélection** (ou touche **Suppr**) : supprime l'élément sélectionné. **Effacer annotations** : supprime tout le calque de la photo.
+
+**Afficher / masquer le calque :**
+Le bouton **✏ Annotations** en haut de la fenêtre (à côté du bouton EXIF, visible dès qu'une photo est ouverte) affiche ou masque le calque sans rien supprimer. Ce réglage n'est pas enregistré : il ne dure que le temps de la session en cours.
+
+> Les annotations sont incluses dans l'export et dans l'enregistrement de l'image traitée sur le disque, comme les autres retouches — sauf si le calque est masqué via **✏ Annotations** au moment de l'export.
+
+---
+
 ### Annuler / Rétablir
 
 | Bouton | Raccourci | Effet |
@@ -415,15 +548,36 @@ Corrige l'inclinaison de l'horizon. Plage : **-10° à +10°**.
 
 L'historique conserve les **20 dernières actions** en mémoire, et jusqu'à **50 états** sont sauvegardés sur disque — ils sont restaurés à la prochaine ouverture de la photo.
 
+### Réinitialiser toutes les retouches
+
+En bas du panneau de retouche, deux boutons complémentaires :
+
+- **Réinitialiser toutes les retouches** — supprime d'un coup toutes les retouches et l'historique de la photo courante, sans demander de confirmation. Le fichier original sur le disque n'est jamais modifié.
+- **Remettre toutes les retouches** — remet en place les retouches supprimées par le dernier **Réinitialiser**. Il se désactive automatiquement dès qu'une nouvelle retouche est appliquée après la réinitialisation (l'état sauvegardé n'est plus restaurable dans ce cas).
+
 ---
 
-## 8. Albums et favoris
+## 8. Albums, favoris, notation et mots-clés
 
 ### Favoris
 
 - Dans la **grille** : clic droit sur une vignette › **Marquer comme favori**.
-- Dans la **visionneuse** : cliquez sur **♡** (ou touche **F**).
+- Dans la **visionneuse** : cliquez sur **♡**.
 - Pour voir tous vos favoris : cliquez sur **♡ Favoris** dans la section Albums de la sidebar.
+
+### Notation
+
+- Dans la **grille** : clic droit sur une sélection › **Noter** › choisissez de ★ à ★★★★★, ou **Retirer la note**.
+- Dans la **visionneuse** : cliquez sur l'une des 5 étoiles de la barre d'outils, ou utilisez les touches **1** à **5** (**0** pour retirer la note).
+- Une photo notée affiche un badge d'étoiles (ex. « ★★★ ») en bas à gauche de sa vignette dans la grille.
+- Pour voir les photos notées : dans la section Albums de la sidebar, **★ Par notes** est repliable/dépliable — cliquez sur l'en-tête pour lister toutes les photos notées (≥ 1 étoile), ou dépliez-le et choisissez un niveau (5★ à 1★) pour n'afficher que les photos notées au moins ce nombre d'étoiles. La [recherche avancée](#recherche-avancée) permet aussi de filtrer sur une note minimale précise.
+
+### Mots-clés
+
+- Dans la **grille** ou la **visionneuse** : clic droit sur une sélection › **Mots-clés…** ouvre un dialogue d'édition avec complétion sur les mots-clés déjà utilisés dans la bibliothèque.
+- Les mots-clés d'une photo s'affichent en tête du panneau EXIF (section 6).
+- Les mots-clés sont **conservés** lors d'un re-scan forcé du dossier (comme les favoris et les notes) — jamais écrasés par les métadonnées du fichier.
+- Pour voir toutes les photos portant un mot-clé donné : tapez-le dans le filtre de la sidebar puis cliquez sur **🏷 Par mot-clé** dans la section Albums (correspondance exacte du mot-clé, pas une recherche partielle).
 
 ### Albums spéciaux (toujours présents, non supprimables)
 
@@ -433,6 +587,8 @@ L'historique conserve les **20 dernières actions** en mémoire, et jusqu'à **5
 | **Favoris** | ♡ | Photos marquées comme favorites |
 | **Vidéos** | ▶ | Toutes les vidéos de la bibliothèque |
 | **Par nom de fichier** | 🔍 | Résultat du texte tapé dans le filtre de la sidebar (voir [section 9](#9-recherche-et-filtrage)) |
+| **Par notes** | ★ | Repliable — en-tête : photos notées ≥ 1 ; 5 sous-niveaux (5★ à 1★) pour une note minimale précise (voir [Notation](#notation) ci-dessus) |
+| **Par mot-clé** | 🏷 | Photos portant le mot-clé tapé dans le filtre de la sidebar (voir [Mots-clés](#mots-clés) ci-dessus) |
 
 ### Créer un album personnalisé
 
@@ -449,9 +605,19 @@ Clic droit sur une vignette (dans la grille **ou** dans la vue Personnes) › **
 
 > Si aucun album personnalisé n'existe encore, un message vous invite à en créer un d'abord via le panneau Albums.
 
+### Retirer des photos d'un album
+
+Dans la vue d'un album personnalisé :
+
+- Sélectionnez une ou plusieurs photos, puis appuyez sur **Suppr**, ou clic droit › **Retirer de l'album** (**Retirer les photos de l'album** pour une sélection multiple).
+- Seul le lien avec l'album est supprimé : **le fichier et la photo restent intacts** sur le disque, dans le catalogue et dans la vue de leur dossier.
+- Le même comportement s'applique dans la **visionneuse** ouverte depuis l'album (touche **Suppr** ou clic droit › **Retirer de l'album**).
+
+> Pour supprimer réellement un fichier du disque, faites-le depuis la vue de son **dossier** (ou une autre vue non-album), où **Suppr** conserve son sens habituel d'envoi à la corbeille.
+
 ### Supprimer un album
 
-Clic droit sur un album personnalisé dans la sidebar › **Supprimer l'album…** — une confirmation précise le nombre de photos concernées et rappelle que **les photos restent intactes** dans le catalogue et sur le disque, seul l'album est supprimé. *(Les 4 albums spéciaux ne proposent pas cette option.)*
+Clic droit sur un album personnalisé dans la sidebar › **Supprimer l'album…** — une confirmation précise le nombre de photos concernées et rappelle que **les photos restent intactes** dans le catalogue et sur le disque, seul l'album est supprimé. *(Les 6 albums spéciaux ne proposent pas cette option.)*
 
 ### Accéder à un album
 
@@ -466,6 +632,25 @@ Le champ de filtrage se trouve en haut de la **sidebar** (placeholder *« 🔍 F
 - Tapez un terme : il filtre **instantanément** (à chaque frappe, sans délai) l'arborescence des **dossiers** et la liste des **personnes** identifiées dans la sidebar.
 - Le même texte alimente l'album spécial **🔍 Par nom de fichier**, qui recherche dans le **catalogue complet** par nom de fichier, marque d'appareil ou modèle d'appareil (une photo peut donc apparaître dans ce résultat même si le terme tapé correspond à son appareil photo plutôt qu'à son nom de fichier).
 - Un bouton **✕** intégré au champ efface le filtre.
+
+### Recherche avancée
+
+Pour combiner plusieurs critères à la fois, ouvrez le dialogue **Recherche avancée** : menu **Fichier › Recherche avancée…** (**Ctrl+F**), ou le bouton **🔎** à côté du champ de filtre de la sidebar.
+
+Critères disponibles, combinables librement :
+
+| Critère | Détail |
+|---|---|
+| **Plage de dates** | Date de début / date de fin |
+| **Appareil** | Marque/modèle, liste préchargée depuis les photos déjà cataloguées |
+| **Personne** | Une personne identifiée (voir [section 13](#13-reconnaissance-faciale)) |
+| **Dossier** | Un dossier surveillé, recherche récursive dans ses sous-dossiers |
+| **Note minimale** | ★ à ★★★★★ |
+| **Mots-clés** | Un ou plusieurs mots-clés (complétion sur les mots-clés existants) |
+| **Favoris uniquement** | Case à cocher |
+| **Type de média** | Photos, vidéos, ou les deux |
+
+Les résultats s'affichent dans la grille, comme pour n'importe quel autre contexte (dossier, album, personne…). La recherche s'exécute en arrière-plan ; les listes du dialogue (appareils, personnes, mots-clés) sont préchargées avant son ouverture pour rester réactives.
 
 ---
 
@@ -569,6 +754,10 @@ La barre disparaît automatiquement après 5 secondes d'inactivité et réappara
 | **Espace** | Pause / Reprendre |
 | **Échap** | Quitter le diaporama |
 
+### Économiseur d'écran
+
+Tant que le diaporama est ouvert, **l'économiseur d'écran et la mise en veille de l'écran sont désactivés** — regarder défiler les photos sans toucher au clavier ni à la souris passerait sinon pour de l'inactivité aux yeux de Windows. Le réglage habituel reprend automatiquement à la fermeture du diaporama (y compris en cas de fermeture de l'application).
+
 ---
 
 ## 13. Reconnaissance faciale
@@ -586,8 +775,7 @@ Ouvrez une photo puis affichez le panneau **Visages** (à côté du panneau EXIF
   - **✕** sur la vignette : ignore ce visage (masqué de l'UI et du regroupement, récupérable).
   - **Clic droit** : **Identifier cette personne…**, **Identifier ce groupe…**, **Désallouer le groupe**, **Ignorer ce visage**.
 - **➕ Ajouter une personne** : bascule en mode dessin manuel d'un rectangle sur la photo (pour un visage non détecté automatiquement), validé par **✓ Valider la position** (ou Entrée) / **✕ Annuler** (ou Échap), puis choix du nom.
-- **Visages ignorés… (N)** : liste les visages ignorés de la photo, avec position/taille, et un bouton **Restaurer** par ligne.
-- Chaque action (ajout, identification, ignorer, restaurer) est **annulable** via le bouton Undo général de la visionneuse.
+- **Visages ignorés… (N)** : liste les visages ignorés de la photo, avec position/taille, et un bouton **Restaurer** par ligne — c'est par ce dialogue qu'un visage ignoré par erreur se récupère.
 
 ### Vue « Personnes » — groupes non identifiés
 
@@ -597,7 +785,7 @@ Accessible via l'icône/le bouton dédié qui remplace la grille de photos.
   - Clic : sélection multiple cumulative ; Maj+clic : sélection étendue.
   - Double-clic : ouvre les photos du groupe.
   - Clic droit : **Identifier cette personne…** / **Identifier ce groupe…**, **Ignorer ce visage/ce groupe**, et en multi-sélection **Associer (N sélectionnés)**.
-  - Actions rapides sur une carte suggérée : **✓** (accepter), **→** (associer à une autre personne), **✕** (ignorer).
+  - **Boutons ✓ / ✗ superposés sur chaque vignette** (toutes les cartes, pas seulement celles avec suggestion) : **✓** accepte directement la suggestion en un clic si une suggestion est proposée, sinon ouvre le dialogue d'identification ; **✗** ignore le visage (carte isolée) ou tout le groupe.
 - **Sections de suggestion** (« ≈ Probablement la même personne » / « ≈ Probablement *Nom* ») avec boutons d'en-tête **Accepter**, **Associer à…**, **Ignorer** pour toute la section d'un coup.
 - **Section « Visages isolés »** en bas de page.
 - **Barre d'action** (dès qu'un groupe est sélectionné) : **Voir les photos**, **Associer à…**, **Ignorer**, **✕** (tout désélectionner).
@@ -632,22 +820,42 @@ Ouverte par double-clic sur une personne nommée.
 
 ## 14. Détection des doublons
 
-Menu **Outils › Détecter les doublons…** analyse l'ensemble de la bibliothèque (les vidéos sont exclues) pour repérer les photos en double, y compris des versions redimensionnées, retouchées (couleur/luminosité) ou recadrées.
+La détection des doublons tourne **automatiquement en arrière-plan**, sans action de votre part : elle démarre après chaque scan de la bibliothèque (les vidéos sont exclues) pour repérer les photos en double, y compris des versions redimensionnées, retouchées (couleur/luminosité) ou recadrées. Il n'y a plus de déclenchement manuel ni de rapport de fin d'analyse — consultez l'état de la détection via **Outils › État des doublons…**.
 
 ### Fonctionnement
 
-L'analyse se déroule en deux passes automatiques (aucune option à régler) :
+L'analyse se déroule en deux passes (aucune option à régler) :
 
 1. **Empreinte perceptuelle (pHash)** — détecte les doublons exacts, redimensionnés ou légèrement retouchés.
 2. **Points d'intérêt (ORB + RANSAC)** — appliqué uniquement aux photos non regroupées à l'étape 1, détecte en plus les **recadrages** (jusqu'à ~60 % de surface recadrée).
 
-Une boîte de progression affiche l'étape en cours (« Tier 1 — empreintes… », « Tier 2 — comparaison ORB… ») avec un bouton **Annuler**.
+Elle est **incrémentale** : une paire de photos déjà comparée lors d'une passe précédente n'est jamais recomparée, seules les paires impliquant une photo nouvelle ou modifiée le sont. Une nouvelle passe après l'ajout de quelques photos est donc rapide, même sur une grosse bibliothèque. L'analyse tourne en tâche de fond à priorité réduite, pour ne pas ralentir le reste de l'application pendant que vous l'utilisez.
 
-### Résultat
+Les photos en double sont marquées d'un **badge ⧉ orange** dans la grille et la visionneuse (voir [section 4](#4-la-grille-de-photos)) — l'application ne supprime ni ne fusionne rien automatiquement, à vous de décider au cas par cas.
 
-- Un message final indique le nombre de groupes et de fichiers concernés.
-- Les photos en double sont marquées d'un **badge ⧉ orange** dans la grille et la visionneuse (voir [section 4](#4-la-grille-de-photos)) — l'application ne supprime ni ne fusionne rien automatiquement, à vous de décider au cas par cas.
-- Un **rapport HTML** (`duplicates_report.html`) est généré automatiquement ; un bouton **Ouvrir le rapport** permet de le consulter directement.
+### État des doublons (Outils › État des doublons…)
+
+Cette fenêtre affiche un instantané de l'état actuel :
+
+- Le nombre de groupes de doublons et de photos concernées.
+- Si une analyse est en cours (« Analyse en cours… ») ou la date de la dernière vérification terminée.
+- S'il y a des fichiers corrompus détectés (voir plus bas), leur nombre avec un bouton **Voir la liste…**.
+- Boutons **Voir les groupes** (ouvre la grille des groupes de doublons), **Vérifier maintenant** (force une nouvelle passe immédiatement — désactivé si une analyse est déjà en cours) et **Fermer**.
+
+### Grille des groupes de doublons (bouton « Dupliquées » de la sidebar)
+
+Le bouton **Dupliquées** de la sidebar (avec un badge indiquant le nombre de groupes détectés) ouvre une grille dédiée listant **tous** les groupes de doublons d'un coup — une carte par groupe, avec la vignette du premier exemplaire et le nombre d'exemplaires.
+
+- **Double-clic** sur une carte : ouvre les exemplaires du groupe dans la visionneuse, pour une comparaison rapide (navigation précédent/suivant limitée aux membres du groupe).
+- **✕** sur une carte : **dissout le groupe entier** (ne supprime aucun fichier) — la carte disparaît de la grille et le badge décrémente. Cette dissolution est **persistante** : le groupe ne sera plus jamais reformé tant qu'aucun de ses membres ne change (une nouvelle photo similaire à l'un d'eux reste en revanche détectée normalement).
+- Bouton **Vérifier maintenant** en haut de la grille pour relancer une analyse sans repasser par le menu Outils.
+
+### Fichiers corrompus détectés pendant l'analyse
+
+Un fichier qui ne peut pas être lu pendant l'analyse (JPEG endommagé, copie interrompue…) n'est pas ignoré silencieusement : il est comptabilisé et signalé (compteur ⚠ dans **Outils › État des doublons…**, bouton **Voir la liste…**). Cette liste propose deux actions :
+
+- **Réparer…** — après confirmation, tente de ré-enregistrer une copie propre de chaque fichier via un décodeur plus tolérant que celui utilisé pour l'analyse (PIL en mode tolérant aux troncatures, puis le codec JPEG de Qt). L'original est sauvegardé au préalable dans un dossier caché `.tmp_originals` à côté du fichier, et les dates Windows de modification **et** de création sont préservées à l'identique sur la copie réparée. Un bilan indique le nombre de fichiers réparés ; ceux qui n'ont pas pu l'être (corruption trop importante pour les décodeurs disponibles) sont listés dans un fichier texte horodaté (`fichiers_corrompus_AAAAMMJJ_HHMMSS.txt`), dont l'emplacement reste accessible via **Outils › Historique des problèmes…** (voir [section 16](#16-autres-outils)).
+- **Supprimer…** — après confirmation, envoie les fichiers sélectionnés à la **corbeille Windows** (récupérables) et les retire du catalogue, des vignettes et des visages associés.
 
 ---
 
@@ -677,6 +885,13 @@ Outil de diagnostic destiné à surveiller les traitements en arrière-plan (sca
 - Boutons **Rapport de problèmes…** (diagnostic textuel copiable) et **Exporter CSV…**.
 - **🗑 Vider** efface le journal (confirmation demandée).
 
+### Historique des problèmes (Outils › Historique des problèmes…)
+
+Conserve la trace de chaque analyse de doublons ayant rencontré des fichiers corrompus (voir [section 14](#14-détection-des-doublons)).
+
+- Une ligne par analyse : date, nombre de fichiers corrompus détectés, nombre réparés.
+- Bouton **Ouvrir la liste…** par ligne : ouvre le fichier texte listant les fichiers qui n'ont pas pu être réparés lors de cette analyse (désactivé si tous ont été réparés, ou si le fichier a depuis été supprimé).
+
 ### Applications externes (Outils › Applications externes…)
 
 Permet d'ajouter des raccourcis vers des logiciels tiers (retoucheur externe, visionneuse RAW, etc.), accessibles ensuite sous forme d'icônes dans la barre d'outils de la visionneuse.
@@ -702,6 +917,7 @@ Dialogue à deux catégories :
 | Raccourci | Action |
 |---|---|
 | **Ctrl + Q** | Quitter l'application |
+| **Ctrl + F** | Recherche avancée… |
 | **F1** | Ouvrir l'aide |
 | **F9** | Afficher/masquer la sidebar |
 | **F11** | Plein écran |
@@ -712,7 +928,7 @@ Dialogue à deux catégories :
 | Raccourci | Action |
 |---|---|
 | **Ctrl + A** | Sélectionner toutes les photos |
-| **Suppr** | Supprimer les photos sélectionnées (avec confirmation) |
+| **Suppr** | Supprimer les photos sélectionnées (avec confirmation) — dans un album : retirer de l'album, fichiers intacts |
 
 ### Mode chronologie (ruban)
 
@@ -730,11 +946,12 @@ Dialogue à deux catégories :
 | **← / ↑** | Photo précédente |
 | **→ / ↓** | Photo suivante |
 | **I** | Afficher/masquer le panneau EXIF |
-| **0** | Ajuster à la fenêtre |
-| **1** | Zoom 100 % |
+| **F** | Ajuster à la fenêtre |
+| **Z** | Zoom 100 % |
 | **Ctrl + Molette** | Zoom avant / arrière |
 | **Échap** | Retour à la grille |
-| **F** | Marquer/retirer des favoris |
+| **1** à **5** | Noter la photo (★ à ★★★★★) |
+| **0** | Retirer la note |
 
 ### Diaporama
 
@@ -752,6 +969,14 @@ Dialogue à deux catégories :
 | **Entrée** | Confirmer le recadrage |
 | **Échap** | Annuler le recadrage |
 | **Molette** | Zoomer dans la visionneuse |
+
+### Mode annotation
+
+| Raccourci | Action |
+|---|---|
+| **Suppr** | Supprimer l'élément d'annotation sélectionné |
+| **Entrée** | Valider une courbe en cours de tracé |
+| **Échap** | Annuler le tracé en cours (le mode annotation reste actif) |
 
 ### Panneau de retouche
 
@@ -780,23 +1005,24 @@ Soit typiquement : `C:\Users\VotreNom\AppData\Local\PixelPhotoManager\`
 | `faces.db` | Visages détectés, groupes/clusters, personnes identifiées |
 | `config.json` | Dossiers surveillés et préférences de l'interface (dont réglages de Paramètres) |
 | `logs\pixelphotomanager.log` | Journal de l'application (pour le dépannage) |
-| `duplicates_report.html` | Dernier rapport de détection de doublons |
+| `problems_history.jsonl` | Historique des fichiers corrompus détectés/réparés (**Outils › Historique des problèmes…**, voir [section 16](#16-autres-outils)) |
+| `fichiers_corrompus_AAAAMMJJ_HHMMSS.txt` | Liste des fichiers corrompus non réparés lors d'une analyse de doublons |
 | Rapport CSV de synchro EXIF | Généré à chaque exécution de l'outil de synchronisation des dates |
 | Sauvegardes de reconnaissance faciale | Archives créées via **Visages › Sauvegarder la reconnaissance…** |
 
 > **Vos photos et vidéos originales ne sont jamais modifiées** par les retouches ou la reconnaissance faciale. Vous pouvez supprimer `edits.db` pour effacer toutes les retouches et repartir de zéro, ou supprimer `catalog.db` pour forcer une réindexation complète.
 
-Dans chaque dossier de photos, un sous-dossier caché **`.tmp_originals`** peut apparaître : il contient les copies de sauvegarde des fichiers écrasés via **Enregistrer l'image traitée sur le disque** (uniquement si vous avez coché l'option de sauvegarde).
+Dans chaque dossier de photos, un sous-dossier caché **`.tmp_originals`** peut apparaître : il contient les copies de sauvegarde des fichiers écrasés via **Enregistrer l'image traitée sur le disque** (uniquement si vous avez coché l'option de sauvegarde), ou celles des fichiers corrompus avant tentative de réparation (voir [section 14](#14-détection-des-doublons)).
 
 ### Formats supportés
 
 **Images :**
-`.jpg` · `.jpeg` · `.png` · `.tiff` · `.tif` · `.webp` · `.bmp` · `.gif` · `.heic` · `.raw` · `.cr2` · `.nef` · `.arw` · `.dng`
+`.jpg` · `.jpeg` · `.png` · `.tiff` · `.tif` · `.webp` · `.bmp` · `.gif` · `.heic` · `.heif` · `.cr2` · `.nef` · `.arw` · `.dng` · `.orf` · `.rw2`
 
 **Vidéos :**
 `.mp4` · `.mov` · `.avi` · `.mkv` · `.wmv` · `.webm` · `.m4v` · `.3gp` · `.flv` · `.ts` · `.mts` · `.mpg` · `.mpeg`
 
-*(La disponibilité des formats RAW dépend des pilotes installés sur le système.)*
+> **RAW et HEIC/HEIF** : le décodage est intégré à l'application (bibliothèques `rawpy` et `pillow-heif`), aucun pilote ni logiciel tiers n'est nécessaire. Pour un fichier RAW, l'affichage et l'export utilisent l'aperçu JPEG intégré par l'appareil photo (pas le dématriçage complet du capteur) — la résolution disponible est donc celle de cet aperçu.
 
 ---
 
@@ -810,7 +1036,8 @@ Dans chaque dossier de photos, un sous-dossier caché **`.tmp_originals`** peut 
 | Un dossier déplacé manuellement (hors de l'application) n'est plus trouvé | Utilisez **Supprimer des dossiers surveillés** puis **Fichier › Ajouter un dossier…** pour le réenregistrer |
 | Récupérer l'original d'une photo retouchée | Le fichier original n'a jamais été modifié — il suffit d'effacer les retouches via **Annuler** (↩) jusqu'à l'état initial |
 | Récupérer un original écrasé par erreur | S'il a été sauvegardé (case cochée lors de l'enregistrement), il se trouve dans le sous-dossier caché `.tmp_originals` du dossier concerné |
+| **État des doublons…** signale des fichiers corrompus | Utilisez le bouton **Réparer…** (ou **Supprimer…**) proposé dans la liste (voir [section 14](#14-détection-des-doublons)) ; l'original est toujours sauvegardé avant réparation dans `.tmp_originals` |
 | La vignette d'une vidéo est noire | OpenCV n'a pas pu lire la vidéo — vérifiez que le codec est installé sur votre système |
 | Une opération semble bloquée ou anormalement lente | Ouvrez **Outils › Journal des threads…** pour voir quel traitement de fond est en cours et son statut |
-| « Détecter les doublons… » signale une erreur au démarrage | Les modules `imagehash` et `Pillow` sont requis ; sans OpenCV/numpy, seule la détection de recadrage (Tier 2) est indisponible, le reste continue de fonctionner |
+| La détection de doublons ne semble jamais tourner | Les modules `imagehash` et `Pillow` sont requis ; sans OpenCV/numpy, seule la détection de recadrage (Tier 2) est indisponible, le reste continue de fonctionner |
 | La reconnaissance faciale ne détecte plus rien | Vérifiez via **Visages › Visualisation des erreurs…** si les fichiers concernés sont en échec de détection (timeout/crash), et utilisez **⟳ Réessayer** |

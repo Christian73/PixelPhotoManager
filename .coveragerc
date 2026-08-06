@@ -1,0 +1,27 @@
+# Configuration coverage.py — partagée entre les tests unitaires/GUI
+# (pytest --cov=src) et les scénarios e2e (PPM_E2E_COVERAGE=1, cf.
+# tools/test_env/launch_isolated.py : l'application est alors lancée via
+# `coverage run` et écrit un fichier .coverage.* par processus, à fusionner
+# avec `coverage combine`).
+
+[run]
+source = src
+# Un fichier de données par processus (suffixe hôte/pid) : indispensable pour
+# que les données du sous-processus e2e ne écrasent pas celles de pytest-cov.
+parallel = true
+
+[report]
+# Cliquet de non-régression : échoue si la couverture repasse sous ce seuil.
+# À RELEVER à chaque campagne de tests (jamais baisser). Historique :
+#   2026-07-19  29 % → 36 % (phases 1+2) → 45,8 % (phases 3+4, seuil 45)
+#   2026-07-20  45,8 % → 48,84 % (refactor modularisation N1-N5, seuil 48)
+#   2026-07-21  48,84 % → 49,23 % (correctif file d'attente suppressions, seuil 49)
+#   2026-07-23  49,23 % → 51,41 % (optimisations réactivité perçue + tests, seuil 51)
+#   2026-07-23  51,41 % → 59,84 % (campagne 80 % phase 1 : dialogues + workers, seuil 59)
+#   2026-07-23  59,84 % → 67,63 % (campagne 80 % phase 2 : vues visages + sidebar, seuil 67)
+#   2026-07-24  67,63 % → 78,90 % (RAW/HEIC, recherche avancée, tags + tests associés, seuil 78)
+#   2026-07-25  78,90 % → 80,06 % (fix clipping EditPanel + fiabilisation e2e click_input, seuil 79)
+#   2026-08-02  80,06 % → 80,42 % (cadres décoratifs : frames.py 96 %, frame_dialog.py 75 %,
+#               ferronnerie + largeur des menus, seuil 80 — marge volontairement étroite)
+fail_under = 80
+precision = 0

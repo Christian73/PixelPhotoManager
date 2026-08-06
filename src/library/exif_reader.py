@@ -1,17 +1,95 @@
 ﻿# Copyright 2026 Christian Guyot
 # SPDX-License-Identifier: Apache-2.0
+import contextlib
 import logging
 import os
+import shutil
+import tempfile
 from datetime import datetime
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
-VIDEO_EXT = {".mp4", ".mov", ".avi", ".mkv", ".wmv", ".webm", ".m4v", ".3gp", ".flv", ".ts", ".mts", ".mpg", ".mpeg"}
+VIDEO_EXT = {".mp4", ".mov", ".avi", ".mkv", ".wmv", ".webm", ".m4v", ".3gp", ".flv", ".ts", ".mts", ".mpg", ".mpeg", ".vob"}
+
+
+@contextlib.contextmanager
+def ascii_safe_path(path: str):
+    """Chemin garanti encodable en ASCII pour cv2 (imread/VideoCapture), qui
+    rejette les chemins non-ASCII sur Windows. Si `path` est déjà ASCII, le
+    retourne tel quel (aucune I/O). Sinon, crée un hardlink temporaire vers un
+    chemin ASCII (repli sur une copie si hardlink impossible, ex. volume
+    différent) et le supprime en sortie de bloc."""
+    try:
+        path.encode("ascii")
+        yield path
+        return
+    except UnicodeEncodeError:
+        pass
+
+    suffix = os.path.splitext(path)[1]
+    fd, temp_path = tempfile.mkstemp(suffix=suffix)
+    os.close(fd)
+    os.remove(temp_path)  # os.link exige que la destination n'existe pas
+    try:
+        try:
+            os.link(path, temp_path)
+        except OSError:
+            shutil.copy2(path, temp_path)
+        yield temp_path
+    finally:
+        try:
+            os.unlink(temp_path)
+        except OSError:
+            pass
+
+
+def preserve_file_dates(src_stat: os.stat_result, dst_path: str) -> None:
+    """Copie atime, mtime et date de création (Windows) de src_stat vers dst_path."""
+    os.utime(dst_path, (src_stat.st_atime, src_stat.st_mtime))
+    try:
+        import ctypes
+        import ctypes.wintypes
+
+        class FILETIME(ctypes.Structure):
+            _fields_ = [("dwLowDateTime",  ctypes.wintypes.DWORD),
+                         ("dwHighDateTime", ctypes.wintypes.DWORD)]
+
+        # Convertir timestamp Unix → FILETIME (100 ns depuis le 1er janvier 1601)
+        val = int((src_stat.st_ctime + 11644473600) * 10_000_000)
+        ft = FILETIME(dwLowDateTime=val & 0xFFFFFFFF,
+                      dwHighDateTime=(val >> 32) & 0xFFFFFFFF)
+
+        kernel32 = ctypes.windll.kernel32
+        handle = kernel32.CreateFileW(
+            dst_path, 0x40000000, 1, None, 3, 0x02000000, None
+        )
+        if handle not in (-1, 0):
+            kernel32.SetFileTime(handle, ctypes.byref(ft), None, None)
+            kernel32.CloseHandle(handle)
+    except Exception:
+        pass   # non-Windows ou droits insuffisants : mtime suffit
+
+
+_SUBSEC_TAG_FOR = {
+    "DateTimeOriginal": "SubsecTimeOriginal",
+    "DateTimeDigitized": "SubsecTimeDigitized",
+    "DateTime": "SubsecTime",
+}
+
+
+def _parse_subsec(value: str) -> int:
+    """Convertit un tag EXIF SubsecTime* (ex. '05', '563') en microsecondes.
+    Le tag représente les décimales de la seconde, pas des microsecondes
+    brutes : '05' = 0.05s = 50000µs (et non 5µs), d'où le padding à droite."""
+    value = value.strip()
+    if not value or not value.isdigit():
+        return 0
+    return int((value + "000000")[:6])
 
 
 class ExifReader:
-    SUPPORTED = {".jpg", ".jpeg", ".png", ".tiff", ".tif", ".webp", ".bmp", ".gif"}
+    SUPPORTED = {".jpg", ".jpeg", ".png", ".tiff", ".tif", ".webp", ".bmp", ".gif", ".heic", ".heif"}
 
     @staticmethod
     def read(path: str) -> dict:
@@ -31,9 +109,11 @@ class ExifReader:
             "gps_lon": None,
         }
         try:
-            from PIL import Image, ImageOps, ExifTags
+            from PIL import ImageOps, ExifTags
 
-            with Image.open(path) as img:
+            from src.library.image_loader import open_image
+
+            with open_image(path) as img:
                 img = ImageOps.exif_transpose(img)
                 result["width"], result["height"] = img.size
 
@@ -61,9 +141,13 @@ class ExifReader:
                 for tag in ("DateTimeOriginal", "DateTimeDigitized", "DateTime"):
                     if tag in exif and exif[tag]:
                         try:
-                            result["date_taken"] = datetime.strptime(
+                            dt = datetime.strptime(
                                 str(exif[tag]), "%Y:%m:%d %H:%M:%S"
                             )
+                            subsec = exif.get(_SUBSEC_TAG_FOR[tag])
+                            if subsec:
+                                dt = dt.replace(microsecond=_parse_subsec(str(subsec)))
+                            result["date_taken"] = dt
                             break
                         except ValueError:
                             pass
@@ -167,15 +251,16 @@ class VideoMetadataReader:
         }
         try:
             import cv2
-            cap = cv2.VideoCapture(path)
-            if cap.isOpened():
-                result["width"]  = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-                result["height"] = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-                fps         = cap.get(cv2.CAP_PROP_FPS)
-                frame_count = cap.get(cv2.CAP_PROP_FRAME_COUNT)
-                if fps > 0 and frame_count > 0:
-                    result["duration"] = frame_count / fps
-                cap.release()
+            with ascii_safe_path(path) as safe_path:
+                cap = cv2.VideoCapture(safe_path)
+                if cap.isOpened():
+                    result["width"]  = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+                    result["height"] = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+                    fps         = cap.get(cv2.CAP_PROP_FPS)
+                    frame_count = cap.get(cv2.CAP_PROP_FRAME_COUNT)
+                    if fps > 0 and frame_count > 0:
+                        result["duration"] = frame_count / fps
+                    cap.release()
         except Exception as e:
             logger.debug("Erreur lecture métadonnées vidéo %s: %s", path, e)
         try:

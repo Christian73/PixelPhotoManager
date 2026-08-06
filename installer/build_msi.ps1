@@ -9,7 +9,7 @@
     2. Genere les bitmaps de l'installeur (banner.bmp, dialog.bmp).
     3. Lance heat.exe pour inventorier dist\PixelPhotoManager\.
     4. Compile avec candle.exe et lie avec light.exe.
-    5. Produit : installer\PixelPhotoManager-Setup.msi
+    5. Produit : installer\PixelPhotoManager-<version>-x64.msi
 
     Lancer depuis le repertoire du projet ou depuis installer\ :
         powershell -ExecutionPolicy Bypass -File installer\build_msi.ps1
@@ -20,8 +20,26 @@ $ErrorActionPreference = "Stop"
 $InstallerDir = $PSScriptRoot
 $ProjectRoot  = Split-Path -Parent $InstallerDir
 $DistDir      = Join-Path $ProjectRoot "dist\PixelPhotoManager"
-$OutputMsi    = Join-Path $InstallerDir "PixelPhotoManager-Setup.msi"
 $ObjDir       = Join-Path $InstallerDir "obj"
+$VersionFile  = Join-Path $ProjectRoot "VERSION"
+
+# ── Numero de version (source unique : VERSION a la racine du depot) ─────────
+# Ecrit par build.ps1 avant le build EXE ; si ce script est lance seul (hors
+# build.ps1), on le demande ici pour ne pas publier un MSI avec une version
+# perimee ou absente.
+if (-not (Test-Path $VersionFile)) {
+    $ProductVersion = Read-Host "Numero de version du MSI (ex: 1.1.0)"
+    if ($ProductVersion -notmatch '^\d+\.\d+\.\d+$') {
+        throw "Numero de version invalide : '$ProductVersion' (format attendu : Major.Minor.Build, ex: 1.1.0)"
+    }
+    Set-Content -Path $VersionFile -Value $ProductVersion -NoNewline
+} else {
+    $ProductVersion = (Get-Content $VersionFile -Raw).Trim()
+}
+Write-Host "Version MSI : $ProductVersion"
+
+# Nom de sortie versionne (ex: PixelPhotoManager-1.0.1-x64.msi)
+$OutputMsi = Join-Path $InstallerDir "PixelPhotoManager-$ProductVersion-x64.msi"
 
 # ── Localiser WiX v3 ─────────────────────────────────────────────────────────
 function Find-Wix3 {
@@ -105,7 +123,8 @@ $wxsSources += Get-ChildItem -Path $InstallerDir -Filter "harvested_*.wxs" |
 
 $candleDefs = @(
     "-dAppSourceDir=$DistDir",
-    "-dAssetsDir=$(Join-Path $ProjectRoot 'assets')"
+    "-dAssetsDir=$(Join-Path $ProjectRoot 'assets')",
+    "-dProductVersion=$ProductVersion"
 )
 
 & $Candle -arch x64 -out "$ObjDir\" -nologo -ext $WixUIExt @candleDefs @wxsSources
@@ -126,6 +145,26 @@ $wixobjs = Get-ChildItem -Path $ObjDir -Filter "*.wixobj" |
     -nologo
 if ($LASTEXITCODE -ne 0) { throw "light.exe a echoue" }
 
+# ── Script compagnon : installation avec journal detaille ────────────────────
+# msiexec ne journalise rien par defaut au double-clic sur le MSI. Ce .cmd,
+# genere a cote du MSI, lance l'installation avec /L*v (log verbeux complet) —
+# a utiliser a la place du MSI quand une installation echoue silencieusement.
+$MsiFileName = Split-Path -Leaf $OutputMsi
+$LogScript   = Join-Path $InstallerDir "Installer-avec-log.cmd"
+$logScriptContent = @"
+@echo off
+setlocal
+cd /d "%~dp0"
+set "MSI=$MsiFileName"
+set "LOG=install-$ProductVersion.log"
+echo Installation de %MSI% avec journal detaille...
+msiexec /i "%MSI%" /L*v "%LOG%"
+echo.
+echo Journal ecrit dans : %CD%\%LOG%
+pause
+"@
+Set-Content -Path $LogScript -Value $logScriptContent -Encoding ASCII
+
 # ── Resultat ──────────────────────────────────────────────────────────────────
 $size = (Get-Item $OutputMsi).Length / 1MB
 Write-Host ""
@@ -133,4 +172,5 @@ Write-Host "============================================================"
 Write-Host "  MSI cree avec succes !"
 Write-Host "  $OutputMsi"
 Write-Host ("  Taille : {0:F0} Mo" -f $size)
+Write-Host "  Pour installer avec journal detaille : $LogScript"
 Write-Host "============================================================"

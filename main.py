@@ -276,172 +276,10 @@ def main() -> None:
     _check_icon = os.path.join(tempfile.gettempdir(), "ppm_check.png").replace("\\", "/")
     _chk_px.save(_check_icon, "PNG")
 
-    app.setStyleSheet("""
-        QToolTip {
-            background-color: #2d2d2d;
-            color: #eeeeee;
-            border: 1px solid #666;
-            padding: 4px 6px;
-            border-radius: 3px;
-        }
-        QMainWindow, QDialog, QWidget {
-            background-color: #1e1e1e;
-            color: #ddd;
-        }
-        QMenuBar {
-            background: #252525;
-            color: #ddd;
-        }
-        QMenuBar::item:selected {
-            background: #3a3a3a;
-        }
-        QMenu {
-            background: #252525;
-            color: #ddd;
-        }
-        QMenu::item:selected {
-            background: #3a5a8a;
-        }
-        QMenu::item:disabled {
-            color: #6a6a6a;
-        }
-        QMenu::item:disabled:selected {
-            background: transparent;
-        }
-        QMenu::separator {
-            height: 1px;
-            background: #6a6a6a;
-            margin: 6px 8px;
-        }
-        QToolBar {
-            background: #252525;
-            border: none;
-            spacing: 4px;
-            padding: 2px;
-        }
-        QTreeWidget, QListWidget {
-            background: #252525;
-            color: #ccc;
-            border: none;
-        }
-        QTreeWidget::item:selected, QListWidget::item:selected {
-            background: #3a5a8a;
-        }
-        QScrollArea {
-            background: #1e1e1e;
-            border: none;
-        }
-        QPushButton {
-            background: #3a3a3a;
-            color: #ddd;
-            border: 1px solid #555;
-            border-radius: 3px;
-            padding: 4px 10px;
-        }
-        QPushButton:hover {
-            background: #4a4a4a;
-        }
-        QPushButton:pressed {
-            background: #2a2a2a;
-        }
-        QPushButton:checked {
-            background: #3a5a8a;
-        }
-        QLineEdit {
-            background: #2a2a2a;
-            color: #ddd;
-            border: 1px solid #555;
-            border-radius: 3px;
-            padding: 3px 6px;
-        }
-        QSlider::groove:horizontal {
-            height: 4px;
-            background: #555;
-            border-radius: 2px;
-        }
-        QSlider::handle:horizontal {
-            width: 12px;
-            height: 12px;
-            margin: -4px 0;
-            background: #7aabdb;
-            border-radius: 6px;
-        }
-        QGroupBox {
-            color: #aaa;
-            border: 1px solid #444;
-            border-radius: 4px;
-            margin-top: 8px;
-            padding-top: 4px;
-        }
-        QGroupBox::title {
-            subcontrol-origin: margin;
-            left: 8px;
-            padding: 0 4px;
-        }
-        QStatusBar {
-            background: #252525;
-            color: #aaa;
-        }
-        QCheckBox {
-            color: #ccc;
-            spacing: 6px;
-        }
-        QCheckBox::indicator {
-            width: 14px;
-            height: 14px;
-            border-radius: 2px;
-        }
-        QCheckBox::indicator:unchecked {
-            border: 1px solid #777;
-            background: #222232;
-        }
-        QCheckBox::indicator:unchecked:hover {
-            border-color: #bbb;
-            background: #2a2a3e;
-        }
-        QCheckBox::indicator:unchecked:disabled {
-            border: 1px solid #444;
-            background: #1a1a1a;
-        }
-        QCheckBox::indicator:checked:disabled {
-            border: 1px solid #444;
-            background: #1a3060;
-        }
-        QSplitter::handle {
-            background: #333;
-        }
-        QScrollBar:vertical {
-            background: #1e1e1e;
-            width: 14px;
-            margin: 0;
-        }
-        QScrollBar::handle:vertical {
-            background: #666;
-            border-radius: 6px;
-            min-height: 30px;
-            margin: 2px 2px;
-        }
-        QScrollBar::handle:vertical:hover {
-            background: #888;
-        }
-        QScrollBar::add-line:vertical,
-        QScrollBar::sub-line:vertical {
-            height: 0;
-        }
-        QScrollBar::add-page:vertical,
-        QScrollBar::sub-page:vertical {
-            background: none;
-        }
-    """ + f"""
-        QCheckBox::indicator:checked {{
-            border: 1px solid #5577ff;
-            background: #2244bb;
-            image: url({_check_icon});
-        }}
-        QCheckBox::indicator:checked:hover {{
-            background: #3355cc;
-        }}
-    """)
+    # Thème sombre : dans src/ui/theme.py plutôt qu'ici, pour être vérifiable
+    # sans importer ce point d'entrée (qui reconfigure le logging à l'import).
+    from src.ui.theme import app_stylesheet
+    app.setStyleSheet(app_stylesheet(_check_icon))
 
     # --- Splash screen ---
     splash = _build_splash()
@@ -456,6 +294,12 @@ def main() -> None:
     from src.library.scanner import LibraryScanner
     from src.faces.face_database import FaceDatabase
     from src.ui.main_window import MainWindow
+    from src.core.app_version import warm_app_version_async
+
+    # Précalcule get_app_version() en tâche de fond (git describe en mode dev,
+    # jusqu'à 2s) pendant les initialisations suivantes, pour que le résultat
+    # soit déjà en cache quand l'UI en a besoin (démarrage, aide).
+    warm_app_version_async()
 
     logger.debug("Initialisation Config")
     _splash_status(splash, app, "Lecture de la configuration…")

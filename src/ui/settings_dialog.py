@@ -20,6 +20,12 @@ from PySide6.QtWidgets import (
 )
 
 from src.core.config import Config
+from src.core.cpu_throttle import (
+    BACKGROUND_CPU_LEVELS,
+    DEFAULT_BACKGROUND_CPU,
+    IDLE_GRACE_SECONDS,
+    set_background_cpu_level,
+)
 from src.ui.edit_panel import MarkedSlider
 
 _DEFAULT_THRESHOLD_PCT = 60
@@ -171,6 +177,11 @@ class _VideoPlayerPage(QWidget):
 
         self._edit_path = QLineEdit()
         self._edit_path.setPlaceholderText("Chemin vers l'exécutable…")
+        # Nom accessible pour l'automatisation pywinauto (e2e) — sans lui,
+        # ce QLineEdit est indiscernable du champ de filtre de la sidebar
+        # (MainWindow reste dans l'arbre UIA derrière ce dialogue modal),
+        # même convention que ThumbnailCell/_DuplicateCard/extapp.
+        self._edit_path.setAccessibleName("settings::video_player_path")
         self._edit_path.textChanged.connect(lambda: self._rb_custom.setChecked(True))
         path_row.addWidget(self._edit_path, stretch=1)
 
@@ -222,6 +233,115 @@ class _VideoPlayerPage(QWidget):
             self._config.set("video.player_path", "")
 
 
+class _PerformancePage(QWidget):
+    """Niveau de bridage CPU des traitements de fond permanents (détection de
+    doublons, indexation des visages).
+
+    Le réglage agit sur le cycle de service de `src.core.cpu_throttle` : chaque
+    thread de fond s'endort périodiquement pour ne travailler qu'une fraction du
+    temps. Contrairement à la priorité OS (déjà abaissée à IDLE partout), c'est
+    le seul levier qui plafonne réellement la consommation — un thread IDLE
+    occupe malgré tout 100 % d'un cœur autrement inoccupé (ventilateur,
+    batterie)."""
+
+    # (clé de BACKGROUND_CPU_LEVELS, libellé, description)
+    _CHOICES = [
+        ("low",    "Économe (recommandé)",
+         "Priorité à la réactivité et au silence du ventilateur.\n"
+         "Les analyses de fond prennent nettement plus longtemps."),
+        ("medium", "Équilibré",
+         "Compromis entre avancement des analyses et confort d'utilisation."),
+        ("max",    "Maximum",
+         "Aucun bridage : les analyses vont aussi vite que possible,\n"
+         "au prix d'une machine sensiblement plus chargée."),
+    ]
+
+    def __init__(self, config: Config, parent=None) -> None:
+        super().__init__(parent)
+        self._config = config
+        self._build()
+
+    def _build(self) -> None:
+        layout = QVBoxLayout(self)
+        layout.setAlignment(Qt.AlignTop)
+        layout.setSpacing(10)
+        layout.setContentsMargins(24, 20, 24, 20)
+
+        title = QLabel("Performances")
+        title.setStyleSheet("font-size: 15px; font-weight: bold;")
+        layout.addWidget(title)
+
+        sep = QFrame()
+        sep.setFrameShape(QFrame.HLine)
+        sep.setStyleSheet("color: #444;")
+        layout.addWidget(sep)
+
+        layout.addSpacing(4)
+
+        lbl_title = QLabel("Charge CPU des traitements de fond")
+        lbl_title.setStyleSheet("font-weight: bold;")
+        layout.addWidget(lbl_title)
+
+        lbl_desc = QLabel(
+            "La détection de doublons et l'indexation des visages tournent en\n"
+            "continu, sans intervention de votre part. Ce réglage détermine la\n"
+            "part de processeur qu'elles s'autorisent pendant que vous utilisez\n"
+            "l'application."
+        )
+        lbl_desc.setStyleSheet("color: #aaa; font-size: 11px;")
+        lbl_desc.setWordWrap(True)
+        layout.addWidget(lbl_desc)
+
+        layout.addSpacing(6)
+
+        self._grp = QButtonGroup(self)
+        current = self._config.get("performance.background_cpu", DEFAULT_BACKGROUND_CPU)
+        if current not in BACKGROUND_CPU_LEVELS:
+            current = DEFAULT_BACKGROUND_CPU
+
+        for idx, (key, label, desc) in enumerate(self._CHOICES):
+            pct = round(BACKGROUND_CPU_LEVELS[key] * 100)
+            radio = QRadioButton(f"{label} — environ {pct} % du temps de calcul")
+            # Nom accessible pour l'automatisation pywinauto (e2e) — même
+            # convention que settings::video_player_path.
+            radio.setAccessibleName(f"settings::background_cpu::{key}")
+            self._grp.addButton(radio, idx)
+            layout.addWidget(radio)
+            if key == current:
+                radio.setChecked(True)
+
+            lbl_hint = QLabel("   " + desc.replace("\n", "\n   "))
+            lbl_hint.setStyleSheet("color: #666; font-size: 10px;")
+            layout.addWidget(lbl_hint)
+            layout.addSpacing(4)
+
+        layout.addStretch()
+
+        lbl_idle = QLabel(
+            f"Quelle que soit la valeur choisie, le bridage est automatiquement\n"
+            f"levé après {int(IDLE_GRACE_SECONDS)} secondes sans interaction : "
+            f"si vous ne vous servez\npas de l'application, les analyses reprennent "
+            f"à pleine vitesse."
+        )
+        lbl_idle.setStyleSheet("color: #777; font-size: 10px; font-style: italic;")
+        lbl_idle.setWordWrap(True)
+        layout.addWidget(lbl_idle)
+
+    def selected_level(self) -> str:
+        checked = self._grp.checkedId()
+        if checked < 0:
+            return DEFAULT_BACKGROUND_CPU
+        return self._CHOICES[checked][0]
+
+    def apply(self) -> None:
+        """Persiste le niveau **et** l'applique immédiatement : les threads de
+        fond déjà en cours relisent le ratio à chaque `throttle_tick()`, le
+        changement est donc pris en compte sans les redémarrer."""
+        level = self.selected_level()
+        self._config.set("performance.background_cpu", level)
+        set_background_cpu_level(level)
+
+
 class SettingsDialog(QDialog):
     recluster_needed = Signal()
 
@@ -253,6 +373,10 @@ class SettingsDialog(QDialog):
         item_video.setTextAlignment(Qt.AlignLeft | Qt.AlignVCenter)
         self._category_list.addItem(item_video)
 
+        item_perf = QListWidgetItem("Performances")
+        item_perf.setTextAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+        self._category_list.addItem(item_perf)
+
         self._category_list.setCurrentRow(0)
         root.addWidget(self._category_list)
 
@@ -265,6 +389,8 @@ class SettingsDialog(QDialog):
         self._stack.addWidget(self._page_faces)
         self._page_video = _VideoPlayerPage(self._config)
         self._stack.addWidget(self._page_video)
+        self._page_perf = _PerformancePage(self._config)
+        self._stack.addWidget(self._page_perf)
         right.addWidget(self._stack, stretch=1)
 
         sep = QFrame()
@@ -286,6 +412,7 @@ class SettingsDialog(QDialog):
 
     def _on_accept(self) -> None:
         self._page_video.apply()
+        self._page_perf.apply()
         changed = self._page_faces.apply()
         if changed:
             self.recluster_needed.emit()

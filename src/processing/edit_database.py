@@ -72,6 +72,24 @@ _MIGRATE_VIGNETTE_V2 = [
     "ALTER TABLE photo_edits ADD COLUMN vignette_ry2   REAL DEFAULT 0.8",
     "ALTER TABLE photo_edits ADD COLUMN vignette_angle REAL DEFAULT 0.0",
 ]
+_MIGRATE_ANNOTATIONS = (
+    "ALTER TABLE photo_edits ADD COLUMN annotations TEXT DEFAULT NULL"
+)
+_MIGRATE_FRAME = [
+    "ALTER TABLE photo_edits ADD COLUMN frame_type        TEXT DEFAULT 'none'",
+    "ALTER TABLE photo_edits ADD COLUMN frame_width       REAL DEFAULT 0.05",
+    "ALTER TABLE photo_edits ADD COLUMN frame_inner_width REAL DEFAULT 0.015",
+    "ALTER TABLE photo_edits ADD COLUMN frame_gap         REAL DEFAULT 0.02",
+    "ALTER TABLE photo_edits ADD COLUMN frame_style       TEXT DEFAULT 'solid'",
+    "ALTER TABLE photo_edits ADD COLUMN frame_color       TEXT DEFAULT '#f2f2f2'",
+    "ALTER TABLE photo_edits ADD COLUMN frame_color2      TEXT DEFAULT '#8c8c8c'",
+    "ALTER TABLE photo_edits ADD COLUMN frame_inner_color TEXT DEFAULT '#303030'",
+    "ALTER TABLE photo_edits ADD COLUMN frame_gap_color   TEXT DEFAULT '#ffffff'",
+    "ALTER TABLE photo_edits ADD COLUMN frame_inner_enabled INTEGER DEFAULT 0",
+    "ALTER TABLE photo_edits ADD COLUMN frame_inner_motif    TEXT DEFAULT 'line'",
+    "ALTER TABLE photo_edits ADD COLUMN frame_inner_relief   INTEGER DEFAULT 1",
+    "ALTER TABLE photo_edits ADD COLUMN frame_inner_ornament REAL DEFAULT 1.0",
+]
 
 _CREATE_HISTORY = """
 CREATE TABLE IF NOT EXISTS edit_history (
@@ -95,12 +113,46 @@ class EditDatabase:
     Deux tables :
     - ``photo_edits``  : état courant par photo (une ligne par photo modifiée).
     - ``edit_history`` : historique des états sauvegardés (undo/redo persistant).
+
+    Singleton par chemin de base : main_window.py, photo_viewer.py et edit_panel.py
+    créent chacun leur propre EditDatabase() ; sans singleton, chacun a son propre
+    threading.Lock() (donc les 3 ne s'excluent pas mutuellement) et relance la
+    migration complète au démarrage (3x le même coût).
     """
 
+    _instances: "dict[str, EditDatabase]" = {}
+    _instances_lock = threading.Lock()
+
+    def __new__(cls, db_path: Path = _DB_PATH):
+        key = str(db_path)
+        with cls._instances_lock:
+            inst = cls._instances.get(key)
+            if inst is None:
+                inst = super().__new__(cls)
+                inst._initialized = False
+                cls._instances[key] = inst
+            return inst
+
     def __init__(self, db_path: Path = _DB_PATH) -> None:
+        if self._initialized:
+            return
         self._db_path = db_path
         self._lock = threading.Lock()
+        # Connexion SQLite par thread, créée une fois puis réutilisée (pattern
+        # ThumbnailCache) : load() est appelé à chaque navigation dans la
+        # visionneuse — ouvrir une connexion neuve à chaque flèche coûtait
+        # plus cher que la requête elle-même.
+        self._tls = threading.local()
+        # Instantané de all_edits(), invalidé par toute écriture (cf. _invalidate_cache).
+        # Toutes les écritures passent par ce singleton : l'instantané ne peut pas
+        # se désynchroniser dans le dos de l'application.
+        self._all_edits_cache: "dict[str, EditInfo] | None" = None
         self._init_db()
+        self._initialized = True
+
+    def _invalidate_cache(self) -> None:
+        """À appeler dans toute méthode qui écrit dans photo_edits, sous _lock."""
+        self._all_edits_cache = None
 
     # ------------------------------------------------------------------ init
 
@@ -138,6 +190,15 @@ class EditDatabase:
                     conn.execute(_sql)
                 except sqlite3.OperationalError:
                     pass
+            try:
+                conn.execute(_MIGRATE_ANNOTATIONS)
+            except sqlite3.OperationalError:
+                pass
+            for _sql in _MIGRATE_FRAME:
+                try:
+                    conn.execute(_sql)
+                except sqlite3.OperationalError:
+                    pass
             self._migrate_normalize_paths(conn)
             conn.commit()
 
@@ -156,8 +217,13 @@ class EditDatabase:
                 )
 
     def _connect(self) -> sqlite3.Connection:
-        conn = sqlite3.connect(self._db_path)
-        conn.row_factory = sqlite3.Row
+        conn = getattr(self._tls, "conn", None)
+        if conn is None:
+            conn = sqlite3.connect(self._db_path, timeout=5, check_same_thread=False)
+            conn.row_factory = sqlite3.Row
+            conn.execute("PRAGMA journal_mode=WAL")
+            conn.execute("PRAGMA synchronous=NORMAL")
+            self._tls.conn = conn
         return conn
 
     # ------------------------------------------------------------------ API publique
@@ -174,53 +240,110 @@ class EditDatabase:
                     ).fetchone()
                 if row is None:
                     return EditInfo()
-                _curve_pts = row["gamma_curve_points"]
-                return EditInfo(
-                    brightness=row["brightness"],
-                    contrast=row["contrast"],
-                    saturation=row["saturation"],
-                    gamma=row["gamma"],
-                    gamma_use_curve=bool(row["gamma_use_curve"]) if row["gamma_use_curve"] is not None else False,
-                    gamma_curve_points=(
-                        [(float(x), float(y)) for x, y in json.loads(_curve_pts)]
-                        if _curve_pts else [(0.0, 0.0), (0.5, 0.5), (1.0, 1.0)]
-                    ),
-                    sharpness=row["sharpness"],
-                    noise_reduction=row["noise_reduction"],
-                    rotation=row["rotation"],
-                    straighten=row["straighten"] or 0.0,
-                    flip_h=bool(row["flip_h"]),
-                    flip_v=bool(row["flip_v"]),
-                    crop=tuple(json.loads(row["crop"])) if row["crop"] else None,
-                    bw=bool(row["bw"]),
-                    bw_red=row["bw_red"],
-                    bw_green=row["bw_green"],
-                    bw_blue=row["bw_blue"],
-                    color_red=row["color_red"] or 0.0,
-                    color_green=row["color_green"] or 0.0,
-                    color_blue=row["color_blue"] or 0.0,
-                    red_eye_regions=(
-                        [tuple(r) for r in json.loads(row["red_eye_regions"])]
-                        if row["red_eye_regions"] else []
-                    ),
-                    vignette_strength=float(row["vignette_strength"] or 0.0),
-                    vignette_color=str(row["vignette_color"] or "black"),
-                    vignette_cx=float(row["vignette_cx"] if row["vignette_cx"] is not None else 0.5),
-                    vignette_cy=float(row["vignette_cy"] if row["vignette_cy"] is not None else 0.5),
-                    vignette_rx1=float(row["vignette_rx1"] if row["vignette_rx1"] is not None else 0.4),
-                    vignette_ry1=float(row["vignette_ry1"] if row["vignette_ry1"] is not None else 0.4),
-                    vignette_rx2=float(row["vignette_rx2"] if row["vignette_rx2"] is not None else 0.8),
-                    vignette_ry2=float(row["vignette_ry2"] if row["vignette_ry2"] is not None else 0.8),
-                    vignette_angle=float(row["vignette_angle"] if row["vignette_angle"] is not None else 0.0),
-                )
+                return self._edit_from_row(row)
             except Exception as e:
                 logger.error(f"Erreur lecture retouches {photo_path}: {e}")
                 return EditInfo()
 
-    def save(self, photo_path: str, edit: EditInfo, operation: str = "edit") -> None:
-        """Sauvegarde l'état courant et l'enregistre dans l'historique."""
+    def all_edits(self) -> dict[str, EditInfo]:
+        """Toutes les retouches en cours, indexées par chemin normalisé.
+
+        La table ne contient que les photos effectivement retouchées (save()
+        supprime la ligne quand plus rien n'est modifié) : le dictionnaire reste
+        donc petit, et une seule requête suffit à alimenter toute une grille —
+        au lieu d'un SELECT par vignette affichée.
+
+        Résultat mémorisé et invalidé par les écritures : la grille le redemande
+        à chaque changement de dossier/album, sur le thread UI."""
+        with self._lock:
+            if self._all_edits_cache is not None:
+                return dict(self._all_edits_cache)
+            try:
+                with self._connect() as conn:
+                    rows = conn.execute("SELECT * FROM photo_edits").fetchall()
+                edits = {row["photo_path"]: self._edit_from_row(row) for row in rows}
+            except Exception as e:
+                logger.error("Erreur lecture de l'ensemble des retouches : %s", e)
+                return {}
+            self._all_edits_cache = edits
+            return dict(edits)
+
+    @staticmethod
+    def _edit_from_row(row) -> EditInfo:
+        _curve_pts = row["gamma_curve_points"]
+        return EditInfo(
+            brightness=row["brightness"],
+            contrast=row["contrast"],
+            saturation=row["saturation"],
+            gamma=row["gamma"],
+            gamma_use_curve=bool(row["gamma_use_curve"]) if row["gamma_use_curve"] is not None else False,
+            gamma_curve_points=(
+                [(float(x), float(y)) for x, y in json.loads(_curve_pts)]
+                if _curve_pts else [(0.0, 0.0), (0.5, 0.5), (1.0, 1.0)]
+            ),
+            sharpness=row["sharpness"],
+            noise_reduction=row["noise_reduction"],
+            rotation=row["rotation"],
+            straighten=row["straighten"] or 0.0,
+            flip_h=bool(row["flip_h"]),
+            flip_v=bool(row["flip_v"]),
+            crop=tuple(json.loads(row["crop"])) if row["crop"] else None,
+            bw=bool(row["bw"]),
+            bw_red=row["bw_red"],
+            bw_green=row["bw_green"],
+            bw_blue=row["bw_blue"],
+            color_red=row["color_red"] or 0.0,
+            color_green=row["color_green"] or 0.0,
+            color_blue=row["color_blue"] or 0.0,
+            red_eye_regions=(
+                [tuple(r) for r in json.loads(row["red_eye_regions"])]
+                if row["red_eye_regions"] else []
+            ),
+            vignette_strength=float(row["vignette_strength"] or 0.0),
+            vignette_color=str(row["vignette_color"] or "black"),
+            vignette_cx=float(row["vignette_cx"] if row["vignette_cx"] is not None else 0.5),
+            vignette_cy=float(row["vignette_cy"] if row["vignette_cy"] is not None else 0.5),
+            vignette_rx1=float(row["vignette_rx1"] if row["vignette_rx1"] is not None else 0.4),
+            vignette_ry1=float(row["vignette_ry1"] if row["vignette_ry1"] is not None else 0.4),
+            vignette_rx2=float(row["vignette_rx2"] if row["vignette_rx2"] is not None else 0.8),
+            vignette_ry2=float(row["vignette_ry2"] if row["vignette_ry2"] is not None else 0.8),
+            vignette_angle=float(row["vignette_angle"] if row["vignette_angle"] is not None else 0.0),
+            annotations=(
+                json.loads(row["annotations"]) if row["annotations"] else []
+            ),
+            frame_type=str(row["frame_type"] or "none"),
+            frame_width=float(row["frame_width"] if row["frame_width"] is not None else 0.05),
+            frame_inner_width=float(
+                row["frame_inner_width"] if row["frame_inner_width"] is not None else 0.015
+            ),
+            frame_gap=float(row["frame_gap"] if row["frame_gap"] is not None else 0.02),
+            frame_style=str(row["frame_style"] or "solid"),
+            frame_color=str(row["frame_color"] or "#f2f2f2"),
+            frame_color2=str(row["frame_color2"] or "#8c8c8c"),
+            frame_inner_color=str(row["frame_inner_color"] or "#303030"),
+            frame_gap_color=str(row["frame_gap_color"] or "#ffffff"),
+            frame_inner_enabled=bool(row["frame_inner_enabled"]),
+            frame_inner_motif=str(row["frame_inner_motif"] or "line"),
+            frame_inner_relief=bool(
+                row["frame_inner_relief"] if row["frame_inner_relief"] is not None else 1
+            ),
+            frame_inner_ornament=float(
+                row["frame_inner_ornament"]
+                if row["frame_inner_ornament"] is not None else 1.0
+            ),
+        )
+
+    def save(self, photo_path: str, edit: EditInfo, operation: str = "edit") -> bool:
+        """Sauvegarde l'état courant et l'enregistre dans l'historique.
+
+        Retourne False en cas d'échec (DB verrouillée, disque plein, etc.) —
+        les appelants doivent vérifier la valeur de retour avant de considérer
+        la sauvegarde comme acquise (ex. avant d'émettre un signal photo_saved)."""
         photo_path = os.path.normpath(photo_path)
         with self._lock:
+            # Invalidé avant l'écriture, pas après : un échec en cours de route
+            # laisse ainsi l'instantané périmé écarté plutôt que conservé.
+            self._invalidate_cache()
             try:
                 with self._connect() as conn:
                     if not edit.is_modified():
@@ -241,17 +364,24 @@ class EditDatabase:
                                  vignette_cx, vignette_cy,
                                  vignette_rx1, vignette_ry1,
                                  vignette_rx2, vignette_ry2,
-                                 vignette_angle,
+                                 vignette_angle, annotations,
+                                 frame_type, frame_width, frame_inner_width,
+                                 frame_gap, frame_style, frame_color, frame_color2,
+                                 frame_inner_color, frame_gap_color,
+                                 frame_inner_enabled, frame_inner_motif,
+                                 frame_inner_relief, frame_inner_ornament,
                                  modified_at)
                             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                                    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                                    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                                    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                                    CURRENT_TIMESTAMP)
                             """,
                             (
                                 photo_path,
                                 edit.brightness, edit.contrast, edit.saturation,
                                 edit.gamma,
                                 int(edit.gamma_use_curve),
-                                json.dumps(edit.gamma_curve_points) if edit.gamma_use_curve else None,
+                                json.dumps(edit.gamma_curve_points) if edit.gamma_curve_points else None,
                                 edit.sharpness, edit.noise_reduction,
                                 edit.rotation, edit.straighten,
                                 int(edit.flip_h), int(edit.flip_v),
@@ -265,6 +395,15 @@ class EditDatabase:
                                 edit.vignette_rx1, edit.vignette_ry1,
                                 edit.vignette_rx2, edit.vignette_ry2,
                                 edit.vignette_angle,
+                                json.dumps(edit.annotations) if edit.annotations else None,
+                                edit.frame_type, edit.frame_width, edit.frame_inner_width,
+                                edit.frame_gap, edit.frame_style,
+                                edit.frame_color, edit.frame_color2,
+                                edit.frame_inner_color, edit.frame_gap_color,
+                                int(edit.frame_inner_enabled),
+                                edit.frame_inner_motif,
+                                int(edit.frame_inner_relief),
+                                edit.frame_inner_ornament,
                             ),
                         )
                     conn.execute(
@@ -287,10 +426,13 @@ class EditDatabase:
                         (photo_path, photo_path, _HISTORY_LIMIT),
                     )
                     conn.commit()
+                    return True
             except Exception as e:
                 logger.error(f"Erreur sauvegarde retouches {photo_path}: {e}")
+                return False
 
     def has_edits(self, photo_path: str) -> bool:
+        photo_path = os.path.normpath(photo_path)
         with self._lock:
             try:
                 with self._connect() as conn:
@@ -306,6 +448,7 @@ class EditDatabase:
         """Supprime l'état courant et tout l'historique pour cette photo."""
         photo_path = os.path.normpath(photo_path)
         with self._lock:
+            self._invalidate_cache()
             try:
                 with self._connect() as conn:
                     conn.execute(
@@ -323,6 +466,7 @@ class EditDatabase:
         old_path = os.path.normpath(old_path)
         new_path = os.path.normpath(new_path)
         with self._lock:
+            self._invalidate_cache()
             try:
                 with self._connect() as conn:
                     conn.execute(

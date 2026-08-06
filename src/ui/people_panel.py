@@ -140,9 +140,11 @@ def _cosine_sim(a: list[float], b: list[float]) -> float:
         return dot / (na * nb) if na > 0 and nb > 0 else 0.0
 
 
-# Seuils pour l'affichage des suggestions
-_SIM_STRONG  = 0.60   # très probable  → libellé en bleu
-_SIM_WEAK    = 0.50   # possible        → libellé en gris
+# Seuils pour l'affichage des suggestions (visages pas encore "en attente de
+# vérification" — sous _SIM_SUGGEST dans face_database.py — affichés ici en
+# aperçu live pendant que l'utilisateur parcourt les groupes non identifiés).
+_SIM_STRONG  = 0.50   # très probable  → libellé en bleu
+_SIM_WEAK    = 0.45   # possible        → libellé en gris
 
 
 def _placeholder_pixmap(size: int = _AVATAR_SIZE) -> QPixmap:
@@ -671,10 +673,13 @@ class PeopleDialog(QDialog):
 
         person_ids = [p.id for p in persons if p.id is not None]
         person_cluster_embs = self._face_db.get_all_person_cluster_centroids(person_ids)
+        reps = self._face_db.get_all_representative_faces(
+            [cid for cid, _ in clusters]
+        )
 
         avatar_items: list[tuple[int, FaceInfo]] = []
         for cluster_id, face_count in clusters:
-            rep = self._face_db.get_representative_face(cluster_id=cluster_id)
+            rep = reps.get(cluster_id)
 
             # Suggestion : meilleur score contre chaque centroïde de groupe connu
             suggestion: tuple[str, int, float] | None = None

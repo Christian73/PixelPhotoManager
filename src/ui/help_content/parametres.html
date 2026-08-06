@@ -1,0 +1,28 @@
+<h2>Paramètres</h2>
+<p>Accédez aux paramètres via <b>Outils › Paramètres</b>.</p>
+
+<h3>Reconnaissance de visages — Tolérance de similarité</h3>
+<p>Contrôle à quel point deux visages doivent se ressembler pour être placés dans le
+même groupe lors du clustering. Plage : 25 % à 70 %. Valeur par défaut : <b>60 %</b>.</p>
+<table>
+  <tr><th>Plage</th><th>Comportement</th></tr>
+  <tr><td>25–30 %</td><td>Groupes très stricts — peu d'erreurs de mélange, mais une même
+      personne sous des angles ou éclairages très différents peut former plusieurs groupes</td></tr>
+  <tr><td>31–40 %</td><td>Groupes équilibrés</td></tr>
+  <tr><td>41–55 %</td><td>Groupes plus larges — regroupe davantage de variantes du même visage</td></tr>
+  <tr><td>56–70 %</td><td>Groupes très larges — risque de mélanger des personnes différentes</td></tr>
+</table>
+<p class="tip">Si vous modifiez ce réglage, les groupes sont recalculés automatiquement
+à la fermeture du dialogue. Les associations de personnes déjà nommées ne sont pas affectées.</p>
+
+<h3>Lecteur vidéo</h3>
+<p>Choisissez le lecteur utilisé par le bouton <b>▶ Ouvrir la vidéo</b> dans la visionneuse.</p>
+<table>
+  <tr><th>Option</th><th>Comportement</th></tr>
+  <tr><td><b>Lecteur par défaut du système</b></td><td>Utilise l'application associée aux fichiers
+      vidéo dans Windows (ex. Films &amp; TV)</td></tr>
+  <tr><td><b>Lecteur personnalisé</b></td><td>Spécifiez le chemin vers un exécutable.
+      Cliquez <b>Parcourir…</b> pour naviguer jusqu'à l'exécutable.
+      Exemples : <code>C:\Program Files\VLC\vlc.exe</code>,
+      <code>C:\Program Files\MPC-HC\mpc-hc64.exe</code></td></tr>
+</table>

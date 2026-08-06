@@ -10,21 +10,17 @@ from PySide6.QtCore import QThread, Signal
 from src.library.exif_reader import ExifReader, VideoMetadataReader, VIDEO_EXT
 from src.library.catalog import Catalog
 from src.library.thumbnail_cache import ThumbnailCache
+from src.library.image_loader import RAW_EXT, is_raw_available
 from src.core.models import PhotoInfo
 
 logger = logging.getLogger(__name__)
 
-SUPPORTED_EXT = ExifReader.SUPPORTED | VIDEO_EXT
+SUPPORTED_EXT = ExifReader.SUPPORTED | VIDEO_EXT | (RAW_EXT if is_raw_available() else set())
 
 
-def _is_hidden(path: str) -> bool:
-    """Return True if path is hidden (Windows hidden attribute or leading dot)."""
-    if os.path.basename(path).startswith("."):
-        return True
-    try:
-        return bool(os.stat(path).st_file_attributes & 0x2)
-    except (AttributeError, OSError):
-        return False
+# Ré-export : implémentation partagée (cf. fs_utils), alias conservé pour les
+# usages internes et les tests existants.
+from src.library.fs_utils import is_hidden_path as _is_hidden  # noqa: E402
 
 
 _BATCH_SIZE = 50   # photos regroupées par émission pour éviter de saturer l'event loop
@@ -59,6 +55,8 @@ class ScanThread(QThread):
 
         all_files: list[str] = []
         for folder in self._folders:
+            if self._stop_flag:
+                break
             for root, dirs, files in os.walk(folder):
                 if self._stop_flag:
                     break
@@ -183,9 +181,19 @@ class LibraryScanner:
         return self._thread
 
     def stop(self) -> None:
+        self.request_stop()
+        self.wait_stopped()
+
+    def request_stop(self) -> None:
+        """Signale l'arrêt sans attendre. Permet à MainWindow.closeEvent de
+        signaler tous les threads d'arrière-plan avant de les attendre, pour
+        qu'ils s'arrêtent en parallèle plutôt que l'un après l'autre."""
         if self._thread and self._thread.isRunning():
             self._thread.stop()
-            self._thread.wait(3000)
+
+    def wait_stopped(self, timeout_ms: int = 3000) -> None:
+        if self._thread and self._thread.isRunning():
+            self._thread.wait(timeout_ms)
 
     @property
     def is_scanning(self) -> bool:

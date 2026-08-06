@@ -3,6 +3,7 @@
 import importlib.util
 import json
 import logging
+import sys
 from pathlib import Path
 from typing import Type
 
@@ -13,10 +14,19 @@ from .event_bus import bus
 logger = logging.getLogger(__name__)
 
 
+def _app_root() -> Path:
+    """Racine de l'application : dossier de l'exe en mode figé, racine du dépôt en mode dev.
+    Ne jamais dériver ceci du cwd — un lancement depuis un autre dossier de travail
+    ne doit pas faire chercher les plugins au mauvais endroit."""
+    if getattr(sys, "frozen", False):
+        return Path(sys.executable).parent
+    return Path(__file__).resolve().parent.parent.parent
+
+
 class PluginManager:
     PLUGIN_DIRS = [
-        Path("plugins"),
-        Path("src/plugins"),
+        _app_root() / "plugins",
+        _app_root() / "src" / "plugins",
         APP_DATA_DIR / "plugins",
     ]
 

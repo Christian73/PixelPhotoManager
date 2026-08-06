@@ -13,7 +13,10 @@ import insightface
 ROOT = Path(SPECPATH)
 
 # Packages avec ressources intégrées (templates, polices, plugins)
-_with_data = ["PIL", "folium", "reportlab", "insightface"]
+# pillow_heif/rawpy : DLLs natives (libheif, libraw) embarquées via
+# collect_all — jamais dans excludes (cf. src/library/image_loader.py,
+# point de décodage unique RAW/HEIC).
+_with_data = ["PIL", "folium", "reportlab", "insightface", "pillow_heif", "rawpy"]
 
 datas, binaries, hiddenimports = [], [], []
 for pkg in _with_data:
@@ -52,6 +55,23 @@ if not _buffalo_l_dir.is_dir():
     )
 datas += [(str(_buffalo_l_dir), "insightface_root/models/buffalo_l")]
 
+# Contenu des onglets d'aide (src/ui/help_content/*.html) — résolu en mode
+# figé via sys._MEIPASS/help_content (cf. src/ui/help_dialog.py::_content_dir).
+datas += [("src/ui/help_content", "help_content")]
+
+# Numéro de version embarqué à la racine du bundle (sys._MEIPASS/VERSION), lu
+# par src/core/app_version.py::get_app_version() en mode figé (le dossier .git
+# n'est pas disponible dans l'exe pour faire un "git describe"). Le fichier
+# VERSION à la racine du dépôt est mis à jour par build.ps1 avant chaque build,
+# à partir du numéro de version demandé au constructeur.
+_version_file = ROOT / "VERSION"
+if not _version_file.is_file():
+    raise FileNotFoundError(
+        f"Fichier VERSION introuvable : {_version_file}\n"
+        "Lancez le build via build.ps1 (qui le génère) plutôt que pyinstaller directement."
+    )
+datas += [(str(_version_file), ".")]
+
 a = Analysis(
     [str(ROOT / "main.py")],
     pathex=[str(ROOT)],
@@ -72,6 +92,8 @@ a = Analysis(
         "piexif",
         # Hashing perceptuel (détection doublons)
         "imagehash",
+        # Corbeille Windows (src/library/trash.py)
+        "send2trash",
         # Stdlib (SQLite embarqué dans Python, mais on force l'inclusion)
         "sqlite3", "_sqlite3",
         # Encodages utilisés par le logging / les chemins Windows

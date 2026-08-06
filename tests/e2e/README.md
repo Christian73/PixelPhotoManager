@@ -1,0 +1,169 @@
+# Tests bout-en-bout (Layer 3)
+
+Ces scénarios pilotent la vraie application (`main.py`, sous-processus réel)
+via [pywinauto](https://pywinauto.readthedocs.io/) (backend UIA), contre une
+bibliothèque photo **synthétique et jetable** générée par
+`tools/test_env/generate_library.py`, avec un `%LOCALAPPDATA%` **isolé** du
+profil réel de l'utilisateur (voir `tools/test_env/launch_isolated.py`).
+
+Aucun test de ce dossier ne touche au catalogue, à la config, aux vignettes ou
+à la base de visages réels. Le dossier d'export par défaut de l'application
+(`~/Pictures/PixelPhotoManager/Export`) est explicitement écrasé dans
+`test_export.py` pour la même raison — ne jamais retirer cet override.
+
+## Prérequis
+
+Windows uniquement. `pywinauto` n'est **pas** dans `requirements.txt` (Layers
+1+2, multiplateforme) : c'est une dépendance séparée et optionnelle.
+
+```powershell
+.venv\Scripts\pip.exe install -r requirements-test-e2e.txt
+```
+
+Sans `pywinauto` installé, `tests/e2e/conftest.py` retire automatiquement
+`scenarios/*` de la collecte (`collect_ignore_glob`) — `pytest tests/` continue
+de fonctionner normalement (Layers 1+2 seulement).
+
+## Lancer les scénarios
+
+```powershell
+# Tous les scénarios (lent : chaque test lance une vraie instance de l'appli,
+# scan complet + indexation faciale InsightFace inclus — plusieurs minutes)
+.venv\Scripts\python.exe -m pytest tests/e2e -m e2e -v
+
+# Un seul scénario
+.venv\Scripts\python.exe -m pytest tests/e2e/scenarios/test_duplicate_detection.py -m e2e -v
+```
+
+`pytest tests/` (commande par défaut documentée dans `CLAUDE.md`) **n'exécute
+pas** ces scénarios : `pytest.ini` définit `addopts = -m "not e2e"`. Il faut
+systématiquement `-m e2e` (ou `-m ""` pour tout inclure) pour les déclencher.
+
+## Couverture de code des scénarios
+
+`--cov` ne voit pas le code exécuté par l'application (sous-processus). Pour
+que les scénarios créditent la couverture du code UI :
+
+```powershell
+$env:PPM_E2E_COVERAGE='1'
+.venv\Scripts\python.exe -m pytest tests/e2e -m e2e
+.venv\Scripts\python.exe -m coverage combine
+.venv\Scripts\python.exe -m coverage report
+```
+
+`launch_isolated.py` lance alors l'appli via `coverage run` (un fichier
+`.coverage.<hôte>.<pid>` par lancement, cf. `parallel = true` dans
+`.coveragerc`), et `_graceful_close()` (conftest) ferme la fenêtre proprement
+avant le `terminate()` de secours — un TerminateProcess n'exécuterait pas le
+hook atexit qui écrit les données. Ce rapport ne combine que le code exécuté
+par les 14 scénarios e2e (pas la suite `pytest tests/` de base) : le total
+global (46 %) est **normalement sous le cliquet `fail_under`** (49) et
+`coverage report` renvoie donc un code de sortie non nul dans ce mode — c'est
+attendu, purement informationnel, jamais gating. Ordre de grandeur constaté
+avec les 14 scénarios actuels (2026-07) : `main_window.py` 73 %,
+`thumbnail_grid.py` 72 %, `edit_panel.py` 70 %, `photo_viewer.py` 69 %,
+`sidebar.py` 70 %, `face_cluster_grid.py` 55 %, `main_window_faces.py` 47 % —
+nette hausse par rapport aux ~35 %/~49 % (`main_window.py`/`thumbnail_grid.py`)
+mesurés avec les 2 seuls tests initiaux de `test_scan_and_browse.py`.
+
+## Ce que chaque scénario vérifie
+
+| Fichier | Vérifie |
+|---|---|
+| `test_scan_and_browse.py` | Scan automatique au démarrage (pas d'onboarding, `config.json` pré-rempli) → toutes les photos synthétiques cataloguées, `media_type` correct. Fichier corrompu : le scan ne doit pas planter (sort exact non fixé — point à enrichir). |
+| `test_duplicate_detection.py` | **Scénario phare** — régression directe du bug `Signal(dict)` avec clés int corrigé en 2026-07 (voir `bugfix_signal_dict_int_keys_2026-07.md`) : menu Outils › Détecter les doublons… → confirmation → thread réel → assertion sur `duplicate_group_id` en base. Couvre Tier 1 (pHash : paires exacte + redimensionnée) et Tier 2 (ORB/RANSAC : paire recadrée). |
+| `test_duplicates_ui.py` | Actions UI sur les doublons, en complément DB-only de `test_duplicate_detection.py` : ouverture comparaison (double-clic carte) + retour auto grille, dissolution ✗ d'un groupe (persistante, n'affecte pas les autres groupes), popup de doublons ouverte depuis le bouton de la visionneuse, suppression d'un exemplaire → `duplicate_group_id` repasse à `NULL` sur le dernier membre, dialogue "État des doublons…" (Voir les groupes / Vérifier maintenant / Fermer). |
+| `test_edit_nondestructive.py` | Retouche Luminosité via la vraie UI (`LuminositeTreatmentDialog`) → persistance dans `edits.db` → Ctrl+Z (bouton "Annuler") → annulation persistée → re-navigation vers la même photo → confirmation que l'état persiste bien depuis la DB (pas seulement en mémoire). |
+| `test_edit_treatments_extended.py` | Contraste/Couleurs/Redresser/Vignette (curseur simple, persistance directe sur `edits.db`), Rotation/Miroir H/Miroir V (boutons directs), Réinitialiser (suppression totale de la ligne `photo_edits`), et surtout la **régression prioritaire** du `NameError` historique de `GammaCurveWidget` (commit `34d8c5e`) : cocher réellement "Fonctions avancées…" puis "Fonctions très avancées…" dans le dialogue Luminosité pour déclencher son `paintEvent` en conditions réelles. |
+| `test_export.py` | Retouche + export (depuis la visionneuse) → le fichier `.jpg` produit incruste bien la retouche (delta de luminance moyenne mesuré) et conserve les dates du fichier original (`preserve_file_dates`). |
+| `test_export_extended.py` | Second chemin d'entrée de l'export (sélection multiple dans la grille, pas la visionneuse), au moins 2 préréglages de taille contrastés (« Petite » redimensionne, « Moyenne » non, sur cette bibliothèque synthétique), et le nommage anti-collision `{stem}_1.jpg` sur ré-export dans le même dossier. |
+| `test_folder_management.py` | Cycle de vie complet d'un dossier surveillé : `FolderManagerDialog` (re-scan forcé avec effet observable réel, "Retirer" — fichiers intacts sur disque, lignes catalogue purgées), arbre de la sidebar (créer/renommer/effacer un sous-dossier — le renommage est vérifié à la fois sur `catalog.db` ET `faces.db`, seul cas où les deux `update_paths_prefix` sont exercés ensemble de bout en bout). |
+| `test_albums.py` | Les 3 chemins de création d'album (sidebar "+", "Créer un nouvel album avec…" en multi-sélection grille, "Ajouter … à un album…" en sélection simple) et le seul chemin de suppression (menu contextuel sidebar, confirmation standard Oui/Non) — vérifie les lignes `albums`/`album_photos` sans jamais toucher aux photos ni aux fichiers sur disque. |
+| `test_save_options_and_settings.py` | "Enregistrer l'image traitée sur le disque" (écrasement + sauvegarde `.tmp_originals`), case "Ne plus demander" de la confirmation de suppression (persistance `ui.delete_no_confirm`), Applications externes (icône visionneuse ajoutée/retirée), Paramètres › Lecteur vidéo (round-trip `config.json`), Aide/À propos. |
+| `test_sidebar_special_views.py` | Vues spéciales de la sidebar (Favoris, Vidéos, recherche par nom de fichier) — preuve de bout en bout des deux correctifs favoris de ce chantier (viewer qui ne persistait rien, item de menu grille sans callback), via les deux chemins d'entrée (bouton visionneuse + menu contextuel grille). |
+| `test_faces_identify_and_reset.py` | Utilise `isolated_app_with_faces` (7 photos de visages, voir `fixtures/faces/`). `test_faces_identify_and_reset` : identifier un visage isolé (nouvelle personne) et un cluster entier (nouvelle personne) depuis la visionneuse/`FaceClusterGrid`, fusionner les deux personnes créées, ignorer puis restaurer un visage, "Réinitialiser les groupes uniquement" (RESET_CLUSTERING, non destructif — les personnes identifiées doivent survivre). `test_faces_reset_full` (lancement séparé, destructif) : "Réinitialisation complète" (RESET_FULL) → `faces`/`indexed_photos` vidés puis ré-indexation complète — régression directe du bug de cache de regroupement HDBSCAN périmé (`clusterer._last_clustered_n`) corrigé en 2026-07 (voir `bugfix_clustering_cache_stale_after_reset_2026-07.md`). |
+
+Le détail exact des étapes de chaque fichier est documenté dans son propre
+docstring de module — cette table reste volontairement un résumé.
+
+## Mécanique de synchronisation : sonder les DB, pas l'UI
+
+`ThumbnailGrid` est peinte à la main (aucun texte natif exploitable par UIA
+pour ses cellules) et les opérations longues (scan, détection de doublons,
+indexation faciale) n'ont pas de marqueur UI fiable à attendre. Le mécanisme
+**principal** de synchronisation est donc `wait_for_condition()`
+(`tests/e2e/conftest.py`) qui sonde directement `catalog.db`/`edits.db` via
+`query_one()` — une vraie connexion `sqlite3.connect()` en lecture, en
+parallèle du process applicatif qui écrit dans le même fichier.
+
+`wait_for_log()` (tail de `logs/pixelphotomanager.log` depuis un offset
+capturé via `log_offset()`) est fourni en repli pour un évènement qui n'a pas
+de trace en base.
+
+## Cibler des éléments UIA précis
+
+- **Boutons / dialogues natifs** (`QMessageBox`, boutons de `QDialog`) :
+  `find_dialog_button(window, texts, exact=False)`. Point établi
+  empiriquement cette session : les `QDialog`/`QMessageBox` Qt sur Windows
+  apparaissent comme des **descendants** de la fenêtre principale dans l'arbre
+  UIA (fenêtres "owned"), jamais comme fenêtres top-level séparées — ne
+  jamais utiliser `app.window(title=...)` pour les cibler, toujours
+  `window.descendants(...)`.
+- **Vignettes précises** : `find_thumbnail(window, photo_path)`, qui s'appuie
+  sur le nom accessible `thumb::<chemin>` posé délibérément sur
+  `ThumbnailCell` (`src/ui/thumbnail_grid.py::_setup_ui`) — seul moyen fiable
+  de cibler une vignette précise dans la grille virtuelle peinte à la main.
+- **Sliders** (`EditSlider` → `MarkedSlider` → `QSlider` réel) :
+  `window.descendants(control_type="Slider")` + `.set_value(int(v * 100))`
+  (l'échelle interne de `EditSlider` est toujours ×100).
+- **Champs de texte** (ex. dossier de destination d'export) :
+  `window.descendants(control_type="Edit")`, désambiguïsé par le **contenu**
+  du champ plutôt que par position (plusieurs `QLineEdit` peuvent coexister
+  à l'écran, ex. le panneau EXIF pendant la visionneuse).
+
+## Ajouter un scénario
+
+1. Nouveau fichier dans `scenarios/`, `pytestmark = pytest.mark.e2e` en tête.
+2. Fixture `isolated_app` (function-scoped — un process applicatif frais et
+   une copie dédiée de la bibliothèque synthétique par test, pour que les
+   scénarios destructifs — suppression, déplacement — ne polluent pas les
+   autres) donne accès à `.window` (pywinauto), `.manifest`
+   (`LibraryManifest`), `.catalog_db`, `.edits_db`, `.faces_db`. Pour un
+   scénario ayant besoin de photos de visages réelles, utiliser
+   `isolated_app_with_faces` à la place (même attributs, plus
+   `.face_photos`) ; pour un état de config de départ non par défaut,
+   paramétrer indirectement `isolated_app` (voir sa docstring dans
+   `conftest.py`).
+3. Toujours vérifier l'état via les DB (`query_one`/`wait_for_condition`)
+   plutôt que via le texte affiché à l'écran — plus robuste, et c'est la
+   vraie source de vérité de l'application.
+4. Ne jamais cliquer "en aveugle" sur des coordonnées écran devinées : passer
+   par `find_dialog_button`/`find_thumbnail`/`descendants(control_type=...)`.
+
+## Limites connues / dette assumée
+
+- Couverture e2e de l'identification/fusion/reset de visages désormais
+  présente (`test_faces_identify_and_reset.py`, fixture dédiée
+  `isolated_app_with_faces` + `tests/e2e/fixtures/faces/`, 7 images : 3
+  solo « Personne A », 3 solo « Personne B », 1 photo des deux ensemble,
+  générées/choisies pour ne pas représenter de vraie personne identifiable).
+  Aucune hypothèse n'est faite sur la topologie exacte du regroupement
+  HDBSCAN (non garanti reproductible sur des visages générés par IA) :
+  chaque étape interroge `faces.db` pour trouver un candidat plutôt que de
+  deviner un id/nombre de groupes.
+- Volontairement hors périmètre pour cette campagne : toute automation de
+  glissé/geste à main levée sur un widget peint à la main (recadrage, poignées
+  de vignette, placement yeux rouges, annotations, pipette balance des blancs,
+  bbox de visage manuelle, glissé-déposer de vignette) — jugé trop fragile en
+  UIA pour la valeur apportée. Le sélecteur natif Windows
+  (`QFileDialog.getExistingDirectory`/`getOpenFileName`, ex. "Ajouter un
+  dossier…", "Déplacer vers…", "Enregistrer à un autre emplacement…") n'est
+  pas non plus automatisé : fenêtre Shell distincte de l'arbre UIA de
+  l'application, même esprit.
+- `test_scan_and_browse.py::test_scan_reports_corrupted_file_as_repairable_or_skipped`
+  ne fixe pas le sort exact du fichier corrompu (catalogué avec erreur vs.
+  ignoré) — dépend de `file_repair.py`, non encore spécifié par ce scénario.
+- Flakiness connue : vol de focus par les dialogues natifs Windows si une
+  autre fenêtre a le focus au moment du clic ; UIA peut mettre quelques
+  centaines de ms à exposer un contrôle nouvellement affiché (d'où les boucles
+  de retente dans tous les helpers `find_*` plutôt que des lookups directs).

@@ -122,7 +122,7 @@ def _exif_corrected(image_path: str, extra_rotation: int = 0):
         needs_ascii = True
 
     try:
-        from src.library.exif_reader import VIDEO_EXT
+        from src.library.exif_reader import VIDEO_EXT, ascii_safe_path
         is_video = os.path.splitext(image_path)[1].lower() in VIDEO_EXT
     except Exception:
         is_video = False
@@ -130,28 +130,36 @@ def _exif_corrected(image_path: str, extra_rotation: int = 0):
     try:
         if is_video:
             import cv2
-            cap = cv2.VideoCapture(image_path)
-            if cap.isOpened():
-                total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-                target = max(0, int(total * 0.1))
-                cap.set(cv2.CAP_PROP_POS_FRAMES, target)
-                ret, frame = cap.read()
-                cap.release()
-                if ret:
-                    fd, temp_path = tempfile.mkstemp(suffix=".jpg")
-                    os.close(fd)
-                    cv2.imwrite(temp_path, frame)
-                    result_path = temp_path
+            with ascii_safe_path(image_path) as vpath:
+                cap = cv2.VideoCapture(vpath)
+                if cap.isOpened():
+                    total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+                    target = max(0, int(total * 0.1))
+                    cap.set(cv2.CAP_PROP_POS_FRAMES, target)
+                    ret, frame = cap.read()
+                    cap.release()
+                    if ret:
+                        fd, temp_path = tempfile.mkstemp(suffix=".jpg")
+                        os.close(fd)
+                        cv2.imwrite(temp_path, frame)
+                        result_path = temp_path
         else:
-            from PIL import Image, ImageOps
-            with Image.open(image_path) as img:
+            from PIL import ImageOps
+            from src.library.image_loader import RAW_EXT, open_image, safe_temp_suffix
+            # RAW/HEIC : cv2.imread ne sait pas les décoder — une conversion
+            # JPEG est nécessaire même quand orientation/rotation/ascii sont
+            # déjà corrects, sinon detect_and_embed reçoit le fichier
+            # d'origine non lisible par cv2.
+            ext = os.path.splitext(image_path)[1].lower()
+            needs_format_conversion = ext in RAW_EXT or ext in (".heic", ".heif")
+            with open_image(image_path) as img:
                 orientation = img.getexif().get(274, 1)
                 needs_exif = orientation not in (None, 1)
-                if needs_exif or needs_rotation or needs_ascii:
+                if needs_exif or needs_rotation or needs_ascii or needs_format_conversion:
                     corrected = ImageOps.exif_transpose(img) if needs_exif else img.copy()
                     if needs_rotation:
                         corrected = corrected.rotate(-extra_rotation, expand=True)
-                    suffix = os.path.splitext(image_path)[1] or ".jpg"
+                    suffix = safe_temp_suffix(image_path)
                     fd, temp_path = tempfile.mkstemp(suffix=suffix)
                     os.close(fd)
                     corrected.save(temp_path, quality=95)
@@ -201,14 +209,15 @@ def _resized_for_detection(image_path: str):
     scale = 1.0
     try:
         from PIL import Image
-        with Image.open(image_path) as img:
+        from src.library.image_loader import open_image, safe_temp_suffix
+        with open_image(image_path) as img:
             w, h = img.size
             max_dim = max(w, h)
             if max_dim > _MAX_DETECT_DIM:
                 scale = _MAX_DETECT_DIM / max_dim
                 new_w, new_h = int(w * scale), int(h * scale)
                 resized = img.resize((new_w, new_h), Image.LANCZOS)
-                suffix = os.path.splitext(image_path)[1] or ".jpg"
+                suffix = safe_temp_suffix(image_path)
                 fd, temp_path = tempfile.mkstemp(suffix=suffix)
                 os.close(fd)
                 resized.save(temp_path, quality=92)
@@ -341,13 +350,13 @@ def detect_and_embed(image_path: str, rotation: int = 0) -> list[dict]:
             continue
         x1, y1, x2, y2 = face.bbox.astype(int)
         w, h = x2 - x1, y2 - y1
-        if w < 20 or h < 20:
-            continue
         if inv != 1.0:
             x1 = int(x1 * inv)
             y1 = int(y1 * inv)
             w  = int(w  * inv)
             h  = int(h  * inv)
+        if w < 20 or h < 20:
+            continue
         result.append({
             "bbox":      (x1, y1, w, h),
             "embedding": face.embedding.tolist(),

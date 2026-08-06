@@ -8,6 +8,13 @@ from collections import deque
 
 from PySide6.QtCore import QThread, Signal
 
+from src.core.cpu_throttle import (
+    init_background_process,
+    limit_cv2_threads,
+    lower_current_thread_priority,
+    throttle_tick,
+    throttled_worker_count,
+)
 from src.faces.face_database import FaceDatabase
 from src.faces.detector import detect_and_embed, detect_and_embed_auto, warmup_worker, warmup_worker_cpu
 from src.library.catalog import Catalog
@@ -15,11 +22,14 @@ from src.library.catalog import Catalog
 logger = logging.getLogger(__name__)
 
 
-_WORKERS              = 4     # subprocesses en pipeline GPU/CPU
+_WORKERS              = throttled_worker_count()  # subprocesses en pipeline GPU/CPU, ~30 % des cœurs
 _CLUSTER_EVERY        = 1000  # relancer le clustering tous les N visages trouvés
 _DETECT_TIMEOUT       = 60    # secondes max par photo avant de tuer le subprocess
 _WARMUP_TIMEOUT       = 120   # secondes max pour le warmup initial (GPU peut être lent)
 _MAX_CONSECUTIVE_FAIL = 5     # échecs consécutifs avant abandon définitif
+_GPU_RETRY_AFTER      = 50    # succès consécutifs en secours CPU avant de retenter le GPU
+                               # (un seul timeout/crash isolé ne doit pas condamner tout le
+                               # reste du scan à tourner en CPU 1 worker)
 
 def _kill_executor(executor: concurrent.futures.ProcessPoolExecutor) -> None:
     """Tue de force tous les subprocesses de l'executor (nécessaire sur Windows :
@@ -37,15 +47,38 @@ def _kill_executor(executor: concurrent.futures.ProcessPoolExecutor) -> None:
 
 def _fresh_executor_cpu() -> concurrent.futures.ProcessPoolExecutor:
     """Crée un executor propre pré-initialisé en mode CPU forcé (1 worker, conservateur)."""
-    ex = concurrent.futures.ProcessPoolExecutor(max_workers=1)
+    ex = concurrent.futures.ProcessPoolExecutor(
+        max_workers=1, initializer=init_background_process
+    )
     try:
         ex.submit(warmup_worker_cpu).result(timeout=30)
         logger.info("FaceIndexThread: re-warmup CPU OK")
     except Exception as exc:
         logger.warning("FaceIndexThread: re-warmup CPU échoué (%s) — executor nu", exc)
         _kill_executor(ex)
-        ex = concurrent.futures.ProcessPoolExecutor(max_workers=1)
+        ex = concurrent.futures.ProcessPoolExecutor(
+            max_workers=1, initializer=init_background_process
+        )
     return ex
+
+
+def _fresh_executor_gpu() -> "concurrent.futures.ProcessPoolExecutor | None":
+    """Tente de recréer un executor GPU plein (_WORKERS workers) après un secours CPU.
+    Retourne None si le warmup échoue, pour laisser l'appelant rester sur CPU sans
+    interrompre le scan en cours."""
+    ex = concurrent.futures.ProcessPoolExecutor(
+        max_workers=_WORKERS, initializer=init_background_process
+    )
+    try:
+        futs = [ex.submit(warmup_worker) for _ in range(_WORKERS)]
+        for f in futs:
+            f.result(timeout=_WARMUP_TIMEOUT)
+        logger.info("FaceIndexThread: re-warmup GPU OK, retour au pipeline GPU")
+        return ex
+    except Exception as exc:
+        logger.warning("FaceIndexThread: tentative de retour au GPU échouée (%s) — reste sur CPU", exc)
+        _kill_executor(ex)
+        return None
 
 
 class TFWarmUpThread(QThread):
@@ -96,10 +129,19 @@ class FaceIndexThread(QThread):
         self._face_db = face_db
         self._catalog = catalog
         self._stop_flag = False
+        self._executor: "concurrent.futures.ProcessPoolExecutor | None" = None
 
     def run(self) -> None:
         from src.core.thread_journal import journal, rss_mb
         self.setPriority(QThread.LowestPriority)
+        # setPriority() ne descend qu'à THREAD_PRIORITY_LOWEST (-2) ; IDLE (-15)
+        # place ce thread sous quasiment tout le reste du système.
+        lower_current_thread_priority()
+        # Ce thread-ci ne fait pas de gros calcul OpenCV (tout part en
+        # sous-processus, où init_background_process s'en charge), mais il
+        # décode et sauvegarde des vignettes de visages via cv2/PIL — et le
+        # réglage est de toute façon global au process.
+        limit_cv2_threads(1)
 
         from src.library.exif_reader import VIDEO_EXT
         all_paths = self._catalog.get_all_photo_paths()
@@ -124,7 +166,10 @@ class FaceIndexThread(QThread):
         # les subprocesses les héritent automatiquement.
         from src.faces.detector import _register_nvidia_dll_dirs
         _register_nvidia_dll_dirs()
-        executor = concurrent.futures.ProcessPoolExecutor(max_workers=_WORKERS)
+        executor = concurrent.futures.ProcessPoolExecutor(
+            max_workers=_WORKERS, initializer=init_background_process
+        )
+        self._executor = executor
         try:
             # ── Phase 1 : warmup des _WORKERS subprocesses ─────────────────
             self.progress.emit(0, total)
@@ -153,6 +198,8 @@ class FaceIndexThread(QThread):
             path_iter = iter(to_index)
             processed = 0
             consecutive_fails = 0
+            on_cpu_fallback = False
+            cpu_recovery_successes = 0
 
             def _enqueue() -> None:
                 """Remplit la file jusqu'à _WORKERS futures simultanées."""
@@ -188,6 +235,8 @@ class FaceIndexThread(QThread):
                     detections, det_rotation = fut.result(timeout=remaining)
 
                 except concurrent.futures.TimeoutError:
+                    if self._stop_flag:
+                        break
                     logger.error("FaceIndexThread: timeout %ds sur %s",
                                  _DETECT_TIMEOUT, os.path.basename(path))
                     journal.step("FaceIndexThread", f"TIMEOUT {os.path.basename(path)}", t0)
@@ -206,6 +255,9 @@ class FaceIndexThread(QThread):
                     in_flight.clear()
                     _kill_executor(executor)
                     executor = _fresh_executor_cpu()
+                    self._executor = executor
+                    on_cpu_fallback = True
+                    cpu_recovery_successes = 0
                     self.error.emit(path, f"timeout ({_DETECT_TIMEOUT}s)")
                     consecutive_fails += 1
                     if consecutive_fails >= _MAX_CONSECUTIVE_FAIL:
@@ -216,6 +268,12 @@ class FaceIndexThread(QThread):
                     continue
 
                 except concurrent.futures.BrokenExecutor as exc:
+                    if self._stop_flag:
+                        # Executor tué par stop() (arrêt demandé pendant que
+                        # fut.result() bloquait, jusqu'à _DETECT_TIMEOUT=60s
+                        # sans ça) : pas un vrai crash, ne pas le compter
+                        # comme échec ni relancer un executor de secours.
+                        break
                     logger.error("FaceIndexThread: subprocess crashé sur %s",
                                  os.path.basename(path))
                     journal.step("FaceIndexThread", f"CRASH {os.path.basename(path)}", t0)
@@ -229,6 +287,9 @@ class FaceIndexThread(QThread):
                     in_flight.clear()
                     _kill_executor(executor)
                     executor = _fresh_executor_cpu()
+                    self._executor = executor
+                    on_cpu_fallback = True
+                    cpu_recovery_successes = 0
                     self.error.emit(path, f"subprocess crash: {exc}")
                     consecutive_fails += 1
                     if consecutive_fails >= _MAX_CONSECUTIVE_FAIL:
@@ -261,10 +322,57 @@ class FaceIndexThread(QThread):
                     self.photo_indexed.emit(path, len(detections))
                     if faces_found % _CLUSTER_EVERY == 0:
                         self.cluster_requested.emit()
+
+                if on_cpu_fallback:
+                    cpu_recovery_successes += 1
+                    if cpu_recovery_successes >= _GPU_RETRY_AFTER:
+                        # Un seul timeout/crash isolé ne doit pas condamner tout le reste
+                        # du scan à tourner en CPU 1 worker : après un nombre de succès
+                        # consécutifs, retenter le GPU. Purge d'abord les futures encore
+                        # en vol sur l'executor CPU (1 worker, donc peu coûteux) avant de
+                        # le tuer, pour ne pas perdre de travail déjà soumis.
+                        while in_flight and not self._stop_flag:
+                            f2, p2, _ = in_flight.popleft()
+                            processed += 1
+                            self.progress.emit(processed, total)
+                            try:
+                                d2, r2 = f2.result(timeout=_DETECT_TIMEOUT)
+                                self._face_db.save_faces(p2, d2, rotation=r2)
+                                faces_found += len(d2)
+                                indexed += 1
+                                if d2:
+                                    self.photo_indexed.emit(p2, len(d2))
+                            except Exception as exc:
+                                logger.warning(
+                                    "FaceIndexThread: échec purge avant retour GPU sur %s : %s",
+                                    os.path.basename(p2), exc,
+                                )
+                                self._face_db.mark_index_error(p2, "error")
+                        new_executor = _fresh_executor_gpu()
+                        _kill_executor(executor)
+                        if new_executor is not None:
+                            executor = new_executor
+                            on_cpu_fallback = False
+                        else:
+                            executor = _fresh_executor_cpu()
+                        self._executor = executor
+                        cpu_recovery_successes = 0
+
+                # Cycle de service du pipeline : la pause est prise *avant* de
+                # réalimenter la file, donc les _WORKERS sous-processus se
+                # vident et restent inoccupés pendant tout le sommeil — c'est
+                # ce qui bride réellement la charge, le travail lui-même ayant
+                # lieu hors de ce thread. Le régulateur mesure ici du temps
+                # d'horloge (l'attente sur fut.result() incluse) et non du temps
+                # CPU : sur un pipeline saturé, qui est le cas visé, les deux se
+                # confondent.
+                throttle_tick(lambda: self._stop_flag)
+
                 _enqueue()
 
         finally:
             executor.shutdown(wait=False, cancel_futures=True)
+            self._executor = None
 
         if indexed > 0:
             self.cluster_requested.emit()
@@ -284,6 +392,15 @@ class FaceIndexThread(QThread):
 
     def stop(self) -> None:
         self._stop_flag = True
+        # Sans ça, run() peut rester bloqué jusqu'à _DETECT_TIMEOUT (60s) ou
+        # _WARMUP_TIMEOUT (120s) dans un fut.result() en cours avant de
+        # seulement remarquer le flag — tuer l'executor fait échouer cet
+        # appel immédiatement (BrokenExecutor), ce qui débloque la boucle
+        # sans attendre. Contribue directement à un arrêt rapide de
+        # l'application (cf. MainWindow.closeEvent).
+        executor = self._executor
+        if executor is not None:
+            _kill_executor(executor)
 
 
 class SingleFaceReindexThread(QThread):
@@ -344,10 +461,21 @@ class ForceRedetectThread(QThread):
     plus proche (IoU) par save_faces() lui-même ; les visages ajoutés manuellement
     (jamais vus par InsightFace) ne sont pas touchés.
 
-    Réutilise la rotation de la dernière indexation réussie (FaceDatabase.
-    get_indexed_rotation) : la photo a déjà été indexée avec succès par le passé,
-    inutile de retenter les 4 rotations comme le fait RetryFaceIndexThread pour un
-    fichier en échec.
+    Essaie deux orientations et garde la plus fructueuse :
+      1. la rotation d'édition courante (edits.db) — celle que l'utilisateur voit ;
+      2. la rotation de la dernière indexation (indexed_photos.rotation).
+
+    Se contenter de la rotation indexée (comportement d'origine) re-détectait
+    éternellement dans une orientation périmée quand les deux ont divergé
+    (rotation annulée par Ctrl+Z, ou deux rotations enchaînées trop vite pour
+    être toutes indexées) — symptôme : 2 visages retrouvés sur 8, même en
+    détection forcée, sans qu'aucune action de l'UI puisse en sortir. Mais s'en
+    tenir à la seule rotation d'édition casserait le cas inverse, légitime et
+    fréquent : `detect_and_embed_auto` bascule volontairement sur 90/180/270
+    quand 0° ne trouve rien (photo prise de travers), et la rotation indexée est
+    alors la bonne alors que la photo s'affiche à 0°. D'où l'essai des deux, à
+    égalité de nombre de visages c'est la rotation d'édition qui gagne (repère
+    cohérent avec ce qui est affiché, cf. detected_rotation).
 
     Signals
     -------
@@ -360,18 +488,51 @@ class ForceRedetectThread(QThread):
     cluster_requested = Signal()
     error             = Signal(str, str)
 
-    def __init__(self, face_db: FaceDatabase, photo_path: str, parent=None) -> None:
+    def __init__(
+        self, face_db: FaceDatabase, photo_path: str, parent=None, edit_db=None,
+    ) -> None:
         super().__init__(parent)
         self._face_db    = face_db
         self._photo_path = photo_path
+        self._edit_db    = edit_db
+
+    def _edit_rotation(self) -> "int | None":
+        """Rotation d'édition courante, ou None si edits.db est illisible."""
+        try:
+            db = self._edit_db
+            if db is None:
+                from src.processing.edit_database import EditDatabase
+                db = EditDatabase()
+            return int(db.load(self._photo_path).rotation) % 360
+        except Exception as exc:
+            logger.warning(
+                "ForceRedetectThread : rotation d'édition illisible pour %s (%s)",
+                os.path.basename(self._photo_path), exc,
+            )
+            return None
+
+    def _rotation_candidates(self) -> list[int]:
+        """Orientations à essayer, par ordre de préférence (cf. docstring)."""
+        indexed = self._face_db.get_indexed_rotation(self._photo_path) % 360
+        edited = self._edit_rotation()
+        if edited is None:
+            return [indexed]
+        return [edited] if edited == indexed else [edited, indexed]
 
     def run(self) -> None:
         from src.library.exif_reader import VIDEO_EXT
         if os.path.splitext(self._photo_path)[1].lower() in VIDEO_EXT:
             return
-        rotation = self._face_db.get_indexed_rotation(self._photo_path)
+        candidates = self._rotation_candidates()
+        detections: list = []
+        rotation = candidates[0]
         try:
-            detections = detect_and_embed(self._photo_path, rotation=rotation)
+            for candidate in candidates:
+                found = detect_and_embed(self._photo_path, rotation=candidate)
+                # `>` strict : à égalité, la première candidate (rotation
+                # d'édition) est conservée.
+                if len(found) > len(detections):
+                    detections, rotation = found, candidate
         except RuntimeError:
             return   # insightface non installé
         except Exception as exc:
@@ -382,8 +543,9 @@ class ForceRedetectThread(QThread):
             self._photo_path, detections, rotation=rotation, force_no_limit=True
         )
         logger.info(
-            "ForceRedetectThread: %d visage(s) détecté(s) sans limite de taille dans %s",
-            len(detections), os.path.basename(self._photo_path),
+            "ForceRedetectThread: %d visage(s) détecté(s) sans limite de taille "
+            "dans %s (rotation=%d°, essais=%s)",
+            len(detections), os.path.basename(self._photo_path), rotation, candidates,
         )
         self.finished.emit(self._photo_path, len(detections))
         self.cluster_requested.emit()
@@ -419,7 +581,9 @@ class RetryFaceIndexThread(QThread):
         path = self._photo_path
         from src.faces.detector import _register_nvidia_dll_dirs
         _register_nvidia_dll_dirs()
-        executor = concurrent.futures.ProcessPoolExecutor(max_workers=1)
+        executor = concurrent.futures.ProcessPoolExecutor(
+            max_workers=1, initializer=init_background_process
+        )
         success = False
         unavailable = False
         detections: list = []

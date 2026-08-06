@@ -7,15 +7,16 @@ from datetime import datetime as _dt
 from pathlib import Path
 
 from PySide6.QtCore import Qt, Signal, QRunnable, QThreadPool, QObject, Slot, QPoint, QRect, QTimer, QMimeData, QByteArray
-from PySide6.QtGui import QPixmap, QColor, QPainter, QFont, QDrag
+from PySide6.QtGui import QPixmap, QColor, QPainter, QFont, QFontMetrics, QDrag
 from PySide6.QtWidgets import (
     QScrollArea, QScrollBar, QWidget, QLabel, QVBoxLayout, QSizePolicy,
-    QMenu, QApplication,
+    QMenu, QApplication, QPushButton,
 )
 
 from src.ui.loading_label import LoadingLabel
 from src.core.models import PhotoInfo
-from src.library.thumbnail_cache import ThumbnailCache
+from src.library.thumbnail_cache import ThumbnailCache, edit_signature
+from src.ui.ui_utils import install_menu_width_fix
 
 logger = logging.getLogger(__name__)
 
@@ -71,7 +72,10 @@ _INERTIA_STOP     = 0.08  # seuil d'arrêt
 
 class _ThumbSignals(QObject):
     # Utilise 'object' (PyObject) pour garantir le marshaling cross-thread en PySide6.
-    ready = Signal(str, object)  # photo_path, jpeg_bytes (Python bytes)
+    # 3e argument : empreinte des retouches appliquées à la vignette produite —
+    # transmise plutôt que relue côté UI, sinon deux retouches rapprochées
+    # pourraient faire ranger le pixmap de la première sous l'empreinte de la seconde.
+    ready = Signal(str, object, str)  # photo_path, jpeg_bytes (Python bytes), edit_sig
 
 
 class _ThumbWorker(QRunnable):
@@ -81,28 +85,30 @@ class _ThumbWorker(QRunnable):
         self._path = photo_path
         self._cache = cache
         self._edit = edit
+        self._sig = edit_signature(edit)
         self._signals_ref = weakref.ref(signals)
         self.setAutoDelete(True)
 
     def run(self) -> None:
         try:
-            # Vérifier DB avant de relancer PIL — évite le décodage JPEG si déjà en cache
-            if self._edit is None:
-                data = self._cache.get_bytes(self._path)
-            else:
-                data = None
+            # Vérifier DB avant de relancer PIL — évite le décodage JPEG si déjà
+            # en cache. L'empreinte garantit qu'on ne réutilise pas une vignette
+            # produite avec un autre état de retouches (ni l'inverse : une
+            # vignette retouchée déjà en cache n'est pas régénérée pour rien).
+            data = self._cache.get_bytes(self._path, self._sig)
             if data is None:
                 data = self._cache.generate(self._path, self._edit)
             if data:
                 signals = self._signals_ref()
                 if signals is not None:
-                    signals.ready.emit(self._path, data)
+                    signals.ready.emit(self._path, data, self._sig)
         except Exception:
             logger.debug(f"Erreur génération vignette {self._path}", exc_info=True)
 
 
 _DUP_BADGE_W = 22
 _DUP_BADGE_H = 16
+_RATING_BADGE_H = 16
 
 
 class ThumbnailCell(QWidget):
@@ -112,10 +118,14 @@ class ThumbnailCell(QWidget):
     drag_started     = Signal(object)
     duplicate_clicked = Signal(object)  # PhotoInfo — clic sur le badge de doublon
 
-    def __init__(self, photo: PhotoInfo, cache: ThumbnailCache, size: int, parent=None):
+    def __init__(self, photo: PhotoInfo, cache: ThumbnailCache, size: int, parent=None,
+                 edit=None):
         super().__init__(parent)
         self._photo = photo
         self._cache = cache
+        # Retouches en cours sur cette photo (None = aucune) : la vignette doit
+        # les refléter (rotation, recadrage…), cf. ThumbnailGrid._edits.
+        self._edit  = edit
         self._size  = size
         self._selected = False
         self._pixmap: QPixmap | None = None
@@ -131,6 +141,10 @@ class ThumbnailCell(QWidget):
     def _setup_ui(self) -> None:
         self.setFixedSize(self._size + 8, self._size + 8)
         self.setCursor(Qt.PointingHandCursor)
+        # Nom accessible (UIA/QAccessible) : permet aux tests bout-en-bout
+        # (tests/e2e, pywinauto) de cibler une vignette précise par chemin de
+        # photo plutôt que par coordonnées écran devinées.
+        self.setAccessibleName(f"thumb::{self._photo.path}")
         layout = QVBoxLayout(self)
         layout.setContentsMargins(4, 4, 4, 4)
         layout.setSpacing(0)
@@ -146,11 +160,12 @@ class ThumbnailCell(QWidget):
         self._load_requested = True
         # Vérifier uniquement le cache RAM dans le thread UI (non bloquant).
         # La vérification DB et la génération PIL sont déléguées au worker.
-        pixmap = self._cache.get_ram(self._photo.path)
+        pixmap = self._cache.get_ram(self._photo.path, edit_signature(self._edit))
         if pixmap:
             self._set_pixmap(pixmap)
         else:
-            worker = _ThumbWorker(self._photo.path, self._cache, self._signals)
+            worker = _ThumbWorker(self._photo.path, self._cache, self._signals,
+                                  self._edit)
             from pathlib import Path as _P
             from src.library.exif_reader import VIDEO_EXT as _VE
             pool = (_get_video_thumb_pool()
@@ -178,17 +193,27 @@ class ThumbnailCell(QWidget):
         self._worker_pool = None
 
     def reload_with_edit(self, edit) -> None:
-        self._cache.invalidate(self._photo.path)
+        """Régénère la vignette pour un nouvel état de retouches.
+
+        Pas d'invalidate() du cache : l'entrée stockée porte l'empreinte de
+        l'ancien état, elle ne peut donc pas être resservie pour le nouveau, et
+        generate() la remplacera (clé primaire = chemin)."""
+        self._edit = edit
         worker = _ThumbWorker(self._photo.path, self._cache, self._signals, edit)
         _get_thumb_pool().start(worker)
 
-    @Slot(str, object)
-    def _on_thumb_ready(self, path: str, data: object) -> None:
+    @Slot(str, object, str)
+    def _on_thumb_ready(self, path: str, data: object, edit_sig: str) -> None:
         if path == self._photo.path:
             pixmap = QPixmap()
             pixmap.loadFromData(QByteArray(data))
             if not pixmap.isNull():
-                self._cache.store_pixmap(path, pixmap)
+                self._cache.store_pixmap(path, pixmap, edit_sig)
+                if edit_sig != edit_signature(self._edit):
+                    # Résultat d'une génération devancée par une retouche plus
+                    # récente : mis en cache (il est valide pour son empreinte),
+                    # mais pas affiché — le worker en cours a le dernier mot.
+                    return
                 self._set_pixmap(pixmap)
             else:
                 logger.warning("Pixmap null pour %s", path)
@@ -213,6 +238,8 @@ class ThumbnailCell(QWidget):
             scaled = self._add_duplicate_badge(scaled)
         else:
             self._dup_badge_rect = None
+        if self._photo.rating > 0:
+            scaled = self._add_rating_badge(scaled, self._photo.rating)
         self._img_label.setPixmap(scaled)
 
     def _add_duplicate_badge(self, pixmap: QPixmap) -> QPixmap:
@@ -230,6 +257,25 @@ class ThumbnailCell(QWidget):
         f.setBold(True)
         p.setFont(f)
         p.drawText(QRect(x, y, _DUP_BADGE_W, _DUP_BADGE_H), Qt.AlignCenter, "⧉")
+        p.end()
+        return result
+
+    def _add_rating_badge(self, pixmap: QPixmap, rating: int) -> QPixmap:
+        result = QPixmap(pixmap)
+        p = QPainter(result)
+        p.setRenderHint(QPainter.Antialiasing)
+        text = "★" * rating
+        f = QFont()
+        f.setPixelSize(11)
+        f.setBold(True)
+        p.setFont(f)
+        w = QFontMetrics(f).horizontalAdvance(text) + 8
+        x, y = 2, result.height() - _RATING_BADGE_H - 2
+        p.setBrush(QColor(0, 0, 0, 170))
+        p.setPen(Qt.NoPen)
+        p.drawRoundedRect(x, y, w, _RATING_BADGE_H, 4, 4)
+        p.setPen(QColor(255, 210, 0))
+        p.drawText(QRect(x, y, w, _RATING_BADGE_H), Qt.AlignCenter, text)
         p.end()
         return result
 
@@ -290,6 +336,11 @@ class ThumbnailCell(QWidget):
 
     def set_duplicate_group(self, group_id) -> None:
         self._photo.duplicate_group_id = group_id
+        if self._pixmap is not None:
+            self._set_pixmap(self._pixmap)
+
+    def set_rating(self, rating: int) -> None:
+        self._photo.rating = rating
         if self._pixmap is not None:
             self._set_pixmap(self._pixmap)
 
@@ -407,19 +458,30 @@ class ThumbnailGrid(QScrollArea):
     rename_requested          = Signal(object)
     move_requested            = Signal(object)
     delete_requested          = Signal(list)
+    remove_from_album_requested = Signal(list)    # list[PhotoInfo] — retirer de l'album affiché
     save_requested            = Signal(object)
     duplicate_clicked         = Signal(object)   # PhotoInfo — badge de doublon cliqué
     add_to_album_requested    = Signal(list)      # list[PhotoInfo] — ajouter à album existant
     create_album_with_requested = Signal(list)    # list[PhotoInfo] — créer nouvel album
     retry_face_index_requested = Signal(object)   # PhotoInfo — retenter l'identification des visages
+    favorite_toggle_requested = Signal(object)    # PhotoInfo — bascule favori demandée
+    rating_change_requested  = Signal(list, int)  # list[PhotoInfo], note 0-5 — changement de note demandé
+    edit_tags_requested       = Signal(list)      # list[PhotoInfo] — édition des mots-clés demandée
 
     def __init__(self, cache: ThumbnailCache, parent=None):
         super().__init__(parent)
         self._cache       = cache
         self._thumb_size  = 180
         self._photos: list[PhotoInfo] = []
+        # Index chemin → PhotoInfo, maintenu en parallèle de _photos : évite les
+        # parcours O(n) de toute la liste à chaque changement de sélection
+        # (get_selected/select_photo sont sur le chemin chaud clic/clavier).
+        self._by_path: dict[str, PhotoInfo] = {}
         self._selected: set[str] = set()
         self._materialized: dict[int, ThumbnailCell] = {}
+        # Album affiché (via set_album_context()), sinon None : pilote l'action
+        # "Retirer de l'album" du menu contextuel et le comportement de la touche Del.
+        self._album_id: int | None = None
         # False tant qu'aucun scroll n'a eu lieu depuis le dernier affichage : seule
         # la partie visible est alors préparée. Passe à True au 1er _on_scroll(),
         # ce qui active la marge d'un écran au-dessus/en dessous (cf. _visible_range).
@@ -428,6 +490,13 @@ class ThumbnailGrid(QScrollArea):
         # non exclues) — pilote l'affichage de "Retenter l'identification des visages"
         # dans le menu contextuel. Mis à jour par MainWindow.set_index_error_paths().
         self._index_error_paths: set[str] = set()
+        # Retouches en cours, par chemin normalisé — les vignettes doivent les
+        # refléter (rotation, recadrage…). Rechargées en une requête à chaque
+        # set_photos() via le fournisseur posé par MainWindow, et maintenues au
+        # coup par coup par refresh_photo() : une grille virtualisée n'a aucune
+        # cellule à rafraîchir pour une photo hors champ au moment de la retouche.
+        self._edits: dict[str, object] = {}
+        self._edit_provider = None
 
         # ── Mode ruban ──
         self._ribbon_mode   = False
@@ -484,6 +553,46 @@ class ThumbnailGrid(QScrollArea):
         )
         self._date_label.hide()
 
+        # État vide avec message + action (ex. dossier "copie de DVD" sans
+        # photo cataloguée) — générique, sans connaissance du cas d'usage :
+        # l'appelant fournit le texte et le callback du bouton.
+        self._empty_overlay = QWidget(self.viewport())
+        self._empty_overlay.setStyleSheet(
+            "QWidget { background-color: rgba(40,40,40,220); border-radius: 10px; }"
+        )
+        _empty_layout = QVBoxLayout(self._empty_overlay)
+        _empty_layout.setContentsMargins(24, 20, 24, 20)
+        _empty_layout.setSpacing(12)
+        self._empty_label = QLabel("", self._empty_overlay)
+        self._empty_label.setWordWrap(True)
+        self._empty_label.setAlignment(Qt.AlignCenter)
+        self._empty_label.setStyleSheet("QLabel { color: white; font-size: 14px; }")
+        self._empty_label.setMaximumWidth(320)
+        _empty_layout.addWidget(self._empty_label)
+        self._empty_action_btn = QPushButton("", self._empty_overlay)
+        _empty_layout.addWidget(self._empty_action_btn)
+        self._empty_overlay.hide()
+
+        # Indicateur "Chargement…" pendant une requête photo (dossier/album
+        # sélectionné) : retour visuel immédiat au clic dans la sidebar. Différé
+        # de 150 ms pour ne pas clignoter quand la requête répond vite.
+        self._loading_label = QLabel("Chargement…", self.viewport())
+        self._loading_label.setAttribute(Qt.WA_TransparentForMouseEvents)
+        self._loading_label.setStyleSheet(
+            "QLabel {"
+            "  color: white;"
+            "  font-size: 15px;"
+            "  background-color: rgba(0,0,0,170);"
+            "  border-radius: 8px;"
+            "  padding: 8px 22px;"
+            "}"
+        )
+        self._loading_label.hide()
+        self._loading_delay_timer = QTimer(self)
+        self._loading_delay_timer.setSingleShot(True)
+        self._loading_delay_timer.setInterval(150)
+        self._loading_delay_timer.timeout.connect(self._show_loading_label)
+
         # Ascenseur de navigation rapide (mode ruban uniquement)
         # La barre est fournie de l'extérieur via bind_ribbon_nav_bar()
         # et placée dans le layout parent — pas en overlay sur le viewport.
@@ -495,13 +604,60 @@ class ThumbnailGrid(QScrollArea):
         self._nav_settle_timer.setInterval(500)
         self._nav_settle_timer.timeout.connect(self._on_nav_settled)
 
+    # ══════════════════════════════════════════════════════════════════ chargement
+
+    def set_loading(self, on: bool) -> None:
+        """Affiche (après 150 ms) ou masque l'indicateur "Chargement…" — appelé
+        par main_window quand une requête photo démarre/aboutit. set_photos()
+        et clear() le masquent aussi automatiquement."""
+        if on:
+            self._loading_delay_timer.start()
+        else:
+            self._loading_delay_timer.stop()
+            self._loading_label.hide()
+
+    def _show_loading_label(self) -> None:
+        self._loading_label.adjustSize()
+        vp = self.viewport().rect()
+        x = max(0, (vp.width() - self._loading_label.width()) // 2)
+        y = max(0, (vp.height() - self._loading_label.height()) // 2)
+        self._loading_label.move(x, y)
+        self._loading_label.show()
+        self._loading_label.raise_()
+
     # ══════════════════════════════════════════════════════════════════ données
 
+    def set_edit_provider(self, provider) -> None:
+        """Fournisseur des retouches en cours : callable() -> dict[chemin, EditInfo].
+
+        Interrogé à chaque set_photos() plutôt qu'injecté par l'appelant : la
+        grille est repeuplée depuis une douzaine d'endroits différents, dont
+        aucun n'aurait à connaître les retouches."""
+        self._edit_provider = provider
+        self._reload_edits()
+
+    def _reload_edits(self) -> None:
+        if self._edit_provider is None:
+            return
+        try:
+            self._edits = {
+                os.path.normpath(p): e for p, e in self._edit_provider().items()
+            }
+        except Exception:
+            logger.debug("Erreur de lecture des retouches pour la grille", exc_info=True)
+
+    def _edit_for(self, photo_path: str):
+        return self._edits.get(os.path.normpath(photo_path))
+
     def set_photos(self, photos: list[PhotoInfo]) -> None:
+        self.set_loading(False)
+        self.clear_empty_message()
         self._selected.clear()
         self._cancel_pending_workers()
         self._dematerialize_all()
+        self._reload_edits()
         self._photos = list(photos)
+        self._by_path = {p.path: p for p in self._photos}
         if self._ribbon_mode:
             self._buffer_active = False
             self._ribbon_offset = 0
@@ -522,6 +678,7 @@ class ThumbnailGrid(QScrollArea):
 
     def add_photo(self, photo: PhotoInfo) -> None:
         self._photos.append(photo)
+        self._by_path[photo.path] = photo
         if self._ribbon_mode:
             QTimer.singleShot(0, self._update_ribbon_cells)
         else:
@@ -532,6 +689,7 @@ class ThumbnailGrid(QScrollArea):
         if not photos:
             return
         self._photos.extend(photos)
+        self._by_path.update((p.path, p) for p in photos)
         if self._ribbon_mode:
             QTimer.singleShot(0, self._update_ribbon_cells)
         else:
@@ -542,6 +700,8 @@ class ThumbnailGrid(QScrollArea):
         paths_set = set(paths)
         self._dematerialize_all()
         self._photos = [p for p in self._photos if p.path not in paths_set]
+        for path in paths_set:
+            self._by_path.pop(path, None)
         self._selected -= paths_set
         if self._ribbon_mode:
             self._clamp_ribbon_offset()
@@ -552,40 +712,66 @@ class ThumbnailGrid(QScrollArea):
         self.selection_changed.emit(self.get_selected())
 
     def scroll_to_photo(self, path: str) -> None:
-        """Centre le ruban sur la photo path. Sans effet si pas en mode ruban."""
-        if not self._ribbon_mode or not self._r_cols:
-            return
+        """Ramène la vignette de path dans la zone visible : centrée en mode
+        ruban (chronologique), défilement minimal juste suffisant sinon."""
         idx = next((i for i, p in enumerate(self._photos) if p.path == path), None)
         if idx is None:
             return
-        self._ribbon_offset = idx - self._center_pos()
-        self._clamp_ribbon_offset()
-        self._update_ribbon_cells()
-        self._update_date_overlay()
+        if self._ribbon_mode:
+            if not self._r_cols:
+                return
+            self._ribbon_offset = idx - self._center_pos()
+            self._clamp_ribbon_offset()
+            self._update_ribbon_cells()
+            self._update_date_overlay()
+        else:
+            rect = self._container.cell_rect(idx)
+            vbar = self.verticalScrollBar()
+            vp_h = max(1, self.viewport().height())
+            spacing = self._container.spacing
+            if rect.top() < vbar.value():
+                vbar.setValue(rect.top() - spacing)
+            elif rect.bottom() > vbar.value() + vp_h:
+                vbar.setValue(rect.bottom() - vp_h + spacing)
 
     def refresh_photo(self, photo_path: str, edit) -> None:
+        """Prend acte d'un nouvel état de retouches pour une photo.
+
+        La table est mise à jour dans tous les cas — c'est elle qui fera
+        régénérer la vignette à la prochaine matérialisation de la cellule si la
+        photo n'est pas à l'écran (grille virtualisée : au moment où
+        l'utilisateur retouche depuis la visionneuse, sa cellule n'existe le plus
+        souvent pas)."""
+        key = os.path.normpath(photo_path)
+        if edit is not None and edit.is_modified():
+            self._edits[key] = edit
+        else:
+            self._edits.pop(key, None)
         for cell in self._materialized.values():
-            if cell.photo.path == photo_path:
+            if os.path.normpath(cell.photo.path) == key:
                 cell.reload_with_edit(edit)
                 return
 
     def clear(self) -> None:
+        self.set_loading(False)
+        self.clear_empty_message()
         self._selected.clear()
         self._cancel_pending_workers()
         self._dematerialize_all()
         self._buffer_active = False
         self._photos.clear()
+        self._by_path.clear()
         if not self._ribbon_mode:
             self._container.set_total(0)
 
     def update_photo_path(self, old_path: str, new_path: str) -> None:
         new_p = Path(new_path)
-        for photo in self._photos:
-            if photo.path == old_path:
-                photo.path     = new_path
-                photo.filename = new_p.name
-                photo.directory = str(new_p.parent)
-                break
+        photo = self._by_path.pop(old_path, None)
+        if photo is not None:
+            photo.path     = new_path
+            photo.filename = new_p.name
+            photo.directory = str(new_p.parent)
+            self._by_path[new_path] = photo
         if old_path in self._selected:
             self._selected.discard(old_path)
             self._selected.add(new_path)
@@ -593,7 +779,10 @@ class ThumbnailGrid(QScrollArea):
     # ══════════════════════════════════════════════════════════════════ sélection
 
     def get_selected(self) -> list[PhotoInfo]:
-        return [p for p in self._photos if p.path in self._selected]
+        # O(sélection) et non O(bibliothèque) — appelé à chaque clic/flèche.
+        # L'ordre n'est pas celui de la grille (ordre du set) : les
+        # consommateurs actuels traitent le résultat comme un ensemble.
+        return [self._by_path[p] for p in self._selected if p in self._by_path]
 
     def select_all(self) -> None:
         self._selected = {p.path for p in self._photos}
@@ -603,7 +792,7 @@ class ThumbnailGrid(QScrollArea):
 
     def select_photo(self, path: str) -> None:
         """Sélectionne une seule photo par chemin et émet selection_changed."""
-        if not any(p.path == path for p in self._photos):
+        if path not in self._by_path:
             return
         self._clear_selection()
         self._selected.add(path)
@@ -824,6 +1013,7 @@ class ThumbnailGrid(QScrollArea):
             if idx not in target:
                 cell = self._materialized.pop(idx)
                 cell.cancel_pending_load()
+                cell.hide()   # jamais setParent(None) sur un widget visible (fenêtre fantôme)
                 cell.setParent(None)
 
         # Mettre à jour ou créer les cellules
@@ -893,6 +1083,7 @@ class ThumbnailGrid(QScrollArea):
             if i not in needed:
                 cell = self._materialized.pop(i)
                 cell.cancel_pending_load()
+                cell.hide()   # jamais setParent(None) sur un widget visible (fenêtre fantôme)
                 cell.setParent(None)
 
         for i in needed:
@@ -923,6 +1114,7 @@ class ThumbnailGrid(QScrollArea):
             if i not in needed:
                 cell = self._materialized.pop(i)
                 cell.cancel_pending_load()
+                cell.hide()   # jamais setParent(None) sur un widget visible (fenêtre fantôme)
                 cell.setParent(None)
 
         for i in needed:
@@ -955,6 +1147,7 @@ class ThumbnailGrid(QScrollArea):
     def _dematerialize_all(self) -> None:
         for cell in self._materialized.values():
             cell.cancel_pending_load()
+            cell.hide()   # jamais setParent(None) sur un widget visible (fenêtre fantôme)
             cell.setParent(None)
         self._materialized.clear()
 
@@ -1016,6 +1209,45 @@ class ThumbnailGrid(QScrollArea):
         self._date_label.show()
         self._date_label.raise_()
 
+    # ══════════════════════════════════════════════════════════════════ état vide
+
+    def show_empty_message(self, text: str, action_label: str = None, action_callback=None) -> None:
+        """Affiche un message centré par-dessus la grille (ex. dossier vide de
+        photos mais contenant en réalité une copie de DVD). Effacé automatiquement
+        par set_photos()/clear() ; l'appelant le redemande si la condition tient
+        toujours après le prochain affichage."""
+        self._empty_label.setText(text)
+        if action_label and action_callback is not None:
+            self._empty_action_btn.setText(action_label)
+            try:
+                self._empty_action_btn.clicked.disconnect()
+            except (TypeError, RuntimeError):
+                pass
+            self._empty_action_btn.clicked.connect(action_callback)
+            self._empty_action_btn.show()
+        else:
+            self._empty_action_btn.hide()
+        self._empty_overlay.adjustSize()
+        self._reposition_empty_overlay()
+        self._empty_overlay.show()
+        self._empty_overlay.raise_()
+
+    def clear_empty_message(self) -> None:
+        self._empty_overlay.hide()
+
+    def _reposition_empty_overlay(self) -> None:
+        if not self._empty_overlay.isVisible():
+            return
+        size = self._empty_overlay.sizeHint()
+        vp = self.viewport().rect()
+        x = max(0, (vp.width() - size.width()) // 2)
+        y = max(0, (vp.height() - size.height()) // 2)
+        self._empty_overlay.setGeometry(x, y, size.width(), size.height())
+
+    def resizeEvent(self, event) -> None:
+        super().resizeEvent(event)
+        self._reposition_empty_overlay()
+
     # ══════════════════════════════════════════════════════════════════ molette
 
     def wheelEvent(self, event) -> None:
@@ -1074,7 +1306,7 @@ class ThumbnailGrid(QScrollArea):
     def _make_cell(self, photo: PhotoInfo, size: int | None = None) -> ThumbnailCell:
         if size is None:
             size = self._thumb_size
-        cell = ThumbnailCell(photo, self._cache, size)
+        cell = ThumbnailCell(photo, self._cache, size, edit=self._edit_for(photo.path))
         cell.double_clicked.connect(self.photo_activated.emit)
         cell.right_clicked.connect(self._on_right_click)
         cell.clicked.connect(self._on_cell_clicked)
@@ -1158,6 +1390,12 @@ class ThumbnailGrid(QScrollArea):
 
         drag.exec(Qt.MoveAction)
 
+    def set_album_context(self, album_id: int | None) -> None:
+        """Indique si la grille affiche le contenu d'un album (et lequel), pour
+        proposer "Retirer de l'album" et faire pointer la touche Del dessus plutôt
+        que sur l'effacement définitif du fichier."""
+        self._album_id = album_id
+
     def set_index_error_paths(self, paths) -> None:
         """Met à jour l'ensemble des photos en erreur d'indexation faciale
         (timeout/crash) — pilote l'action "Retenter l'identification des visages"
@@ -1173,6 +1411,22 @@ class ThumbnailGrid(QScrollArea):
             if cell.photo.path in assignments:
                 cell.set_duplicate_group(assignments[cell.photo.path])
 
+    def refresh_rating(self, ratings: dict) -> None:
+        """Met à jour les badges de notation. ratings = {path: rating (0-5)}."""
+        for photo in self._photos:
+            if photo.path in ratings:
+                photo.rating = ratings[photo.path]
+        for cell in self._materialized.values():
+            if cell.photo.path in ratings:
+                cell.set_rating(ratings[cell.photo.path])
+
+    def _toggle_favorite_from_menu(self, photo: PhotoInfo) -> None:
+        photo.is_favorite = not photo.is_favorite
+        self.favorite_toggle_requested.emit(photo)
+
+    def _emit_rating_change(self, photos: list[PhotoInfo], rating: int) -> None:
+        self.rating_change_requested.emit(photos, rating)
+
     @Slot(object, object)
     def _on_right_click(self, photo: PhotoInfo, pos) -> None:
         # Effective selection: full selection if photo is already selected, else just this photo
@@ -1182,13 +1436,24 @@ class ThumbnailGrid(QScrollArea):
             photos = [photo]
 
         menu = QMenu(self)
+        install_menu_width_fix(menu)
         menu.addAction("Ouvrir", lambda: self.photo_activated.emit(photo))
         menu.addSeparator()
         fav_label = "Retirer des favoris" if photo.is_favorite else "Marquer comme favori"
-        menu.addAction(fav_label)
+        menu.addAction(fav_label, lambda: self._toggle_favorite_from_menu(photo))
+        rating_menu = menu.addMenu("Noter")
+        for n in range(1, 6):
+            rating_menu.addAction(
+                "★" * n, lambda p=photos, n=n: self._emit_rating_change(p, n)
+            )
+        rating_menu.addSeparator()
+        rating_menu.addAction(
+            "Retirer la note", lambda p=photos: self._emit_rating_change(p, 0)
+        )
+        menu.addAction("Mots-clés…", lambda p=photos: self.edit_tags_requested.emit(p))
         menu.addAction("Renommer l'image", lambda: self.rename_requested.emit(photo))
         menu.addAction("Déplacer vers…", lambda: self.move_requested.emit(photo))
-        menu.addAction("Enregistrer l'image traitée sur le disque",
+        menu.addAction("Enregistrer l'image traitée sur le disque\tCtrl+S",
                        lambda: self.save_requested.emit(photo))
         menu.addSeparator()
         n = len(photos)
@@ -1206,9 +1471,31 @@ class ThumbnailGrid(QScrollArea):
             menu.addAction("Retenter l'identification des visages",
                            lambda: self.retry_face_index_requested.emit(photo))
         menu.addSeparator()
-        menu.addAction("Effacer le fichier…",
-                       lambda: self.delete_requested.emit([photo]))
+        if self._album_id is not None:
+            # Vue album : seul le retrait (non destructif) est proposé — jamais
+            # l'effacement du fichier, même en multi-sélection (même règle que la
+            # visionneuse et que la touche Del, cf. _emit_delete_or_remove).
+            rm_lbl = "Retirer les photos de l'album" if n > 1 else "Retirer de l'album"
+            menu.addAction(rm_lbl + "\tSuppr", lambda p=photos: self.remove_from_album_requested.emit(p))
+        else:
+            del_lbl = "Effacer les fichiers…" if n > 1 else "Effacer le fichier…"
+            menu.addAction(del_lbl + "\tSuppr", lambda p=photos: self.delete_requested.emit(p))
         menu.exec(pos)
+
+    def _emit_delete_or_remove(self, photos: list) -> None:
+        """Touche Del : retire de l'album affiché s'il y en a un, sinon efface
+        définitivement le(s) fichier(s)."""
+        if not photos:
+            return
+        if self._album_id is not None:
+            self.remove_from_album_requested.emit(photos)
+        else:
+            self.delete_requested.emit(photos)
+
+    def _emit_save_for_single(self, photos: list) -> None:
+        """Ctrl+S : n'a de sens que pour une photo unique et non ambiguë."""
+        if len(photos) == 1:
+            self.save_requested.emit(photos[0])
 
     def keyPressEvent(self, event) -> None:
         if self._ribbon_mode:
@@ -1224,11 +1511,21 @@ class ThumbnailGrid(QScrollArea):
             elif key == Qt.Key_Delete:
                 selected = self.get_selected()
                 if selected:
-                    self.delete_requested.emit(selected)
+                    self._emit_delete_or_remove(selected)
                 else:
                     center_idx = self._ribbon_offset + self._center_pos()
                     if 0 <= center_idx < len(self._photos):
-                        self.delete_requested.emit([self._photos[center_idx]])
+                        self._emit_delete_or_remove([self._photos[center_idx]])
+                event.accept()
+                return
+            elif key == Qt.Key_S and event.modifiers() == Qt.ControlModifier:
+                selected = self.get_selected()
+                if selected:
+                    self._emit_save_for_single(selected)
+                else:
+                    center_idx = self._ribbon_offset + self._center_pos()
+                    if 0 <= center_idx < len(self._photos):
+                        self._emit_save_for_single([self._photos[center_idx]])
                 event.accept()
                 return
             else:
@@ -1241,6 +1538,8 @@ class ThumbnailGrid(QScrollArea):
         elif event.key() == Qt.Key_Delete:
             selected = self.get_selected()
             if selected:
-                self.delete_requested.emit(selected)
+                self._emit_delete_or_remove(selected)
+        elif event.key() == Qt.Key_S and event.modifiers() == Qt.ControlModifier:
+            self._emit_save_for_single(self.get_selected())
         else:
             super().keyPressEvent(event)

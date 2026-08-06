@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (
     QPushButton, QScrollArea, QGroupBox, QDialog,
     QDialogButtonBox, QToolButton, QGridLayout, QSizePolicy,
     QCheckBox, QStyle, QStyleOptionSlider,
+    QButtonGroup, QColorDialog, QFontComboBox, QSpinBox, QDoubleSpinBox,
 )
 
 from src.core.models import PhotoInfo, EditInfo
@@ -24,7 +25,6 @@ from src.processing.edit_database import EditDatabase
 logger = logging.getLogger(__name__)
 
 _UNDO_MAX = 20
-_ICON_SIZE = 44
 
 # Noms d'affichage pour les opérations stockées en DB (undo/redo persistant)
 _OP_LABELS: dict[str, str] = {
@@ -34,8 +34,19 @@ _OP_LABELS: dict[str, str] = {
     "crop":               "Recadrage",
     "red_eye":            "Yeux rouges",
     "red_eye_clear":      "Effacer yeux rouges",
+    "annotation":         "Annotation",
+    "annotation_delete":  "Supprimer annotation",
+    "annotation_clear":   "Effacer annotations",
+    "annotation_move":    "Déplacer annotation",
+    "annotation_move_multi": "Déplacer annotations",
+    "annotation_delete_multi": "Supprimer annotations",
+    "annotation_resize":  "Redimensionner annotation",
+    "annotation_style":   "Modifier le style",
+    "annotation_group":   "Grouper les annotations",
+    "annotation_ungroup": "Dégrouper les annotations",
     "undo":               "Annuler",
     "redo":               "Rétablir",
+    "restore_all":        "Remise en place des retouches",
     "picasa_before":      "Avant import",
     "picasa_rotate":      "Rotation",
     "picasa_crop":        "Recadrage",
@@ -59,1055 +70,58 @@ def _op_label(op: str) -> str:
 
 # ------------------------------------------------------------------ icônes
 
-def _base_pixmap(size: int) -> tuple[QPixmap, QPainter]:
-    px = QPixmap(size, size)
-    px.fill(QColor(0, 0, 0, 0))
-    p = QPainter(px)
-    p.setRenderHint(QPainter.Antialiasing)
-    return px, p
+# Icônes dessinées par code : regroupées dans edit_icons.py (2026-07).
+from src.ui.edit_icons import (  # noqa: E402,F401
+    _ANNOTATION_TOOL_BTN_STYLE, _ICON_SIZE, _base_pixmap,
+    _icon_ann_curve,
+    _icon_ann_ellipse,
+    _icon_ann_line,
+    _icon_ann_pen,
+    _icon_ann_rect,
+    _icon_ann_select,
+    _icon_ann_text,
+    _icon_brightness,
+    _icon_contrast,
+    _icon_crop,
+    _icon_flip_h,
+    _icon_flip_v,
+    _icon_gamma,
+    _icon_red_eye,
+    _icon_saturation,
+    _icon_straighten,
+    _icon_vignette,
+)
 
-
-def _icon_brightness(size: int = _ICON_SIZE) -> QPixmap:
-    px, p = _base_pixmap(size)
-    c, r = size // 2, size // 4
-    p.setBrush(QColor(255, 210, 60))
-    p.setPen(QPen(QColor(255, 170, 0), 1))
-    p.drawEllipse(c - r, c - r, r * 2, r * 2)
-    p.setPen(QPen(QColor(255, 210, 60), 2))
-    r1, r2 = r + 3, r + size // 5
-    for i in range(8):
-        a = math.radians(i * 45)
-        p.drawLine(
-            int(c + r1 * math.cos(a)), int(c + r1 * math.sin(a)),
-            int(c + r2 * math.cos(a)), int(c + r2 * math.sin(a)),
-        )
-    p.end()
-    return px
-
-
-def _icon_contrast(size: int = _ICON_SIZE) -> QPixmap:
-    px, p = _base_pixmap(size)
-    c = size // 2
-    r = int(size * 0.38)
-    p.setBrush(QColor(30, 30, 30))
-    p.setPen(Qt.NoPen)
-    p.drawChord(c - r, c - r, r * 2, r * 2, 90 * 16, 180 * 16)
-    p.setBrush(QColor(230, 230, 230))
-    p.drawChord(c - r, c - r, r * 2, r * 2, 270 * 16, 180 * 16)
-    p.setBrush(Qt.NoBrush)
-    p.setPen(QPen(QColor(140, 140, 140), 1))
-    p.drawEllipse(c - r, c - r, r * 2, r * 2)
-    p.end()
-    return px
-
-
-def _icon_saturation(size: int = _ICON_SIZE) -> QPixmap:
-    px, p = _base_pixmap(size)
-    c, r = size // 2, size // 3
-    for angle, col in [
-        (210, QColor(80, 80, 220, 180)),
-        (330, QColor(80, 200, 80, 180)),
-        (90,  QColor(220, 60, 60, 180)),
-    ]:
-        rad = math.radians(angle)
-        cx = int(c + r * 0.45 * math.cos(rad))
-        cy = int(c + r * 0.45 * math.sin(rad))
-        p.setBrush(col)
-        p.setPen(Qt.NoPen)
-        p.drawEllipse(cx - r // 2, cy - r // 2, r, r)
-    p.end()
-    return px
-
-
-def _icon_gamma(size: int = _ICON_SIZE) -> QPixmap:
-    px, p = _base_pixmap(size)
-    pad = size // 8
-    w, h = size - 2 * pad, size - 2 * pad
-    p.setPen(QPen(QColor(80, 80, 80), 1, Qt.DashLine))
-    p.drawLine(pad, pad + h, pad + w, pad)
-    p.setPen(QPen(QColor(160, 160, 255), 2))
-    prev = None
-    for i in range(w + 1):
-        t = i / w
-        y = h - int(h * (t ** 0.42))
-        pt = (pad + i, pad + y)
-        if prev:
-            p.drawLine(prev[0], prev[1], pt[0], pt[1])
-        prev = pt
-    p.end()
-    return px
-
-
-
-def _icon_straighten(size: int = _ICON_SIZE) -> QPixmap:
-    """Cadre légèrement incliné + ligne d'horizon horizontale."""
-    px, p = _base_pixmap(size)
-    c = size // 2
-    pad = size // 7
-    # Ligne d'horizon de référence (pointillés)
-    p.setPen(QPen(QColor(100, 180, 255), 1, Qt.DashLine))
-    p.drawLine(pad, c, size - pad, c)
-    # Cadre incliné représentant l'image à redresser
-    angle = math.radians(12)
-    cos_a, sin_a = math.cos(angle), math.sin(angle)
-    hw, hh = size // 2 - pad - 2, size // 3 - 2
-    corners = [(-hw, -hh), (hw, -hh), (hw, hh), (-hw, hh)]
-    rotated = [
-        QPoint(int(c + x * cos_a - y * sin_a), int(c + x * sin_a + y * cos_a))
-        for x, y in corners
-    ]
-    p.setPen(QPen(QColor(210, 210, 210), 2))
-    p.setBrush(Qt.NoBrush)
-    for i in range(4):
-        p.drawLine(rotated[i], rotated[(i + 1) % 4])
-    # Petite flèche de correction (arc)
-    p.setPen(QPen(QColor(100, 200, 100), 2))
-    p.drawArc(c - 8, c + pad // 2, 16, 10, 0, 100 * 16)
-    p.end()
-    return px
-
-
-def _icon_flip_h(size: int = _ICON_SIZE) -> QPixmap:
-    """Deux triangles pointant vers l'axe vertical central."""
-    px, p = _base_pixmap(size)
-    c, pad = size // 2, size // 6
-    h_half = size // 3
-    # Triangle gauche → pointe vers la droite (vers le centre)
-    tl = QPolygon([
-        QPoint(pad, c - h_half),
-        QPoint(c - 3, c),
-        QPoint(pad, c + h_half),
-    ])
-    p.setBrush(QColor(90, 150, 255))
-    p.setPen(Qt.NoPen)
-    p.drawPolygon(tl)
-    # Triangle droit → pointe vers la gauche (vers le centre)
-    tr = QPolygon([
-        QPoint(size - pad, c - h_half),
-        QPoint(c + 3, c),
-        QPoint(size - pad, c + h_half),
-    ])
-    p.drawPolygon(tr)
-    # Axe central
-    p.setPen(QPen(QColor(255, 255, 255), 2))
-    p.drawLine(c, pad, c, size - pad)
-    p.end()
-    return px
-
-
-def _icon_crop(size: int = _ICON_SIZE) -> QPixmap:
-    """Rectangle de recadrage avec poignées de coin."""
-    px, p = _base_pixmap(size)
-    pad_out = size // 7
-    pad_in  = size // 3
-    # Zone image (contour en pointillé)
-    p.setPen(QPen(QColor(90, 90, 90), 1, Qt.DashLine))
-    p.setBrush(Qt.NoBrush)
-    p.drawRect(pad_out, pad_out, size - 2 * pad_out, size - 2 * pad_out)
-    # Zone crop (contour blanc)
-    p.setPen(QPen(QColor(200, 200, 200), 2))
-    p.drawRect(pad_in, pad_in, size - 2 * pad_in, size - 2 * pad_in)
-    # Poignées de coin
-    hs = 4
-    p.setBrush(QColor(200, 200, 200))
-    p.setPen(Qt.NoPen)
-    for hx, hy in [(pad_in, pad_in), (size - pad_in, pad_in),
-                   (pad_in, size - pad_in), (size - pad_in, size - pad_in)]:
-        p.drawRect(hx - hs, hy - hs, hs * 2, hs * 2)
-    p.end()
-    return px
-
-
-def _icon_flip_v(size: int = _ICON_SIZE) -> QPixmap:
-    """Deux triangles pointant vers l'axe horizontal central."""
-    px, p = _base_pixmap(size)
-    c, pad = size // 2, size // 6
-    w_half = size // 3
-    # Triangle haut → pointe vers le bas (vers le centre)
-    tt = QPolygon([
-        QPoint(c - w_half, pad),
-        QPoint(c, c - 3),
-        QPoint(c + w_half, pad),
-    ])
-    p.setBrush(QColor(90, 200, 100))
-    p.setPen(Qt.NoPen)
-    p.drawPolygon(tt)
-    # Triangle bas → pointe vers le haut (vers le centre)
-    tb = QPolygon([
-        QPoint(c - w_half, size - pad),
-        QPoint(c, c + 3),
-        QPoint(c + w_half, size - pad),
-    ])
-    p.drawPolygon(tb)
-    # Axe central
-    p.setPen(QPen(QColor(255, 255, 255), 2))
-    p.drawLine(pad, c, size - pad, c)
-    p.end()
-    return px
-
-
-def _icon_vignette(size: int = _ICON_SIZE) -> QPixmap:
-    """Carré gris avec dégradé radial sombre aux coins — effet vignette."""
-    px, p = _base_pixmap(size)
-    pad = size // 8
-    c = size // 2
-    bw = size - 2 * pad
-    bh = size - 2 * pad
-
-    # Photo de fond gris moyen
-    p.setBrush(QColor(130, 130, 130))
-    p.setPen(Qt.NoPen)
-    p.drawRect(pad, pad, bw, bh)
-
-    # Vignette sombre via dégradé radial
-    grad = QRadialGradient(c, c, int(size * 0.62))
-    grad.setColorAt(0.35, QColor(0, 0, 0, 0))
-    grad.setColorAt(1.00, QColor(0, 0, 0, 210))
-    p.setBrush(grad)
-    p.drawRect(pad, pad, bw, bh)
-
-    # Reflet clair au centre
-    grad2 = QRadialGradient(c, c, size // 7)
-    grad2.setColorAt(0.0, QColor(220, 220, 220, 120))
-    grad2.setColorAt(1.0, QColor(220, 220, 220, 0))
-    p.setBrush(grad2)
-    p.drawRect(pad, pad, bw, bh)
-
-    p.end()
-    return px
 
 
 # ------------------------------------------------------------------ repères de curseur
 
 
-class _Ruler(QWidget):
-    """Bande de repères (min / zéro si dans la plage / max) sous un QSlider."""
-    _H = 14
-
-    def __init__(self, slider: QSlider, fmt, parent=None):
-        super().__init__(parent)
-        self._slider = slider
-        self._fmt = fmt
-        self.setFixedHeight(self._H)
-        self.setAttribute(Qt.WA_TransparentForMouseEvents)
-
-    def _x_for(self, value: int) -> int:
-        sl = self._slider
-        opt = QStyleOptionSlider()
-        sl.initStyleOption(opt)
-        groove = sl.style().subControlRect(QStyle.CC_Slider, opt, QStyle.SC_SliderGroove, sl)
-        handle = sl.style().subControlRect(QStyle.CC_Slider, opt, QStyle.SC_SliderHandle, sl)
-        hw = handle.width() // 2
-        avail = max(1, groove.width() - handle.width())
-        pos = QStyle.sliderPositionFromValue(sl.minimum(), sl.maximum(), value, avail)
-        return groove.x() + hw + pos
-
-    def paintEvent(self, _event):
-        sl = self._slider
-        mn, mx = sl.minimum(), sl.maximum()
-        marks: set[int] = {mn, mx}
-        if mn < 0 < mx:
-            marks.add(0)
-
-        p = QPainter(self)
-        font = QFont()
-        font.setPixelSize(9)
-        p.setFont(font)
-        fm = p.fontMetrics()
-
-        for val in sorted(marks):
-            x = self._x_for(val)
-            is_zero = (val == 0 and mn < 0 < mx)
-            p.setPen(QColor(200, 200, 200) if is_zero else QColor(110, 110, 110))
-            p.drawLine(x, 0, x, 5 if is_zero else 3)
-            label = self._fmt(val)
-            tw = fm.horizontalAdvance(label)
-            lx = max(0, min(self.width() - tw, x - tw // 2))
-            p.drawText(lx, self._H - 1, label)
-        p.end()
-
-
-class MarkedSlider(QWidget):
-    """QSlider avec repères de valeur gravés en dessous (min / zéro si dans la plage / max)."""
-    valueChanged = Signal(int)
-    rangeChanged = Signal(int, int)
-
-    def __init__(self, orientation: Qt.Orientation = Qt.Horizontal,
-                 fmt=None, parent=None):
-        super().__init__(parent)
-        self._fmt = fmt or str
-        vbox = QVBoxLayout(self)
-        vbox.setContentsMargins(0, 0, 0, 0)
-        vbox.setSpacing(0)
-        self._slider = QSlider(orientation)
-        vbox.addWidget(self._slider)
-        self._ruler = _Ruler(self._slider, self._fmt)
-        vbox.addWidget(self._ruler)
-        self._slider.valueChanged.connect(self.valueChanged)
-        self._slider.rangeChanged.connect(self.rangeChanged)
-        self._slider.rangeChanged.connect(lambda *_: self._ruler.update())
-
-    # --- Proxy API QSlider ---
-    def value(self) -> int:              return self._slider.value()
-    def minimum(self) -> int:            return self._slider.minimum()
-    def maximum(self) -> int:            return self._slider.maximum()
-    def setValue(self, v: int):          self._slider.setValue(v)
-    def setRange(self, a: int, b: int):  self._slider.setRange(a, b)
-    def setMinimum(self, v: int):        self._slider.setMinimum(v)
-    def setMaximum(self, v: int):        self._slider.setMaximum(v)
-    def setSingleStep(self, v: int):     self._slider.setSingleStep(v)
-    def setPageStep(self, v: int):       self._slider.setPageStep(v)
-    def setTickPosition(self, v):        pass   # remplacé par le ruler
-    def setTickInterval(self, v: int):   pass   # idem
-
-    def set_double_click_handler(self, handler) -> None:
-        self._slider.mouseDoubleClickEvent = handler
-
-    def blockSignals(self, b: bool) -> bool:
-        self._slider.blockSignals(b)
-        return super().blockSignals(b)
-
-
-# ------------------------------------------------------------------ slider
-
-class EditSlider(QWidget):
-    value_changed = Signal(float)
-
-    def __init__(self, label: str, min_val: float, max_val: float,
-                 default_val: float, decimals: int = 2, parent=None):
-        super().__init__(parent)
-        self._min = min_val
-        self._max = max_val
-        self._default = default_val
-        self._decimals = decimals
-        self._scale = 100
-
-        layout = QHBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
-
-        lbl = QLabel(label)
-        lbl.setFixedWidth(110)
-        layout.addWidget(lbl)
-
-        _fmt = lambda v, s=self._scale, d=self._decimals: f"{v / s:.{d}f}"
-        self._slider = MarkedSlider(Qt.Horizontal, fmt=_fmt)
-        self._slider.setRange(int(min_val * self._scale), int(max_val * self._scale))
-        self._slider.setValue(int(default_val * self._scale))
-        self._slider.valueChanged.connect(self._on_changed)
-        layout.addWidget(self._slider, stretch=1)
-
-        self._val_lbl = QLabel(self._fmt(default_val))
-        self._val_lbl.setFixedWidth(46)
-        self._val_lbl.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
-        layout.addWidget(self._val_lbl)
-
-        # Flèches d'ajustement fin (pas = 1 unité au niveau de la dernière décimale)
-        self._step_size = 10 ** (-self._decimals)
-        arrows = QVBoxLayout()
-        arrows.setContentsMargins(0, 0, 0, 0)
-        arrows.setSpacing(1)
-        _arrow_style = (
-            "QPushButton { padding:0; font-size:8px; min-width:16px; max-width:16px;"
-            " min-height:12px; max-height:12px; }"
-        )
-        btn_up = QPushButton("▲")
-        btn_up.setStyleSheet(_arrow_style)
-        btn_up.setToolTip("Augmenter d'un pas")
-        btn_up.clicked.connect(lambda: self._nudge(self._step_size))
-        arrows.addWidget(btn_up)
-        btn_dn = QPushButton("▼")
-        btn_dn.setStyleSheet(_arrow_style)
-        btn_dn.setToolTip("Diminuer d'un pas")
-        btn_dn.clicked.connect(lambda: self._nudge(-self._step_size))
-        arrows.addWidget(btn_dn)
-        layout.addLayout(arrows)
-
-        self._slider.set_double_click_handler(lambda _e: (
-            self.set_value(self._default),
-            self.value_changed.emit(self._default),
-        ))
-
-    def _fmt(self, v: float) -> str:
-        return f"{v:.{self._decimals}f}"
-
-    def _on_changed(self, raw: int) -> None:
-        v = raw / self._scale
-        self._val_lbl.setText(self._fmt(v))
-        self.value_changed.emit(v)
-
-    def get_value(self) -> float:
-        return self._slider.value() / self._scale
-
-    def set_value(self, v: float) -> None:
-        self._slider.blockSignals(True)
-        self._slider.setValue(int(v * self._scale))
-        self._val_lbl.setText(self._fmt(v))
-        self._slider.blockSignals(False)
-
-    def _nudge(self, delta: float) -> None:
-        new_val = max(self._min, min(self._max, self.get_value() + delta))
-        self.set_value(new_val)
-        self.value_changed.emit(new_val)
-
-
-# ------------------------------------------------------------------ dialogue de traitement
-
-class TreatmentDialog(QDialog):
-    preview = Signal(object)  # EditInfo en temps réel
-
-    def __init__(self, title: str, sliders_def: list, edit: EditInfo, parent=None):
-        """
-        sliders_def : list of (label, attr_name, min, max, decimals)
-        """
-        super().__init__(parent)
-        self.setWindowTitle(title)
-        self.setMinimumWidth(720)
-        self._edit = copy.copy(edit)
-        self._sliders: dict[str, EditSlider] = {}
-        self._panel = None   # référence vers EditPanel, positionné dans showEvent
-
-        layout = QVBoxLayout(self)
-        layout.setSpacing(8)
-        layout.setContentsMargins(12, 12, 12, 12)
-
-        for label, attr, mn, mx, decimals in sliders_def:
-            sl = EditSlider(label, mn, mx, getattr(edit, attr), decimals)
-            self._sliders[attr] = sl
-            sl.value_changed.connect(lambda v, a=attr: self._on_changed(a, v))
-            layout.addWidget(sl)
-
-        btn_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
-        btn_box.button(QDialogButtonBox.Ok).setText("Valider")
-        btn_box.button(QDialogButtonBox.Cancel).setText("Annuler")
-        btn_box.accepted.connect(self.accept)
-        btn_box.rejected.connect(self.reject)
-        layout.addWidget(btn_box)
-
-    def showEvent(self, event) -> None:
-        super().showEvent(event)
-        if self._panel is not None:
-            # Dimensions réelles disponibles ici.
-            # QTimer.singleShot(0) diffère le move() APRÈS que Windows ait fini
-            # tout repositionnement asynchrone (adjustPosition, WM_WINDOWPOSCHANGED…).
-            pos = self._panel._compute_dialog_pos(self.width(), self.height())
-            QTimer.singleShot(0, lambda: self.move(pos))
-
-    def _on_changed(self, attr: str, value: float) -> None:
-        setattr(self._edit, attr, value)
-        self.preview.emit(copy.copy(self._edit))
-
-    def get_edit(self) -> EditInfo:
-        return self._edit
-
-
-# ------------------------------------------------------------------ courbe gamma
-
-
-def _compute_luminosity_histogram(photo_path: str) -> list[float]:
-    """Retourne 256 valeurs normalisées (log) de l'histogramme de luminosité."""
-    try:
-        from PIL import Image
-        img = Image.open(photo_path)
-        img.thumbnail((384, 384))
-        hist = img.convert("L").histogram()  # 256 buckets
-        max_val = max(hist) if hist else 1
-        log_max = math.log(max_val + 1)
-        return [math.log(v + 1) / log_max for v in hist]
-    except Exception:
-        return []
-
-
-def _gamma_to_curve_points(gamma: float) -> list:
-    result = []
-    for v in [0.0, 0.25, 0.5, 0.75, 1.0]:
-        out = v ** (1.0 / max(0.01, gamma))
-        result.append((v, max(0.0, min(1.0, out))))
-    return result
-
-
-_CURVE_PAD = 22
-
-
-class GammaCurveWidget(QWidget):
-    curve_changed = Signal(list)
-
-    def __init__(self, points=None, histogram=None, parent=None):
-        super().__init__(parent)
-        self.setMinimumSize(260, 260)
-        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        self._points: list[tuple[float, float]] = sorted(
-            points or [(0.0, 0.0), (0.5, 0.5), (1.0, 1.0)]
-        )
-        self._histogram: list[float] = histogram or []
-        self._drag_idx = -1
-        self._hover_idx = -1
-        self.setMouseTracking(True)
-
-    # -- coords helpers
-
-    def _chart(self):
-        p = _CURVE_PAD
-        return p, p, self.width() - 2 * p, self.height() - 2 * p
-
-    def _to_widget(self, cx: float, cy: float) -> tuple[int, int]:
-        x0, y0, w, h = self._chart()
-        return int(x0 + cx * w), int(y0 + (1.0 - cy) * h)
-
-    def _to_curve(self, px: int, py: int) -> tuple[float, float]:
-        x0, y0, w, h = self._chart()
-        cx = (px - x0) / max(w, 1)
-        cy = 1.0 - (py - y0) / max(h, 1)
-        return max(0.0, min(1.0, cx)), max(0.0, min(1.0, cy))
-
-    def _hit(self, px: int, py: int, r: int = 9) -> int:
-        for i, (cx, cy) in enumerate(self._points):
-            wx, wy = self._to_widget(cx, cy)
-            if abs(px - wx) <= r and abs(py - wy) <= r:
-                return i
-        return -1
-
-    # -- painting
-
-    def paintEvent(self, event):
-        p = QPainter(self)
-        p.setRenderHint(QPainter.Antialiasing)
-        x0, y0, w, h = self._chart()
-
-        p.fillRect(self.rect(), QColor(22, 22, 32))
-        p.fillRect(x0, y0, w, h, QColor(14, 14, 22))
-
-        # histogramme de luminosité (silhouette semi-transparente)
-        if self._histogram:
-            hist_path = QPainterPath()
-            hist_path.moveTo(x0, y0 + h)
-            for k, v in enumerate(self._histogram):
-                hx = x0 + k * w / 255.0
-                hy = y0 + h - v * h * 0.92
-                hist_path.lineTo(hx, hy)
-            hist_path.lineTo(x0 + w, y0 + h)
-            hist_path.closeSubpath()
-            p.setPen(Qt.NoPen)
-            p.setBrush(QColor(210, 210, 210, 38))
-            p.drawPath(hist_path)
-
-        # grille
-        p.setPen(QPen(QColor(55, 55, 75), 1))
-        for i in range(1, 4):
-            p.drawLine(x0 + i * w // 4, y0, x0 + i * w // 4, y0 + h)
-            p.drawLine(x0, y0 + i * h // 4, x0 + w, y0 + i * h // 4)
-
-        # diagonale identité
-        p.setPen(QPen(QColor(75, 75, 100), 1, Qt.DashLine))
-        p.drawLine(x0, y0 + h, x0 + w, y0)
-
-        # courbe interpolée
-        lut = ImageAdjuster._curve_lut(self._points)
-        p.setPen(QPen(QColor(140, 140, 255), 2))
-        prev = None
-        for k, yv in enumerate(lut):
-            wx, wy = self._to_widget(k / 255.0, yv / 255.0)
-            if prev:
-                p.drawLine(prev[0], prev[1], wx, wy)
-            prev = (wx, wy)
-
-        # bordure
-        p.setPen(QPen(QColor(75, 75, 100), 1))
-        p.drawRect(x0, y0, w, h)
-
-        # points de contrôle
-        for i, (cx, cy) in enumerate(self._points):
-            wx, wy = self._to_widget(cx, cy)
-            r = 7 if (i == self._drag_idx or i == self._hover_idx) else 5
-            p.setBrush(QColor(255, 255, 255) if (i == self._drag_idx or i == self._hover_idx)
-                       else QColor(160, 160, 255))
-            p.setPen(QPen(QColor(220, 220, 255), 1))
-            p.drawEllipse(wx - r, wy - r, r * 2, r * 2)
-
-        p.end()
-
-    # -- interactions
-
-    def mousePressEvent(self, event):
-        px, py = event.x(), event.y()
-        idx = self._hit(px, py)
-        if event.button() == Qt.RightButton:
-            if idx >= 0 and len(self._points) > 2:
-                self._points.pop(idx)
-                self._drag_idx = -1
-                self.update()
-                self.curve_changed.emit(list(self._points))
-            return
-        if idx >= 0:
-            self._drag_idx = idx
-        else:
-            cx, cy = self._to_curve(px, py)
-            x0, y0, w, h = self._chart()
-            if x0 <= px <= x0 + w and y0 <= py <= y0 + h:
-                # éviter les x trop proches des points existants
-                if not any(abs(cx - p[0]) < 0.02 for p in self._points):
-                    self._points.append((cx, cy))
-                    self._points.sort(key=lambda pt: pt[0])
-                    self._drag_idx = next(
-                        i for i, pt in enumerate(self._points) if abs(pt[0] - cx) < 0.001
-                    )
-                    self.update()
-                    self.curve_changed.emit(list(self._points))
-
-    def mouseMoveEvent(self, event):
-        px, py = event.x(), event.y()
-        if self._drag_idx >= 0:
-            cx, cy = self._to_curve(px, py)
-            idx = self._drag_idx
-            pts = self._points
-            # les extrémités restent fixées en x
-            if idx == 0:
-                cx = 0.0
-            elif idx == len(pts) - 1:
-                cx = 1.0
-            else:
-                x_min = pts[idx - 1][0] + 0.01
-                x_max = pts[idx + 1][0] - 0.01
-                cx = max(x_min, min(x_max, cx))
-            self._points[idx] = (cx, cy)
-            self.update()
-            self.curve_changed.emit(list(self._points))
-        else:
-            new_hover = self._hit(px, py)
-            if new_hover != self._hover_idx:
-                self._hover_idx = new_hover
-                self.update()
-            self.setCursor(Qt.SizeAllCursor if new_hover >= 0 else Qt.CrossCursor)
-
-    def mouseReleaseEvent(self, event):
-        self._drag_idx = -1
-
-    # -- API publique
-
-    def set_from_gamma(self, gamma: float) -> None:
-        self._points = _gamma_to_curve_points(gamma)
-        self.update()
-        self.curve_changed.emit(list(self._points))
-
-    def get_points(self) -> list:
-        return list(self._points)
-
-    def set_points(self, points: list) -> None:
-        self._points = sorted(points, key=lambda pt: pt[0])
-        self.update()
-
-
-# ------------------------------------------------------------------ dialogue luminosité (+ gamma avancé)
-
-class LuminositeTreatmentDialog(QDialog):
-    preview = Signal(object)
-
-    def __init__(self, edit: EditInfo, photo_path: str | None = None, parent=None):
-        super().__init__(parent)
-        self.setWindowTitle("Luminosité")
-        self.setMinimumWidth(400)
-        self._edit = copy.copy(edit)
-        self._panel = None
-
-        layout = QVBoxLayout(self)
-        layout.setSpacing(8)
-        layout.setContentsMargins(12, 12, 12, 12)
-
-        # Slider luminosité principal
-        self._sl_lum = EditSlider("Luminosité", -1.0, 1.0, edit.brightness, 2)
-        self._sl_lum.value_changed.connect(lambda v: self._on_changed("brightness", v))
-        layout.addWidget(self._sl_lum)
-
-        # Checkbox "Fonctions avancées…" (gamma)
-        self._chk = QCheckBox("Fonctions avancées…")
-        has_gamma = edit.gamma != 1.0 or edit.gamma_use_curve
-        self._chk.setChecked(has_gamma)
-        self._chk.toggled.connect(self._on_advanced_toggled)
-        layout.addWidget(self._chk)
-
-        # Section gamma (masquée si pas d'édition gamma)
-        self._adv = QWidget()
-        adv_layout = QVBoxLayout(self._adv)
-        adv_layout.setContentsMargins(0, 4, 0, 0)
-        adv_layout.setSpacing(4)
-
-        self._gamma_slider = EditSlider("Gamma", 0.1, 3.0, edit.gamma, 2)
-        self._gamma_slider.value_changed.connect(self._on_gamma_changed)
-        adv_layout.addWidget(self._gamma_slider)
-
-        self._chk_curve = QCheckBox("Fonctions très avancées…")
-        self._chk_curve.setChecked(edit.gamma_use_curve)
-        self._chk_curve.toggled.connect(self._on_curve_toggled)
-        adv_layout.addWidget(self._chk_curve)
-
-        # Section courbe (masquée par défaut)
-        self._curve_section = QWidget()
-        cs_layout = QVBoxLayout(self._curve_section)
-        cs_layout.setContentsMargins(0, 0, 0, 0)
-        cs_layout.setSpacing(4)
-
-        lbl = QLabel(
-            "Cliquer pour ajouter un point · Glisser pour déplacer · "
-            "Clic droit pour supprimer"
-        )
-        lbl.setWordWrap(True)
-        lbl.setStyleSheet("color: #999; font-size: 10px;")
-        cs_layout.addWidget(lbl)
-
-        histogram = _compute_luminosity_histogram(photo_path) if photo_path else []
-        init_pts = edit.gamma_curve_points if edit.gamma_use_curve else _gamma_to_curve_points(edit.gamma)
-        self._curve = GammaCurveWidget(points=init_pts, histogram=histogram)
-        self._curve.curve_changed.connect(self._on_curve_changed)
-        cs_layout.addWidget(self._curve)
-        adv_layout.addWidget(self._curve_section)
-
-        # Visibilité initiale
-        self._gamma_slider.setVisible(not edit.gamma_use_curve)
-        self._curve_section.setVisible(edit.gamma_use_curve)
-        self._edit.gamma_curve_points = init_pts
-
-        layout.addWidget(self._adv)
-        self._adv.setVisible(has_gamma)
-
-        btn_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
-        btn_box.button(QDialogButtonBox.Ok).setText("Valider")
-        btn_box.button(QDialogButtonBox.Cancel).setText("Annuler")
-        btn_box.accepted.connect(self.accept)
-        btn_box.rejected.connect(self.reject)
-        layout.addWidget(btn_box)
-
-    def showEvent(self, event) -> None:
-        super().showEvent(event)
-        if self._panel is not None:
-            pos = self._panel._compute_dialog_pos(self.width(), self.height())
-            QTimer.singleShot(0, lambda: self.move(pos))
-
-    def _on_changed(self, attr: str, value: float) -> None:
-        setattr(self._edit, attr, value)
-        self.preview.emit(copy.copy(self._edit))
-
-    def _on_gamma_changed(self, value: float) -> None:
-        self._edit.gamma = value
-        self.preview.emit(copy.copy(self._edit))
-
-    def _on_advanced_toggled(self, checked: bool) -> None:
-        self._adv.setVisible(checked)
-        self.adjustSize()
-        QTimer.singleShot(0, self._reposition)
-
-    def _on_curve_toggled(self, checked: bool) -> None:
-        self._gamma_slider.setVisible(not checked)
-        self._curve_section.setVisible(checked)
-        self._edit.gamma_use_curve = checked
-        if checked:
-            self._curve.set_from_gamma(self._edit.gamma)
-        self.adjustSize()
-        QTimer.singleShot(0, self._reposition)
-        self.preview.emit(copy.copy(self._edit))
-
-    def _on_curve_changed(self, points: list) -> None:
-        self._edit.gamma_curve_points = points
-        self.preview.emit(copy.copy(self._edit))
-
-    def _reposition(self) -> None:
-        if self._panel is not None:
-            pos = self._panel._compute_dialog_pos(self.width(), self.height())
-            self.move(pos)
-
-    def get_edit(self) -> EditInfo:
-        return self._edit
-
-
-# ------------------------------------------------------------------ dialogue couleurs
-
-
-class CouleursTreatmentDialog(QDialog):
-    preview          = Signal(object)  # EditInfo
-    wb_pick_requested = Signal(bool)   # True = démarrer la pipette, False = annuler
-
-    def __init__(self, edit: EditInfo, parent=None):
-        super().__init__(parent)
-        self.setWindowTitle("Couleurs")
-        self.setMinimumWidth(720)
-        self._edit = copy.copy(edit)
-        self._panel = None
-
-        layout = QVBoxLayout(self)
-        layout.setSpacing(8)
-        layout.setContentsMargins(12, 12, 12, 12)
-
-        # Curseur saturation globale
-        self._sl_sat = EditSlider("Saturation", -1.0, 1.0, edit.saturation, 2)
-        self._sl_sat.value_changed.connect(lambda v: self._on_changed("saturation", v))
-        layout.addWidget(self._sl_sat)
-
-        # Checkbox avancé
-        self._chk = QCheckBox("Fonctions avancées…")
-        has_channel_edits = any(v != 0.0 for v in (edit.color_red, edit.color_green, edit.color_blue))
-        self._chk.setChecked(has_channel_edits)
-        layout.addWidget(self._chk)
-
-        # Section RVB (masquée par défaut)
-        self._adv = QWidget()
-        adv_layout = QVBoxLayout(self._adv)
-        adv_layout.setContentsMargins(0, 4, 0, 0)
-        adv_layout.setSpacing(4)
-
-        lbl = QLabel("Réglage des couleurs indépendantes")
-        lbl.setStyleSheet("color: #999; font-size: 10px;")
-        adv_layout.addWidget(lbl)
-
-        # --- Pipette balance des blancs ---
-        pip_row = QHBoxLayout()
-        pip_row.setContentsMargins(0, 4, 0, 0)
-        self._btn_pip = QPushButton("⌖  Pipette balance des blancs")
-        self._btn_pip.setCheckable(True)
-        self._btn_pip.setToolTip(
-            "Cliquez sur une zone neutre (blanc ou gris) dans l'image\n"
-            "pour équilibrer automatiquement les canaux R, V, B."
-        )
-        pip_row.addWidget(self._btn_pip)
-        self._lbl_pip_hint = QLabel("→ Cliquez sur un point neutre dans l'image principale")
-        self._lbl_pip_hint.setStyleSheet("color: #7ab; font-size: 10px;")
-        self._lbl_pip_hint.hide()
-        pip_row.addWidget(self._lbl_pip_hint, stretch=1)
-        adv_layout.addLayout(pip_row)
-
-        # Swatch de feedback (couleur prélevée)
-        swatch_row = QHBoxLayout()
-        self._wb_swatch_lbl = QLabel("Couleur prélevée :")
-        self._wb_swatch_lbl.setStyleSheet("color: #888; font-size: 10px;")
-        self._wb_swatch_lbl.hide()
-        self._wb_swatch = QLabel()
-        self._wb_swatch.setFixedSize(44, 16)
-        self._wb_swatch.setStyleSheet("border: 1px solid #666;")
-        self._wb_swatch.hide()
-        swatch_row.addWidget(self._wb_swatch_lbl)
-        swatch_row.addWidget(self._wb_swatch)
-        swatch_row.addStretch()
-        adv_layout.addLayout(swatch_row)
-
-        self._btn_pip.toggled.connect(self._on_pip_toggled)
-
-        # Sliders RVB
-        self._sl_r = EditSlider("Rouge",  -1.0, 1.0, edit.color_red,   2)
-        self._sl_g = EditSlider("Vert",   -1.0, 1.0, edit.color_green, 2)
-        self._sl_b = EditSlider("Bleu",   -1.0, 1.0, edit.color_blue,  2)
-        for sl, attr in [
-            (self._sl_r, "color_red"),
-            (self._sl_g, "color_green"),
-            (self._sl_b, "color_blue"),
-        ]:
-            sl.value_changed.connect(lambda v, a=attr: self._on_changed(a, v))
-            adv_layout.addWidget(sl)
-
-        self._adv.setVisible(has_channel_edits)
-        self._chk.toggled.connect(self._adv.setVisible)
-        self._chk.toggled.connect(lambda _: self._resize_and_reposition())
-        layout.addWidget(self._adv)
-
-        btn_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
-        btn_box.button(QDialogButtonBox.Ok).setText("Valider")
-        btn_box.button(QDialogButtonBox.Cancel).setText("Annuler")
-        btn_box.accepted.connect(self.accept)
-        btn_box.rejected.connect(self.reject)
-        layout.addWidget(btn_box)
-
-    def _on_pip_toggled(self, checked: bool) -> None:
-        self._lbl_pip_hint.setVisible(checked)
-        self.wb_pick_requested.emit(checked)
-
-    def apply_wb_pixel(self, r: int, g: int, b: int) -> None:
-        """Applique la correction balance des blancs depuis le pixel prélevé sur la visionneuse."""
-        if r == 0 and g == 0 and b == 0:
-            return
-        mean = (r + g + b) / 3.0
-        def _corr(ch: int) -> float:
-            return max(-1.0, min(1.0, mean / ch - 1.0)) if ch > 0 else 0.0
-        cr, cg, cb = _corr(r), _corr(g), _corr(b)
-        self._sl_r.set_value(cr)
-        self._sl_g.set_value(cg)
-        self._sl_b.set_value(cb)
-        self._edit.color_red   = cr
-        self._edit.color_green = cg
-        self._edit.color_blue  = cb
-        self.preview.emit(copy.copy(self._edit))
-        # Désactiver le bouton pipette (sans réémettre le signal)
-        self._btn_pip.blockSignals(True)
-        self._btn_pip.setChecked(False)
-        self._btn_pip.blockSignals(False)
-        self._lbl_pip_hint.hide()
-        # Feedback : swatch de la couleur prélevée
-        self._wb_swatch.setStyleSheet(f"background: rgb({r},{g},{b}); border: 1px solid #666;")
-        self._wb_swatch.setToolTip(f"Pixel prélevé — R : {r}  V : {g}  B : {b}")
-        self._wb_swatch_lbl.show()
-        self._wb_swatch.show()
-        # Activer la section avancée si elle est masquée
-        if not self._adv.isVisible():
-            self._chk.setChecked(True)
-
-    def showEvent(self, event) -> None:
-        super().showEvent(event)
-        if self._panel is not None:
-            pos = self._panel._compute_dialog_pos(self.width(), self.height())
-            QTimer.singleShot(0, lambda: self.move(pos))
-
-    def _resize_and_reposition(self) -> None:
-        self.adjustSize()
-        QTimer.singleShot(0, self._reposition)
-
-    def _reposition(self) -> None:
-        if self._panel is not None:
-            pos = self._panel._compute_dialog_pos(self.width(), self.height())
-            self.move(pos)
-
-    def _on_changed(self, attr: str, value: float) -> None:
-        setattr(self._edit, attr, value)
-        self.preview.emit(copy.copy(self._edit))
-
-    def get_edit(self) -> EditInfo:
-        return self._edit
-
-
-def _icon_red_eye(size: int = _ICON_SIZE) -> QPixmap:
-    px, p = _base_pixmap(size)
-    c, h = size // 2, size // 2
-    eye_w = int(size * 0.7)
-    eye_h = int(size * 0.32)
-    p.setPen(QPen(QColor(200, 200, 200), 1.5))
-    p.setBrush(QColor(60, 60, 60))
-    path = QPainterPath()
-    path.moveTo(c - eye_w // 2, h)
-    path.quadTo(c, h - eye_h, c + eye_w // 2, h)
-    path.quadTo(c, h + eye_h, c - eye_w // 2, h)
-    p.drawPath(path)
-    pr = int(size * 0.12)
-    p.setPen(Qt.NoPen)
-    p.setBrush(QColor(220, 40, 40))
-    p.drawEllipse(c - pr, h - pr, pr * 2, pr * 2)
-    p.end()
-    return px
-
-
-# ------------------------------------------------------------------ dialogue vignette
-
-_TOGGLE_BTN_STYLE = """
-    QPushButton {{
-        background: #2e2e2e; color: #aaa;
-        border: 1px solid #555; border-radius: 4px;
-        padding: 4px 8px; font-size: 11px;
-    }}
-    QPushButton:hover   {{ background: #3a3a3a; color: #ddd; }}
-    QPushButton:checked {{ background: #1a3a5a; color: #7ab; border-color: #4a9fd4; font-weight: bold; }}
-"""
-
-
-class VignetteTreatmentDialog(QDialog):
-    preview = Signal(object)   # EditInfo en temps réel
-
-    def __init__(self, edit: EditInfo, parent=None) -> None:
-        super().__init__(parent)
-        self._edit = copy.copy(edit)
-        self._panel = None
-        self.setWindowTitle("Vignette")
-        self.setWindowFlags(Qt.Tool | Qt.WindowStaysOnTopHint)
-        self.setMinimumWidth(380)
-        self._setup_ui()
-
-    def _setup_ui(self) -> None:
-        layout = QVBoxLayout(self)
-        layout.setSpacing(10)
-        layout.setContentsMargins(14, 14, 14, 10)
-
-        # ---- Intensité ----
-        self._sl_strength = EditSlider("Intensité", 0.0, 1.0, self._edit.vignette_strength, 2)
-        self._sl_strength.value_changed.connect(lambda v: self._on_changed("vignette_strength", v))
-        layout.addWidget(self._sl_strength)
-
-        # ---- Couleur ----
-        color_grp = QGroupBox("Couleur")
-        color_row = QHBoxLayout(color_grp)
-        color_row.setSpacing(6)
-
-        self._btn_black = QPushButton("Noir")
-        self._btn_white = QPushButton("Blanc")
-        for btn in (self._btn_black, self._btn_white):
-            btn.setCheckable(True)
-            btn.setStyleSheet(_TOGGLE_BTN_STYLE)
-            btn.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-            color_row.addWidget(btn)
-
-        self._btn_black.setChecked(self._edit.vignette_color == "black")
-        self._btn_white.setChecked(self._edit.vignette_color == "white")
-        self._btn_black.clicked.connect(lambda: self._set_color("black"))
-        self._btn_white.clicked.connect(lambda: self._set_color("white"))
-        layout.addWidget(color_grp)
-
-        # ---- Instructions ----
-        hint = QLabel(
-            "Faites glisser les poignées sur l'image :\n"
-            "• Cercle intérieur (pointillés) — début du fondu\n"
-            "• Cercle extérieur — fin du fondu\n"
-            "• Poignée ronde au sommet — rotation\n"
-            "• Croix centrale — déplacer"
-        )
-        hint.setStyleSheet("color: #999; font-size: 10px;")
-        hint.setWordWrap(True)
-        layout.addWidget(hint)
-
-        # ---- Boutons OK / Annuler ----
-        btn_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
-        btn_box.button(QDialogButtonBox.Ok).setText("Valider")
-        btn_box.button(QDialogButtonBox.Cancel).setText("Annuler")
-        btn_box.accepted.connect(self.accept)
-        btn_box.rejected.connect(self.reject)
-        layout.addWidget(btn_box)
-
-    def showEvent(self, event) -> None:
-        super().showEvent(event)
-        if self._panel is not None:
-            pos = self._panel._compute_dialog_pos(self.width(), self.height())
-            QTimer.singleShot(0, lambda: self.move(pos))
-
-    def _on_changed(self, attr: str, value: float) -> None:
-        setattr(self._edit, attr, value)
-        self.preview.emit(copy.copy(self._edit))
-
-    def _set_color(self, color: str) -> None:
-        self._edit.vignette_color = color
-        self._btn_black.setChecked(color == "black")
-        self._btn_white.setChecked(color == "white")
-        self.preview.emit(copy.copy(self._edit))
-
-    def update_from_edit(self, edit: EditInfo) -> None:
-        self._edit = copy.copy(edit)
-        self._sl_strength.set_value(edit.vignette_strength)
-        self._btn_black.setChecked(edit.vignette_color == "black")
-        self._btn_white.setChecked(edit.vignette_color == "white")
-
-    def get_edit(self) -> EditInfo:
-        return self._edit
-
-
-# ------------------------------------------------------------------ panneau principal
-
-# (label, icône_fn, sliders_def)
-_TREATMENTS: list[tuple] = [
-    ("Luminosité", _icon_brightness, [("Luminosité", "brightness", -1.0, 1.0, 2)]),
-    ("Contraste",  _icon_contrast,   [("Contraste",  "contrast",   -1.0, 1.0, 2)]),
-    ("Couleurs",   _icon_saturation, [("Saturation", "saturation", -1.0, 1.0, 2)]),
-    ("Vignette",   _icon_vignette,   []),   # dialogue dédié — sliders_def ignoré
-]
+# ------------------------------------------------------------------ classes extraites
+# (2026-07) Curseurs et dialogues de traitement déplacés dans leurs modules ;
+# ré-exportés ici sous leurs noms historiques (main_window, settings_dialog et
+# les tests importent MarkedSlider/EditSlider depuis edit_panel).
+from src.ui.edit_sliders import EditSlider, MarkedSlider, _Ruler  # noqa: E402,F401
+from src.ui.treatment_dialogs import (  # noqa: E402,F401
+    _ACTIVE_TOOL_STYLE, _TREATMENTS, CouleursTreatmentDialog, GammaCurveWidget,
+    LuminositeTreatmentDialog, TreatmentDialog, VignetteTreatmentDialog,
+)
 
 
 class EditPanel(QWidget):
     edits_changed           = Signal(object)       # EditInfo
     crop_mode_requested     = Signal()
+    crop_confirm_requested  = Signal()             # un autre outil a été sélectionné pendant un recadrage en cours
     grid_visibility_changed = Signal(bool)
     photo_saved             = Signal(str, object)  # (photo_path, EditInfo) — uniquement lors d'un enregistrement réel
     rotation_stepped        = Signal(str, int)     # (photo_path, new_rotation_degrees) — émis uniquement pour les rotations 90°
     red_eye_mode_requested  = Signal(bool, float)  # (active, radius) — bascule le mode yeux rouges dans le canvas
     wb_pick_requested       = Signal(bool)         # True = démarrer la pipette, False = annuler
     vignette_edit_mode      = Signal(bool, object) # (active: bool, edit: EditInfo)
+    annotation_mode_requested            = Signal(bool, str)   # (active, tool) — bascule le mode annotation dans le canvas
+    annotation_style_changed             = Signal(str, float, str, float, bool, bool, str, float, float)
+    # (color_argb, width, font_family, font_size, bold, italic, fill_color_argb, opacity, blur)
+    annotation_delete_selected_requested = Signal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -1115,10 +129,24 @@ class EditPanel(QWidget):
         self._edit = EditInfo()
         self._undo_stack: list[EditInfo] = []
         self._redo_stack: list[EditInfo] = []
+        # path normalisé -> (état avant reset_all(), pile d'undo d'avant le reset)
+        self._reset_snapshots: dict[str, tuple] = {}
         self._db = EditDatabase()
         self._red_eye_active = False
+        self._annotation_active = False
+        self._crop_active = False
+        self._annotation_tool = "pen"
+        self._annotation_color = QColor("#ffff0000")
+        self._annotation_fill_color = QColor("#ffff0000")
+        self._annotation_opacity = 0.4
+        self._annotation_blur = 0.0
+        self._annotation_selected_ids: set = set()
         self._active_color_dlg: "CouleursTreatmentDialog | None" = None
         self._active_vignette_dlg: "VignetteTreatmentDialog | None" = None
+        self._active_frame_dlg: "QDialog | None" = None
+        self._active_generic_dlg: "QDialog | None" = None    # Luminosité/Contraste/Redresser… non modal
+        self._active_generic_dlg_title: "str | None" = None
+        self._treatment_buttons: dict = {}   # nom de traitement -> QToolButton (surbrillance active/inactive)
         self._setup_ui()
 
     def _setup_ui(self) -> None:
@@ -1133,7 +161,7 @@ class EditPanel(QWidget):
 
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
-        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         inner = QWidget()
         inner_layout = QVBoxLayout(inner)
         inner_layout.setSpacing(8)
@@ -1148,9 +176,14 @@ class EditPanel(QWidget):
         grid.setSpacing(4)
         for idx, (name, icon_fn, sliders_def) in enumerate(_TREATMENTS):
             btn = self._make_treatment_button(name, icon_fn(), sliders_def)
+            self._treatment_buttons[name] = btn
             grid.addWidget(btn, idx // 2, idx % 2)
+        # Les deux boutons suivants poursuivent le remplissage de la grille :
+        # leur position dépend du nombre de traitements (une case en dur
+        # écraserait le dernier bouton dès qu'un traitement est ajouté).
+        _next = len(_TREATMENTS)
 
-        # Bouton Yeux rouges — ligne 2 (ligne 1 = Couleurs | Vignette)
+        # Bouton Yeux rouges
         self._btn_red_eye = QToolButton()
         self._btn_red_eye.setText("Yeux rouges")
         self._btn_red_eye.setIcon(QIcon(_icon_red_eye()))
@@ -1161,7 +194,20 @@ class EditPanel(QWidget):
         self._btn_red_eye.setToolTip("Corriger les yeux rouges — cliquez sur chaque œil")
         self._btn_red_eye.setCheckable(True)
         self._btn_red_eye.clicked.connect(self._toggle_red_eye_mode)
-        grid.addWidget(self._btn_red_eye, 2, 0)
+        grid.addWidget(self._btn_red_eye, _next // 2, _next % 2)
+
+        # Bouton Annotations
+        self._btn_annotations = QToolButton()
+        self._btn_annotations.setText("Annotations")
+        self._btn_annotations.setIcon(QIcon(_icon_ann_pen()))
+        self._btn_annotations.setIconSize(QSize(_ICON_SIZE, _ICON_SIZE))
+        self._btn_annotations.setToolButtonStyle(Qt.ToolButtonTextUnderIcon)
+        self._btn_annotations.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self._btn_annotations.setFixedHeight(_ICON_SIZE + 28)
+        self._btn_annotations.setToolTip("Dessiner / écrire par-dessus la photo (calque séparé)")
+        self._btn_annotations.setCheckable(True)
+        self._btn_annotations.clicked.connect(self._toggle_annotation_mode)
+        grid.addWidget(self._btn_annotations, (_next + 1) // 2, (_next + 1) % 2)
         inner_layout.addLayout(grid)
 
         # Panneau de contrôle yeux rouges (masqué hors mode)
@@ -1201,6 +247,177 @@ class EditPanel(QWidget):
         self._red_eye_panel.hide()
         inner_layout.addWidget(self._red_eye_panel)
 
+        # Panneau de contrôle du calque d'annotations (masqué hors mode)
+        self._annotation_panel = QGroupBox("Annotations")
+        an_layout = QVBoxLayout(self._annotation_panel)
+        an_layout.setContentsMargins(6, 8, 6, 6)
+        an_layout.setSpacing(4)
+
+        tools_row = QHBoxLayout()
+        tools_row.setSpacing(4)
+        self._annotation_tool_group = QButtonGroup(self)
+        self._annotation_tool_group.setExclusive(True)
+        self._annotation_tool_buttons: dict[str, QToolButton] = {}
+        for tool, icon_fn, tip in [
+            ("pen",     _icon_ann_pen,     "Stylo — trait libre"),
+            ("line",    _icon_ann_line,    "Ligne droite"),
+            ("curve",   _icon_ann_curve,   "Courbe — cliquez les points de passage, double-clic pour valider"),
+            ("rect",    _icon_ann_rect,    "Rectangle"),
+            ("ellipse", _icon_ann_ellipse, "Ellipse"),
+            ("text",    _icon_ann_text,    "Texte"),
+            ("select",  _icon_ann_select,  "Sélection — cliquez un élément pour le sélectionner"),
+        ]:
+            btn = QToolButton()
+            btn.setIcon(QIcon(icon_fn()))
+            btn.setIconSize(QSize(24, 24))
+            btn.setStyleSheet(_ANNOTATION_TOOL_BTN_STYLE)
+            btn.setCheckable(True)
+            btn.setToolTip(tip)
+            btn.clicked.connect(lambda checked, t=tool: self._set_annotation_tool(t))
+            self._annotation_tool_group.addButton(btn)
+            self._annotation_tool_buttons[tool] = btn
+            tools_row.addWidget(btn)
+        self._annotation_tool_buttons["pen"].setChecked(True)
+        an_layout.addLayout(tools_row)
+
+        style_row = QHBoxLayout()
+        style_row.setSpacing(4)
+        self._btn_annotation_color = QPushButton()
+        self._btn_annotation_color.setFixedSize(28, 28)
+        self._btn_annotation_color.setToolTip("Couleur")
+        self._btn_annotation_color.clicked.connect(self._pick_annotation_color)
+        style_row.addWidget(self._btn_annotation_color)
+        style_row.addWidget(QLabel("Épaisseur"))
+        self._annotation_width_spin = QDoubleSpinBox()
+        self._annotation_width_spin.setRange(0.0, 4.0)   # % de la plus petite dimension — 0 = pas de contour
+        self._annotation_width_spin.setSingleStep(0.1)
+        self._annotation_width_spin.setDecimals(1)
+        self._annotation_width_spin.setValue(0.6)         # défaut : 0.6%
+        self._annotation_width_spin.setSuffix(" %")
+        self._annotation_width_spin.setToolTip("Épaisseur du trait (% de l'image)")
+        self._annotation_width_spin.valueChanged.connect(self._on_annotation_style_changed)
+        style_row.addWidget(self._annotation_width_spin, stretch=1)
+        self._annotation_style_row = QWidget()
+        self._annotation_style_row.setLayout(style_row)
+        an_layout.addWidget(self._annotation_style_row)
+
+        shape_row = QHBoxLayout()
+        shape_row.setSpacing(14)
+        self._btn_annotation_fill_color = QPushButton()
+        self._btn_annotation_fill_color.setFixedSize(28, 28)
+        self._btn_annotation_fill_color.setToolTip("Couleur de la surface")
+        self._btn_annotation_fill_color.clicked.connect(self._pick_annotation_fill_color)
+        shape_row.addWidget(self._btn_annotation_fill_color)
+
+        opacity_pair = QHBoxLayout()
+        opacity_pair.setSpacing(4)
+        opacity_pair.addWidget(QLabel("Opacité"))
+        self._annotation_opacity_spin = QDoubleSpinBox()
+        self._annotation_opacity_spin.setRange(0.0, 100.0)
+        self._annotation_opacity_spin.setSingleStep(5.0)
+        self._annotation_opacity_spin.setDecimals(0)
+        self._annotation_opacity_spin.setValue(40.0)
+        self._annotation_opacity_spin.setSuffix(" %")
+        self._annotation_opacity_spin.setToolTip(
+            "Opacité de la surface — à 100 %, la photo derrière n'est plus visible")
+        self._annotation_opacity_spin.valueChanged.connect(self._on_annotation_style_changed)
+        opacity_pair.addWidget(self._annotation_opacity_spin)
+        shape_row.addLayout(opacity_pair)
+
+        blur_pair = QHBoxLayout()
+        blur_pair.setSpacing(4)
+        blur_pair.addWidget(QLabel("Flou"))
+        self._annotation_blur_spin = QDoubleSpinBox()
+        self._annotation_blur_spin.setRange(0.0, 10.0)   # % de la plus petite dimension
+        self._annotation_blur_spin.setSingleStep(0.5)
+        self._annotation_blur_spin.setDecimals(1)
+        self._annotation_blur_spin.setValue(0.0)
+        self._annotation_blur_spin.setSuffix(" %")
+        self._annotation_blur_spin.setToolTip("Flou de la photo sous la surface (% de l'image)")
+        self._annotation_blur_spin.valueChanged.connect(self._on_annotation_style_changed)
+        blur_pair.addWidget(self._annotation_blur_spin)
+        shape_row.addLayout(blur_pair)
+
+        shape_row.addStretch(1)
+        self._annotation_shape_row = QWidget()
+        self._annotation_shape_row.setLayout(shape_row)
+        an_layout.addWidget(self._annotation_shape_row)
+
+        font_row = QHBoxLayout()
+        font_row.setSpacing(4)
+        self._annotation_font_combo = QFontComboBox()
+        self._annotation_font_combo.setCurrentFont(QFont("Arial"))
+        self._annotation_font_combo.currentFontChanged.connect(self._on_annotation_style_changed)
+        font_row.addWidget(self._annotation_font_combo, stretch=1)
+        self._annotation_font_size = QSpinBox()
+        self._annotation_font_size.setRange(1, 20)   # % de la plus petite dimension
+        self._annotation_font_size.setValue(4)
+        self._annotation_font_size.setSuffix(" %")
+        self._annotation_font_size.setToolTip("Taille du texte (% de l'image)")
+        self._annotation_font_size.valueChanged.connect(self._on_annotation_style_changed)
+        font_row.addWidget(self._annotation_font_size)
+        self._annotation_font_row = QWidget()
+        self._annotation_font_row.setLayout(font_row)
+        an_layout.addWidget(self._annotation_font_row)
+
+        bi_row = QHBoxLayout()
+        bi_row.setSpacing(4)
+        self._btn_annotation_bold = QToolButton()
+        self._btn_annotation_bold.setText("G")
+        self._btn_annotation_bold.setStyleSheet(_ANNOTATION_TOOL_BTN_STYLE)
+        self._btn_annotation_bold.setCheckable(True)
+        self._btn_annotation_bold.setToolTip("Gras")
+        bold_font = QFont("Arial")
+        bold_font.setBold(True)
+        self._btn_annotation_bold.setFont(bold_font)
+        self._btn_annotation_bold.clicked.connect(self._on_annotation_style_changed)
+        bi_row.addWidget(self._btn_annotation_bold)
+        self._btn_annotation_italic = QToolButton()
+        self._btn_annotation_italic.setStyleSheet(_ANNOTATION_TOOL_BTN_STYLE)
+        self._btn_annotation_italic.setText("I")
+        self._btn_annotation_italic.setCheckable(True)
+        self._btn_annotation_italic.setToolTip("Italique")
+        italic_font = QFont("Arial")
+        italic_font.setItalic(True)
+        self._btn_annotation_italic.setFont(italic_font)
+        self._btn_annotation_italic.clicked.connect(self._on_annotation_style_changed)
+        bi_row.addWidget(self._btn_annotation_italic)
+        bi_row.addSpacing(10)
+        bi_row.addWidget(QLabel("Couleur"))
+        self._btn_annotation_text_color = QPushButton()
+        self._btn_annotation_text_color.setFixedSize(24, 24)
+        self._btn_annotation_text_color.setToolTip("Couleur du texte")
+        self._btn_annotation_text_color.clicked.connect(self._pick_annotation_color)
+        bi_row.addWidget(self._btn_annotation_text_color)
+        bi_row.addStretch()
+        self._annotation_bi_row = QWidget()
+        self._annotation_bi_row.setLayout(bi_row)
+        an_layout.addWidget(self._annotation_bi_row)
+        self._update_annotation_style_controls_visibility()
+
+        self._btn_annotation_delete_sel = QPushButton("Supprimer la sélection")
+        self._btn_annotation_delete_sel.setEnabled(False)
+        self._btn_annotation_delete_sel.setToolTip("Supprimer l'élément d'annotation sélectionné")
+        self._btn_annotation_delete_sel.clicked.connect(self.annotation_delete_selected_requested.emit)
+        an_layout.addWidget(self._btn_annotation_delete_sel)
+
+        an_btns = QHBoxLayout()
+        an_btns.setSpacing(4)
+        btn_clear_ann = QPushButton("Effacer tout")
+        btn_clear_ann.setToolTip("Supprimer toutes les annotations")
+        btn_clear_ann.clicked.connect(self._clear_all_annotations)
+        an_btns.addWidget(btn_clear_ann)
+        btn_done_ann = QPushButton("Terminé")
+        btn_done_ann.setToolTip("Quitter le mode annotation  (Echap)")
+        btn_done_ann.clicked.connect(self._done_annotation_mode)
+        an_btns.addWidget(btn_done_ann)
+        an_layout.addLayout(an_btns)
+
+        self._update_annotation_color_swatch()
+        self._update_annotation_fill_color_swatch()
+        self._annotation_panel.hide()
+        inner_layout.addWidget(self._annotation_panel)
+
         # Annuler / Rétablir
         undo_row = QHBoxLayout()
         undo_row.setSpacing(4)
@@ -1212,16 +429,20 @@ class EditPanel(QWidget):
         self._btn_redo = QPushButton("Rétablir")
         self._btn_redo.setEnabled(False)
         self._btn_redo.setShortcut(QKeySequence("Ctrl+Y"))
+        self._btn_redo.setStyleSheet("QPushButton:disabled { color: #555; }")
         self._btn_redo.clicked.connect(self.redo)
         undo_row.addWidget(self._btn_redo)
         inner_layout.addLayout(undo_row)
 
-        # Réinitialiser toutes les retouches
-        self._btn_reset = QPushButton("Réinitialiser toutes les retouches")
+        # Réinitialiser toutes les retouches / Remettre toutes les retouches
+        reset_row = QHBoxLayout()
+        reset_row.setSpacing(4)
+        self._btn_reset = QPushButton("Réinitialiser\ntoutes les retouches")
         self._btn_reset.setEnabled(False)
         self._btn_reset.setToolTip(
             "Supprime toutes les retouches et l'historique pour cette photo.\n"
-            "Le fichier original sur disque n'est pas modifié."
+            "Le fichier original sur disque n'est pas modifié.\n"
+            "Réversible via « Remettre toutes les retouches »."
         )
         self._btn_reset.setStyleSheet(
             "QPushButton { color: #c07070; }"
@@ -1229,7 +450,17 @@ class EditPanel(QWidget):
             "QPushButton:disabled { color: #555; }"
         )
         self._btn_reset.clicked.connect(self.reset_all)
-        inner_layout.addWidget(self._btn_reset)
+        reset_row.addWidget(self._btn_reset)
+        self._btn_restore = QPushButton("Remettre\ntoutes les retouches")
+        self._btn_restore.setEnabled(False)
+        self._btn_restore.setToolTip(
+            "Remet en place les retouches supprimées par le dernier\n"
+            "« Réinitialiser toutes les retouches » sur cette photo."
+        )
+        self._btn_restore.setStyleSheet("QPushButton:disabled { color: #555; }")
+        self._btn_restore.clicked.connect(self.restore_all)
+        reset_row.addWidget(self._btn_restore)
+        inner_layout.addLayout(reset_row)
 
         # Géométrie (boutons directs)
         grp_geo = QGroupBox("Géométrie")
@@ -1263,6 +494,7 @@ class EditPanel(QWidget):
         btn_straighten.clicked.connect(
             lambda: self._open_treatment("Redresser", [("Angle (°)", "straighten", -10.0, 10.0, 1)])
         )
+        self._treatment_buttons["Redresser"] = btn_straighten
         row_sr.addWidget(btn_straighten)
 
         self._btn_crop = QToolButton()
@@ -1273,7 +505,7 @@ class EditPanel(QWidget):
         self._btn_crop.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self._btn_crop.setFixedHeight(_ICON_SIZE + 28)
         self._btn_crop.setToolTip("Définir interactivement la zone de recadrage")
-        self._btn_crop.clicked.connect(self.crop_mode_requested.emit)
+        self._btn_crop.clicked.connect(self._on_crop_clicked)
         row_sr.addWidget(self._btn_crop)
 
         grp_geo.layout().addLayout(row_sr)
@@ -1299,7 +531,46 @@ class EditPanel(QWidget):
         inner_layout.addWidget(grp_geo)
         inner_layout.addStretch()
         scroll.setWidget(inner)
+        self._scroll = scroll
+        self._scroll_inner = inner
+        # QScrollArea ne propage jamais le minimumSizeHint() de son widget
+        # interne vers le sien (comportement voulu pour permettre un contenu
+        # plus grand que la vue) — sans ce plancher explicite, rien n'empêche
+        # le splitter de comprimer le panneau sous la largeur requise par la
+        # grille de boutons à 2 colonnes, rendant la 2e colonne (Contraste,
+        # Vignette, Annotations…) invisible et inatteignable au clic. Valeur
+        # posée ici à titre de filet de sécurité minimal ; le calcul faisant
+        # foi pour le splitter est `content_min_width()`, interrogé à la
+        # demande car le style Qt applicatif (`app.setStyleSheet` dans
+        # main.py) n'est pleinement résolu qu'après le premier affichage —
+        # une valeur figée ici, avant le show(), sous-estime la largeur
+        # réelle des boutons une fois stylés.
+        scroll.setMinimumWidth(inner.minimumSizeHint().width() + 2 * scroll.frameWidth() + 4)
         root.addWidget(scroll, stretch=1)
+
+    def content_min_width(self) -> int:
+        """Largeur minimale, recalculée à la demande, pour afficher la
+        grille de boutons de traitement (2 colonnes) sans troncature ni
+        recours à la scrollbar horizontale — cf. commentaire sur
+        `scroll.setMinimumWidth` dans `_setup_ui` pour pourquoi ce calcul
+        ne peut pas être figé une fois pour toutes à la construction."""
+        margins = self.layout().contentsMargins()
+        return (self._scroll_inner.minimumSizeHint().width()
+                + 2 * self._scroll.frameWidth()
+                + self._vertical_scrollbar_width()
+                + margins.left() + margins.right() + 4)
+
+    def _vertical_scrollbar_width(self) -> int:
+        """Largeur prise par l'ascenseur vertical de la QScrollArea.
+
+        Le contenu du panneau dépasse toujours la hauteur disponible : la barre
+        verticale est présente en pratique et mange autant de largeur au
+        viewport. Sans elle dans le calcul, la 2e colonne de boutons ressort de
+        quelques pixels hors du viewport — exactement le défaut que
+        content_min_width() est censé empêcher."""
+        if self._scroll.verticalScrollBarPolicy() == Qt.ScrollBarAlwaysOff:
+            return 0
+        return self._scroll.verticalScrollBar().sizeHint().width()
 
     def _make_treatment_button(self, name: str, icon_px: QPixmap,
                                 sliders_def: list) -> QToolButton:
@@ -1368,7 +639,45 @@ class EditPanel(QWidget):
 
         return QPoint(x, y)
 
+    def _deactivate_other_tools(self, current: str) -> None:
+        """Un seul outil d'édition actif à la fois : sélectionner un outil désactive
+        celui actuellement en cours (mode canvas interactif ou dialogue de réglage
+        non modal encore ouvert). ``current`` est le nom de l'outil qu'on active
+        (ex. "Recadrer", "Yeux rouges", "Annotations", ou un titre de _TREATMENTS).
+        La sortie équivaut à une validation (pas une annulation) : le travail en
+        cours dans l'outil quitté est appliqué, jamais perdu silencieusement."""
+        if current != "Yeux rouges" and self._red_eye_active:
+            self._btn_red_eye.setChecked(False)
+            self._toggle_red_eye_mode(False)
+        if current != "Annotations" and self._annotation_active:
+            self._btn_annotations.setChecked(False)
+            self._toggle_annotation_mode(False)
+        if current != "Recadrer" and self._crop_active:
+            self.crop_confirm_requested.emit()
+        if current != "Couleurs" and self._active_color_dlg is not None:
+            self._active_color_dlg.accept()
+        if current != "Vignette" and self._active_vignette_dlg is not None:
+            self._active_vignette_dlg.accept()
+        if current != "Cadre" and self._active_frame_dlg is not None:
+            self._active_frame_dlg.accept()
+        if current != self._active_generic_dlg_title and self._active_generic_dlg is not None:
+            self._active_generic_dlg.accept()
+
+    def _highlight_treatment_button(self, title: str, active: bool) -> None:
+        """Même surbrillance que le bouton Annotations autour de l'icône, tant que
+        l'outil ``title`` est actif (dialogue ouvert ou mode canvas en cours)."""
+        btn = self._treatment_buttons.get(title)
+        if btn is not None:
+            btn.setStyleSheet(_ACTIVE_TOOL_STYLE if active else "")
+
     def _open_treatment(self, title: str, sliders_def: list) -> None:
+        # Déjà ouvert : le ramener au premier plan plutôt que d'en ouvrir un second.
+        if self._active_generic_dlg is not None and self._active_generic_dlg_title == title:
+            self._active_generic_dlg.raise_()
+            self._active_generic_dlg.activateWindow()
+            return
+        self._deactivate_other_tools(title)
+        self._highlight_treatment_button(title, True)
         if title == "Luminosité":
             self._open_luminosite_treatment()
             return
@@ -1378,30 +687,55 @@ class EditPanel(QWidget):
         if title == "Vignette":
             self._open_vignette_treatment()
             return
+        if title == "Cadre":
+            self._open_frame_treatment()
+            return
 
         original = copy.copy(self._edit)
         dlg = TreatmentDialog(title, sliders_def, self._edit, parent=self)
         dlg.preview.connect(self._on_preview)
         dlg._panel = self
+        self._active_generic_dlg = dlg
+        self._active_generic_dlg_title = title
 
         is_straighten = (title == "Redresser")
         if is_straighten:
             self.grid_visibility_changed.emit(True)
 
-        if dlg.exec() == QDialog.Accepted:
-            self._checkpoint(title)
-            self._push_undo(title)
-            new_edit = dlg.get_edit()
-            for _, attr, *_ in sliders_def:
-                setattr(self._edit, attr, getattr(new_edit, attr))
-            self.edits_changed.emit(copy.copy(self._edit))
-            self._save(title)
-        else:
-            self._edit = original
-            self.edits_changed.emit(copy.copy(self._edit))
+        def _finish(accepted: bool) -> None:
+            self._active_generic_dlg = None
+            self._active_generic_dlg_title = None
+            if accepted:
+                self._checkpoint(title)
+                self._push_undo(title)
+                new_edit = dlg.get_edit()
+                for _, attr, *_ in sliders_def:
+                    setattr(self._edit, attr, getattr(new_edit, attr))
+                self.edits_changed.emit(copy.copy(self._edit))
+                self._save(title)
+            else:
+                self._edit = original
+                self.edits_changed.emit(copy.copy(self._edit))
+            if is_straighten:
+                self.grid_visibility_changed.emit(False)
+            self._highlight_treatment_button(title, False)
 
-        if is_straighten:
-            self.grid_visibility_changed.emit(False)
+        dlg.accepted.connect(lambda: _finish(True))
+        dlg.rejected.connect(lambda: _finish(False))
+        dlg.show()
+        dlg.raise_()
+
+    def _on_crop_clicked(self) -> None:
+        self._deactivate_other_tools("Recadrer")
+        self._crop_active = True
+        self._btn_crop.setStyleSheet(_ACTIVE_TOOL_STYLE)
+        self.crop_mode_requested.emit()
+
+    def on_crop_mode_ended(self) -> None:
+        """Reçu depuis la visionneuse quand le mode recadrage se termine
+        (validation ou annulation) — retire la surbrillance du bouton."""
+        self._crop_active = False
+        self._btn_crop.setStyleSheet("")
 
     def _open_couleurs_treatment(self) -> None:
         # Si le dialogue est déjà ouvert, le ramener au premier plan
@@ -1436,6 +770,7 @@ class EditPanel(QWidget):
             # Annuler le mode pipette si toujours actif
             self.wb_pick_requested.emit(False)
             self._active_color_dlg = None
+            self._highlight_treatment_button("Couleurs", False)
 
         dlg.accepted.connect(_on_accepted)
         dlg.rejected.connect(_on_rejected)
@@ -1458,20 +793,31 @@ class EditPanel(QWidget):
         dlg = LuminositeTreatmentDialog(self._edit, photo_path=photo_path, parent=self)
         dlg.preview.connect(self._on_preview)
         dlg._panel = self
+        self._active_generic_dlg = dlg
+        self._active_generic_dlg_title = "Luminosité"
 
-        if dlg.exec() == QDialog.Accepted:
-            self._checkpoint("Luminosité")
-            self._push_undo("Luminosité")
-            new_edit = dlg.get_edit()
-            self._edit.brightness = new_edit.brightness
-            self._edit.gamma = new_edit.gamma
-            self._edit.gamma_use_curve = new_edit.gamma_use_curve
-            self._edit.gamma_curve_points = new_edit.gamma_curve_points
-            self.edits_changed.emit(copy.copy(self._edit))
-            self._save("Luminosité")
-        else:
-            self._edit = original
-            self.edits_changed.emit(copy.copy(self._edit))
+        def _finish(accepted: bool) -> None:
+            self._active_generic_dlg = None
+            self._active_generic_dlg_title = None
+            if accepted:
+                self._checkpoint("Luminosité")
+                self._push_undo("Luminosité")
+                new_edit = dlg.get_edit()
+                self._edit.brightness = new_edit.brightness
+                self._edit.gamma = new_edit.gamma
+                self._edit.gamma_use_curve = new_edit.gamma_use_curve
+                self._edit.gamma_curve_points = new_edit.gamma_curve_points
+                self.edits_changed.emit(copy.copy(self._edit))
+                self._save("Luminosité")
+            else:
+                self._edit = original
+                self.edits_changed.emit(copy.copy(self._edit))
+            self._highlight_treatment_button("Luminosité", False)
+
+        dlg.accepted.connect(lambda: _finish(True))
+        dlg.rejected.connect(lambda: _finish(False))
+        dlg.show()
+        dlg.raise_()
 
     def _open_vignette_treatment(self) -> None:
         if self._active_vignette_dlg is not None:
@@ -1487,6 +833,7 @@ class EditPanel(QWidget):
 
         def _finish(accepted: bool) -> None:
             self._active_vignette_dlg = None
+            self._highlight_treatment_button("Vignette", False)
             if accepted:
                 # Pousser l'état AVANT ouverture (original), pas self._edit qui a
                 # déjà été modifié par on_vignette_changed pendant le glissement.
@@ -1517,6 +864,52 @@ class EditPanel(QWidget):
         dlg.show()
         dlg.raise_()
 
+    # Attributs de cadre recopiés entre le dialogue et l'état du panneau.
+    _FRAME_ATTRS = (
+        "frame_type", "frame_width", "frame_inner_width", "frame_gap",
+        "frame_style", "frame_color", "frame_color2", "frame_inner_color",
+        "frame_gap_color", "frame_inner_enabled", "frame_inner_motif",
+        "frame_inner_relief", "frame_inner_ornament",
+    )
+
+    def _open_frame_treatment(self) -> None:
+        if self._active_frame_dlg is not None:
+            self._active_frame_dlg.raise_()
+            self._active_frame_dlg.activateWindow()
+            return
+
+        from src.ui.frame_dialog import FrameDialog
+
+        original = copy.copy(self._edit)
+        photo_path = self._photo.path if self._photo else None
+        dlg = FrameDialog(self._edit, photo_path=photo_path, parent=self)
+        # Aperçu en direct : l'EditInfo du dialogue (copie complète de l'état du
+        # panneau) part telle quelle vers la visionneuse. self._edit n'est pas
+        # touché avant validation, pour que _push_undo empile bien l'état d'avant.
+        dlg.preview.connect(self._on_preview)
+        dlg._panel = self
+        self._active_frame_dlg = dlg
+
+        def _finish(accepted: bool) -> None:
+            self._active_frame_dlg = None
+            self._highlight_treatment_button("Cadre", False)
+            if accepted:
+                self._checkpoint("Cadre")
+                self._push_undo("Cadre")
+                new_edit = dlg.get_edit()
+                for attr in self._FRAME_ATTRS:
+                    setattr(self._edit, attr, getattr(new_edit, attr))
+                self.edits_changed.emit(copy.copy(self._edit))
+                self._save("Cadre")
+            else:
+                self._edit = original
+                self.edits_changed.emit(copy.copy(self._edit))
+
+        dlg.accepted.connect(lambda: _finish(True))
+        dlg.rejected.connect(lambda: _finish(False))
+        dlg.show()
+        dlg.raise_()
+
     def _on_vignette_preview(self, edit: EditInfo) -> None:
         """Mise à jour depuis le slider d'intensité ou bouton couleur du dialogue."""
         self._edit.vignette_strength = edit.vignette_strength
@@ -1543,13 +936,7 @@ class EditPanel(QWidget):
     # ------------------------------------------------------------------ public
 
     def set_photo(self, photo: PhotoInfo) -> None:
-        if self._red_eye_active:
-            self._btn_red_eye.setChecked(False)
-            self._toggle_red_eye_mode(False)
-        if self._active_color_dlg is not None:
-            self._active_color_dlg.reject()
-        if self._active_vignette_dlg is not None:
-            self._active_vignette_dlg.reject()
+        self._deactivate_other_tools("")   # aucun outil ne doit rester actif au changement de photo
         self._photo = photo
         self._edit = self._db.load(photo.path)
         # get_history retourne aussi l'état courant (dernier enregistrement).
@@ -1568,29 +955,49 @@ class EditPanel(QWidget):
     def undo(self) -> None:
         if not self._undo_stack:
             return
+        before = self._edit.rotation
         prev_edit, op_label = self._undo_stack.pop()
         self._redo_stack.append((copy.copy(self._edit), op_label))
         self._edit = prev_edit
         self.edits_changed.emit(copy.copy(self._edit))
         self._save("undo")
         self._update_undo_buttons()
+        self._emit_rotation_if_changed(before)
 
     def redo(self) -> None:
         if not self._redo_stack:
             return
+        before = self._edit.rotation
         prev_edit, op_label = self._redo_stack.pop()
         self._undo_stack.append((copy.copy(self._edit), op_label))
         self._edit = prev_edit
         self.edits_changed.emit(copy.copy(self._edit))
         self._save("redo")
         self._update_undo_buttons()
+        self._emit_rotation_if_changed(before)
 
     # ------------------------------------------------------------------ private
 
+    def _emit_rotation_if_changed(self, before: float) -> None:
+        """Émet rotation_stepped si la rotation vient de changer.
+
+        Les boutons ↻/↺ émettent eux-mêmes ; ce helper couvre les chemins qui
+        changent la rotation sans passer par eux (undo, redo, reset_all,
+        restore_all). Sans ça, indexed_photos.rotation reste figé sur
+        l'orientation de la dernière détection alors que la photo est revenue à
+        une autre : la re-détection ne retrouve plus qu'une partie des visages
+        et aucune action de l'UI ne permet d'en sortir."""
+        if not self._photo:
+            return
+        after = int(self._edit.rotation) % 360
+        if int(before) % 360 == after:
+            return
+        self.rotation_stepped.emit(self._photo.path, after)
+
     def _save(self, operation: str) -> None:
         if self._photo:
-            self._db.save(self._photo.path, self._edit, operation=operation)
-            self.photo_saved.emit(self._photo.path, copy.copy(self._edit))
+            if self._db.save(self._photo.path, self._edit, operation=operation):
+                self.photo_saved.emit(self._photo.path, copy.copy(self._edit))
 
     def _checkpoint(self, op_label: str) -> None:
         """Sauvegarde l'état courant dans l'historique DB avant une opération.
@@ -1601,11 +1008,20 @@ class EditPanel(QWidget):
         if self._photo:
             self._db.push_history(self._photo.path, self._edit, op_label)
 
+    def _checkpoint_state(self, edit: EditInfo, op_label: str) -> None:
+        """Comme _checkpoint(), mais pour un état arbitraire (réinjection d'historique)."""
+        if self._photo:
+            self._db.push_history(self._photo.path, edit, op_label)
+
     def _push_undo(self, op_label: str) -> None:
         self._undo_stack.append((copy.copy(self._edit), op_label))
         if len(self._undo_stack) > _UNDO_MAX:
             self._undo_stack.pop(0)
         self._redo_stack.clear()
+        # une nouvelle retouche après un reset_all() invalide l'instantané de restauration
+        # (sinon un futur restore_all() écraserait silencieusement cette retouche)
+        if self._photo:
+            self._reset_snapshots.pop(os.path.normpath(self._photo.path), None)
         self._update_undo_buttons()
 
     def _update_undo_buttons(self) -> None:
@@ -1624,22 +1040,22 @@ class EditPanel(QWidget):
             self._btn_redo.setText("Rétablir")
             self._btn_redo.setEnabled(False)
         self._btn_reset.setEnabled(self._edit.is_modified())
+        can_restore = bool(self._photo) and os.path.normpath(self._photo.path) in self._reset_snapshots
+        self._btn_restore.setEnabled(can_restore)
 
     def reset_all(self) -> None:
-        """Supprime toutes les retouches et l'historique pour la photo courante."""
+        """Supprime toutes les retouches et l'historique pour la photo courante.
+
+        Pas de confirmation : l'action est réversible via restore_all()."""
         if not self._photo:
             return
-        from PySide6.QtWidgets import QMessageBox
-        reply = QMessageBox.question(
-            self,
-            "Réinitialiser les retouches",
-            f"Supprimer toutes les retouches de cette photo ?\n\n"
-            "Le fichier original sur disque n'est pas modifié.",
-            QMessageBox.Yes | QMessageBox.No,
-            QMessageBox.No,
+        before = self._edit.rotation
+        # L'historique est sauvegardé avec l'état : restore_all() doit rendre les
+        # retouches ET la possibilité de les défaire une par une (sinon un
+        # reset + restauration écrase définitivement l'historique de la photo).
+        self._reset_snapshots[os.path.normpath(self._photo.path)] = (
+            copy.copy(self._edit), list(self._undo_stack),
         )
-        if reply != QMessageBox.Yes:
-            return
         self._db.delete(self._photo.path)
         self._edit = EditInfo()
         self._undo_stack.clear()
@@ -1647,6 +1063,30 @@ class EditPanel(QWidget):
         self._update_undo_buttons()
         self.edits_changed.emit(copy.copy(self._edit))
         self.photo_saved.emit(self._photo.path, copy.copy(self._edit))
+        self._emit_rotation_if_changed(before)
+
+    def restore_all(self) -> None:
+        """Remet en place les retouches supprimées par le dernier reset_all() sur cette photo."""
+        if not self._photo:
+            return
+        snapshot = self._reset_snapshots.pop(os.path.normpath(self._photo.path), None)
+        if snapshot is None:
+            self._update_undo_buttons()
+            return
+        prev_edit, prev_history = snapshot
+        before = self._edit.rotation
+        self._edit = prev_edit
+        self._undo_stack = list(prev_history)
+        self._redo_stack.clear()
+        # reset_all() a effacé edit_history en DB : on la réinsère avant _save()
+        # (qui y empile l'état courant) pour que l'undo pas-à-pas reste possible,
+        # y compris après redémarrage de l'application.
+        for hist_edit, op_label in self._undo_stack:
+            self._checkpoint_state(hist_edit, op_label)
+        self._save("restore_all")
+        self._update_undo_buttons()
+        self.edits_changed.emit(copy.copy(self._edit))
+        self._emit_rotation_if_changed(before)
 
     def _rotate_cw(self) -> None:
         self._checkpoint("Rotation +90°")
@@ -1692,9 +1132,8 @@ class EditPanel(QWidget):
     def _toggle_red_eye_mode(self, checked: bool) -> None:
         self._red_eye_active = checked
         if checked:
-            self._btn_red_eye.setStyleSheet(
-                "QToolButton { background: #3a1a1a; border: 1px solid #8a2020; border-radius: 4px; }"
-            )
+            self._deactivate_other_tools("Yeux rouges")
+            self._btn_red_eye.setStyleSheet(_ACTIVE_TOOL_STYLE)
             self._red_eye_panel.show()
             radius = self._red_eye_slider.value() / 1000.0
             self.red_eye_mode_requested.emit(True, radius)
@@ -1729,3 +1168,285 @@ class EditPanel(QWidget):
         self._edit.red_eye_regions.append((cx, cy, radius))
         self.edits_changed.emit(copy.copy(self._edit))
         self._save("red_eye")
+
+    # ------------------------------------------------------------------ annotations
+
+    def _toggle_annotation_mode(self, checked: bool) -> None:
+        self._annotation_active = checked
+        if checked:
+            self._deactivate_other_tools("Annotations")
+            self._btn_annotations.setStyleSheet(_ACTIVE_TOOL_STYLE)
+            self._annotation_panel.show()
+            self.annotation_mode_requested.emit(True, self._annotation_tool)
+            self._emit_annotation_style()
+        else:
+            self._btn_annotations.setStyleSheet("")
+            self._annotation_panel.hide()
+            self._annotation_selected_ids = set()
+            self._btn_annotation_delete_sel.setEnabled(False)
+            self.annotation_mode_requested.emit(False, self._annotation_tool)
+        self._update_annotation_style_controls_visibility()
+
+    def _set_annotation_tool(self, tool: str) -> None:
+        self._annotation_tool = tool
+        if self._annotation_active:
+            self.annotation_mode_requested.emit(True, tool)
+        self._update_annotation_style_controls_visibility()
+
+    def _annotation_active_kind(self) -> "str | None":
+        """Détermine à quel groupe de contrôles de style le contexte courant se rapporte :
+        'line' (trait : stylo/ligne/courbe), 'shape' (rectangle/ellipse), 'text',
+        ou None si rien n'est pertinent (ex. outil Sélection sans élément sélectionné)."""
+        if self._annotation_tool in ("pen", "line", "curve"):
+            return "line"
+        if self._annotation_tool in ("rect", "ellipse"):
+            return "shape"
+        if self._annotation_tool == "text":
+            return "text"
+        if self._annotation_tool == "select" and self._annotation_selected_ids:
+            kinds = set()
+            for ann_id in self._annotation_selected_ids:
+                ann = next((a for a in self._edit.annotations if a.get("id") == ann_id), None)
+                if ann is None:
+                    continue
+                if ann.get("type") == "text":
+                    kinds.add("text")
+                elif ann.get("type") in ("rect", "ellipse"):
+                    kinds.add("shape")
+                else:
+                    kinds.add("line")
+            if len(kinds) == 1:
+                return next(iter(kinds))
+        return None
+
+    def _update_annotation_style_controls_visibility(self) -> None:
+        kind = self._annotation_active_kind()
+        self._annotation_style_row.setVisible(kind in ("line", "shape"))
+        self._annotation_shape_row.setVisible(kind == "shape")
+        self._annotation_font_row.setVisible(kind == "text")
+        self._annotation_bi_row.setVisible(kind == "text")
+
+    def _pick_annotation_color(self) -> None:
+        color = QColorDialog.getColor(
+            self._annotation_color, self, "Couleur d'annotation",
+            QColorDialog.ShowAlphaChannel,
+        )
+        if color.isValid():
+            self._annotation_color = color
+            self._update_annotation_color_swatch()
+            self._on_annotation_style_changed()
+
+    def _update_annotation_color_swatch(self) -> None:
+        style = (
+            f"background-color: {self._annotation_color.name(QColor.HexArgb)}; "
+            "border: 1px solid #888; border-radius: 3px;"
+        )
+        self._btn_annotation_color.setStyleSheet(style)
+        self._btn_annotation_text_color.setStyleSheet(style)
+
+    def _pick_annotation_fill_color(self) -> None:
+        # Pas de canal alpha ici : l'opacité de la surface est régie exclusivement
+        # par _annotation_opacity_spin, pour éviter deux contrôles de transparence
+        # qui se composent silencieusement.
+        color = QColorDialog.getColor(self._annotation_fill_color, self, "Couleur de la surface")
+        if color.isValid():
+            self._annotation_fill_color = color
+            self._update_annotation_fill_color_swatch()
+            self._on_annotation_style_changed()
+
+    def _update_annotation_fill_color_swatch(self) -> None:
+        self._btn_annotation_fill_color.setStyleSheet(
+            f"background-color: {self._annotation_fill_color.name(QColor.HexArgb)}; "
+            "border: 1px solid #888; border-radius: 3px;"
+        )
+
+    def _on_annotation_style_changed(self, *_args) -> None:
+        if self._annotation_active:
+            self._emit_annotation_style()
+
+    def _emit_annotation_style(self) -> None:
+        width = self._annotation_width_spin.value() / 100.0
+        font_family = self._annotation_font_combo.currentFont().family()
+        font_size = self._annotation_font_size.value() / 100.0
+        bold = self._btn_annotation_bold.isChecked()
+        italic = self._btn_annotation_italic.isChecked()
+        color = self._annotation_color.name(QColor.HexArgb)
+        fill_color = self._annotation_fill_color.name(QColor.HexArgb)
+        opacity = self._annotation_opacity_spin.value() / 100.0
+        blur = self._annotation_blur_spin.value() / 100.0
+        self.annotation_style_changed.emit(color, width, font_family, font_size, bold, italic,
+                                            fill_color, opacity, blur)
+        if self._annotation_selected_ids:
+            self._apply_style_to_selected(color, width, font_family, font_size, bold, italic,
+                                           fill_color, opacity, blur)
+
+    def _apply_style_to_selected(self, color: str, width: float, font_family: str,
+                                  font_size: float, bold: bool, italic: bool,
+                                  fill_color: str = "#ffff0000", opacity: float = 0.4,
+                                  blur: float = 0.0) -> None:
+        """Applique le style courant (couleur/épaisseur/police/fond) aux éléments sélectionnés,
+        plutôt qu'au seul style par défaut des prochains éléments dessinés."""
+        ids = self._annotation_selected_ids
+        new_list = []
+        any_updated = False
+        for a in self._edit.annotations:
+            if a.get("id") in ids:
+                a = dict(a)
+                a["color"] = color
+                if a.get("type") == "text":
+                    a["font_family"] = font_family
+                    a["font_size"] = font_size
+                    a["bold"] = bold
+                    a["italic"] = italic
+                elif a.get("type") in ("rect", "ellipse"):
+                    a["width"] = width
+                    a["fill_color"] = fill_color
+                    a["opacity"] = opacity
+                    a["blur"] = blur
+                else:
+                    a["width"] = width
+                any_updated = True
+            new_list.append(a)
+        if not any_updated:
+            return
+        self._checkpoint("Modifier le style")
+        self._push_undo("Modifier le style")
+        self._edit.annotations = new_list
+        self.edits_changed.emit(copy.copy(self._edit))
+        self._save("annotation_style")
+
+    def _clear_all_annotations(self) -> None:
+        if not self._edit.annotations:
+            return
+        self._checkpoint("Effacer annotations")
+        self._push_undo("Effacer annotations")
+        self._edit.annotations = []
+        self._annotation_selected_ids = set()
+        self._btn_annotation_delete_sel.setEnabled(False)
+        self._update_annotation_style_controls_visibility()
+        self.edits_changed.emit(copy.copy(self._edit))
+        self._save("annotation_clear")
+
+    def _done_annotation_mode(self) -> None:
+        self._btn_annotations.setChecked(False)
+        self._toggle_annotation_mode(False)
+
+    def on_annotation_added(self, annotation: dict) -> None:
+        """Reçu depuis le canvas quand l'utilisateur valide un nouvel élément (trait/texte)."""
+        self._checkpoint("Annotation")
+        self._push_undo("Annotation")
+        self._edit.annotations = list(self._edit.annotations) + [dict(annotation)]
+        self.edits_changed.emit(copy.copy(self._edit))
+        self._save("annotation")
+
+    def on_annotation_deleted(self, annotation_id: str) -> None:
+        """Reçu depuis le canvas quand l'utilisateur supprime l'élément sélectionné."""
+        self._checkpoint("Supprimer annotation")
+        self._push_undo("Supprimer annotation")
+        self._edit.annotations = [a for a in self._edit.annotations if a.get("id") != annotation_id]
+        self.edits_changed.emit(copy.copy(self._edit))
+        self._save("annotation_delete")
+
+    def on_annotation_deleted_multi(self, annotation_ids) -> None:
+        """Reçu depuis le canvas quand l'utilisateur supprime plusieurs éléments sélectionnés."""
+        ids = set(annotation_ids or [])
+        if not ids:
+            return
+        self._checkpoint("Supprimer annotations")
+        self._push_undo("Supprimer annotations")
+        self._edit.annotations = [a for a in self._edit.annotations if a.get("id") not in ids]
+        self.edits_changed.emit(copy.copy(self._edit))
+        self._save("annotation_delete_multi")
+
+    def on_annotation_selection_changed(self, annotation_ids) -> None:
+        self._annotation_selected_ids = set(annotation_ids or [])
+        self._btn_annotation_delete_sel.setEnabled(bool(self._annotation_selected_ids))
+        if len(self._annotation_selected_ids) == 1:
+            ann_id = next(iter(self._annotation_selected_ids))
+            ann = next((a for a in self._edit.annotations if a.get("id") == ann_id), None)
+            if ann is not None:
+                self._load_style_into_controls(ann)
+        self._update_annotation_style_controls_visibility()
+
+    def _load_style_into_controls(self, ann: dict) -> None:
+        """Reflète le style de l'élément sélectionné (couleur/épaisseur/police) dans les
+        contrôles du panneau, sans déclencher de ré-application en cascade sur l'élément."""
+        widgets = [
+            self._annotation_width_spin, self._annotation_font_combo,
+            self._annotation_font_size, self._btn_annotation_bold, self._btn_annotation_italic,
+            self._annotation_opacity_spin, self._annotation_blur_spin,
+        ]
+        for w in widgets:
+            w.blockSignals(True)
+        try:
+            self._annotation_color = QColor(ann.get("color") or self._annotation_color.name(QColor.HexArgb))
+            self._update_annotation_color_swatch()
+            if ann.get("type") == "text":
+                self._annotation_font_combo.setCurrentFont(QFont(ann.get("font_family", "Arial")))
+                self._annotation_font_size.setValue(round(ann.get("font_size", 0.04) * 100))
+                self._btn_annotation_bold.setChecked(bool(ann.get("bold", False)))
+                self._btn_annotation_italic.setChecked(bool(ann.get("italic", False)))
+            elif ann.get("type") in ("rect", "ellipse"):
+                self._annotation_width_spin.setValue(ann.get("width", 0.006) * 100)
+                self._annotation_fill_color = QColor(
+                    ann.get("fill_color") or self._annotation_fill_color.name(QColor.HexArgb)
+                )
+                self._update_annotation_fill_color_swatch()
+                self._annotation_opacity_spin.setValue(ann.get("opacity", 1.0) * 100)
+                self._annotation_blur_spin.setValue(ann.get("blur", 0.0) * 100)
+            else:
+                self._annotation_width_spin.setValue(ann.get("width", 0.006) * 100)
+        finally:
+            for w in widgets:
+                w.blockSignals(False)
+
+    def on_annotation_moved(self, annotation_id: str, updated: dict) -> None:
+        """Reçu depuis le canvas quand l'utilisateur relâche la souris après avoir
+        déplacé l'élément sélectionné (outil Sélection)."""
+        self._checkpoint("Déplacer annotation")
+        self._push_undo("Déplacer annotation")
+        self._edit.annotations = [
+            dict(updated) if a.get("id") == annotation_id else a for a in self._edit.annotations
+        ]
+        self.edits_changed.emit(copy.copy(self._edit))
+        self._save("annotation_move")
+
+    def on_annotation_moved_multi(self, updated) -> None:
+        """Reçu depuis le canvas quand l'utilisateur relâche la souris après avoir
+        déplacé plusieurs éléments sélectionnés en une fois (outil Sélection)."""
+        if not updated:
+            return
+        self._checkpoint("Déplacer annotations")
+        self._push_undo("Déplacer annotations")
+        self._edit.annotations = [
+            dict(updated[a.get("id")]) if a.get("id") in updated else a for a in self._edit.annotations
+        ]
+        self.edits_changed.emit(copy.copy(self._edit))
+        self._save("annotation_move_multi")
+
+    def on_annotation_resized(self, annotation_id: str, updated: dict) -> None:
+        """Reçu depuis le canvas quand l'utilisateur relâche la souris après avoir
+        redimensionné/tourné l'élément sélectionné via ses ancres (outil Sélection)."""
+        self._checkpoint("Redimensionner annotation")
+        self._push_undo("Redimensionner annotation")
+        self._edit.annotations = [
+            dict(updated) if a.get("id") == annotation_id else a for a in self._edit.annotations
+        ]
+        if self._annotation_selected_ids == {annotation_id}:
+            self._load_style_into_controls(updated)
+        self.edits_changed.emit(copy.copy(self._edit))
+        self._save("annotation_resize")
+
+    def on_annotation_grouped(self, updated) -> None:
+        """Reçu depuis le canvas après un Grouper/Dégrouper (menu contextuel)."""
+        if not updated:
+            return
+        is_group = any(v.get("group") for v in updated.values())
+        label = "Grouper les annotations" if is_group else "Dégrouper les annotations"
+        self._checkpoint(label)
+        self._push_undo(label)
+        self._edit.annotations = [
+            dict(updated[a.get("id")]) if a.get("id") in updated else a for a in self._edit.annotations
+        ]
+        self.edits_changed.emit(copy.copy(self._edit))
+        self._save("annotation_group" if is_group else "annotation_ungroup")

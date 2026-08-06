@@ -2,21 +2,55 @@
 # SPDX-License-Identifier: Apache-2.0
 import logging
 import os
+import time
 
-from PySide6.QtCore import QFileSystemWatcher, QObject, QTimer, Signal
+from PySide6.QtCore import QFileSystemWatcher, QObject, QThread, QTimer, Signal
 
 logger = logging.getLogger(__name__)
 
 _DEBOUNCE_MS = 400
 
 
-def _is_hidden(path: str) -> bool:
-    if os.path.basename(path).startswith("."):
-        return True
-    try:
-        return bool(os.stat(path).st_file_attributes & 0x2)
-    except (AttributeError, OSError):
-        return False
+# Ré-export : implémentation partagée (cf. fs_utils), alias conservé pour les
+# usages internes et les tests existants.
+from src.library.fs_utils import is_hidden_path as _is_hidden  # noqa: E402
+
+
+class _TreeScanThread(QThread):
+    """Parcourt récursivement les dossiers racine hors thread UI.
+
+    os.scandir répété sur une grosse arborescence (ou un lecteur réseau lent)
+    peut largement dépasser le budget de 50ms — cf. règle "l'UI ne bloque
+    jamais" (CLAUDE.md).
+    """
+
+    finished_scan = Signal(list)  # list[tuple[str, frozenset, frozenset]]
+
+    def __init__(self, folders: list[str], parent: QObject | None = None) -> None:
+        super().__init__(parent)
+        self._folders = folders
+
+    def run(self) -> None:
+        results: list[tuple[str, frozenset, frozenset]] = []
+        for folder in self._folders:
+            self._scan(folder, results)
+        self.finished_scan.emit(results)
+
+    def _scan(self, path: str, results: list) -> None:
+        if not os.path.isdir(path):
+            return
+        try:
+            entries = list(os.scandir(path))
+            files = frozenset(e.name for e in entries if e.is_file())
+            dirs = frozenset(
+                e.name for e in entries
+                if e.is_dir(follow_symlinks=False) and not _is_hidden(e.path)
+            )
+        except OSError:
+            files, dirs = frozenset(), frozenset()
+        results.append((path, files, dirs))
+        for name in dirs:
+            self._scan(os.path.join(path, name), results)
 
 
 class FolderWatcher(QObject):
@@ -42,18 +76,91 @@ class FolderWatcher(QObject):
         self._debounce.setSingleShot(True)
         self._debounce.setInterval(_DEBOUNCE_MS)
         self._debounce.timeout.connect(self._flush_pending)
+        self._scan_thread: "_TreeScanThread | None" = None
+        self._scan_generation = 0
+        # Changements auto-infligés à absorber : dir -> (noms de fichiers,
+        # deadline time.monotonic). Quand l'application supprime/déplace
+        # elle-même des fichiers (touche Del, drag & drop), l'événement watcher
+        # qui suit ne fait que constater ce que l'UI a déjà traité — sans cette
+        # absorption, chaque suppression déclenchait un rescan complet du
+        # dossier suivi d'un refresh albums/personnes redondant.
+        self._self_deleted: dict[str, tuple[set[str], float]] = {}
+        self._self_added: dict[str, tuple[set[str], float]] = {}
 
     # ------------------------------------------------------------------ public
 
     def set_folders(self, folders: list[str]) -> None:
-        """Remplace l'ensemble surveillé par ces dossiers racine (récursif)."""
+        """Remplace l'ensemble surveillé par ces dossiers racine (récursif).
+
+        Le parcours récursif se fait dans un QThread (cf. _TreeScanThread) —
+        une grosse arborescence ou un lecteur réseau lent rendrait sinon cet
+        appel bloquant pour l'UI bien au-delà de 50ms."""
+        self._scan_generation += 1
+        generation = self._scan_generation
+
         existing = self._watcher.directories()
         if existing:
             self._watcher.removePaths(existing)
         self._snapshots.clear()
         self._pending.clear()
-        for folder in folders:
-            self._add_tree(folder)
+
+        thread = _TreeScanThread(list(folders), self)
+        thread.finished_scan.connect(
+            lambda results, g=generation: self._apply_scan(g, results)
+        )
+        thread.finished.connect(thread.deleteLater)
+        self._scan_thread = thread
+        thread.start()
+
+    def notify_self_deletions(self, paths: list[str], ttl_s: float = 10.0) -> None:
+        """Déclare des fichiers que l'application va supprimer elle-même : les
+        événements du watcher qui ne font que constater ces disparitions seront
+        absorbés (pas de files_changed → pas de rescan redondant). Un
+        changement EXTERNE dans le même dossier (autre fichier ajouté ou
+        supprimé) émet toujours. Le TTL borne le cas où la suppression échoue
+        finalement (le nom resterait sinon absorbé indéfiniment)."""
+        self._notify_self(self._self_deleted, paths, ttl_s)
+
+    def notify_self_additions(self, paths: list[str], ttl_s: float = 10.0) -> None:
+        """Pendant du précédent pour des fichiers que l'application va créer
+        elle-même (destination d'un déplacement par drag & drop)."""
+        self._notify_self(self._self_added, paths, ttl_s)
+
+    @staticmethod
+    def _notify_self(table: dict, paths: list[str], ttl_s: float) -> None:
+        deadline = time.monotonic() + ttl_s
+        for path in paths:
+            directory = os.path.dirname(os.path.normpath(path))
+            names, _ = table.get(directory, (set(), 0.0))
+            names.add(os.path.basename(path))
+            table[directory] = (names, deadline)
+
+    @staticmethod
+    def _consume_suppressed(table: dict, directory: str, names: frozenset) -> frozenset:
+        """Retourne l'intersection de names avec les noms déclarés pour ce
+        dossier (si la deadline n'est pas dépassée) et retire les noms
+        consommés de la table."""
+        entry = table.get(directory)
+        if entry is None:
+            return frozenset()
+        declared, deadline = entry
+        if time.monotonic() > deadline:
+            del table[directory]
+            return frozenset()
+        consumed = names & declared
+        declared -= consumed
+        if declared:
+            table[directory] = (declared, deadline)
+        else:
+            del table[directory]
+        return frozenset(consumed)
+
+    def _apply_scan(self, generation: int, results: list) -> None:
+        if generation != self._scan_generation:
+            return  # un set_folders() plus récent a eu lieu entretemps — résultat obsolète
+        for path, files, dirs in results:
+            self._snapshots[path] = (files, dirs)
+            self._watcher.addPath(path)
         logger.debug("FolderWatcher : %d dossier(s) surveillé(s)", len(self._snapshots))
 
     # ------------------------------------------------------------------ internal
@@ -118,9 +225,20 @@ class FolderWatcher(QObject):
 
         self._snapshots[path] = (new_files, new_dirs)
 
-        if new_files != old_files:
+        # Absorber les changements que l'application a elle-même provoqués
+        # (cf. notify_self_deletions/notify_self_additions) : tout autre
+        # changement dans le même événement émet normalement.
+        disappeared = old_files - new_files
+        appeared    = new_files - old_files
+        sup_del = self._consume_suppressed(self._self_deleted, path, disappeared)
+        sup_add = self._consume_suppressed(self._self_added, path, appeared)
+        if (disappeared - sup_del) or (appeared - sup_add):
             logger.debug("FolderWatcher : fichiers modifiés dans %s", path)
             self.files_changed.emit(path)
+        elif disappeared or appeared:
+            logger.debug(
+                "FolderWatcher : changement auto-infligé absorbé dans %s", path
+            )
 
         for name in (new_dirs - old_dirs):
             subdir = os.path.join(path, name)

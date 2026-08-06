@@ -11,7 +11,7 @@ import logging
 from PySide6.QtCore import Qt, QThread, Signal, Slot
 from PySide6.QtGui import QMouseEvent, QPixmap
 from PySide6.QtWidgets import (
-    QDialog, QDialogButtonBox, QFrame, QHBoxLayout, QLabel,
+    QApplication, QDialog, QDialogButtonBox, QFrame, QHBoxLayout, QLabel,
     QMenu, QPushButton, QScrollArea, QSizePolicy,
     QVBoxLayout, QWidget,
 )
@@ -19,8 +19,10 @@ from PySide6.QtWidgets import (
 from src.core.models import FaceInfo
 from src.faces.face_database import FaceDatabase
 from src.ui.loading_label import LoadingLabel
+from src.ui.ui_utils import install_menu_width_fix
 from src.ui.people_panel import (
-    _AssignDialog, _cosine_sim, _face_bytes, _load_edit_rotations, _SIM_WEAK,
+    _AssignDialog, _cosine_sim, _face_bytes, _load_edit_rotations,
+    _SIM_STRONG, _SIM_WEAK,
 )
 
 logger = logging.getLogger(__name__)
@@ -103,8 +105,9 @@ class _FacesDataLoader(QThread):
     Les dicts sont transmis comme list de tuples pour éviter la coercition
     des clés entières en str par PySide6 lors des connexions cross-thread.
     """
-    # photo_path, faces, person_names_items [(int,str)], cluster_persons_items [(int,int)]
-    data_ready = Signal(str, list, list, list)
+    # photo_path, faces, person_names_items [(int,str)], cluster_persons_items [(int,int)],
+    # probable_items [(face_id, (person_id, score))], ignored_count, edit_rotation
+    data_ready = Signal(str, list, list, list, list, int, int)
 
     def __init__(self, face_db: "FaceDatabase", catalog, photo_path: str, parent=None) -> None:
         super().__init__(parent)
@@ -131,14 +134,58 @@ class _FacesDataLoader(QThread):
             persons = self._catalog.get_persons()
             person_names_items = [(p.id, p.name) for p in persons]
 
+            # Libellé informatif "≈ Probablement/Peut-être X" (seuil _SIM_WEAK=0.45,
+            # cf. people_panel.py/CLAUDE.md) pour les visages qui n'ont ni personne
+            # assignée (directement ou via leur cluster) ni suggestion persistée
+            # (>= _SIM_SUGGEST=0.55, gérée séparément par les coches ✓/✕) — purement
+            # informatif ici, pas de coche automatique vu la confiance encore faible.
+            probable_items: list[tuple[int, tuple[int, float]]] = []
+            candidates = [
+                f for f in faces
+                if not f.person_id
+                and f.cluster_id is not None
+                and f.cluster_id not in cluster_persons
+                and f.suggestion_person_id is None
+                and not f.pinned
+            ]
+            if candidates:
+                person_ids = [p.id for p in persons if p.id is not None]
+                person_centroids = (
+                    self._face_db.get_all_person_centroids(person_ids) if person_ids else {}
+                )
+                if person_centroids:
+                    for f in candidates:
+                        c_emb = self._face_db.get_representative_embedding(cluster_id=f.cluster_id)
+                        if not c_emb:
+                            continue
+                        best_sim, best_id = 0.0, None
+                        for pid, p_emb in person_centroids.items():
+                            sim = _cosine_sim(c_emb, p_emb)
+                            if sim > best_sim:
+                                best_sim, best_id = sim, pid
+                        if best_id is not None and best_sim >= _SIM_WEAK:
+                            probable_items.append((f.id, (best_id, best_sim)))
+
+            ignored_count = len(
+                self._face_db.get_ignored_faces_for_photo(self._photo_path)
+            )
+
+            # Rotation de retouche en attente (non baked) : influence le rendu de la
+            # vignette (cf. _FacePanelLoader) sans toucher aux bbox stockées — fait
+            # partie de la clé de validité du cache de vignettes (cf. _thumb_cache).
+            edit_rotation = _load_edit_rotations([self._photo_path]).get(self._photo_path, 0)
+
             self.data_ready.emit(
                 self._photo_path, faces,
                 person_names_items,
                 list(cluster_persons.items()),
+                probable_items,
+                ignored_count,
+                edit_rotation,
             )
         except Exception:
             logger.exception("[FacesDataLoader] exception during load")
-            self.data_ready.emit(self._photo_path, [], [], [])
+            self.data_ready.emit(self._photo_path, [], [], [], [], 0, 0)
 
 
 class _AssignPrepLoader(QThread):
@@ -184,6 +231,25 @@ class _AssignPrepLoader(QThread):
             self.ready.emit([], None)
 
 
+class _DbWriteWorker(QThread):
+    """Exécute une écriture FaceDatabase hors du thread UI.
+
+    Les assignations de personne (groupe entier) déclenchent en transaction la
+    dédup des visages superposés et la consommation des annotations Picasa sur
+    toutes les photos du groupe — potentiellement long sur un gros groupe. Le
+    panneau se rafraîchit via finished (cf. FacePanel._run_db_write)."""
+
+    def __init__(self, fn, parent=None) -> None:
+        super().__init__(parent)
+        self._fn = fn
+
+    def run(self) -> None:
+        try:
+            self._fn()
+        except Exception:
+            logger.exception("[FacePanel] écriture DB en arrière-plan échouée")
+
+
 # ------------------------------------------------------------------ face item
 
 _BTN_IGNORE_SZ = 20   # diamètre du bouton ✕
@@ -191,10 +257,12 @@ _BTN_IGNORE_SZ = 20   # diamètre du bouton ✕
 class _FaceItem(QFrame):
     """Un visage dans le panneau : vignette + nom. Supporte le menu contextuel."""
 
-    clicked                = Signal(int)           # face_id  (clic gauche)
-    double_clicked         = Signal(int)           # face_id  (double-clic gauche)
-    context_menu_requested = Signal(int, object)   # (face_id, QPoint global)
-    ignore_requested       = Signal(int)           # face_id  (bouton ✕)
+    clicked                     = Signal(int)           # face_id  (clic gauche)
+    double_clicked              = Signal(int)           # face_id  (double-clic gauche)
+    context_menu_requested      = Signal(int, object)   # (face_id, QPoint global)
+    ignore_requested            = Signal(int)           # face_id  (bouton ✕ bas droite)
+    suggestion_accept_requested = Signal(int)           # face_id  (bouton ✓ suggestion)
+    suggestion_reject_requested = Signal(int)           # face_id  (bouton ✕ suggestion)
 
     _STYLE_NORMAL   = "background: transparent; border: none;"
     _STYLE_SELECTED = "background: #1a2f45; border: 2px solid #4a9fd4; border-radius: 4px;"
@@ -207,13 +275,35 @@ class _FaceItem(QFrame):
         "}"
         "QPushButton:hover { background: rgba(220,50,50,240); }"
     )
+    _BTN_ACCEPT_STYLE = (
+        "QPushButton {"
+        "  background: rgba(30,150,30,210);"
+        "  color: white; border-radius: 10px;"
+        "  font-weight: bold; font-size: 12px;"
+        "  border: none; padding: 0;"
+        "}"
+        "QPushButton:hover { background: rgba(50,190,50,240); }"
+    )
+    _BTN_REJECT_STYLE = (
+        "QPushButton {"
+        "  background: rgba(180,30,30,210);"
+        "  color: white; border-radius: 10px;"
+        "  font-weight: bold; font-size: 12px;"
+        "  border: none; padding: 0;"
+        "}"
+        "QPushButton:hover { background: rgba(220,50,50,240); }"
+    )
 
-    def __init__(self, face: FaceInfo, name: str, parent=None) -> None:
+    def __init__(
+        self, face: FaceInfo, name: str, parent=None,
+        *, suggestion: bool = False, name_color: "str | None" = None,
+    ) -> None:
         super().__init__(parent)
         self._face    = face
         self._face_id = face.id
         self.setFrameShape(QFrame.NoFrame)
         self.setStyleSheet(self._STYLE_NORMAL)
+        self.setAccessibleName(f"faceitem::{face.id}")
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(4, 4, 4, 4)
@@ -244,14 +334,40 @@ class _FaceItem(QFrame):
         self._btn_ignore.clicked.connect(lambda: self.ignore_requested.emit(self._face_id))
         self._btn_ignore.raise_()
 
+        if suggestion:
+            self._btn_accept = QPushButton("✓", img_container)
+            self._btn_accept.setGeometry(2, 2, _BTN_IGNORE_SZ, _BTN_IGNORE_SZ)
+            self._btn_accept.setStyleSheet(self._BTN_ACCEPT_STYLE)
+            self._btn_accept.setCursor(Qt.PointingHandCursor)
+            self._btn_accept.setToolTip("Confirmer cette personne (tout le groupe)")
+            self._btn_accept.clicked.connect(
+                lambda: self.suggestion_accept_requested.emit(self._face_id)
+            )
+            self._btn_accept.raise_()
+
+            self._btn_reject = QPushButton("✕", img_container)
+            self._btn_reject.setGeometry(
+                _THUMB - _BTN_IGNORE_SZ - 2, 2, _BTN_IGNORE_SZ, _BTN_IGNORE_SZ
+            )
+            self._btn_reject.setStyleSheet(self._BTN_REJECT_STYLE)
+            self._btn_reject.setCursor(Qt.PointingHandCursor)
+            self._btn_reject.setToolTip("Rejeter cette suggestion")
+            self._btn_reject.clicked.connect(
+                lambda: self.suggestion_reject_requested.emit(self._face_id)
+            )
+            self._btn_reject.raise_()
+
         layout.addWidget(img_container, alignment=Qt.AlignHCenter)
 
         lbl_name = QLabel(name)
         lbl_name.setAlignment(Qt.AlignCenter)
         lbl_name.setWordWrap(True)
         lbl_name.setMaximumWidth(_WIDTH - 8)
-        lbl_name.setStyleSheet("font-size: 11px; color: #ccc; border: none;")
+        lbl_name.setStyleSheet(
+            f"font-size: 11px; color: {name_color or '#ccc'}; border: none;"
+        )
         layout.addWidget(lbl_name)
+        self._name_label = lbl_name
 
         sep = QFrame()
         sep.setFrameShape(QFrame.HLine)
@@ -431,12 +547,19 @@ class FacePanel(QWidget):
         self._items:           dict[int, _FaceItem] = {}
         self._faces:           dict[int, FaceInfo]  = {}
         self._cluster_persons: dict[int, int]       = {}   # cluster_id → person_id
+        self._person_names:    dict[int, str]       = {}   # person_id → nom (dernier chargement)
         self._loader:          _FacePanelLoader | None = None
         self._data_loader:     _FacesDataLoader | None = None
         self._dying_threads:   list = []   # threads being stopped — keep ref until finished
         self._current_photo:   str = ""
         self._selected_face_id: int | None = None
         self._undo_stack:      list[tuple[str, object]] = []
+        # face_id → ((bbox_x, bbox_y, bbox_w, bbox_h, detected_rotation, edit_rotation), PNG)
+        # clé de géométrie complète : un visage réindexé (rotation 90° avant enregistrement,
+        # cf. SingleFaceReindexThread) peut changer de bbox/rotation sous le même face_id ;
+        # sans la comparer, on réafficherait un ancien cadrage périmé.
+        self._thumb_cache:      dict[int, tuple[tuple, bytes]] = {}
+        self._last_edit_rotation: int = 0
         self._setup_ui()
 
     # ------------------------------------------------------------------ setup
@@ -508,10 +631,16 @@ class FacePanel(QWidget):
             self.set_photo(self._current_photo)
 
     def set_photo(self, photo_path: str) -> None:
-        """Charger et afficher les visages de la photo (asynchrone)."""
+        """Charger et afficher les visages de la photo (asynchrone).
+
+        Un rafraîchissement de la même photo (après identification, ignorer,
+        etc.) réutilise les vignettes déjà décodées (cf. _thumb_cache) : seuls
+        les visages nouveaux (ajout manuel) n'ont pas encore de bbox inchangée
+        en cache et sont donc les seuls à repasser par _FacePanelLoader."""
         if photo_path != self._current_photo:
             self._undo_stack.clear()
             self.undo_stack_changed.emit(False)
+            self._thumb_cache.clear()
         self._current_photo = photo_path
         self._btn_add_face.setEnabled(bool(photo_path))
         self._stop_loader()
@@ -559,13 +688,16 @@ class FacePanel(QWidget):
 
     # ------------------------------------------------------------------ data loading
 
-    @Slot(str, list, list, list)
+    @Slot(str, list, list, list, list, int, int)
     def _on_faces_data_ready(
         self,
         photo_path: str,
         faces: list,
         person_names_items: list,
         cluster_persons_items: list,
+        probable_items: list,
+        ignored_count: int,
+        edit_rotation: int,
     ) -> None:
         if photo_path != self._current_photo:
             return  # navigation entre-temps
@@ -574,15 +706,18 @@ class FacePanel(QWidget):
         # des clés en str par PySide6 lors de la transmission cross-thread via Signal.
         person_names: dict[int, str] = {int(k): v for k, v in person_names_items}
         cluster_persons: dict[int, int] = {int(k): v for k, v in cluster_persons_items}
+        probable: dict[int, tuple[int, float]] = {int(k): v for k, v in probable_items}
         self._cluster_persons = cluster_persons
+        self._person_names = person_names
+        self._last_edit_rotation = edit_rotation
 
         self._clear()
 
-        # Mettre à jour le bouton "Visages ignorés"
-        ignored = self._face_db.get_ignored_faces_for_photo(photo_path)
-        self._btn_ignored.setEnabled(bool(ignored))
+        # Mettre à jour le bouton "Visages ignorés" (compte calculé dans le
+        # thread de chargement — pas de requête DB sur le thread UI ici)
+        self._btn_ignored.setEnabled(ignored_count > 0)
         self._btn_ignored.setText(
-            f"Visages ignorés… ({len(ignored)})" if ignored else "Visages ignorés…"
+            f"Visages ignorés… ({ignored_count})" if ignored_count else "Visages ignorés…"
         )
 
         if not faces:
@@ -606,6 +741,8 @@ class FacePanel(QWidget):
 
         loader_items = []
         for face in faces_sorted:
+            suggestion = False
+            name_color = None
             if face.person_id and face.person_id in person_names:
                 name = person_names[face.person_id]
             elif face.cluster_id is not None and face.cluster_id in cluster_persons:
@@ -615,22 +752,66 @@ class FacePanel(QWidget):
                 name = person_names.get(pid, f"Groupe {face.cluster_id}")
             elif face.pinned:
                 name = "Séparé"
+            elif (
+                face.suggestion_person_id is not None
+                and face.suggestion_person_id in person_names
+                and face.cluster_id is not None
+            ):
+                # Suggestion en attente de vérification (_SIM_SUGGEST <= score < _SIM_AUTO_ASSIGN,
+                # cf. CLAUDE.md) : tick vert/croix rouge sur la vignette pour confirmer/rejeter
+                # sans passer par le dialogue d'assignation complet.
+                sugg_name = person_names[face.suggestion_person_id]
+                pct = round(face.suggestion_score * 100)
+                name = f"{sugg_name} ? ({pct} %)"
+                suggestion = True
+                name_color = "#7aabdb"
+            elif face.id in probable and probable[face.id][0] in person_names:
+                # Correspondance calculée à la volée (pas persistée, sous le seuil
+                # _SIM_SUGGEST=0.55 qui déclenche les coches ✓/✕) : purement informatif,
+                # confirmation via le menu contextuel "Identifier cette personne…".
+                prob_pid, prob_sim = probable[face.id]
+                prob_name = person_names[prob_pid]
+                pct = round(prob_sim * 100)
+                qualifier = "Probablement" if prob_sim >= _SIM_STRONG else "Peut-être"
+                name = f"≈ {qualifier} {prob_name} ({pct} %)"
+                name_color = "#7aabdb" if prob_sim >= _SIM_STRONG else "#888"
             elif face.cluster_id is not None:
                 name = f"Groupe {face.cluster_id}"
             else:
                 name = "Inconnu"
 
-            item = _FaceItem(face, name, self._content)
+            item = _FaceItem(
+                face, name, self._content, suggestion=suggestion, name_color=name_color
+            )
             item.clicked.connect(self._on_item_clicked)
             item.double_clicked.connect(self._on_item_double_clicked)
             item.context_menu_requested.connect(self._on_item_context_menu)
             item.ignore_requested.connect(self._on_ignore_requested)
+            if suggestion:
+                item.suggestion_accept_requested.connect(self._on_suggestion_accept_requested)
+                item.suggestion_reject_requested.connect(self._on_suggestion_reject_requested)
             self._vbox.addWidget(item)
             self._items[face.id] = item
             self._faces[face.id] = face
-            loader_items.append((face.id, face))
+            geom_key = (
+                face.bbox_x, face.bbox_y, face.bbox_w, face.bbox_h,
+                face.detected_rotation, edit_rotation,
+            )
+            cached = self._thumb_cache.get(face.id)
+            if cached is not None and cached[0] == geom_key:
+                item.set_image(cached[1])
+            else:
+                loader_items.append((face.id, face))
 
-        # Charger les vignettes en arrière-plan
+        # Le bbox/rotation d'un visage existant ne change jamais après une
+        # identification — seules les entrées disparues (dédup, ignorer) sont à purger.
+        live_ids = {f.id for f in faces_sorted}
+        for stale_id in list(self._thumb_cache):
+            if stale_id not in live_ids:
+                del self._thumb_cache[stale_id]
+
+        # Charger en arrière-plan uniquement les vignettes pas encore en cache
+        # (visage nouveau : ajout manuel, ou 1er affichage de cette photo).
         if loader_items:
             self._loader = _FacePanelLoader(loader_items, self)
             self._loader.ready.connect(self._on_face_ready)
@@ -644,6 +825,7 @@ class FacePanel(QWidget):
         """Construit et affiche le menu contextuel d'un visage.
         Appelé depuis le panneau (via _on_item_context_menu) et depuis la visionneuse."""
         menu = QMenu(self)
+        install_menu_width_fix(menu)
         act_identify = menu.addAction("Identifier cette personne…")
         act_identify.setToolTip(
             "Sépare ce visage de son groupe et l'attache à une personne nommée"
@@ -736,6 +918,7 @@ class FacePanel(QWidget):
         le nom de la personne avant de créer le visage en base."""
         if not self._current_photo:
             return
+        QApplication.setOverrideCursor(Qt.BusyCursor)
         t = _AssignPrepLoader(self._catalog, self._face_db, None, self)
         t.ready.connect(
             lambda persons, _sugg, bbox=bbox: self._continue_bbox_ready(bbox, persons)
@@ -744,6 +927,7 @@ class FacePanel(QWidget):
         t.start()
 
     def _continue_bbox_ready(self, bbox: tuple, persons: list) -> None:
+        QApplication.restoreOverrideCursor()
         dlg = _AssignDialog(0, persons, suggested_person_id=None, show_ignore=False, parent=self)
         dlg.setWindowTitle("Nommer ce visage")
         if dlg.exec() != QDialog.Accepted:
@@ -773,11 +957,48 @@ class FacePanel(QWidget):
 
     # ------------------------------------------------------------------ context menu handlers
 
+    def _run_db_write(self, fn, refresh: bool = True) -> None:
+        """Exécute une écriture FaceDatabase dans un _DbWriteWorker puis rafraîchit
+        le panneau (person_assigned + set_photo) à la fin. Le thread UI reste
+        fluide pendant la dédup/consommation Picasa d'un gros groupe ; le retour
+        visuel immédiat est assuré par _set_item_name_immediate côté appelant."""
+        w = _DbWriteWorker(fn, self)
+        if refresh:
+            w.finished.connect(self._on_db_write_done)
+        w.finished.connect(w.deleteLater)
+        w.finished.connect(self._reap_dying_threads)
+        self._dying_threads.append(w)
+        w.start()
+
+    @Slot()
+    def _on_db_write_done(self) -> None:
+        self.person_assigned.emit()
+        if self._current_photo:
+            self.set_photo(self._current_photo)
+
+    def _set_item_name_immediate(self, face_id: int, text: str) -> None:
+        """Met à jour le libellé d'un visage sans attendre l'écriture DB ni le
+        rechargement du panneau — retour visuel immédiat après le dialogue."""
+        item = self._items.get(face_id)
+        if item is not None:
+            item._name_label.setText(text)
+            item._name_label.setStyleSheet(
+                "font-size: 11px; color: #ccc; border: none;"
+            )
+
+    def _person_display_name(self, person_id: int, persons: list) -> str:
+        name = self._person_names.get(person_id)
+        if name:
+            return name
+        p = next((p for p in persons if p.id == person_id), None)
+        return p.name if p is not None else "…"
+
     def _on_identify_face_requested(self, face_id: int) -> None:
         """Sépare ce visage de son groupe et l'attache à une personne nommée."""
         face = self._faces.get(face_id)
         if face is None:
             return
+        QApplication.setOverrideCursor(Qt.BusyCursor)
         t = _AssignPrepLoader(self._catalog, self._face_db, face, self)
         t.ready.connect(
             lambda persons, suggested_id, face_id=face_id:
@@ -789,6 +1010,7 @@ class FacePanel(QWidget):
     def _continue_identify_face(
         self, face_id: int, persons: list, suggested_id: "int | None"
     ) -> None:
+        QApplication.restoreOverrideCursor()
         dlg = _AssignDialog(
             face_id, persons,
             suggested_person_id=suggested_id,
@@ -805,15 +1027,18 @@ class FacePanel(QWidget):
                 return
             person = self._catalog.create_person(name)
             person_id = person.id
+            display = name
         else:
             person_id = dlg.existing_person_id()
             if person_id is None:
                 return
+            display = self._person_display_name(person_id, persons)
 
         logger.debug(
             "[FacePanel] isolate_and_assign face=%s person=%s", face_id, person_id
         )
-        self._face_db.isolate_and_assign_face(face_id, person_id)
+        # Retour visuel immédiat, écriture (dédup + Picasa) en arrière-plan
+        self._set_item_name_immediate(face_id, display)
 
         def _undo(fid=face_id):
             self._face_db.unassign_face(fid)
@@ -821,11 +1046,14 @@ class FacePanel(QWidget):
             self.set_photo(self._current_photo)
         self._push_undo("Identifier visage", _undo)
 
-        self.person_assigned.emit()
-        self.set_photo(self._current_photo)
+        self._run_db_write(
+            lambda fid=face_id, pid=person_id:
+                self._face_db.isolate_and_assign_face(fid, pid)
+        )
 
     def _on_assign_requested(self, face_id: int) -> None:
         face = self._faces.get(face_id)
+        QApplication.setOverrideCursor(Qt.BusyCursor)
         t = _AssignPrepLoader(self._catalog, self._face_db, face, self)
         t.ready.connect(
             lambda persons, suggested_id, face_id=face_id, face=face:
@@ -837,6 +1065,7 @@ class FacePanel(QWidget):
     def _continue_assign_requested(
         self, face_id: int, face: "FaceInfo | None", persons: list, suggested_id: "int | None"
     ) -> None:
+        QApplication.restoreOverrideCursor()
         dlg = _AssignDialog(
             face_id, persons,
             suggested_person_id=suggested_id,
@@ -849,10 +1078,12 @@ class FacePanel(QWidget):
         if dlg.is_new_person():
             person = self._catalog.create_person(dlg.new_name())
             person_id = person.id
+            display = person.name
         else:
             person_id = dlg.existing_person_id()
             if person_id is None:
                 return
+            display = self._person_display_name(person_id, persons)
 
         cluster_id_assigned: int | None = None
         if (
@@ -861,17 +1092,19 @@ class FacePanel(QWidget):
             and face.cluster_id >= 0
             and not face.pinned
         ):
-            logger.debug(
-                "[FacePanel] assign_person_to_cluster cluster=%s person=%s",
-                face.cluster_id, person_id,
-            )
-            self._face_db.assign_person_to_cluster(face.cluster_id, person_id)
             cluster_id_assigned = face.cluster_id
         logger.debug(
-            "[FacePanel] assign_person_to_face face=%s person=%s",
-            face_id, person_id,
+            "[FacePanel] assign cluster=%s face=%s person=%s",
+            cluster_id_assigned, face_id, person_id,
         )
-        self._face_db.assign_person_to_face(face_id, person_id)
+
+        # Retour visuel immédiat : tous les visages du groupe prennent le nom
+        # sans attendre l'écriture (dédup + Picasa sur toutes les photos du groupe)
+        for fid, f in self._faces.items():
+            if fid == face_id or (
+                cluster_id_assigned is not None and f.cluster_id == cluster_id_assigned
+            ):
+                self._set_item_name_immediate(fid, display)
 
         def _undo(fid=face_id, pid=person_id, cid=cluster_id_assigned):
             if cid is not None:
@@ -882,8 +1115,11 @@ class FacePanel(QWidget):
             self.set_photo(self._current_photo)
         self._push_undo("Identifier groupe", _undo)
 
-        self.person_assigned.emit()
-        self.set_photo(self._current_photo)
+        def _write(fid=face_id, pid=person_id, cid=cluster_id_assigned):
+            if cid is not None:
+                self._face_db.assign_person_to_cluster(cid, pid)
+            self._face_db.assign_person_to_face(fid, pid)
+        self._run_db_write(_write)
 
     def _on_unassign_requested(self, face_id: int) -> None:
         self._face_db.unassign_face(face_id)
@@ -896,6 +1132,52 @@ class FacePanel(QWidget):
             self._face_db.unignore_face(fid)
             self.set_photo(self._current_photo)
         self._push_undo("Ignorer visage", _undo)
+
+        self.set_photo(self._current_photo)
+
+    def _on_suggestion_accept_requested(self, face_id: int) -> None:
+        """Confirme la suggestion en attente : alloue la personne à tout le groupe
+        (même effet que le bouton "Confirmer" de la liste de vérification par personne)."""
+        face = self._faces.get(face_id)
+        if face is None or face.cluster_id is None or face.suggestion_person_id is None:
+            return
+        cluster_id = face.cluster_id
+        person_id = face.suggestion_person_id
+
+        # Retour visuel immédiat sur tous les visages du groupe présents dans
+        # le panneau ; l'écriture (dédup + Picasa) part en arrière-plan.
+        display = self._person_names.get(person_id, "…")
+        for fid, f in self._faces.items():
+            if f.cluster_id == cluster_id:
+                self._set_item_name_immediate(fid, display)
+
+        def _undo(cid=cluster_id, pid=person_id):
+            self._face_db.unassign_person_from_cluster(pid, cid)
+            self.person_assigned.emit()
+            self.set_photo(self._current_photo)
+        self._push_undo("Confirmer suggestion", _undo)
+
+        self._run_db_write(
+            lambda cid=cluster_id: self._face_db.accept_cluster_suggestion(cid)
+        )
+
+    def _on_suggestion_reject_requested(self, face_id: int) -> None:
+        """Rejette la suggestion en attente (vide suggestion_person_id/score du groupe,
+        sans recalculer immédiatement une autre personne — contrairement au rejet
+        depuis la vue de vérification par personne)."""
+        face = self._faces.get(face_id)
+        if face is None or face.cluster_id is None:
+            return
+        cluster_id = face.cluster_id
+        person_id = face.suggestion_person_id
+        score = face.suggestion_score
+        self._face_db.clear_cluster_suggestion(cluster_id)
+
+        def _undo(cid=cluster_id, pid=person_id, sc=score):
+            if pid is not None:
+                self._face_db.set_cluster_suggestions({cid: (pid, sc)})
+            self.set_photo(self._current_photo)
+        self._push_undo("Rejeter suggestion", _undo)
 
         self.set_photo(self._current_photo)
 
@@ -934,6 +1216,13 @@ class FacePanel(QWidget):
     # ------------------------------------------------------------------ internal
 
     def _on_face_ready(self, face_id: int, data: bytes) -> None:
+        face = self._faces.get(face_id)
+        if face is not None:
+            geom_key = (
+                face.bbox_x, face.bbox_y, face.bbox_w, face.bbox_h,
+                face.detected_rotation, self._last_edit_rotation,
+            )
+            self._thumb_cache[face_id] = (geom_key, data)
         item = self._items.get(face_id)
         if item:
             item.set_image(data)

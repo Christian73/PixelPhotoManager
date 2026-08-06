@@ -371,7 +371,7 @@ La barre de recherche (`Ctrl+F`) est unifiée et accepte plusieurs syntaxes :
 
 **Découverte automatique** — PixelPhotoManager scanne les dossiers configurés au démarrage et en arrière-plan. Aucun import manuel requis. Les photos et vidéos restent à leur emplacement d'origine.
 
-**Support vidéo** — Les fichiers vidéo (`.mp4`, `.mov`, `.avi`, `.mkv`, `.wmv`, `.webm`, `.m4v`, `.3gp`, `.flv`, `.ts`, `.mts`, `.mpg`, `.mpeg`) sont indexés au même titre que les photos. Leurs vignettes sont extraites automatiquement via OpenCV. La lecture se fait dans le lecteur système via `QDesktopServices`.
+**Support vidéo** — Les fichiers vidéo (`.mp4`, `.mov`, `.avi`, `.mkv`, `.wmv`, `.webm`, `.m4v`, `.3gp`, `.flv`, `.ts`, `.mts`, `.mpg`, `.mpeg`, `.vob`) sont indexés au même titre que les photos. Leurs vignettes sont extraites automatiquement via OpenCV. La lecture se fait dans le lecteur système via `QDesktopServices`.
 
 **Gestionnaire de dossiers** — Le dialogue **Outils › Dossiers…** liste les dossiers surveillés avec leur statut, le nombre de fichiers indexés, et les sous-dossiers exclus du scan. Permet d'ajouter, retirer, ou forcer un re-scan complet de n'importe quel dossier. Le retrait d'un dossier surveillé (bouton ou menu contextuel « Supprimer des dossiers surveillés ») purge aussi le catalogue, les vignettes et les visages associés à ce dossier, après confirmation indiquant le nombre de photos concernées — les fichiers restent intacts sur le disque.
 
@@ -407,6 +407,8 @@ Implémenté dans `src/ui/slideshow.py` (`SlideshowWindow` + `_KenBurnsWidget`).
 Toutes les retouches sont stockées dans la base de données et appliquées à la volée. L'original n'est jamais modifié.
 
 Les retouches disponibles sont les suivantes : ajustement de la luminosité, du contraste et de la saturation via des sliders en temps réel ; correction gamma ; recadrage libre ou selon des ratios prédéfinis (10×15, 13×18 paysage/portrait) ; rotation ±90° et redressement de l'horizon (−10° à +10°) ; miroir horizontal et vertical ; netteté et réduction du bruit ; conversion en noir et blanc avec mixage des canaux R/G/B par sliders indépendants.
+
+**Cadres décoratifs** — Treize motifs (entourage uni, simple, double, baroque doré, oves et perles, grecque, art déco, sculpture bois, feuilles de vigne, roses, fleurs, métallique, reflets) rendus **procéduralement** en PIL/NumPy, sans aucun fichier d'image externe : le rendu est donc net à toute résolution et ne pèse rien dans le packaging. Les dix motifs décoratifs ne sont pas dessinés mais **sculptés** : chaque ornement est gravé dans une carte de hauteur (profil de moulure + motifs ciselés) puis éclairé — diffus, spéculaire, occlusion des creux, patine et usure de la dorure — ce qui leur donne la matière d'un vrai cadre plutôt qu'un aplat coloré. Ils demandent une épaisseur minimale pour se lire, appliquée automatiquement au choix du motif. Le cadre s'ajoute **autour** de la photo (le canevas est agrandi, aucun pixel de l'image n'est recouvert) ; toutes les largeurs sont exprimées en fraction du petit côté, si bien qu'un même réglage rend identiquement sur une vignette et sur un export pleine résolution. Deux effets dérogent volontairement à ce principe, sans jamais toucher à la géométrie de la photo : les trois entourages végétaux laissent quelques motifs déborder sur le bord de l'image, avec leur ombre portée, comme un cadre sculpté qui mord sur la toile ; et l'entourage uni accepte un second cadre facultatif peint par-dessus la photo, avec motifs de ferronnerie (volutes d'angle, rinceaux, barreau torsadé, clous forgés) en relief léger ou en aplat.
 
 ### 4.4 Reconnaissance faciale
 
@@ -464,11 +466,13 @@ PixelPhotoManager/
 │   │   ├── photo_viewer.py      ← Visionneuse + vidéos + carte
 │   │   ├── sidebar.py           ← Panneau de navigation
 │   │   ├── edit_panel.py        ← Panneau de retouche (N&B R/G/B)
+│   │   ├── frame_dialog.py      ← Galerie de cadres décoratifs
 │   │   ├── exif_panel.py        ← Panneau EXIF (toggle I)
 │   │   └── folder_manager_dialog.py ← Gestion dossiers (Outils › Dossiers…)
 │   │
 │   ├── processing/              ← Traitements image
 │   │   ├── adjustments.py       ← Luminosité, contraste, N&B mixage...
+│   │   ├── frames.py            ← Cadres décoratifs (13 motifs procéduraux)
 │   │   ├── geometry.py          ← Recadrage, rotation
 │   │   └── edit_database.py     ← Persistence retouches (SQLite)
 │   │
@@ -1514,7 +1518,31 @@ def on_photo_changed(self, index: int):
 
 ---
 
-## 9. Plugins intégrés prévus
+## 9. Stratégie de tests
+
+### 9.1 Trois couches, alignées sur le coût de chaque type de bug
+
+La stratégie de tests reflète la même philosophie que le reste du projet (§2) : privilégier ce qui donne le plus de confiance pour le moins de friction. Trois couches, du moins au plus coûteux à écrire et exécuter :
+
+| Couche | Cible | Ce qu'elle attrape |
+|---|---|---|
+| **Layer 1 — Unitaire** | Logique pure (détection de doublons, géométrie des retouches, base de données) | Régressions de calcul, migrations SQL cassées |
+| **Layer 2 — Widgets Qt** | Un widget isolé (`pytest-qt`), sans lancer l'application | Bugs de rendu/état d'un composant, sans le coût d'un scénario complet |
+| **Layer 3 — Bout-en-bout** | La vraie application pilotée via automation OS (`pywinauto`), scénario utilisateur complet | Régressions d'intégration entre couches (UI ↔ thread ↔ DB) invisibles aux deux couches précédentes |
+
+Layer 3 existe précisément parce que plusieurs bugs critiques de ce projet (ex. la détection de doublons qui rapportait silencieusement « aucun doublon » à cause d'un `Signal(dict)` avec clés `int`, cf. historique du projet) ne se manifestaient qu'à l'intégration réelle — aucun test unitaire ne les aurait révélés, car chaque composant pris isolément se comportait correctement.
+
+### 9.2 Isolation totale des données réelles de l'utilisateur
+
+Principe non négociable : **aucun test ne touche jamais au profil réel de l'utilisateur** (`%LOCALAPPDATA%\PixelPhotoManager` — catalogue, vignettes, retouches, visages, configuration). Les tests Layer 1/2 redirigent cette variable d'environnement vers un dossier temporaire avant tout import de code applicatif ; les tests Layer 3 lancent une vraie instance de l'application en sous-processus, avec son propre profil isolé et une bibliothèque de photos synthétique jetable, jamais les photos réelles. Cette isolation permet en particulier de lancer la suite de tests pendant qu'une instance réelle de l'application tourne sur des données de production, sans aucun risque de collision — voir le Guide Développeur §15 pour le détail des mécanismes.
+
+### 9.3 État de la couverture (2026-07)
+
+La couverture de tests automatisés reste volontairement ciblée sur les zones à plus fort historique de régressions silencieuses (doublons, retouches non destructives) plutôt qu'exhaustive : ~9 % des lignes de `src/` sont couvertes par les Layers 1+2. La reconnaissance faciale (`src/faces/`) et la quasi-totalité de l'interface (`src/ui/`) ne sont exercées qu'indirectement par les 4 scénarios Layer 3, ce qui est une dette assumée plutôt qu'un oubli — ces zones nécessitent soit des données visages réalistes (coûteuses à synthétiser), soit une automation UI plus lourde que ce que Layer 1/2 permettent.
+
+---
+
+## 10. Plugins intégrés prévus
 
 | Plugin | Type | Description | Dépendance |
 |--------|------|-------------|------------|
@@ -1531,7 +1559,7 @@ def on_photo_changed(self, index: int):
 
 ---
 
-## 10. Roadmap
+## 11. Roadmap
 
 ### Version 1.0 — Fondations (MVP) ✓ Livré
 Scan et indexation des photos, grille de vignettes rapide, visionneuse avec zoom, retouches basiques non destructives (luminosité, contraste, saturation, gamma, netteté, débruitage, rotation, redressement, recadrage, miroir, N&B avec mixage R/G/B), undo/redo persistant, albums, favoris, recherche.
@@ -1540,14 +1568,14 @@ Scan et indexation des photos, grille de vignettes rapide, visionneuse avec zoom
 Albums virtuels, diaporama, géolocalisation (carte depuis la visionneuse), reconnaissance faciale avec clustering DBSCAN et import Picasa, panneau EXIF toggle, support vidéo complet (13 extensions), gestionnaire de dossiers (Outils › Dossiers…).
 
 ### Version 1.2 — Intelligence (en cours)
-Suggestions intelligentes d'albums, recherche par contenu visuel, détection automatique de scènes, chronologie avancée, détection des doublons.
+Suggestions intelligentes d'albums, recherche par contenu visuel, détection automatique de scènes, chronologie avancée, détection des doublons, calque d'annotations et cadres décoratifs procéduraux.
 
 ### Version 2.0 — Extensions IA
 Intégration des modèles de restauration (HYPIR, SUPIR, DDColor, Real-ESRGAN), marketplace de plugins, synchronisation optionnelle avec le cloud.
 
 ---
 
-## 11. Stack technique résumée
+## 12. Stack technique résumée
 
 | Composant | Technologie | Justification |
 |-----------|-------------|---------------|
@@ -1563,3 +1591,5 @@ Intégration des modèles de restauration (HYPIR, SUPIR, DDColor, Real-ESRGAN), 
 | Plugins | importlib dynamique | Standard Python, simple |
 | GPS/Carte | GPSPhoto + folium | Lecture EXIF GPS + carte offline |
 | Packaging | PyInstaller | Exécutable Windows autonome |
+| Tests unitaire/widgets | pytest + pytest-qt | Layers 1+2, multiplateforme, rapide |
+| Tests bout-en-bout | pywinauto (backend UIA) | Layer 3, pilotage réel de l'appli Windows |

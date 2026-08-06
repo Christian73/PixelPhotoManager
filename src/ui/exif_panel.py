@@ -583,17 +583,19 @@ class _ExifDataLoader(QThread):
         data["mtime"] = stat.st_mtime
         try:
             import cv2
-            cap = cv2.VideoCapture(path)
-            if cap.isOpened():
-                data["width"]   = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-                data["height"]  = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-                data["fps"]     = cap.get(cv2.CAP_PROP_FPS)
-                fc              = cap.get(cv2.CAP_PROP_FRAME_COUNT)
-                fps             = data["fps"]
-                data["duration"] = fc / fps if fps > 0 else 0.0
-                codec_raw       = int(cap.get(cv2.CAP_PROP_FOURCC))
-                data["codec"]   = "".join(chr((codec_raw >> (8 * i)) & 0xFF) for i in range(4))
-                cap.release()
+            from src.library.exif_reader import ascii_safe_path
+            with ascii_safe_path(path) as safe_path:
+                cap = cv2.VideoCapture(safe_path)
+                if cap.isOpened():
+                    data["width"]   = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+                    data["height"]  = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+                    data["fps"]     = cap.get(cv2.CAP_PROP_FPS)
+                    fc              = cap.get(cv2.CAP_PROP_FRAME_COUNT)
+                    fps             = data["fps"]
+                    data["duration"] = fc / fps if fps > 0 else 0.0
+                    codec_raw       = int(cap.get(cv2.CAP_PROP_FOURCC))
+                    data["codec"]   = "".join(chr((codec_raw >> (8 * i)) & 0xFF) for i in range(4))
+                    cap.release()
         except Exception:
             pass
         return data
@@ -629,6 +631,15 @@ class ExifPanel(QWidget):
         )
         header.setFixedHeight(36)
         root.addWidget(header)
+
+        self._tags_label = QLabel()
+        self._tags_label.setWordWrap(True)
+        self._tags_label.setStyleSheet(
+            "background: #24384a; color: #9cc4e4; padding: 6px 10px;"
+            "border-bottom: 1px solid #444; font-size: 12px;"
+        )
+        self._tags_label.setVisible(False)
+        root.addWidget(self._tags_label)
 
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
@@ -686,10 +697,21 @@ class ExifPanel(QWidget):
         else:
             self._populate_from_image_data(data, path)
 
+    def set_tags(self, tags: list) -> None:
+        """Affiche les mots-clés (données catalogue, pas EXIF fichier) en tête
+        du panneau — alimenté par MainWindow, indépendamment du chargement
+        asynchrone des métadonnées EXIF."""
+        if tags:
+            self._tags_label.setText("🏷  " + ", ".join(tags))
+            self._tags_label.setVisible(True)
+        else:
+            self._tags_label.setVisible(False)
+
     def clear(self) -> None:
         self._current_path = ""
         self._is_video = False
         self._btn_edit.setEnabled(False)
+        self._tags_label.setVisible(False)
         self._clear()
 
     # ------------------------------------------------------------------ private

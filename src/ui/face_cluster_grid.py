@@ -42,970 +42,35 @@ _UF_CHUNK      = 500    # lignes par bloc dans le produit matriciel de l'Union-F
                         # RAM pic ≈ _UF_CHUNK × n × 4 octets  (500 × 50k × 4 = 100 Mo)
 UNION_FIND_MAX = 80_000 # skip UF au-delà (temps > 2 min même en mode blocs)
 
-
-# ------------------------------------------------------------------ helpers (module-level, utilisés par le thread)
-
-def _compute_cluster_groups_bg(
-    cluster_ids: list[int],
-    embeddings: dict[int, list[float]],
-    progress_cb=None,
-) -> dict[int, list[int]]:
-    """Union-Find par blocs : regroupe les clusters dont sim(centroïde) ≥ _SIM_GROUP.
-
-    Calcul en blocs de _UF_CHUNK lignes : à chaque itération on multiplie un bloc
-    de lignes par toutes les lignes suivantes (triangle supérieur) via BLAS.
-    RAM pic ≈ _UF_CHUNK × n × 4 octets au lieu de n² × 4 — scalable jusqu'à ~80k.
-    progress_cb(chunk_start) est appelé au début de chaque bloc."""
-    parent = {cid: cid for cid in cluster_ids}
-
-    def find(x: int) -> int:
-        while parent[x] != x:
-            parent[x] = parent[parent[x]]
-            x = parent[x]
-        return x
-
-    def union(x: int, y: int) -> None:
-        px, py = find(x), find(y)
-        if px != py:
-            parent[px] = py
-
-    valid = [(cid, embeddings[cid]) for cid in cluster_ids if cid in embeddings]
-
-    try:
-        import numpy as np
-        if valid:
-            ids_arr = [cid for cid, _ in valid]
-            m = len(ids_arr)
-            mat = np.array([e for _, e in valid], dtype=np.float32)  # (m, dim)
-            norms = np.linalg.norm(mat, axis=1, keepdims=True)
-            mat /= np.where(norms > 1e-8, norms, 1.0)
-
-            for chunk_start in range(0, m, _UF_CHUNK):
-                if progress_cb is not None:
-                    progress_cb(chunk_start)
-                if chunk_start + 1 >= m:
-                    break
-                chunk_end = min(chunk_start + _UF_CHUNK, m)
-                # Bloc courant vs toutes les lignes suivantes (triangle supérieur)
-                chunk = mat[chunk_start:chunk_end]     # (_UF_CHUNK, dim)
-                rest  = mat[chunk_start + 1:]          # (m - chunk_start - 1, dim)
-                sims  = chunk @ rest.T                 # (_UF_CHUNK, m - chunk_start - 1)
-                rows, cols = np.nonzero(sims >= _SIM_GROUP)
-                for r, c in zip(rows.tolist(), cols.tolist()):
-                    i_abs = chunk_start + int(r)
-                    j_abs = chunk_start + 1 + int(c)
-                    if j_abs > i_abs:                  # triangle supérieur uniquement
-                        union(ids_arr[i_abs], ids_arr[j_abs])
-    except ImportError:
-        ids = list(cluster_ids)
-        for i, ci in enumerate(ids):
-            if progress_cb is not None:
-                progress_cb(i)
-            ei = embeddings.get(ci)
-            if not ei:
-                continue
-            for cj in ids[i + 1:]:
-                ej = embeddings.get(cj)
-                if ej and _cosine_sim(ei, ej) >= _SIM_GROUP:
-                    union(ci, cj)
-
-    groups: dict[int, list[int]] = {}
-    for cid in cluster_ids:
-        root = find(cid)
-        groups.setdefault(root, []).append(cid)
-    return groups
-
-
-def _compute_suggestion_bg(
-    cluster_id: int,
-    cluster_embeddings: dict[int, list[float]],
-    persons: list,
-    person_cluster_embeddings: dict[int, dict[int, list[float]]],
-) -> "tuple[int | None, str, str]":
-    """Calcule la meilleure suggestion de personne pour un cluster (fallback scalaire)."""
-    if not person_cluster_embeddings:
-        return None, "", ""
-    c_emb = cluster_embeddings.get(cluster_id)
-    if not c_emb:
-        return None, "", ""
-
-    best_sim, best_p = 0.0, None
-    for p in persons:
-        for p_emb in person_cluster_embeddings.get(p.id, {}).values():
-            sim = _cosine_sim(c_emb, p_emb)
-            if sim > best_sim:
-                best_sim, best_p = sim, p
-
-    if not best_p or best_sim < _SIM_WEAK:
-        return None, "", ""
-
-    pct = int(best_sim * 100)
-    if best_sim >= 0.82:
-        return best_p.id, f"≈ {best_p.name} ({pct} %)", "#7aabdb"
-    return best_p.id, f"~ {best_p.name} ({pct} %)", "#888"
-
-
-def _compute_all_suggestions_bg(
-    cluster_ids: list[int],
-    cluster_embeddings: dict[int, list[float]],
-    persons: list,
-    person_cluster_embeddings: dict[int, dict[int, list[float]]],
-) -> "dict[int, tuple[int | None, str, str, float]]":
-    """Calcule les suggestions pour tous les clusters en un seul produit matriciel.
-
-    Retourne {cluster_id: (person_id | None, label, color, score)}.
-    Construit (n_clusters, dim) × (n_person_emb, dim)^T → matrice de similarité
-    complète, puis sélectionne le maximum par ligne. Remplace la boucle Python
-    de N appels _compute_suggestion_bg."""
-    result: dict = {cid: (None, "", "", 0.0) for cid in cluster_ids}
-
-    if not persons or not person_cluster_embeddings:
-        return result
-
-    # Liste plate (person, embedding) pour toutes les personnes connues
-    person_emb_pairs: list = []
-    for p in persons:
-        for p_emb in person_cluster_embeddings.get(p.id, {}).values():
-            person_emb_pairs.append((p, p_emb))
-    if not person_emb_pairs:
-        return result
-
-    valid_c = [(cid, cluster_embeddings[cid]) for cid in cluster_ids if cid in cluster_embeddings]
-    if not valid_c:
-        return result
-
-    try:
-        import numpy as np
-        cid_arr = [cid for cid, _ in valid_c]
-        c_mat = np.array([e for _, e in valid_c], dtype=np.float32)     # (nc, dim)
-        c_norms = np.linalg.norm(c_mat, axis=1, keepdims=True)
-        c_mat /= np.where(c_norms > 1e-8, c_norms, 1.0)
-
-        p_mat = np.array([e for _, e in person_emb_pairs], dtype=np.float32)  # (np, dim)
-        p_norms = np.linalg.norm(p_mat, axis=1, keepdims=True)
-        p_mat /= np.where(p_norms > 1e-8, p_norms, 1.0)
-
-        sim_mat  = c_mat @ p_mat.T                                      # (nc, np_emb)
-        best_idx = np.argmax(sim_mat, axis=1)                           # (nc,)
-        best_sim = sim_mat[np.arange(len(cid_arr)), best_idx]           # (nc,)
-
-        for k, cid in enumerate(cid_arr):
-            s = float(best_sim[k])
-            if s < _SIM_WEAK:
-                continue
-            best_p = person_emb_pairs[int(best_idx[k])][0]
-            pct = int(s * 100)
-            if s >= 0.82:
-                result[cid] = (best_p.id, f"≈ {best_p.name} ({pct} %)", "#7aabdb", s)
-            else:
-                result[cid] = (best_p.id, f"~ {best_p.name} ({pct} %)", "#888", s)
-    except ImportError:
-        for cid in cluster_ids:
-            pid, label, color = _compute_suggestion_bg(
-                cid, cluster_embeddings, persons, person_cluster_embeddings
-            )
-            # Reconstruct score from label if possible
-            s = 0.0
-            if pid is not None and label:
-                try:
-                    s = int(label.split("(")[1].split("%")[0]) / 100.0
-                except (IndexError, ValueError):
-                    pass
-            result[cid] = (pid, label, color, s)
-
-    return result
-
-
-# ------------------------------------------------------------------ card
-
-class _ClusterCard(QFrame):
-    """
-    Carte représentant un groupe de visages.
-
-    1 clic         → sélection alternée (selection_toggled)
-    Maj+1 clic     → sélection étendue depuis l'ancre (range_select_requested)
-    2 clics        → ouvrir les photos (view_requested)
-    Clic droit     → menu contextuel (nommer / fusionner / ignorer / associer si multi-sélection)
-    """
-
-    selection_toggled    = Signal(int, bool)  # cluster_id, is_selected
-    range_select_requested = Signal(int)      # cluster_id (Maj+clic)
-    view_requested       = Signal(int)
-    name_requested       = Signal(int)
-    merge_requested      = Signal(int)
-    associate_requested  = Signal()           # fusionner tous les groupes sélectionnés ensemble
-    ignore_requested     = Signal(int)
-    quick_accept_requested = Signal(int, int)   # cluster_id, person_id
-    quick_assign_requested = Signal(int)        # cluster_id
-    quick_ignore_requested = Signal(int)        # cluster_id
-    eject_from_section_requested = Signal(int)  # cluster_id
-
-    _STYLE_NORMAL = """
-        QFrame {
-            border: 2px solid #3a3a3a;
-            border-radius: 6px;
-            background: #252525;
-        }
-        QFrame:hover {
-            border-color: #7aabdb;
-            background: #2a3545;
-        }
-    """
-    _STYLE_SELECTED = """
-        QFrame {
-            border: 2px solid #5a9fd4;
-            border-radius: 6px;
-            background: #1e3a5a;
-        }
-    """
-
-    def __init__(
-        self,
-        cluster_id: int,
-        face_count: int,
-        suggested_person_id: int | None,
-        suggestion_label: str,
-        suggestion_color: str,
-        is_solo: bool = False,
-        show_quick_actions: bool = False,
-        show_eject: bool = False,
-        selected_ids_ref: "set[int] | None" = None,
-        parent=None,
-    ) -> None:
-        super().__init__(parent)
-        self._cluster_id          = cluster_id
-        self._suggested_person_id = suggested_person_id
-        self._is_solo             = is_solo
-        self._is_selected         = False
-        self._show_quick_actions  = show_quick_actions
-        # Référence directe vers l'ensemble des cluster_id sélectionnés dans la
-        # grille parente, pour savoir au clic droit si une multi-sélection est
-        # en cours (afficher "Associer") sans devoir répliquer l'état ailleurs.
-        self._selected_ids_ref    = selected_ids_ref
-
-        self.setFixedWidth(_CARD_W)
-        self.setFrameShape(QFrame.StyledPanel)
-        self.setCursor(Qt.PointingHandCursor)
-        self.setStyleSheet(self._STYLE_NORMAL)
-        if is_solo:
-            self.setToolTip("Clic : sélectionner  —  Double-clic : voir la photo  —  Clic droit : identifier / ignorer")
-        else:
-            self.setToolTip("Clic : sélectionner  —  Double-clic : voir les photos  —  Clic droit : identifier / fusionner / ignorer")
-
-        col = QVBoxLayout(self)
-        col.setContentsMargins(6, 6, 6, 6)
-        col.setSpacing(4)
-        col.setAlignment(Qt.AlignTop | Qt.AlignHCenter)
-
-        self._lbl_img = LoadingLabel("#1a1a1a")
-        self._lbl_img.setFixedSize(_CARD_IMG, _CARD_IMG)
-        self._lbl_img.setAlignment(Qt.AlignCenter)
-        self._lbl_img.setStyleSheet("border: none; border-radius: 4px;")
-        self._lbl_img.start_loading()
-        col.addWidget(self._lbl_img, alignment=Qt.AlignHCenter)
-
-        if not is_solo:
-            plural = "s" if face_count > 1 else ""
-            lbl_count = QLabel(f"{face_count} visage{plural}")
-            lbl_count.setAlignment(Qt.AlignCenter)
-            lbl_count.setStyleSheet("border: none; font-size: 11px; color: #aaa;")
-            col.addWidget(lbl_count)
-
-        if suggestion_label:
-            lbl_sugg = QLabel(suggestion_label)
-            lbl_sugg.setAlignment(Qt.AlignCenter)
-            lbl_sugg.setWordWrap(True)
-            lbl_sugg.setStyleSheet(
-                f"border: none; font-size: 10px; color: {suggestion_color};"
-            )
-            col.addWidget(lbl_sugg)
-
-        self._quick_row: "QWidget | None" = None
-        if show_quick_actions:
-            self._quick_row = QWidget()
-            self._quick_row.setStyleSheet("background: transparent;")
-            qr = QHBoxLayout(self._quick_row)
-            qr.setContentsMargins(0, 2, 0, 0)
-            qr.setSpacing(4)
-            _bs_accept = (
-                "QPushButton { background: #1a4a1a; border: 1px solid #2a7a2a; border-radius: 3px;"
-                " color: #5dba5d; font-size: 13px; font-weight: bold; padding: 0; }"
-                "QPushButton:hover { background: #2a6a2a; }"
-            )
-            _bs_ignore = (
-                "QPushButton { background: #3a1a1a; border: 1px solid #7a2a2a; border-radius: 3px;"
-                " color: #ba5d5d; font-size: 11px; font-weight: bold; padding: 0; }"
-                "QPushButton:hover { background: #5a2a2a; }"
-            )
-            _bs_assign = (
-                "QPushButton { background: #1a2a3a; border: 1px solid #2a5a7a; border-radius: 3px;"
-                " color: #7ab4d4; font-size: 10px; font-weight: bold; padding: 0 2px; }"
-                "QPushButton:hover { background: #1a3a5a; }"
-            )
-            btn_accept = QPushButton("✓")
-            btn_accept.setFixedHeight(20)
-            btn_accept.setStyleSheet(_bs_accept)
-            btn_accept.setToolTip("Accepter la suggestion")
-            btn_accept.clicked.connect(
-                lambda: self.quick_accept_requested.emit(
-                    self._cluster_id, self._suggested_person_id
-                )
-            )
-            btn_assign = QPushButton("→")
-            btn_assign.setFixedHeight(20)
-            btn_assign.setStyleSheet(_bs_assign)
-            btn_assign.setToolTip("Associer à une autre personne…")
-            btn_assign.clicked.connect(
-                lambda: self.quick_assign_requested.emit(self._cluster_id)
-            )
-            btn_ignore = QPushButton("✕")
-            btn_ignore.setFixedHeight(20)
-            btn_ignore.setStyleSheet(_bs_ignore)
-            btn_ignore.setToolTip("Ignorer ce groupe")
-            btn_ignore.clicked.connect(
-                lambda: self.quick_ignore_requested.emit(self._cluster_id)
-            )
-            qr.addWidget(btn_accept)
-            qr.addWidget(btn_assign)
-            qr.addWidget(btn_ignore)
-            col.addWidget(self._quick_row)
-            self._quick_row.setVisible(suggested_person_id is not None)
-
-        if show_eject:
-            btn_eject = QPushButton("✕ Retirer du groupe")
-            btn_eject.setFixedHeight(18)
-            btn_eject.setStyleSheet(
-                "QPushButton { background: transparent; border: 1px solid #555;"
-                " border-radius: 3px; color: #888; font-size: 9px; padding: 0 4px; }"
-                "QPushButton:hover { border-color: #ba5d5d; color: #ba5d5d; }"
-            )
-            btn_eject.setToolTip("Retirer ce groupe de la suggestion de personne")
-            btn_eject.clicked.connect(
-                lambda: self.eject_from_section_requested.emit(self._cluster_id)
-            )
-            col.addWidget(btn_eject)
-
-    def set_avatar(self, data: bytes) -> None:
-        pix = QPixmap()
-        pix.loadFromData(data)
-        scaled = pix.scaled(
-            _CARD_IMG, _CARD_IMG,
-            Qt.KeepAspectRatioByExpanding,
-            Qt.SmoothTransformation,
-        )
-        self._lbl_img.setPixmap(scaled)
-
-    def set_suggestion(
-        self,
-        sugg_id: "int | None",
-        label: str,
-        color: str,
-    ) -> None:
-        """Met à jour (ou crée) le label de suggestion sans recréer la carte."""
-        self._suggested_person_id = sugg_id
-        if not hasattr(self, "_lbl_sugg"):
-            self._lbl_sugg = QLabel()
-            self._lbl_sugg.setAlignment(Qt.AlignCenter)
-            self._lbl_sugg.setWordWrap(True)
-            self.layout().addWidget(self._lbl_sugg)
-        if label:
-            self._lbl_sugg.setText(label)
-            self._lbl_sugg.setStyleSheet(
-                f"border: none; font-size: 10px; color: {color};"
-            )
-            self._lbl_sugg.setVisible(True)
-        else:
-            self._lbl_sugg.setVisible(False)
-        if self._quick_row is not None:
-            self._quick_row.setVisible(sugg_id is not None)
-
-    def set_selected(self, selected: bool) -> None:
-        self._is_selected = selected
-        self.setStyleSheet(self._STYLE_SELECTED if selected else self._STYLE_NORMAL)
-
-    def mousePressEvent(self, event) -> None:
-        if event.button() == Qt.LeftButton:
-            if event.modifiers() & Qt.ShiftModifier:
-                self.range_select_requested.emit(self._cluster_id)
-            else:
-                self._is_selected = not self._is_selected
-                self.set_selected(self._is_selected)
-                self.selection_toggled.emit(self._cluster_id, self._is_selected)
-        elif event.button() == Qt.RightButton:
-            n_selected = len(self._selected_ids_ref) if self._selected_ids_ref else 0
-            menu = QMenu(self)
-            act_associate = None
-            if self._is_selected and n_selected > 1:
-                act_associate = menu.addAction(f"Associer ({n_selected} sélectionnés)")
-                menu.addSeparator()
-            if self._is_solo:
-                act_name = menu.addAction("Identifier ce visage…")
-                menu.addSeparator()
-                act_ignore = menu.addAction("Ignorer ce visage")
-                act_merge  = None
-            else:
-                act_name   = menu.addAction("Identifier cette personne…")
-                act_merge  = None
-                menu.addSeparator()
-                act_ignore = menu.addAction("Ignorer ce groupe")
-            chosen = menu.exec(event.globalPosition().toPoint())
-            if chosen == act_associate:
-                self.associate_requested.emit()
-            elif chosen == act_name:
-                self.name_requested.emit(self._cluster_id)
-            elif chosen == act_ignore:
-                self.ignore_requested.emit(self._cluster_id)
-        super().mousePressEvent(event)
-
-    def mouseDoubleClickEvent(self, event) -> None:
-        if event.button() == Qt.LeftButton:
-            self.view_requested.emit(self._cluster_id)
-        super().mouseDoubleClickEvent(event)
-
-
-# ------------------------------------------------------------------ merge dialog
-
-class _MergeRow(QFrame):
-    selected = Signal(int)
-
-    def __init__(self, cluster_id: int, face_count: int, parent=None) -> None:
-        super().__init__(parent)
-        self._cluster_id  = cluster_id
-        self._is_selected = False
-        self.setFrameShape(QFrame.NoFrame)
-        self.setCursor(Qt.PointingHandCursor)
-        self.setFixedHeight(54)
-        self._apply_style()
-
-        row = QHBoxLayout(self)
-        row.setContentsMargins(8, 6, 8, 6)
-        row.setSpacing(10)
-
-        self._lbl_avatar = LoadingLabel("#2a2a2a")
-        self._lbl_avatar.setFixedSize(40, 40)
-        self._lbl_avatar.setAlignment(Qt.AlignCenter)
-        self._lbl_avatar.setStyleSheet("border-radius: 20px; border: none;")
-        self._lbl_avatar.start_loading()
-        row.addWidget(self._lbl_avatar)
-
-        plural = "s" if face_count > 1 else ""
-        group_label = "Isolé" if face_count == 1 else f"Groupe {cluster_id}"
-        lbl = QLabel(f"{group_label}  —  {face_count} visage{plural}")
-        lbl.setStyleSheet("border: none; color: #ddd;")
-        row.addWidget(lbl, stretch=1)
-
-    def set_avatar(self, data: bytes) -> None:
-        pix = QPixmap()
-        pix.loadFromData(data)
-        scaled = pix.scaled(40, 40, Qt.KeepAspectRatioByExpanding, Qt.SmoothTransformation)
-        self._lbl_avatar.setPixmap(scaled)
-
-    def set_selected(self, selected: bool) -> None:
-        self._is_selected = selected
-        self._apply_style()
-
-    def _apply_style(self) -> None:
-        if self._is_selected:
-            self.setStyleSheet("QFrame { background: #1e3a5f; border-radius: 4px; }")
-        else:
-            self.setStyleSheet(
-                "QFrame { background: transparent; border-radius: 4px; }"
-                "QFrame:hover { background: #2a2a2a; }"
-            )
-
-    def mousePressEvent(self, event) -> None:
-        if event.button() == Qt.LeftButton:
-            self.selected.emit(self._cluster_id)
-        super().mousePressEvent(event)
-
-    def mouseDoubleClickEvent(self, event) -> None:
-        if event.button() == Qt.LeftButton:
-            self.selected.emit(self._cluster_id)
-        super().mouseDoubleClickEvent(event)
-
-
-class _MergePickerDialog(QDialog):
-    def __init__(self, source_cluster_id: int, face_db: FaceDatabase, parent=None) -> None:
-        super().__init__(parent)
-        self._source_id  = source_cluster_id
-        self._face_db    = face_db
-        self._target_id: int | None = None
-        self._rows: dict[int, _MergeRow] = {}
-        self._loader = None
-
-        self.setWindowTitle(f"Fusionner le groupe {source_cluster_id}")
-        self.setMinimumSize(340, 420)
-        self._build()
-        QTimer.singleShot(0, self._start_loader)
-
-    def _build(self) -> None:
-        layout = QVBoxLayout(self)
-        layout.setSpacing(10)
-        layout.setContentsMargins(16, 16, 16, 16)
-
-        lbl = QLabel(f"Fusionner le groupe {self._source_id} avec :")
-        lbl.setStyleSheet("font-weight: bold; font-size: 12px;")
-        layout.addWidget(lbl)
-
-        content = QWidget()
-        vbox = QVBoxLayout(content)
-        vbox.setContentsMargins(0, 0, 0, 0)
-        vbox.setSpacing(2)
-        vbox.setAlignment(Qt.AlignTop)
-
-        for cid, count in self._face_db.get_unnamed_clusters():
-            if cid == self._source_id:
-                continue
-            row = _MergeRow(cid, count)
-            row.selected.connect(self._on_row_selected)
-            vbox.addWidget(row)
-            self._rows[cid] = row
-
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setWidget(content)
-        scroll.setStyleSheet("border: 1px solid #333;")
-        layout.addWidget(scroll, stretch=1)
-
-        if not self._rows:
-            lbl_empty = QLabel("Aucun autre groupe disponible.")
-            lbl_empty.setAlignment(Qt.AlignCenter)
-            lbl_empty.setStyleSheet("color: #555;")
-            vbox.addWidget(lbl_empty)
-
-        buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
-        self._btn_ok = buttons.button(QDialogButtonBox.Ok)
-        self._btn_ok.setText("Fusionner")
-        self._btn_ok.setEnabled(False)
-        buttons.accepted.connect(self.accept)
-        buttons.rejected.connect(self.reject)
-        layout.addWidget(buttons)
-
-    def _on_row_selected(self, cluster_id: int) -> None:
-        for cid, row in self._rows.items():
-            row.set_selected(cid == cluster_id)
-        self._target_id = cluster_id
-        self._btn_ok.setEnabled(True)
-
-    def _start_loader(self) -> None:
-        items = []
-        for cid in self._rows:
-            rep = self._face_db.get_representative_face(cluster_id=cid)
-            if rep:
-                items.append((cid, rep))
-        if items:
-            self._loader = _AvatarLoader(items, 40, self)
-            self._loader.avatar_ready.connect(self._on_avatar_ready)
-            self._loader.start()
-
-    def _on_avatar_ready(self, cluster_id: int, data: bytes) -> None:
-        row = self._rows.get(cluster_id)
-        if row:
-            row.set_avatar(data)
-
-    def selected_cluster_id(self) -> int | None:
-        return self._target_id
-
-
-# ------------------------------------------------------------------ section widget
-
-class _SectionWidget(QFrame):
-    """Un groupe de clusters visuellement similaires, avec un en-tête optionnel."""
-
-    accept_requested = Signal(list, int)  # cluster_ids, person_id
-    assign_requested = Signal(list)       # cluster_ids
-    ignore_requested = Signal(list)       # cluster_ids
-
-    def __init__(
-        self, label: str, color: str,
-        suggested_person_id: "int | None" = None,
-        parent=None,
-    ) -> None:
-        super().__init__(parent)
-        self._suggested_person_id = suggested_person_id
-        self.setFrameShape(QFrame.NoFrame)
-        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
-        outer = QVBoxLayout(self)
-        outer.setContentsMargins(0, 10, 0, 4)
-        outer.setSpacing(4)
-
-        if label:
-            hdr_row = QHBoxLayout()
-            hdr_row.setSpacing(8)
-            lbl = QLabel(label)
-            lbl.setStyleSheet(
-                f"color: {color}; font-size: 11px; font-weight: bold; border: none;"
-            )
-            hdr_row.addWidget(lbl)
-            hdr_row.addStretch()
-
-            _bs = "QPushButton { padding: 1px 8px; font-size: 11px; }"
-            if suggested_person_id is not None:
-                btn_accept = QPushButton("Accepter")
-                btn_accept.setFixedHeight(22)
-                btn_accept.setStyleSheet(_bs)
-                btn_accept.setToolTip("Assigner tous les groupes à la personne suggérée")
-                btn_accept.clicked.connect(
-                    lambda: self.accept_requested.emit(
-                        [c for c, _ in self._entries], self._suggested_person_id
-                    )
-                )
-                hdr_row.addWidget(btn_accept)
-
-            btn_assign = QPushButton("Associer à…")
-            btn_assign.setFixedHeight(22)
-            btn_assign.setStyleSheet(_bs)
-            btn_assign.setToolTip("Assigner tous les groupes à une autre personne")
-            btn_assign.clicked.connect(
-                lambda: self.assign_requested.emit([c for c, _ in self._entries])
-            )
-            hdr_row.addWidget(btn_assign)
-
-            btn_ignore = QPushButton("Ignorer")
-            btn_ignore.setFixedHeight(22)
-            btn_ignore.setStyleSheet(_bs)
-            btn_ignore.setToolTip("Ignorer tous les groupes de cette section")
-            btn_ignore.clicked.connect(
-                lambda: self.ignore_requested.emit([c for c, _ in self._entries])
-            )
-            hdr_row.addWidget(btn_ignore)
-
-            outer.addLayout(hdr_row)
-
-            sep = QFrame()
-            sep.setFrameShape(QFrame.HLine)
-            sep.setStyleSheet(f"background: {color}; border: none;")
-            sep.setFixedHeight(1)
-            outer.addWidget(sep)
-
-        self._card_area = QWidget()
-        self._card_area.setStyleSheet("background: transparent;")
-        self._card_area.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
-        self._card_gl = QGridLayout(self._card_area)
-        self._card_gl.setSpacing(_CARD_SPACING)
-        self._card_gl.setContentsMargins(0, 0, 0, 0)
-        outer.addWidget(self._card_area)
-
-        self._entries: list[tuple[int, "_ClusterCard"]] = []
-
-    def add_card(self, cluster_id: int, card: "_ClusterCard") -> None:
-        self._entries.append((cluster_id, card))
-
-    def reflow(self, cols: int) -> None:
-        while self._card_gl.count():
-            self._card_gl.takeAt(0)
-        # Réinitialiser les stretches des colonnes précédentes
-        for c in range(self._card_gl.columnCount() + cols + 1):
-            self._card_gl.setColumnStretch(c, 0)
-        # Colonne fantôme à droite : absorbe l'espace libre → cartes alignées à gauche
-        self._card_gl.setColumnStretch(cols, 1)
-        for i, (_, card) in enumerate(self._entries):
-            self._card_gl.addWidget(card, i // cols, i % cols, Qt.AlignLeft | Qt.AlignTop)
-
-
-# ------------------------------------------------------------------ refresh thread
-
-class _ClusterRefreshThread(QThread):
-    """
-    Chargement en deux phases pour un affichage progressif.
-
-    Phase 1 — initial_ready (rapide, < 1 s) :
-        2 requêtes SQL (face counts + faces représentatives).
-        Émet une structure plate (1 groupe = 1 cluster) sans suggestions.
-        Les cartes peuvent être affichées immédiatement.
-
-    Phase 2 — data_ready (lent, O(n²)) :
-        Embeddings, Union-Find, suggestions.
-        Émet la structure complète groupée avec suggestions.
-    """
-
-    initial_ready = Signal(object)         # dict — affiché immédiatement
-    data_ready    = Signal(object)         # dict | None — affiché après calcul lourd
-    progress      = Signal(int, int, str)  # étape courante, total, message
-
-    def __init__(self, face_db: "FaceDatabase", catalog, parent=None) -> None:
-        super().__init__(parent)
-        self._face_db = face_db
-        self._catalog = catalog
-
-    def run(self) -> None:
-        try:
-            # ── Récupération initiale (rapide) — N encore inconnu ──────────
-            self.progress.emit(0, 0, "Récupération des groupes de visages…")
-            clusters = self._face_db.get_unnamed_clusters()
-
-            _empty = {
-                "face_counts": {}, "groups_sorted": [], "group_labels": {},
-                "suggestions": {}, "representative_faces": {}, "persons": [],
-                "person_cluster_embeddings": {}, "is_partial": False,
-            }
-            if not clusters:
-                self.progress.emit(1, 1, "Aucun groupe à analyser")
-                self.initial_ready.emit(_empty)
-                self.data_ready.emit(_empty)
-                return
-
-            cluster_ids = [cid for cid, _ in clusters]
-            face_counts = {cid: fc for cid, fc in clusters}
-            n  = len(cluster_ids)
-            s  = "s" if n > 1 else ""
-
-            # Total d'étapes = 5 fixes + ≤100 mises à jour Union-Find + 1 suggestions.
-            # Les suggestions sont vectorisées (1 opération matricielle) donc 1 seule étape.
-            n_uf_steps = min(n, 100)
-            N          = 5 + n_uf_steps + 1
-            step       = 0
-
-            # ── Phase 1 : structure plate, sans suggestion ─────────────────
-            step += 1
-            self.progress.emit(step, N, f"Chargement des visages représentatifs ({n} groupe{s})…")
-            representative_faces = self._face_db.get_all_representative_faces(cluster_ids)
-            flat_groups = [[cid] for cid in cluster_ids]   # déjà trié DESC par face_count
-
-            self.initial_ready.emit({
-                "face_counts":               face_counts,
-                "groups_sorted":             flat_groups,
-                "group_labels":              {},
-                "suggestions":               {},
-                "representative_faces":      representative_faces,
-                "persons":                   [],
-                "person_cluster_embeddings": {},
-                "is_partial":                True,
-            })
-
-            # ── Phase 2 : embeddings (groupes non-isolés seulement pour UF) ─
-            # L'Union-Find est lancé uniquement sur les clusters à face_count > 1
-            # (les visages isolés restent des singletons). Cela réduit la taille
-            # de la matrice de ~68k à ~32k — temps divisé par ~4.
-            non_solo_ids = [cid for cid in cluster_ids if face_counts.get(cid, 0) > 1]
-            n_ns = len(non_solo_ids)
-            s_ns = "s" if n_ns > 1 else ""
-
-            step += 1
-            self.progress.emit(step, N,
-                f"Calcul des représentations vectorielles ({n_ns} groupe{s_ns} non-isolé{s_ns})…")
-            cluster_embeddings = self._face_db.get_all_cluster_centroids(cluster_ids)
-
-            # Affiner N maintenant qu'on connaît les embeddings disponibles
-            non_solo_embeddings = {cid: cluster_embeddings[cid]
-                                   for cid in non_solo_ids if cid in cluster_embeddings}
-            m_emb      = len(non_solo_embeddings)
-            # UF en blocs : nombre de blocs ≤ 100 pour la barre de progression
-            n_uf_steps = min(max(m_emb // _UF_CHUNK, 1), 100) if m_emb else 0
-            N          = step + 3 + n_uf_steps + 1
-
-            # ── Phase 2 : personnes connues ───────────────────────────────
-            step += 1
-            self.progress.emit(step, N, "Récupération des personnes connues…")
-            persons    = self._catalog.get_persons()
-            np_        = len(persons)
-            sp         = "s" if np_ > 1 else ""
-
-            step += 1
-            self.progress.emit(step, N, f"Analyse des personnes connues ({np_} personne{sp})…")
-            self._face_db.enrich_persons(persons)
-            person_ids = [p.id for p in persons]
-
-            step += 1
-            self.progress.emit(step, N, "Représentations vectorielles des personnes…")
-            person_cluster_embeddings = self._face_db.get_all_person_cluster_centroids(person_ids)
-
-            # ── Phase 2 : Union-Find par blocs, progression au % près ─────
-            _last_uf_pct = -1
-            _n_blocks    = max(m_emb // _UF_CHUNK, 1) if m_emb else 1
-
-            def uf_progress(chunk_start: int) -> None:
-                nonlocal step, _last_uf_pct
-                pct = chunk_start * 100 // m_emb if m_emb else 100
-                if pct != _last_uf_pct:
-                    _last_uf_pct = pct
-                    step += 1
-                    self.progress.emit(
-                        step, N,
-                        f"Regroupement des visages similaires… {pct} %"
-                        + (f"  ({m_emb} groupes, blocs de {_UF_CHUNK})" if pct == 0 else ""),
-                    )
-
-            if n_ns > UNION_FIND_MAX:
-                # Trop grand même en mode blocs : skip UF
-                self.progress.emit(step + 1, step + 1,
-                    f"{n_ns} groupes — regroupement désactivé (limite : {UNION_FIND_MAX})")
-                raw_groups: dict[int, list[int]] = {cid: [cid] for cid in cluster_ids}
-            else:
-                raw_groups = _compute_cluster_groups_bg(
-                    non_solo_ids, non_solo_embeddings, uf_progress
-                )
-                # Ajouter les visages isolés comme singletons
-                for cid in cluster_ids:
-                    if face_counts.get(cid, 0) == 1:
-                        raw_groups[cid] = [cid]
-
-            groups_sorted = sorted(
-                raw_groups.values(),
-                key=lambda g: (-len(g), -sum(face_counts.get(c, 0) for c in g)),
-            )
-
-            # ── Phase 2 : étiquettes des groupes multi-clusters (vectorisé) ─
-            step += 1
-            n_multi = sum(1 for g in groups_sorted if len(g) > 1)
-            self.progress.emit(step, N, f"Calcul des étiquettes de groupes ({n_multi} groupe{('s' if n_multi > 1 else '')})…")
-            N += 1   # on ajoute une étape au total pour cette phase
-
-            try:
-                import numpy as _np
-
-                def _avg_sim_np(group: list[int]) -> float:
-                    valid = [c for c in group if c in cluster_embeddings]
-                    if len(valid) < 2:
-                        return 0.0
-                    mat = _np.array([cluster_embeddings[c] for c in valid], dtype=_np.float32)
-                    norms = _np.linalg.norm(mat, axis=1, keepdims=True)
-                    mat /= _np.where(norms > 1e-8, norms, 1.0)
-                    sim_mat = mat @ mat.T
-                    ng = len(valid)
-                    ti, tj = _np.triu_indices(ng, k=1)
-                    return float(sim_mat[ti, tj].mean()) if len(ti) > 0 else 0.0
-            except ImportError:
-                def _avg_sim_np(group: list[int]) -> float:  # type: ignore[misc]
-                    sims = [
-                        _cosine_sim(cluster_embeddings[ci], cluster_embeddings[cj])
-                        for i, ci in enumerate(group)
-                        for cj in group[i + 1:]
-                        if ci in cluster_embeddings and cj in cluster_embeddings
-                    ]
-                    return sum(sims) / len(sims) if sims else 0.0
-
-            group_labels: dict[int, tuple[str, str]] = {}
-            for group in groups_sorted:
-                root = group[0]
-                if len(group) > 1:
-                    avg_sim = _avg_sim_np(sorted(group, key=lambda c: -face_counts.get(c, 0)))
-                    pct     = int(avg_sim * 100)
-                    n_faces = sum(face_counts.get(c, 0) for c in group)
-                    fp      = "s" if n_faces > 1 else ""
-                    label   = (
-                        f"≈ Probablement la même personne"
-                        f"  —  {len(group)} groupes, {n_faces} visage{fp}"
-                        f"  (sim. {pct} %)"
-                    )
-                    color = "#7aabdb" if avg_sim >= _SIM_STRONG else "#aaa"
-                    group_labels[root] = (label, color)
-                else:
-                    group_labels[root] = ("", "")
-
-            # ── Phase 2 : suggestions vectorisées (1 produit matriciel) ────
-            step += 1
-            self.progress.emit(
-                step, N,
-                "Calcul des suggestions d'identification…"
-                + (f"  —  {np_} personne{sp} connue{sp}" if np_ else ""),
-            )
-            suggestions = _compute_all_suggestions_bg(
-                cluster_ids, cluster_embeddings, persons, person_cluster_embeddings
-            )
-
-            # Auto-promotion : les clusters avec suggestion forte (≥ 0.82) passent
-            # en "attente de vérification" et disparaissent de la liste à identifier.
-            strong = {
-                cid: (pid, score)
-                for cid, (pid, _label, _color, score) in suggestions.items()
-                if pid is not None and score >= _SIM_STRONG
-            }
-            if strong:
-                self._face_db.set_cluster_suggestions(strong)
-                # Filtrer les clusters promus des structures de données
-                promoted_set = set(strong)
-                face_counts  = {c: v for c, v in face_counts.items()  if c not in promoted_set}
-                suggestions  = {c: v for c, v in suggestions.items()  if c not in promoted_set}
-                representative_faces = {
-                    c: v for c, v in representative_faces.items() if c not in promoted_set
-                }
-                groups_sorted = [
-                    [c for c in g if c not in promoted_set]
-                    for g in groups_sorted
-                ]
-                groups_sorted = [g for g in groups_sorted if g]
-                group_labels  = {
-                    g[0]: group_labels.get(root, ("", ""))
-                    for g in groups_sorted
-                    for root in [g[0]]
-                }
-
-            self.data_ready.emit({
-                "face_counts":               face_counts,
-                "groups_sorted":             groups_sorted,
-                "group_labels":              group_labels,
-                "suggestions":               suggestions,
-                "representative_faces":      representative_faces,
-                "persons":                   persons,
-                "person_cluster_embeddings": person_cluster_embeddings,
-                "is_partial":                False,
-                "n_promoted":                len(strong),
-            })
-        except Exception:
-            logger.exception("_ClusterRefreshThread: erreur inattendue")
-            self.data_ready.emit(None)
-
-
-class _PersonsLoader(QThread):
-    """Charge get_persons + enrich_persons hors du thread UI avant d'ouvrir un dialogue.
-
-    Pour la sélection multi-groupe, calcule aussi la suggestion de personne en
-    comparant les centroïdes des clusters aux centroïdes connus des personnes.
-    """
-
-    ready = Signal(list, object)   # (persons: list[PersonInfo], suggested_person_id | None)
-
-    def __init__(
-        self, catalog, face_db, parent=None,
-        cluster_ids: list | None = None,
-        persons_snap: list | None = None,
-        emb_snap: dict | None = None,
-    ) -> None:
-        super().__init__(parent)
-        self._catalog      = catalog
-        self._face_db      = face_db
-        self._cluster_ids  = cluster_ids or []
-        self._persons_snap = persons_snap or []
-        self._emb_snap     = emb_snap or {}
-
-    def run(self) -> None:
-        try:
-            persons = self._catalog.get_persons()
-            self._face_db.enrich_persons(persons)
-            suggested_id = None
-            if self._cluster_ids:
-                # Une seule requête batch pour tous les clusters sélectionnés,
-                # au lieu de N appels get_representative_embedding (N connexions SQLite).
-                cluster_centroids = self._face_db.get_all_cluster_centroids(self._cluster_ids)
-                best_sim = 0.0
-                for cid in self._cluster_ids:
-                    c_emb = cluster_centroids.get(cid)
-                    if not c_emb:
-                        continue
-                    for p in self._persons_snap:
-                        for p_emb in self._emb_snap.get(p.id, {}).values():
-                            sim = _cosine_sim(c_emb, p_emb)
-                            if sim > best_sim:
-                                best_sim, suggested_id = sim, p.id
-                if best_sim < _SIM_WEAK:
-                    suggested_id = None
-            self.ready.emit(persons, suggested_id)
-        except Exception:
-            logger.exception("_PersonsLoader: erreur inattendue")
-            self.ready.emit([], None)
-
-
-# ------------------------------------------------------------------ progress popup
+# ------------------------------------------------------------------ modules extraits
+# (2026-07) Cartes/sections, dialogue de fusion et threads déplacés dans leurs
+# modules ; noms ré-exportés sous leurs noms historiques.
+from src.ui.face_cluster_cards import (  # noqa: E402,F401
+    _BTN_ACCEPT_STYLE, _BTN_OVL, _BTN_REJECT_STYLE, _ClusterCard, _SectionWidget,
+)
+from src.ui.face_merge_dialog import _MergePickerDialog, _MergeRow  # noqa: E402,F401
+from src.ui.face_cluster_workers import (  # noqa: E402,F401
+    _ClusterRefreshThread, _PersonsLoader,
+    _compute_all_suggestions_bg, _compute_cluster_groups_bg, _compute_suggestion_bg,
+)
 
 class _ProgressPopup(QDialog):
-    """Dialogue modal-less affiché pendant le calcul Union-Find."""
+    """
+    Dialogue modal-less affiché pendant le calcul Union-Find.
+
+    Sans cadre (pas de barre de titre système) : le déplacement est assuré
+    par un glisser-déposer sur n'importe quelle zone vide de la popup
+    (cf. mousePressEvent/mouseMoveEvent).
+    """
+
+    cancel_requested = Signal()
 
     def __init__(self, parent: QWidget) -> None:
         super().__init__(parent, Qt.WindowType.Tool | Qt.WindowType.FramelessWindowHint)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, False)
         self.setWindowModality(Qt.WindowModality.NonModal)
         self.setFixedWidth(380)
+        self._drag_offset: "QPoint | None" = None
 
         self.setStyleSheet(
             "QDialog { background: #252535; border: 1px solid #445; border-radius: 8px; }"
@@ -1020,6 +85,8 @@ class _ProgressPopup(QDialog):
         lbl_title.setStyleSheet(
             "font-weight: bold; font-size: 13px; color: #eee; background: transparent;"
         )
+        lbl_title.setCursor(Qt.CursorShape.SizeAllCursor)
+        lbl_title.setToolTip("Glisser pour déplacer la fenêtre")
         vbox.addWidget(lbl_title)
 
         self._lbl_phase = QLabel("Initialisation…")
@@ -1047,6 +114,46 @@ class _ProgressPopup(QDialog):
         self._lbl_pct.setStyleSheet("font-size: 11px; color: #888; background: transparent;")
         bar_row.addWidget(self._lbl_pct)
         vbox.addLayout(bar_row)
+
+        btn_row = QHBoxLayout()
+        btn_row.addStretch()
+        btn_cancel = QPushButton("Annuler")
+        btn_cancel.setFixedHeight(24)
+        btn_cancel.setStyleSheet(
+            "QPushButton { background: #3a3a4a; color: #ddd; border: 1px solid #556; "
+            "border-radius: 4px; padding: 2px 12px; }"
+            "QPushButton:hover { background: #454558; }"
+        )
+        btn_cancel.clicked.connect(self.cancel_requested)
+        btn_row.addWidget(btn_cancel)
+        vbox.addLayout(btn_row)
+
+    # -------------------------------------------------------------- déplacement
+    # Fenêtre sans cadre : Qt ne fournit aucun déplacement natif, on l'implémente
+    # à la main (offset mémorisé au clic, move() à chaque mouvement).
+
+    def mousePressEvent(self, event) -> None:
+        if event.button() == Qt.MouseButton.LeftButton:
+            self._drag_offset = (
+                event.globalPosition().toPoint() - self.frameGeometry().topLeft()
+            )
+            event.accept()
+            return
+        super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event) -> None:
+        if self._drag_offset is not None and (event.buttons() & Qt.MouseButton.LeftButton):
+            self.move(event.globalPosition().toPoint() - self._drag_offset)
+            event.accept()
+            return
+        super().mouseMoveEvent(event)
+
+    def mouseReleaseEvent(self, event) -> None:
+        if self._drag_offset is not None and event.button() == Qt.MouseButton.LeftButton:
+            self._drag_offset = None
+            event.accept()
+            return
+        super().mouseReleaseEvent(event)
 
     def update_progress(self, current: int, total: int, message: str) -> None:
         self._lbl_phase.setText(message)
@@ -1081,6 +188,7 @@ class FaceClusterGrid(QWidget):
     clusters_named(cluster_ids, name)         — créer une personne pour N groupes
     clusters_assigned(cluster_ids, pid)       — assigner N groupes à une personne
     cluster_ignored(cluster_id)               — ignorer un groupe
+    clusters_ignored(cluster_ids)             — ignorer N groupes/visages sélectionnés
     cluster_merged(source_id, target_id)      — fusionner deux groupes
     back_requested()                          — retourner à la grille de photos
     photos_requested(cluster_id, label)       — afficher les photos d'un groupe
@@ -1091,6 +199,7 @@ class FaceClusterGrid(QWidget):
     clusters_named     = Signal(list, str)    # list[int], name
     clusters_assigned  = Signal(list, int)    # list[int], person_id
     cluster_ignored    = Signal(int)
+    clusters_ignored   = Signal(list)         # list[int]
     cluster_merged     = Signal(int, int)
     back_requested     = Signal()
     photos_requested   = Signal(int, str)
@@ -1277,6 +386,7 @@ class FaceClusterGrid(QWidget):
         # Arrêter un refresh précédent encore en cours et libérer le thread Qt enfant
         if self._refresh_thread is not None:
             if self._refresh_thread.isRunning():
+                self._refresh_thread.cancel()
                 try:
                     self._refresh_thread.data_ready.disconnect()
                     self._refresh_thread.initial_ready.disconnect()
@@ -1319,6 +429,7 @@ class FaceClusterGrid(QWidget):
             self._progress_popup = None
         self._progress_popup = _ProgressPopup(self)
         self._progress_popup.update_progress(0, 100, "Initialisation…")
+        self._progress_popup.cancel_requested.connect(self._on_progress_cancelled)
         self._progress_popup.show()
         self._progress_popup.center_on_parent()
 
@@ -1451,6 +562,24 @@ class FaceClusterGrid(QWidget):
         self._restore_scroll_on_build = True
         self._build_from_data(self._cached_data)
 
+    @Slot()
+    def _on_progress_cancelled(self) -> None:
+        """Bouton Annuler de la popup de progression : interrompt l'analyse en cours.
+
+        Le thread vérifie son drapeau _cancelled à intervalles réguliers ; si
+        l'annulation survient pendant l'Union-Find (la partie longue), il ne
+        s'arrête pas net : il termine avec les fusions déjà trouvées et émet
+        quand même data_ready peu après (résultat partiel mais valide, marqué
+        `was_cancelled`). Ce signal reste donc connecté — _on_data_ready
+        remplacera ce message dès qu'il arrive."""
+        if self._refresh_thread is not None and self._refresh_thread.isRunning():
+            self._refresh_thread.cancel()
+        if self._progress_popup is not None:
+            self._progress_popup.close()
+            self._progress_popup = None
+        self._progress_widget.setVisible(False)
+        self._lbl_title.setText("Analyse annulée")
+
     @Slot(int, int, str)
     def _on_progress(self, current: int, total: int, message: str) -> None:
         if self._progress_popup is not None:
@@ -1574,7 +703,15 @@ class FaceClusterGrid(QWidget):
             parts.append(f"{n_groups} groupe{'s' if n_groups > 1 else ''}")
         if n_solos > 0:
             parts.append(f"{n_solos} visage{'s isolés' if n_solos > 1 else ' isolé'}")
-        suffix = " — analyse en cours…" if is_partial else ""
+        if is_partial:
+            suffix = " — analyse en cours…"
+        elif data.get("was_cancelled"):
+            # Annulation pendant l'Union-Find : certains groupes qui auraient
+            # fusionné plus tard restent séparés (rien n'est jamais fusionné à
+            # tort, juste pas encore découvert) — cf. _compute_cluster_groups_bg.
+            suffix = " — analyse interrompue, regroupement partiel"
+        else:
+            suffix = ""
         self._lbl_title.setText(", ".join(parts) + suffix)
 
         available = self._scroll.viewport().width()
@@ -1588,6 +725,7 @@ class FaceClusterGrid(QWidget):
         if suggestions:
             persons_by_id = {p.id: p for p in (self._persons or [])}
             singleton_by_person: dict[int, list[int]] = {}
+            singleton_scores: dict[int, float] = {}
             flat_singletons: list[int] = []
             rebuilt_main: list[list[int]] = []
             for g in main_groups:
@@ -1598,6 +736,7 @@ class FaceClusterGrid(QWidget):
                     pid, _, _, score = suggestions.get(cid, (None, "", "", 0.0))
                     if pid is not None and score >= _SIM_WEAK:
                         singleton_by_person.setdefault(pid, []).append(cid)
+                        singleton_scores[cid] = score
                     else:
                         flat_singletons.append(cid)
             for pid, cids in sorted(singleton_by_person.items(),
@@ -1608,8 +747,10 @@ class FaceClusterGrid(QWidget):
                     p_name = p.name if p else f"Personne #{pid}"
                     n_f = sum(face_counts.get(c, 0) for c in cids)
                     fp = "s" if n_f > 1 else ""
+                    best_score = max(singleton_scores.get(c, 0.0) for c in cids)
+                    pct = round(best_score * 100)
                     group_labels[cids[0]] = (
-                        f"≈ Probablement {p_name}"
+                        f"≈ Probablement {p_name} ({pct} %)"
                         f"  —  {len(cids)} groupe{'s' if len(cids) > 1 else ''},"
                         f" {n_f} visage{fp}",
                         "#7aabdb",
@@ -1637,13 +778,12 @@ class FaceClusterGrid(QWidget):
 
         avatar_items: list = []
 
-        def _add_card(cluster_id: int, target: _SectionWidget, is_solo: bool = False, quick_actions: bool = False, eject: bool = False) -> None:
+        def _add_card(cluster_id: int, target: _SectionWidget, is_solo: bool = False, eject: bool = False) -> None:
             fc = face_counts.get(cluster_id, 0)
             sugg_id, sugg_label, sugg_color, _ = suggestions.get(cluster_id, (None, "", "", 0.0))
             card = _ClusterCard(
                 cluster_id, fc, sugg_id, sugg_label, sugg_color,
                 is_solo=is_solo,
-                show_quick_actions=quick_actions,
                 show_eject=eject,
                 selected_ids_ref=self._selected_ids,
                 parent=target._card_area,
@@ -1652,12 +792,11 @@ class FaceClusterGrid(QWidget):
             card.range_select_requested.connect(self._on_range_select)
             card.view_requested.connect(self._on_card_view_requested)
             card.name_requested.connect(self._on_card_name_requested)
+            card.quick_accept_requested.connect(self._on_card_quick_accept)
             card.merge_requested.connect(self._on_card_merge_requested)
             card.associate_requested.connect(self._on_card_associate_requested)
             card.ignore_requested.connect(self._on_card_ignore_requested)
-            card.quick_accept_requested.connect(self._on_card_quick_accept)
-            card.quick_assign_requested.connect(self._on_card_quick_assign)
-            card.quick_ignore_requested.connect(self._on_card_quick_ignore)
+            card.ignore_selection_requested.connect(self._on_card_ignore_selection_requested)
             card.eject_from_section_requested.connect(self._on_card_eject_from_section)
             target.add_card(cluster_id, card)
             self._cards[cluster_id] = card
@@ -1734,7 +873,7 @@ class FaceClusterGrid(QWidget):
                 if kind == "solo":
                     _add_card(group[0], solo_section, is_solo=True)
                 elif len(group) == 1:
-                    _add_card(group[0], flat_section, quick_actions=True)
+                    _add_card(group[0], flat_section)
                 else:
                     label, color  = group_labels.get(group[0], ("", ""))
                     group_by_size = sorted(group, key=lambda c: -face_counts.get(c, 0))
@@ -1819,18 +958,20 @@ class FaceClusterGrid(QWidget):
         self._face_db.ignore_cluster(cluster_id)
         self.cluster_ignored.emit(cluster_id)
 
-    def _on_card_quick_accept(self, cluster_id: int, person_id: int) -> None:
-        if person_id is None:
+    def _on_card_ignore_selection_requested(self) -> None:
+        """Ignore tous les groupes/visages isolés actuellement sélectionnés
+        (menu contextuel « Ignorer ces groupes », visible seulement en
+        multi-sélection — cf. _ClusterCard.mousePressEvent)."""
+        cluster_ids = list(self._selected_ids)
+        if not cluster_ids:
             return
+        for cid in cluster_ids:
+            self._face_db.ignore_cluster(cid)
+        self._clear_selection()
+        self.clusters_ignored.emit(cluster_ids)
+
+    def _on_card_quick_accept(self, cluster_id: int, person_id: int) -> None:
         self.clusters_assigned.emit([cluster_id], person_id)
-
-    def _on_card_quick_ignore(self, cluster_id: int) -> None:
-        self._face_db.ignore_cluster(cluster_id)
-        self._anchor_id = None
-        self.remove_clusters([cluster_id])
-
-    def _on_card_quick_assign(self, cluster_id: int) -> None:
-        self._start_assign_for_clusters([cluster_id])
 
     def _on_card_eject_from_section(self, cluster_id: int) -> None:
         """Retire le cluster de sa section de suggestion et le place dans les groupes isolés."""
@@ -1866,17 +1007,25 @@ class FaceClusterGrid(QWidget):
         # Mettre à jour _cached_data
         if self._cached_data:
             self._cached_data["suggestions"].pop(cluster_id, None)
+            old_group_labels = self._cached_data.get("group_labels", {})
+            new_group_labels = dict(old_group_labels)
             new_groups = []
             for g in self._cached_data.get("groups_sorted", []):
                 if cluster_id in g:
+                    old_root = g[0]
                     new_g = [c for c in g if c != cluster_id]
                     if new_g:
                         new_groups.append(new_g)
+                        # Le groupe restant garde son étiquette, réindexée sur son
+                        # nouveau premier élément si le cluster éjecté était le root.
+                        if new_g[0] != old_root:
+                            new_group_labels[new_g[0]] = old_group_labels.get(old_root, ("", ""))
                     new_groups.append([cluster_id])
                 else:
                     new_groups.append(g)
             self._cached_data["groups_sorted"] = new_groups
-            self._cached_data.setdefault("group_labels", {})[cluster_id] = ("", "")
+            new_group_labels[cluster_id] = ("", "")
+            self._cached_data["group_labels"] = new_group_labels
 
         # Retirer de _all_combined (la carte sera ajoutée directement à flat_section)
         self._all_combined = [
@@ -1893,7 +1042,6 @@ class FaceClusterGrid(QWidget):
             rep = data["representative_faces"].get(cluster_id)
             new_card = _ClusterCard(
                 cluster_id, fc, None, "", "",
-                show_quick_actions=True,
                 selected_ids_ref=self._selected_ids,
                 parent=flat._card_area,
             )
@@ -1901,12 +1049,11 @@ class FaceClusterGrid(QWidget):
             new_card.range_select_requested.connect(self._on_range_select)
             new_card.view_requested.connect(self._on_card_view_requested)
             new_card.name_requested.connect(self._on_card_name_requested)
+            new_card.quick_accept_requested.connect(self._on_card_quick_accept)
             new_card.merge_requested.connect(self._on_card_merge_requested)
             new_card.associate_requested.connect(self._on_card_associate_requested)
             new_card.ignore_requested.connect(self._on_card_ignore_requested)
-            new_card.quick_accept_requested.connect(self._on_card_quick_accept)
-            new_card.quick_assign_requested.connect(self._on_card_quick_assign)
-            new_card.quick_ignore_requested.connect(self._on_card_quick_ignore)
+            new_card.ignore_selection_requested.connect(self._on_card_ignore_selection_requested)
             flat.add_card(cluster_id, new_card)
             self._cards[cluster_id] = new_card
             if rep:
@@ -2067,7 +1214,7 @@ class FaceClusterGrid(QWidget):
         solo_section         = self._solo_section
         avatar_items: list   = []
 
-        def _add_card(cluster_id: int, target: "_SectionWidget", is_solo: bool = False, quick_actions: bool = False, eject: bool = False) -> None:
+        def _add_card(cluster_id: int, target: "_SectionWidget", is_solo: bool = False, eject: bool = False) -> None:
             if target is None:
                 return
             fc = face_counts.get(cluster_id, 0)
@@ -2075,7 +1222,6 @@ class FaceClusterGrid(QWidget):
             card = _ClusterCard(
                 cluster_id, fc, sugg_id, sugg_label, sugg_color,
                 is_solo=is_solo,
-                show_quick_actions=quick_actions,
                 show_eject=eject,
                 selected_ids_ref=self._selected_ids,
                 parent=target._card_area,
@@ -2084,12 +1230,11 @@ class FaceClusterGrid(QWidget):
             card.range_select_requested.connect(self._on_range_select)
             card.view_requested.connect(self._on_card_view_requested)
             card.name_requested.connect(self._on_card_name_requested)
+            card.quick_accept_requested.connect(self._on_card_quick_accept)
             card.merge_requested.connect(self._on_card_merge_requested)
             card.associate_requested.connect(self._on_card_associate_requested)
             card.ignore_requested.connect(self._on_card_ignore_requested)
-            card.quick_accept_requested.connect(self._on_card_quick_accept)
-            card.quick_assign_requested.connect(self._on_card_quick_assign)
-            card.quick_ignore_requested.connect(self._on_card_quick_ignore)
+            card.ignore_selection_requested.connect(self._on_card_ignore_selection_requested)
             card.eject_from_section_requested.connect(self._on_card_eject_from_section)
             target.add_card(cluster_id, card)
             self._cards[cluster_id] = card
@@ -2142,7 +1287,7 @@ class FaceClusterGrid(QWidget):
                 if kind == "solo":
                     _add_card(group[0], solo_section, is_solo=True)
                 elif len(group) == 1:
-                    _add_card(group[0], flat_section, quick_actions=True)
+                    _add_card(group[0], flat_section)
                 else:
                     label, color  = group_labels.get(group[0], ("", ""))
                     group_by_size = sorted(group, key=lambda c: -face_counts.get(c, 0))

@@ -15,12 +15,14 @@
 6. [Composants UI](#6-composants-ui)
 7. [Composants processing](#7-composants-processing)
 8. [Reconnaissance faciale](#8-reconnaissance-faciale)
-9. [Système de plugins](#9-système-de-plugins)
-10. [Schémas des bases de données](#10-schémas-des-bases-de-données)
-11. [Modèle de threading](#11-modèle-de-threading)
-12. [Normalisation des chemins Windows](#12-normalisation-des-chemins-windows)
-13. [Packaging et distribution](#13-packaging-et-distribution)
-14. [Patterns à suivre pour les évolutions](#14-patterns-à-suivre-pour-les-évolutions)
+9. [Détection de doublons](#9-détection-de-doublons)
+10. [Système de plugins](#10-système-de-plugins)
+11. [Schémas des bases de données](#11-schémas-des-bases-de-données)
+12. [Modèle de threading](#12-modèle-de-threading)
+13. [Normalisation des chemins Windows](#13-normalisation-des-chemins-windows)
+14. [Packaging et distribution](#14-packaging-et-distribution)
+15. [Patterns à suivre pour les évolutions](#15-patterns-à-suivre-pour-les-évolutions)
+16. [Tests](#16-tests)
 
 ---
 
@@ -32,7 +34,9 @@ PixelPhotoManager/
 ├── main.py                        # Point d'entrée unique
 ├── pixelphotomanager.spec         # Spec PyInstaller (packaging)
 ├── build.ps1                      # Script de build PowerShell
-├── requirements.txt               # Dépendances Python
+├── requirements.txt               # Dépendances Python (cœur applicatif)
+├── requirements-test-e2e.txt      # Dépendances des tests bout-en-bout (pywinauto, Windows-only, optionnel)
+├── pytest.ini                     # Config pytest : markers e2e/gui, addopts -m "not e2e"
 ├── Guide_Utilisateur.md
 ├── Guide_Developpeur.md
 │
@@ -42,42 +46,104 @@ PixelPhotoManager/
 ├── src/
 │   ├── core/                      # Socle transversal
 │   │   ├── app_dirs.py            # Chemin APP_DATA_DIR
+│   │   ├── app_version.py         # Numéro de version (VERSION en mode figé, git describe en dev)
 │   │   ├── config.py              # Config singleton (JSON)
 │   │   ├── event_bus.py           # Bus d'événements pub/sub
 │   │   ├── models.py              # Dataclasses (PhotoInfo, EditInfo…)
+│   │   ├── cpu_throttle.py        # Limite CPU (~15% cœurs) + priorité OS abaissée (dedup/visages)
+│   │   ├── screensaver_guard.py   # Inhibition économiseur d'écran / veille écran (diaporama)
+│   │   ├── thread_journal.py      # Journal JSONL des threads de fond (Outils › Journal des threads…)
+│   │   ├── update_checker.py      # Vérification de version via l'API releases GitHub
+│   │   ├── problems_history.py    # Historique des analyses de doublons avec fichiers corrompus
+│   │   ├── deleted_corrupted_files.py  # Suivi des fichiers corrompus supprimés
 │   │   ├── base_plugin.py         # Classe de base des plugins
 │   │   ├── processor_plugin.py    # Sous-classe plugin de traitement
 │   │   └── plugin_manager.py      # Chargement dynamique des plugins
 │   │
 │   ├── library/                   # Gestion de la bibliothèque
-│   │   ├── catalog.py             # Catalogue SQLite (photos, albums)
+│   │   ├── catalog.py             # Catalogue SQLite (photos, albums, groupes de doublons)
 │   │   ├── scanner.py             # Scan de dossiers en thread
-│   │   ├── thumbnail_cache.py     # Cache vignettes 3 niveaux
-│   │   └── exif_reader.py         # Lecture EXIF (ExifReader) + vidéo (VideoMetadataReader)
+│   │   ├── folder_watcher.py      # Surveillance disque (QFileSystemWatcher)
+│   │   ├── fs_utils.py            # is_hidden_path() — test « chemin caché » partagé
+│   │   ├── thumbnail_cache.py     # Cache vignettes 3 niveaux (verrou d'écriture dédié)
+│   │   ├── exif_reader.py         # Lecture EXIF (ExifReader) + vidéo (VideoMetadataReader)
+│   │   ├── duplicate_detector.py  # Détection de doublons (pHash Tier 1 + ORB/RANSAC Tier 2)
+│   │   ├── dedup_cache.py         # Cache incrémental de la détection (dedup_cache.db)
+│   │   └── file_repair.py         # Réparation des fichiers corrompus détectés pendant le scan doublons
 │   │
 │   ├── ui/                        # Interface PySide6
-│   │   ├── main_window.py         # Fenêtre principale + orchestration
+│   │   ├── main_window.py         # Fenêtre principale + orchestration (mixins Faces/Duplicates)
+│   │   ├── main_window_faces.py   # FacesController (mixin) — indexation, clustering, personnes
+│   │   ├── main_window_duplicates.py  # DuplicatesController (mixin) — détection, fichiers corrompus
+│   │   ├── background_workers.py  # QThread transverses de MainWindow (chargement, suppression…)
 │   │   ├── sidebar.py             # Arborescence dossiers + albums
 │   │   ├── thumbnail_grid.py      # Grille de vignettes (badge ▶ pour vidéos)
-│   │   ├── photo_viewer.py        # Visionneuse + mode recadrage + vidéos
-│   │   ├── edit_panel.py          # Panneau de retouche
+│   │   ├── photo_viewer.py        # Visionneuse (délègue à viewer_canvas.py / viewer_pixmaps.py)
+│   │   ├── viewer_canvas.py       # Canvas interactif (_Canvas) : recadrage, annotations, zoom
+│   │   ├── viewer_pixmaps.py      # Pipeline pixmap (chargement image/vidéo + retouches)
+│   │   ├── edit_panel.py          # Panneau de retouche (un seul outil actif à la fois)
+│   │   ├── edit_sliders.py        # Widgets slider du panneau de retouche (MarkedSlider/EditSlider)
+│   │   ├── edit_icons.py          # Icônes dessinées (QPixmap) des boutons de retouche
+│   │   ├── treatment_dialogs.py   # Dialogues de correction (Luminosité, Couleurs, Vignette…)
+│   │   ├── frame_dialog.py        # Galerie de cadres décoratifs (aperçus + réglages)
+│   │   ├── annotation_renderer.py # Rendu QPainter du calque d'annotations (aperçu + export)
+│   │   ├── export_dialogs.py      # Dialogues Enregistrer/Exporter
 │   │   ├── exif_panel.py          # Panneau EXIF (toggle avec touche I)
-│   │   └── folder_manager_dialog.py  # Dialogue Outils › Dossiers…
+│   │   ├── exif_date_sync_dialog.py  # Outils › Synchroniser les dates EXIF…
+│   │   ├── slideshow.py           # Diaporama plein écran (effet Ken Burns)
+│   │   ├── display_order_dialog.py   # Affichage › Ordre d'affichage…
+│   │   ├── folder_manager_dialog.py  # Dialogue Outils › Dossiers…
+│   │   ├── duplicate_grid.py      # Grille des groupes de doublons (bouton « Dupliquées »)
+│   │   ├── duplicates_popup.py    # Popup « Doublons de cette photo » depuis le badge ⧉
+│   │   ├── index_errors_dialog.py    # Visages › Visualisation des erreurs…
+│   │   ├── problems_history_dialog.py  # Outils › Historique des problèmes…
+│   │   ├── deleted_corrupted_files_dialog.py  # Historique des fichiers corrompus supprimés
+│   │   ├── thread_journal_dialog.py  # Outils › Journal des threads…
+│   │   ├── settings_dialog.py     # Outils › Paramètres
+│   │   ├── loading_label.py       # Indicateur de chargement générique
+│   │   ├── ui_utils.py            # fmt_size(), install_menu_width_fix(), utilitaires UI
+│   │   ├── help_dialog.py         # Dialogue Aide/À propos (contenu dans help_content/*.html)
+│   │   ├── face_panel.py          # Panneau visages dans la visionneuse
+│   │   ├── people_panel.py        # Vue « Personnes » (groupes non identifiés) + assignation
+│   │   ├── person_cluster_view.py # Vue détaillée d'une personne (visages confirmés/en attente)
+│   │   ├── face_cluster_grid.py   # Grille des groupes non identifiés
+│   │   ├── face_cluster_cards.py  # Cartes de groupe (widgets de face_cluster_grid.py)
+│   │   ├── face_cluster_workers.py   # Threads de rafraîchissement de la vue Personnes
+│   │   ├── face_merge_dialog.py   # Fusion de groupes/personnes
+│   │   ├── face_backup_dialog.py  # Visages › Sauvegarder/Gérer les sauvegardes…
+│   │   ├── face_counters_dialog.py   # Visages › Compteurs…
+│   │   ├── picasa_import_dialog.py   # Visages › Importer depuis Picasa…
+│   │   └── reset_faces_dialog.py  # Visages › Réinitialiser et réindexer…
 │   │
 │   ├── processing/                # Traitement image
 │   │   ├── adjustments.py         # ImageAdjuster.apply_all()
+│   │   ├── frames.py              # Cadres décoratifs (13 motifs rendus procéduralement)
 │   │   ├── geometry.py            # Rotation, redressement, recadrage
-│   │   └── edit_database.py       # Persistence des retouches (SQLite)
+│   │   ├── annotation_geometry.py # Géométrie des formes d'annotation (hit-test, bbox, redimensionnement)
+│   │   └── edit_database.py       # Persistence des retouches (SQLite), inclut EditInfo.annotations
 │   │
 │   ├── faces/                     # Reconnaissance faciale (optionnel)
-│   │   ├── detector.py            # Détection (RetinaFace / OpenCV)
-│   │   ├── recognizer.py          # Embeddings (DeepFace / ArcFace)
-│   │   ├── clusterer.py           # Clustering DBSCAN (scikit-learn)
-│   │   ├── face_panel.py          # Panneau visages dans la visionneuse
-│   │   └── picasa_importer.py     # Import annotations Picasa (.picasa.ini)
+│   │   ├── detector.py            # Détection + embedding via InsightFace (buffalo_l : SCRFD + ArcFace)
+│   │   ├── clusterer.py           # Clustering HDBSCAN (scikit-learn/hdbscan) + purification des clusters
+│   │   ├── face_database.py       # Base SQLite faces.db (visages, clusters, personnes, suggestions)
+│   │   ├── face_indexer.py        # Threads d'indexation/réindexation/nouvelle tentative
+│   │   ├── gpu_utils.py           # Détection GPU (CUDA/DirectML) pour l'inférence InsightFace
+│   │   └── picasa_importer.py     # Import annotations + retouches Picasa (.picasa.ini)
+│   │
 │   └── plugins/                   # Plugins intégrés (src/)
 │
-└── plugins/                       # Plugins utilisateur externes
+├── plugins/                       # Plugins utilisateur externes
+│
+├── tests/                         # Layers 1+2 (voir §16 Tests)
+│   ├── conftest.py                 # Isolation LOCALAPPDATA globale
+│   ├── test_*.py                   # Layer 1 : logique pure
+│   ├── gui_widgets/                 # Layer 2 : widgets Qt (pytest-qt)
+│   └── e2e/                        # Layer 3 : bout-en-bout (pywinauto, voir e2e/README.md)
+│       ├── conftest.py             # Fixture isolated_app
+│       └── scenarios/              # Un fichier par scénario
+│
+└── tools/
+    └── test_env/                  # Utilitaires Layer 3 : launch_isolated.py, generate_library.py
 ```
 
 **Données runtime** (non versionnées) :
@@ -109,12 +175,18 @@ python -m venv .venv
 # Lancer l'application
 .venv\Scripts\python.exe main.py
 
-# Lancer les tests
+# Lancer les tests (Layers 1+2 — unitaire + widgets Qt, multiplateforme, ~10 s)
 .venv\Scripts\python.exe -m pytest tests/
+
+# Optionnel : dépendances des tests bout-en-bout (Layer 3, Windows uniquement)
+.venv\Scripts\pip.exe install -r requirements-test-e2e.txt
+.venv\Scripts\python.exe -m pytest tests/e2e -m e2e
 
 # Construire l'EXE
 .\build.ps1
 ```
+
+Voir [§16 Tests](#16-tests) pour le détail des trois couches, l'isolation des données et la mesure de couverture.
 
 ---
 
@@ -229,6 +301,83 @@ bus.off("library.photo_selected", self.handler)
 
 ---
 
+### `cpu_throttle.py` — Limitation CPU des tâches de fond
+
+Les traitements permanents (détection de doublons, indexation/clustering des visages) ne
+doivent pas rendre l'application désagréable à utiliser pendant qu'ils tournent.
+
+```python
+from src.core.cpu_throttle import throttled_worker_count, lower_current_thread_priority, lower_current_process_priority
+
+THROTTLE_FRACTION = 0.15  # ~15 % des cœurs disponibles
+
+n = throttled_worker_count(minimum=1)          # nombre de workers à utiliser
+executor = ThreadPoolExecutor(max_workers=n, initializer=lower_current_thread_priority)
+pool = ProcessPoolExecutor(max_workers=n, initializer=lower_current_process_priority)
+```
+
+`lower_current_thread_priority()` (Windows `SetThreadPriority(THREAD_PRIORITY_BELOW_NORMAL)`) et
+`lower_current_process_priority()` (via `psutil`, `BELOW_NORMAL_PRIORITY_CLASS`) s'utilisent comme
+`initializer` d'un pool, pour que chaque worker démarre déjà à priorité réduite.
+
+---
+
+### `screensaver_guard.py` — Inhibition de l'économiseur d'écran
+
+Utilisé par le diaporama (`src/ui/slideshow.py`) : regarder défiler des photos sans toucher au
+clavier ni à la souris est de l'inactivité pour Windows, l'économiseur d'écran finirait par
+recouvrir le diaporama. Deux verrous, aucun ne suffisant seul :
+
+```python
+from src.core.screensaver_guard import ScreensaverGuard, is_screensaver_command
+
+self._screensaver = ScreensaverGuard()
+self._screensaver.inhibit()      # à la construction de la fenêtre
+self._screensaver.release()      # dans closeEvent
+
+def nativeEvent(self, event_type, message):        # second verrou
+    if is_screensaver_command(event_type, message):
+        return True, 0                             # « message traité » → annule le lancement
+    return super().nativeEvent(event_type, message)
+```
+
+1. `ScreensaverGuard` → `SetThreadExecutionState(ES_CONTINUOUS | ES_DISPLAY_REQUIRED |
+   ES_SYSTEM_REQUIRED)` : réarme le compteur d'inactivité de **l'affichage** (extinction du
+   moniteur, veille machine). Idempotent dans les deux sens ; no-op silencieux hors Windows.
+   **L'état est propre au thread appelant** : `inhibit()` et `release()` doivent être appelés
+   depuis le même thread (le thread UI).
+2. `is_screensaver_command()` → filtrage de `WM_SYSCOMMAND`/`SC_SCREENSAVE` : l'économiseur
+   d'écran, lui, dépend du compteur d'inactivité **utilisateur**, distinct du précédent. Windows
+   prévient la fenêtre au premier plan avant de le lancer. Toute anomalie de lecture du message
+   renvoie `False` (le message suit son traitement normal).
+
+Piège de test : `QWidget.nativeEvent()` (appelé par `super()` sur le chemin « non traité »)
+refuse une adresse entière brute et exige un `shiboken6.VoidPtr` — cf.
+`tests/gui_widgets/test_slideshow.py::test_native_screensaver_request_is_refused`.
+
+---
+
+### `thread_journal.py` — Journal des threads de fond
+
+Journal JSON-Lines (`%LOCALAPPDATA%\PixelPhotoManager\thread_journal.jsonl`, rotation à 8000
+lignes → 5000 conservées) alimentant **Outils › Journal des threads…** (`thread_journal_dialog.py`) —
+diagnostic si l'application semble lente ou bloquée (scan, indexation visages, clustering, vignettes…).
+
+```python
+from src.core.thread_journal import journal
+
+t0 = journal.start("ScanThread", "scan dossier X")
+journal.step("ScanThread", "1000 photos lues", t0=t0)
+journal.end("ScanThread", "terminé", t0)      # ou journal.error(...) en cas d'exception
+journal.get_entries(limit=2000)               # pour l'UI
+journal.clear()
+```
+
+Chaque entrée : `{ts, wall, tid, thread, event, msg, elapsed_ms, **extra}` — `event` ∈
+`START/STEP/END/ERROR`. Singleton global `journal`, thread-safe.
+
+---
+
 ### `models.py` — Modèles de données
 
 #### `PhotoInfo` (dataclass)
@@ -285,7 +434,9 @@ Le champ `crop` stocke un tuple de 8 valeurs `(x0,y0, x1,y1, x2,y2, x3,y3)` — 
 
 ### `catalog.py` — Catalogue SQLite
 
-Interface d'accès à `catalog.db`. Toutes les méthodes sont **thread-safe** (verrou `threading.Lock` sur chaque opération, connexion créée et fermée à chaque appel).
+Interface d'accès à `catalog.db`. Toutes les méthodes sont **thread-safe** : verrou `threading.Lock` sur chaque opération, et **connexion SQLite par (instance, thread)** mise en cache dans un `threading.local` porté par l'instance (pattern partagé avec `ThumbnailCache`, `FaceDatabase` et `EditDatabase`). La connexion est créée une seule fois par thread avec ses PRAGMAs (`journal_mode=WAL`, `synchronous=NORMAL`, `cache_size=-2048`) — l'ancien schéma « connexion neuve + PRAGMAs à chaque appel » coûtait souvent plus cher que la requête elle-même.
+
+**Invariant du pattern** : les méthodes d'écriture ne ferment plus la connexion ; en cas d'exception, une garde `except BaseException: conn.rollback(); raise` remplace le rollback implicite qu'assurait l'ancienne fermeture. Une connexion cachée ne doit **jamais** rester au milieu d'une transaction ouverte (toutes les écritures suivantes échoueraient en `database is locked`). `close()` ferme la connexion du thread courant (tests, `closeEvent`).
 
 ```python
 catalog = Catalog()   # utilise APP_DATA_DIR / "catalog.db"
@@ -297,10 +448,15 @@ catalog.search(query)                       # filename, make, model
 catalog.move_photo(old_path, new_path)
 catalog.rename_photo(old_path, new_path)
 catalog.delete_photo(path)
+catalog.delete_photos(paths)                # variante lot (albums nettoyés, groupes doublons dissous)
+catalog.add_photos_to_album(album_id, ids)  # lot — retourne le nombre réellement ajouté
+catalog.remove_photos_from_album(album_id, ids)  # lot
 catalog.get_known_mtimes(folder)            # dict {path: mtime} pour le scanner
 catalog.update_paths_prefix(old, new)       # renommage de dossier en masse
 catalog.count_photos_in_folder(folder)      # int — compte récursif pour le FolderManagerDialog
 ```
+
+**Index** : `idx_photos_directory`, `idx_photos_dup_group`, `idx_photos_favorite`, `idx_photos_media_type` — les vues Favoris/Vidéos ne scannent pas la table.
 
 **Migrations au démarrage** (dans `_init_db()`) :
 - `_migrate_normalize_paths()` — normalise les séparateurs de chemins dans les données existantes.
@@ -338,6 +494,21 @@ LibraryScanner.scan(folders, force=False) → ScanThread (QThread)
 
 ---
 
+### `folder_watcher.py` — Surveillance disque
+
+`FolderWatcher` surveille récursivement les dossiers racine via `QFileSystemWatcher` (snapshots par dossier, debounce 400 ms) et émet `files_changed(path)` / `subfolder_added(path)`. `MainWindow._on_watcher_files_changed` répond par un rescan du sous-arbre concerné.
+
+**Absorption des changements auto-infligés** : quand l'application supprime ou déplace elle-même des fichiers (touche Suppr, drag & drop, fichiers corrompus), l'événement watcher qui suit ne fait que constater ce que l'UI a déjà traité — le rescan serait du pur gaspillage (re-walk du dossier + refresh albums/personnes + réarmement de la détection de doublons).
+
+```python
+watcher.notify_self_deletions(paths, ttl_s=10.0)  # AVANT de toucher au disque
+watcher.notify_self_additions(paths, ttl_s=10.0)  # destinations d'un déplacement
+```
+
+Les noms déclarés (par dossier, avec deadline) sont soustraits des ensembles apparus/disparus dans `_process()` : si l'événement ne contient **que** des changements annoncés, `files_changed` n'est pas émis. Tout changement externe dans le même dossier (autre fichier ajouté/supprimé, y c. dans le même événement) émet toujours. Le TTL borne le cas où l'opération annoncée échoue finalement.
+
+---
+
 ### `thumbnail_cache.py` — Cache vignettes
 
 Architecture à **3 niveaux** :
@@ -366,6 +537,8 @@ cache.move_photo(old_path, new_path)   # Transfère l'entrée sans régénérer
 ```
 
 **Règle** : ne jamais appeler `generate()` depuis le thread UI. Utiliser `_ThumbWorker` (QRunnable) via `QThreadPool.globalInstance()`.
+
+**Verrou d'écriture** : contrairement à `Catalog`/`FaceDatabase`, `ThumbnailCache` protège ses écritures SQLite par un `threading.Lock()` dédié — sans lui, les 4 (voire 6, avec l'indexation visages en parallèle) threads de génération de vignettes déclenchés en rafale pendant la navigation se disputaient la connexion et ralentissaient perceptiblement le défilement de la grille.
 
 ---
 
@@ -400,13 +573,68 @@ VIDEO_EXT = {".mp4", ".mov", ".avi", ".mkv", ".wmv", ".webm",
 
 Importée par `scanner.py` et `thumbnail_cache.py`. Toujours utiliser cette constante pour tester si un fichier est une vidéo.
 
+#### `ascii_safe_path(path)` — context manager
+
+```python
+with ascii_safe_path(video_path) as safe_path:
+    cap = cv2.VideoCapture(safe_path)
+```
+
+`cv2.VideoCapture`/`cv2.imread` rejettent les chemins non-ASCII sur Windows. Si `path` est déjà ASCII, retourné tel quel sans I/O ; sinon crée un hardlink temporaire vers un chemin ASCII (repli sur une copie si le hardlink échoue, ex. volume différent), supprimé en sortie de bloc. À utiliser systématiquement autour de tout appel `cv2.VideoCapture`/`cv2.imread`.
+
+#### `preserve_file_dates(src_stat, dst_path)`
+
+```python
+orig_stat = os.stat(path)
+# ... écriture d'une nouvelle version de `path` ...
+preserve_file_dates(orig_stat, path)
+```
+
+Copie `atime`/`mtime` (`os.utime`) et la date de création Windows (`ctypes` + `kernel32.SetFileTime`) de `src_stat` vers `dst_path`. Utilisée partout où un fichier est ré-écrit sur place sans que l'utilisateur ne doive voir ses dates changer (export avec écrasement, réparation de fichier corrompu — voir `file_repair.py`).
+
 ---
 
 ## 6. Composants UI
 
+### Découpage 2026-07 : fichiers volumineux → modules délégués
+
+`main_window.py`, `photo_viewer.py` et `edit_panel.py` ont chacun dépassé une taille où un
+seul fichier devenait difficile à naviguer. Le découpage extrait les classes annexes vers des
+modules dédiés, tout en **ré-exportant les noms historiques** depuis le module d'origine (bloc
+d'import `# noqa: E402` en tête de fichier) pour que le code et les tests existants continuent
+d'importer depuis `main_window`/`photo_viewer`/`edit_panel` sans changement. **Le nouveau code
+doit importer directement le module dédié**, pas le ré-export.
+
+- `main_window.py` délègue à :
+  - `background_workers.py` — `QThread` transverses : `_CatalogLoadThread`, `_PhotoQueryThread`,
+    `_DeleteWorkerThread`, `_DupMigrationThread`, `_PersonsRefreshThread`, `_ResuggestThread`,
+    `_ResetWorkerThread`.
+  - `export_dialogs.py` (`_ExportDialog`, `_SaveOptionsDialog`), `reset_faces_dialog.py`
+    (`_ResetFacesDialog`), `duplicates_popup.py` (`_DuplicatesPopup`), `ui_utils.py`
+    (`fmt_size`, `install_menu_width_fix`).
+  - `main_window_faces.py::FacesController` et `main_window_duplicates.py::DuplicatesController`
+    — deux **mixins** apportant respectivement toutes les méthodes `_on_*`/`_show_*`/`_start_*`
+    liées aux visages et aux doublons. `class MainWindow(QMainWindow, FacesController,
+    DuplicatesController)` — `MainWindow` reste la classe unique instanciée ; les mixins
+    n'existent que pour répartir les méthodes entre plusieurs fichiers.
+- `photo_viewer.py` délègue à `viewer_canvas.py` (`_Canvas` — le widget interactif : recadrage,
+  annotations, zoom/pan, `_InlineTextEdit`) et `viewer_pixmaps.py` (pipeline de construction du
+  pixmap affiché : `_build_pixmap`, `_build_video_pixmap`, `_build_base_image`,
+  `_apply_edit_to_base` — réutilisé tel quel par `slideshow.py`).
+- `edit_panel.py` délègue à `edit_sliders.py` (`MarkedSlider`, `EditSlider`), `treatment_dialogs.py`
+  (`TreatmentDialog` et ses sous-classes `LuminositeTreatmentDialog`, `CouleursTreatmentDialog`,
+  `VignetteTreatmentDialog`, plus `_TREATMENTS`) et `edit_icons.py` (fonctions `_icon_*` dessinant
+  chaque icône de bouton en `QPixmap`).
+
+> **Piège rencontré pendant le découpage** : une classe définie *entre* deux méthodes d'une autre
+> classe (mise en évidence uniquement à l'extraction) casse silencieusement l'héritage attendu —
+> vérifier avec `pyflakes` après toute extraction de module.
+
+---
+
 ### `main_window.py` — Orchestrateur principal
 
-`MainWindow` est le **chef d'orchestre** : il instancie tous les composants UI, les relie aux composants library/processing, et répond aux signaux de la sidebar et de la grille.
+`MainWindow` est le **chef d'orchestre** : il instancie tous les composants UI, les relie aux composants library/processing, et répond aux signaux de la sidebar et de la grille. Il hérite aussi de `FacesController` et `DuplicatesController` (voir ci-dessus) pour les méthodes spécifiques aux visages et aux doublons.
 
 **Attributs d'état clés** :
 
@@ -414,7 +642,24 @@ Importée par `scanner.py` et `thumbnail_cache.py`. Toujours utiliser cette cons
 |---|---|---|
 | `_current_photos` | `list[PhotoInfo]` | Photos affichées dans la grille |
 | `_current_context` | `str` | Dossier ou contexte actif (`"Toutes les photos"`, `"Favoris"`, un chemin, un nom d'album) |
+| `_current_album_id` | `int \| None` | Id de l'album affiché (sinon `None`) — pilote « Retirer de l'album » et le comportement de la touche Suppr dans la grille et la visionneuse |
 | `_current_photo_index` | `int` | Index de la photo ouverte dans la visionneuse |
+
+**Flux d'une suppression (touche Suppr / « Effacer le(s) fichier(s)… ») :**
+
+```
+delete_requested (grille ou visionneuse)
+  → _on_delete_requested(photos)
+    → confirmation (thread UI), capture du contexte (viewer, groupes de doublons…)
+    → _folder_watcher.notify_self_deletions(paths)   # pas de rescan redondant
+    → _DeleteWorkerThread (QThread) :
+        unlink par fichier (+ progress) puis, en lot :
+        catalog.delete_photos / thumb_cache.invalidate_many / face_db.delete_for_paths
+    → _on_delete_finished(...) (thread UI) : grille, albums, groupes de doublons,
+      navigation vers le voisin, erreurs
+```
+
+Garde de réentrance : un seul `_delete_thread` à la fois (partagé avec la suppression des fichiers corrompus). En **contexte album** (`_current_album_id` non `None`), la touche Suppr émet `remove_from_album_requested` à la place : `Catalog.remove_photos_from_album` supprime uniquement le lien `album_photos`, fichiers et catalogue intacts.
 
 **Flux d'un changement de dossier :**
 
@@ -481,7 +726,11 @@ La sidebar est divisée en deux zones via un `QSplitter` vertical :
 
 **Lazy-loading de l'arborescence** :
 
-Quand un nœud possède des sous-dossiers, un **placeholder** (item vide sans `UserRole`) est ajouté pour rendre le nœud dépliable. À l'expansion (`itemExpanded`), le placeholder est remplacé par les vrais sous-dossiers (`_populate_subfolders`).
+Chaque nœud reçoit systématiquement un **placeholder** (item vide sans `UserRole`) qui le rend dépliable. À l'expansion (`itemExpanded`), le placeholder est remplacé par les vrais sous-dossiers (`_populate_subfolders`). On ne vérifie **pas** si le dossier a réellement des sous-dossiers (ça coûterait un `os.scandir` par enfant — très lent sur un volume réseau) : un nœud sans sous-dossier se replie simplement à la première expansion.
+
+**Cache session des icônes de personnes** :
+
+`refresh_persons` (rebuild complet de la liste Personnes) ne re-décode plus toutes les vignettes de couverture depuis les photos originales : un cache en mémoire (`_icon_bytes_cache`, clé `(cover_path, cover_bbox)`) fournit instantanément les icônes inchangées, et seul le reste part dans `_FaceIconLoader` (QThread). Le signal `persons_thumbnails_ready` est émis dans **tous** les cas (immédiatement si tout vient du cache) — il sert de gate au démarrage de la détection de doublons dans `main_window.py`.
 
 **Drag & drop** :
 
@@ -521,7 +770,7 @@ PhotoViewer (QWidget)
   └─ _navbar (QWidget)  — précédente/suivante (s'arrête aux extrémités)
 ```
 
-**`_build_pixmap(photo, edit)`** : charge l'image avec Pillow, applique `ImageOps.exif_transpose`, downscale à `_PREVIEW_MAX_PX = 1024 px`, puis applique `ImageAdjuster.apply_all(img, edit)`. Pour les vidéos, délègue à `_build_video_pixmap(path)` qui extrait une frame via `cv2`.
+**`_build_pixmap(photo, edit)`** (dans `viewer_pixmaps.py`, ré-exporté par `photo_viewer.py` — `slideshow.py` l'importe directement depuis `photo_viewer`) : charge l'image avec Pillow, applique `ImageOps.exif_transpose`, downscale à `_PREVIEW_MAX_PX = 1024 px`, puis applique `ImageAdjuster.apply_all(img, edit)`. Pour les vidéos, délègue à `_build_video_pixmap(path)` qui extrait une frame via `cv2`. `_BaseLoader(QThread)` (défini directement dans `photo_viewer.py`) charge `_build_base_image()` hors du thread UI — nécessaire car `cv2.VideoCapture` peut déclencher des appels COM sur Windows pour certains codecs.
 
 **Navigation sans boucle** : les boutons Précédente/Suivante sont désactivés (`setEnabled(False)`) quand on est à la première/dernière photo. Aucun wrap-around.
 
@@ -586,7 +835,7 @@ EditPanel
             └─ Miroir H | Miroir V
 ```
 
-**`TreatmentDialog`** : dialogue modal avec un ou plusieurs `EditSlider`. L'aperçu est en temps réel via `preview.emit(EditInfo)` → `PhotoViewer.update_edit()`. Si l'utilisateur annule, l'`EditInfo` original est restauré.
+**`TreatmentDialog`** (dans `treatment_dialogs.py`) : dialogue modal avec un ou plusieurs `EditSlider` (`edit_sliders.py`). L'aperçu est en temps réel via `preview.emit(EditInfo)` → `PhotoViewer.update_edit()`. Si l'utilisateur annule, l'`EditInfo` original est restauré.
 
 **Couleurs (N&B)** : `TreatmentDialog` avec checkbox `bw` + trois `EditSlider` pour `bw_red`, `bw_green`, `bw_blue`. La checkbox active/désactive les sliders.
 
@@ -595,6 +844,18 @@ EditPanel
 - `_undo_stack` et `_redo_stack` : listes d'`EditInfo` en mémoire (max 20).
 - Chaque opération (`_push_undo`) sauvegarde également dans `edit_db` via `_save()`.
 - À l'ouverture d'une photo, `get_history()` recharge jusqu'à 20 états depuis la DB → undo persistant entre sessions.
+
+**`reset_all()` / `restore_all()`** : `reset_all()` supprime toutes les retouches sans confirmation
+(l'ancien `QMessageBox.question` a été retiré) mais conserve un instantané dans
+`self._reset_snapshots: dict[str, tuple[EditInfo, list]]` (clé = chemin normalisé) avant de vider
+l'état. L'instantané contient **l'état courant ET la pile d'undo** : `reset_all()` efface aussi
+`edit_history` en DB (`EditDatabase.delete`), donc sans ça une restauration rendait bien les
+retouches mais plus la possibilité de les défaire une par une. `restore_all()` réapplique l'état,
+restaure `_undo_stack` et réinjecte l'historique en DB (`_checkpoint_state` par entrée, avant le
+`_save("restore_all")` final) pour que l'undo pas-à-pas survive aussi à un redémarrage.
+Le snapshot est invalidé (`.pop(...)`) dès qu'une nouvelle retouche est poussée via `_push_undo()`
+après le reset, pour qu'un `restore_all()` tardif n'écrase jamais silencieusement une retouche
+faite entre-temps.
 
 **Ordre d'application des retouches** (dans `ImageAdjuster.apply_all`) :
 
@@ -608,6 +869,35 @@ EditPanel
 ```
 
 Cet ordre est figé par conception : modifier l'ordre changerait le résultat visuel pour toutes les photos existantes.
+
+---
+
+### `thread_journal_dialog.py` — Journal des threads (Outils › Journal des threads…)
+
+Lit `src/core/thread_journal.py::journal.get_entries()`. Onglets : bilan d'exécution
+(`_CompteRenduPanel`) avec statut par thread (✓ OK / ● LENT / ● TROP LONG / ✗ ERREUR / ● EN COURS),
+résumé (`_SummaryTable`), événements bruts filtrables (`_EventTable`, mode **▶ Temps réel**), et
+un `_ProblemsReportDialog` générant un diagnostic texte copiable.
+
+### `help_dialog.py` — Aide / À propos
+
+`HelpDialog(QDialog)` charge le contenu de chaque onglet depuis `src/ui/help_content/*.html`
+(un fichier par onglet + `_style.html` partagé) plutôt que de l'avoir en dur dans le code Python —
+objectif : pouvoir corriger l'aide sans toucher au code. `_load_tab_html()` résout le dossier via
+`sys._MEIPASS / "help_content"` en mode figé (PyInstaller, cf. §14 Packaging) ou
+`Path(__file__).parent / "help_content"` en développement, et substitue `__VERSION__` /
+`__VERSION_CHECK__`. **Toute modification du contenu d'aide passe par ces fichiers HTML, jamais
+par du texte en dur dans `help_dialog.py`.**
+
+Barre de recherche (`self._search_edit`, `HelpDialog._search()`) : cherche dans l'onglet
+`QTextBrowser` courant via `QTextBrowser.find()` (Qt, insensible à la casse et **substring**, cf.
+piège rencontré en test — "ORB" matche aussi "c**orb**eille") puis, si absent, dans les onglets
+suivants par ordre circulaire à partir de l'onglet courant — bascule automatiquement dessus si
+trouvé (`tabs.setCurrentIndex`). `continue_search=True` (Entrée, `returnPressed`) poursuit depuis
+la position du curseur ; toute autre frappe (`textChanged`) repart du début de l'onglet affiché.
+Raccourci `Ctrl+F` (`QShortcut(QKeySequence.Find, self)`, portée fenêtre — n'entre pas en conflit
+avec le `Ctrl+F` global de la fenêtre principale car `HelpDialog` est modal) donne le focus au
+champ. Aucun résultat dans aucun onglet → `_SEARCH_NOT_FOUND_STYLE` (fond rouge) sur le champ.
 
 ---
 
@@ -635,6 +925,121 @@ Transformations géométriques via Pillow :
 - `apply_flip(img, flip_h, flip_v)` : `Image.FLIP_LEFT_RIGHT` / `Image.FLIP_TOP_BOTTOM`.
 - `apply_crop(img, quad_tuple)` : recadrage par les 8 coordonnées relatives.
 
+### `frames.py` — Cadres décoratifs
+
+13 motifs (`FRAME_TYPES`) rendus **procéduralement** en PIL/NumPy, sans aucun fichier d'image
+externe : entourage uni, simple, double, baroque doré, oves et perles, grecque, art déco,
+sculpture bois, feuilles de vigne, roses, fleurs, métallique, reflets.
+
+```python
+from src.processing import frames
+
+framed = frames.apply_frame(image, edit)          # image + cadre
+b      = frames.border_px(edit, w, h)             # épaisseur du cadre, en px
+box    = frames.content_box(edit, fw, fh)         # (x0, y0, x1, y1) de la photo dans le pixmap
+thumb  = frames.frame_preview(image, edit, 160)   # vignette pour la galerie du dialogue
+```
+
+**Invariant central** : `apply_frame()` colle la photo **en dernier** sur un canevas agrandi —
+le cadre ne recouvre jamais un pixel de l'image, il s'ajoute autour. Corollaire : le pixmap
+affiché est plus grand que la photo, et toute coordonnée relative (recadrage, yeux rouges,
+vignette, annotations, bbox de visage) se rapporte au **contenu**, pas au pixmap.
+`viewer_canvas._img_rect()` retire donc la bordure via `content_box()`, inverse exact de
+`border_px()` — un pixel d'écart décalerait tous les outils interactifs.
+
+Deux dérogations, **toutes deux purement d'affichage** (elles n'entrent ni dans `border_px()`
+ni dans `content_box()`, donc la géométrie des outils reste celle de la photo entière) : le
+second cadre facultatif de `plain` et les débordements des trois cadres végétaux
+(`SPILL_FRAMES`), décrits plus bas.
+
+Toutes les largeurs sont des **fractions du petit côté** de la photo (exposées en pourcentage
+dans l'UI) : un réglage rend identiquement sur une vignette et sur un export pleine résolution.
+`ImageAdjuster.apply_all(image, edit, with_frame=True)` pose le cadre en dernier ; l'export
+(`main_window.py`) passe `with_frame=False` puis appelle `apply_frame()` lui-même **après**
+`composite_annotations_pil()`, les annotations étant en coordonnées de contenu.
+
+| Ensemble | Motifs | Réglages exposés |
+|---|---|---|
+| tous | les 13 motifs | Largeur extérieure |
+| `PARAMETRIC_FRAMES` | plain, simple, double | En plus : intervalle, cadre intérieur, couleur |
+| `STYLED_FRAMES` | simple, double | En plus : `COLOR_STYLES` (uni/dégradé/pailleté) + `frame_color2` |
+| — | plain seul | Second cadre facultatif (`frame_inner_enabled`) + ferronnerie |
+
+#### Moteur de relief (les 10 motifs hors `PARAMETRIC_FRAMES`)
+
+Ce qui fait qu'un cadre paraît sculpté n'est pas le dessin mais la lumière : un ornement plaqué
+en couleur reste plat quel que soit son tracé. Le rendu passe donc par une **carte de hauteur**
+(`float32`) en trois temps :
+
+1. **Profil de moulure** — `_PROFILE_SEGMENTS` / `_PROFILE_LUTS` (`ogee`, `cove`, `flat`,
+   `bevel`, `round`, `steps`, `scoop`, `field`) : coupe transversale échantillonnée en LUT 1-D,
+   interpolée par `np.interp` sur `t = dist_au_bord / border`. Les LUT doivent rester
+   croissantes en `t` sur `[0, 1]` (contrainte de `np.interp`). `field` est un champ plat entre
+   deux baguettes : à utiliser quand la sculpture doit porter seule le relief (les trois cadres
+   végétaux), une moulure creusée entrant sinon en concurrence avec les ornements qui la couvrent.
+2. **Ornements gravés** — `_Carver` (`dome` / `flat` / `disc` / `ridge` / `groove`) écrit dans la
+   carte de hauteur, plus un calque RGBA optionnel pour les motifs réellement peints (porcelaine,
+   roses). Le paramètre `edge` grave le sillon de contour du sculpteur : sans lui, deux motifs
+   voisins fusionnent en une masse molle.
+3. **Éclairage** — `_shade_relief()` : normales via `np.gradient`, diffus lambertien + spéculaire
+   Blinn-Phong (`_LIGHT` / `_HALF`, lumière en **haut à gauche**), occlusion de cavité approchée
+   par différence de hauteur floutée, patine dans les creux, usure de la dorure. Matières dans
+   `_MATERIALS` ; `_DECOR[kind] = (profil, matière, amplitude)` — un motif ajouté à `FRAME_TYPES`
+   sans entrée `_DECOR` retomberait silencieusement sur un aplat gris.
+
+`DECOR_MIN_WIDTH` (0,08) + `suggested_width(kind, current)` : un motif sculpté est illisible à la
+largeur par défaut (5 %). Choisir un motif décoratif **remonte visiblement le curseur**
+(`FrameDialog._select_kind`) au lieu d'appliquer un plancher caché au rendu, et `_TileLoader`
+applique la même fonction à chaque vignette — la vignette montre exactement ce qu'on obtient en
+cliquant dessus.
+
+`plain` est le seul motif **sans relief** (aplat strict : il ne passe jamais par le moteur
+ci-dessus, sinon le noir demandé ne serait plus un vrai noir). Il accepte en plus un **second cadre** peint *par-dessus* la photo
+(`_draw_inner_overlay`, après le `paste`) — seule dérogation à l'invariant ci-dessus, la bande
+d'image visible entre les deux cadres étant l'effet recherché. Ce second cadre n'entre donc pas
+dans `border_px()`/`content_box()` : `inner_overlay_px()` est un calcul d'affichage, jamais une
+donnée de géométrie.
+
+**Ferronnerie du second cadre** (`INNER_MOTIFS` : `line`, `corners`, `scrolls`, `twist`,
+`studs`), dimensionnée par `frame_inner_ornament` (borné à `[INNER_ORNAMENT_MIN,
+INNER_ORNAMENT_MAX]`) et rendue en relief ou en aplat (`frame_inner_relief`). Trois règles :
+
+- `line` est le **défaut** et ignore relief comme ornements : aplat strict dessiné directement
+  sur le canevas à pleine résolution, pour qu'une base migrée rende exactement le cadre d'avant
+  la fonctionnalité. Relief et curseur ne concernent que `ORNAMENTED_MOTIFS`, et `FrameDialog`
+  masque les deux réglages pour `line`.
+- Les ornements se développent **vers l'intérieur** depuis la ligne. Leur calque
+  (`_inner_motif_layer`) fait exactement la taille de la photo et est collé en
+  `(border, border)` : le débordement sur le cadre extérieur est impossible par construction.
+- Le calque est rendu à résolution de travail bornée × suréchantillonnage puis réduit une seule
+  fois (~0,8 s sur un export 6000 × 4000, contre 0,43 s pour `line`). Un échec de rendu est
+  rattrapé par un simple anneau, jamais par la perte du cadre.
+
+#### Débordements des cadres végétaux (`SPILL_FRAMES` : vine, roses, flowers)
+
+Quelques motifs passent **par-dessus la photo** pour que le cadre se lise comme une sculpture qui
+surplombe l'image. Rendu dans un calque RGBA plein canevas (`_spill_array` / `_render_spill`,
+`_SPILLERS[kind]`), collé **après** la photo dans `apply_frame()` — un échec ne coûte que le
+débordement, jamais le cadre.
+
+- Deux choses font la différence entre une sculpture et un autocollant : l'**ombre portée** sur
+  l'image (`_SPILL_SHADOW`, décalée dans l'axe de `_LIGHT`), et le fait que chaque motif reste
+  **accroché** au bandeau (`_spill_stem`, tige courte partant de sous l'arête — droite et longue,
+  elle se lit comme une épingle plantée dans le cadre).
+- « Parfois » est essentiel : un débordement régulier redevient une frise. D'où un tirage par site
+  (`_SPILL_SKIP`) et un espacement de plusieurs largeurs de bandeau (`_SPILL_SPACING`), sur des
+  sites à cheval sur l'arête (`_spill_sites`, `_spill_corners`).
+- La silhouette qui porte l'ombre vient d'un **troisième canal** du `_Carver` (masque `mdraw`),
+  alimenté par les passes qui *ajoutent* de la matière (`dome`/`flat`/`ridge`) — jamais par
+  `groove`, dont les sillons laisseraient des griffures noires en travers de l'image.
+- Coût : ~1,2 s de plus sur un export 6000 × 4000 (seconde gravure + `_shade_relief` + flou), et
+  0,06–0,12 s par vignette de galerie.
+
+Côté UI, `src/ui/frame_dialog.py::FrameDialog` affiche une galerie d'aperçus de la photo
+courante (un par motif, rendus dans un `_TileLoader(QThread)` réutilisant une image de base
+décodée une seule fois) et n'émet `preview` que pour l'aperçu temps réel — `EditPanel` ne
+modifie `self._edit` qu'à la validation, pour que `_push_undo` empile bien l'état d'avant.
+
 ### `edit_database.py` — `EditDatabase`
 
 Interface d'accès à `edits.db`. Thread-safe (verrou par opération).
@@ -654,28 +1059,206 @@ Tous les chemins sont normalisés avec `os.path.normpath` à l'entrée de chaque
 
 ## 8. Reconnaissance faciale
 
-> Module optionnel — dépendances lourdes (DeepFace, RetinaFace, PyTorch, scikit-learn). L'application fonctionne sans ces packages ; les fonctionnalités de visages sont simplement désactivées.
+> Module optionnel — dépendances lourdes (InsightFace/ONNXRuntime, scikit-learn, hdbscan). `scikit-learn`
+> et `hdbscan` sont cependant des dépendances **non optionnelles** du cœur applicatif (ne jamais les
+> exclure du packaging PyInstaller, cf. §14) ; seul InsightFace lui-même (détection/embedding) est
+> réellement facultatif — sans lui, les fonctionnalités de visages sont désactivées mais l'app démarre.
 
 ### Architecture
 
 ```
 faces/
-├── detector.py        # Détection via RetinaFace (fallback : OpenCV Haar)
-├── recognizer.py      # Embeddings facials via DeepFace/ArcFace
-├── clusterer.py       # Clustering DBSCAN (scikit-learn)
-├── face_panel.py      # Widget visionneuse : boîtes, noms, menu contextuel
-└── picasa_importer.py # Import .picasa.ini → table picasa_annotations
+├── detector.py         # Détection + embedding via InsightFace (buffalo_l : SCRFD-10GF + ArcFace R100)
+├── clusterer.py         # Clustering HDBSCAN + purification (scission des clusters impurs)
+├── face_database.py     # Base SQLite faces.db — visages, clusters, personnes, suggestions
+├── face_indexer.py      # Threads d'indexation en masse / réindexation / nouvelle tentative
+├── gpu_utils.py          # Détection du backend GPU disponible pour l'inférence ONNXRuntime
+└── picasa_importer.py    # Import annotations + retouches Picasa (.picasa.ini / contacts.xml)
 ```
+
+Panneaux et dialogues UI (`src/ui/`) : `face_panel.py` (panneau visages de la visionneuse),
+`people_panel.py` (vue « Personnes », groupes non identifiés + assignation), `person_cluster_view.py`
+(vue détaillée d'une personne), `face_cluster_grid.py` + `face_cluster_cards.py` +
+`face_cluster_workers.py` (grille des groupes non identifiés), `face_merge_dialog.py`,
+`face_backup_dialog.py`, `face_counters_dialog.py`, `picasa_import_dialog.py`, `reset_faces_dialog.py`.
+Orchestration côté `MainWindow` : mixin `main_window_faces.py::FacesController` (voir §6).
+
+### `detector.py` — Détection et embedding
+
+```python
+from src.faces.detector import is_available, detect_and_embed
+
+if is_available():
+    faces = detect_and_embed(image_path, rotation=0)
+    # → [{'bbox': (x, y, w, h), 'embedding': list[float] (512D), 'det_score': float}, ...]
+```
+
+`_get_insight_app()` maintient un singleton `FaceAnalysis` par process (coûteux à charger). Les
+détections avec `det_score < 0.5`, `embedding is None`, ou `w < 20`/`h < 20` px sont **exclues
+définitivement** (jamais écrites en base) — voir la mise en garde dans `CLAUDE.md` : ne pas y
+ajouter de seuil d'aire relatif à l'image, ça a déjà supprimé silencieusement des visages valides
+sans rattrapage possible.
+
+### `face_database.py` — `FaceDatabase` (faces.db)
+
+Même pattern de connexion que `Catalog` (thread-local, PRAGMAs WAL, garde
+`except BaseException: conn.rollback(); raise` sur les écritures — voir §5/CLAUDE.md).
+
+**Paliers de confiance de la reconnaissance** (comparaison cosinus visage/centroïde ↔ centroïde
+personne, appliqués par `set_cluster_suggestions()`, point d'entrée unique pour les 4 producteurs
+de suggestions) :
+
+| Seuil | Valeur | Effet |
+|---|---|---|
+| `_SIM_SUGGEST` | 0.60 | Suggestion enregistrée (`suggestion_person_id`/`suggestion_score`) — à confirmer manuellement |
+| `_SIM_AUTO_ASSIGN` | 0.70 | Allocation automatique de la personne, sans confirmation |
+| `_SIM_STRONG` (`people_panel.py`, affichage seul) | 0.55 | Libellé bleu « Probablement X » vs gris « Peut-être X » (`_SIM_WEAK` = 0.50) |
+| `_SIM_GROUP` (`people_panel.py`) | 0.72 | Auto-groupement de clusters *non identifiés* entre eux |
+
+`set_cluster_suggestions()` est idempotent dans les deux branches (`WHERE person_id IS NULL AND
+suggestion_person_id IS NULL`) : un cluster déjà assigné ou déjà suggéré n'est jamais réécrit.
+
+**Filtrage par taille** (deux étages, à ne pas confondre) : `detect_and_embed()` exclut
+définitivement (`w`/`h` < 20 px, cf. ci-dessus) ; `save_faces()` marque ensuite `ignored=1`
+(conservé en base, masqué de l'UI/clustering, **récupérable**) selon un seuil proportionnel à la
+résolution de la photo (`_AUTO_IGNORE_MIN_SIDE_RATIO=0.03`, `_AUTO_IGNORE_MIN_SIDE_FG_RATIO=0.20`,
+`_AUTO_IGNORE_FG_FRACTION=0.25`, `_AUTO_IGNORE_MIN_SCORE=0.65`).
+
+**Cache des centroïdes personne** : `get_all_person_centroids()` décode jusqu'à ~60k embeddings
+(512D float32, `numpy.frombuffer` plutôt que `struct.unpack`, ~10× plus rapide) — coûteux sur une
+grosse bibliothèque, donc mis en cache (`self._person_centroid_cache`) et invalidé seulement quand
+un fingerprint bon marché (`SELECT COUNT(*), SUM(person_id) FROM faces WHERE person_id IS NOT NULL`)
+change. `enrich_persons()` (photo_count + cover_path/cover_bbox + pending_count) est également
+coûteux (~1 s) ; `enrich_persons_photo_count()` en est une variante allégée à préférer quand la
+couverture n'est pas affichée.
+
+**Méthodes principales** :
+
+```python
+db = FaceDatabase()
+db.save_faces(photo_path, detections, rotation=0, force_no_limit=False)
+db.get_all_person_centroids(person_ids) -> dict[int, list[float]]
+db.set_cluster_suggestions(suggestions)              # {cluster_id: (person_id, score)}
+db.merge_persons(keep_id, remove_id)                  # réassigne faces + picasa_annotations, dédup
+db.delete_for_path(photo_path) / delete_for_paths(paths)
+db.update_clusters(face_ids, labels, progress_cb=None)
+db.resuggest_clusters(cluster_ids, exclude_person_id=None)
+db.accept_cluster_suggestion(cluster_id)
+db.reset_clustering()   # garde les visages détectés, refait juste le regroupement
+db.reset_index()        # efface tout, à réindexer depuis zéro
+```
+
+### `clusterer.py` — Clustering HDBSCAN
+
+`ClusterThread(QThread)` lance `_run_clustering()` dans un `_clustering_worker_proc` séparé
+(timeout `_CLUSTER_TIMEOUT = 1800 s`). Réduction dimensionnelle PCA (`_PCA_DIMS = 32`) avant
+HDBSCAN. `_purify_clusters()` scinde les clusters HDBSCAN mixtes via une liaison complète sur les
+paires impures (`_PURITY_MIN_SIM = 0.60`, plafonné à `_PURITY_MAX_CLUSTER_N = 2000` pour rester
+tractable). `reset_clustering_cache()` invalide le sentinel « dernier N traité » — **doit être
+appelé après tout `reset_clustering()`/`reset_index()`**, sans quoi les visages restent bloqués
+avec `cluster_id = NULL` (bug déjà rencontré, trouvé par un scénario e2e).
 
 ### Import Picasa
 
-`PicasaImporter` lit les fichiers `.picasa.ini` dans chaque dossier scanné. Il parse les sections `[contacts]` (mapping hash → nom) et les entrées `rect=` des photos (coordonnées de visage encodées en base64).
+`PicasaImporter` (`picasa_importer.py`) lit les fichiers `.picasa.ini` (et `contacts.xml`) dans
+chaque dossier scanné. Il parse les sections `[contacts]` (hash → nom) et les entrées `rect=`
+(coordonnées de visage encodées en base64, `_decode_rect64` puis conversion vers coordonnées EXIF
+via `_bbox_raw_to_exif`), et peut aussi convertir les édits Picasa (rotation, recadrage,
+luminosité…) en `EditInfo` (`_picasa_to_edit_info`).
 
-Les annotations sont stockées dans `catalog.db` dans la table `picasa_annotations`. La coexistence avec le moteur ArcFace est gérée : les noms Picasa peuvent être réutilisés comme étiquettes pour les clusters DBSCAN.
+Les annotations en attente sont stockées dans **`faces.db`**, table `picasa_annotations` (et non
+`catalog.db`), avec un flag `consumed` — `save_faces()` les consulte pour ré-appliquer une
+identification Picasa dès qu'un visage correspondant (IoU ≥ `_IOU_THRESHOLD = 0.30`) est
+(ré)indexé, sans jamais écraser une association déjà faite manuellement.
 
 ---
 
-## 9. Système de plugins
+## 9. Détection de doublons
+
+### Architecture
+
+```
+library/
+├── duplicate_detector.py   # DuplicateDetectorThread — Tier 1 pHash + Tier 2 ORB/RANSAC
+├── dedup_cache.py           # DedupCache — cache incrémental (dedup_cache.db)
+└── file_repair.py           # FileRepairThread — réparation des fichiers corrompus détectés
+```
+
+Orchestration côté `MainWindow` : mixin `main_window_duplicates.py::DuplicatesController` (voir §6).
+UI dédiée : `src/ui/duplicate_grid.py` (grille des groupes, bouton « Dupliquées » de la sidebar),
+`src/ui/duplicates_popup.py` (popup « Doublons de cette photo » depuis le badge ⧉).
+
+### `DuplicateDetectorThread` — les deux passes
+
+```python
+thread = DuplicateDetectorThread(
+    photo_paths,
+    seed_groups=catalog.get_duplicate_group_assignments(),  # {path: group_id} — TOUJOURS repasser
+    cache_db_path=...,             # dedup_cache.db
+    dates=catalog.get_photo_dates_for_dedup(),  # {path: datetime|None}
+)
+thread.progress.connect(...)        # (int, int, str)
+thread.partial_results.connect(...)  # ({group_id: [paths]}, [corrupted_paths]) — snapshot live
+thread.finished.connect(...)        # dict — object, PAS dict : QVariantMap exige des clés str
+```
+
+> **Piège** (déjà rencontré, cf. `CLAUDE.md`) : relancer le thread sur un `cache_db_path` déjà
+> peuplé **sans repasser `seed_groups`** fait que toutes les paires apparaissent comme « déjà
+> comparées » (`compared_tier1`/`compared_tier2`) → aucun groupe reformé, retour silencieux de
+> `{}`. En usage réel `seed_groups` est toujours récupéré frais avant chaque création de thread ;
+> seul un script relançant `_detect()` plusieurs fois sur le même cache doit y penser explicitement.
+
+**Tier 1 — pHash** (`_HASH_THRESHOLD=10`, `_HASH_MICRO_SIZE=8`, `_HASH_PIXEL_MAX_DIFF=0.34`) :
+empreinte perceptuelle + micro-vignette 8×8 normalisée par photo, calculées en parallèle
+(`ThreadPoolExecutor(max_workers=throttled_worker_count())`, cf. §4 `cpu_throttle.py`), mises en
+cache dans `DedupCache`, puis union-find incrémental (`_merge`) — les paires ancien×ancien déjà
+dans `compared_tier1` ne sont jamais recomparées.
+
+**Tier 2 — ORB + RANSAC** (`_ORB_MIN_INLIERS=40`, `_ORB_MAX_KP=300`, `_ORB_RATIO_TEST=0.75`,
+`_ORB_LOAD_SIZE=800`) : uniquement sur les photos non groupées par le Tier 1, détecte les
+recadrages via `knnMatch` + `cv2.findHomography(RANSAC)` puis vérification du diff pixel sur la
+zone de recouvrement recalée.
+
+**Exclusion par date EXIF** (`_dates_differ`) : deux photos dont les dates EXIF sont connues et
+différentes ne sont **jamais** fusionnées, même visuellement identiques (rafale) — un groupe déjà
+formé avant l'ajout de cette règle n'est pas défait rétroactivement.
+
+### `dedup_cache.py` — `DedupCache` (dedup_cache.db)
+
+Cache l'intégralité du travail coûteux pour rendre les passes suivantes incrémentales : empreintes
+(`fingerprints`), features ORB (`orb_features`), paires déjà comparées (`compared_tier1`/`_tier2`)
+et fichiers illisibles rencontrés (`corrupted_files`) — voir schéma complet en §11.
+
+```python
+cache = DedupCache(db_path)
+cache.get_fingerprints(paths) / store_fingerprints(rows)
+cache.get_compared_tier1(paths) / store_compared_tier1(rows)
+cache.remove_compared(paths)      # invalide tier1+tier2 pour ces chemins (migration date EXIF)
+cache.replace_corrupted_paths(paths) / get_corrupted_paths()
+cache.purge_missing(keep_paths)   # nettoie toutes les tables des chemins disparus de la bibliothèque
+```
+
+### `file_repair.py` — Réparation des fichiers corrompus
+
+`FileRepairThread(QThread)` essaie trois décodeurs tolérants dans l'ordre
+(`_decode_truncated_pil`, `_decode_qimage`, `_decode_cv2_truncated`) plus un correctif
+non-destructif du marqueur JPEG EOI (`_decode_strict_with_eoi_fix`), retient le meilleur candidat
+via une heuristique d'écart-type par ligne (`_usable_height`), sauvegarde l'original dans
+`.tmp_originals/` avant d'écraser (`_backup_before_repair`), puis restaure les dates Windows
+(`preserve_file_dates`, cf. `exif_reader.py`).
+
+### Persistance et dissolution des groupes
+
+`Catalog` (`catalog.py`) porte la colonne `photos.duplicate_group_id`. `ignore_duplicate_group(group_id)`
+(bouton ✕ de la grille) est **persistant** : un groupe ignoré n'est plus jamais recréé tant
+qu'aucun de ses membres ne change, car ses paires restent dans `compared_tier1`/`_tier2`.
+`_dissolve_singleton_duplicate_groups(conn)` s'auto-déclenche après toute mutation de groupe pour
+éviter les groupes résiduels à un seul exemplaire — appelé depuis **tous** les chemins de
+suppression (`delete_photo`/`delete_photos`), pas seulement le flux UI de la grille de doublons.
+
+---
+
+## 10. Système de plugins
 
 ### Structure d'un plugin
 
@@ -738,7 +1321,7 @@ manager.deactivate("mon_plugin")
 
 ---
 
-## 10. Schémas des bases de données
+## 11. Schémas des bases de données
 
 ### `catalog.db`
 
@@ -767,8 +1350,10 @@ CREATE TABLE photos (
     tags        TEXT,                  -- CSV "tag1,tag2"
     indexed_at  TEXT DEFAULT CURRENT_TIMESTAMP,
     media_type  TEXT DEFAULT 'image',  -- 'image' ou 'video'
-    duration    REAL DEFAULT 0.0       -- durée en secondes (vidéos)
+    duration    REAL DEFAULT 0.0,      -- durée en secondes (vidéos)
+    duplicate_group_id INTEGER         -- NULL si non dupliquée, cf. §9
 );
+CREATE INDEX idx_photos_dup_group ON photos(duplicate_group_id);
 
 CREATE TABLE albums (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -788,21 +1373,9 @@ CREATE TABLE persons (
     name        TEXT NOT NULL,
     created_at  TEXT DEFAULT CURRENT_TIMESTAMP
 );
-
--- Annotations de visages importées depuis Picasa (.picasa.ini)
-CREATE TABLE picasa_annotations (
-    id          INTEGER PRIMARY KEY AUTOINCREMENT,
-    photo_path  TEXT NOT NULL,
-    person_name TEXT NOT NULL,
-    rect_x1     REAL,   -- coordonnées relatives (0-1)
-    rect_y1     REAL,
-    rect_x2     REAL,
-    rect_y2     REAL,
-    imported_at TEXT DEFAULT CURRENT_TIMESTAMP
-);
 ```
 
-> Les colonnes `media_type` et `duration` sont ajoutées par migration automatique au démarrage si elles n'existent pas (`_migrate_video_fields()`).
+> Les colonnes `media_type`, `duration` et `duplicate_group_id` sont ajoutées par migration automatique au démarrage si elles n'existent pas (`_migrate_video_fields()`, migration doublons). **Note** : la table `persons` ci-dessus est la table de référence des personnes identifiées (id, name) — `faces.db` (ci-dessous) s'y réfère par `person_id` mais ne la duplique pas. Les visages, clusters et annotations Picasa (`picasa_annotations`), en revanche, vivent entièrement dans `faces.db`, jamais dans `catalog.db`.
 
 ### `thumbnails.db`
 
@@ -854,9 +1427,110 @@ CREATE INDEX idx_history_path ON edit_history(photo_path, id DESC);
 
 L'historique est **limité à 50 entrées par photo** (nettoyage dans `EditDatabase.save()`). À l'ouverture d'une photo, les 20 entrées les plus récentes sont chargées en mémoire.
 
+### `faces.db`
+
+```sql
+CREATE TABLE IF NOT EXISTS indexed_photos (
+    photo_path TEXT PRIMARY KEY,
+    indexed_at REAL NOT NULL,
+    face_count INTEGER DEFAULT 0,
+    rotation   INTEGER DEFAULT 0        -- migration
+);
+
+CREATE TABLE IF NOT EXISTS faces (
+    id                   INTEGER PRIMARY KEY AUTOINCREMENT,
+    photo_path           TEXT NOT NULL,
+    bbox_x               INTEGER NOT NULL,
+    bbox_y               INTEGER NOT NULL,
+    bbox_w               INTEGER NOT NULL,
+    bbox_h               INTEGER NOT NULL,
+    embedding            BLOB,               -- 512D float32, cf. get_all_person_centroids()
+    cluster_id           INTEGER,            -- NULL tant que non (re)clusterisé (HDBSCAN)
+    person_id            INTEGER,            -- FK logique vers catalog.db::persons.id
+    ignored              INTEGER DEFAULT 0,  -- migration — filtrage taille, cf. §8
+    pinned                INTEGER DEFAULT 0,  -- migration — épinglé comme couverture
+    is_cover              INTEGER DEFAULT 0,  -- migration
+    suggestion_person_id INTEGER DEFAULT NULL,  -- migration — cf. _SIM_SUGGEST
+    suggestion_score      REAL DEFAULT NULL,     -- migration
+    det_score             REAL DEFAULT 1.0       -- migration — score de détection InsightFace
+);
+CREATE INDEX idx_faces_person ON faces(person_id);       -- fingerprint centroïdes, cf. §8
+CREATE INDEX idx_faces_suggestion ON faces(suggestion_person_id);  -- créé APRÈS les migrations
+
+-- Annotations en attente importées depuis Picasa (.picasa.ini / contacts.xml)
+CREATE TABLE IF NOT EXISTS picasa_annotations (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    photo_path TEXT NOT NULL,
+    bbox_x     INTEGER NOT NULL,
+    bbox_y     INTEGER NOT NULL,
+    bbox_w     INTEGER NOT NULL,
+    bbox_h     INTEGER NOT NULL,
+    person_id  INTEGER NOT NULL,
+    consumed   INTEGER DEFAULT 0        -- consommée dès qu'un visage détecté matche (IoU ≥ 0.30)
+);
+
+CREATE TABLE IF NOT EXISTS face_index_errors (
+    photo_path   TEXT PRIMARY KEY,
+    error_type   TEXT NOT NULL,
+    last_attempt REAL NOT NULL,
+    excluded     INTEGER DEFAULT 0
+);
+```
+
+> Piège de migration (cf. `CLAUDE.md`) : `idx_faces_suggestion` doit être créé **après** les
+> migrations dans `_init_db` — `suggestion_person_id` n'existe pas dans le `CREATE TABLE` initial,
+> seulement via `ALTER TABLE`.
+
+### `dedup_cache.db`
+
+```sql
+CREATE TABLE IF NOT EXISTS meta (
+    key   TEXT PRIMARY KEY,
+    value TEXT
+);
+
+CREATE TABLE IF NOT EXISTS fingerprints (       -- Tier 1 (pHash)
+    path       TEXT PRIMARY KEY,
+    file_mtime REAL NOT NULL,
+    phash_hex  TEXT NOT NULL,
+    width      INTEGER NOT NULL,
+    height     INTEGER NOT NULL,
+    micro      BLOB NOT NULL                     -- micro-vignette 8×8 normalisée
+);
+
+CREATE TABLE IF NOT EXISTS orb_features (        -- Tier 2 (ORB + RANSAC)
+    path         TEXT PRIMARY KEY,
+    file_mtime   REAL NOT NULL,
+    width        INTEGER NOT NULL,
+    height       INTEGER NOT NULL,
+    keypoints_xy BLOB NOT NULL,
+    descriptors  BLOB NOT NULL,
+    image_jpeg   BLOB NOT NULL                    -- image réduite (≤ 800px), pour le diff pixel final
+);
+
+CREATE TABLE IF NOT EXISTS compared_tier1 (      -- chemins déjà comparés à tout le reste (Tier 1)
+    path       TEXT PRIMARY KEY,
+    file_mtime REAL NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS compared_tier2 (      -- idem, Tier 2
+    path       TEXT PRIMARY KEY,
+    file_mtime REAL NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS corrupted_files (
+    path        TEXT PRIMARY KEY,
+    detected_at REAL NOT NULL
+);
+```
+
+> C'est la présence dans `compared_tier1`/`compared_tier2` qui rend la détection de doublons
+> incrémentale (cf. §9) : seules les paires nouveau×ancien et nouveau×nouveau sont réévaluées,
+> jamais ancien×ancien.
+
 ---
 
-## 11. Modèle de threading
+## 12. Modèle de threading
 
 ```
 Thread UI (main)
@@ -873,19 +1547,46 @@ ThreadPool (QThreadPool global)
   └─ _ThumbWorker (QRunnable) × N   ← génération vignettes images et vidéos
        ├─ image : PIL.Image.open + resize
        ├─ vidéo : cv2.VideoCapture + frame extraction
-       ├─ thumbnail_cache.generate()  ← verrou threading.Lock
+       ├─ thumbnail_cache.generate()  ← verrou threading.Lock dédié (seule classe à en avoir un,
+       │                                 cf. §5 — évite la contention SQLite constatée avec 4+2
+       │                                 threads de vignettes actifs en parallèle de l'indexation
+       │                                 visages)
        └─ _ThumbSignals.ready.emit()  → reçu dans ThumbnailCell (UI)
+
+FaceIndexThread / SingleFaceReindexThread / ForceRedetectThread (QThread, face_indexer.py)
+  ├─ detector.detect_and_embed()  ← InsightFace (CPU/GPU, cf. gpu_utils.py)
+  └─ face_database.save_faces()   → faces.db, connexion thread-local
+
+ClusterThread (QThread, clusterer.py)
+  └─ _run_clustering() dans un process séparé (_clustering_worker_proc)
+       ├─ ThreadPoolExecutor/ProcessPoolExecutor initialisés via cpu_throttle.py
+       │    (throttled_worker_count() ≈ 15 % des cœurs, priorité OS abaissée)
+       └─ HDBSCAN + purification → face_database.update_clusters()
+
+DuplicateDetectorThread (QThread, duplicate_detector.py)
+  ├─ Tier 1 pHash : ThreadPoolExecutor(max_workers=throttled_worker_count())
+  ├─ Tier 2 ORB+RANSAC : idem, uniquement sur les photos non groupées au Tier 1
+  ├─ dedup_cache (DedupCache)  ← connexion thread-local dédiée à ce thread
+  └─ partial_results.emit() / finished.emit()  → reçus dans DuplicatesController (UI)
 ```
 
 **Règles** :
 1. Ne jamais modifier un widget Qt depuis un thread secondaire.
 2. Utiliser uniquement des signaux PySide6 pour communiquer vers l'UI depuis un thread.
-3. Tous les accès SQLite passent par le verrou `threading.Lock` de chaque classe.
+3. `Catalog`, `FaceDatabase`, `ThumbnailCache`, `EditDatabase` utilisent le pattern **connexion
+   SQLite par (instance, thread)** (`threading.local`, PRAGMAs WAL posés une fois) plutôt qu'un
+   verrou partagé — voir CLAUDE.md « Pattern de connexion ». Seul `ThumbnailCache` ajoute en plus
+   un `threading.Lock()` explicite autour de ses écritures (cf. ci-dessus). Toute méthode
+   d'écriture doit reprendre la garde `except BaseException: conn.rollback(); raise` pour ne
+   jamais laisser la connexion cachée dans une transaction ouverte.
 4. `_ThumbSignals` est un `QObject` distinct par worker, pas partagé, pour éviter les race conditions sur la destruction.
+5. Les tâches de fond continues (indexation visages, clustering, détection de doublons) passent
+   par `cpu_throttle.py` pour ne pas saturer la machine pendant que l'utilisateur travaille, et
+   journalisent leur activité via `thread_journal.py` (cf. §4, `Outils › Journal des threads…`).
 
 ---
 
-## 12. Normalisation des chemins Windows
+## 13. Normalisation des chemins Windows
 
 ### Le problème
 
@@ -908,7 +1609,7 @@ Sur Windows, `QFileDialog` retourne des chemins avec `/` (`D:/Photos`). `os.path
 
 ---
 
-## 13. Packaging et distribution
+## 14. Packaging et distribution
 
 ### Prérequis
 
@@ -919,10 +1620,31 @@ Sur Windows, `QFileDialog` retourne des chemins avec `/` (`D:/Photos`). `os.path
 ### Build
 
 ```powershell
-.\build.ps1                    # Script complet avec nettoyage et résumé
-# ou directement :
-.venv\Scripts\python.exe -m PyInstaller pixelphotomanager.spec --clean --noconfirm
+.\build.ps1                    # EXE + MSI (demande le numéro de version, tag git proposé par défaut)
+.\build.ps1 -Version 1.1.0     # EXE + MSI, version fournie directement (pas de prompt)
+.\build.ps1 -ExeOnly           # EXE uniquement
+.\build.ps1 -MsiOnly           # MSI uniquement (EXE déjà construit, VERSION déjà à jour)
 ```
+
+### Numéro de version
+
+Le fichier `VERSION` à la racine du dépôt (non versionné, régénéré à chaque build) est la
+source unique de vérité pour le numéro de version :
+
+- `build.ps1` le (re)génère : sans `-Version`, il propose le dernier tag git du dépôt
+  (`git tag --sort=-v:refname`, indépendant de la branche courante — pas `git describe`,
+  qui échoue si le tag n'est pas un ancêtre de HEAD) comme valeur par défaut.
+- `pixelphotomanager.spec` l'embarque dans l'exécutable (`datas`) ; `src/core/app_version.py::get_app_version()`
+  le lit en mode figé (`sys._MEIPASS / "VERSION"`), et retombe sur `git describe` en mode développement.
+- `installer\build_msi.ps1` le lit pour renseigner `Product/@Version` dans `installer/product.wxs`.
+
+`src/core/update_checker.py::UpdateCheckThread` compare cette version à la dernière release
+GitHub publiée (`api.github.com/repos/Christian73/PixelPhotoManager/releases/latest`, sans
+authentification). Utilisé au démarrage (`main_window.py`, notification silencieuse sauf si
+une mise à jour est disponible) et dans l'onglet **À propos** de l'aide (`help_dialog.py`,
+qui affiche aussi les états « à jour » et « erreur »). Quatre statuts : `STATUS_UPDATE_AVAILABLE`,
+`STATUS_UP_TO_DATE`, `STATUS_ERROR` (réseau/API), `STATUS_VERSION_UNKNOWN` (version locale non
+sémantique, typiquement un hash git en mode développement — à ne pas confondre avec une erreur réseau).
 
 ### Sortie
 
@@ -990,7 +1712,7 @@ else:
 
 ---
 
-## 14. Patterns à suivre pour les évolutions
+## 15. Patterns à suivre pour les évolutions
 
 ### Ajouter une retouche image
 
@@ -998,6 +1720,23 @@ else:
 2. **`src/processing/adjustments.py`** — Ajouter la méthode statique dans `ImageAdjuster` et l'appeler dans `apply_all()` à la bonne position dans l'ordre.
 3. **`src/ui/edit_panel.py`** — Ajouter un tuple dans `_TREATMENTS` (label, icône, sliders_def).
 4. **`src/processing/edit_database.py`** — Ajouter la colonne SQL via une migration `ALTER TABLE` dans `_init_db()` (pattern du `_MIGRATE_STRAIGHTEN` existant).
+
+> Une entrée de plus dans `_TREATMENTS` ajoute une ligne à la grille 2 colonnes du panneau :
+> vérifier `EditPanel.content_min_width()` (cf. `tests/gui_widgets/test_edit_panel.py::TestEditPanelContentMinWidth`),
+> sans quoi la colonne 2 peut devenir inatteignable au clic.
+
+### Ajouter un motif de cadre
+
+1. **`src/processing/frames.py`** — Ajouter le couple `(clé, libellé)` dans `FRAME_TYPES`, puis
+   le rendu dans `_band_array()` (bande NumPy en relief) ou `_ornament_layer()` (motif dessiné).
+   L'ajouter à `PARAMETRIC_FRAMES`/`STYLED_FRAMES` seulement s'il expose les réglages
+   correspondants.
+2. Ne rien changer à `border_px()`/`content_box()` : ils restent inverses l'un de l'autre, et
+   toute la géométrie interactive en dépend.
+3. **`tests/test_frames.py`** — Vérifier au minimum que le pixel central de la photo est
+   intact et que la bande extérieure ne déborde pas dans le contenu.
+4. Le dialogue (`frame_dialog.py`) découvre les motifs via `FRAME_TYPES` : aucune modification
+   n'y est nécessaire pour qu'un nouveau motif apparaisse dans la galerie.
 
 ### Ajouter un nouveau type de média
 
@@ -1041,3 +1780,60 @@ thread = MyThread()
 thread.result.connect(self._on_result)   # dans le thread UI
 thread.start()
 ```
+
+---
+
+## 16. Tests
+
+### 15.1 Trois couches
+
+| Layer | Dossier | Cible | Dépendances | Vitesse |
+|---|---|---|---|---|
+| 1 — Unitaire | `tests/test_*.py` | Logique pure (DB, géométrie, doublons…), sans Qt | `requirements.txt` | ms |
+| 2 — Widgets Qt | `tests/gui_widgets/` | Widgets isolés via `pytest-qt` (pas d'automation OS) | `requirements.txt` (`pytest-qt`) | ms–s |
+| 3 — Bout-en-bout (e2e) | `tests/e2e/` | La vraie application (`main.py`) pilotée via `pywinauto`, scénario complet UI | `requirements-test-e2e.txt`, **Windows uniquement** | minutes |
+
+```powershell
+# Layers 1+2 (défaut — c'est ce que documente CLAUDE.md)
+.venv\Scripts\python.exe -m pytest tests/
+
+# Un test précis
+.venv\Scripts\python.exe -m pytest tests/test_duplicate_detector.py -v
+
+# Layer 3 — nécessite requirements-test-e2e.txt installé au préalable
+.venv\Scripts\python.exe -m pytest tests/e2e -m e2e -v
+```
+
+`pytest.ini` définit `addopts = -m "not e2e"` : `pytest tests/` sans argument **n'exécute jamais** les scénarios e2e, il faut systématiquement `-m e2e` (ou `-m ""` pour tout inclure) pour les déclencher. Deux markers sont déclarés : `e2e` (lent, Windows-only, vole le focus) et `gui` (widget Qt via pytest-qt, rapide).
+
+Si `pywinauto` n'est pas installé, `tests/e2e/conftest.py` retire automatiquement `tests/e2e/scenarios/*` de la collecte (`collect_ignore_glob`) — `pytest tests/` continue de fonctionner normalement sans que Layer 3 soit disponible. Voir **`tests/e2e/README.md`** pour le détail complet de Layer 3 (mécanique de synchronisation via sondage direct des DB, ciblage d'éléments UIA, comment ajouter un scénario, limites connues).
+
+### 15.2 Isolation des données réelles
+
+Aucun test ne doit jamais lire ni écrire dans le vrai `%LOCALAPPDATA%\PixelPhotoManager` de l'utilisateur (catalogue, vignettes, retouches, config). Deux mécanismes, un par couche :
+
+- **Layers 1+2** : `tests/conftest.py` redirige la variable d'environnement `LOCALAPPDATA` vers un dossier temporaire de session, **avant tout import** de code applicatif (chargé par pytest avant tout fichier `tests/**/*.py`). Comme `src/core/app_dirs.py::APP_DATA_DIR` est une constante de module calculée une seule fois au premier import, cette redirection garantit qu'aucun composant (y compris ceux instanciés sans point d'injection explicite, ex. `EditPanel.__init__` → `EditDatabase()`) ne peut accidentellement toucher le profil réel. Cette mutation ne porte que sur le process `pytest` en cours, jamais sur le profil persistant de l'utilisateur. Les tests Layer 1 qui passent un `db_path=tmp_path/...` explicite au constructeur ajoutent une seconde couche d'isolation, indépendante de cette variable d'environnement.
+- **Layer 3** : `tools/test_env/launch_isolated.py` lance `main.py` en sous-processus avec `LOCALAPPDATA` fixé (uniquement dans le bloc d'environnement de cet enfant) sur un dossier temporaire dédié au test, contre une bibliothèque photo **synthétique et jetable** (`tools/test_env/generate_library.py`) — jamais les vraies photos de l'utilisateur.
+
+**Conséquence pratique** : les tests peuvent tourner sans risque pendant qu'une instance réelle de l'application est ouverte sur les données de production — aucun fichier (DB, config, vignettes) n'est partagé. Il n'existe pas de verrou "instance unique" dans le code, donc une deuxième instance (lancée par Layer 3) démarre sans conflit à côté de la réelle. Deux réserves cependant :
+1. **Log partagé en mode dev** : en mode non-figé, `main.py` écrit toujours dans `<repo>/logs/pixelphotomanager.log`, indépendamment de `LOCALAPPDATA` (seul le mode `sys.frozen` redirige vers `%LOCALAPPDATA%\PixelPhotoManager\logs\`). Si l'instance réelle tourne aussi via `python main.py` pendant un run Layer 3, les deux processus écrivent dans le même fichier — lignes entrelacées, sans corruption de données ni impact sur les tests.
+2. **`pywinauto` vole le focus réel** : `click_input()` envoie de vrais événements souris/clavier au niveau OS (voir `tests/e2e/README.md`, section limites connues). Éviter d'utiliser le clavier/la souris pendant l'exécution de scénarios Layer 3.
+
+### 15.3 Mesurer la couverture
+
+`pytest-cov` n'est pas dans `requirements.txt` (outil de développement, pas une dépendance applicative) :
+
+```powershell
+.venv\Scripts\pip.exe install pytest-cov
+.venv\Scripts\python.exe -m pytest tests/ --cov=src --cov-report=term-missing
+```
+
+Ajouter `--cov-report=html` pour un rapport navigable ligne par ligne (`htmlcov/index.html`).
+
+**État courant (2026-07)** : ~9 % de `src/` couvert par Layers 1+2. Bien couverts : `core/models.py`, `library/duplicate_detector.py` (68 %), `processing/edit_database.py` (71 %), `ui/edit_panel.py` (49 %), `ui/thumbnail_grid.py` (39 %). **Non couverts du tout** : tout `src/faces/` (détection, clustering, `face_database.py`, import Picasa), tout `src/core/` sauf `models.py`/`app_dirs.py` (bus d'événements, config, plugin manager), et la quasi-totalité de `src/ui/` (`main_window.py`, `photo_viewer.py`, `sidebar.py`, tous les dialogues). Ces zones ne sont exercées qu'indirectement via les 4 scénarios Layer 3 existants (voir `tests/e2e/README.md`).
+
+### 15.4 Écrire un nouveau test
+
+- **Logique pure sans Qt** → Layer 1, `tests/test_*.py`. Préférer un `db_path=tmp_path/...` explicite en plus de l'isolation `LOCALAPPDATA` du conftest.
+- **Un widget Qt isolé** (comportement, signaux, rendu) → Layer 2, `tests/gui_widgets/`, via `pytest-qt` (fixture `qtbot`). Pas d'automation OS, pas de fenêtre visible.
+- **Un scénario bout-en-bout impliquant plusieurs composants réels** (scan → catalogue → UI, ou toute régression déjà rencontrée en production) → Layer 3, `tests/e2e/scenarios/`. Suivre le guide « Ajouter un scénario » de `tests/e2e/README.md` : fixture `isolated_app`, toujours vérifier l'état via `catalog.db`/`edits.db` (`query_one`/`wait_for_condition`) plutôt que via le texte affiché à l'écran.

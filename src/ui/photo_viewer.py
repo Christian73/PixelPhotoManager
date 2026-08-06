@@ -5,214 +5,44 @@ import io
 import logging
 import math
 import os
+import uuid
 
 from PySide6.QtCore import Qt, QThread, QTimer, QUrl, Signal, Slot, QPoint, QRectF, QPointF, QSize, QFileInfo
 from PySide6.QtGui import (
     QDesktopServices, QPixmap, QPainter, QKeyEvent, QWheelEvent,
-    QMouseEvent, QPen, QColor, QPainterPath, QPolygonF, QIcon,
+    QMouseEvent, QPen, QBrush, QColor, QPainterPath, QPolygonF, QIcon, QFont, QTextCursor,
 )
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
-    QLabel, QSizePolicy, QToolButton, QButtonGroup, QMenu, QFileIconProvider,
+    QLabel, QSizePolicy, QToolButton, QButtonGroup, QMenu, QFileIconProvider, QTextEdit,
+    QComboBox,
 )
 
 from src.core.models import PhotoInfo, EditInfo
 from src.processing.edit_database import EditDatabase
 from src.processing.adjustments import ImageAdjuster
+from src.processing.annotation_geometry import catmull_rom_to_bezier_segments
+from src.ui.annotation_renderer import (
+    render_annotations, hit_test_annotations, annotation_screen_bounds,
+)
+from src.ui.ui_utils import install_menu_width_fix
 
 logger = logging.getLogger(__name__)
 
 # Résolution maximale pour l'affichage à l'écran.
 # Les retouches (rotation, recadrage, etc.) s'appliquent sur cette copie réduite.
 # L'image originale pleine résolution n'est utilisée que pour l'export final.
-_PREVIEW_MAX_PX = 1024
-
-
-def _to_rgb(img):
-    """Convertit une image PIL en RGB pour l'enregistrement JPEG.
-    RGBA est aplati sur fond blanc ; les autres modes (CMYK, P…) sont convertis directement."""
-    if img.mode == "RGBA":
-        from PIL import Image as _Image
-        bg = _Image.new("RGB", img.size, (255, 255, 255))
-        bg.paste(img, mask=img.split()[3])
-        return bg
-    if img.mode != "RGB":
-        return img.convert("RGB")
-    return img
-
-
-def _build_pixmap(photo: PhotoInfo, edit: EditInfo | None) -> "tuple[QPixmap, int, int] | None":
-    """Retourne (pixmap, orig_w, orig_h) — dimensions de l'image EXIF-corrigée avant
-    tout edit, à utiliser pour mapper les bbox de détection faciale."""
-    from pathlib import Path as _Path
-    from src.library.exif_reader import VIDEO_EXT
-    if _Path(photo.path).suffix.lower() in VIDEO_EXT:
-        return _build_video_pixmap(photo.path)
-    try:
-        from PIL import Image, ImageOps
-        with Image.open(photo.path) as img:
-            img = ImageOps.exif_transpose(img)
-            orig_w, orig_h = img.size   # dimensions EXIF-corrigées (référence pour les bbox)
-            if max(orig_w, orig_h) > _PREVIEW_MAX_PX:
-                scale = _PREVIEW_MAX_PX / max(orig_w, orig_h)
-                img = img.resize(
-                    (round(orig_w * scale), round(orig_h * scale)),
-                    Image.LANCZOS,
-                )
-            if edit and edit.is_modified():
-                img = ImageAdjuster.apply_all(img, edit)
-            img = _to_rgb(img)
-            buf = io.BytesIO()
-            img.save(buf, format="JPEG", quality=92)
-            pixmap = QPixmap()
-            pixmap.loadFromData(buf.getvalue())
-            return pixmap, orig_w, orig_h
-    except Exception as e:
-        logger.error(f"Erreur chargement photo {photo.path}: {e}")
-        return None
-
-
-def _build_video_base_image(video_path: str) -> "tuple[bytes, int, int] | None":
-    """
-    Extrait la première frame de la vidéo sans aucun seek.
-    Retourne (jpeg_bytes, orig_w, orig_h).
-
-    Utilise CAP_FFMPEG pour éviter les appels COM/DirectShow qui peuvent marshaler
-    du travail sur le thread UI (STA) et provoquer des freezes.
-    Ne lit jamais CAP_PROP_FRAME_COUNT ni cap.set(POS_FRAMES) : ces deux appels
-    peuvent scanner ou décoder tout le fichier pour les formats sans index.
-    """
-    try:
-        import cv2
-        from PIL import Image
-
-        cap = cv2.VideoCapture(video_path, cv2.CAP_FFMPEG)
-        if not cap.isOpened():
-            cap = cv2.VideoCapture(video_path)
-            if not cap.isOpened():
-                return None
-        orig_w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-        orig_h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-        ret, frame = cap.read()
-        cap.release()
-        if not ret or frame is None:
-            return None
-
-        frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        img = Image.fromarray(frame_rgb)
-        w, h = img.size
-        if max(w, h) > _PREVIEW_MAX_PX:
-            scale = _PREVIEW_MAX_PX / max(w, h)
-            img = img.resize((round(w * scale), round(h * scale)), Image.LANCZOS)
-        if img.mode != "RGB":
-            img = img.convert("RGB")
-        buf = io.BytesIO()
-        img.save(buf, format="JPEG", quality=92)
-        return buf.getvalue(), orig_w or w, orig_h or h
-    except Exception as e:
-        logger.error("Erreur base vidéo %s: %s", video_path, e)
-        return None
-
-
-def _build_base_image(photo: PhotoInfo) -> "tuple[bytes, int, int] | None":
-    """
-    Charge l'image (ou la première frame vidéo), applique la correction EXIF et réduit
-    à _PREVIEW_MAX_PX. Retourne (jpeg_bytes, orig_w, orig_h) SANS retouche.
-    Résultat mis en cache dans PhotoViewer._base_cache : évite de relire le fichier
-    complet à chaque mouvement de slider (preview de retouche).
-    """
-    from pathlib import Path as _Path
-    from src.library.exif_reader import VIDEO_EXT
-    if _Path(photo.path).suffix.lower() in VIDEO_EXT:
-        return _build_video_base_image(photo.path)
-    try:
-        from PIL import Image, ImageOps
-        with Image.open(photo.path) as img:
-            img = ImageOps.exif_transpose(img)
-            orig_w, orig_h = img.size
-            if max(orig_w, orig_h) > _PREVIEW_MAX_PX:
-                scale = _PREVIEW_MAX_PX / max(orig_w, orig_h)
-                img = img.resize(
-                    (round(orig_w * scale), round(orig_h * scale)), Image.LANCZOS
-                )
-            img = _to_rgb(img)
-            buf = io.BytesIO()
-            img.save(buf, format="JPEG", quality=95)
-            return buf.getvalue(), orig_w, orig_h
-    except Exception as e:
-        logger.error("Erreur base image %s: %s", photo.path, e)
-        return None
-
-
-def _apply_edit_to_base(base_bytes: bytes, edit: "EditInfo | None") -> "QPixmap | None":
-    """
-    Applique les retouches sur l'image de base en cache (bytes JPEG 1024px).
-    Aucune lecture disque — remplace _build_pixmap pour les previews.
-    """
-    try:
-        from PIL import Image
-        img = Image.open(io.BytesIO(base_bytes))
-        if edit and edit.is_modified():
-            img = ImageAdjuster.apply_all(img, edit)
-        img = _to_rgb(img)
-        buf = io.BytesIO()
-        img.save(buf, format="JPEG", quality=92)
-        pixmap = QPixmap()
-        pixmap.loadFromData(buf.getvalue())
-        return pixmap
-    except Exception as e:
-        logger.error("Erreur apply edit: %s", e)
-        return None
-
-
-def _build_video_pixmap(video_path: str) -> "tuple[QPixmap, int, int] | None":
-    """Extrait une frame de la vidéo pour l'afficher dans la visionneuse."""
-    try:
-        import cv2
-        from PIL import Image
-
-        cap = cv2.VideoCapture(video_path)
-        if not cap.isOpened():
-            return None
-        frame_count = cap.get(cv2.CAP_PROP_FRAME_COUNT)
-        if frame_count > 10:
-            cap.set(cv2.CAP_PROP_POS_FRAMES, int(frame_count * 0.1))
-        ret, frame = cap.read()
-        cap.release()
-        if not ret:
-            return None
-
-        frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        img = Image.fromarray(frame)
-        orig_w, orig_h = img.size
-        if max(orig_w, orig_h) > _PREVIEW_MAX_PX:
-            scale = _PREVIEW_MAX_PX / max(orig_w, orig_h)
-            img = img.resize((round(orig_w * scale), round(orig_h * scale)), Image.LANCZOS)
-        if img.mode != "RGB":
-            img = img.convert("RGB")
-        buf = io.BytesIO()
-        img.save(buf, format="JPEG", quality=92)
-        pixmap = QPixmap()
-        pixmap.loadFromData(buf.getvalue())
-        return pixmap, orig_w, orig_h
-    except Exception as e:
-        logger.error("Erreur chargement vidéo %s: %s", video_path, e)
-        return None
-
-
-def _make_rect_quad(x0: float, y0: float, x1: float, y1: float) -> list:
-    """Retourne [TL, TR, BR, BL] pour un rectangle axis-aligned."""
-    return [QPointF(x0, y0), QPointF(x1, y0), QPointF(x1, y1), QPointF(x0, y1)]
-
-# Formats de recadrage : (libellé, tooltip, ratio w/h ou None)
-# L'icône de chaque bouton montre visuellement l'orientation paysage/portrait.
-_CROP_FORMAT_DATA: list[tuple[str, str, float | None]] = [
-    ("Libre",  "Format libre — quadrilatère quelconque",  None),
-    ("10×15",  "10×15 horizontal  (ratio 3:2)",           3 / 2),
-    ("10×15",  "10×15 vertical  (ratio 2:3)",             2 / 3),
-    ("13×18",  "13×18 horizontal  (ratio 18:13)",         18 / 13),
-    ("13×18",  "13×18 vertical  (ratio 13:18)",           13 / 18),
-]
+# ------------------------------------------------------------------ modules extraits
+# (2026-07) Pipeline pixmap et canvas déplacés dans leurs modules ; noms
+# ré-exportés (le diaporama importe _build_pixmap depuis photo_viewer).
+from src.ui.viewer_pixmaps import (  # noqa: E402,F401
+    _PREVIEW_MAX_PX, _apply_edit_to_base, _build_base_image, _build_pixmap,
+    _build_video_base_image, _build_video_pixmap, _to_rgb,
+)
+from src.ui.viewer_canvas import (  # noqa: E402,F401
+    _ANNOTATION_CORNER_CURSORS, _CORNER_CURSORS, _CROP_FORMAT_DATA,
+    _EDGE_INDICES, _HANDLE_HIT, _Canvas, _InlineTextEdit, _make_rect_quad,
+)
 
 _BTN_CROP_STYLE = """
 QToolButton {
@@ -265,1375 +95,180 @@ def _fmt_icon(ratio: float | None, iw: int = 24, ih: int = 18) -> QPixmap:
     return px
 
 # 4 poignées de coin : TL(0), TR(1), BR(2), BL(3)
-_CORNER_CURSORS = [
-    Qt.SizeFDiagCursor,  # 0: TL
-    Qt.SizeBDiagCursor,  # 1: TR
-    Qt.SizeFDiagCursor,  # 2: BR
-    Qt.SizeBDiagCursor,  # 3: BL
-]
-_HANDLE_HIT = 10   # pixels de tolérance pour détecter une poignée de coin
-_EDGE_HIT   = 12   # pixels de tolérance pour détecter une poignée d'arête
-# Paires de coins formant chaque arête : haut, droite, bas, gauche
-_EDGE_INDICES = [(0, 1), (1, 2), (2, 3), (3, 0)]
 
 
-class _Canvas(QWidget):
-    zoom_changed                = Signal(float)
-    wheel_navigate              = Signal(int)    # ±1 photo
-    crop_confirmed              = Signal(object) # tuple 8 coords relatives (x0,y0,…,x3,y3)
-    context_menu_requested      = Signal(object) # QPoint global
-    red_eye_point_added         = Signal(float, float)  # cx_norm, cy_norm (0-1)
-    pixel_sampled               = Signal(int, int, int)  # R, G, B — pipette balance des blancs
-    face_context_menu_requested = Signal(object, object) # (FaceInfo, QPoint global)
-    vignette_changed            = Signal(object) # EditInfo (géométrie mise à jour par drag)
-    face_add_confirmed          = Signal(object) # tuple (bbox_x,bbox_y,bbox_w,bbox_h) int
+class _RatingStars(QWidget):
+    """5 étoiles cliquables (barre d'outils de la visionneuse). Re-cliquer sur
+    la note déjà affichée la retire (rating → 0)."""
+
+    rating_clicked = Signal(int)   # 0-5
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self._pixmap: QPixmap | None = None
-        self._zoom = 1.0
-        self._offset = QPointF(0, 0)
-        self._drag_start: QPoint | None = None
-        self._drag_offset_start = QPointF(0, 0)
-        # Crop
-        self._crop_mode   = False
-        self._crop_quad:  list[QPointF] | None = None   # [TL, TR, BR, BL] coords écran
-        self._crop_action: str | None   = None          # None | 'DRAWING' | 'MOVING' | 'RESIZING' | 'PANNING'
-        self._crop_handle: int | None   = None          # index coin actif (0-3)
-        self._aspect_ratio: float | None = None         # ratio largeur/hauteur verrouillé (None = libre)
-        self._drag_ratio:   float | None = None         # ratio effectif pour le drag en cours
-        self._crop_mouse_start:  QPointF | None = None
-        self._crop_quad_start:   list[QPointF] | None = None
-        self._crop_draw_start:   QPointF | None = None
-        self._grid_visible = False
-        # Visage(s) mis en surbrillance — un seul (FacePanel clic) ou tous (bouton "Tous")
-        self._highlighted_face  = None   # FaceInfo unique
-        self._highlighted_faces: list = []  # liste pour le mode "Tous"
-        self._orig_w: int = 0
-        self._orig_h: int = 0
-        self._current_edit = None   # EditInfo courant pour transformer les bbox
-        # Mode correction yeux rouges
-        self._red_eye_mode: bool = False
-        self._red_eye_radius: float = 0.03   # rayon normalisé (0-1) pour le curseur
-        self._red_eye_mouse: QPointF | None = None
-        # Mode pipette balance des blancs
-        self._wb_pick_mode: bool = False
-        # Mode vignette interactive
-        self._vignette_mode: bool = False
-        self._vignette_edit = None           # EditInfo courant de la vignette
-        self._vignette_drag: str | None = None
-        self._vignette_drag_start: "QPointF | None" = None
-        self._vignette_edit_start = None     # copie de EditInfo au début du drag
-        # Mode ajout manuel d'un visage (bbox non détectée par InsightFace)
-        self._face_add_mode: bool = False
-        self._face_add_rect: "QRectF | None" = None     # écran, rectangle axis-aligned
-        self._face_add_action: "str | None" = None      # None | 'DRAWING' | 'MOVING' | 'RESIZING'
-        self._face_add_handle: "int | None" = None       # index coin actif (0=TL,1=TR,2=BR,3=BL)
-        self._face_add_draw_start: "QPointF | None" = None
-        self._face_add_mouse_start: "QPointF | None" = None
-        self._face_add_rect_start: "QRectF | None" = None
-        self.setMouseTracking(True)
-        self.setFocusPolicy(Qt.NoFocus)
+        self._rating = 0
+        self._btns: list[QPushButton] = []
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+        for i in range(1, 6):
+            btn = QPushButton("☆")
+            btn.setFlat(True)
+            btn.setFixedWidth(20)
+            btn.setStyleSheet(
+                "QPushButton { color: #ccc; border: none; padding: 0; font-size: 14px; }"
+                "QPushButton:hover { color: #ffd200; }"
+            )
+            btn.setToolTip(f"Noter {i} étoile{'s' if i > 1 else ''}")
+            btn.clicked.connect(lambda _checked=False, n=i: self._on_star_clicked(n))
+            layout.addWidget(btn)
+            self._btns.append(btn)
 
-    # ------------------------------------------------------------------ pipette couleur
-
-    def start_color_pick(self) -> None:
-        """Active le mode pipette : prochain clic gauche → pixel_sampled(r, g, b)."""
-        self._wb_pick_mode = True
-        self.setCursor(Qt.CrossCursor)
-
-    def stop_color_pick(self) -> None:
-        self._wb_pick_mode = False
-        self.unsetCursor()
-
-    # ------------------------------------------------------------------ zoom
+    def _on_star_clicked(self, n: int) -> None:
+        new_rating = 0 if n == self._rating else n
+        self.set_rating(new_rating)
+        self.rating_clicked.emit(new_rating)
 
     @property
-    def zoom(self) -> float:
-        return self._zoom
+    def rating(self) -> int:
+        return self._rating
 
-    def set_pixmap(self, pixmap: QPixmap | None) -> None:
-        self._pixmap = pixmap
-        self.zoom_fit()
-
-    def zoom_fit(self) -> None:
-        if not self._pixmap or self._pixmap.isNull():
-            return
-        cw, ch = self.width() or 800, self.height() or 600
-        pw, ph = self._pixmap.width(), self._pixmap.height()
-        if pw == 0 or ph == 0:
-            return
-        self._zoom = min(cw / pw, ch / ph)
-        self._center()
-        self.zoom_changed.emit(self._zoom)
-        self.update()
-
-    def zoom_100(self) -> None:
-        self._zoom = 1.0
-        self._center()
-        self.zoom_changed.emit(self._zoom)
-        self.update()
-
-    def set_zoom(self, factor: float) -> None:
-        new_zoom = max(0.1, min(factor, 4.0))
-        if self._pixmap and self._zoom > 0:
-            # Zoom centré sur le centre du viewport : préserve le point visible central
-            ratio = new_zoom / self._zoom
-            cx, cy = self.width() / 2, self.height() / 2
-            self._offset = QPointF(
-                cx - (cx - self._offset.x()) * ratio,
-                cy - (cy - self._offset.y()) * ratio,
+    def set_rating(self, rating: int) -> None:
+        self._rating = max(0, min(5, int(rating)))
+        for i, btn in enumerate(self._btns, start=1):
+            btn.setText("★" if i <= self._rating else "☆")
+            btn.setStyleSheet(
+                "QPushButton { color: %s; border: none; padding: 0; font-size: 14px; }"
+                "QPushButton:hover { color: #ffd200; }"
+                % ("#ffd200" if i <= self._rating else "#ccc")
             )
-        self._zoom = new_zoom
-        self.update()
 
-    def _center(self) -> None:
-        if not self._pixmap:
-            return
-        cw, ch = self.width(), self.height()
-        pw = self._pixmap.width() * self._zoom
-        ph = self._pixmap.height() * self._zoom
-        self._offset = QPointF((cw - pw) / 2, (ch - ph) / 2)
 
-    # ------------------------------------------------------------------ crop helpers
+class _TagDropdown(QComboBox):
+    """Liste déroulante toujours présente des mots-clés du catalogue (barre
+    d'outils de la visionneuse) — pas seulement ceux de la photo courante.
+    Les mots-clés actifs sur la photo affichée sont triés en tête de liste,
+    en jaune (#ffd200) sur fond bleu (#2a5a8a, couleur du bouton Exporter).
+    Sélectionner une entrée bascule ce mot-clé sur la photo courante (ajout
+    si absent, retrait si déjà présent) ; la case reprend systématiquement
+    son texte de substitution après sélection (elle liste tous les
+    mots-clés, elle n'en "contient" pas un seul comme une combo classique)."""
 
-    def _img_rect(self) -> QRectF:
-        """Rect en coordonnées entières — identique à ce que drawPixmap dessine réellement."""
-        if not self._pixmap:
-            return QRectF()
-        return QRectF(
-            int(self._offset.x()), int(self._offset.y()),
-            int(self._pixmap.width()  * self._zoom),
-            int(self._pixmap.height() * self._zoom),
+    tag_toggled = Signal(str, bool)  # (tag, added) — True = ajouté, False = retiré
+
+    _ACTIVE_FG = "#ffd200"
+    _ACTIVE_BG = "#2a5a8a"
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setEditable(False)
+        self.setToolTip("Aucun mot-clé")
+        self.setFixedWidth(150)
+        # Le triangle CSS habituel (::down-arrow avec des bordures en biseau)
+        # ne se dessine pas ici : ce sous-contrôle bascule en mode "image
+        # personnalisée" dès qu'on le stylise, et sans image valide fournie
+        # il retombe sur un pictogramme d'image cassée (rectangle gris plein)
+        # plutôt qu'une vraie flèche, quel que soit le style Qt actif. Plus
+        # simple et fiable : la flèche est un label superposé au bord droit
+        # (positionné dans resizeEvent) et le sous-contrôle natif est réduit
+        # à zéro. WA_TransparentForMouseEvents laisse les clics traverser
+        # jusqu'au QComboBox en dessous (sinon la flèche capterait le clic
+        # et empêcherait l'ouverture de la liste).
+        self._arrow_label = QLabel("▾", self)
+        self._arrow_label.setStyleSheet("color: #ccc; background: transparent; font-size: 11px;")
+        self._arrow_label.setAttribute(Qt.WA_TransparentForMouseEvents)
+        self._active: set[str] = set()
+        self._apply_style()
+        self._set_placeholder()
+        self.activated.connect(self._on_activated)
+
+    def _apply_style(self) -> None:
+        # Vu au travers de setPlaceholderText (currentIndex reste -1 en
+        # permanence, cf. docstring de classe) : le "color" du QSS ci-dessous
+        # colore bien le texte de substitution, pas seulement un texte
+        # sélectionné classique — d'où la nécessité de regénérer toute la
+        # feuille de style pour changer sa couleur (une simple règle
+        # QComboBox[prop] n'était pas plus simple ici).
+        color = self._ACTIVE_FG if len(self._active) == 1 else "#ccc"
+        self.setStyleSheet(
+            f"QComboBox {{ color: {color}; background: rgba(255,255,255,25);"
+            " border: 1px solid rgba(255,255,255,60); border-radius: 8px;"
+            " padding: 1px 18px 1px 8px; font-size: 11px; }"
+            "QComboBox:hover { border: 1px solid rgba(255,255,255,90); }"
+            "QComboBox::drop-down { width: 0; border: none; }"
+            "QComboBox QAbstractItemView { outline: none; }"
         )
-
-    def _handle_positions(self) -> dict[int, QPointF]:
-        if not self._crop_quad:
-            return {}
-        return {i: QPointF(pt) for i, pt in enumerate(self._crop_quad)}
-
-    def _hit_handle(self, pos: QPointF) -> int | None:
-        for hid, hpos in self._handle_positions().items():
-            if (abs(pos.x() - hpos.x()) <= _HANDLE_HIT and
-                    abs(pos.y() - hpos.y()) <= _HANDLE_HIT):
-                return hid
-        return None
-
-    def _hit_center(self, pos: QPointF) -> bool:
-        if not self._crop_quad:
-            return False
-        cx = sum(pt.x() for pt in self._crop_quad) / 4
-        cy = sum(pt.y() for pt in self._crop_quad) / 4
-        xs = [pt.x() for pt in self._crop_quad]
-        ys = [pt.y() for pt in self._crop_quad]
-        half = max(16.0, min(max(xs) - min(xs), max(ys) - min(ys)) * 0.12)
-        return abs(pos.x() - cx) <= half and abs(pos.y() - cy) <= half
-
-    def _edge_handle_positions(self) -> dict[int, QPointF]:
-        if not self._crop_quad:
-            return {}
-        result = {}
-        for eid, (i, j) in enumerate(_EDGE_INDICES):
-            a, b = self._crop_quad[i], self._crop_quad[j]
-            result[eid] = QPointF((a.x() + b.x()) / 2, (a.y() + b.y()) / 2)
-        return result
-
-    def _hit_edge_handle(self, pos: QPointF) -> int | None:
-        for eid, mid in self._edge_handle_positions().items():
-            if (abs(pos.x() - mid.x()) <= _EDGE_HIT and
-                    abs(pos.y() - mid.y()) <= _EDGE_HIT):
-                return eid
-        return None
-
-    def _edge_cursor(self, eid: int) -> Qt.CursorShape:
-        i, j = _EDGE_INDICES[eid]
-        a, b = self._crop_quad[i], self._crop_quad[j]
-        return Qt.SizeVerCursor if abs(b.x() - a.x()) > abs(b.y() - a.y()) else Qt.SizeHorCursor
-
-    def _update_cursor_for_pos(self, pos: QPointF) -> None:
-        hid = self._hit_handle(pos)
-        if hid is not None:
-            self.setCursor(_CORNER_CURSORS[hid])
-            return
-        eid = self._hit_edge_handle(pos)
-        if eid is not None:
-            self.setCursor(self._edge_cursor(eid))
-        elif self._hit_center(pos):
-            self.setCursor(Qt.SizeAllCursor)
-        elif self._crop_quad is not None and self._img_rect().contains(pos):
-            self.setCursor(Qt.OpenHandCursor)
-        else:
-            self.setCursor(Qt.CrossCursor)
-
-    def _constrained_rect(self, s: QPointF, dx: float, dy: float,
-                          r: float, ir: QRectF) -> list:
-        """Rectangle à partir du point de départ s, delta (dx,dy) et ratio r=w/h."""
-        sx = 1 if dx >= 0 else -1
-        sy = 1 if dy >= 0 else -1
-        if abs(dy) < 1 or abs(dx) / (abs(dy) + 1e-9) >= r:
-            w = abs(dx)
-            h = w / r
-        else:
-            h = abs(dy)
-            w = h * r
-        max_w = (ir.right() - s.x()) * sx if sx > 0 else (s.x() - ir.left())
-        max_h = (ir.bottom() - s.y()) * sy if sy > 0 else (s.y() - ir.top())
-        w = min(w, max_w)
-        h = min(h, max_h)
-        if w / r > h:
-            w = h * r
-        else:
-            h = w / r
-        x0, x1 = (s.x(), s.x() + w) if sx > 0 else (s.x() - w, s.x())
-        y0, y1 = (s.y(), s.y() + h) if sy > 0 else (s.y() - h, s.y())
-        return _make_rect_quad(x0, y0, x1, y1)
-
-    def _apply_drag_corner(self, pos: QPointF) -> None:
-        if self._crop_quad is None or self._crop_handle is None:
-            return
-        ir = self._img_rect()
-        px = max(ir.left(), min(ir.right(),  pos.x()))
-        py = max(ir.top(),  min(ir.bottom(), pos.y()))
-        if self._drag_ratio is None:
-            self._crop_quad[self._crop_handle] = QPointF(px, py)
-            return
-        # Format verrouillé : le coin opposé est l'ancre, on recrée le rectangle
-        r   = self._drag_ratio
-        opp = (self._crop_handle + 2) % 4
-        fx  = self._crop_quad[opp].x()
-        fy  = self._crop_quad[opp].y()
-        dx, dy = px - fx, py - fy
-        if abs(dx) < 1 and abs(dy) < 1:
-            return
-        self._crop_quad = self._constrained_rect(QPointF(fx, fy), dx, dy, r, ir)
-
-    def _apply_drag_edge(self, pos: QPointF) -> None:
-        """Déplace l'arête en conservant l'orientation des côtés adjacents.
-        Chaque coin glisse le long de son côté adjacent — allongement/réduction seulement."""
-        if self._crop_quad is None or self._crop_handle is None:
-            return
-        if not self._crop_quad_start or not self._crop_mouse_start:
-            return
-        ir  = self._img_rect()
-        dx  = pos.x() - self._crop_mouse_start.x()
-        dy  = pos.y() - self._crop_mouse_start.y()
-        eid = self._crop_handle
-
-        if self._drag_ratio is not None:
-            # Format verrouillé : rectangle, bord opposé ancré, ratio maintenu
-            r = self._drag_ratio
-            xs = [pt.x() for pt in self._crop_quad_start]
-            ys = [pt.y() for pt in self._crop_quad_start]
-            x0, x1 = min(xs), max(xs)
-            y0, y1 = min(ys), max(ys)
-            cx, cy = (x0 + x1) / 2, (y0 + y1) / 2
-            if eid == 0:            # bord haut : y0 change
-                ny0 = max(ir.top(),    min(y1 - 1, y0 + dy))
-                h   = y1 - ny0
-                w   = min(h * r, ir.width())
-                h   = w / r
-                hx  = w / 2
-                cx2 = max(ir.left() + hx, min(ir.right() - hx, cx))
-                self._crop_quad = _make_rect_quad(cx2-hx, y1-h, cx2+hx, y1)
-            elif eid == 2:          # bord bas : y1 change
-                ny1 = max(y0 + 1,   min(ir.bottom(), y1 + dy))
-                h   = ny1 - y0
-                w   = min(h * r, ir.width())
-                h   = w / r
-                hx  = w / 2
-                cx2 = max(ir.left() + hx, min(ir.right() - hx, cx))
-                self._crop_quad = _make_rect_quad(cx2-hx, y0, cx2+hx, y0+h)
-            elif eid == 1:          # bord droit : x1 change
-                nx1 = max(x0 + 1,   min(ir.right(), x1 + dx))
-                w   = nx1 - x0
-                h   = min(w / r, ir.height())
-                w   = h * r
-                hy  = h / 2
-                cy2 = max(ir.top() + hy, min(ir.bottom() - hy, cy))
-                self._crop_quad = _make_rect_quad(x0, cy2-hy, x0+w, cy2+hy)
-            elif eid == 3:          # bord gauche : x0 change
-                nx0 = max(ir.left(), min(x1 - 1, x0 + dx))
-                w   = x1 - nx0
-                h   = min(w / r, ir.height())
-                w   = h * r
-                hy  = h / 2
-                cy2 = max(ir.top() + hy, min(ir.bottom() - hy, cy))
-                self._crop_quad = _make_rect_quad(x1-w, cy2-hy, x1, cy2+hy)
-            return
-
-        i, j = _EDGE_INDICES[self._crop_handle]
-        # Coin adjacent fixe pour chaque extrémité de l'arête
-        # Dans le cycle TL(0)-TR(1)-BR(2)-BL(3), les voisins de i (≠j) et j (≠i) sont :
-        i_adj = (i - 1) % 4
-        j_adj = (j + 1) % 4
-
-        q_i = self._crop_quad_start[i]       # position de départ du coin i
-        q_j = self._crop_quad_start[j]       # position de départ du coin j
-        p_i = self._crop_quad_start[i_adj]   # coin adjacent fixe de i
-        p_j = self._crop_quad_start[j_adj]   # coin adjacent fixe de j
-
-        # Normale à l'arête
-        ex, ey = q_j.x() - q_i.x(), q_j.y() - q_i.y()
-        length = math.hypot(ex, ey)
-        if length < 1:
-            return
-        nx, ny = -ey / length, ex / length
-
-        # Projection du déplacement souris sur la normale
-        proj = dx * nx + dy * ny
-
-        # Pour chaque coin : déplacement le long du côté adjacent
-        # new_corner = q + proj * (q - p) / ((q - p) · n)
-        # soit new_corner = q + proj * (sx, sy)
-        dq_i_dot_n = (q_i.x() - p_i.x()) * nx + (q_i.y() - p_i.y()) * ny
-        dq_j_dot_n = (q_j.x() - p_j.x()) * nx + (q_j.y() - p_j.y()) * ny
-        if abs(dq_i_dot_n) < 1e-9 or abs(dq_j_dot_n) < 1e-9:
-            return  # côté adjacent quasi-parallèle à l'arête — cas dégénéré
-
-        si_x = (q_i.x() - p_i.x()) / dq_i_dot_n
-        si_y = (q_i.y() - p_i.y()) / dq_i_dot_n
-        sj_x = (q_j.x() - p_j.x()) / dq_j_dot_n
-        sj_y = (q_j.y() - p_j.y()) / dq_j_dot_n
-
-        # Clamp proj pour que les deux nouveaux coins restent dans l'image
-        proj_min, proj_max = -1e9, 1e9
-        for sx, sy, qx, qy in [(si_x, si_y, q_i.x(), q_i.y()),
-                                 (sj_x, sj_y, q_j.x(), q_j.y())]:
-            if abs(sx) > 1e-9:
-                lo = (ir.left()  - qx) / sx
-                hi = (ir.right() - qx) / sx
-                if sx < 0:
-                    lo, hi = hi, lo
-                proj_min = max(proj_min, lo)
-                proj_max = min(proj_max, hi)
-            if abs(sy) > 1e-9:
-                lo = (ir.top()    - qy) / sy
-                hi = (ir.bottom() - qy) / sy
-                if sy < 0:
-                    lo, hi = hi, lo
-                proj_min = max(proj_min, lo)
-                proj_max = min(proj_max, hi)
-
-        proj = max(proj_min, min(proj_max, proj))
-
-        self._crop_quad[i] = QPointF(q_i.x() + proj * si_x, q_i.y() + proj * si_y)
-        self._crop_quad[j] = QPointF(q_j.x() + proj * sj_x, q_j.y() + proj * sj_y)
-
-    def _apply_move(self, pos: QPointF) -> None:
-        if not self._crop_quad_start or not self._crop_mouse_start:
-            return
-        ir = self._img_rect()
-        dx = pos.x() - self._crop_mouse_start.x()
-        dy = pos.y() - self._crop_mouse_start.y()
-        xs = [pt.x() for pt in self._crop_quad_start]
-        ys = [pt.y() for pt in self._crop_quad_start]
-        dx = max(ir.left() - min(xs), min(ir.right()  - max(xs), dx))
-        dy = max(ir.top()  - min(ys), min(ir.bottom() - max(ys), dy))
-        self._crop_quad = [QPointF(pt.x() + dx, pt.y() + dy) for pt in self._crop_quad_start]
-
-    # ------------------------------------------------------------------ crop coords helpers
-
-    def _crop_to_rel(self) -> tuple | None:
-        """Renvoie le quad en coords relatives (0-1) : (x0,y0,x1,y1,x2,y2,x3,y3)."""
-        if not self._crop_quad:
-            return None
-        ir = self._img_rect()
-        if ir.width() == 0 or ir.height() == 0:
-            return None
-        result = []
-        for pt in self._crop_quad:
-            result.append((pt.x() - ir.x()) / ir.width())
-            result.append((pt.y() - ir.y()) / ir.height())
-        return tuple(result)
-
-    def _crop_from_rel(self, rel: tuple) -> None:
-        """Restaure _crop_quad depuis des coords relatives.
-        Accepte l'ancien format rectangulaire (4 valeurs x,y,w,h) ou le nouveau quad (8 valeurs)."""
-        ir = self._img_rect()
-        if len(rel) == 4:
-            x, y, w, h = rel
-            self._crop_quad = [
-                QPointF(ir.x() + x       * ir.width(), ir.y() + y       * ir.height()),  # TL
-                QPointF(ir.x() + (x + w) * ir.width(), ir.y() + y       * ir.height()),  # TR
-                QPointF(ir.x() + (x + w) * ir.width(), ir.y() + (y + h) * ir.height()),  # BR
-                QPointF(ir.x() + x       * ir.width(), ir.y() + (y + h) * ir.height()),  # BL
-            ]
-        elif len(rel) == 8:
-            it = iter(rel)
-            self._crop_quad = [
-                QPointF(ir.x() + next(it) * ir.width(), ir.y() + next(it) * ir.height())
-                for _ in range(4)
-            ]
-
-    # ------------------------------------------------------------------ crop public
-
-    def enter_crop(self, existing_crop: tuple | None = None) -> None:
-        self._crop_mode        = True
-        self._crop_action      = None
-        self._crop_handle      = None
-        self._crop_mouse_start = None
-        self._crop_quad_start  = None
-        self._crop_draw_start  = None
-        if existing_crop:
-            self._crop_from_rel(existing_crop)
-        else:
-            self._crop_quad = None
-        self.setCursor(Qt.CrossCursor)
-        self.update()
-
-    def cancel_crop(self) -> None:
-        self._crop_mode   = False
-        self._crop_quad   = None
-        self._crop_action = None
-        self._crop_handle = None
-        self.setCursor(Qt.ArrowCursor)
-        self.update()
-
-    def set_aspect_ratio(self, ratio: float | None) -> None:
-        self._aspect_ratio = ratio
-        if ratio is not None and self._crop_quad:
-            self._fit_rect_to_ratio(ratio)
-        self.update()
-
-    def _locked_ratio_from_quad(self) -> float | None:
-        """Ratio verrouillé pour le drag en cours — utilise _aspect_ratio tel quel."""
-        return self._aspect_ratio
-
-    def _fit_rect_to_ratio(self, ratio: float) -> None:
-        """Recadre le quad au ratio donné en conservant l'aire (rotation 90° si changement
-        d'orientation, redimensionnement isométrique sinon)."""
-        if not self._crop_quad:
-            return
-        ir = self._img_rect()
-        xs = [pt.x() for pt in self._crop_quad]
-        ys = [pt.y() for pt in self._crop_quad]
-        cx = (min(xs) + max(xs)) / 2
-        cy = (min(ys) + max(ys)) / 2
-        w  = max(xs) - min(xs)
-        h  = max(ys) - min(ys)
-        # Nouvelles dimensions qui conservent l'aire : w_new*h_new = w*h et w_new/h_new = ratio
-        area = w * h
-        if area > 0:
-            w = math.sqrt(area * ratio)
-            h = math.sqrt(area / ratio)
-        # Clamper à l'image en re-enforçant le ratio
-        w = min(w, ir.width())
-        h = min(h, ir.height())
-        if w / ratio > h:
-            w = h * ratio
-        else:
-            h = w / ratio
-        hx, hy = w / 2, h / 2
-        cx = max(ir.left() + hx, min(ir.right()  - hx, cx))
-        cy = max(ir.top()  + hy, min(ir.bottom() - hy, cy))
-        self._crop_quad = _make_rect_quad(cx - hx, cy - hy, cx + hx, cy + hy)
-
-    def confirm_crop(self) -> None:
-        if not self._crop_mode or not self._crop_quad:
-            self.cancel_crop()
-            return
-        rel = self._crop_to_rel()
-        if rel is None:
-            self.cancel_crop()
-            return
-        clamped = tuple(max(0.0, min(1.0, v)) for v in rel)
-        self.cancel_crop()
-        self.crop_confirmed.emit(clamped)
-
-    # ------------------------------------------------------------------ paint
-
-    def set_grid_visible(self, visible: bool) -> None:
-        self._grid_visible = visible
-        self.update()
-
-    def _draw_grid(self, p: QPainter) -> None:
-        ir = self._img_rect()
-        if ir.width() < 1 or ir.height() < 1:
-            return
-        # Lignes fines en pointillés : 10 divisions régulières
-        pen_dots = QPen(QColor(255, 255, 255, 255), 0.8, Qt.DotLine)
-        p.setPen(pen_dots)
-        for i in range(1, 10):
-            t = i / 10
-            p.drawLine(QPointF(ir.left() + t * ir.width(), ir.top()),
-                       QPointF(ir.left() + t * ir.width(), ir.bottom()))
-            p.drawLine(QPointF(ir.left(),  ir.top() + t * ir.height()),
-                       QPointF(ir.right(), ir.top() + t * ir.height()))
-        # Lignes de tiers pleines (repères d'alignement clés)
-        p.setPen(QPen(QColor(255, 255, 255, 255), 1.2))
-        for t in (1 / 3, 2 / 3):
-            p.drawLine(QPointF(ir.left() + t * ir.width(), ir.top()),
-                       QPointF(ir.left() + t * ir.width(), ir.bottom()))
-            p.drawLine(QPointF(ir.left(),  ir.top() + t * ir.height()),
-                       QPointF(ir.right(), ir.top() + t * ir.height()))
-
-    def set_orig_size(self, w: int, h: int) -> None:
-        """Dimensions EXIF-corrigées de l'image chargée (source de vérité pour les bbox)."""
-        self._orig_w = w
-        self._orig_h = h
-
-    def set_edit(self, edit) -> None:
-        """Edit courant à prendre en compte pour le mapping bbox → écran."""
-        self._current_edit = edit
-
-    # ------------------------------------------------------------------ ajout manuel de visage
-
-    def enter_face_add_mode(self) -> None:
-        self._face_add_mode   = True
-        self._face_add_rect   = None
-        self._face_add_action = None
-        self._face_add_handle = None
-        self.setCursor(Qt.CrossCursor)
-        self.update()
-
-    def cancel_face_add_mode(self) -> None:
-        self._face_add_mode   = False
-        self._face_add_rect   = None
-        self._face_add_action = None
-        self._face_add_handle = None
-        self.unsetCursor()
-        self.update()
-
-    def confirm_face_add(self) -> None:
-        rect = self._face_add_rect
-        self.cancel_face_add_mode()
-        if rect is None or rect.width() < 8 or rect.height() < 8:
-            return
-        bbox = self._bbox_from_screen_rect(rect)
-        if bbox is not None:
-            self.face_add_confirmed.emit(bbox)
-
-    def _face_add_handle_positions(self, rect: QRectF) -> dict[int, QPointF]:
-        return {
-            0: rect.topLeft(), 1: rect.topRight(),
-            2: rect.bottomRight(), 3: rect.bottomLeft(),
-        }
-
-    def _face_add_hit_handle(self, pos: QPointF) -> "int | None":
-        if self._face_add_rect is None:
-            return None
-        for idx, hpos in self._face_add_handle_positions(self._face_add_rect).items():
-            if (abs(pos.x() - hpos.x()) <= _HANDLE_HIT and
-                    abs(pos.y() - hpos.y()) <= _HANDLE_HIT):
-                return idx
-        return None
-
-    def _apply_face_add_resize(self, pos: QPointF) -> None:
-        if self._face_add_rect_start is None or self._face_add_handle is None:
-            return
-        r = self._face_add_rect_start
-        ir = self._img_rect()
-        x = max(ir.left(), min(ir.right(), pos.x()))
-        y = max(ir.top(), min(ir.bottom(), pos.y()))
-        if self._face_add_handle == 0:      # TL
-            rect = QRectF(QPointF(x, y), r.bottomRight())
-        elif self._face_add_handle == 1:    # TR
-            rect = QRectF(QPointF(r.left(), y), QPointF(x, r.bottom()))
-        elif self._face_add_handle == 2:    # BR
-            rect = QRectF(r.topLeft(), QPointF(x, y))
-        else:                               # BL
-            rect = QRectF(QPointF(x, r.top()), QPointF(r.right(), y))
-        self._face_add_rect = rect.normalized()
-
-    def _apply_face_add_move(self, pos: QPointF) -> None:
-        if self._face_add_rect_start is None or self._face_add_mouse_start is None:
-            return
-        ir = self._img_rect()
-        r  = self._face_add_rect_start
-        dx = pos.x() - self._face_add_mouse_start.x()
-        dy = pos.y() - self._face_add_mouse_start.y()
-        nx = max(ir.left(), min(ir.right()  - r.width(),  r.x() + dx))
-        ny = max(ir.top(),  min(ir.bottom() - r.height(), r.y() + dy))
-        self._face_add_rect = QRectF(nx, ny, r.width(), r.height())
-
-    def _bbox_from_screen_rect(self, rect: QRectF) -> "tuple[int, int, int, int] | None":
-        """Inverse de _face_screen_rect() pour detected_rotation=0 — le seul cas
-        pertinent pour un visage ajouté manuellement (embedding=NULL garantit que
-        detected_rotation résoudra à 0 à la relecture, cf. add_manual_face)."""
-        if self._pixmap is None or self._orig_w == 0 or self._orig_h == 0:
-            return None
-        dw0, dh0 = float(self._orig_w), float(self._orig_h)
-
-        # Dimensions après rotation puis crop de l'edit courant (même logique
-        # géométrique que _face_screen_rect, mais uniquement les tailles ici).
-        dw_postrot, dh_postrot = dw0, dh0
-        edit = self._current_edit
-        rot = 0
-        cx_rel, cy_rel, cw_rel, ch_rel = 0.0, 0.0, 1.0, 1.0
-        if edit is not None:
-            rot = int(round(getattr(edit, "rotation", 0.0))) % 360
-            if rot in (90, 270):
-                dw_postrot, dh_postrot = dh0, dw0
-            crop = getattr(edit, "crop", None)
-            if crop and len(crop) == 4:
-                cx_rel, cy_rel, cw_rel, ch_rel = crop
-            elif crop and len(crop) == 8:
-                xs = [crop[i] for i in range(0, 8, 2)]
-                ys = [crop[i] for i in range(1, 8, 2)]
-                cx_rel, cy_rel = min(xs), min(ys)
-                cw_rel, ch_rel = max(xs) - cx_rel, max(ys) - cy_rel
-
-        dw_crop = cw_rel * dw_postrot
-        dh_crop = ch_rel * dh_postrot
-        if dw_crop <= 0 or dh_crop <= 0 or self._zoom <= 0:
-            return None
-
-        # 1) écran → espace pixmap (post-rotation, post-crop)
-        sx = self._pixmap.width()  / dw_crop
-        sy = self._pixmap.height() / dh_crop
-        if sx <= 0 or sy <= 0:
-            return None
-        bx = (rect.x() - self._offset.x()) / (sx * self._zoom)
-        by = (rect.y() - self._offset.y()) / (sy * self._zoom)
-        bw = rect.width()  / (sx * self._zoom)
-        bh = rect.height() / (sy * self._zoom)
-
-        # 2) undo crop → espace post-rotation
-        bx += cx_rel * dw_postrot
-        by += cy_rel * dh_postrot
-
-        # 3) undo flip (toujours en espace post-rotation)
-        if edit is not None:
-            if getattr(edit, "flip_h", False):
-                bx = dw_postrot - bx - bw
-            if getattr(edit, "flip_v", False):
-                by = dh_postrot - by - bh
-
-        # 4) undo rotation edit → espace EXIF-corrigé d'origine (dw0, dh0)
-        if rot == 90:
-            bx, by, bw, bh = by, dh0 - bx - bw, bh, bw
-        elif rot == 180:
-            bx, by, bw, bh = dw0 - bx - bw, dh0 - by - bh, bw, bh
-        elif rot == 270:
-            bx, by, bw, bh = dw0 - by - bh, bx, bh, bw
-
-        bx = max(0.0, min(bx, dw0 - 1))
-        by = max(0.0, min(by, dh0 - 1))
-        bw = max(1.0, min(bw, dw0 - bx))
-        bh = max(1.0, min(bh, dh0 - by))
-        return int(round(bx)), int(round(by)), int(round(bw)), int(round(bh))
-
-    # ------------------------------------------------------------------ vignette interactive
-
-    def enter_vignette_mode(self, edit) -> None:
-        self._vignette_mode = True
-        self._vignette_edit = copy.copy(edit)
-        self._vignette_drag = None
-        self.update()
-
-    def exit_vignette_mode(self) -> None:
-        self._vignette_mode = False
-        self._vignette_edit = None
-        self._vignette_drag = None
-        self.update()
-
-    def update_vignette(self, edit) -> None:
-        if self._vignette_mode:
-            self._vignette_edit = copy.copy(edit)
-            self.update()
-
-    def _vignette_handle_positions(self) -> dict:
-        if not self._vignette_edit or not self._pixmap:
-            return {}
-        ir = self._img_rect()
-        if ir.width() <= 0 or ir.height() <= 0:
-            return {}
-        e = self._vignette_edit
-        cx_s  = ir.x() + e.vignette_cx * ir.width()
-        cy_s  = ir.y() + e.vignette_cy * ir.height()
-        rx1_s = e.vignette_rx1 * ir.width()  / 2.0
-        ry1_s = e.vignette_ry1 * ir.height() / 2.0
-        rx2_s = e.vignette_rx2 * ir.width()  / 2.0
-        ry2_s = e.vignette_ry2 * ir.height() / 2.0
-        rad   = math.radians(e.vignette_angle)
-        cos_a = math.cos(rad)
-        sin_a = math.sin(rad)
-
-        def rot(ldx, ldy):
-            return (ldx * cos_a - ldy * sin_a, ldx * sin_a + ldy * cos_a)
-
-        def s(ldx, ldy):
-            rdx, rdy = rot(ldx, ldy)
-            return QPointF(cx_s + rdx, cy_s + rdy)
-
-        return {
-            'center':  QPointF(cx_s, cy_s),
-            'inner_n': s(0,      -ry1_s),
-            'inner_s': s(0,      +ry1_s),
-            'inner_e': s(+rx1_s, 0),
-            'inner_w': s(-rx1_s, 0),
-            'outer_n': s(0,      -ry2_s),
-            'outer_s': s(0,      +ry2_s),
-            'outer_e': s(+rx2_s, 0),
-            'outer_w': s(-rx2_s, 0),
-            'rotate':  s(0,      -(ry2_s + 28)),
-        }
-
-    def _vignette_hit_test(self, pos: QPointF) -> "str | None":
-        HIT_R = 12
-        for name, hpos in self._vignette_handle_positions().items():
-            if math.hypot(pos.x() - hpos.x(), pos.y() - hpos.y()) <= HIT_R:
-                return name
-        return None
-
-    def _vignette_update_drag(self, pos: QPointF) -> None:
-        if not self._vignette_drag or not self._vignette_edit_start or not self._vignette_drag_start:
-            return
-        ir = self._img_rect()
-        if ir.width() <= 0 or ir.height() <= 0:
-            return
-
-        e0  = self._vignette_edit_start
-        dx  = pos.x() - self._vignette_drag_start.x()
-        dy  = pos.y() - self._vignette_drag_start.y()
-        rad = math.radians(e0.vignette_angle)
-        cos_a = math.cos(rad)
-        sin_a = math.sin(rad)
-        handle = self._vignette_drag
-        e = copy.copy(e0)
-
-        if handle == 'center':
-            e.vignette_cx = max(0.0, min(1.0, e0.vignette_cx + dx / ir.width()))
-            e.vignette_cy = max(0.0, min(1.0, e0.vignette_cy + dy / ir.height()))
-        elif handle == 'inner_n':
-            proj = dx * sin_a + dy * (-cos_a)
-            e.vignette_ry1 = max(0.05, e0.vignette_ry1 + proj / (ir.height() / 2.0))
-        elif handle == 'inner_s':
-            proj = dx * (-sin_a) + dy * cos_a
-            e.vignette_ry1 = max(0.05, e0.vignette_ry1 + proj / (ir.height() / 2.0))
-        elif handle == 'inner_e':
-            proj = dx * cos_a + dy * sin_a
-            e.vignette_rx1 = max(0.05, e0.vignette_rx1 + proj / (ir.width() / 2.0))
-        elif handle == 'inner_w':
-            proj = dx * (-cos_a) + dy * (-sin_a)
-            e.vignette_rx1 = max(0.05, e0.vignette_rx1 + proj / (ir.width() / 2.0))
-        elif handle == 'outer_n':
-            proj = dx * sin_a + dy * (-cos_a)
-            e.vignette_ry2 = max(0.05, e0.vignette_ry2 + proj / (ir.height() / 2.0))
-        elif handle == 'outer_s':
-            proj = dx * (-sin_a) + dy * cos_a
-            e.vignette_ry2 = max(0.05, e0.vignette_ry2 + proj / (ir.height() / 2.0))
-        elif handle == 'outer_e':
-            proj = dx * cos_a + dy * sin_a
-            e.vignette_rx2 = max(0.05, e0.vignette_rx2 + proj / (ir.width() / 2.0))
-        elif handle == 'outer_w':
-            proj = dx * (-cos_a) + dy * (-sin_a)
-            e.vignette_rx2 = max(0.05, e0.vignette_rx2 + proj / (ir.width() / 2.0))
-        elif handle == 'rotate':
-            cx_s = ir.x() + e0.vignette_cx * ir.width()
-            cy_s = ir.y() + e0.vignette_cy * ir.height()
-            a0 = math.degrees(math.atan2(
-                self._vignette_drag_start.y() - cy_s,
-                self._vignette_drag_start.x() - cx_s))
-            ac = math.degrees(math.atan2(pos.y() - cy_s, pos.x() - cx_s))
-            e.vignette_angle = (e0.vignette_angle + ac - a0) % 360.0
-
-        self._vignette_edit = e
-        self.vignette_changed.emit(copy.copy(e))
-        self.update()
-
-    def _draw_vignette_overlay(self, p: QPainter) -> None:
-        if not self._vignette_edit or not self._pixmap:
-            return
-        ir = self._img_rect()
-        if ir.width() <= 0 or ir.height() <= 0:
-            return
-        e = self._vignette_edit
-        cx_s  = ir.x() + e.vignette_cx * ir.width()
-        cy_s  = ir.y() + e.vignette_cy * ir.height()
-        rx1_s = e.vignette_rx1 * ir.width()  / 2.0
-        ry1_s = e.vignette_ry1 * ir.height() / 2.0
-        rx2_s = e.vignette_rx2 * ir.width()  / 2.0
-        ry2_s = e.vignette_ry2 * ir.height() / 2.0
-
-        # Ellipse interne — pointillés jaunes
-        p.save()
-        p.translate(cx_s, cy_s)
-        p.rotate(e.vignette_angle)
-        p.setPen(QPen(QColor(255, 200, 0, 210), 1.5, Qt.DashLine))
-        p.setBrush(Qt.NoBrush)
-        p.drawEllipse(QPointF(0, 0), rx1_s, ry1_s)
-        p.restore()
-
-        # Ellipse externe — trait continu jaune
-        p.save()
-        p.translate(cx_s, cy_s)
-        p.rotate(e.vignette_angle)
-        p.setPen(QPen(QColor(255, 200, 0, 210), 1.5))
-        p.setBrush(Qt.NoBrush)
-        p.drawEllipse(QPointF(0, 0), rx2_s, ry2_s)
-        p.restore()
-
-        handles = self._vignette_handle_positions()
-
-        # Tige de rotation (outer_n → rotate)
-        outer_n = handles.get('outer_n')
-        rot_h   = handles.get('rotate')
-        if outer_n and rot_h:
-            p.setPen(QPen(QColor(255, 200, 0, 130), 1, Qt.DotLine))
-            p.drawLine(outer_n, rot_h)
-
-        HS = 6
-        for name, hpos in handles.items():
-            active = (name == self._vignette_drag)
-            fill   = QColor(255, 200, 0, 230 if active else 160)
-            border = QPen(QColor(160, 120, 0, 230), 1.5)
-
-            if name == 'center':
-                p.setPen(QPen(QColor(255, 200, 0, 210), 1.5))
-                p.setBrush(Qt.NoBrush)
-                arm = 10
-                p.drawLine(QPointF(hpos.x()-arm, hpos.y()), QPointF(hpos.x()+arm, hpos.y()))
-                p.drawLine(QPointF(hpos.x(), hpos.y()-arm), QPointF(hpos.x(), hpos.y()+arm))
-                p.drawEllipse(hpos, 4.0, 4.0)
-            elif name == 'rotate':
-                p.setPen(border)
-                p.setBrush(fill)
-                p.drawEllipse(hpos, HS + 1, HS + 1)
-            elif name.startswith('inner_'):
-                p.setPen(border)
-                p.setBrush(fill)
-                p.drawEllipse(hpos, HS, HS)
-            else:  # outer_n/s/e/w
-                p.setPen(border)
-                p.setBrush(fill)
-                p.drawRect(QRectF(hpos.x()-HS, hpos.y()-HS, HS*2, HS*2))
-
-    # ------------------------------------------------------------------ red-eye mode
-
-    def enter_red_eye_mode(self, radius: float = 0.03) -> None:
-        self._red_eye_mode = True
-        self._red_eye_radius = max(0.005, radius)
-        self._red_eye_mouse = None
-        self.setCursor(Qt.CrossCursor)
-        self.update()
-
-    def exit_red_eye_mode(self) -> None:
-        self._red_eye_mode = False
-        self._red_eye_mouse = None
-        self.setCursor(Qt.ArrowCursor)
-        self.update()
-
-    def set_red_eye_radius(self, radius: float) -> None:
-        self._red_eye_radius = max(0.005, radius)
-        self.update()
-
-    def _red_eye_screen_radius(self) -> float:
-        """Rayon du curseur yeux rouges en pixels écran."""
-        if not self._pixmap:
-            return 20.0
-        return self._red_eye_radius * min(self._pixmap.width(), self._pixmap.height()) * self._zoom
-
-    def _draw_red_eye_overlay(self, p: QPainter) -> None:
-        if not self._red_eye_mouse or not self._pixmap:
-            return
-        r = self._red_eye_screen_radius()
-        center = self._red_eye_mouse
-        p.setPen(QPen(QColor(220, 60, 60, 200), 1.5))
-        p.setBrush(QColor(220, 60, 60, 40))
-        p.drawEllipse(center, r, r)
-        # Réticule
-        p.setPen(QPen(QColor(220, 60, 60, 160), 1))
-        arm = r * 0.6
-        p.drawLine(QPointF(center.x() - arm, center.y()), QPointF(center.x() + arm, center.y()))
-        p.drawLine(QPointF(center.x(), center.y() - arm), QPointF(center.x(), center.y() + arm))
-
-    def set_highlighted_face(self, face) -> None:
-        self._highlighted_face  = face
-        self._highlighted_faces = []
-        self.update()
-
-    def set_highlighted_faces(self, faces: list) -> None:
-        self._highlighted_faces = list(faces)
-        self._highlighted_face  = None
-        self.update()
-
-    def _face_screen_rect(self, face=None) -> "QRectF | None":
-        f = face if face is not None else self._highlighted_face
-        if f is None or self._pixmap is None or self._orig_w == 0 or self._orig_h == 0:
-            return None
-        # bbox stocké dans l'espace de l'image après detected_rotation CW supplémentaire.
-        # On ramène dans l'espace d'affichage (image EXIF-corrigée, sans rotation extra).
-        bx, by, bw, bh = float(f.bbox_x), float(f.bbox_y), float(f.bbox_w), float(f.bbox_h)
-        r = getattr(f, "detected_rotation", 0) % 360
-        dw, dh = float(self._orig_w), float(self._orig_h)
-        if r == 90:
-            bx, by, bw, bh = by, dh - bx - bw, bh, bw
-        elif r == 180:
-            bx, by, bw, bh = dw - bx - bw, dh - by - bh, bw, bh
-        elif r == 270:
-            bx, by, bw, bh = dw - by - bh, bx, bh, bw
-
-        # Appliquer les transformations géométriques de l'edit (même ordre que apply_all) :
-        # rotation CW → straighten (ignoré, petit angle) → flip → crop
-        edit = self._current_edit
-        if edit is not None:
-            rot = int(round(getattr(edit, "rotation", 0.0))) % 360
-            if rot == 90:
-                bx, by, bw, bh = dh - by - bh, bx, bh, bw
-                dw, dh = dh, dw
-            elif rot == 180:
-                bx, by, bw, bh = dw - bx - bw, dh - by - bh, bw, bh
-            elif rot == 270:
-                bx, by, bw, bh = by, dw - bx - bw, bh, bw
-                dw, dh = dh, dw
-
-            if getattr(edit, "flip_h", False):
-                bx = dw - bx - bw
-            if getattr(edit, "flip_v", False):
-                by = dh - by - bh
-
-            crop = getattr(edit, "crop", None)
-            if crop and len(crop) == 4:
-                cx, cy, cw, ch = crop
-                bx = bx - cx * dw
-                by = by - cy * dh
-                dw = cw * dw
-                dh = ch * dh
-            elif crop and len(crop) == 8:
-                # Format quad TL,TR,BR,BL (coords relatives 0-1)
-                xs = [crop[i] for i in range(0, 8, 2)]
-                ys = [crop[i] for i in range(1, 8, 2)]
-                cx, cy = min(xs), min(ys)
-                cw, ch = max(xs) - cx, max(ys) - cy
-                bx = bx - cx * dw
-                by = by - cy * dh
-                dw = cw * dw
-                dh = ch * dh
-
-        # Mise à l'échelle pixmap puis zoom
-        sx = self._pixmap.width()  / dw
-        sy = self._pixmap.height() / dh
-        x = self._offset.x() + bx * sx * self._zoom
-        y = self._offset.y() + by * sy * self._zoom
-        w = bw * sx * self._zoom
-        h = bh * sy * self._zoom
-        return QRectF(x, y, w, h)
-
-    def _draw_one_face_rect(self, p: QPainter, rect: "QRectF") -> None:
-        p.fillRect(rect, QColor(74, 159, 212, 45))
-        p.setPen(QPen(QColor(74, 159, 212), 2.5))
-        p.setBrush(Qt.NoBrush)
-        p.drawRect(rect)
-        p.setPen(QPen(QColor(130, 200, 255), 3))
-        arm = min(rect.width(), rect.height()) * 0.18
-        for cx, cy, dx, dy in [
-            (rect.left(),  rect.top(),    1,  1),
-            (rect.right(), rect.top(),   -1,  1),
-            (rect.right(), rect.bottom(),-1, -1),
-            (rect.left(),  rect.bottom(), 1, -1),
-        ]:
-            p.drawLine(QPointF(cx, cy), QPointF(cx + dx * arm, cy))
-            p.drawLine(QPointF(cx, cy), QPointF(cx, cy + dy * arm))
-
-    def _draw_face_highlight(self, p: QPainter) -> None:
-        faces = self._highlighted_faces or (
-            [self._highlighted_face] if self._highlighted_face is not None else []
-        )
-        for face in faces:
-            rect = self._face_screen_rect(face)
-            if rect is not None:
-                self._draw_one_face_rect(p, rect)
-
-    def paintEvent(self, _event) -> None:
-        p = QPainter(self)
-        p.setRenderHint(QPainter.SmoothPixmapTransform)
-        p.fillRect(self.rect(), QColor(30, 30, 30))
-        if self._pixmap and not self._pixmap.isNull():
-            pw = int(self._pixmap.width() * self._zoom)
-            ph = int(self._pixmap.height() * self._zoom)
-            p.drawPixmap(int(self._offset.x()), int(self._offset.y()), pw, ph, self._pixmap)
-            if self._highlighted_face is not None or self._highlighted_faces:
-                self._draw_face_highlight(p)
-            if self._red_eye_mode:
-                self._draw_red_eye_overlay(p)
-            if self._grid_visible:
-                self._draw_grid(p)
-            if self._crop_mode:
-                self._draw_crop_overlay(p)
-            if self._vignette_mode:
-                self._draw_vignette_overlay(p)
-            if self._face_add_mode:
-                self._draw_face_add_overlay(p)
-
-    def _draw_face_add_overlay(self, p: QPainter) -> None:
-        ir = self._img_rect()
-        p.setPen(QPen(QColor(255, 200, 60, 160), 2))
-        p.setBrush(Qt.NoBrush)
-        p.drawRect(ir)
-        if self._face_add_rect is None:
-            return
-        rect = self._face_add_rect
-        p.setPen(QPen(QColor(255, 200, 60), 2, Qt.DashLine))
-        p.drawRect(rect)
-        hs = 8
-        p.setBrush(QColor(255, 200, 60))
-        p.setPen(Qt.NoPen)
-        for pt in (rect.topLeft(), rect.topRight(), rect.bottomRight(), rect.bottomLeft()):
-            p.drawRect(QRectF(pt.x() - hs / 2, pt.y() - hs / 2, hs, hs))
-
-    def _draw_crop_overlay(self, p: QPainter) -> None:
-        ir = self._img_rect()
-
-        # Bordure de mode crop (liseré autour de l'image)
-        p.setPen(QPen(QColor(255, 255, 255, 120), 2))
-        p.setBrush(Qt.NoBrush)
-        p.drawRect(ir)
-
-        if not self._crop_quad:
-            return
-
-        tl, tr, br, bl = self._crop_quad
-        poly = QPolygonF([tl, tr, br, bl])
-
-        # Zone sombre hors du quadrilatère
-        outer = QPainterPath()
-        outer.addRect(ir)
-        inner = QPainterPath()
-        inner.addPolygon(poly)
-        inner.closeSubpath()
-        p.fillPath(outer.subtracted(inner), QColor(0, 0, 0, 155))
-
-        # Bordure pointillée du quadrilatère
-        p.setPen(QPen(QColor(255, 255, 255), 1, Qt.DashLine))
-        p.setBrush(Qt.NoBrush)
-        p.drawPolygon(poly)
-
-        # Grille des tiers (interpolation bilinéaire dans le quad)
-        p.setPen(QPen(QColor(255, 255, 255, 80), 1))
-        for t in (1 / 3, 2 / 3):
-            top_pt  = tl + (tr - tl) * t
-            bot_pt  = bl + (br - bl) * t
-            left_pt = tl + (bl - tl) * t
-            rgt_pt  = tr + (br - tr) * t
-            p.drawLine(top_pt, bot_pt)
-            p.drawLine(left_pt, rgt_pt)
-
-        # 4 poignées de coin
-        hs = 8
-        p.setBrush(QColor(255, 255, 255))
-        p.setPen(Qt.NoPen)
-        for pt in self._crop_quad:
-            p.drawRect(QRectF(pt.x() - hs / 2, pt.y() - hs / 2, hs, hs))
-
-        # Poignées d'arête ("saucisses") — milieu de chaque côté
-        for eid, (i, j) in enumerate(_EDGE_INDICES):
-            a, b = self._crop_quad[i], self._crop_quad[j]
-            mid = QPointF((a.x() + b.x()) / 2, (a.y() + b.y()) / 2)
-            dx, dy = b.x() - a.x(), b.y() - a.y()
-            length = math.hypot(dx, dy)
-            if length < 1:
-                continue
-            angle_deg = math.degrees(math.atan2(dy, dx))
-            p.save()
-            p.translate(mid)
-            p.rotate(angle_deg)
-            p.setBrush(QColor(255, 255, 255))
-            p.setPen(Qt.NoPen)
-            p.drawRoundedRect(QRectF(-11, -5, 22, 10), 5, 5)
-            p.restore()
-
-        # Indicateur de déplacement au centre
-        cx = sum(pt.x() for pt in self._crop_quad) / 4
-        cy = sum(pt.y() for pt in self._crop_quad) / 4
-        c = QPointF(cx, cy)
-        p.setPen(QPen(QColor(255, 255, 255, 200), 1))
-        p.setBrush(Qt.NoBrush)
-        arm = 10
-        p.drawLine(QPointF(c.x() - arm, c.y()), QPointF(c.x() + arm, c.y()))
-        p.drawLine(QPointF(c.x(), c.y() - arm), QPointF(c.x(), c.y() + arm))
-        p.drawEllipse(c, 4.0, 4.0)
-
-    # ------------------------------------------------------------------ events
-
-    def wheelEvent(self, event: QWheelEvent) -> None:
-        delta = event.angleDelta().y()
-        if self._red_eye_mode or self._face_add_mode:
-            return
-        if self._crop_mode:
-            # Zoom centré sur le milieu, en préservant le quadrilatère de crop
-            factor = 1.15 if delta > 0 else 1 / 1.15
-            new_zoom = self._zoom * factor
-            if new_zoom < 0.1 or new_zoom > 4.0:
-                return
-            crop_rel = self._crop_to_rel()
-            cx, cy = self.width() / 2.0, self.height() / 2.0
-            self._offset = QPointF(
-                cx - (cx - self._offset.x()) * factor,
-                cy - (cy - self._offset.y()) * factor,
-            )
-            self._zoom = new_zoom
-            self.zoom_changed.emit(self._zoom)
-            if crop_rel:
-                self._crop_from_rel(crop_rel)
-            self.update()
-        else:
-            self.wheel_navigate.emit(1 if delta > 0 else -1)
-
-    def mousePressEvent(self, event: QMouseEvent) -> None:
-        if self._vignette_mode:
-            if event.button() == Qt.LeftButton:
-                pos = event.position()
-                hit = self._vignette_hit_test(pos)
-                if hit:
-                    self._vignette_drag       = hit
-                    self._vignette_drag_start = QPointF(pos)
-                    self._vignette_edit_start = copy.copy(self._vignette_edit)
-                    self.setCursor(Qt.ClosedHandCursor)
-            return
-        if self._wb_pick_mode:
-            if event.button() == Qt.LeftButton and self._pixmap:
-                pos = event.position()
-                ir  = self._img_rect()
-                if ir.contains(pos) and ir.width() > 0 and ir.height() > 0:
-                    px = max(0, min(self._pixmap.width()  - 1,
-                                   int((pos.x() - ir.x()) * self._pixmap.width()  / ir.width())))
-                    py = max(0, min(self._pixmap.height() - 1,
-                                   int((pos.y() - ir.y()) * self._pixmap.height() / ir.height())))
-                    c = self._pixmap.toImage().pixelColor(px, py)
-                    self.pixel_sampled.emit(c.red(), c.green(), c.blue())
-            self._wb_pick_mode = False
-            self.unsetCursor()
-            return
-        if self._red_eye_mode:
-            if event.button() == Qt.LeftButton and self._pixmap:
-                pos = event.position()
-                ir = self._img_rect()
-                if ir.contains(pos) and ir.width() > 0 and ir.height() > 0:
-                    cx = (pos.x() - ir.x()) / ir.width()
-                    cy = (pos.y() - ir.y()) / ir.height()
-                    self.red_eye_point_added.emit(cx, cy)
-            return
-        if self._face_add_mode:
-            if event.button() != Qt.LeftButton:
-                return
-            pos = event.position()
-            ir  = self._img_rect()
-            hid = self._face_add_hit_handle(pos) if self._face_add_rect is not None else None
-            if hid is not None:
-                self._face_add_action      = 'RESIZING'
-                self._face_add_handle      = hid
-                self._face_add_mouse_start = pos
-                self._face_add_rect_start  = QRectF(self._face_add_rect)
-            elif self._face_add_rect is not None and self._face_add_rect.contains(pos):
-                self._face_add_action      = 'MOVING'
-                self._face_add_mouse_start = pos
-                self._face_add_rect_start  = QRectF(self._face_add_rect)
-            elif ir.contains(pos):
-                self._face_add_action     = 'DRAWING'
-                self._face_add_draw_start = QPointF(pos)
-                self._face_add_rect       = QRectF(pos, pos)
-            self.update()
-            return
-        if self._crop_mode:
-            if event.button() != Qt.LeftButton:
-                return
-            pos = event.position()
-            ir  = self._img_rect()
-            logger.debug(
-                "crop press pos=(%.0f,%.0f) img_rect=(%.0f,%.0f,%.0f,%.0f) "
-                "contains=%s crop_quad=%s",
-                pos.x(), pos.y(),
-                ir.x(), ir.y(), ir.width(), ir.height(),
-                ir.contains(pos), self._crop_quad,
-            )
-            hid = self._hit_handle(pos)
-            eid = self._hit_edge_handle(pos) if hid is None else None
-            if hid is not None:
-                self._crop_action      = 'RESIZING'
-                self._crop_handle      = hid
-                self._crop_mouse_start = pos
-                self._crop_quad_start  = [QPointF(pt) for pt in self._crop_quad] if self._crop_quad else None
-                self._drag_ratio       = self._locked_ratio_from_quad()
-            elif eid is not None:
-                self._crop_action      = 'RESIZING_EDGE'
-                self._crop_handle      = eid
-                self._crop_mouse_start = pos
-                self._crop_quad_start  = [QPointF(pt) for pt in self._crop_quad] if self._crop_quad else None
-                self._drag_ratio       = self._locked_ratio_from_quad()
-            elif self._hit_center(pos):
-                self._crop_action      = 'MOVING'
-                self._crop_mouse_start = pos
-                self._crop_quad_start  = [QPointF(pt) for pt in self._crop_quad] if self._crop_quad else None
-                self._drag_ratio       = None
-            elif ir.contains(pos):
-                if self._crop_quad is not None:
-                    # Zone déjà définie → pan
-                    self._crop_action       = 'PANNING'
-                    self._drag_start        = pos.toPoint()
-                    self._drag_offset_start = QPointF(self._offset)
-                    self._drag_ratio        = None
-                    self.setCursor(Qt.ClosedHandCursor)
-                else:
-                    # Première définition de la zone
-                    self._crop_action     = 'DRAWING'
-                    self._crop_draw_start = QPointF(pos)
-                    self._crop_quad       = [QPointF(pos) for _ in range(4)]
-                    self._drag_ratio      = None  # déterminé au premier mouvement
-                self.update()
-        else:
-            if event.button() == Qt.LeftButton:
-                self._drag_start        = event.position().toPoint()
-                self._drag_offset_start = QPointF(self._offset)
-
-    def mouseMoveEvent(self, event: QMouseEvent) -> None:
-        pos = event.position()
-        if self._vignette_mode:
-            if self._vignette_drag:
-                self._vignette_update_drag(pos)
-            else:
-                # Mettre à jour le curseur selon la proximité des poignées
-                hit = self._vignette_hit_test(pos)
-                self.setCursor(Qt.PointingHandCursor if hit else Qt.ArrowCursor)
-            return
-        if self._red_eye_mode:
-            self._red_eye_mouse = pos
-            self.update()
-            return
-        if self._face_add_mode:
-            if self._face_add_action == 'DRAWING':
-                ir = self._img_rect()
-                s  = self._face_add_draw_start
-                raw_x = max(ir.left(), min(ir.right(),  pos.x()))
-                raw_y = max(ir.top(),  min(ir.bottom(), pos.y()))
-                self._face_add_rect = QRectF(
-                    QPointF(min(s.x(), raw_x), min(s.y(), raw_y)),
-                    QPointF(max(s.x(), raw_x), max(s.y(), raw_y)),
-                )
-                self.update()
-            elif self._face_add_action == 'RESIZING':
-                self._apply_face_add_resize(pos)
-                self.update()
-            elif self._face_add_action == 'MOVING':
-                self._apply_face_add_move(pos)
-                self.update()
-            else:
-                hid = self._face_add_hit_handle(pos) if self._face_add_rect is not None else None
-                if hid is not None:
-                    self.setCursor([Qt.SizeFDiagCursor, Qt.SizeBDiagCursor,
-                                     Qt.SizeFDiagCursor, Qt.SizeBDiagCursor][hid])
-                elif self._face_add_rect is not None and self._face_add_rect.contains(pos):
-                    self.setCursor(Qt.SizeAllCursor)
-                else:
-                    self.setCursor(Qt.CrossCursor)
-            return
-        if self._crop_mode:
-            if self._crop_action == 'DRAWING':
-                ir = self._img_rect()
-                s  = self._crop_draw_start
-                raw_x = max(ir.left(), min(ir.right(),  pos.x()))
-                raw_y = max(ir.top(),  min(ir.bottom(), pos.y()))
-                dx, dy = raw_x - s.x(), raw_y - s.y()
-                if self._aspect_ratio is not None:
-                    # Verrouiller le ratio dès le premier mouvement significatif,
-                    # en respectant l'orientation explicitement choisie (H ou V).
-                    if self._drag_ratio is None and (abs(dx) > 4 or abs(dy) > 4):
-                        self._drag_ratio = self._aspect_ratio
-                    if self._drag_ratio is not None:
-                        self._crop_quad = self._constrained_rect(s, dx, dy,
-                                                                  self._drag_ratio, ir)
-                        self.update()
-                        return
-                self._crop_quad = _make_rect_quad(
-                    min(s.x(), raw_x), min(s.y(), raw_y),
-                    max(s.x(), raw_x), max(s.y(), raw_y),
-                )
-                self.update()
-            elif self._crop_action == 'RESIZING':
-                self._apply_drag_corner(pos)
-                self.update()
-            elif self._crop_action == 'RESIZING_EDGE':
-                self._apply_drag_edge(pos)
-                self.update()
-            elif self._crop_action == 'MOVING':
-                self._apply_move(pos)
-                self.update()
-            elif self._crop_action == 'PANNING':
-                crop_rel = self._crop_to_rel()
-                delta = pos.toPoint() - self._drag_start
-                self._offset = self._drag_offset_start + QPointF(delta)
-                if crop_rel:
-                    self._crop_from_rel(crop_rel)
-                self.update()
-            else:
-                # Pas d'action en cours — mettre à jour le curseur
-                self._update_cursor_for_pos(pos)
-        else:
-            if self._drag_start is not None:
-                delta = event.position().toPoint() - self._drag_start
-                self._offset = self._drag_offset_start + QPointF(delta)
-                self.update()
-
-    def mouseReleaseEvent(self, event: QMouseEvent) -> None:
-        if self._vignette_mode:
-            if event.button() == Qt.LeftButton and self._vignette_drag:
-                self._vignette_drag       = None
-                self._vignette_drag_start = None
-                self._vignette_edit_start = None
-                pos = event.position()
-                hit = self._vignette_hit_test(pos)
-                self.setCursor(Qt.PointingHandCursor if hit else Qt.ArrowCursor)
-            return
-        if self._face_add_mode:
-            if event.button() == Qt.LeftButton:
-                self._face_add_action      = None
-                self._face_add_handle      = None
-                self._face_add_mouse_start = None
-                self._face_add_rect_start  = None
-                self._face_add_draw_start  = None
-            return
-        if self._crop_mode:
-            if event.button() == Qt.LeftButton:
-                self._drag_start       = None
-                self._crop_action      = None
-                self._crop_handle      = None
-                self._crop_mouse_start = None
-                self._crop_quad_start  = None
-                self._crop_draw_start  = None
-                self._drag_ratio       = None
-                self._update_cursor_for_pos(event.position())
-        elif event.button() == Qt.LeftButton:
-            self._drag_start = None
-
-    def contextMenuEvent(self, event) -> None:
-        if not self._crop_mode and not self._red_eye_mode and not self._face_add_mode:
-            faces = self._highlighted_faces or (
-                [self._highlighted_face] if self._highlighted_face is not None else []
-            )
-            for face in faces:
-                rect = self._face_screen_rect(face)
-                if rect is not None and rect.contains(QPointF(event.pos())):
-                    self.face_context_menu_requested.emit(face, event.globalPos())
-                    return
-            self.context_menu_requested.emit(event.globalPos())
 
     def resizeEvent(self, event) -> None:
         super().resizeEvent(event)
-        if self._pixmap:
-            crop_rel = self._crop_to_rel() if self._crop_mode else None
-            self.zoom_fit()
-            if crop_rel:
-                self._crop_from_rel(crop_rel)
-            if self._face_add_mode:
-                # Le rectangle écran ne survit pas à un changement de zoom/offset.
-                self._face_add_rect   = None
-                self._face_add_action = None
+        self._arrow_label.adjustSize()
+        margin = 8
+        x = self.width() - self._arrow_label.width() - margin
+        y = (self.height() - self._arrow_label.height()) // 2
+        self._arrow_label.move(x, y)
+
+    def _set_placeholder(self) -> None:
+        self._apply_style()
+        n = len(self._active)
+        if n == 0:
+            label = "🏷 Mots-clés"
+        elif n == 1:
+            label = f"🏷 {next(iter(self._active))}"
+        else:
+            label = f"🏷 Mots-clés ({n})"
+        self.setPlaceholderText(label)
+
+    def set_tags(self, all_tags: list[str], active_tags: list[str]) -> None:
+        self._active = set(active_tags)
+        self.blockSignals(True)
+        self.clear()
+        ordered = sorted(self._active) + sorted(t for t in all_tags if t not in self._active)
+        for tag in ordered:
+            self.addItem(tag)
+            idx = self.count() - 1
+            self.setItemData(idx, tag, Qt.UserRole)
+            if tag in self._active:
+                self.setItemData(idx, QColor(self._ACTIVE_FG), Qt.ForegroundRole)
+                self.setItemData(idx, QColor(self._ACTIVE_BG), Qt.BackgroundRole)
+        self.setCurrentIndex(-1)
+        self.blockSignals(False)
+        self._set_placeholder()
+        self.setToolTip(", ".join(sorted(self._active)) if self._active else "Aucun mot-clé")
+
+    def _on_activated(self, index: int) -> None:
+        tag = self.itemData(index, Qt.UserRole)
+        self.setCurrentIndex(-1)
+        if tag:
+            self.tag_toggled.emit(tag, tag not in self._active)
+
+
+# Nombre d'images de base (JPEG 1024 px, ~300 Ko pièce) conservées en mémoire :
+# la photo courante + les voisines préchargées → navigation instantanée dans
+# les deux sens sans relire le fichier original.
+_BASE_LRU_MAX = 8
 
 
 class _BaseLoader(QThread):
-    """Charge _build_base_image dans un thread secondaire.
+    """Charge _build_base_image dans un thread secondaire, pour une ou plusieurs
+    photos (photo courante, ou préchargement des voisines pour la navigation).
     Nécessaire pour les vidéos : cv2.VideoCapture peut marshaler des appels COM
     sur le thread UI (STA Windows) et provoquer des freezes si appelé directement."""
 
     base_ready = Signal(str, object)   # (photo_path, tuple[bytes,int,int] | None)
 
-    def __init__(self, photo: "PhotoInfo", parent=None) -> None:
+    def __init__(self, photos: "list[PhotoInfo]", parent=None) -> None:
         super().__init__(parent)
-        self._photo = photo
+        self._photos = list(photos)
+        self._stop_flag = False
+
+    def stop(self) -> None:
+        self._stop_flag = True
 
     def run(self) -> None:
-        result = _build_base_image(self._photo)
-        self.base_ready.emit(self._photo.path, result)
+        for photo in self._photos:
+            if self._stop_flag:
+                break
+            result = _build_base_image(photo)
+            self.base_ready.emit(photo.path, result)
 
 
 class PhotoViewer(QWidget):
@@ -1641,10 +276,12 @@ class PhotoViewer(QWidget):
     navigate             = Signal(int)
     zoom_changed         = Signal(float)
     crop_ready           = Signal(object)  # tuple 8 coords relatives (x0,y0,…,x3,y3)
+    crop_mode_ended      = Signal()        # mode recadrage terminé (validé ou annulé)
     save_requested       = Signal(object)  # PhotoInfo
     rename_requested     = Signal(object)  # PhotoInfo
     move_requested       = Signal(object)  # PhotoInfo
     delete_requested            = Signal(list)    # list[PhotoInfo]
+    remove_from_album_requested = Signal(list)    # list[PhotoInfo] — retrait d'album (non destructif)
     dup_badge_clicked    = Signal(object)  # PhotoInfo — badge de doublon cliqué
     red_eye_point_added         = Signal(float, float)  # cx_norm, cy_norm (0-1)
     pixel_sampled               = Signal(int, int, int)  # R, G, B — pipette balance des blancs
@@ -1653,20 +290,51 @@ class PhotoViewer(QWidget):
     face_bbox_ready             = Signal(object)  # tuple (bbox_x,bbox_y,bbox_w,bbox_h) int
     face_add_mode_ended         = Signal()  # mode ajout de visage terminé (validé ou annulé)
     force_redetect_requested    = Signal(object)  # PhotoInfo — menu contextuel
+    folder_grid_requested       = Signal(object)  # PhotoInfo — menu contextuel : grille du dossier
+    favorite_toggle_requested   = Signal(object)  # PhotoInfo — bascule favori demandée
+    rating_change_requested     = Signal(list, int)  # list[PhotoInfo], note 0-5 — changement de note demandé
+    edit_tags_requested         = Signal(list)    # list[PhotoInfo] — édition des mots-clés demandée
+    tag_toggle_requested        = Signal(object, str, bool)  # (PhotoInfo, tag, added) — entrée cliquée dans la liste déroulante de la barre d'outils
+    annotation_added             = Signal(object)  # dict annotation ajoutée
+    annotation_deleted           = Signal(str)     # id de l'annotation supprimée
+    annotation_deleted_multi     = Signal(object)  # list[str] ids supprimés (suppression groupée)
+    annotation_selection_changed = Signal(object)  # list[str] ids sélectionnés (peut être vide)
+    annotation_moved              = Signal(str, object)  # (id, dict annotation à jour)
+    annotation_moved_multi        = Signal(object)  # dict[id, annotation à jour] (déplacement groupé)
+    annotation_resized            = Signal(str, object)  # (id, dict annotation à jour)
+    annotation_grouped            = Signal(object)  # dict[id, annotation à jour] (groupe/dégroupe)
 
-    def __init__(self, config=None, parent=None):
+    def __init__(self, config=None, thumb_cache=None, parent=None):
         super().__init__(parent)
         self._config = config
+        # Cache de vignettes de la grille (optionnel) : sert de placeholder
+        # immédiat pendant le chargement de l'image de base — l'utilisateur voit
+        # tout de suite la photo (floue) au lieu d'un écran noir.
+        self._thumb_cache = thumb_cache
         self._photo: PhotoInfo | None = None
         self._edit: EditInfo | None = None
         self._db = EditDatabase()
-        # Cache de l'image de base (1024px, sans retouche) pour la photo courante.
-        # Évite de relire le fichier complet à chaque preview de slider.
-        self._base_cache: "tuple[bytes, int, int] | None" = None
-        # Thread de chargement de l'image de base (images et vidéos).
-        # Le chargement est asynchrone pour éviter de bloquer le thread UI,
-        # particulièrement critique pour les vidéos (cv2.VideoCapture + COM).
-        self._base_loader: "_BaseLoader | None" = None
+        # Liste complète des mots-clés du catalogue (pas seulement ceux de la
+        # photo courante) — alimente _tag_dropdown, cf. set_available_tags().
+        self._all_tags: list[str] = []
+        # Cache LRU des images de base (1024px, sans retouche), clé = chemin.
+        # Photo courante + voisines préchargées : évite de relire le fichier
+        # complet à chaque preview de slider ET à chaque navigation prev/next.
+        from collections import OrderedDict
+        self._base_lru: "OrderedDict[str, tuple[bytes, int, int]]" = OrderedDict()
+        # Chemins dont l'image de base est en cours de chargement (courante ou
+        # préchargée) — évite les chargements en double.
+        self._loading_paths: set[str] = set()
+        # Threads de chargement actifs (images et vidéos). Le chargement est
+        # asynchrone pour éviter de bloquer le thread UI, particulièrement
+        # critique pour les vidéos (cv2.VideoCapture + COM). Les résultats des
+        # chargements « dépassés » par la navigation alimentent quand même le LRU.
+        self._base_loaders: "list[_BaseLoader]" = []
+        # Album affiché lorsque la visionneuse a été ouverte depuis sa grille
+        # (ou None) : détermine si le menu contextuel propose "Retirer de
+        # l'album" et si la touche Del retire de l'album plutôt que d'effacer
+        # le fichier — cf. ThumbnailGrid.set_album_context.
+        self._album_id: int | None = None
         # Debounce pour les previews de retouche : on ne recharge que 60 ms
         # après le dernier événement slider (évite les surcharges mémoire).
         self._preview_timer = QTimer(self)
@@ -1703,11 +371,24 @@ class PhotoViewer(QWidget):
         tb_layout.addWidget(self._lbl_name, stretch=1)
 
         self._btn_fav = QPushButton("♡")
-        self._btn_fav.setToolTip("Marquer comme favori  (F)")
+        self._btn_fav.setToolTip("Marquer comme favori")
         self._btn_fav.setFixedWidth(32)
         self._btn_fav.setCheckable(True)
+        self._btn_fav.setStyleSheet(
+            "QPushButton { color: #ccc; border: none; padding: 0; font-size: 16px; }"
+            "QPushButton:checked { color: #ffd200; }"
+            "QPushButton:hover { color: #ffd200; }"
+        )
         self._btn_fav.clicked.connect(self._toggle_favorite)
         tb_layout.addWidget(self._btn_fav)
+
+        self._rating_stars = _RatingStars()
+        self._rating_stars.rating_clicked.connect(self._on_rating_clicked)
+        tb_layout.addWidget(self._rating_stars)
+
+        self._tag_dropdown = _TagDropdown()
+        self._tag_dropdown.tag_toggled.connect(self._on_tag_dropdown_toggled)
+        tb_layout.addWidget(self._tag_dropdown)
 
         # Conteneur des boutons d'applications externes (reconstruit par refresh_external_apps)
         self._ext_apps_container = QWidget()
@@ -1718,13 +399,13 @@ class PhotoViewer(QWidget):
         tb_layout.addWidget(self._ext_apps_container)
 
         self._btn_fit = QPushButton("⊡")
-        self._btn_fit.setToolTip("Ajuster à la fenêtre  (0)")
+        self._btn_fit.setToolTip("Ajuster à la fenêtre  (F)")
         self._btn_fit.setFixedWidth(32)
         self._btn_fit.clicked.connect(self.zoom_fit)
         tb_layout.addWidget(self._btn_fit)
 
         self._btn_100 = QPushButton("1:1")
-        self._btn_100.setToolTip("Zoom 100%  (1)")
+        self._btn_100.setToolTip("Zoom 100%  (Z)")
         self._btn_100.setFixedWidth(36)
         self._btn_100.clicked.connect(self.zoom_100)
         tb_layout.addWidget(self._btn_100)
@@ -1749,6 +430,14 @@ class PhotoViewer(QWidget):
         self._canvas.face_context_menu_requested.connect(self.face_context_menu_requested)
         self._canvas.vignette_changed.connect(self.vignette_changed)
         self._canvas.face_add_confirmed.connect(self._on_face_add_confirmed)
+        self._canvas.annotation_added.connect(self.annotation_added)
+        self._canvas.annotation_deleted.connect(self.annotation_deleted)
+        self._canvas.annotation_deleted_multi.connect(self.annotation_deleted_multi)
+        self._canvas.annotation_selection_changed.connect(self.annotation_selection_changed)
+        self._canvas.annotation_moved.connect(self.annotation_moved)
+        self._canvas.annotation_moved_multi.connect(self.annotation_moved_multi)
+        self._canvas.annotation_resized.connect(self.annotation_resized)
+        self._canvas.annotation_grouped.connect(self.annotation_grouped)
         layout.addWidget(self._canvas, stretch=1)
 
         # ---- Pied de page ----
@@ -1764,6 +453,10 @@ class PhotoViewer(QWidget):
         nav_layout.addWidget(self._btn_prev)
 
         nav_layout.addStretch()
+
+        self._nav_position_label = QLabel("")
+        self._nav_position_label.setStyleSheet("color: white; font-size: 13px;")
+        nav_layout.addWidget(self._nav_position_label)
 
         # Boutons de format de recadrage (masqués hors mode crop)
         self._btn_play_video = QPushButton("▶  Ouvrir la vidéo")
@@ -1868,20 +561,43 @@ class PhotoViewer(QWidget):
     def current_photo(self) -> "PhotoInfo | None":
         return self._photo
 
+    def refresh_tags(self) -> None:
+        """Redessine la liste déroulante de mots-clés depuis `self._photo.tags`
+        (sans changer la liste complète des mots-clés du catalogue) — à
+        appeler après une mutation externe de `photo.tags` qui ne repasse pas
+        par `set_photo()`. Si la liste complète a pu changer (ex. nouveau
+        mot-clé créé), préférer `set_available_tags()`."""
+        if self._photo is not None:
+            self._tag_dropdown.set_tags(self._all_tags, self._photo.tags)
+
+    def set_available_tags(self, all_tags: list[str]) -> None:
+        """Liste complète des mots-clés définis dans le catalogue — à
+        réappeler chaque fois qu'elle change (nouveau mot-clé créé, dernier
+        photo d'un mot-clé supprimée…). Restyle aussitôt _tag_dropdown avec
+        les mots-clés actifs de la photo courante."""
+        self._all_tags = list(all_tags)
+        self.refresh_tags()
+
+    def set_album_context(self, album_id: int | None) -> None:
+        """Indique si la photo affichée provient d'un album (et lequel), pour
+        proposer "Retirer de l'album" et faire pointer la touche Del dessus
+        plutôt que sur l'effacement définitif du fichier."""
+        self._album_id = album_id
+
     def set_photo(self, photo: PhotoInfo, edit: EditInfo | None = None) -> None:
         self._preview_timer.stop()
-        # Annuler un chargement de base image en cours (navigation rapide)
-        if self._base_loader and self._base_loader.isRunning():
-            self._base_loader.base_ready.disconnect()
-            self._base_loader.quit()
-            self._base_loader = None
-        self._base_cache = None  # invalide le cache pour la nouvelle photo
+        # Les chargements en vol ne sont pas annulés : leurs résultats alimentent
+        # le LRU (utile si l'utilisateur revient en arrière) ; _on_base_ready
+        # n'affiche que le résultat correspondant à la photo courante.
         self._photo = photo
         is_video = photo.media_type == "video"
         self._edit = None if is_video else (edit or self._db.load(photo.path))
         self._lbl_name.setText(photo.path)
         self._btn_fav.setChecked(photo.is_favorite)
+        self._rating_stars.set_rating(photo.rating)
+        self._tag_dropdown.set_tags(self._all_tags, photo.tags)
         self._btn_play_video.setVisible(is_video)
+        self.refresh_external_apps()
         self._canvas.set_highlighted_face(None)
         self._update_dup_badge()
         self._reload_pixmap()
@@ -1891,10 +607,17 @@ class PhotoViewer(QWidget):
             self._dup_badge.show()
             self._dup_badge.raise_()
             self._reposition_dup_badge()
+            # La géométrie du viewer peut ne pas être définitive à cet instant
+            # (ex. bascule depuis la grille : le stack/splitter ne se redimensionne
+            # qu'après cet appel) — un repositionnement différé rattrape le calcul
+            # une fois la géométrie finale connue, pour éviter le badge mal placé.
+            QTimer.singleShot(0, self._reposition_dup_badge)
         else:
             self._dup_badge.hide()
 
     def _reposition_dup_badge(self) -> None:
+        if not self._dup_badge.isVisible():
+            return
         self._dup_badge.adjustSize()
         margin = 12
         toolbar_h = self._toolbar.height()
@@ -1906,6 +629,11 @@ class PhotoViewer(QWidget):
         super().resizeEvent(event)
         if self._dup_badge.isVisible():
             self._reposition_dup_badge()
+
+    def showEvent(self, event) -> None:
+        super().showEvent(event)
+        if self._dup_badge.isVisible():
+            QTimer.singleShot(0, self._reposition_dup_badge)
 
     def highlight_face(self, face) -> None:
         """Encadre un visage unique sur la photo (appelé depuis main_window)."""
@@ -1919,31 +647,80 @@ class PhotoViewer(QWidget):
         if not self._photo:
             return
         self._canvas.set_edit(self._edit)
+        self._canvas.set_annotations(self._edit.annotations if self._edit else [])
 
-        if self._base_cache is not None:
+        cached = self._base_lru.get(self._photo.path)
+        if cached is not None:
             # Cache chaud : appliquer les retouches et afficher immédiatement
-            base_bytes, orig_w, orig_h = self._base_cache
+            self._base_lru.move_to_end(self._photo.path)
+            base_bytes, orig_w, orig_h = cached
             pixmap = _apply_edit_to_base(base_bytes, self._edit)
             self._canvas.set_orig_size(orig_w, orig_h)
             self._canvas.set_pixmap(pixmap)
             return
 
-        # Cache froid : lancer le chargement en arrière-plan (image ou vidéo)
-        # Afficher un état vide pendant le chargement
-        self._canvas.set_orig_size(0, 0)
-        self._canvas.set_pixmap(None)
-        if self._base_loader and self._base_loader.isRunning():
-            return  # déjà en cours pour cette photo
-        self._base_loader = _BaseLoader(self._photo, self)
-        self._base_loader.base_ready.connect(self._on_base_ready)
-        self._base_loader.start()
+        # Cache froid : afficher immédiatement la vignette de la grille en
+        # placeholder (floue mais instantanée — retour visuel sans écran noir),
+        # puis lancer le chargement de l'image de base en arrière-plan.
+        placeholder = (
+            self._thumb_cache.get_ram(self._photo.path)
+            if self._thumb_cache is not None else None
+        )
+        if placeholder is not None and not placeholder.isNull():
+            self._canvas.set_orig_size(self._photo.width or 0, self._photo.height or 0)
+            self._canvas.set_pixmap(placeholder)
+        else:
+            self._canvas.set_orig_size(0, 0)
+            self._canvas.set_pixmap(None)
+        self._start_base_loader([self._photo])
+
+    def prefetch(self, photos: "list[PhotoInfo]") -> None:
+        """Précharge en arrière-plan l'image de base des photos données (les
+        voisines de la photo affichée, fournies par main_window après chaque
+        navigation) : le passage à la photo suivante/précédente devient
+        instantané. Ignore ce qui est déjà en cache ou en cours de chargement."""
+        self._start_base_loader(photos)
+
+    def _start_base_loader(self, photos: "list[PhotoInfo]") -> None:
+        todo = [
+            p for p in photos
+            if p is not None
+            and p.path not in self._base_lru
+            and p.path not in self._loading_paths
+        ]
+        if not todo:
+            return
+        for p in todo:
+            self._loading_paths.add(p.path)
+        loader = _BaseLoader(todo, self)
+        loader.base_ready.connect(self._on_base_ready)
+        loader.finished.connect(loader.deleteLater)
+        loader.finished.connect(self._reap_base_loaders)
+        self._base_loaders.append(loader)
+        loader.start()
+
+    @Slot()
+    def _reap_base_loaders(self) -> None:
+        alive = []
+        for t in self._base_loaders:
+            try:
+                if t.isRunning():
+                    alive.append(t)
+            except RuntimeError:
+                pass  # objet C++ déjà détruit par deleteLater
+        self._base_loaders = alive
 
     @Slot(str, object)
     def _on_base_ready(self, path: str, result: object) -> None:
         """Reçoit le résultat du chargement de base image/vidéo depuis _BaseLoader."""
+        self._loading_paths.discard(path)
+        if result is not None:
+            self._base_lru[path] = result
+            self._base_lru.move_to_end(path)
+            while len(self._base_lru) > _BASE_LRU_MAX:
+                self._base_lru.popitem(last=False)
         if self._photo is None or self._photo.path != path:
-            return  # navigation entre-temps — résultat obsolète
-        self._base_cache = result
+            return  # préchargement d'une voisine, ou navigation entre-temps
         if result is None:
             return
         base_bytes, orig_w, orig_h = result
@@ -1952,12 +729,23 @@ class PhotoViewer(QWidget):
         self._canvas.set_orig_size(orig_w, orig_h)
         self._canvas.set_pixmap(pixmap)
 
+    def invalidate_base_cache(self, path: "str | None" = None) -> None:
+        """Oublie l'image de base en cache pour un chemin (fichier modifié sur
+        disque), ou tout le cache si path est None."""
+        if path is None:
+            self._base_lru.clear()
+        else:
+            self._base_lru.pop(path, None)
+
     def refresh_name(self) -> None:
         if self._photo:
             self._lbl_name.setText(self._photo.path)
 
     def update_edit(self, edit: EditInfo) -> None:
         self._edit = edit
+        # Les annotations sont des données vectorielles légères, rendues en
+        # calque séparé — pas besoin d'attendre le debounce du pixmap raster.
+        self._canvas.set_annotations(edit.annotations)
         # Debounce : reporte le rendu de 60 ms pour absorber les rafales de
         # sliders. Évite d'accumuler des images PIL de 72 Mo en mémoire.
         self._preview_timer.stop()
@@ -1987,9 +775,10 @@ class PhotoViewer(QWidget):
         existing = self._edit.crop if self._edit else None
         # Si un crop est déjà appliqué, afficher l'image sans ce crop pour que
         # l'utilisateur puisse repositionner la zone sur l'image complète.
-        if existing and self._photo and self._edit and self._base_cache:
+        cached = self._base_lru.get(self._photo.path) if self._photo else None
+        if existing and self._photo and self._edit and cached:
             edit_no_crop = EditInfo.from_dict({**self._edit.to_dict(), 'crop': None})
-            base_bytes, _, _ = self._base_cache
+            base_bytes, _, _ = cached
             pixmap = _apply_edit_to_base(base_bytes, edit_no_crop)
             if pixmap:
                 self._canvas.set_pixmap(pixmap)
@@ -1998,6 +787,7 @@ class PhotoViewer(QWidget):
         self._canvas.set_aspect_ratio(_CROP_FORMAT_DATA[idx][2] if idx >= 0 else None)
         self._btn_prev.hide()
         self._btn_next.hide()
+        self._nav_position_label.hide()
         self._crop_format_widget.show()
         self._btn_crop_confirm.show()
         self._btn_crop_cancel.show()
@@ -2012,6 +802,9 @@ class PhotoViewer(QWidget):
         self._btn_prev.setVisible(has_prev)
         self._btn_next.setVisible(has_next)
 
+    def set_nav_position(self, current: int, total: int) -> None:
+        self._nav_position_label.setText(f"{current} / {total}" if total > 0 else "")
+
     def cancel_crop(self) -> None:
         self._canvas.cancel_crop()
         self._crop_format_widget.hide()
@@ -2019,8 +812,10 @@ class PhotoViewer(QWidget):
         self._btn_crop_cancel.hide()
         self._btn_prev.show()
         self._btn_next.show()
+        self._nav_position_label.show()
         # Restaurer l'image avec le crop appliqué (on avait affiché l'image sans crop)
         self._reload_pixmap()
+        self.crop_mode_ended.emit()
 
     def _on_crop_confirmed(self, quad: tuple) -> None:
         self._crop_format_widget.hide()
@@ -2028,7 +823,9 @@ class PhotoViewer(QWidget):
         self._btn_crop_cancel.hide()
         self._btn_prev.show()
         self._btn_next.show()
+        self._nav_position_label.show()
         self.crop_ready.emit(quad)
+        self.crop_mode_ended.emit()
 
     # ------------------------------------------------------------------ ajout manuel de visage
 
@@ -2036,6 +833,7 @@ class PhotoViewer(QWidget):
         self._canvas.enter_face_add_mode()
         self._btn_prev.hide()
         self._btn_next.hide()
+        self._nav_position_label.hide()
         self._btn_face_confirm.show()
         self._btn_face_cancel.show()
 
@@ -2045,6 +843,7 @@ class PhotoViewer(QWidget):
         self._btn_face_cancel.hide()
         self._btn_prev.show()
         self._btn_next.show()
+        self._nav_position_label.show()
         self.face_add_mode_ended.emit()
 
     def cancel_face_add_mode(self) -> None:
@@ -2053,6 +852,7 @@ class PhotoViewer(QWidget):
         self._btn_face_cancel.hide()
         self._btn_prev.show()
         self._btn_next.show()
+        self._nav_position_label.show()
         self.face_add_mode_ended.emit()
 
     def _on_face_add_confirmed(self, bbox: tuple) -> None:
@@ -2089,26 +889,76 @@ class PhotoViewer(QWidget):
     def stop_color_pick(self) -> None:
         self._canvas.stop_color_pick()
 
+    # ------------------------------------------------------------------ annotations (dessin/texte)
+
+    def enter_annotation_mode(self, tool: str = "pen") -> None:
+        self._canvas.enter_annotation_mode(tool)
+
+    def exit_annotation_mode(self) -> None:
+        self._canvas.exit_annotation_mode()
+
+    def set_annotation_tool(self, tool: str) -> None:
+        self._canvas.set_annotation_tool(tool)
+
+    def set_annotation_style(self, color: str, width: float, font_family: str,
+                              font_size: float, bold: bool, italic: bool,
+                              fill_color: str = "#40ff0000", opacity: float = 1.0,
+                              blur: float = 0.0) -> None:
+        self._canvas.set_annotation_style(color, width, font_family, font_size, bold, italic,
+                                           fill_color, opacity, blur)
+
+    def delete_selected_annotation(self) -> None:
+        self._canvas.delete_selected_annotation()
+
+    def clear_all_annotations(self) -> None:
+        self._canvas.clear_all_annotations()
+
+    def group_selected_annotations(self) -> None:
+        self._canvas.group_selected_annotations()
+
+    def ungroup_selected_annotations(self) -> None:
+        self._canvas.ungroup_selected_annotations()
+
+    def set_annotations_visible(self, visible: bool) -> None:
+        self._canvas.set_annotations_visible(visible)
+
     # ------------------------------------------------------------------ misc
 
     def refresh_external_apps(self) -> None:
-        """Reconstruit les boutons d'applications externes dans la toolbar depuis la config."""
+        """Reconstruit les boutons d'applications externes dans la toolbar depuis la
+        config, filtrés par la portée média de chaque application ("image" / "video"
+        / "both", absente = "both" pour rétrocompatibilité) comparée au media_type de
+        la photo actuellement affichée — une application taguée "vidéo" (ex. VLC)
+        n'apparaît que sur une vidéo, une taguée "photo" que sur une image. Sans
+        photo affichée (ex. au tout premier appel, dans __init__), aucun filtrage
+        n'est appliqué."""
         while self._ext_apps_layout.count():
             item = self._ext_apps_layout.takeAt(0)
             if item.widget():
                 item.widget().deleteLater()
 
         if not self._config:
+            self._ext_apps_container.setVisible(False)
             return
 
+        media_type = self._photo.media_type if self._photo else None
         _icon_provider = QFileIconProvider()
+        shown = 0
         for app in self._config.get("tools.external_apps", []):
             name = app.get("name", "")
             path = app.get("path", "")
+            scope = app.get("media", "both")
             if not path or not os.path.isfile(path):
                 continue
+            if media_type is not None and scope != "both" and scope != media_type:
+                continue
+            shown += 1
             btn = QToolButton()
             btn.setToolTip(f"Ouvrir avec {name}")
+            # Nom accessible pour l'automatisation pywinauto (e2e) — même
+            # convention que ThumbnailCell/_DuplicateCard : ce bouton n'a pas
+            # de texte propre (icône seule), donc pas de window_text() unique.
+            btn.setAccessibleName(f"extapp::{name}")
             btn.setFixedSize(32, 32)
             btn.setIcon(_icon_provider.icon(QFileInfo(path)))
             btn.setIconSize(QSize(22, 22))
@@ -2119,6 +969,8 @@ class PhotoViewer(QWidget):
             )
             btn.clicked.connect(lambda _checked=False, p=path: self._open_with(p))
             self._ext_apps_layout.addWidget(btn)
+
+        self._ext_apps_container.setVisible(shown > 0)
 
     def _open_with(self, app_path: str) -> None:
         if not self._photo:
@@ -2147,16 +999,20 @@ class PhotoViewer(QWidget):
             return
         photo = self._photo
         menu = QMenu(self)
+        install_menu_width_fix(menu)
 
         fav_label = "Retirer des favoris" if photo.is_favorite else "Marquer comme favori"
         menu.addAction(fav_label, self._toggle_fav_from_menu)
+        menu.addAction("Mots-clés…", lambda: self.edit_tags_requested.emit([photo]))
         menu.addAction("Renommer…", lambda: self.rename_requested.emit(photo))
         menu.addAction("Déplacer vers…", lambda: self.move_requested.emit(photo))
-        menu.addAction("Enregistrer l'image traitée sur le disque",
+        menu.addAction("Enregistrer l'image traitée sur le disque\tCtrl+S",
                        lambda: self.save_requested.emit(photo))
         menu.addSeparator()
         menu.addAction("Révéler dans l'Explorateur",
                        lambda: os.startfile(os.path.dirname(photo.path)))
+        menu.addAction("Afficher le dossier dans la grille",
+                       lambda: self.folder_grid_requested.emit(photo))
         menu.addSeparator()
 
         gps_coords = self._resolve_gps(photo)
@@ -2174,7 +1030,11 @@ class PhotoViewer(QWidget):
         menu.addAction("Forcer une nouvelle détection sans limite de taille",
                        lambda: self.force_redetect_requested.emit(photo))
         menu.addSeparator()
-        menu.addAction("Effacer le fichier…", lambda: self.delete_requested.emit([photo]))
+        if self._album_id is not None:
+            menu.addAction("Retirer de l'album\tSuppr",
+                           lambda: self.remove_from_album_requested.emit([photo]))
+        else:
+            menu.addAction("Effacer le fichier…\tSuppr", lambda: self.delete_requested.emit([photo]))
 
         menu.exec(pos)
 
@@ -2204,7 +1064,28 @@ class PhotoViewer(QWidget):
     def _toggle_favorite(self, checked: bool) -> None:
         if self._photo:
             self._photo.is_favorite = checked
-            self._btn_fav.setText("★" if checked else "♡")
+            self._btn_fav.setText("♥" if checked else "♡")
+            self.favorite_toggle_requested.emit(self._photo)
+
+    def _set_rating(self, rating: int) -> None:
+        if self._photo:
+            self._photo.rating = rating
+            self._rating_stars.set_rating(rating)
+            self.rating_change_requested.emit([self._photo], rating)
+
+    def _on_rating_clicked(self, rating: int) -> None:
+        self._set_rating(rating)
+
+    def _on_tag_dropdown_toggled(self, tag: str, added: bool) -> None:
+        if self._photo is None:
+            return
+        if added:
+            if tag not in self._photo.tags:
+                self._photo.tags = self._photo.tags + [tag]
+        else:
+            self._photo.tags = [t for t in self._photo.tags if t != tag]
+        self._tag_dropdown.set_tags(self._all_tags, self._photo.tags)
+        self.tag_toggle_requested.emit(self._photo, tag, added)
 
     def keyPressEvent(self, event: QKeyEvent) -> None:
         key = event.key()
@@ -2215,6 +1096,8 @@ class PhotoViewer(QWidget):
                 self.cancel_face_add_mode()
             elif self._canvas._red_eye_mode:
                 self.exit_red_eye_mode()
+            elif self._canvas._annotation_mode:
+                self._canvas.cancel_annotation_draft()
             else:
                 self.closed.emit()
         elif key == Qt.Key_Return or key == Qt.Key_Enter:
@@ -2222,22 +1105,39 @@ class PhotoViewer(QWidget):
                 self.confirm_crop()
             elif self._canvas._face_add_mode:
                 self.confirm_face_add()
+            elif self._canvas._annotation_mode and self._canvas._annotation_tool == "curve":
+                self._canvas.confirm_annotation_draft()
         elif key in (Qt.Key_Right, Qt.Key_Up):
             if not self._canvas._crop_mode and not self._canvas._red_eye_mode \
-                    and not self._canvas._face_add_mode:
+                    and not self._canvas._face_add_mode and not self._canvas._annotation_mode:
                 self.navigate.emit(-1)   # plus récente (droite/haut = vers le haut de la liste)
         elif key in (Qt.Key_Left, Qt.Key_Down):
             if not self._canvas._crop_mode and not self._canvas._red_eye_mode \
-                    and not self._canvas._face_add_mode:
+                    and not self._canvas._face_add_mode and not self._canvas._annotation_mode:
                 self.navigate.emit(1)    # plus ancienne (gauche/bas = vers le bas de la liste)
         elif key == Qt.Key_Delete:
+            if self._canvas._annotation_mode:
+                self.delete_selected_annotation()
+            else:
+                photo = self.current_photo()
+                if photo and not self._canvas._crop_mode and not self._canvas._red_eye_mode \
+                        and not self._canvas._face_add_mode:
+                    if self._album_id is not None:
+                        self.remove_from_album_requested.emit([photo])
+                    else:
+                        self.delete_requested.emit([photo])
+        elif key == Qt.Key_S and event.modifiers() == Qt.ControlModifier:
             photo = self.current_photo()
             if photo and not self._canvas._crop_mode and not self._canvas._red_eye_mode \
                     and not self._canvas._face_add_mode:
-                self.delete_requested.emit([photo])
-        elif key == Qt.Key_0:
+                self.save_requested.emit(photo)
+        elif key == Qt.Key_F:
             self.zoom_fit()
-        elif key == Qt.Key_1:
+        elif key == Qt.Key_Z:
             self.zoom_100()
+        elif key in (Qt.Key_0, Qt.Key_1, Qt.Key_2, Qt.Key_3, Qt.Key_4, Qt.Key_5):
+            if not self._canvas._crop_mode and not self._canvas._red_eye_mode \
+                    and not self._canvas._face_add_mode and not self._canvas._annotation_mode:
+                self._set_rating(key - Qt.Key_0)
         else:
             super().keyPressEvent(event)

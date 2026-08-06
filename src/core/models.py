@@ -28,6 +28,7 @@ class PhotoInfo:
     gps_lat: Optional[float] = None
     gps_lon: Optional[float] = None
     is_favorite: bool = False
+    rating: int = 0             # note 0-5 étoiles (0 = non notée)
     tags: list[str] = field(default_factory=list)
     id: Optional[int] = None
     media_type: str = "image"   # "image" or "video"
@@ -77,6 +78,25 @@ class EditInfo:
     vignette_rx2: float = 0.80        # rayon X externe (1.0 = demi-largeur image)
     vignette_ry2: float = 0.80        # rayon Y externe (1.0 = demi-hauteur image)
     vignette_angle: float = 0.0       # rotation en degrés
+    annotations: list = field(default_factory=list)  # calque dessin/texte, cf. annotation_renderer.py
+    # Cadre décoratif — cf. src/processing/frames.py. Les largeurs sont des
+    # fractions du plus petit côté de la photo (indépendantes de la résolution) ;
+    # le cadre s'ajoute AUTOUR de l'image, il n'empiète jamais dessus — seule
+    # exception, le second cadre facultatif de « plain » (frame_inner_enabled),
+    # dessiné SUR la photo (cf. frames.inner_overlay_px).
+    frame_type: str = "none"           # "none", "plain", "simple", "double", "vine", …
+    frame_width: float = 0.05          # largeur du cadre extérieur
+    frame_inner_width: float = 0.015   # largeur du cadre intérieur (double, plain)
+    frame_gap: float = 0.02            # intervalle entre les deux cadres (double, plain)
+    frame_style: str = "solid"         # "solid", "gradient", "glitter"
+    frame_color: str = "#f2f2f2"       # couleur principale du cadre extérieur
+    frame_color2: str = "#8c8c8c"      # 2e couleur (dégradé / éclats du pailleté)
+    frame_inner_color: str = "#303030"  # couleur du cadre intérieur (double)
+    frame_gap_color: str = "#ffffff"   # couleur de l'intervalle (double)
+    frame_inner_enabled: bool = False  # second cadre de « plain » (sur la photo)
+    frame_inner_motif: str = "line"    # ferronnerie du second cadre, cf. frames.INNER_MOTIFS
+    frame_inner_relief: bool = True    # relief léger (False = aplat strict)
+    frame_inner_ornament: float = 1.0  # échelle des ornements (curseur « Ornements »)
 
     def is_modified(self) -> bool:
         return (
@@ -98,6 +118,8 @@ class EditInfo:
             or self.color_blue != 0.0
             or bool(self.red_eye_regions)
             or self.vignette_strength > 0.0
+            or bool(self.annotations)
+            or (self.frame_type or "none") != "none"
         )
 
 
@@ -133,6 +155,20 @@ class EditInfo:
             "vignette_rx2":      self.vignette_rx2,
             "vignette_ry2":      self.vignette_ry2,
             "vignette_angle":    self.vignette_angle,
+            "annotations": [dict(a) for a in self.annotations],
+            "frame_type":        self.frame_type,
+            "frame_width":       self.frame_width,
+            "frame_inner_width": self.frame_inner_width,
+            "frame_gap":         self.frame_gap,
+            "frame_style":       self.frame_style,
+            "frame_color":       self.frame_color,
+            "frame_color2":      self.frame_color2,
+            "frame_inner_color": self.frame_inner_color,
+            "frame_gap_color":   self.frame_gap_color,
+            "frame_inner_enabled": self.frame_inner_enabled,
+            "frame_inner_motif":     self.frame_inner_motif,
+            "frame_inner_relief":    self.frame_inner_relief,
+            "frame_inner_ornament":  self.frame_inner_ornament,
         }
 
     @classmethod
@@ -174,6 +210,20 @@ class EditInfo:
             vignette_rx2=float(data.get("vignette_rx2", 0.80)),
             vignette_ry2=float(data.get("vignette_ry2", 0.80)),
             vignette_angle=float(data.get("vignette_angle", 0.0)),
+            annotations=[dict(a) for a in data.get("annotations", [])],
+            frame_type=str(data.get("frame_type", "none") or "none"),
+            frame_width=float(data.get("frame_width", 0.05)),
+            frame_inner_width=float(data.get("frame_inner_width", 0.015)),
+            frame_gap=float(data.get("frame_gap", 0.02)),
+            frame_style=str(data.get("frame_style", "solid") or "solid"),
+            frame_color=str(data.get("frame_color", "#f2f2f2") or "#f2f2f2"),
+            frame_color2=str(data.get("frame_color2", "#8c8c8c") or "#8c8c8c"),
+            frame_inner_color=str(data.get("frame_inner_color", "#303030") or "#303030"),
+            frame_gap_color=str(data.get("frame_gap_color", "#ffffff") or "#ffffff"),
+            frame_inner_enabled=bool(data.get("frame_inner_enabled", False)),
+            frame_inner_motif=str(data.get("frame_inner_motif", "line") or "line"),
+            frame_inner_relief=bool(data.get("frame_inner_relief", True)),
+            frame_inner_ornament=float(data.get("frame_inner_ornament", 1.0)),
         )
 
 
@@ -209,3 +259,5 @@ class FaceInfo:
     ignored: bool = False
     pinned: bool = False   # True = face isolée manuellement, exclue du re-clustering
     detected_rotation: int = 0   # rotation CW (degrés) appliquée lors de la détection
+    suggestion_person_id: Optional[int] = None   # personne suggérée (en attente de vérification)
+    suggestion_score: float = 0.0                # similarité cosinus de la suggestion ci-dessus

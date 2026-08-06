@@ -29,6 +29,7 @@ from PySide6.QtWidgets import (
 from src.core.models import FaceInfo, PersonInfo
 from src.faces.face_database import FaceDatabase
 from src.ui.loading_label import LoadingLabel
+from src.ui.ui_utils import install_menu_width_fix
 from src.ui.people_panel import _AssignDialog, _face_bytes, _load_edit_rotations
 
 logger = logging.getLogger(__name__)
@@ -624,6 +625,7 @@ class PersonClusterView(QWidget):
         if cluster_id is None:
             return
         menu = QMenu(self)
+        install_menu_width_fix(menu)
         menu.setStyleSheet(_MENU_STYLE)
         act_accept = menu.addAction("✓ Accepter cette suggestion")
         act_reject = menu.addAction("✗ Rejeter cette suggestion")
@@ -701,6 +703,12 @@ class PersonClusterView(QWidget):
 
     # ------------------------------------------------------------------ sélection (visages confirmés)
 
+    def select_all(self) -> None:
+        """Sélectionne tous les visages confirmés de la grille (Ctrl+A)."""
+        self._selection = set(self._flat_order)
+        self._last_clicked = self._flat_order[-1] if self._flat_order else None
+        self._apply_selection_style()
+
     @Slot(int, bool, bool)
     def _on_thumb_clicked(self, face_id: int, ctrl_held: bool, shift_held: bool) -> None:
         if shift_held and self._last_clicked is not None and self._last_clicked in self._flat_cards:
@@ -746,6 +754,7 @@ class PersonClusterView(QWidget):
         lbl_photos = f"les {np} photo(s)" if np > 1 else "cette photo"
 
         menu = QMenu(self)
+        install_menu_width_fix(menu)
         menu.setStyleSheet(_MENU_STYLE)
         act_reassign = menu.addAction(f"Réassigner {n} visage{s} à une autre personne…")
         act_unassign = menu.addAction(f"Dé-associer {n} visage{s} de la personne")
@@ -763,8 +772,7 @@ class PersonClusterView(QWidget):
         elif chosen == act_cover:
             self._set_cover_face(face_id)
         elif chosen in (act_add_album, act_new_album):
-            photos = [self._catalog.get_photo_by_path(p) for p in selected_paths]
-            photos = [p for p in photos if p is not None]
+            photos = self._catalog.get_photos_by_paths(list(selected_paths))
             if photos:
                 if chosen == act_add_album:
                     self.add_to_album_requested.emit(photos)
