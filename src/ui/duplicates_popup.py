@@ -10,6 +10,7 @@ from PySide6.QtWidgets import (
 )
 
 from src.ui.ui_utils import fmt_size as _fmt_size
+from src.core.i18n import translate
 
 
 class _DuplicatesPopup(QFrame):
@@ -40,12 +41,14 @@ class _DuplicatesPopup(QFrame):
         layout.setContentsMargins(14, 12, 14, 12)
         layout.setSpacing(8)
 
-        n = len(others)
-        title = QLabel(f"{n + 1} exemplaire{'s' if n + 1 != 1 else ''} dans ce groupe de doublons :")
+        n_total = len(others) + 1
+        title = QLabel(translate("DuplicatesPopup",
+                                 "%n exemplaire(s) dans ce groupe de doublons :",
+                                 None, n_total))
         title.setStyleSheet("font-weight: bold; font-size: 13px;")
         title.setWordWrap(True)
         title.setCursor(Qt.SizeAllCursor)
-        title.setToolTip("Cliquer-glisser pour déplacer la fenêtre")
+        title.setToolTip(translate("DuplicatesPopup", "Cliquer-glisser pour déplacer la fenêtre"))
         title.installEventFilter(self)
         layout.addWidget(title)
 
@@ -63,7 +66,7 @@ class _DuplicatesPopup(QFrame):
 
         btn_row = QHBoxLayout()
         btn_row.addStretch()
-        btn_close = QPushButton("Fermer")
+        btn_close = QPushButton(translate("DuplicatesPopup", "Fermer"))
         btn_close.clicked.connect(self.close)
         btn_row.addWidget(btn_close)
         layout.addLayout(btn_row)

@@ -24,6 +24,7 @@ from PySide6.QtWidgets import (
 )
 
 from src.core.app_dirs import APP_DATA_DIR
+from src.core.i18n import translate
 
 logger = logging.getLogger(__name__)
 
@@ -89,8 +90,11 @@ class _SyncThread(QThread):
         with open(csv_path, "w", newline="", encoding="utf-8-sig") as f:
             writer = csv.writer(f, delimiter=";")
             writer.writerow([
-                "Chemin", "Date création fichier", "Date EXIF",
-                "Action", "Commentaire",
+                translate("ExifDateSyncDialog", "Chemin"),
+                translate("ExifDateSyncDialog", "Date création fichier"),
+                translate("ExifDateSyncDialog", "Date EXIF"),
+                translate("ExifDateSyncDialog", "Action"),
+                translate("ExifDateSyncDialog", "Commentaire"),
             ])
 
             for i, photo in enumerate(photos):
@@ -101,14 +105,19 @@ class _SyncThread(QThread):
 
                 path = photo.path
                 if not os.path.exists(path):
-                    writer.writerow([path, "", "", "ignoré", "fichier introuvable"])
+                    writer.writerow([path, "", "",
+                                     translate("ExifDateSyncDialog", "ignoré"),
+                                     translate("ExifDateSyncDialog", "fichier introuvable")])
                     skipped += 1
                     continue
 
                 # Date EXIF
                 dt_exif = photo.date_taken
                 if dt_exif is None or not _exif_date_is_coherent(dt_exif):
-                    writer.writerow([path, "", "", "ignoré", "pas de date EXIF cohérente"])
+                    writer.writerow([path, "", "",
+                                     translate("ExifDateSyncDialog", "ignoré"),
+                                     translate("ExifDateSyncDialog",
+                                               "pas de date EXIF cohérente")])
                     skipped += 1
                     continue
 
@@ -117,7 +126,8 @@ class _SyncThread(QThread):
                     st = os.stat(path)
                     ctime_current = st.st_ctime
                 except OSError as e:
-                    writer.writerow([path, "", dt_exif.isoformat(), "erreur", str(e)])
+                    writer.writerow([path, "", dt_exif.isoformat(),
+                                     translate("ExifDateSyncDialog", "erreur"), str(e)])
                     skipped += 1
                     continue
 
@@ -129,7 +139,8 @@ class _SyncThread(QThread):
                         path,
                         ctime_dt.strftime("%Y-%m-%d %H:%M:%S"),
                         dt_exif.strftime("%Y-%m-%d %H:%M:%S"),
-                        "ignoré", "dates déjà identiques",
+                        translate("ExifDateSyncDialog", "ignoré"),
+                        translate("ExifDateSyncDialog", "dates déjà identiques"),
                     ])
                     skipped += 1
                     continue
@@ -140,7 +151,7 @@ class _SyncThread(QThread):
                         path,
                         ctime_dt.strftime("%Y-%m-%d %H:%M:%S"),
                         dt_exif.strftime("%Y-%m-%d %H:%M:%S"),
-                        "mis à jour", "",
+                        translate("ExifDateSyncDialog", "mis à jour"), "",
                     ])
                     updated += 1
                 except Exception as e:
@@ -148,7 +159,7 @@ class _SyncThread(QThread):
                         path,
                         ctime_dt.strftime("%Y-%m-%d %H:%M:%S"),
                         dt_exif.strftime("%Y-%m-%d %H:%M:%S"),
-                        "erreur", str(e),
+                        translate("ExifDateSyncDialog", "erreur"), str(e),
                     ])
                     skipped += 1
 
@@ -165,7 +176,7 @@ class ExifDateSyncDialog(QDialog):
         self._thread: _SyncThread | None = None
         self._csv_path: str = ""
 
-        self.setWindowTitle("Synchroniser les dates de création avec l'EXIF")
+        self.setWindowTitle(translate("ExifDateSyncDialog", "Synchroniser les dates de création avec l'EXIF"))
         self.setMinimumWidth(520)
         self.setWindowFlag(Qt.WindowContextHelpButtonHint, False)
         self._setup_ui()
@@ -177,7 +188,7 @@ class ExifDateSyncDialog(QDialog):
         layout.setSpacing(14)
         layout.setContentsMargins(24, 24, 24, 20)
 
-        title = QLabel("Synchroniser la date de création Windows avec la date EXIF")
+        title = QLabel(translate("ExifDateSyncDialog", "Synchroniser la date de création Windows avec la date EXIF"))
         font = QFont()
         font.setPointSize(11)
         font.setBold(True)
@@ -196,13 +207,13 @@ class ExifDateSyncDialog(QDialog):
         info_layout.setSpacing(8)
 
         lbl_expl = QLabel(
-            "Lors d'un transfert depuis un appareil photo ou d'une copie de fichiers, "
+            translate("ExifDateSyncDialog", "Lors d'un transfert depuis un appareil photo ou d'une copie de fichiers, "
             "Windows peut attribuer la date du jour comme date de création, "
             "écrasant la date réelle de prise de vue.\n\n"
             "Cette opération parcourt toutes les photos et vidéos du catalogue et, "
             "lorsqu'une date EXIF valide est présente et différente de la date de "
             "création Windows, elle remplace la date de création par la date EXIF.\n\n"
-            "Un rapport CSV détaillant chaque fichier traité sera enregistré dans :"
+            "Un rapport CSV détaillant chaque fichier traité sera enregistré dans :")
         )
         lbl_expl.setWordWrap(True)
         lbl_expl.setStyleSheet("color: #ccc; font-size: 12px;")
@@ -217,8 +228,8 @@ class ExifDateSyncDialog(QDialog):
 
         # Avertissement
         lbl_warn = QLabel(
-            "⚠  Cette opération modifie les métadonnées système des fichiers originaux. "
-            "Elle ne modifie pas le contenu des photos."
+            translate("ExifDateSyncDialog", "⚠  Cette opération modifie les métadonnées système des fichiers originaux. "
+            "Elle ne modifie pas le contenu des photos.")
         )
         lbl_warn.setWordWrap(True)
         lbl_warn.setStyleSheet("color: #e8a030; font-size: 11px;")
@@ -249,7 +260,7 @@ class ExifDateSyncDialog(QDialog):
         btn_layout = QHBoxLayout()
         btn_layout.setSpacing(8)
 
-        self._btn_open_csv = QPushButton("Ouvrir le rapport CSV")
+        self._btn_open_csv = QPushButton(translate("ExifDateSyncDialog", "Ouvrir le rapport CSV"))
         self._btn_open_csv.setStyleSheet(
             "QPushButton { background: #2a5a2a; color: white; border: none;"
             " border-radius: 3px; padding: 6px 16px; }"
@@ -261,7 +272,7 @@ class ExifDateSyncDialog(QDialog):
 
         btn_layout.addStretch()
 
-        self._btn_start = QPushButton("Démarrer")
+        self._btn_start = QPushButton(translate("ExifDateSyncDialog", "Démarrer"))
         self._btn_start.setStyleSheet(
             "QPushButton { background: #2a5a8a; color: white; border: none;"
             " border-radius: 3px; padding: 6px 20px; font-weight: bold; }"
@@ -270,7 +281,7 @@ class ExifDateSyncDialog(QDialog):
         self._btn_start.clicked.connect(self._start)
         btn_layout.addWidget(self._btn_start)
 
-        self._btn_close = QPushButton("Fermer")
+        self._btn_close = QPushButton(translate("ExifDateSyncDialog", "Fermer"))
         self._btn_close.clicked.connect(self._on_close)
         btn_layout.addWidget(self._btn_close)
 
@@ -280,7 +291,7 @@ class ExifDateSyncDialog(QDialog):
 
     def _start(self) -> None:
         self._btn_start.setEnabled(False)
-        self._btn_start.setText("En cours…")
+        self._btn_start.setText(translate("ExifDateSyncDialog", "En cours…"))
         self._progress_bar.show()
         self._lbl_status.show()
 
@@ -300,7 +311,9 @@ class ExifDateSyncDialog(QDialog):
         self._lbl_status.hide()
 
         self._lbl_result.setText(
-            f"{updated} fichier(s) mis à jour  ·  {skipped} ignoré(s) ou en erreur"
+            translate("ExifDateSyncDialog", "%n fichier(s) mis à jour", None, updated)
+            + "  ·  "
+            + translate("ExifDateSyncDialog", "%n ignoré(s) ou en erreur", None, skipped)
         )
         self._lbl_result.show()
         self._btn_open_csv.show()

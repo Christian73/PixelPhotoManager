@@ -53,6 +53,7 @@ from src.ui.face_cluster_workers import (  # noqa: E402,F401
     _ClusterRefreshThread, _PersonsLoader,
     _compute_all_suggestions_bg, _compute_cluster_groups_bg, _compute_suggestion_bg,
 )
+from src.core.i18n import translate
 
 class _ProgressPopup(QDialog):
     """
@@ -81,15 +82,15 @@ class _ProgressPopup(QDialog):
         vbox.setContentsMargins(24, 20, 24, 20)
         vbox.setSpacing(12)
 
-        lbl_title = QLabel("Analyse des groupes de visages")
+        lbl_title = QLabel(translate("ProgressPopup", "Analyse des groupes de visages"))
         lbl_title.setStyleSheet(
             "font-weight: bold; font-size: 13px; color: #eee; background: transparent;"
         )
         lbl_title.setCursor(Qt.CursorShape.SizeAllCursor)
-        lbl_title.setToolTip("Glisser pour déplacer la fenêtre")
+        lbl_title.setToolTip(translate("ProgressPopup", "Glisser pour déplacer la fenêtre"))
         vbox.addWidget(lbl_title)
 
-        self._lbl_phase = QLabel("Initialisation…")
+        self._lbl_phase = QLabel(translate("ProgressPopup", "Initialisation…"))
         self._lbl_phase.setStyleSheet(
             "font-size: 11px; color: #aaa; background: transparent;"
         )
@@ -117,7 +118,7 @@ class _ProgressPopup(QDialog):
 
         btn_row = QHBoxLayout()
         btn_row.addStretch()
-        btn_cancel = QPushButton("Annuler")
+        btn_cancel = QPushButton(translate("ProgressPopup", "Annuler"))
         btn_cancel.setFixedHeight(24)
         btn_cancel.setStyleSheet(
             "QPushButton { background: #3a3a4a; color: #ddd; border: 1px solid #556; "
@@ -247,8 +248,8 @@ class FaceClusterGrid(QWidget):
 
         # Barre de titre
         bar = QHBoxLayout()
-        btn_back = QPushButton("← Photos")
-        btn_back.setToolTip("Retourner à la grille de photos")
+        btn_back = QPushButton(translate("FaceClusterGrid", "← Photos"))
+        btn_back.setToolTip(translate("FaceClusterGrid", "Retourner à la grille de photos"))
         btn_back.clicked.connect(self.back_requested)
         bar.addWidget(btn_back)
         bar.addStretch()
@@ -267,7 +268,7 @@ class FaceClusterGrid(QWidget):
 
         _pw_top = QHBoxLayout()
         _pw_top.setContentsMargins(0, 0, 0, 0)
-        self._lbl_progress = QLabel("Initialisation…")
+        self._lbl_progress = QLabel(translate("FaceClusterGrid", "Initialisation…"))
         self._lbl_progress.setStyleSheet("color: #aaa; font-size: 11px;")
         _pw_top.addWidget(self._lbl_progress)
         _pw_top.addStretch()
@@ -304,24 +305,24 @@ class FaceClusterGrid(QWidget):
         _ab_row.addWidget(self._lbl_selected)
         _ab_row.addStretch()
 
-        self._btn_action_view = QPushButton("Voir les photos")
+        self._btn_action_view = QPushButton(translate("FaceClusterGrid", "Voir les photos"))
         self._btn_action_view.setFixedHeight(26)
         self._btn_action_view.clicked.connect(self._on_action_view)
         _ab_row.addWidget(self._btn_action_view)
 
-        self._btn_action_assign = QPushButton("Associer à…")
+        self._btn_action_assign = QPushButton(translate("FaceClusterGrid", "Associer à…"))
         self._btn_action_assign.setFixedHeight(26)
         self._btn_action_assign.clicked.connect(self._on_action_assign)
         _ab_row.addWidget(self._btn_action_assign)
 
-        self._btn_action_ignore = QPushButton("Ignorer")
+        self._btn_action_ignore = QPushButton(translate("FaceClusterGrid", "Ignorer"))
         self._btn_action_ignore.setFixedHeight(26)
         self._btn_action_ignore.clicked.connect(self._on_action_ignore)
         _ab_row.addWidget(self._btn_action_ignore)
 
         btn_deselect = QPushButton("✕")
         btn_deselect.setFixedSize(26, 26)
-        btn_deselect.setToolTip("Désélectionner tout")
+        btn_deselect.setToolTip(translate("FaceClusterGrid", "Désélectionner tout"))
         btn_deselect.clicked.connect(self._clear_selection)
         _ab_row.addWidget(btn_deselect)
 
@@ -422,7 +423,7 @@ class FaceClusterGrid(QWidget):
 
         # Cacher la petite barre interne et ouvrir la popup de progression
         self._progress_widget.setVisible(False)
-        self._lbl_title.setText("Chargement…")
+        self._lbl_title.setText(translate("FaceClusterGrid", "Chargement…"))
 
         if self._progress_popup is not None:
             self._progress_popup.close()
@@ -511,8 +512,8 @@ class FaceClusterGrid(QWidget):
             else:
                 next_n = min(_PAGE_SIZE, remaining)
                 self._load_more_btn.setText(
-                    f"Charger {next_n} de plus  "
-                    f"({remaining} restant{'s' if remaining > 1 else ''})"
+                    translate("FaceClusterGrid", "Charger {n} de plus  ").format(n=next_n)
+                    + translate("FaceClusterGrid", "(%n restant(s))", None, remaining)
                 )
 
         # Barre d'action
@@ -578,7 +579,7 @@ class FaceClusterGrid(QWidget):
             self._progress_popup.close()
             self._progress_popup = None
         self._progress_widget.setVisible(False)
-        self._lbl_title.setText("Analyse annulée")
+        self._lbl_title.setText(translate("FaceClusterGrid", "Analyse annulée"))
 
     @Slot(int, int, str)
     def _on_progress(self, current: int, total: int, message: str) -> None:
@@ -616,7 +617,7 @@ class FaceClusterGrid(QWidget):
             self._progress_popup = None
         self._progress_widget.setVisible(False)
         if data is None:
-            self._lbl_title.setText("Erreur lors du chargement")
+            self._lbl_title.setText(translate("FaceClusterGrid", "Erreur lors du chargement"))
             return
         if data.get("is_partial"):
             return  # ne devrait pas arriver, mais garde-fou
@@ -690,8 +691,8 @@ class FaceClusterGrid(QWidget):
         n        = n_groups + n_solos
 
         if n == 0:
-            self._lbl_title.setText("Aucun groupe à identifier")
-            lbl = QLabel("Tous les groupes ont été identifiés ou ignorés.")
+            self._lbl_title.setText(translate("FaceClusterGrid", "Aucun groupe à identifier"))
+            lbl = QLabel(translate("FaceClusterGrid", "Tous les groupes ont été identifiés ou ignorés."))
             lbl.setAlignment(Qt.AlignCenter)
             lbl.setStyleSheet("color: #666; font-size: 13px;")
             self._content_vbox.addWidget(lbl)
@@ -700,16 +701,17 @@ class FaceClusterGrid(QWidget):
         is_partial = data.get("is_partial", False)
         parts = []
         if n_groups > 0:
-            parts.append(f"{n_groups} groupe{'s' if n_groups > 1 else ''}")
+            parts.append(translate("FaceClusterGrid", "%n groupe(s)", None, n_groups))
         if n_solos > 0:
-            parts.append(f"{n_solos} visage{'s isolés' if n_solos > 1 else ' isolé'}")
+            parts.append(translate("FaceClusterGrid", "%n visage(s) isolé(s)", None, n_solos))
         if is_partial:
-            suffix = " — analyse en cours…"
+            suffix = translate("FaceClusterGrid", " — analyse en cours…")
         elif data.get("was_cancelled"):
             # Annulation pendant l'Union-Find : certains groupes qui auraient
             # fusionné plus tard restent séparés (rien n'est jamais fusionné à
             # tort, juste pas encore découvert) — cf. _compute_cluster_groups_bg.
-            suffix = " — analyse interrompue, regroupement partiel"
+            suffix = translate("FaceClusterGrid",
+                               " — analyse interrompue, regroupement partiel")
         else:
             suffix = ""
         self._lbl_title.setText(", ".join(parts) + suffix)
@@ -744,15 +746,19 @@ class FaceClusterGrid(QWidget):
                 if len(cids) >= 2:
                     cids = sorted(cids, key=lambda c: -face_counts.get(c, 0))
                     p = persons_by_id.get(pid)
-                    p_name = p.name if p else f"Personne #{pid}"
+                    p_name = p.name if p else translate(
+                        "FaceClusterGrid", "Personne #{id}").format(id=pid)
                     n_f = sum(face_counts.get(c, 0) for c in cids)
-                    fp = "s" if n_f > 1 else ""
                     best_score = max(singleton_scores.get(c, 0.0) for c in cids)
                     pct = round(best_score * 100)
+                    n_cids = len(cids)
                     group_labels[cids[0]] = (
-                        f"≈ Probablement {p_name} ({pct} %)"
-                        f"  —  {len(cids)} groupe{'s' if len(cids) > 1 else ''},"
-                        f" {n_f} visage{fp}",
+                        translate("FaceClusterGrid", "≈ Probablement {name} ({pct} %)"
+                                  ).format(name=p_name, pct=pct)
+                        + "  —  "
+                        + translate("FaceClusterGrid", "%n groupe(s)", None, n_cids)
+                        + ", "
+                        + translate("FaceClusterGrid", "%n visage(s)", None, n_f),
                         "#7aabdb",
                     )
                     rebuilt_main.append(cids)
@@ -772,7 +778,8 @@ class FaceClusterGrid(QWidget):
         self._pending_build_data = data
 
         flat_section = _SectionWidget("", "", self._content)
-        solo_section = _SectionWidget("Visages isolés", "#666", self._content)
+        solo_section = _SectionWidget(
+            translate("FaceClusterGrid", "Visages isolés"), "#666", self._content)
         self._flat_section = flat_section
         self._solo_section = solo_section
 
@@ -837,8 +844,8 @@ class FaceClusterGrid(QWidget):
                     self._load_more_btn = btn
                     self._content_vbox.addWidget(btn)
                 self._load_more_btn.setText(
-                    f"Charger {next_n} de plus  "
-                    f"({remaining} restant{'s' if remaining > 1 else ''})"
+                    translate("FaceClusterGrid", "Charger {n} de plus  ").format(n=next_n)
+                    + translate("FaceClusterGrid", "(%n restant(s))", None, remaining)
                 )
                 if avatar_items:
                     QTimer.singleShot(
@@ -919,16 +926,14 @@ class FaceClusterGrid(QWidget):
                        if self._cards.get(cid) and self._cards[cid]._is_solo)
         n_groups = n - n_solos
         if n_solos > 0 and n_groups == 0:
-            self._lbl_selected.setText(
-                f"{n} visage{'s isolés' if n > 1 else ' isolé'} sélectionné{'s' if n > 1 else ''}"
-            )
+            self._lbl_selected.setText(translate(
+                "FaceClusterGrid", "%n visage(s) isolé(s) sélectionné(s)", None, n))
         elif n_solos == 0:
-            plural = "s" if n > 1 else ""
-            self._lbl_selected.setText(f"{n} groupe{plural} sélectionné{plural}")
+            self._lbl_selected.setText(translate(
+                "FaceClusterGrid", "%n groupe(s) sélectionné(s)", None, n))
         else:
-            self._lbl_selected.setText(
-                f"{n} élément{'s' if n > 1 else ''} sélectionné{'s' if n > 1 else ''}"
-            )
+            self._lbl_selected.setText(translate(
+                "FaceClusterGrid", "%n élément(s) sélectionné(s)", None, n))
         self._btn_action_view.setVisible(n == 1)
 
     def _clear_selection(self) -> None:
@@ -945,14 +950,18 @@ class FaceClusterGrid(QWidget):
         self._saved_scroll_pos = self._scroll.verticalScrollBar().value()
         card = self._cards.get(cluster_id)
         if card and card._is_solo:
-            self.photos_requested.emit(cluster_id, "Visage isolé")
+            self.photos_requested.emit(
+                cluster_id, translate("FaceClusterGrid", "Visage isolé"))
         else:
             face_count = next(
                 (fc for cid, fc in self._face_db.get_unnamed_clusters() if cid == cluster_id), 0
             )
-            plural = "s" if face_count > 1 else ""
-            group_label = "Isolé" if face_count == 1 else f"Groupe {cluster_id}"
-            self.photos_requested.emit(cluster_id, f"{group_label} — {face_count} visage{plural}")
+            group_label = (translate("FaceClusterGrid", "Isolé") if face_count == 1
+                           else translate("FaceClusterGrid", "Groupe {id}").format(id=cluster_id))
+            self.photos_requested.emit(
+                cluster_id,
+                group_label + " — "
+                + translate("FaceClusterGrid", "%n visage(s)", None, face_count))
 
     def _on_card_ignore_requested(self, cluster_id: int) -> None:
         self._face_db.ignore_cluster(cluster_id)
@@ -1257,8 +1266,8 @@ class FaceClusterGrid(QWidget):
                 next_n = min(_PAGE_SIZE, remaining)
                 if self._load_more_btn:
                     self._load_more_btn.setText(
-                        f"Charger {next_n} de plus  "
-                        f"({remaining} restant{'s' if remaining > 1 else ''})"
+                        translate("FaceClusterGrid", "Charger {n} de plus  ").format(n=next_n)
+                        + translate("FaceClusterGrid", "(%n restant(s))", None, remaining)
                     )
             else:
                 if self._load_more_btn is not None:

@@ -63,10 +63,10 @@ if multiprocessing.current_process().name == 'MainProcess':
             text = "".join(traceback.format_exception(exc_type, exc_value, exc_tb))
 
             dlg = QDialog()
-            dlg.setWindowTitle("Erreur — PixelPhotoManager")
+            dlg.setWindowTitle(translate("Main", "Erreur — PixelPhotoManager"))
             dlg.setMinimumSize(720, 420)
             layout = QVBoxLayout(dlg)
-            layout.addWidget(QLabel("<b>Une erreur non gérée s'est produite :</b>"))
+            layout.addWidget(QLabel(translate("Main", "<b>Une erreur non gérée s'est produite :</b>")))
 
             te = QTextEdit(dlg)
             te.setReadOnly(True)
@@ -75,9 +75,9 @@ if multiprocessing.current_process().name == 'MainProcess':
             layout.addWidget(te)
 
             btn_row = QHBoxLayout()
-            btn_copy = QPushButton("Copier le texte")
+            btn_copy = QPushButton(translate("Main", "Copier le texte"))
             btn_copy.clicked.connect(lambda: app.clipboard().setText(text))
-            btn_close = QPushButton("Fermer")
+            btn_close = QPushButton(translate("Main", "Fermer"))
             btn_close.clicked.connect(dlg.accept)
             btn_row.addWidget(btn_copy)
             btn_row.addStretch()
@@ -110,6 +110,7 @@ if multiprocessing.current_process().name == 'MainProcess':
         QFileDialog, QFrame, QWidget, QSplashScreen, QTextEdit,
     )
     from PySide6.QtCore import Qt, QPoint, QTimer
+    from src.core.i18n import translate
     from PySide6.QtGui import QColor, QFont, QPainter, QPen, QPixmap, QLinearGradient
 
 logger = logging.getLogger(__name__)
@@ -176,14 +177,14 @@ def _splash_status(splash: QSplashScreen, app: QApplication, msg: str) -> None:
 
 def _build_onboarding(config) -> QDialog:
     dlg = QDialog()
-    dlg.setWindowTitle("Bienvenue dans PixelPhotoManager")
+    dlg.setWindowTitle(translate("Main", "Bienvenue dans PixelPhotoManager"))
     dlg.setMinimumWidth(500)
 
     layout = QVBoxLayout(dlg)
     layout.setSpacing(14)
     layout.setContentsMargins(24, 24, 24, 24)
 
-    title = QLabel("Bienvenue dans PixelPhotoManager !")
+    title = QLabel(translate("Main", "Bienvenue dans PixelPhotoManager !"))
     font = QFont()
     font.setPointSize(14)
     font.setBold(True)
@@ -192,7 +193,8 @@ def _build_onboarding(config) -> QDialog:
     layout.addWidget(title)
 
     # --- Dossiers ---
-    layout.addWidget(QLabel("Où sont vos photos ? Choisissez au moins un dossier à surveiller."))
+    layout.addWidget(QLabel(translate(
+        "Main", "Où sont vos photos ? Choisissez au moins un dossier à surveiller.")))
 
     folder_list = QListWidget()
     for f in config.get_scan_folders():
@@ -200,10 +202,12 @@ def _build_onboarding(config) -> QDialog:
     layout.addWidget(folder_list)
 
     btn_row = QHBoxLayout()
-    btn_add = QPushButton("+ Ajouter un dossier")
+    btn_add = QPushButton(translate("Main", "+ Ajouter un dossier"))
 
     def _add_folder():
-        folder = QFileDialog.getExistingDirectory(dlg, "Choisir un dossier", os.path.expanduser("~"))
+        folder = QFileDialog.getExistingDirectory(
+            dlg, translate("Main", "Choisir un dossier"),
+            os.path.expanduser("~"))
         if folder and folder not in [
             folder_list.item(i).text() for i in range(folder_list.count())
         ]:
@@ -221,28 +225,30 @@ def _build_onboarding(config) -> QDialog:
     layout.addWidget(sep)
 
     # --- Reconnaissance faciale ---
-    lbl_faces = QLabel("Reconnaissance des personnes")
+    lbl_faces = QLabel(translate("Main", "Reconnaissance des personnes"))
     font2 = QFont()
     font2.setBold(True)
     lbl_faces.setFont(font2)
     layout.addWidget(lbl_faces)
 
-    chk_faces = QCheckBox(
+    chk_faces = QCheckBox(translate(
+        "Main",
         "Analyser automatiquement les visages après chaque scan\n"
-        "(traitement en arrière-plan — recommandé)"
-    )
+        "(traitement en arrière-plan — recommandé)",
+    ))
     chk_faces.setChecked(True)
     layout.addWidget(chk_faces)
 
-    lbl_note = QLabel(
+    lbl_note = QLabel(translate(
+        "Main",
         "La première analyse peut prendre plusieurs minutes selon la taille\n"
-        "de votre bibliothèque. Elle n'est faite qu'une seule fois par photo."
-    )
+        "de votre bibliothèque. Elle n'est faite qu'une seule fois par photo.",
+    ))
     lbl_note.setStyleSheet("color: #888; font-size: 11px;")
     layout.addWidget(lbl_note)
 
     # --- Bouton démarrer ---
-    btn_start = QPushButton("Commencer →")
+    btn_start = QPushButton(translate("Main", "Commencer →"))
     btn_start.setDefault(True)
 
     def _start():
@@ -262,6 +268,14 @@ def main() -> None:
     app = QApplication(sys.argv)
     app.setApplicationName("PixelPhotoManager")
     app.setOrganizationName("PixelPhotoManager")
+
+    # Langue — AVANT la construction du moindre widget (y compris le splash) :
+    # les libellés sont traduits à la construction, pas réévalués ensuite.
+    # Avant aussi les imports de src.ui plus bas, dont les constantes de module
+    # (libellés de traitements, de cadres…) sont traduites à l'import.
+    from src.core import i18n
+    from src.core.config import Config
+    i18n.install(app, i18n.current_language(Config()))
 
     # Génère l'icône coche pour le style global des QCheckBox
     import tempfile
@@ -287,7 +301,8 @@ def main() -> None:
     app.processEvents()
 
     logger.debug("Import des modules internes")
-    _splash_status(splash, app, "Chargement des modules…")
+    _splash_status(splash, app,
+                   translate("Main", "Chargement des modules…"))
     from src.core.config import Config
     from src.library.catalog import Catalog
     from src.library.thumbnail_cache import ThumbnailCache
@@ -302,26 +317,31 @@ def main() -> None:
     warm_app_version_async()
 
     logger.debug("Initialisation Config")
-    _splash_status(splash, app, "Lecture de la configuration…")
+    _splash_status(splash, app,
+                   translate("Main", "Lecture de la configuration…"))
     config = Config()
 
     logger.debug("Initialisation Catalog")
-    _splash_status(splash, app, "Ouverture du catalogue…")
+    _splash_status(splash, app,
+                   translate("Main", "Ouverture du catalogue…"))
     catalog = Catalog()
 
     logger.debug("Initialisation ThumbnailCache")
-    _splash_status(splash, app, "Initialisation du cache de vignettes…")
+    _splash_status(splash, app,
+                   translate("Main", "Initialisation du cache de vignettes…"))
     thumb_cache = ThumbnailCache()
     _removed = catalog.cleanup_asset_dirs()
     if _removed:
         thumb_cache.invalidate_many(_removed)
 
     logger.debug("Initialisation LibraryScanner")
-    _splash_status(splash, app, "Préparation du scanner de bibliothèque…")
+    _splash_status(splash, app,
+                   translate("Main", "Préparation du scanner de bibliothèque…"))
     scanner = LibraryScanner(catalog, thumb_cache)
 
     logger.debug("Initialisation FaceDatabase")
-    _splash_status(splash, app, "Initialisation de la base de données des visages…")
+    _splash_status(splash, app,
+                   translate("Main", "Initialisation de la base de données des visages…"))
     face_db = FaceDatabase()
 
     if not config.get_scan_folders():
@@ -335,7 +355,8 @@ def main() -> None:
         app.processEvents()
 
     logger.debug("Création MainWindow")
-    _splash_status(splash, app, "Création de la fenêtre principale…")
+    _splash_status(splash, app,
+                   translate("Main", "Création de la fenêtre principale…"))
     window = MainWindow(config, catalog, thumb_cache, scanner, face_db)
     window.show()
     splash.finish(window)

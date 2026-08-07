@@ -12,6 +12,7 @@ from PySide6.QtWidgets import (
 )
 
 from src.core.problems_history import problems_history
+from src.core.i18n import translate
 
 
 # ---------------------------------------------------------------------------
@@ -43,15 +44,16 @@ class _ProblemRow(QWidget):
         corrupted = entry.get("corrupted_count", 0)
         repaired = entry.get("repaired_count", 0)
         summary = QLabel(
-            f"{corrupted} fichier{'s' if corrupted != 1 else ''} corrompu{'s' if corrupted != 1 else ''} détecté"
-            f"{'s' if corrupted != 1 else ''}, {repaired} réparé{'s' if repaired != 1 else ''}"
+            translate("ProblemRow", "%n fichier(s) corrompu(s) détecté(s)", None, corrupted)
+            + ", "
+            + translate("ProblemRow", "%n réparé(s)", None, repaired)
         )
         summary.setStyleSheet("color: #888; font-size: 11px; background: transparent; border: none;")
         summary.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
         top.addWidget(summary, stretch=1)
 
         list_path = entry.get("list_path")
-        btn_open = QPushButton("Ouvrir la liste…")
+        btn_open = QPushButton(translate("ProblemRow", "Ouvrir la liste…"))
         btn_open.setStyleSheet(
             "QPushButton { background: #2a5080; color: white; border: none;"
             " border-radius: 3px; padding: 3px 10px; }"
@@ -60,7 +62,8 @@ class _ProblemRow(QWidget):
         )
         has_list = bool(list_path) and os.path.isfile(list_path)
         btn_open.setEnabled(has_list)
-        btn_open.setToolTip(list_path or "Aucun fichier associé")
+        btn_open.setToolTip(list_path
+                            or translate("ProblemRow", "Aucun fichier associé"))
         if has_list:
             btn_open.clicked.connect(lambda: os.startfile(list_path))
         top.addWidget(btn_open)
@@ -74,7 +77,7 @@ class _ProblemRow(QWidget):
 class ProblemsHistoryDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("Historique des problèmes")
+        self.setWindowTitle(translate("ProblemsHistoryDialog", "Historique des problèmes"))
         self.setMinimumWidth(560)
         self.setMinimumHeight(380)
         self.setAttribute(Qt.WA_DeleteOnClose)
@@ -85,7 +88,7 @@ class ProblemsHistoryDialog(QDialog):
         root.setSpacing(10)
         root.setContentsMargins(16, 16, 16, 14)
 
-        lbl = QLabel("Problèmes rencontrés (fichiers corrompus détectés lors des analyses)")
+        lbl = QLabel(translate("ProblemsHistoryDialog", "Problèmes rencontrés (fichiers corrompus détectés lors des analyses)"))
         lbl.setStyleSheet("font-size: 13px; font-weight: bold; color: #ccc;")
         lbl.setWordWrap(True)
         root.addWidget(lbl)
@@ -103,7 +106,7 @@ class ProblemsHistoryDialog(QDialog):
 
         entries = list(reversed(problems_history.get_entries()))
         if not entries:
-            empty = QLabel("Aucun problème enregistré pour l'instant.")
+            empty = QLabel(translate("ProblemsHistoryDialog", "Aucun problème enregistré pour l'instant."))
             empty.setStyleSheet("color: #555; font-size: 11px; padding: 24px;")
             empty.setAlignment(Qt.AlignCenter)
             layout.addWidget(empty)
@@ -117,7 +120,7 @@ class ProblemsHistoryDialog(QDialog):
 
         btn_row = QHBoxLayout()
         btn_row.addStretch()
-        btn_close = QPushButton("Fermer")
+        btn_close = QPushButton(translate("ProblemsHistoryDialog", "Fermer"))
         btn_close.setFixedWidth(80)
         btn_close.clicked.connect(self.accept)
         btn_row.addWidget(btn_close)

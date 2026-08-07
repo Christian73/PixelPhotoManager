@@ -1,0 +1,187 @@
+<h2>Face detection and recognition</h2>
+
+<p>The recognition pipeline runs in three steps:</p>
+<p style="text-align:center; font-size:13px;">
+  <b>① Analyse</b> (automatic) &nbsp;→&nbsp; <b>② Group</b> &nbsp;→&nbsp; <b>③ Identify</b>
+</p>
+<p>Only steps ② and ③ require anything from you.
+The options below are presented in the order in which they appear in the <b>Faces</b> menu.
+Read the descriptions before using one: some of them are long.</p>
+
+<hr/>
+
+<h3>① Analyse the faces &nbsp;<span style="font-weight:normal;color:#888;">(automatic, no action required)</span></h3>
+<p><b>What it does:</b> As soon as a library scan finds new photos, the analysis starts
+automatically in the background: InsightFace (buffalo_l model) detects the faces and computes
+a 512D ArcFace vector for each one. When it finishes, grouping also starts automatically.
+Progress is shown in the status bar.</p>
+<p><b>Scope:</b> Only the photos that have <u>never been analysed</u> (new photos added to the
+library). Photos already processed are skipped, even if they contain faces marked
+“ignored”.</p>
+<p class="tip">Duration: from a few seconds (a new photo) to several hours (the first analysis
+of a large library). The application stays usable throughout.</p>
+
+<hr/>
+
+<h3>Picasa import &nbsp;<span style="font-weight:normal;color:#888;">(Faces › Import from Picasa…)</span></h3>
+<ul>
+  <li>Imports the face annotations from Google Picasa's <code>.picasa.ini</code> files:
+      names and face regions.</li>
+  <li>Names are matched automatically to existing people, or create new people.</li>
+</ul>
+<p class="tip"><b>Do this only once.</b> A new import re-inserts every Picasa name and
+annotation already known, which can create duplicates or bring back associations you had
+removed. A warning is shown if you try to run the import again.</p>
+
+<hr/>
+
+<h3>Reset and reindex &nbsp;<span style="font-weight:normal;color:#888;">(Faces › Reset and reindex…)</span></h3>
+<p>Two options to choose from, to be used with care:</p>
+<table>
+  <tr><th>Option</th><th>What is erased</th><th>What is kept</th></tr>
+  <tr>
+    <td><b>Reset clustering</b></td>
+    <td>HDBSCAN groups only</td>
+    <td>Embeddings, names and person ↔ face associations</td>
+  </tr>
+  <tr>
+    <td><b>Full reindex</b></td>
+    <td>Everything (embeddings, groups, names, associations)</td>
+    <td>— (clean slate)</td>
+  </tr>
+</table>
+<p class="tip"><b>A full reindex takes several hours</b> depending on the size of the library.
+Make a backup first.</p>
+
+<hr/>
+
+<h3>② Group the faces &nbsp;<span style="font-weight:normal;color:#888;">(Faces › Group faces…)</span></h3>
+<p><b>What it does:</b> Groups by similarity the faces that have already been analysed, using
+the HDBSCAN algorithm on the ArcFace vectors. The groups are then presented in
+<i>Identify the people…</i></p>
+<p><b>Scope:</b> Every face with a stored embedding, <u>except</u> those already identified
+(person_id assigned). Confirmed associations are kept intact.</p>
+<p><b>What it does NOT do:</b></p>
+<ul>
+  <li>It does not run InsightFace detection again.</li>
+  <li>It does not erase names or associations already confirmed.</li>
+  <li>It does not process faces marked “ignored”.</li>
+</ul>
+<p class="tip">Duration: 15 to 30 minutes depending on the size of the library.
+Run it again after adjusting the similarity tolerance in the Settings.</p>
+<p class="tip">As soon as new groups are formed, the application automatically compares the
+centroid (average embedding) of each one to the people already named. Three confidence tiers,
+according to the cosine similarity with the closest person:</p>
+<table>
+  <tr><th>Similarity</th><th>Effect</th></tr>
+  <tr><td>≥ 70&nbsp;%</td><td>Automatically assigned to the person, <b>without confirmation</b></td></tr>
+  <tr><td>≥ 55&nbsp;%</td><td>Suggestion recorded: the group appears under “Awaiting
+      verification” in the view of the person concerned — see step ③ below</td></tr>
+  <tr><td>≥ 50&nbsp;%</td><td>A “Probably X” label (blue) shown as a preview in the
+      identification popup, without a suggestion being recorded yet</td></tr>
+</table>
+<p class="tip">This comparison is silent and never runs InsightFace again. Below 70&nbsp;%, no
+face is ever associated with a person without your approval.</p>
+
+<hr/>
+
+<h3>Error review &nbsp;<span style="font-weight:normal;color:#888;">(Faces › Error review…)</span></h3>
+<p><b>What it does:</b> Lists the photos for which step ① (analysis) failed — a timeout or a
+crash of the detection subprocess — with a thumbnail, the file name and the type of error. The
+<b>⟳ Retry</b> button runs the analysis again for that single file; the row disappears from the
+list as soon as processing succeeds.</p>
+<p><b>Scope:</b> Only the photos in error. As long as a photo stays in error, it is excluded
+from the following automatic analyses (it is not retried on every scan).</p>
+<p class="tip">These photos can also be spotted directly in the grid: right-clicking a
+thumbnail in error offers the “Retry face identification” option in the context menu.</p>
+
+<hr/>
+
+<h3>Backup and restore</h3>
+<ul>
+  <li><b>Faces › Back up recognition data…</b> — creates a timestamped backup of the whole
+      <code>faces.db</code> (embeddings, groups, people, annotations).</li>
+  <li><b>Faces › Manage backups…</b> — lists, restores or deletes the backups. The current
+      state is automatically backed up before any restore.</li>
+</ul>
+
+<hr/>
+
+<h3>Counters &nbsp;<span style="font-weight:normal;color:#888;">(Faces › Counters…)</span></h3>
+<p>Shows a numerical summary of the face recognition: number of people identified, of faces
+identified / recognised / awaiting confirmation / unknown, as well as the counters related to
+the Picasa import. Nothing is started — it is a plain status report.</p>
+
+<hr/>
+
+<h3>③ Identify the people &nbsp;<span style="font-weight:normal;color:#888;">(“Identify…” button in the sidebar)</span></h3>
+<p>The <b>Identify…</b> button in the sidebar (with a badge showing the number of groups
+awaiting attention) opens the view of the anonymous groups so you can name them. An
+unidentified group can show a suggested name, according to its resemblance to a person already
+named:</p>
+<ul>
+  <li><b>“Probably X”</b> (blue) — similarity ≥ 50&nbsp;%</li>
+  <li><b>“Maybe X”</b> (grey) — similarity ≥ 45&nbsp;%</li>
+</ul>
+<p>Giving the same name to several groups merges them into the same person.</p>
+<p>Nothing is started — this is pure navigation.</p>
+
+<h3>View of one person's faces</h3>
+<p>Click a person in the sidebar to open their detailed view. It shows two sections:</p>
+<ul>
+  <li><b>Confirmed faces</b> — faces already associated with this person.
+    <ul>
+      <li>Single click: select a face.</li>
+      <li><kbd>Ctrl</kbd>+click: multiple selection. <kbd>Shift</kbd>+click: range selection.</li>
+      <li>Double-click: open the matching photo in the viewer.</li>
+    </ul>
+  </li>
+</ul>
+<p><b>Right-click</b> on a confirmed face:</p>
+<table>
+  <tr><th>Action</th><th>Effect</th></tr>
+  <tr><td><b>Reassign</b></td><td>Moves the selected face or faces to another person</td></tr>
+  <tr><td><b>Unassign</b></td><td>Removes the face from the person; it is reconsidered for other people</td></tr>
+  <tr><td><b>Use as the main thumbnail</b></td><td>Uses this face as the avatar in the sidebar</td></tr>
+</table>
+<ul>
+  <li><b>Awaiting verification</b> — groups the system suggests associating with this person.
+    <ul>
+      <li>Hover a thumbnail to reveal <b>✓</b> (accept) and <b>✗</b> (reject).</li>
+      <li><b>Right-click</b>: accept or reject the whole group.</li>
+      <li><b>Accept all</b> / <b>Reject all</b> buttons in the header of the section.</li>
+    </ul>
+  </li>
+</ul>
+<p class="tip">A rejected face is never lost: it stays isolated and remains a candidate for a
+suggestion for other people.</p>
+
+<h3>Managing people (sidebar)</h3>
+<ul>
+  <li>Named people appear in the sidebar under <b>People</b>.</li>
+  <li>An orange badge between the thumbnail and the name shows the number of pending
+      suggestions.</li>
+  <li>In the viewer, the <b>Faces</b> panel lists the faces of the open photo.</li>
+</ul>
+<p><b>Right-click</b> on a person in the sidebar:</p>
+<table>
+  <tr><th>Action</th><th>Effect</th></tr>
+  <tr><td><b>Rename…</b></td><td>Changes the name throughout the library</td></tr>
+  <tr><td><b>Merge with…</b></td><td>Merges every face of this person with those of another</td></tr>
+  <tr><td><b>Clear the name…</b></td><td>Removes the name — the faces become anonymous groups again</td></tr>
+</table>
+
+<hr/>
+
+<h3>Ignored faces</h3>
+<p>A face can be ignored in two ways:</p>
+<ul>
+  <li><b>Automatically</b> during detection: size below the proportional threshold, or
+      confidence score &lt; 0.65. The face is stored but excluded from clustering.</li>
+  <li><b>Manually</b> with the ✕ button in the Faces panel (false positive, stand-in,
+      background). The face stays recoverable through <b>Ignored faces…</b> (below).</li>
+</ul>
+<p>The <b>Ignored faces…</b> button at the bottom of the Faces panel lets you see and restore
+the ignored faces photo by photo.</p>
+
+<hr/>

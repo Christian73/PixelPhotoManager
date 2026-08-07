@@ -1,0 +1,49 @@
+<h2>PixelPhotoManager</h2>
+<p>Nicht-destruktive Foto- und Videoverwaltung für Windows.
+Alle Bearbeitungen werden getrennt gespeichert — das Original wird nie verändert.</p>
+
+<p class="tip"><b>Tipp:</b> Dieses Hilfefenster hat oben eine Suchleiste
+(<kbd>Strg</kbd>+<kbd>F</kbd> setzt den Cursor hinein). Sie durchsucht den angezeigten Reiter und
+bei Bedarf die folgenden — der Reiter mit dem ersten Treffer wird automatisch ausgewählt
+und die Stelle hervorgehoben. <kbd>Eingabetaste</kbd> springt zum nächsten Treffer.</p>
+
+<h2>Aufbau der Oberfläche</h2>
+<ul>
+  <li><b>Linke Seitenleiste</b> — überwachte Ordner, Alben, identifizierte Personen und ganz oben
+      ein Sofortfilter nach Dateiname, Kameramarke/-modell, Ordner oder
+      Person (<kbd>F9</kbd> blendet die Seitenleiste ein/aus).</li>
+  <li><b>Raster in der Mitte</b> — Miniaturen der Fotos und Videos des gewählten Kontexts.</li>
+  <li><b>Betrachter</b> — öffnet sich per Doppelklick auf eine Miniatur; Bearbeitungsleiste links.</li>
+  <li><b>Untere Leiste</b> — Anzahl der Dateien, Größe, Zoomregler des Rasters.</li>
+</ul>
+
+<h2>Anzeigemodi des Rasters</h2>
+<ul>
+  <li><b>Rastermodus</b> — gleich große Miniaturen, Größe über den Regler unten rechts einstellbar.</li>
+  <li><b>Zeitleistenmodus</b> — ein Zeitband: 5 Reihen, die zur Mitte hin größer werden.
+    Das mittlere Foto ist das „aktuelle“. Navigieren Sie mit dem Mausrad, den Pfeiltasten
+    oder der Bildlaufleiste rechts. Die Diaschau beginnt bei diesem mittleren Foto.</li>
+</ul>
+
+<h2>Unterstützte Formate</h2>
+<p><b>Bilder:</b> JPEG, PNG, TIFF, WebP, BMP, GIF, HEIC/HEIF,
+RAW (CR2, NEF, ARW, DNG, ORF, RW2).<br>
+<b>Videos:</b> MP4, MOV, AVI, MKV, WMV, WebM, M4V, 3GP, FLV, TS, MTS, MPG, MPEG.</p>
+<p class="tip"><b>Hinweis:</b> Eine RAW-Datei wird in der Auflösung der von der Kamera
+eingebetteten JPEG-Vorschau angezeigt und exportiert (nicht als vollständige Demosaikierung des Sensors).</p>
+
+<h2>Wo Ihre Daten liegen</h2>
+<p>Alle Daten befinden sich in <b>%LOCALAPPDATA%\PixelPhotoManager\</b></p>
+<table>
+  <tr><th>Datei / Ordner</th><th>Inhalt</th></tr>
+  <tr><td><code>catalog.db</code></td><td>Foto-/Videoindex (Pfade, EXIF, Metadaten)</td></tr>
+  <tr><td><code>thumbnails.db</code></td><td>Zwischenspeicher der erzeugten Miniaturen</td></tr>
+  <tr><td><code>edits.db</code></td><td>Alle Bearbeitungen und ihr Verlauf</td></tr>
+  <tr><td><code>faces.db</code></td><td>Erkannte Gesichter, Embeddings, Cluster und identifizierte Personen</td></tr>
+  <tr><td><code>dedup_cache.db</code></td><td>Zwischenspeicher der Duplikatanalyse (Fingerabdrücke, bereits erfolgte Vergleiche)</td></tr>
+  <tr><td><code>config.json</code></td><td>Überwachte Ordner und Einstellungen</td></tr>
+  <tr><td><code>faces_backups\</code></td><td>Zeitgestempelte Sicherungen der Gesichtserkennung (<code>visages_JJJJMMTT_HHMMSS.zip</code>)</td></tr>
+  <tr><td><code>problems_history.jsonl</code></td><td>Verlauf der bei den Duplikatanalysen gefundenen/reparierten beschädigten Dateien</td></tr>
+</table>
+<p class="tip">Ihre Originaldateien werden <b>nie verändert</b>. Wird <code>edits.db</code> gelöscht,
+sind alle Bearbeitungen weg; wird <code>catalog.db</code> gelöscht, wird vollständig neu indiziert.</p>

@@ -20,6 +20,9 @@ _DEFAULTS = {
     "ui": {
         "sidebar_width": 240,
         "theme": "dark",
+        # Langue de l'interface — "fr" | "en" | "de" (cf. src/core/i18n.py).
+        # Lue au démarrage uniquement : le changement prend effet au redémarrage.
+        "language": "fr",
         "splitters": {
             "viewer": "",
             "sidebar_panels": "",

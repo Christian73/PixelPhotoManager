@@ -9,6 +9,7 @@ Sortie : dist\PixelPhotoManager\PixelPhotoManager.exe  (one-dir)
 from PyInstaller.utils.hooks import collect_all
 from pathlib import Path
 import insightface
+import PySide6
 
 ROOT = Path(SPECPATH)
 
@@ -55,8 +56,10 @@ if not _buffalo_l_dir.is_dir():
     )
 datas += [(str(_buffalo_l_dir), "insightface_root/models/buffalo_l")]
 
-# Contenu des onglets d'aide (src/ui/help_content/*.html) — résolu en mode
-# figé via sys._MEIPASS/help_content (cf. src/ui/help_dialog.py::_content_dir).
+# Contenu des onglets d'aide (src/ui/help_content/<langue>/*.html) — résolu en
+# mode figé via sys._MEIPASS/help_content (cf. src/ui/help_dialog.py::_content_dir).
+# Une entrée « dossier » de datas est copiée récursivement : les sous-dossiers
+# de langue (fr/en/de) suivent sans entrée dédiée.
 datas += [("src/ui/help_content", "help_content")]
 
 # Numéro de version embarqué à la racine du bundle (sys._MEIPASS/VERSION), lu
@@ -71,6 +74,26 @@ if not _version_file.is_file():
         "Lancez le build via build.ps1 (qui le génère) plutôt que pyinstaller directement."
     )
 datas += [(str(_version_file), ".")]
+
+# Catalogues de traduction compilés (translations/ppm_*.qm) + ceux de Qt lui-même
+# (qtbase_*.qm : boutons OK/Annuler, sélecteur de fichiers…), les deux résolus par
+# src/core/i18n.py sous sys._MEIPASS/translations en mode figé. Les .qm sont
+# générés par tools/update_translations.py — un .ts sans .qm ne sert à rien à
+# l'exécution, d'où l'échec explicite plutôt qu'une interface muettement française.
+_ts_dir = ROOT / "translations"
+_qm_files = sorted(_ts_dir.glob("ppm_*.qm")) if _ts_dir.is_dir() else []
+if not _qm_files:
+    raise FileNotFoundError(
+        f"Aucun catalogue compilé dans {_ts_dir}\n"
+        "Lancez : .venv\\Scripts\\python.exe tools\\update_translations.py"
+    )
+datas += [(str(p), "translations") for p in _qm_files]
+
+_qt_ts_dir = Path(PySide6.__file__).parent / "translations"
+for _code in ("fr", "en", "de"):
+    _qtbase = _qt_ts_dir / f"qtbase_{_code}.qm"
+    if _qtbase.is_file():
+        datas += [(str(_qtbase), "translations")]
 
 a = Analysis(
     [str(ROOT / "main.py")],

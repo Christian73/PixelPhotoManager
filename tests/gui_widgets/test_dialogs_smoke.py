@@ -79,12 +79,12 @@ class TestHelpDialog:
         assert tabs.count() == len(_TABS)
 
     def test_named_tab_selected(self, qtbot):
-        from src.ui.help_dialog import HelpDialog
+        from src.ui.help_dialog import HelpDialog, _TAB_LABELS
         dlg = HelpDialog(tab="Doublons")
         qtbot.addWidget(dlg)
         from PySide6.QtWidgets import QTabWidget
         tabs = dlg.findChild(QTabWidget)
-        assert tabs.tabText(tabs.currentIndex()) == "Doublons"
+        assert tabs.tabText(tabs.currentIndex()) == _TAB_LABELS["Doublons"]
 
     def test_version_check_states(self, qtbot):
         from src.ui import help_dialog as hd
@@ -106,26 +106,28 @@ class TestHelpDialog:
         dlg.close()   # closeEvent : déconnexion sans exception
 
     def test_search_finds_text_in_current_tab(self, qtbot):
-        """"RANSAC" n'apparaît que dans doublons.html (cf. help_content/), même
-        en comparaison insensible à la casse (find() par défaut) — chercher ce
-        terme en étant déjà sur cet onglet ne doit pas en changer."""
-        from src.ui.help_dialog import HelpDialog
+        """"RANSAC" n'apparaît que dans doublons.html (cf. help_content/<langue>/),
+        même en comparaison insensible à la casse (find() par défaut) — chercher
+        ce terme en étant déjà sur cet onglet ne doit pas en changer."""
+        from src.ui.help_dialog import HelpDialog, _TAB_LABELS
         dlg = HelpDialog(tab="Doublons")
         qtbot.addWidget(dlg)
         dlg._search_edit.setText("RANSAC")
         tabs = dlg._tabs
-        assert tabs.tabText(tabs.currentIndex()) == "Doublons"
+        # Le libellé de l'onglet est traduit : comparer via _TAB_LABELS, jamais
+        # à un littéral français (cf. CLAUDE.md, « chaîne qui sert aussi de clé »).
+        assert tabs.tabText(tabs.currentIndex()) == _TAB_LABELS["Doublons"]
         assert tabs.currentWidget().textCursor().selectedText() == "RANSAC"
 
     def test_search_switches_to_tab_containing_match(self, qtbot):
-        from src.ui.help_dialog import HelpDialog
+        from src.ui.help_dialog import HelpDialog, _TAB_LABELS
         dlg = HelpDialog()  # démarre sur "Vue d'ensemble"
         qtbot.addWidget(dlg)
         tabs = dlg._tabs
-        assert tabs.tabText(tabs.currentIndex()) == "Vue d'ensemble"
+        assert tabs.tabText(tabs.currentIndex()) == _TAB_LABELS["Vue d'ensemble"]
 
         dlg._search_edit.setText("RANSAC")
-        assert tabs.tabText(tabs.currentIndex()) == "Doublons"
+        assert tabs.tabText(tabs.currentIndex()) == _TAB_LABELS["Doublons"]
 
     def test_search_not_found_flags_the_search_box(self, qtbot):
         from src.ui.help_dialog import HelpDialog

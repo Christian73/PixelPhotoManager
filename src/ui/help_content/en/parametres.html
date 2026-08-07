@@ -1,0 +1,28 @@
+<h2>Settings</h2>
+<p>Reach the settings through <b>Tools › Settings</b>.</p>
+
+<h3>Face recognition — Similarity tolerance</h3>
+<p>Controls how much two faces must look alike to be placed in the same group during
+clustering. Range: 25 % to 70 %. Default value: <b>60 %</b>.</p>
+<table>
+  <tr><th>Range</th><th>Behaviour</th></tr>
+  <tr><td>25–30 %</td><td>Very strict groups — few mixing errors, but the same person under
+      very different angles or lighting can form several groups</td></tr>
+  <tr><td>31–40 %</td><td>Balanced groups</td></tr>
+  <tr><td>41–55 %</td><td>Wider groups — brings together more variants of the same face</td></tr>
+  <tr><td>56–70 %</td><td>Very wide groups — risk of mixing different people</td></tr>
+</table>
+<p class="tip">If you change this setting, the groups are recomputed automatically when the
+dialog is closed. The associations of people already named are not affected.</p>
+
+<h3>Video player</h3>
+<p>Choose the player used by the <b>▶ Open the video</b> button in the viewer.</p>
+<table>
+  <tr><th>Option</th><th>Behaviour</th></tr>
+  <tr><td><b>System default player</b></td><td>Uses the application associated with video files
+      in Windows (e.g. Films &amp; TV)</td></tr>
+  <tr><td><b>Custom player</b></td><td>Give the path to an executable.
+      Click <b>Browse…</b> to navigate to it.
+      Examples: <code>C:\Program Files\VLC\vlc.exe</code>,
+      <code>C:\Program Files\MPC-HC\mpc-hc64.exe</code></td></tr>
+</table>

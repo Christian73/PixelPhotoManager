@@ -1,10 +1,11 @@
 # Copyright 2026 Christian Guyot
 # SPDX-License-Identifier: Apache-2.0
-"""Registre persistant des fichiers corrompus supprimés définitivement (cf.
-main_window.py::_offer_corrupted_delete), au format JSON Lines dans
+"""Registre persistant des fichiers corrompus supprimés par l'application (cf.
+main_window_duplicates.py::_offer_corrupted_delete), au format JSON Lines dans
 %LOCALAPPDATA%\\PixelPhotoManager\\deleted_corrupted_files.jsonl — permet à
-l'utilisateur de retrouver après coup la liste exacte des chemins supprimés
-pour tenter de les récupérer depuis une sauvegarde externe.
+l'utilisateur de retrouver après coup la liste exacte des chemins supprimés,
+soit dans la corbeille Windows (où ils sont partis, cf. src/library/trash.py),
+soit dans une sauvegarde externe si la corbeille a depuis été vidée.
 
 API publique :
     deleted_corrupted_files.add_deleted(paths)

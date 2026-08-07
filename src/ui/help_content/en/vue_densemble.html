@@ -1,0 +1,49 @@
+<h2>PixelPhotoManager</h2>
+<p>Non-destructive photo and video manager for Windows.
+Every edit is stored separately — the original is never modified.</p>
+
+<p class="tip"><b>Tip:</b> this help window has a search bar at the top
+(<kbd>Ctrl</kbd>+<kbd>F</kbd> puts the cursor in it). It searches the tab you are reading and then,
+if needed, the following ones — the tab holding the first result is selected automatically
+and the passage is highlighted. <kbd>Enter</kbd> jumps to the next match.</p>
+
+<h2>How the interface is laid out</h2>
+<ul>
+  <li><b>Left sidebar</b> — watched folders, albums, identified people, and at the top
+      an instant filter box by file name, camera make/model, folder or
+      person (<kbd>F9</kbd> shows/hides the sidebar).</li>
+  <li><b>Central grid</b> — thumbnails of the photos and videos in the selected context.</li>
+  <li><b>Viewer</b> — opened by double-clicking a thumbnail; editing panel on the left.</li>
+  <li><b>Bottom bar</b> — number of files, size, zoom slider for the grid.</li>
+</ul>
+
+<h2>Grid display modes</h2>
+<ul>
+  <li><b>Grid mode</b> — uniform thumbnails, size adjustable with the slider at the bottom right.</li>
+  <li><b>Timeline mode</b> — a time ribbon: 5 rows growing towards the centre.
+    The central photo is the “current” one. Move around with the wheel, the arrow keys
+    or the scroll bar on the right. The slideshow starts from that central photo.</li>
+</ul>
+
+<h2>Supported formats</h2>
+<p><b>Images:</b> JPEG, PNG, TIFF, WebP, BMP, GIF, HEIC/HEIF,
+RAW (CR2, NEF, ARW, DNG, ORF, RW2).<br>
+<b>Videos:</b> MP4, MOV, AVI, MKV, WMV, WebM, M4V, 3GP, FLV, TS, MTS, MPG, MPEG.</p>
+<p class="tip"><b>Note:</b> a RAW file is displayed and exported at the resolution of
+the JPEG preview embedded by the camera (not a full demosaic of the sensor data).</p>
+
+<h2>Where your data is stored</h2>
+<p>Everything lives in <b>%LOCALAPPDATA%\PixelPhotoManager\</b></p>
+<table>
+  <tr><th>File / Folder</th><th>Contents</th></tr>
+  <tr><td><code>catalog.db</code></td><td>Photo/video index (paths, EXIF, metadata)</td></tr>
+  <tr><td><code>thumbnails.db</code></td><td>Cache of the generated thumbnails</td></tr>
+  <tr><td><code>edits.db</code></td><td>Every edit and its history</td></tr>
+  <tr><td><code>faces.db</code></td><td>Detected faces, embeddings, clusters and identified people</td></tr>
+  <tr><td><code>dedup_cache.db</code></td><td>Duplicate analysis cache (fingerprints, comparisons already made)</td></tr>
+  <tr><td><code>config.json</code></td><td>Watched folders and preferences</td></tr>
+  <tr><td><code>faces_backups\</code></td><td>Time-stamped backups of the face recognition (<code>visages_YYYYMMDD_HHMMSS.zip</code>)</td></tr>
+  <tr><td><code>problems_history.jsonl</code></td><td>History of the corrupted files found/repaired during the duplicate analyses</td></tr>
+</table>
+<p class="tip">Your original files are <b>never modified</b>. Deleting <code>edits.db</code>
+wipes out every edit; deleting <code>catalog.db</code> forces a full reindex.</p>

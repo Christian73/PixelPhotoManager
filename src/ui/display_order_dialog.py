@@ -10,6 +10,7 @@ from PySide6.QtWidgets import (
 )
 
 from src.core.config import Config
+from src.core.i18n import translate
 
 # Le thème sombre global ne définit pas QRadioButton::indicator, ce qui rend
 # le bouton sélectionné indiscernable du non-sélectionné sur fond foncé
@@ -44,8 +45,8 @@ class _OrderSection(QGroupBox):
         v = QVBoxLayout(self)
 
         mode_row = QHBoxLayout()
-        self._rb_alpha = QRadioButton("Alphabétique")
-        self._rb_chrono = QRadioButton("Chronologique")
+        self._rb_alpha = QRadioButton(translate("OrderSection", "Alphabétique"))
+        self._rb_chrono = QRadioButton(translate("OrderSection", "Chronologique"))
         self._mode_group = QButtonGroup(self)
         self._mode_group.addButton(self._rb_alpha)
         self._mode_group.addButton(self._rb_chrono)
@@ -54,8 +55,8 @@ class _OrderSection(QGroupBox):
         v.addLayout(mode_row)
 
         dir_row = QHBoxLayout()
-        self._rb_asc = QRadioButton("Croissant")
-        self._rb_desc = QRadioButton("Décroissant")
+        self._rb_asc = QRadioButton(translate("OrderSection", "Croissant"))
+        self._rb_desc = QRadioButton(translate("OrderSection", "Décroissant"))
         self._dir_group = QButtonGroup(self)
         self._dir_group.addButton(self._rb_asc)
         self._dir_group.addButton(self._rb_desc)
@@ -78,13 +79,14 @@ class _ChronoAlbumSection(QGroupBox):
     donc pas de paire de boutons "mode" ici, contrairement à _OrderSection)."""
 
     def __init__(self, default_dir: str, parent=None):
-        super().__init__("Album « Chronologie » (toutes les photos)", parent)
+        super().__init__(translate("ChronoAlbumSection",
+                                   "Album « Chronologie » (toutes les photos)"), parent)
         self.setStyleSheet(_RADIO_STYLE)
         v = QVBoxLayout(self)
 
         dir_row = QHBoxLayout()
-        self._rb_asc = QRadioButton("Anti-chronologique (plus anciennes d'abord)")
-        self._rb_desc = QRadioButton("Chronologique (plus récentes d'abord)")
+        self._rb_asc = QRadioButton(translate("ChronoAlbumSection", "Anti-chronologique (plus anciennes d'abord)"))
+        self._rb_desc = QRadioButton(translate("ChronoAlbumSection", "Chronologique (plus récentes d'abord)"))
         self._dir_group = QButtonGroup(self)
         self._dir_group.addButton(self._rb_asc)
         self._dir_group.addButton(self._rb_desc)
@@ -109,16 +111,16 @@ class DisplayOrderDialog(QDialog):
     def __init__(self, config: Config, parent=None):
         super().__init__(parent)
         self._config = config
-        self.setWindowTitle("Ordre d'affichage")
+        self.setWindowTitle(translate("DisplayOrderDialog", "Ordre d'affichage"))
 
         layout = QVBoxLayout(self)
         self._folders = _OrderSection(
-            "Dossiers",
+            translate("DisplayOrderDialog", "Dossiers"),
             config.get("display_order.folder_mode", "alpha"),
             config.get("display_order.folder_dir", "asc"),
         )
         self._grid = _OrderSection(
-            "Grille de photos",
+            translate("DisplayOrderDialog", "Grille de photos"),
             config.get("display_order.grid_mode", "chrono"),
             config.get("display_order.grid_dir", "desc"),
         )

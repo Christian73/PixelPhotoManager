@@ -13,6 +13,7 @@ from PySide6.QtWidgets import (
     QCheckBox, QDialog, QDialogButtonBox, QFrame, QLabel,
     QProgressBar, QPushButton, QVBoxLayout, QHBoxLayout,
 )
+from src.core.i18n import translate
 
 logger = logging.getLogger(__name__)
 
@@ -39,7 +40,7 @@ class PicasaImportDialog(QDialog):
         self._thread             = None
         self._on_edits_imported  = on_edits_imported  # callable({path: EditInfo}) | None
 
-        self.setWindowTitle("Données Picasa détectées")
+        self.setWindowTitle(translate("PicasaImportDialog", "Données Picasa détectées"))
         self.setMinimumWidth(460)
         self.setWindowFlag(Qt.WindowContextHelpButtonHint, False)
 
@@ -55,7 +56,7 @@ class PicasaImportDialog(QDialog):
         layout.setContentsMargins(24, 24, 24, 20)
 
         # Title
-        title = QLabel("Données de reconnaissance Picasa détectées")
+        title = QLabel(translate("PicasaImportDialog", "Données de reconnaissance Picasa détectées"))
         font = QFont()
         font.setPointSize(12)
         font.setBold(True)
@@ -64,8 +65,8 @@ class PicasaImportDialog(QDialog):
         layout.addWidget(title)
 
         layout.addWidget(QLabel(
-            "PixelPhotoManager a trouvé des données de visages Picasa\n"
-            "sur cet ordinateur. Souhaitez-vous les importer ?"
+            translate("PicasaImportDialog", "PixelPhotoManager a trouvé des données de visages Picasa\n"
+            "sur cet ordinateur. Souhaitez-vous les importer ?")
         ))
 
         # Stats box
@@ -81,11 +82,16 @@ class PicasaImportDialog(QDialog):
         stats_layout.setContentsMargins(14, 10, 14, 10)
         stats_layout.setSpacing(4)
 
-        lbl_contacts = QLabel(f"  {n_contacts} personne(s) dans la base Picasa")
+        lbl_contacts = QLabel("  " + translate(
+            "PicasaImportDialog", "%n personne(s) dans la base Picasa", None, n_contacts))
         lbl_contacts.setStyleSheet("color: #ccc; border: none;")
-        lbl_photos = QLabel(f"  {n_photos} photo(s) avec des visages identifiés")
+        lbl_photos = QLabel("  " + translate(
+            "PicasaImportDialog", "%n photo(s) avec des visages identifiés", None, n_photos))
         lbl_photos.setStyleSheet("color: #ccc; border: none;")
-        lbl_edits = QLabel(f"  {n_edits} photo(s) avec des retouches (rotation, recadrage, luminosité…)")
+        lbl_edits = QLabel("  " + translate(
+            "PicasaImportDialog",
+            "%n photo(s) avec des retouches (rotation, recadrage, luminosité…)",
+            None, n_edits))
         lbl_edits.setStyleSheet("color: #ccc; border: none;")
         stats_layout.addWidget(lbl_contacts)
         stats_layout.addWidget(lbl_photos)
@@ -93,17 +99,17 @@ class PicasaImportDialog(QDialog):
         layout.addWidget(stats_frame)
 
         layout.addWidget(QLabel(
-            "L'import créera les personnes manquantes et enregistrera\n"
+            translate("PicasaImportDialog", "L'import créera les personnes manquantes et enregistrera\n"
             "les positions des visages Picasa. Elles seront associées\n"
-            "automatiquement lors de l'analyse ArcFace, même ultérieure."
+            "automatiquement lors de l'analyse ArcFace, même ultérieure.")
         ))
 
         # Checkbox retouches
-        self._chk_edits = QCheckBox("Importer aussi les retouches Picasa (rotation, recadrage, luminosité…)")
+        self._chk_edits = QCheckBox(translate("PicasaImportDialog", "Importer aussi les retouches Picasa (rotation, recadrage, luminosité…)"))
         self._chk_edits.setChecked(n_edits > 0 and self._edit_db is not None)
         self._chk_edits.setEnabled(n_edits > 0 and self._edit_db is not None)
         if self._edit_db is None:
-            self._chk_edits.setToolTip("Base de retouches non disponible")
+            self._chk_edits.setToolTip(translate("PicasaImportDialog", "Base de retouches non disponible"))
         layout.addWidget(self._chk_edits)
 
         # Separator
@@ -131,13 +137,13 @@ class PicasaImportDialog(QDialog):
         self._btn_row = QHBoxLayout()
         self._btn_row.setSpacing(10)
 
-        self._btn_skip = QPushButton("Plus tard")
+        self._btn_skip = QPushButton(translate("PicasaImportDialog", "Plus tard"))
         self._btn_skip.clicked.connect(self._on_skip)
         self._btn_row.addWidget(self._btn_skip)
 
         self._btn_row.addStretch()
 
-        self._btn_import = QPushButton("Importer →")
+        self._btn_import = QPushButton(translate("PicasaImportDialog", "Importer →"))
         self._btn_import.setDefault(True)
         self._btn_import.clicked.connect(self._on_import)
         self._btn_import.setEnabled(n_photos > 0 or n_edits > 0)
@@ -156,7 +162,7 @@ class PicasaImportDialog(QDialog):
         self._btn_import.hide()
         self._btn_skip.setEnabled(False)
         self._progress.show()
-        self._lbl_status.setText("Analyse des dossiers en cours…")
+        self._lbl_status.setText(translate("PicasaImportDialog", "Analyse des dossiers en cours…"))
         self._lbl_status.show()
 
         folders  = self._config.get_scan_folders()
@@ -169,23 +175,34 @@ class PicasaImportDialog(QDialog):
     def _on_progress(self, current: int, total: int) -> None:
         if total > 0:
             self._progress.setValue(int(current / total * 100))
-        self._lbl_status.setText(f"Traitement du dossier {current} / {total}…")
+        self._lbl_status.setText(translate(
+            "PicasaImportDialog", "Traitement du dossier {cur} / {total}…"
+            ).format(cur=current, total=total))
 
     def _on_finished(self, result) -> None:
         self._progress.setValue(100)
         self._config.set("picasa.import_done", True)
 
+        n_persons = result.persons_created
+        n_faces   = result.faces_imported
+        n_photos  = result.photos_processed
+        n_edits   = result.edits_imported
         parts = [
-            f"{result.persons_created} personne(s) créée(s)",
-            f"{result.faces_imported} annotation(s) de visage dans {result.photos_processed} photo(s)",
+            translate("PicasaImportDialog", "%n personne(s) créée(s)",
+                      None, n_persons),
+            translate("PicasaImportDialog", "%n annotation(s) de visage dans {photos}",
+                      None, n_faces).format(
+                photos=translate("PicasaImportDialog", "%n photo(s)",
+                                 None, n_photos)),
         ]
         if result.edits_imported:
-            parts.append(f"{result.edits_imported} retouche(s) importée(s)")
+            parts.append(translate("PicasaImportDialog", "%n retouche(s) importée(s)",
+                                   None, n_edits))
         summary = ", ".join(parts) + "."
         self._lbl_status.setText(summary)
         self._lbl_status.setStyleSheet("color: #7fba7f; font-size: 11px;")
 
-        self._btn_skip.setText("Fermer")
+        self._btn_skip.setText(translate("PicasaImportDialog", "Fermer"))
         self._btn_skip.setEnabled(True)
         self._btn_skip.clicked.disconnect()
         self._btn_skip.clicked.connect(self.accept)

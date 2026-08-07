@@ -1,0 +1,53 @@
+<h2>Slideshow</h2>
+<p>Start the slideshow from <b>View › Slideshow</b> or with <kbd>F5</kbd>.
+It opens <b>full screen</b> and runs through the photos of the current context.</p>
+
+<h3>Starting point</h3>
+<table>
+  <tr><th>Situation when it starts</th><th>First photo</th></tr>
+  <tr><td>Viewer open</td><td>The photo currently on display</td></tr>
+  <tr><td>Timeline mode (ribbon)</td><td>The photo at the <b>centre</b> of the ribbon</td></tr>
+  <tr><td>Any other view</td><td>The oldest photo in the folder</td></tr>
+</table>
+
+<h3>Ken Burns effect</h3>
+<p>Every photo gets a <b>gentle zoom and a slow pan</b>:</p>
+<ul>
+  <li>The zoom goes from 0 to 8 % over the whole display time.</li>
+  <li>The direction is random, with a preference for <b>horizontal and diagonal</b>
+      movements (purely vertical ones are toned down).</li>
+  <li>Photos whose aspect ratio differs from the screen are shown with
+      <b>black bars</b> (letterbox / pillarbox) — they are never cropped.</li>
+  <li>While a new photo loads, the animation of the previous one
+      carries on until the next is ready.</li>
+</ul>
+
+<h3>Control bar</h3>
+<p>The bar appears when the mouse moves and hides again after 5 seconds of inactivity.</p>
+<table>
+  <tr><th>Control</th><th>Effect</th></tr>
+  <tr><td><b>◀ Previous</b></td><td>Go to the older photo</td></tr>
+  <tr><td><b>Next ▶</b></td><td>Go to the newer photo</td></tr>
+  <tr><td><b>−</b> / counter / <b>+</b></td>
+      <td>Shorten / show / lengthen the display interval (1 s to 60 s, in steps of 1 s)</td></tr>
+  <tr><td><b>⏸ / ▶</b></td><td>Pause / resume the automatic advance</td></tr>
+  <tr><td><b>✕</b></td><td>Leave the slideshow</td></tr>
+</table>
+<p class="tip">Moving manually (◀ / ▶ or the arrow keys) while paused shows the neighbouring
+photo without restarting the automatic advance — the pause stays on.</p>
+
+<h3>Keyboard shortcuts</h3>
+<table>
+  <tr><th>Shortcut</th><th>Action</th></tr>
+  <tr><td><kbd>←</kbd> or <kbd>↑</kbd></td><td>Older photo</td></tr>
+  <tr><td><kbd>→</kbd> or <kbd>↓</kbd></td><td>Newer photo</td></tr>
+  <tr><td><kbd>Space</kbd></td><td>Pause / resume</td></tr>
+  <tr><td><kbd>Esc</kbd></td><td>Leave the slideshow</td></tr>
+</table>
+
+<p class="tip">For as long as the slideshow runs, the screen saver and the display sleep
+are switched off: the photos stay visible even if you touch neither keyboard nor
+mouse. The usual Windows behaviour comes back as soon as you leave the slideshow.</p>
+
+<p class="tip"><b>Tip:</b> in timeline mode, scroll the ribbon to the period
+you are interested in before starting the slideshow — it will begin at the central photo.</p>

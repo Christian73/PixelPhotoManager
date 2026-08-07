@@ -12,6 +12,7 @@ from PySide6.QtWidgets import (
     QLineEdit,
     QListWidget,
     QListWidgetItem,
+    QMessageBox,
     QPushButton,
     QRadioButton,
     QStackedWidget,
@@ -19,6 +20,8 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from src.core import i18n
+from src.core.i18n import translate
 from src.core.config import Config
 from src.core.cpu_throttle import (
     BACKGROUND_CPU_LEVELS,
@@ -29,6 +32,85 @@ from src.core.cpu_throttle import (
 from src.ui.edit_panel import MarkedSlider
 
 _DEFAULT_THRESHOLD_PCT = 60
+
+
+class _LanguagePage(QWidget):
+    """Choix de la langue de l'interface.
+
+    Le changement ne prend effet qu'au redémarrage : les widgets construisent
+    leurs libellés une seule fois, à la construction (cf. `src/core/i18n.py`).
+    """
+
+    def __init__(self, config: Config, parent=None) -> None:
+        super().__init__(parent)
+        self._config = config
+        self._initial = i18n.current_language(config)
+        self._build()
+
+    def _build(self) -> None:
+        layout = QVBoxLayout(self)
+        layout.setAlignment(Qt.AlignTop)
+        layout.setSpacing(10)
+        layout.setContentsMargins(24, 20, 24, 20)
+
+        title = QLabel(translate("SettingsDialog", "Langue"))
+        title.setStyleSheet("font-size: 15px; font-weight: bold;")
+        layout.addWidget(title)
+
+        sep = QFrame()
+        sep.setFrameShape(QFrame.HLine)
+        sep.setStyleSheet("color: #444;")
+        layout.addWidget(sep)
+
+        layout.addSpacing(4)
+
+        lbl_desc = QLabel(translate("SettingsDialog",
+            "Langue de l'interface et de l'aide intégrée. Les documents PDF\n"
+            "(guide de l'utilisateur, note de livraison) restent en français."
+        ))
+        lbl_desc.setStyleSheet("color: #aaa; font-size: 11px;")
+        lbl_desc.setWordWrap(True)
+        layout.addWidget(lbl_desc)
+
+        layout.addSpacing(6)
+
+        self._grp = QButtonGroup(self)
+        self._codes: list[str] = []
+        for idx, (code, name) in enumerate(i18n.LANGUAGES.items()):
+            radio = QRadioButton(name)
+            # Nom accessible pour l'automatisation pywinauto (e2e) — même
+            # convention que settings::video_player_path : le libellé, lui,
+            # est traduit et ne peut pas servir de sélecteur stable.
+            radio.setAccessibleName(f"settings::language::{code}")
+            self._grp.addButton(radio, idx)
+            self._codes.append(code)
+            layout.addWidget(radio)
+            if code == self._initial:
+                radio.setChecked(True)
+
+        layout.addStretch()
+
+        lbl_hint = QLabel(translate("SettingsDialog",
+            "Le changement de langue prend effet au prochain démarrage de\n"
+            "l'application."
+        ))
+        lbl_hint.setStyleSheet("color: #777; font-size: 10px; font-style: italic;")
+        lbl_hint.setWordWrap(True)
+        layout.addWidget(lbl_hint)
+
+    def selected_language(self) -> str:
+        checked = self._grp.checkedId()
+        if checked < 0:
+            return self._initial
+        return self._codes[checked]
+
+    def apply(self) -> bool:
+        """Persiste la langue. Renvoie True si elle a changé."""
+        code = self.selected_language()
+        changed = code != self._initial
+        i18n.set_language(self._config, code)
+        self._initial = code
+        return changed
 
 
 class _FaceRecognitionPage(QWidget):
@@ -44,7 +126,7 @@ class _FaceRecognitionPage(QWidget):
         layout.setSpacing(16)
         layout.setContentsMargins(24, 20, 24, 20)
 
-        title = QLabel("Reconnaissance de visages")
+        title = QLabel(translate("FaceRecognitionPage", "Reconnaissance de visages"))
         title.setStyleSheet("font-size: 15px; font-weight: bold;")
         layout.addWidget(title)
 
@@ -55,14 +137,14 @@ class _FaceRecognitionPage(QWidget):
 
         layout.addSpacing(4)
 
-        lbl_title = QLabel("Tolérance de similarité")
+        lbl_title = QLabel(translate("FaceRecognitionPage", "Tolérance de similarité"))
         lbl_title.setStyleSheet("font-weight: bold;")
         layout.addWidget(lbl_title)
 
         lbl_desc = QLabel(
-            "Contrôle à quel point deux visages doivent se ressembler pour être\n"
+            translate("FaceRecognitionPage", "Contrôle à quel point deux visages doivent se ressembler pour être\n"
             "placés dans le même groupe. Une valeur plus élevée regroupe davantage\n"
-            "de visages ensemble, mais risque de mélanger des personnes différentes."
+            "de visages ensemble, mais risque de mélanger des personnes différentes.")
         )
         lbl_desc.setStyleSheet("color: #aaa; font-size: 11px;")
         lbl_desc.setWordWrap(True)
@@ -92,8 +174,8 @@ class _FaceRecognitionPage(QWidget):
         layout.addStretch()
 
         lbl_hint = QLabel(
-            "Si vous modifiez ce paramètre, les groupes seront recalculés\n"
-            "automatiquement lorsque vous fermez cette fenêtre."
+            translate("FaceRecognitionPage", "Si vous modifiez ce paramètre, les groupes seront recalculés\n"
+            "automatiquement lorsque vous fermez cette fenêtre.")
         )
         lbl_hint.setStyleSheet("color: #777; font-size: 10px; font-style: italic;")
         lbl_hint.setWordWrap(True)
@@ -105,13 +187,14 @@ class _FaceRecognitionPage(QWidget):
     def _update_value_label(self, value: int) -> None:
         threshold = value / 100.0
         if value <= 30:
-            hint = "— groupes très stricts"
+            hint = translate("ClusteringPage", "— groupes très stricts")
         elif value <= 40:
-            hint = "— groupes équilibrés"
+            hint = translate("ClusteringPage", "— groupes équilibrés")
         elif value <= 55:
-            hint = "— groupes plus larges"
+            hint = translate("ClusteringPage", "— groupes plus larges")
         else:
-            hint = "— groupes très larges (peut mélanger des personnes différentes)"
+            hint = translate("ClusteringPage",
+                             "— groupes très larges (peut mélanger des personnes différentes)")
         self._lbl_value.setText(f"{threshold:.2f}  {hint}")
 
     def apply(self) -> bool:
@@ -134,7 +217,7 @@ class _VideoPlayerPage(QWidget):
         layout.setSpacing(16)
         layout.setContentsMargins(24, 20, 24, 20)
 
-        title = QLabel("Lecteur vidéo")
+        title = QLabel(translate("VideoPlayerPage", "Lecteur vidéo"))
         title.setStyleSheet("font-size: 15px; font-weight: bold;")
         layout.addWidget(title)
 
@@ -146,8 +229,8 @@ class _VideoPlayerPage(QWidget):
         layout.addSpacing(4)
 
         lbl_desc = QLabel(
-            "Choisissez le lecteur utilisé par le bouton «▶ Ouvrir la vidéo»\n"
-            "dans la visionneuse."
+            translate("VideoPlayerPage", "Choisissez le lecteur utilisé par le bouton «▶ Ouvrir la vidéo»\n"
+            "dans la visionneuse.")
         )
         lbl_desc.setStyleSheet("color: #aaa; font-size: 11px;")
         lbl_desc.setWordWrap(True)
@@ -155,19 +238,19 @@ class _VideoPlayerPage(QWidget):
 
         self._grp = QButtonGroup(self)
 
-        self._rb_default = QRadioButton("Lecteur par défaut du système")
+        self._rb_default = QRadioButton(translate("VideoPlayerPage", "Lecteur par défaut du système"))
         self._grp.addButton(self._rb_default, 0)
         layout.addWidget(self._rb_default)
 
         lbl_default_hint = QLabel(
-            "   Utilise l'application associée aux fichiers vidéo dans Windows."
+            translate("VideoPlayerPage", "   Utilise l'application associée aux fichiers vidéo dans Windows.")
         )
         lbl_default_hint.setStyleSheet("color: #666; font-size: 10px;")
         layout.addWidget(lbl_default_hint)
 
         layout.addSpacing(8)
 
-        self._rb_custom = QRadioButton("Lecteur personnalisé :")
+        self._rb_custom = QRadioButton(translate("VideoPlayerPage", "Lecteur personnalisé :"))
         self._grp.addButton(self._rb_custom, 1)
         layout.addWidget(self._rb_custom)
 
@@ -176,7 +259,7 @@ class _VideoPlayerPage(QWidget):
         path_row.setContentsMargins(20, 0, 0, 0)
 
         self._edit_path = QLineEdit()
-        self._edit_path.setPlaceholderText("Chemin vers l'exécutable…")
+        self._edit_path.setPlaceholderText(translate("VideoPlayerPage", "Chemin vers l'exécutable…"))
         # Nom accessible pour l'automatisation pywinauto (e2e) — sans lui,
         # ce QLineEdit est indiscernable du champ de filtre de la sidebar
         # (MainWindow reste dans l'arbre UIA derrière ce dialogue modal),
@@ -185,7 +268,7 @@ class _VideoPlayerPage(QWidget):
         self._edit_path.textChanged.connect(lambda: self._rb_custom.setChecked(True))
         path_row.addWidget(self._edit_path, stretch=1)
 
-        btn_browse = QPushButton("Parcourir…")
+        btn_browse = QPushButton(translate("VideoPlayerPage", "Parcourir…"))
         btn_browse.setFixedWidth(90)
         btn_browse.clicked.connect(self._browse)
         path_row.addWidget(btn_browse)
@@ -193,8 +276,8 @@ class _VideoPlayerPage(QWidget):
         layout.addLayout(path_row)
 
         lbl_examples = QLabel(
-            "   Exemples : C:\\Program Files\\VLC\\vlc.exe\n"
-            "                    C:\\Program Files\\MPC-HC\\mpc-hc64.exe"
+            translate("VideoPlayerPage", "   Exemples : C:\\Program Files\\VLC\\vlc.exe\n"
+            "                    C:\\Program Files\\MPC-HC\\mpc-hc64.exe")
         )
         lbl_examples.setStyleSheet("color: #555; font-size: 10px; font-style: italic;")
         layout.addWidget(lbl_examples)
@@ -218,9 +301,9 @@ class _VideoPlayerPage(QWidget):
     def _browse(self) -> None:
         path, _ = QFileDialog.getOpenFileName(
             self,
-            "Choisir le lecteur vidéo",
+            translate("VideoPlayerPage", "Choisir le lecteur vidéo"),
             self._edit_path.text() or "C:\\Program Files",
-            "Exécutables (*.exe);;Tous les fichiers (*)",
+            translate("VideoPlayerPage", "Exécutables (*.exe);;Tous les fichiers (*)"),
         )
         if path:
             self._rb_custom.setChecked(True)
@@ -246,14 +329,17 @@ class _PerformancePage(QWidget):
 
     # (clé de BACKGROUND_CPU_LEVELS, libellé, description)
     _CHOICES = [
-        ("low",    "Économe (recommandé)",
-         "Priorité à la réactivité et au silence du ventilateur.\n"
-         "Les analyses de fond prennent nettement plus longtemps."),
-        ("medium", "Équilibré",
-         "Compromis entre avancement des analyses et confort d'utilisation."),
-        ("max",    "Maximum",
-         "Aucun bridage : les analyses vont aussi vite que possible,\n"
-         "au prix d'une machine sensiblement plus chargée."),
+        ("low",    translate("PerformancePage", "Économe (recommandé)"),
+         translate("PerformancePage",
+                   "Priorité à la réactivité et au silence du ventilateur.\n"
+                   "Les analyses de fond prennent nettement plus longtemps.")),
+        ("medium", translate("PerformancePage", "Équilibré"),
+         translate("PerformancePage",
+                   "Compromis entre avancement des analyses et confort d'utilisation.")),
+        ("max",    translate("PerformancePage", "Maximum"),
+         translate("PerformancePage",
+                   "Aucun bridage : les analyses vont aussi vite que possible,\n"
+                   "au prix d'une machine sensiblement plus chargée.")),
     ]
 
     def __init__(self, config: Config, parent=None) -> None:
@@ -267,7 +353,7 @@ class _PerformancePage(QWidget):
         layout.setSpacing(10)
         layout.setContentsMargins(24, 20, 24, 20)
 
-        title = QLabel("Performances")
+        title = QLabel(translate("PerformancePage", "Performances"))
         title.setStyleSheet("font-size: 15px; font-weight: bold;")
         layout.addWidget(title)
 
@@ -278,15 +364,15 @@ class _PerformancePage(QWidget):
 
         layout.addSpacing(4)
 
-        lbl_title = QLabel("Charge CPU des traitements de fond")
+        lbl_title = QLabel(translate("PerformancePage", "Charge CPU des traitements de fond"))
         lbl_title.setStyleSheet("font-weight: bold;")
         layout.addWidget(lbl_title)
 
         lbl_desc = QLabel(
-            "La détection de doublons et l'indexation des visages tournent en\n"
+            translate("PerformancePage", "La détection de doublons et l'indexation des visages tournent en\n"
             "continu, sans intervention de votre part. Ce réglage détermine la\n"
             "part de processeur qu'elles s'autorisent pendant que vous utilisez\n"
-            "l'application."
+            "l'application.")
         )
         lbl_desc.setStyleSheet("color: #aaa; font-size: 11px;")
         lbl_desc.setWordWrap(True)
@@ -301,7 +387,9 @@ class _PerformancePage(QWidget):
 
         for idx, (key, label, desc) in enumerate(self._CHOICES):
             pct = round(BACKGROUND_CPU_LEVELS[key] * 100)
-            radio = QRadioButton(f"{label} — environ {pct} % du temps de calcul")
+            radio = QRadioButton(translate(
+                "PerformancePage", "{label} — environ {pct} % du temps de calcul"
+                ).format(label=label, pct=pct))
             # Nom accessible pour l'automatisation pywinauto (e2e) — même
             # convention que settings::video_player_path.
             radio.setAccessibleName(f"settings::background_cpu::{key}")
@@ -317,12 +405,13 @@ class _PerformancePage(QWidget):
 
         layout.addStretch()
 
-        lbl_idle = QLabel(
-            f"Quelle que soit la valeur choisie, le bridage est automatiquement\n"
-            f"levé après {int(IDLE_GRACE_SECONDS)} secondes sans interaction : "
-            f"si vous ne vous servez\npas de l'application, les analyses reprennent "
-            f"à pleine vitesse."
-        )
+        lbl_idle = QLabel(translate(
+            "PerformancePage",
+            "Quelle que soit la valeur choisie, le bridage est automatiquement\n"
+            "levé après {sec} secondes sans interaction : "
+            "si vous ne vous servez\npas de l'application, les analyses reprennent "
+            "à pleine vitesse."
+        ).format(sec=int(IDLE_GRACE_SECONDS)))
         lbl_idle.setStyleSheet("color: #777; font-size: 10px; font-style: italic;")
         lbl_idle.setWordWrap(True)
         layout.addWidget(lbl_idle)
@@ -348,7 +437,7 @@ class SettingsDialog(QDialog):
     def __init__(self, config: Config, parent=None) -> None:
         super().__init__(parent)
         self._config = config
-        self.setWindowTitle("Paramètres")
+        self.setWindowTitle(translate("SettingsDialog", "Paramètres"))
         self.setMinimumSize(620, 400)
         self._build()
 
@@ -365,15 +454,19 @@ class SettingsDialog(QDialog):
             "QListWidget::item:selected { background: #2d2d2d; color: #fff; border-left: 3px solid #5599cc; }"
         )
 
-        item_faces = QListWidgetItem("Reconnaissance\nde visages")
+        item_lang = QListWidgetItem(translate("SettingsDialog", "Langue"))
+        item_lang.setTextAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+        self._category_list.addItem(item_lang)
+
+        item_faces = QListWidgetItem(translate("SettingsDialog", "Reconnaissance\nde visages"))
         item_faces.setTextAlignment(Qt.AlignLeft | Qt.AlignVCenter)
         self._category_list.addItem(item_faces)
 
-        item_video = QListWidgetItem("Lecteur vidéo")
+        item_video = QListWidgetItem(translate("SettingsDialog", "Lecteur vidéo"))
         item_video.setTextAlignment(Qt.AlignLeft | Qt.AlignVCenter)
         self._category_list.addItem(item_video)
 
-        item_perf = QListWidgetItem("Performances")
+        item_perf = QListWidgetItem(translate("SettingsDialog", "Performances"))
         item_perf.setTextAlignment(Qt.AlignLeft | Qt.AlignVCenter)
         self._category_list.addItem(item_perf)
 
@@ -385,6 +478,8 @@ class SettingsDialog(QDialog):
         right.setSpacing(0)
 
         self._stack = QStackedWidget()
+        self._page_lang = _LanguagePage(self._config)
+        self._stack.addWidget(self._page_lang)
         self._page_faces = _FaceRecognitionPage(self._config)
         self._stack.addWidget(self._page_faces)
         self._page_video = _VideoPlayerPage(self._config)
@@ -413,7 +508,15 @@ class SettingsDialog(QDialog):
     def _on_accept(self) -> None:
         self._page_video.apply()
         self._page_perf.apply()
+        lang_changed = self._page_lang.apply()
         changed = self._page_faces.apply()
         if changed:
             self.recluster_needed.emit()
+        if lang_changed:
+            QMessageBox.information(
+                self,
+                translate("SettingsDialog", "Langue"),
+                translate("SettingsDialog", "La nouvelle langue sera appliquée au prochain démarrage "
+                        "de PixelPhotoManager."),
+            )
         self.accept()

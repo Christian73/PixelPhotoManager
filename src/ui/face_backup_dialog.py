@@ -24,14 +24,19 @@ from PySide6.QtWidgets import (
     QDialog, QFrame, QHBoxLayout, QLabel, QMessageBox,
     QPushButton, QScrollArea, QSizePolicy, QVBoxLayout, QWidget,
 )
+from src.core.i18n import translate
 
 logger = logging.getLogger(__name__)
 
 _BACKUP_SUBDIR = "faces_backups"
 _TS_FMT = "%Y%m%d_%H%M%S"
-_MONTHS_FR = [
-    "janv.", "févr.", "mars", "avr.", "mai", "juin",
-    "juil.", "août", "sept.", "oct.", "nov.", "déc.",
+_MONTHS = [
+    translate("FaceBackupDialog", "janv."), translate("FaceBackupDialog", "févr."),
+    translate("FaceBackupDialog", "mars"), translate("FaceBackupDialog", "avr."),
+    translate("FaceBackupDialog", "mai"), translate("FaceBackupDialog", "juin"),
+    translate("FaceBackupDialog", "juil."), translate("FaceBackupDialog", "août"),
+    translate("FaceBackupDialog", "sept."), translate("FaceBackupDialog", "oct."),
+    translate("FaceBackupDialog", "nov."), translate("FaceBackupDialog", "déc."),
 ]
 
 
@@ -48,7 +53,8 @@ def _parse_ts(zip_path: Path) -> str:
     try:
         ts = zip_path.stem[len("visages_"):]
         dt = datetime.strptime(ts, _TS_FMT)
-        return f"{dt.day} {_MONTHS_FR[dt.month - 1]} {dt.year} à {dt.strftime('%H:%M')}"
+        return translate("FaceBackupDialog", "{d} {month} {y} à {time}").format(
+            d=dt.day, month=_MONTHS[dt.month - 1], y=dt.year, time=dt.strftime('%H:%M'))
     except Exception:
         return zip_path.stem
 
@@ -254,7 +260,7 @@ class FaceBackupDialog(QDialog):
         self._catalog_db_path = catalog_db_path
         self._thread: QThread | None = None
 
-        self.setWindowTitle("Sauvegardes — Reconnaissance faciale")
+        self.setWindowTitle(translate("FaceBackupDialog", "Sauvegardes — Reconnaissance faciale"))
         self.setMinimumSize(500, 340)
         self.setStyleSheet("background: #1e1e1e; color: #ccc;")
         self._build_ui()
@@ -269,8 +275,8 @@ class FaceBackupDialog(QDialog):
 
         # Info
         lbl_info = QLabel(
-            "Chaque sauvegarde capture l'état complet de la reconnaissance : "
-            "visages détectés, groupes, associations personnes."
+            translate("FaceBackupDialog", "Chaque sauvegarde capture l'état complet de la reconnaissance : "
+            "visages détectés, groupes, associations personnes.")
         )
         lbl_info.setWordWrap(True)
         lbl_info.setStyleSheet("color: #888; font-size: 11px;")
@@ -303,7 +309,7 @@ class FaceBackupDialog(QDialog):
         bot = QHBoxLayout()
         bot.setSpacing(10)
 
-        self._btn_create = QPushButton("＋  Créer une sauvegarde")
+        self._btn_create = QPushButton(translate("FaceBackupDialog", "＋  Créer une sauvegarde"))
         self._btn_create.setStyleSheet(_BTN_CREATE)
         self._btn_create.setCursor(Qt.PointingHandCursor)
         self._btn_create.clicked.connect(self._on_create)
@@ -311,7 +317,7 @@ class FaceBackupDialog(QDialog):
 
         bot.addStretch()
 
-        btn_close = QPushButton("Fermer")
+        btn_close = QPushButton(translate("FaceBackupDialog", "Fermer"))
         btn_close.setStyleSheet(
             "QPushButton { background: #2a2a2a; color: #aaa;"
             " border: 1px solid #444; border-radius: 4px; padding: 5px 16px; }"
@@ -339,7 +345,7 @@ class FaceBackupDialog(QDialog):
 
         backups = list_backups(self._app_data_dir)
         if not backups:
-            lbl = QLabel("Aucune sauvegarde disponible.")
+            lbl = QLabel(translate("FaceBackupDialog", "Aucune sauvegarde disponible."))
             lbl.setAlignment(Qt.AlignCenter)
             lbl.setStyleSheet("color: #555; font-size: 12px; padding: 20px;")
             self._list_vbox.addWidget(lbl)
@@ -370,7 +376,7 @@ class FaceBackupDialog(QDialog):
         lbl_size.setFixedWidth(56)
         h.addWidget(lbl_size)
 
-        btn_restore = QPushButton("Restaurer")
+        btn_restore = QPushButton(translate("FaceBackupDialog", "Restaurer"))
         btn_restore.setStyleSheet(_BTN_RESTORE)
         btn_restore.setCursor(Qt.PointingHandCursor)
         btn_restore.setFixedWidth(80)
@@ -381,7 +387,7 @@ class FaceBackupDialog(QDialog):
         btn_del.setStyleSheet(_BTN_DELETE)
         btn_del.setCursor(Qt.PointingHandCursor)
         btn_del.setFixedWidth(28)
-        btn_del.setToolTip("Supprimer cette sauvegarde")
+        btn_del.setToolTip(translate("FaceBackupDialog", "Supprimer cette sauvegarde"))
         btn_del.clicked.connect(lambda _=False, p=zip_path, r=row: self._on_delete(p, r))
         h.addWidget(btn_del)
 
@@ -417,18 +423,21 @@ class FaceBackupDialog(QDialog):
     def _on_backup_done(self, path: Path) -> None:
         self._set_busy(False)
         self._refresh_list()
-        self._lbl_status.setText(f"Sauvegarde créée : {path.name}")
+        self._lbl_status.setText(
+            translate("FaceBackupDialog", "Sauvegarde créée : {name}").format(name=path.name))
         self._lbl_status.show()
 
     def _on_restore(self, zip_path: Path) -> None:
         date_str = _parse_ts(zip_path)
         reply = QMessageBox.question(
             self,
-            "Restaurer la sauvegarde",
-            f"Restaurer la reconnaissance faciale au point :\n\n"
-            f"  {date_str}\n\n"
-            f"L'état actuel sera remplacé. Cette action est irréversible\n"
-            f"(pensez à sauvegarder l'état actuel avant de continuer).",
+            translate("FaceBackupDialog", "Restaurer la sauvegarde"),
+            translate("FaceBackupDialog",
+                      "Restaurer la reconnaissance faciale au point :\n\n"
+                      "  {date}\n\n"
+                      "L'état actuel sera remplacé. Cette action est irréversible\n"
+                      "(pensez à sauvegarder l'état actuel avant de continuer)."
+                      ).format(date=date_str),
             QMessageBox.Ok | QMessageBox.Cancel,
             QMessageBox.Cancel,
         )
@@ -454,17 +463,18 @@ class FaceBackupDialog(QDialog):
         self.restore_completed.emit()
         QMessageBox.information(
             self,
-            "Restauration réussie",
-            "La reconnaissance faciale a été restaurée.\n"
-            "La liste des personnes et les associations sont à jour.",
+            translate("FaceBackupDialog", "Restauration réussie"),
+            translate("FaceBackupDialog", "La reconnaissance faciale a été restaurée.\n"
+            "La liste des personnes et les associations sont à jour."),
         )
         self.accept()
 
     def _on_delete(self, zip_path: Path, row: QWidget) -> None:
         reply = QMessageBox.question(
             self,
-            "Supprimer la sauvegarde",
-            f"Envoyer à la corbeille :\n\n  {_parse_ts(zip_path)} ?",
+            translate("FaceBackupDialog", "Supprimer la sauvegarde"),
+            translate("FaceBackupDialog", "Envoyer à la corbeille :\n\n  {name} ?"
+                      ).format(name=_parse_ts(zip_path)),
             QMessageBox.Yes | QMessageBox.Cancel,
             QMessageBox.Cancel,
         )
@@ -474,7 +484,10 @@ class FaceBackupDialog(QDialog):
             from src.library.trash import move_to_trash
             move_to_trash(str(zip_path))
         except Exception as exc:
-            QMessageBox.warning(self, "Erreur", f"Impossible de supprimer :\n{exc}")
+            QMessageBox.warning(
+                self, translate("FaceBackupDialog", "Erreur"),
+                translate("FaceBackupDialog", "Impossible de supprimer :\n{error}")
+                .format(error=exc))
             return
         self._list_vbox.removeWidget(row)
         row.deleteLater()
@@ -485,4 +498,6 @@ class FaceBackupDialog(QDialog):
     @Slot(str)
     def _on_op_error(self, msg: str) -> None:
         self._set_busy(False)
-        QMessageBox.critical(self, "Erreur", f"Opération échouée :\n\n{msg}")
+        QMessageBox.critical(
+            self, translate("FaceBackupDialog", "Erreur"),
+            translate("FaceBackupDialog", "Opération échouée :\n\n{error}").format(error=msg))

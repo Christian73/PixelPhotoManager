@@ -1,0 +1,85 @@
+<h2>Duplikaterkennung</h2>
+<p>PixelPhotoManager erkennt visuell ähnliche Fotos auch dann, wenn sie verkleinert, leicht
+bearbeitet oder zugeschnitten wurden.</p>
+
+<h3>Wann die Erkennung läuft</h3>
+<p>Die Erkennung erfolgt <b>automatisch und fortlaufend</b>: Sie startet nach jedem Scan der
+Bibliothek, ohne Schaltfläche und ohne Abschlussbericht. Sie läuft im Hintergrund auf einem
+Bruchteil der Prozessorkerne, die Anwendung bleibt uneingeschränkt nutzbar.</p>
+<ul>
+  <li>Die Analyse ist <b>inkrementell</b>: Nur neue oder geänderte Fotos werden mit dem Rest
+      der Bibliothek verglichen. Spätere Durchgänge sind daher weit schneller als der erste.</li>
+  <li>Die Gruppen erscheinen <b>nach und nach</b>, ohne das Ende der Analyse abzuwarten.</li>
+  <li><b>Extras › Status der Duplikate…</b> zeigt eine Momentaufnahme: Anzahl der Gruppen und
+      der betroffenen Fotos, Datum der letzten Prüfung und — falls ein Durchgang läuft — einen
+      Fortschrittsbalken in Echtzeit. Zwei Schaltflächen: <b>Gruppen ansehen</b> und
+      <b>Jetzt prüfen</b> (erzwingt einen sofortigen Durchgang).</li>
+  <li>Werden unlesbare Dateien gefunden, erscheint in der Statusleiste ein Zähler
+      <b>⚠ N beschädigte Dateien</b>; ein Klick darauf öffnet die Liste.</li>
+</ul>
+
+<h3>Wie es funktioniert — zwei Durchgänge</h3>
+<table>
+  <tr><th>Durchgang</th><th>Verfahren</th><th>Abgedeckte Fälle</th></tr>
+  <tr><td><b>1 — pHash</b></td><td>Wahrnehmungsbezogener Fingerabdruck (Hamming)</td>
+      <td>Exakte, verkleinerte und leicht bearbeitete Duplikate (Farbe, Helligkeit)</td></tr>
+  <tr><td><b>2 — ORB + RANSAC</b></td><td>Abgleich von Schlüsselpunkten</td>
+      <td>Zugeschnittene Duplikate (bis zu ~60 % abgeschnittene Fläche) — nur für die Fotos,
+          die Durchgang 1 nicht gruppiert hat</td></tr>
+</table>
+<p class="tip"><b>Hinweis:</b> Videos werden nicht auf Duplikate untersucht.</p>
+
+<h3>Duplikat-Kennzeichen</h3>
+<ul>
+  <li>Miniaturbilder, die zu einer Duplikatgruppe gehören, tragen ein <b>⧉</b>-Kennzeichen.</li>
+  <li>Ein Klick darauf öffnet eine Ansicht, die alle Fotos der Gruppe nebeneinander zeigt.</li>
+</ul>
+
+<h3>Raster der Duplikatgruppen &nbsp;<span style="font-weight:normal;color:#888;">(Schaltfläche „Duplikate“ in der Seitenleiste)</span></h3>
+<p>Die Schaltfläche <b>Duplikate</b> in der Seitenleiste (die Kennzahl gibt die Anzahl der
+Gruppen an) öffnet ein eigenes Raster mit allen Duplikatgruppen auf einen Blick: eine Karte je
+Gruppe, ein Miniaturbild des ersten Exemplars und die Anzahl der Exemplare.</p>
+<ul>
+  <li><b>Doppelklick</b> auf eine Karte: öffnet die Exemplare der Gruppe zum schnellen Vergleich
+      im Betrachter.</li>
+  <li><b>✕</b> auf einer Karte: löst die gesamte Gruppe auf (es wird keine Datei gelöscht). Die
+      Entscheidung ist <b>dauerhaft</b>: Diese Gruppe wird nie wieder gebildet, solange sich
+      keines ihrer Mitglieder ändert. Eine neue Datei, die einem von ihnen ähnelt, wird
+      weiterhin normal erkannt.</li>
+  <li>Schaltfläche <b>Jetzt prüfen</b> oben im Raster, um einen sofortigen Durchgang zu
+      erzwingen.</li>
+</ul>
+
+<h3>Empfohlener Arbeitsablauf</h3>
+<ul>
+  <li>Lassen Sie die Erkennung laufen: Die <b>⧉</b>-Kennzeichen erscheinen im Verlauf der
+      Analyse von selbst auf den betroffenen Miniaturbildern.</li>
+  <li>Klicken Sie auf ein Kennzeichen, um die Gruppe ähnlicher Fotos zu prüfen.</li>
+  <li>Wählen Sie die zu behaltenden bzw. zu löschenden Exemplare aus und drücken Sie
+      <kbd>Entf</kbd>.</li>
+</ul>
+<p class="tip">Beim Löschen eines Duplikats wandert die Datei in den <b>Windows-Papierkorb</b>
+(wiederherstellbar) — prüfen Sie die Fotos gut, bevor Sie bestätigen.</p>
+
+<h3>Während der Analyse gefundene beschädigte Dateien</h3>
+<p>Lässt sich eine Datei während der Analyse nicht lesen (beschädigtes JPEG, abgebrochene
+Kopie…), wird sie gemeldet statt stillschweigend übergangen. Zwei Zugänge: der Zähler
+<b>⚠ N beschädigte Dateien</b> in der Statusleiste und <b>Extras › Beschädigte Dateien…</b> —
+dort stehen <b>Auflisten…</b> (die Liste der Dateien, in der sich auch nur ein Teil auswählen
+lässt) und <b>Reparieren…</b> zur Verfügung.</p>
+<ul>
+  <li>Vor jedem Reparaturversuch wird eine Bestätigung eingeholt.</li>
+  <li>PixelPhotoManager versucht, mit einem Decoder, der toleranter ist als der für die Analyse
+      verwendete, eine saubere Kopie der Datei zu speichern.</li>
+  <li>Das Original wird vor jeder Änderung gesichert (versteckter Ordner
+      <code>.tmp_originals</code> neben der Datei), und die Windows-Daten für Änderung und
+      Erstellung bleiben unverändert erhalten.</li>
+  <li>Eine Zusammenfassung <b>Reparatur abgeschlossen</b> listet die reparierten Dateien auf und
+      danach jene, die nicht repariert werden konnten (zu starke Beschädigung). Nur für Letztere
+      wird eine Schaltfläche <b>Diese Dateien löschen…</b> angeboten — gelöscht wird über den
+      Windows-Papierkorb, und die Pfade bleiben anschließend über
+      <b>Extras › Gelöschte beschädigte Dateien…</b> einsehbar.</li>
+</ul>
+<p class="tip"><b>Extras › Problemverlauf…</b> hält jede Analyse fest, bei der beschädigte
+Dateien aufgetreten sind (Datum, Anzahl gefunden, Anzahl repariert), mit direktem Zugriff auf
+die Liste der nicht reparierten Dateien.</p>

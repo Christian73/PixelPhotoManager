@@ -9,6 +9,7 @@ from PySide6.QtGui import QFont
 from PySide6.QtWidgets import (
     QDialog, QDialogButtonBox, QFrame, QLabel, QVBoxLayout,
 )
+from src.core.i18n import translate
 
 
 def _section(title: str, rows: list[tuple[str, int]]) -> QFrame:
@@ -41,7 +42,7 @@ class FaceCountersDialog(QDialog):
 
     def __init__(self, face_db, catalog, parent=None) -> None:
         super().__init__(parent)
-        self.setWindowTitle("Compteurs de reconnaissance faciale")
+        self.setWindowTitle(translate("FaceCountersDialog", "Compteurs de reconnaissance faciale"))
         self.setMinimumWidth(420)
         self.setWindowFlag(Qt.WindowContextHelpButtonHint, False)
 
@@ -52,24 +53,28 @@ class FaceCountersDialog(QDialog):
         layout.setSpacing(12)
         layout.setContentsMargins(20, 20, 20, 16)
 
-        layout.addWidget(_section("Reconnaissance faciale", [
-            ("Personnes identifiées", n_persons),
-            ("Visages identifiés", stats["identified_faces"]),
-            ("Visages reconnus (analyse faciale)", stats["recognized_faces"]),
-            ("Visages en attente de confirmation", stats["pending_faces"]),
-            ("Visages inconnus", stats["unknown_faces"]),
+        layout.addWidget(_section(translate("FaceCountersDialog", "Reconnaissance faciale"), [
+            (translate("FaceCountersDialog", "Personnes identifiées"), n_persons),
+            (translate("FaceCountersDialog", "Visages identifiés"), stats["identified_faces"]),
+            (translate("FaceCountersDialog", "Visages reconnus (analyse faciale)"),
+             stats["recognized_faces"]),
+            (translate("FaceCountersDialog", "Visages en attente de confirmation"),
+             stats["pending_faces"]),
+            (translate("FaceCountersDialog", "Visages inconnus"), stats["unknown_faces"]),
         ]))
 
-        layout.addWidget(_section("Import Picasa", [
-            ("Visages importés", stats["picasa_total"]),
-            ("Fusionnés avec la reconnaissance", stats["picasa_merged"]),
-            ("En attente de reconnaissance", stats["picasa_placeholder"]),
+        layout.addWidget(_section(translate("FaceCountersDialog", "Import Picasa"), [
+            (translate("FaceCountersDialog", "Visages importés"), stats["picasa_total"]),
+            (translate("FaceCountersDialog", "Fusionnés avec la reconnaissance"),
+             stats["picasa_merged"]),
+            (translate("FaceCountersDialog", "En attente de reconnaissance"),
+             stats["picasa_placeholder"]),
         ]))
 
-        layout.addWidget(_section("Totalité", [
-            ("Visages détectés", stats["total_faces"]),
-            ("Visages ignorés (taille)", stats["ignored_faces"]),
-            ("Groupes (clusters)", stats["clusters"]),
+        layout.addWidget(_section(translate("FaceCountersDialog", "Totalité"), [
+            (translate("FaceCountersDialog", "Visages détectés"), stats["total_faces"]),
+            (translate("FaceCountersDialog", "Visages ignorés (taille)"), stats["ignored_faces"]),
+            (translate("FaceCountersDialog", "Groupes (clusters)"), stats["clusters"]),
         ]))
 
         buttons = QDialogButtonBox(QDialogButtonBox.Ok)

@@ -1,0 +1,200 @@
+<h2>Nicht-destruktive Bearbeitung</h2>
+<p>Die Anpassungen werden nie in die Originaldatei geschrieben. Sie werden in einer eigenen
+SQLite-Datenbank gespeichert und bei der Anzeige wie beim Export im laufenden Betrieb
+angewendet.</p>
+
+<h3>Tonwertkorrekturen</h3>
+<table>
+  <tr><th>Korrektur</th><th>Bereich</th><th>Beschreibung</th></tr>
+  <tr><td><b>Helligkeit</b></td><td>−1,00 bis +1,00</td><td>Hellt das Bild insgesamt auf oder dunkelt es ab</td></tr>
+  <tr><td><b>Kontrast</b></td><td>−1,00 bis +1,00</td><td>Erweitert oder verringert den Tonwertumfang</td></tr>
+  <tr><td><b>Sättigung</b></td><td>−1,00 bis +1,00</td><td>Verstärkt oder dämpft die Farben (−1 = S/W)</td></tr>
+  <tr><td><b>Gamma</b></td><td>0,10 bis 3,00</td><td>Helligkeitskurve (1,0 = neutral)</td></tr>
+</table>
+
+<h3>Farben (Schwarzweiß mit Kanalmischung)</h3>
+<ul>
+  <li>Aktivieren Sie <b>Schwarzweiß</b> und dosieren Sie die Anteile Rot/Grün/Blau (−1 bis +1).</li>
+  <li>Beispiel: Rot +1, Blau −1 → dunkler Himmel und helle Hauttöne (der klassische Rotfilter
+      der Analogfotografie).</li>
+</ul>
+
+<h3>Vignette</h3>
+<ul>
+  <li>Fügt eine allmähliche Abdunklung (oder Aufhellung) an den Bildrändern hinzu.</li>
+  <li><b>Stärke</b> — von 0,00 (keine Wirkung) bis 1,00 (maximale Wirkung).</li>
+  <li><b>Farbe</b> — Schwarz (dunkler Verlauf, analoger Look) oder Weiß (heller Verlauf,
+      Retro-Look).</li>
+  <li>Form und Position der Vignette lassen sich direkt auf dem Foto einstellen:</li>
+</ul>
+<table>
+  <tr><th>Anfasser</th><th>Wirkung</th></tr>
+  <tr><td>Innerer Kreis (gepunktet)</td><td>Beginn des Verlaufs</td></tr>
+  <tr><td>Äußerer Kreis</td><td>Ende des Verlaufs</td></tr>
+  <tr><td>Runder Anfasser oben</td><td>Ellipse drehen</td></tr>
+  <tr><td>Kreuz in der Mitte</td><td>Mittelpunkt der Vignette verschieben</td></tr>
+</table>
+
+<h3>Geometrie</h3>
+<ul>
+  <li><b>↺ / ↻</b> — Drehung um 90° gegen den / im Uhrzeigersinn.</li>
+  <li><b>Ausrichten</b> — korrigiert die Neigung des Horizonts (−10° bis +10°), mit
+      Hilfsraster.</li>
+  <li><b>Zuschneiden</b> — freie Auswahl oder die Formate 10×15 / 13×18 (Hoch- oder Querformat).
+      Der Zuschnittbereich bleibt zwischen den Sitzungen erhalten.</li>
+  <li><b>Horizontal / Vertikal gespiegelt</b> — waagerechte oder senkrechte Spiegelung.</li>
+</ul>
+
+<h3>Rote Augen</h3>
+<ul>
+  <li>Klicken Sie auf <b>Rote Augen</b> und dann direkt im Foto auf jedes betroffene Auge.</li>
+  <li><b>Größe</b> — Radius der Korrektur (0,5&nbsp;% bis 8&nbsp;% der kleineren Bildseite).</li>
+  <li><b>Alles zurücksetzen</b> — entfernt alle gesetzten Korrekturen. <b>Fertig</b>
+      (oder <kbd>Esc</kbd>) — verlässt den Modus, ohne etwas zu verlieren.</li>
+</ul>
+
+<h3>Zierrahmen</h3>
+<p>Die Schaltfläche <b>Rahmen</b> öffnet eine Galerie mit Vorschauen des aktuellen Fotos, eine
+je Muster. Der Rahmen wird <b>um</b> das Foto gelegt: Er verdeckt keinen Bildpunkt, das Bild
+kommt beim Export lediglich größer heraus. Zwei Ausnahmen, weiter unten beschrieben: die
+Pflanzenumrandungen, bei denen einige Motive in den Bildrand hineinragen, und der zweite Rahmen
+der einfarbigen Umrandung.</p>
+<table>
+  <tr><th>Muster</th><th>Beschreibung</th></tr>
+  <tr><td><b>Einfarbige Umrandung</b></td><td>Eine einzige Farbfläche, ohne Relief (schwarz, weiß oder eine beliebige Farbe)</td></tr>
+  <tr><td><b>Einfach</b> / <b>Doppelt</b></td><td>Profilleiste mit Relief, ein oder zwei durch einen Abstand getrennte Bänder</td></tr>
+  <tr><td><b>Vergoldeter Barock</b></td><td>Akanthusblätter und Muscheln, in eine vergoldete Kehle geschnitzt, mit abgenutztem Gold</td></tr>
+  <tr><td><b>Eierstab und Perlen</b></td><td>Klassischer Fries: Eierstab und Pfeilblätter, Perlreihe und Oliven</td></tr>
+  <tr><td><b>Mäander</b></td><td>Durchlaufender griechischer Mäander, Rosetten in den Ecken</td></tr>
+  <tr><td><b>Art déco</b></td><td>Silberne Stufen, Zickzackbänder und Stege der 1930er-Jahre</td></tr>
+  <tr><td><b>Holzschnitzerei</b></td><td>Nussbaum mit ausgehobenen Kanneluren und Stegen, sichtbare Maserung</td></tr>
+  <tr><td><b>Weinlaub</b>, <b>Rosen</b>, <b>Blumen</b></td><td>Geschnitzte Pflanzenumrandungen (patinierte Bronze, karminroter Lack, bemaltes Porzellan)</td></tr>
+  <tr><td><b>Metallisch</b>, <b>Reflexe</b></td><td>Nachgeahmte Materialien (gebürstetes Metall mit Nieten, lackierter Firnis)</td></tr>
+</table>
+<ul>
+  <li><b>Stärke</b> (bzw. <b>Äußerer Rahmen</b>), <b>Abstand</b> und <b>Innenrahmen</b> werden
+      als Prozentsatz der kürzeren Fotoseite eingestellt: Dieselbe Einstellung wirkt auf einem
+      Miniaturbild genauso wie auf einem Export in voller Auflösung.</li>
+  <li>Geschnitzte Muster brauchen Stärke, um zur Geltung zu kommen: Die Wahl eines solchen
+      Musters <b>erhöht die Stärke automatisch</b>, wenn sie zu gering ist. Jedes Miniaturbild
+      der Galerie zeigt genau den Rahmen, den ein Klick darauf ergibt.</li>
+  <li><b>Füllstil</b> (einfarbig, Verlauf, glitzernd) und <b>zweite Farbe</b>: nur für die
+      Muster Einfach und Doppelt.</li>
+</ul>
+
+<h4>Pflanzenumrandungen, die überstehen</h4>
+<p>Bei <b>Weinlaub</b>, <b>Rosen</b> und <b>Blumen</b> ragen einige Ranken, Rosen oder Sträuße
+mitsamt ihrem Schlagschatten <i>über</i> den Bildrand, wie bei einem geschnitzten Rahmen, der in
+die Leinwand hineingreift. Sie sind bewusst unregelmäßig — ein Überstand in regelmäßigen
+Abständen wäre wieder ein Fries — und bleiben am Band verankert: Die Bildmitte wird nie berührt.
+Es gibt nichts einzustellen: Das bringt das Muster mit. Zuschnitt, rote Augen, Anmerkungen und
+Gesichter arbeiten weiterhin auf dem gesamten Foto.</p>
+
+<h4>Zweiter Rahmen der einfarbigen Umrandung</h4>
+<p>Nur bei der <b>Einfarbigen Umrandung</b> können Sie <b>Zweiter Rahmen über dem Foto</b>
+aktivieren: Eine Linie wird <i>auf</i> das Foto gezeichnet, mit Abstand zum Rand —
+der zwischen den beiden Rahmen sichtbar bleibende Bildstreifen ist genau der gewünschte Effekt.
+<b>Abstand</b> regelt diesen Abstand, <b>Zweiter Rahmen</b> seine Stärke.</p>
+<p>Diese Linie kann die Form einer <b>Schmiedearbeit</b> annehmen:</p>
+<table>
+  <tr><th>Schmiedearbeit</th><th>Wirkung</th></tr>
+  <tr><td><b>Einfache Linie</b></td><td>Klarer Strich (Standardauswahl)</td></tr>
+  <tr><td><b>Eckvoluten</b></td><td>Geschmiedete Schnecken in den vier Ecken</td></tr>
+  <tr><td><b>Laufende Ranken</b></td><td>Eckvoluten + wiederholte Motive entlang der Seiten</td></tr>
+  <tr><td><b>Gedrehter Stab</b></td><td>Gedrillter Stab, Zierspitzen an den Ecken und in der Mitte der Seiten</td></tr>
+  <tr><td><b>Geschmiedete Nägel</b></td><td>Reihe von Nägeln mit rundem Kopf, größer an den Ecken</td></tr>
+</table>
+<ul>
+  <li><b>Darstellung</b> — <b>Leichtes Relief</b> (Licht und Schatten auf dem Metall) oder
+      <b>Reine Fläche</b> (volle Silhouette, grafischer). Ohne Wirkung auf die einfache Linie,
+      die immer flächig bleibt.</li>
+  <li><b>Ornamente</b> — Größe der Motive, von 40&nbsp;% bis 250&nbsp;%. Die Ornamente
+      entwickeln sich zum Bildinneren hin: Sie ragen nie in den äußeren Rahmen hinein.</li>
+</ul>
+<p class="tip">Die Vorschauen der Galerie folgen Ihren Einstellungen, und der Betrachter zeigt
+das Ergebnis unmittelbar. Nichts wird gespeichert, solange Sie nicht auf <b>Übernehmen</b>
+geklickt haben — <b>Abbrechen</b> schließt den Dialog, ohne etwas zu ändern.</p>
+
+<h3>Anmerkungen</h3>
+<p>Eine nicht-destruktive Zeichen- und Textebene über dem Foto — unabhängig von den
+Tonwertkorrekturen und von der Geometrie.</p>
+<ul>
+  <li><b>Werkzeuge</b> — Stift (Freihand), Linie, Kurve (Stützpunkte anklicken, Doppelklick zum
+      Bestätigen), Rechteck, Ellipse, Text und Auswahl (um ein bereits gesetztes Element zu
+      ändern oder zu verschieben).</li>
+  <li><b>Stil</b> — Farbe von Strich/Text, Stärke, Farbe und Deckkraft der Flächenfüllung,
+      Weichzeichnung des Fotos unter der Fläche, Schriftart/-größe/fett/kursiv für den Text.</li>
+  <li>Doppelklick auf einen vorhandenen Text (Werkzeug Auswahl): öffnet den Editor an Ort und
+      Stelle erneut.</li>
+  <li><b>Auswahl löschen</b> — entfernt das ausgewählte Element.
+      <b>Anmerkungen zurücksetzen</b> — entfernt die gesamte Ebene des Fotos.</li>
+  <li>Schaltfläche <b>✏ Anmerkungen</b> oben im Fenster (neben EXIF) — blendet die Ebene ein
+      bzw. aus, ohne etwas zu löschen; diese Einstellung wird nicht gespeichert, sie gilt nur
+      für die laufende Sitzung.</li>
+</ul>
+<p class="tip">Anmerkungen werden wie die übrigen Bearbeitungen in den Export und in das
+Speichern des bearbeiteten Bildes übernommen — außer die Ebene ist zum Zeitpunkt des Exports
+über die Schaltfläche ✏ Anmerkungen ausgeblendet.</p>
+
+<h3>Arbeitsablauf</h3>
+<ul>
+  <li><b>Immer nur ein Werkzeug aktiv</b> — die Wahl eines neuen Werkzeugs (Zuschneiden, Rote
+      Augen, Anmerkungen, Helligkeit/Kontrast/Farben/Vignette/Ausrichten…) bestätigt
+      automatisch die laufende Arbeit im vorherigen Werkzeug und schließt es anschließend.</li>
+  <li>Doppelklick auf einen Regler: setzt den Wert auf null zurück.</li>
+  <li>Die Vorschau wird in Echtzeit aktualisiert (≤ 60 ms).</li>
+  <li><b>Keine Schaltfläche „Speichern“</b>: Jede übernommene Bearbeitung wird sofort in die
+      Bearbeitungsdatenbank geschrieben und liegt beim nächsten Öffnen unverändert wieder vor.
+      Die Originaldatei auf der Festplatte wird dabei nie verändert.</li>
+  <li><kbd>Strg</kbd>+<kbd>Z</kbd> / <kbd>Strg</kbd>+<kbd>Y</kbd> — Rückgängig/Wiederherstellen,
+      dauerhaft über Sitzungen hinweg (max. 50 Zustände je Foto).</li>
+  <li><b>Alle Bearbeitungen zurücksetzen</b> — entfernt auf einen Schlag alle Bearbeitungen und
+      den Verlauf des Fotos (ohne Rückfrage), um wieder vom Original auszugehen. Die Datei auf
+      der Festplatte wird nie verändert.</li>
+  <li><b>Alle Bearbeitungen wiederherstellen</b> — stellt die Bearbeitungen wieder her, die das
+      letzte <b>Zurücksetzen</b> bei diesem Foto entfernt hat. Diese Schaltfläche wird
+      deaktiviert, sobald nach dem Zurücksetzen eine neue Bearbeitung angewendet wird (die
+      Momentaufnahme gilt dann nicht mehr).</li>
+</ul>
+
+<h3>Bearbeitungen in eine Datei schreiben</h3>
+<p>Die Bearbeitungen leben in einer eigenen Datenbank: Die Ursprungsdatei wird nie angerührt.
+Um eine tatsächlich bearbeitete Fassung auf der Festplatte zu erhalten, gibt es zwei getrennte
+Wege.</p>
+
+<h4>Bearbeitetes Bild speichern &nbsp;<span style="font-weight:normal;color:#888;">(<kbd>Strg</kbd>+<kbd>S</kbd> oder Rechtsklick auf das Foto)</span></h4>
+<p>Ein Foto auf einmal, in seiner Originalauflösung. Der Dialog bietet zwei Möglichkeiten:</p>
+<ul>
+  <li><b>Originaldatei überschreiben</b> — unumkehrbar. Ein standardmäßig aktiviertes
+      Kontrollkästchen kopiert das Original zuvor in den versteckten Ordner
+      <code>.tmp_originals</code> neben der Datei.</li>
+  <li><b>An anderem Ort speichern…</b> — öffnet den Explorer, mit einem bereits
+      vorgeschlagenen Namen mit der Endung <code>_bearbeitet</code>.</li>
+</ul>
+
+<h4>Exportieren &nbsp;<span style="font-weight:normal;color:#888;">(Schaltfläche <b>⬆ Exportieren</b> oben im Fenster)</span></h4>
+<p>Exportiert in einen Zielordner: das im Betrachter angezeigte Foto oder <b>alle im Raster
+ausgewählten Fotos</b>. Hier — und nur hier — stehen die vier Größenvorgaben zur Wahl:</p>
+<table>
+  <tr><th>Vorgabe</th><th>Max. Auflösung</th><th>Geschätzte Größe</th><th>Typische Verwendung</th></tr>
+  <tr><td><b>Maximale Größe</b></td><td>Originalauflösung</td><td>variabel</td>
+      <td>Archivierung, großformatiger Druck, Bearbeitung in einem anderen Programm</td></tr>
+  <tr><td><b>Groß (~4 MP)</b></td><td>≈ 2 600 × 1 500 px</td><td>600–1 600 KB</td>
+      <td>Druck in A4/A3, Weitergabe in hoher Qualität</td></tr>
+  <tr><td><b>Mittel (~2 MP)</b></td><td>≈ 1 800 × 1 100 px</td><td>320–800 KB</td>
+      <td>Bildschirmanzeige, Diaschauen, leichter E-Mail-Anhang</td></tr>
+  <tr><td><b>Klein (~500 kP)</b></td><td>≈ 900 × 560 px</td><td>75–300 KB</td>
+      <td>Soziale Netzwerke, Web-Vorschau, Messenger auf dem Mobiltelefon</td></tr>
+</table>
+<p class="tip"><b>Tipp:</b> Um ein Foto per E-Mail zu versenden oder in einem sozialen Netzwerk
+zu veröffentlichen, wählen Sie besser <b>Mittel</b> oder <b>Klein</b> — ein Foto in maximaler
+Größe kann 5 MB überschreiten und abgewiesen werden oder den Versand verlangsamen. Das Original
+auf der Festplatte wird nie verändert.</p>
+
+<h3>EXIF</h3>
+<ul>
+  <li>Taste <kbd>I</kbd> (oder Schaltfläche <b>[i]</b>): blendet das EXIF-Bedienfeld im
+      Betrachter ein bzw. aus.</li>
+  <li><b>Werkzeuge › Erstellungsdaten mit EXIF abgleichen</b> — korrigiert die Daten im
+      Stapel.</li>
+</ul>

@@ -108,7 +108,7 @@ la bande d'image restée visible entre les deux cadres est justement l'effet rec
 </ul>
 <p class="tip">Les aperçus de la galerie se mettent à jour avec vos réglages, et la
 visionneuse montre le résultat en direct. Rien n'est enregistré tant que vous n'avez pas
-cliqué <b>Valider</b> puis <b>Appliquer</b>.</p>
+cliqué <b>Valider</b> — <b>Annuler</b> referme le dialogue sans rien changer.</p>
 
 <h3>Annotations</h3>
 <p>Calque de dessin et de texte non destructif, superposé à la photo — indépendant des
@@ -136,7 +136,9 @@ traitée, comme les autres retouches — sauf si le calque est masqué via le bo
       automatiquement le travail en cours dans l'outil précédent, puis le referme.</li>
   <li>Double-clic sur un slider : remet la valeur à zéro.</li>
   <li>L'aperçu se met à jour en temps réel (≤ 60 ms).</li>
-  <li>Cliquez <b>Appliquer</b> pour enregistrer.</li>
+  <li><b>Aucun bouton « Enregistrer »</b> : chaque retouche validée est écrite aussitôt dans la
+      base des retouches, et vous la retrouverez telle quelle à la prochaine ouverture. Le
+      fichier original sur le disque, lui, n'est jamais modifié.</li>
   <li><kbd>Ctrl</kbd>+<kbd>Z</kbd> / <kbd>Ctrl</kbd>+<kbd>Y</kbd> — undo/redo persistant
       entre les sessions (50 états max par photo).</li>
   <li><b>Réinitialiser toutes les retouches</b> — supprime d'un coup toutes les retouches
@@ -147,9 +149,23 @@ traitée, comme les autres retouches — sauf si le calque est masqué via le bo
       retouche est appliquée après le reset (l'instantané n'est plus valable).</li>
 </ul>
 
-<h3>Export</h3>
-<p><b>Enregistrer une copie</b> — exporte l'image avec les retouches appliquées dans un nouveau
-fichier JPEG. Quatre préréglages de taille sont proposés :</p>
+<h3>Écrire les retouches dans un fichier</h3>
+<p>Les retouches vivent dans une base à part : le fichier d'origine n'est jamais touché. Pour
+en obtenir une version réellement retouchée sur le disque, deux chemins distincts.</p>
+
+<h4>Enregistrer l'image traitée &nbsp;<span style="font-weight:normal;color:#888;">(<kbd>Ctrl</kbd>+<kbd>S</kbd>, ou clic droit sur la photo)</span></h4>
+<p>Une photo à la fois, à sa résolution d'origine. Le dialogue propose deux options :</p>
+<ul>
+  <li><b>Écraser le fichier original</b> — irréversible. Une case cochée par défaut copie
+      d'abord l'original dans le dossier caché <code>.tmp_originals</code>, à côté du fichier.</li>
+  <li><b>Enregistrer à un autre emplacement</b> — ouvre l'explorateur, avec un nom suffixé
+      <code>_retouché</code> déjà proposé.</li>
+</ul>
+
+<h4>Exporter &nbsp;<span style="font-weight:normal;color:#888;">(bouton <b>⬆ Exporter</b>, en haut de la fenêtre)</span></h4>
+<p>Exporte vers un dossier de destination : la photo affichée dans la visionneuse, ou
+<b>toutes les photos sélectionnées</b> dans la grille. C'est ici, et seulement ici, que sont
+proposés les quatre préréglages de taille :</p>
 <table>
   <tr><th>Préréglage</th><th>Résolution max.</th><th>Poids estimé</th><th>Usage typique</th></tr>
   <tr><td><b>Taille maximale</b></td><td>Résolution originale</td><td>variable</td>

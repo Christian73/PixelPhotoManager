@@ -18,6 +18,7 @@ from PySide6.QtWidgets import (
     QButtonGroup, QColorDialog, QFontComboBox, QSpinBox, QDoubleSpinBox,
 )
 
+from src.core.i18n import translate
 from src.core.models import PhotoInfo, EditInfo
 from src.processing.adjustments import ImageAdjuster
 from src.processing.edit_database import EditDatabase
@@ -28,44 +29,69 @@ _UNDO_MAX = 20
 
 # Noms d'affichage pour les opérations stockées en DB (undo/redo persistant)
 _OP_LABELS: dict[str, str] = {
-    "rotation":           "Rotation",
-    "flip_h":             "Miroir H",
-    "flip_v":             "Miroir V",
-    "crop":               "Recadrage",
-    "red_eye":            "Yeux rouges",
-    "red_eye_clear":      "Effacer yeux rouges",
-    "annotation":         "Annotation",
-    "annotation_delete":  "Supprimer annotation",
-    "annotation_clear":   "Effacer annotations",
-    "annotation_move":    "Déplacer annotation",
-    "annotation_move_multi": "Déplacer annotations",
-    "annotation_delete_multi": "Supprimer annotations",
-    "annotation_resize":  "Redimensionner annotation",
-    "annotation_style":   "Modifier le style",
-    "annotation_group":   "Grouper les annotations",
-    "annotation_ungroup": "Dégrouper les annotations",
-    "undo":               "Annuler",
-    "redo":               "Rétablir",
-    "restore_all":        "Remise en place des retouches",
-    "picasa_before":      "Avant import",
-    "picasa_rotate":      "Rotation",
-    "picasa_crop":        "Recadrage",
-    "picasa_bw":          "Noir et blanc",
-    "picasa_tilt":        "Redressement",
-    "picasa_finetune2":   "Réglages fins",
-    "picasa_fill":        "Lumière",
-    "picasa_warmth":      "Chaleur",
-    "picasa_lumi":        "Luminosité",
-    "picasa_autolight":   "Auto-éclairage",
-    "picasa_sat":         "Saturation",
-    "picasa_anisotropic": "Netteté",
-    "picasa_sharpen":     "Netteté",
-    "picasa_softfocus":   "Adoucissement",
+    "rotation":           translate("EditPanel", "Rotation"),
+    "flip_h":             translate("EditPanel", "Miroir H"),
+    "flip_v":             translate("EditPanel", "Miroir V"),
+    "crop":               translate("EditPanel", "Recadrage"),
+    "red_eye":            translate("EditPanel", "Yeux rouges"),
+    "red_eye_clear":      translate("EditPanel", "Effacer yeux rouges"),
+    "annotation":         translate("EditPanel", "Annotation"),
+    "annotation_delete":  translate("EditPanel", "Supprimer annotation"),
+    "annotation_clear":   translate("EditPanel", "Effacer annotations"),
+    "annotation_move":    translate("EditPanel", "Déplacer annotation"),
+    "annotation_move_multi": translate("EditPanel", "Déplacer annotations"),
+    "annotation_delete_multi": translate("EditPanel", "Supprimer annotations"),
+    "annotation_resize":  translate("EditPanel", "Redimensionner annotation"),
+    "annotation_style":   translate("EditPanel", "Modifier le style"),
+    "annotation_group":   translate("EditPanel", "Grouper les annotations"),
+    "annotation_ungroup": translate("EditPanel", "Dégrouper les annotations"),
+    "undo":               translate("EditPanel", "Annuler"),
+    "redo":               translate("EditPanel", "Rétablir"),
+    "restore_all":        translate("EditPanel", "Remise en place des retouches"),
+    "picasa_before":      translate("EditPanel", "Avant import"),
+    "picasa_rotate":      translate("EditPanel", "Rotation"),
+    "picasa_crop":        translate("EditPanel", "Recadrage"),
+    "picasa_bw":          translate("EditPanel", "Noir et blanc"),
+    "picasa_tilt":        translate("EditPanel", "Redressement"),
+    "picasa_finetune2":   translate("EditPanel", "Réglages fins"),
+    "picasa_fill":        translate("EditPanel", "Lumière"),
+    "picasa_warmth":      translate("EditPanel", "Chaleur"),
+    "picasa_lumi":        translate("EditPanel", "Luminosité"),
+    "picasa_autolight":   translate("EditPanel", "Auto-éclairage"),
+    "picasa_sat":         translate("EditPanel", "Saturation"),
+    "picasa_anisotropic": translate("EditPanel", "Netteté"),
+    "picasa_sharpen":     translate("EditPanel", "Netteté"),
+    "picasa_softfocus":   translate("EditPanel", "Adoucissement"),
 }
 
 
+# Noms d'affichage des outils. Comme pour _OP_LABELS, la clé est le nom INTERNE
+# de l'outil (1er élément de _TREATMENTS, cf. treatment_dialogs.py) : il reste en
+# français en toutes langues parce qu'il sert d'identifiant — clé de
+# _treatment_buttons, discriminant de _open_treatment, et nom d'opération
+# persisté dans edits.db (historique undo/redo cross-session). Ne jamais
+# traduire ces chaînes ailleurs qu'ici, sous peine de casser l'aiguillage.
+_TOOL_LABELS: dict[str, str] = {
+    "Luminosité": translate("EditPanel", "Luminosité"),
+    "Contraste":  translate("EditPanel", "Contraste"),
+    "Couleurs":   translate("EditPanel", "Couleurs"),
+    "Vignette":   translate("EditPanel", "Vignette"),
+    "Cadre":      translate("EditPanel", "Cadre"),
+    "Redresser":  translate("EditPanel", "Redresser"),
+}
+
+
+def _tool_label(name: str) -> str:
+    """Libellé affiché d'un outil, à partir de son nom interne."""
+    return _TOOL_LABELS.get(name, name)
+
+
 def _op_label(op: str) -> str:
-    return _OP_LABELS.get(op, op.replace("_", " ").capitalize())
+    if op in _OP_LABELS:
+        return _OP_LABELS[op]
+    if op in _TOOL_LABELS:
+        return _TOOL_LABELS[op]
+    return op.replace("_", " ").capitalize()
 
 
 # ------------------------------------------------------------------ icônes
@@ -155,7 +181,7 @@ class EditPanel(QWidget):
         root.setSpacing(6)
 
         # Barre titre
-        self._title_label = QLabel("Retouche")
+        self._title_label = QLabel(translate("EditPanel", "Retouche"))
         self._title_label.setStyleSheet("font-weight: bold;")
         root.addWidget(self._title_label)
 
@@ -168,7 +194,7 @@ class EditPanel(QWidget):
         inner_layout.setContentsMargins(2, 2, 2, 2)
 
         # Grille de boutons de traitement
-        lbl_corrections = QLabel("Corrections")
+        lbl_corrections = QLabel(translate("EditPanel", "Corrections"))
         lbl_corrections.setStyleSheet("color: #aaa; font-size: 10px;")
         inner_layout.addWidget(lbl_corrections)
 
@@ -185,61 +211,61 @@ class EditPanel(QWidget):
 
         # Bouton Yeux rouges
         self._btn_red_eye = QToolButton()
-        self._btn_red_eye.setText("Yeux rouges")
+        self._btn_red_eye.setText(translate("EditPanel", "Yeux rouges"))
         self._btn_red_eye.setIcon(QIcon(_icon_red_eye()))
         self._btn_red_eye.setIconSize(QSize(_ICON_SIZE, _ICON_SIZE))
         self._btn_red_eye.setToolButtonStyle(Qt.ToolButtonTextUnderIcon)
         self._btn_red_eye.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self._btn_red_eye.setFixedHeight(_ICON_SIZE + 28)
-        self._btn_red_eye.setToolTip("Corriger les yeux rouges — cliquez sur chaque œil")
+        self._btn_red_eye.setToolTip(translate("EditPanel", "Corriger les yeux rouges — cliquez sur chaque œil"))
         self._btn_red_eye.setCheckable(True)
         self._btn_red_eye.clicked.connect(self._toggle_red_eye_mode)
         grid.addWidget(self._btn_red_eye, _next // 2, _next % 2)
 
         # Bouton Annotations
         self._btn_annotations = QToolButton()
-        self._btn_annotations.setText("Annotations")
+        self._btn_annotations.setText(translate("EditPanel", "Annotations"))
         self._btn_annotations.setIcon(QIcon(_icon_ann_pen()))
         self._btn_annotations.setIconSize(QSize(_ICON_SIZE, _ICON_SIZE))
         self._btn_annotations.setToolButtonStyle(Qt.ToolButtonTextUnderIcon)
         self._btn_annotations.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self._btn_annotations.setFixedHeight(_ICON_SIZE + 28)
-        self._btn_annotations.setToolTip("Dessiner / écrire par-dessus la photo (calque séparé)")
+        self._btn_annotations.setToolTip(translate("EditPanel", "Dessiner / écrire par-dessus la photo (calque séparé)"))
         self._btn_annotations.setCheckable(True)
         self._btn_annotations.clicked.connect(self._toggle_annotation_mode)
         grid.addWidget(self._btn_annotations, (_next + 1) // 2, (_next + 1) % 2)
         inner_layout.addLayout(grid)
 
         # Panneau de contrôle yeux rouges (masqué hors mode)
-        self._red_eye_panel = QGroupBox("Correction yeux rouges")
+        self._red_eye_panel = QGroupBox(translate("EditPanel", "Correction yeux rouges"))
         re_layout = QVBoxLayout(self._red_eye_panel)
         re_layout.setContentsMargins(6, 8, 6, 6)
         re_layout.setSpacing(4)
 
-        lbl_instr = QLabel("Cliquez sur chaque œil rouge dans la photo")
+        lbl_instr = QLabel(translate("EditPanel", "Cliquez sur chaque œil rouge dans la photo"))
         lbl_instr.setStyleSheet("color: #bbb; font-size: 10px;")
         lbl_instr.setAlignment(Qt.AlignCenter)
         lbl_instr.setWordWrap(True)
         re_layout.addWidget(lbl_instr)
 
         radius_row = QHBoxLayout()
-        radius_row.addWidget(QLabel("Taille :"))
+        radius_row.addWidget(QLabel(translate("EditPanel", "Taille :")))
         self._red_eye_slider = MarkedSlider(Qt.Horizontal, fmt=lambda v: f"{v/10:.1f}%")
         self._red_eye_slider.setRange(5, 80)   # 0.5% – 8% de la plus petite dimension
         self._red_eye_slider.setValue(30)       # défaut : 3%
-        self._red_eye_slider.setToolTip("Rayon de correction (% de l'image)")
+        self._red_eye_slider.setToolTip(translate("EditPanel", "Rayon de correction (% de l'image)"))
         self._red_eye_slider.valueChanged.connect(self._on_red_eye_radius_changed)
         radius_row.addWidget(self._red_eye_slider)
         re_layout.addLayout(radius_row)
 
         re_btns = QHBoxLayout()
         re_btns.setSpacing(4)
-        btn_clear_re = QPushButton("Effacer tout")
-        btn_clear_re.setToolTip("Supprimer toutes les corrections yeux rouges")
+        btn_clear_re = QPushButton(translate("EditPanel", "Effacer tout"))
+        btn_clear_re.setToolTip(translate("EditPanel", "Supprimer toutes les corrections yeux rouges"))
         btn_clear_re.clicked.connect(self._clear_red_eye)
         re_btns.addWidget(btn_clear_re)
-        btn_done_re = QPushButton("Terminé")
-        btn_done_re.setToolTip("Quitter le mode yeux rouges  (Echap)")
+        btn_done_re = QPushButton(translate("EditPanel", "Terminé"))
+        btn_done_re.setToolTip(translate("EditPanel", "Quitter le mode yeux rouges  (Echap)"))
         btn_done_re.clicked.connect(self._done_red_eye)
         re_btns.addWidget(btn_done_re)
         re_layout.addLayout(re_btns)
@@ -248,7 +274,7 @@ class EditPanel(QWidget):
         inner_layout.addWidget(self._red_eye_panel)
 
         # Panneau de contrôle du calque d'annotations (masqué hors mode)
-        self._annotation_panel = QGroupBox("Annotations")
+        self._annotation_panel = QGroupBox(translate("EditPanel", "Annotations"))
         an_layout = QVBoxLayout(self._annotation_panel)
         an_layout.setContentsMargins(6, 8, 6, 6)
         an_layout.setSpacing(4)
@@ -259,13 +285,17 @@ class EditPanel(QWidget):
         self._annotation_tool_group.setExclusive(True)
         self._annotation_tool_buttons: dict[str, QToolButton] = {}
         for tool, icon_fn, tip in [
-            ("pen",     _icon_ann_pen,     "Stylo — trait libre"),
-            ("line",    _icon_ann_line,    "Ligne droite"),
-            ("curve",   _icon_ann_curve,   "Courbe — cliquez les points de passage, double-clic pour valider"),
-            ("rect",    _icon_ann_rect,    "Rectangle"),
-            ("ellipse", _icon_ann_ellipse, "Ellipse"),
-            ("text",    _icon_ann_text,    "Texte"),
-            ("select",  _icon_ann_select,  "Sélection — cliquez un élément pour le sélectionner"),
+            ("pen",     _icon_ann_pen,     translate("EditPanel", "Stylo — trait libre")),
+            ("line",    _icon_ann_line,    translate("EditPanel", "Ligne droite")),
+            ("curve",   _icon_ann_curve,   translate(
+                "EditPanel",
+                "Courbe — cliquez les points de passage, double-clic pour valider")),
+            ("rect",    _icon_ann_rect,    translate("EditPanel", "Rectangle")),
+            ("ellipse", _icon_ann_ellipse, translate("EditPanel", "Ellipse")),
+            ("text",    _icon_ann_text,    translate("EditPanel", "Texte")),
+            ("select",  _icon_ann_select,  translate(
+                "EditPanel",
+                "Sélection — cliquez un élément pour le sélectionner")),
         ]:
             btn = QToolButton()
             btn.setIcon(QIcon(icon_fn()))
@@ -284,17 +314,17 @@ class EditPanel(QWidget):
         style_row.setSpacing(4)
         self._btn_annotation_color = QPushButton()
         self._btn_annotation_color.setFixedSize(28, 28)
-        self._btn_annotation_color.setToolTip("Couleur")
+        self._btn_annotation_color.setToolTip(translate("EditPanel", "Couleur"))
         self._btn_annotation_color.clicked.connect(self._pick_annotation_color)
         style_row.addWidget(self._btn_annotation_color)
-        style_row.addWidget(QLabel("Épaisseur"))
+        style_row.addWidget(QLabel(translate("EditPanel", "Épaisseur")))
         self._annotation_width_spin = QDoubleSpinBox()
         self._annotation_width_spin.setRange(0.0, 4.0)   # % de la plus petite dimension — 0 = pas de contour
         self._annotation_width_spin.setSingleStep(0.1)
         self._annotation_width_spin.setDecimals(1)
         self._annotation_width_spin.setValue(0.6)         # défaut : 0.6%
         self._annotation_width_spin.setSuffix(" %")
-        self._annotation_width_spin.setToolTip("Épaisseur du trait (% de l'image)")
+        self._annotation_width_spin.setToolTip(translate("EditPanel", "Épaisseur du trait (% de l'image)"))
         self._annotation_width_spin.valueChanged.connect(self._on_annotation_style_changed)
         style_row.addWidget(self._annotation_width_spin, stretch=1)
         self._annotation_style_row = QWidget()
@@ -305,13 +335,13 @@ class EditPanel(QWidget):
         shape_row.setSpacing(14)
         self._btn_annotation_fill_color = QPushButton()
         self._btn_annotation_fill_color.setFixedSize(28, 28)
-        self._btn_annotation_fill_color.setToolTip("Couleur de la surface")
+        self._btn_annotation_fill_color.setToolTip(translate("EditPanel", "Couleur de la surface"))
         self._btn_annotation_fill_color.clicked.connect(self._pick_annotation_fill_color)
         shape_row.addWidget(self._btn_annotation_fill_color)
 
         opacity_pair = QHBoxLayout()
         opacity_pair.setSpacing(4)
-        opacity_pair.addWidget(QLabel("Opacité"))
+        opacity_pair.addWidget(QLabel(translate("EditPanel", "Opacité")))
         self._annotation_opacity_spin = QDoubleSpinBox()
         self._annotation_opacity_spin.setRange(0.0, 100.0)
         self._annotation_opacity_spin.setSingleStep(5.0)
@@ -319,21 +349,21 @@ class EditPanel(QWidget):
         self._annotation_opacity_spin.setValue(40.0)
         self._annotation_opacity_spin.setSuffix(" %")
         self._annotation_opacity_spin.setToolTip(
-            "Opacité de la surface — à 100 %, la photo derrière n'est plus visible")
+            translate("EditPanel", "Opacité de la surface — à 100 %, la photo derrière n'est plus visible"))
         self._annotation_opacity_spin.valueChanged.connect(self._on_annotation_style_changed)
         opacity_pair.addWidget(self._annotation_opacity_spin)
         shape_row.addLayout(opacity_pair)
 
         blur_pair = QHBoxLayout()
         blur_pair.setSpacing(4)
-        blur_pair.addWidget(QLabel("Flou"))
+        blur_pair.addWidget(QLabel(translate("EditPanel", "Flou")))
         self._annotation_blur_spin = QDoubleSpinBox()
         self._annotation_blur_spin.setRange(0.0, 10.0)   # % de la plus petite dimension
         self._annotation_blur_spin.setSingleStep(0.5)
         self._annotation_blur_spin.setDecimals(1)
         self._annotation_blur_spin.setValue(0.0)
         self._annotation_blur_spin.setSuffix(" %")
-        self._annotation_blur_spin.setToolTip("Flou de la photo sous la surface (% de l'image)")
+        self._annotation_blur_spin.setToolTip(translate("EditPanel", "Flou de la photo sous la surface (% de l'image)"))
         self._annotation_blur_spin.valueChanged.connect(self._on_annotation_style_changed)
         blur_pair.addWidget(self._annotation_blur_spin)
         shape_row.addLayout(blur_pair)
@@ -353,7 +383,7 @@ class EditPanel(QWidget):
         self._annotation_font_size.setRange(1, 20)   # % de la plus petite dimension
         self._annotation_font_size.setValue(4)
         self._annotation_font_size.setSuffix(" %")
-        self._annotation_font_size.setToolTip("Taille du texte (% de l'image)")
+        self._annotation_font_size.setToolTip(translate("EditPanel", "Taille du texte (% de l'image)"))
         self._annotation_font_size.valueChanged.connect(self._on_annotation_style_changed)
         font_row.addWidget(self._annotation_font_size)
         self._annotation_font_row = QWidget()
@@ -366,7 +396,7 @@ class EditPanel(QWidget):
         self._btn_annotation_bold.setText("G")
         self._btn_annotation_bold.setStyleSheet(_ANNOTATION_TOOL_BTN_STYLE)
         self._btn_annotation_bold.setCheckable(True)
-        self._btn_annotation_bold.setToolTip("Gras")
+        self._btn_annotation_bold.setToolTip(translate("EditPanel", "Gras"))
         bold_font = QFont("Arial")
         bold_font.setBold(True)
         self._btn_annotation_bold.setFont(bold_font)
@@ -376,17 +406,17 @@ class EditPanel(QWidget):
         self._btn_annotation_italic.setStyleSheet(_ANNOTATION_TOOL_BTN_STYLE)
         self._btn_annotation_italic.setText("I")
         self._btn_annotation_italic.setCheckable(True)
-        self._btn_annotation_italic.setToolTip("Italique")
+        self._btn_annotation_italic.setToolTip(translate("EditPanel", "Italique"))
         italic_font = QFont("Arial")
         italic_font.setItalic(True)
         self._btn_annotation_italic.setFont(italic_font)
         self._btn_annotation_italic.clicked.connect(self._on_annotation_style_changed)
         bi_row.addWidget(self._btn_annotation_italic)
         bi_row.addSpacing(10)
-        bi_row.addWidget(QLabel("Couleur"))
+        bi_row.addWidget(QLabel(translate("EditPanel", "Couleur")))
         self._btn_annotation_text_color = QPushButton()
         self._btn_annotation_text_color.setFixedSize(24, 24)
-        self._btn_annotation_text_color.setToolTip("Couleur du texte")
+        self._btn_annotation_text_color.setToolTip(translate("EditPanel", "Couleur du texte"))
         self._btn_annotation_text_color.clicked.connect(self._pick_annotation_color)
         bi_row.addWidget(self._btn_annotation_text_color)
         bi_row.addStretch()
@@ -395,20 +425,20 @@ class EditPanel(QWidget):
         an_layout.addWidget(self._annotation_bi_row)
         self._update_annotation_style_controls_visibility()
 
-        self._btn_annotation_delete_sel = QPushButton("Supprimer la sélection")
+        self._btn_annotation_delete_sel = QPushButton(translate("EditPanel", "Supprimer la sélection"))
         self._btn_annotation_delete_sel.setEnabled(False)
-        self._btn_annotation_delete_sel.setToolTip("Supprimer l'élément d'annotation sélectionné")
+        self._btn_annotation_delete_sel.setToolTip(translate("EditPanel", "Supprimer l'élément d'annotation sélectionné"))
         self._btn_annotation_delete_sel.clicked.connect(self.annotation_delete_selected_requested.emit)
         an_layout.addWidget(self._btn_annotation_delete_sel)
 
         an_btns = QHBoxLayout()
         an_btns.setSpacing(4)
-        btn_clear_ann = QPushButton("Effacer tout")
-        btn_clear_ann.setToolTip("Supprimer toutes les annotations")
+        btn_clear_ann = QPushButton(translate("EditPanel", "Effacer tout"))
+        btn_clear_ann.setToolTip(translate("EditPanel", "Supprimer toutes les annotations"))
         btn_clear_ann.clicked.connect(self._clear_all_annotations)
         an_btns.addWidget(btn_clear_ann)
-        btn_done_ann = QPushButton("Terminé")
-        btn_done_ann.setToolTip("Quitter le mode annotation  (Echap)")
+        btn_done_ann = QPushButton(translate("EditPanel", "Terminé"))
+        btn_done_ann.setToolTip(translate("EditPanel", "Quitter le mode annotation  (Echap)"))
         btn_done_ann.clicked.connect(self._done_annotation_mode)
         an_btns.addWidget(btn_done_ann)
         an_layout.addLayout(an_btns)
@@ -421,12 +451,12 @@ class EditPanel(QWidget):
         # Annuler / Rétablir
         undo_row = QHBoxLayout()
         undo_row.setSpacing(4)
-        self._btn_undo = QPushButton("Annuler")
+        self._btn_undo = QPushButton(translate("EditPanel", "Annuler"))
         self._btn_undo.setEnabled(False)
         self._btn_undo.setShortcut(QKeySequence("Ctrl+Z"))
         self._btn_undo.clicked.connect(self.undo)
         undo_row.addWidget(self._btn_undo)
-        self._btn_redo = QPushButton("Rétablir")
+        self._btn_redo = QPushButton(translate("EditPanel", "Rétablir"))
         self._btn_redo.setEnabled(False)
         self._btn_redo.setShortcut(QKeySequence("Ctrl+Y"))
         self._btn_redo.setStyleSheet("QPushButton:disabled { color: #555; }")
@@ -437,12 +467,12 @@ class EditPanel(QWidget):
         # Réinitialiser toutes les retouches / Remettre toutes les retouches
         reset_row = QHBoxLayout()
         reset_row.setSpacing(4)
-        self._btn_reset = QPushButton("Réinitialiser\ntoutes les retouches")
+        self._btn_reset = QPushButton(translate("EditPanel", "Réinitialiser\ntoutes les retouches"))
         self._btn_reset.setEnabled(False)
         self._btn_reset.setToolTip(
-            "Supprime toutes les retouches et l'historique pour cette photo.\n"
+            translate("EditPanel", "Supprime toutes les retouches et l'historique pour cette photo.\n"
             "Le fichier original sur disque n'est pas modifié.\n"
-            "Réversible via « Remettre toutes les retouches »."
+            "Réversible via « Remettre toutes les retouches ».")
         )
         self._btn_reset.setStyleSheet(
             "QPushButton { color: #c07070; }"
@@ -451,11 +481,11 @@ class EditPanel(QWidget):
         )
         self._btn_reset.clicked.connect(self.reset_all)
         reset_row.addWidget(self._btn_reset)
-        self._btn_restore = QPushButton("Remettre\ntoutes les retouches")
+        self._btn_restore = QPushButton(translate("EditPanel", "Remettre\ntoutes les retouches"))
         self._btn_restore.setEnabled(False)
         self._btn_restore.setToolTip(
-            "Remet en place les retouches supprimées par le dernier\n"
-            "« Réinitialiser toutes les retouches » sur cette photo."
+            translate("EditPanel", "Remet en place les retouches supprimées par le dernier\n"
+            "« Réinitialiser toutes les retouches » sur cette photo.")
         )
         self._btn_restore.setStyleSheet("QPushButton:disabled { color: #555; }")
         self._btn_restore.clicked.connect(self.restore_all)
@@ -463,7 +493,7 @@ class EditPanel(QWidget):
         inner_layout.addLayout(reset_row)
 
         # Géométrie (boutons directs)
-        grp_geo = QGroupBox("Géométrie")
+        grp_geo = QGroupBox(translate("EditPanel", "Géométrie"))
         grp_geo.setLayout(QVBoxLayout())
         grp_geo.layout().setSpacing(4)
         grp_geo.layout().setContentsMargins(4, 8, 4, 4)
@@ -484,27 +514,29 @@ class EditPanel(QWidget):
         row_sr.setSpacing(4)
 
         btn_straighten = QToolButton()
-        btn_straighten.setText("Redresser")
+        btn_straighten.setText(translate("EditPanel", "Redresser"))
         btn_straighten.setIcon(QIcon(_icon_straighten()))
         btn_straighten.setIconSize(QSize(_ICON_SIZE, _ICON_SIZE))
         btn_straighten.setToolButtonStyle(Qt.ToolButtonTextUnderIcon)
         btn_straighten.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         btn_straighten.setFixedHeight(_ICON_SIZE + 28)
-        btn_straighten.setToolTip("Corriger l'inclinaison de l'horizon (-10° à +10°)")
+        btn_straighten.setToolTip(translate("EditPanel", "Corriger l'inclinaison de l'horizon (-10° à +10°)"))
         btn_straighten.clicked.connect(
-            lambda: self._open_treatment("Redresser", [("Angle (°)", "straighten", -10.0, 10.0, 1)])
+            lambda: self._open_treatment(
+                "Redresser",
+                [(translate("EditPanel", "Angle (°)"), "straighten", -10.0, 10.0, 1)])
         )
         self._treatment_buttons["Redresser"] = btn_straighten
         row_sr.addWidget(btn_straighten)
 
         self._btn_crop = QToolButton()
-        self._btn_crop.setText("Recadrer")
+        self._btn_crop.setText(translate("EditPanel", "Recadrer"))
         self._btn_crop.setIcon(QIcon(_icon_crop()))
         self._btn_crop.setIconSize(QSize(_ICON_SIZE, _ICON_SIZE))
         self._btn_crop.setToolButtonStyle(Qt.ToolButtonTextUnderIcon)
         self._btn_crop.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self._btn_crop.setFixedHeight(_ICON_SIZE + 28)
-        self._btn_crop.setToolTip("Définir interactivement la zone de recadrage")
+        self._btn_crop.setToolTip(translate("EditPanel", "Définir interactivement la zone de recadrage"))
         self._btn_crop.clicked.connect(self._on_crop_clicked)
         row_sr.addWidget(self._btn_crop)
 
@@ -575,7 +607,7 @@ class EditPanel(QWidget):
     def _make_treatment_button(self, name: str, icon_px: QPixmap,
                                 sliders_def: list) -> QToolButton:
         btn = QToolButton()
-        btn.setText(name)
+        btn.setText(_tool_label(name))
         btn.setIcon(QIcon(icon_px))
         btn.setIconSize(QSize(_ICON_SIZE, _ICON_SIZE))
         btn.setToolButtonStyle(Qt.ToolButtonTextUnderIcon)
@@ -692,7 +724,7 @@ class EditPanel(QWidget):
             return
 
         original = copy.copy(self._edit)
-        dlg = TreatmentDialog(title, sliders_def, self._edit, parent=self)
+        dlg = TreatmentDialog(_tool_label(title), sliders_def, self._edit, parent=self)
         dlg.preview.connect(self._on_preview)
         dlg._panel = self
         self._active_generic_dlg = dlg
@@ -946,7 +978,8 @@ class EditPanel(QWidget):
             history.pop()
         self._undo_stack = history   # list[(EditInfo, op_label)]
         self._redo_stack.clear()
-        self._title_label.setText(f"Retouche — {photo.filename}")
+        self._title_label.setText(
+            translate("EditPanel", "Retouche — {name}").format(name=photo.filename))
         self._update_undo_buttons()
 
     def get_edit(self) -> EditInfo:
@@ -1027,17 +1060,19 @@ class EditPanel(QWidget):
     def _update_undo_buttons(self) -> None:
         if self._undo_stack:
             _, label = self._undo_stack[-1]
-            self._btn_undo.setText(f"Annuler  {_op_label(label)}")
+            self._btn_undo.setText(
+                translate("EditPanel", "Annuler  {op}").format(op=_op_label(label)))
             self._btn_undo.setEnabled(True)
         else:
-            self._btn_undo.setText("Annuler")
+            self._btn_undo.setText(translate("EditPanel", "Annuler"))
             self._btn_undo.setEnabled(False)
         if self._redo_stack:
             _, label = self._redo_stack[-1]
-            self._btn_redo.setText(f"Rétablir  {_op_label(label)}")
+            self._btn_redo.setText(
+                translate("EditPanel", "Rétablir  {op}").format(op=_op_label(label)))
             self._btn_redo.setEnabled(True)
         else:
-            self._btn_redo.setText("Rétablir")
+            self._btn_redo.setText(translate("EditPanel", "Rétablir"))
             self._btn_redo.setEnabled(False)
         self._btn_reset.setEnabled(self._edit.is_modified())
         can_restore = bool(self._photo) and os.path.normpath(self._photo.path) in self._reset_snapshots
@@ -1228,7 +1263,8 @@ class EditPanel(QWidget):
 
     def _pick_annotation_color(self) -> None:
         color = QColorDialog.getColor(
-            self._annotation_color, self, "Couleur d'annotation",
+            self._annotation_color, self,
+            translate("EditPanel", "Couleur d'annotation"),
             QColorDialog.ShowAlphaChannel,
         )
         if color.isValid():
@@ -1248,7 +1284,8 @@ class EditPanel(QWidget):
         # Pas de canal alpha ici : l'opacité de la surface est régie exclusivement
         # par _annotation_opacity_spin, pour éviter deux contrôles de transparence
         # qui se composent silencieusement.
-        color = QColorDialog.getColor(self._annotation_fill_color, self, "Couleur de la surface")
+        color = QColorDialog.getColor(self._annotation_fill_color, self,
+                                      translate("EditPanel", "Couleur de la surface"))
         if color.isValid():
             self._annotation_fill_color = color
             self._update_annotation_fill_color_swatch()
@@ -1309,8 +1346,8 @@ class EditPanel(QWidget):
             new_list.append(a)
         if not any_updated:
             return
-        self._checkpoint("Modifier le style")
-        self._push_undo("Modifier le style")
+        self._checkpoint("annotation_style")
+        self._push_undo("annotation_style")
         self._edit.annotations = new_list
         self.edits_changed.emit(copy.copy(self._edit))
         self._save("annotation_style")
@@ -1341,8 +1378,8 @@ class EditPanel(QWidget):
 
     def on_annotation_deleted(self, annotation_id: str) -> None:
         """Reçu depuis le canvas quand l'utilisateur supprime l'élément sélectionné."""
-        self._checkpoint("Supprimer annotation")
-        self._push_undo("Supprimer annotation")
+        self._checkpoint("annotation_delete")
+        self._push_undo("annotation_delete")
         self._edit.annotations = [a for a in self._edit.annotations if a.get("id") != annotation_id]
         self.edits_changed.emit(copy.copy(self._edit))
         self._save("annotation_delete")
@@ -1352,8 +1389,8 @@ class EditPanel(QWidget):
         ids = set(annotation_ids or [])
         if not ids:
             return
-        self._checkpoint("Supprimer annotations")
-        self._push_undo("Supprimer annotations")
+        self._checkpoint("annotation_delete_multi")
+        self._push_undo("annotation_delete_multi")
         self._edit.annotations = [a for a in self._edit.annotations if a.get("id") not in ids]
         self.edits_changed.emit(copy.copy(self._edit))
         self._save("annotation_delete_multi")
@@ -1403,8 +1440,8 @@ class EditPanel(QWidget):
     def on_annotation_moved(self, annotation_id: str, updated: dict) -> None:
         """Reçu depuis le canvas quand l'utilisateur relâche la souris après avoir
         déplacé l'élément sélectionné (outil Sélection)."""
-        self._checkpoint("Déplacer annotation")
-        self._push_undo("Déplacer annotation")
+        self._checkpoint("annotation_move")
+        self._push_undo("annotation_move")
         self._edit.annotations = [
             dict(updated) if a.get("id") == annotation_id else a for a in self._edit.annotations
         ]
@@ -1416,8 +1453,8 @@ class EditPanel(QWidget):
         déplacé plusieurs éléments sélectionnés en une fois (outil Sélection)."""
         if not updated:
             return
-        self._checkpoint("Déplacer annotations")
-        self._push_undo("Déplacer annotations")
+        self._checkpoint("annotation_move_multi")
+        self._push_undo("annotation_move_multi")
         self._edit.annotations = [
             dict(updated[a.get("id")]) if a.get("id") in updated else a for a in self._edit.annotations
         ]
@@ -1442,7 +1479,7 @@ class EditPanel(QWidget):
         if not updated:
             return
         is_group = any(v.get("group") for v in updated.values())
-        label = "Grouper les annotations" if is_group else "Dégrouper les annotations"
+        label = "annotation_group" if is_group else "annotation_ungroup"
         self._checkpoint(label)
         self._push_undo(label)
         self._edit.annotations = [

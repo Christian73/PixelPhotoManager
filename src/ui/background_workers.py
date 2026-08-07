@@ -9,6 +9,7 @@ import logging
 import os
 from PySide6.QtCore import QThread, Signal
 
+from src.core.i18n import translate
 from src.faces.clusterer import reset_clustering_cache
 from src.library.dedup_cache import DedupCache
 
@@ -104,8 +105,10 @@ class _DeleteWorkerThread(QThread):
                 deleted.append(path)
             except Exception as e:
                 errors.append(
-                    f"{os.path.basename(path)} : mise à la corbeille impossible"
-                    f" ({e}) — le fichier n'a PAS été supprimé."
+                    translate("DeleteWorker",
+                              "{name} : mise à la corbeille impossible ({err}) — "
+                              "le fichier n'a PAS été supprimé."
+                              ).format(name=os.path.basename(path), err=e)
                 )
             self.progress.emit(i + 1, len(self._paths))
         if deleted:

@@ -11,13 +11,18 @@ from PySide6.QtWidgets import (
     QGroupBox, QHBoxLayout, QLabel, QLineEdit, QPushButton, QRadioButton,
     QVBoxLayout, QWidget,
 )
+from src.core.i18n import translate
 
 # (label, max_total_pixels | None, jpeg_quality, size_hint)
 _EXPORT_SIZES = [
-    ("Taille maximale — résolution originale", None,      95, ""),
-    ("Grande  (~4 Mpx)",                       4_000_000, 98, "600–1 600 Ko"),
-    ("Moyenne (~2 Mpx)",                       2_000_000, 94, "320–800 Ko"),
-    ("Petite  (~500 kpx)",                     500_000,   90, "75–300 Ko"),
+    (translate("ExportDialog", "Taille maximale — résolution originale"),
+     None,      95, ""),
+    (translate("ExportDialog", "Grande  (~4 Mpx)"),
+     4_000_000, 98, translate("ExportDialog", "600–1 600 Ko")),
+    (translate("ExportDialog", "Moyenne (~2 Mpx)"),
+     2_000_000, 94, translate("ExportDialog", "320–800 Ko")),
+    (translate("ExportDialog", "Petite  (~500 kpx)"),
+     500_000,   90, translate("ExportDialog", "75–300 Ko")),
 ]
 
 
@@ -27,7 +32,7 @@ class _ExportDialog(QDialog):
     def __init__(self, photo_count: int, parent=None):
         super().__init__(parent)
         n = photo_count
-        self.setWindowTitle(f"Exporter {n} photo{'s' if n > 1 else ''}")
+        self.setWindowTitle(translate("ExportDialog", "Exporter %n photo(s)", None, n))
         self.setMinimumWidth(500)
         self._setup_ui()
 
@@ -37,18 +42,18 @@ class _ExportDialog(QDialog):
         layout.setContentsMargins(18, 18, 18, 18)
 
         # Dossier de destination
-        grp_dir = QGroupBox("Dossier de destination")
+        grp_dir = QGroupBox(translate("ExportDialog", "Dossier de destination"))
         dir_layout = QHBoxLayout(grp_dir)
         self._dir_edit = QLineEdit(str(self._DEFAULT_DIR))
         dir_layout.addWidget(self._dir_edit)
-        btn_browse = QPushButton("Parcourir…")
+        btn_browse = QPushButton(translate("ExportDialog", "Parcourir…"))
         btn_browse.setFixedWidth(90)
         btn_browse.clicked.connect(self._browse)
         dir_layout.addWidget(btn_browse)
         layout.addWidget(grp_dir)
 
         # Options de taille
-        grp_size = QGroupBox("Taille d'export")
+        grp_size = QGroupBox(translate("ExportDialog", "Taille d'export"))
         grp_size.setStyleSheet("""
             QRadioButton::indicator {
                 width: 13px; height: 13px;
@@ -81,7 +86,9 @@ class _ExportDialog(QDialog):
             row_layout.addWidget(rb)
 
             if size_hint:
-                lbl_info = QLabel(f"qualité {quality}  •  ≈ {size_hint}")
+                lbl_info = QLabel(
+                    translate("ExportDialog", "qualité {q}  •  ≈ {hint}").format(
+                        q=quality, hint=size_hint))
                 lbl_info.setStyleSheet("color: #777; font-size: 10px;")
                 row_layout.addWidget(lbl_info)
 
@@ -92,15 +99,15 @@ class _ExportDialog(QDialog):
 
         # Boutons
         btn_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
-        btn_box.button(QDialogButtonBox.Ok).setText("Exporter")
-        btn_box.button(QDialogButtonBox.Cancel).setText("Annuler")
+        btn_box.button(QDialogButtonBox.Ok).setText(translate("ExportDialog", "Exporter"))
+        btn_box.button(QDialogButtonBox.Cancel).setText(translate("ExportDialog", "Annuler"))
         btn_box.accepted.connect(self.accept)
         btn_box.rejected.connect(self.reject)
         layout.addWidget(btn_box)
 
     def _browse(self) -> None:
         folder = QFileDialog.getExistingDirectory(
-            self, "Choisir le dossier d'export", self._dir_edit.text()
+            self, translate("ExportDialog", "Choisir le dossier d'export"), self._dir_edit.text()
         )
         if folder:
             self._dir_edit.setText(folder)
@@ -128,7 +135,7 @@ class _SaveOptionsDialog(QDialog):
 
     def __init__(self, photo_path: str, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("Enregistrer l'image traitée")
+        self.setWindowTitle(translate("SaveOptionsDialog", "Enregistrer l'image traitée"))
         self.setMinimumWidth(480)
         self._photo_path = photo_path
         self._setup_ui()
@@ -150,7 +157,7 @@ class _SaveOptionsDialog(QDialog):
         layout.addSpacing(4)
 
         # --- Option 1 : écraser ---
-        self._rb_overwrite = QRadioButton("Écraser le fichier original")
+        self._rb_overwrite = QRadioButton(translate("SaveOptionsDialog", "Écraser le fichier original"))
         self._rb_overwrite.setChecked(True)
         layout.addWidget(self._rb_overwrite)
 
@@ -160,26 +167,26 @@ class _SaveOptionsDialog(QDialog):
         od_layout.setSpacing(6)
 
         lbl_warn = QLabel(
-            "⚠  Cette action est irréversible : le fichier original sera définitivement\n"
-            "    remplacé par la version traitée."
+            translate("SaveOptionsDialog", "⚠  Cette action est irréversible : le fichier original sera définitivement\n"
+            "    remplacé par la version traitée.")
         )
         lbl_warn.setStyleSheet("color: #e8a040; font-size: 10px;")
         od_layout.addWidget(lbl_warn)
 
         self._cb_backup = QCheckBox(
-            "Copier l'original dans .tmp_originals avant l'écrasement"
+            translate("SaveOptionsDialog", "Copier l'original dans .tmp_originals avant l'écrasement")
         )
         self._cb_backup.setChecked(True)
         self._cb_backup.setToolTip(
-            f"L'original sera copié dans :\n"
-            f"{Path(self._photo_path).parent / '.tmp_originals'}"
+            translate("SaveOptionsDialog", "L'original sera copié dans :\n{path}").format(
+                path=Path(self._photo_path).parent / '.tmp_originals')
         )
         od_layout.addWidget(self._cb_backup)
 
         layout.addWidget(self._overwrite_details)
 
         # --- Option 2 : enregistrer ailleurs ---
-        self._rb_elsewhere = QRadioButton("Enregistrer à un autre emplacement…")
+        self._rb_elsewhere = QRadioButton(translate("SaveOptionsDialog", "Enregistrer à un autre emplacement…"))
         layout.addWidget(self._rb_elsewhere)
 
         layout.addSpacing(8)
@@ -189,8 +196,8 @@ class _SaveOptionsDialog(QDialog):
 
         # Boutons
         btn_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
-        btn_box.button(QDialogButtonBox.Ok).setText("Enregistrer")
-        btn_box.button(QDialogButtonBox.Cancel).setText("Annuler")
+        btn_box.button(QDialogButtonBox.Ok).setText(translate("SaveOptionsDialog", "Enregistrer"))
+        btn_box.button(QDialogButtonBox.Cancel).setText(translate("SaveOptionsDialog", "Annuler"))
         btn_box.accepted.connect(self.accept)
         btn_box.rejected.connect(self.reject)
         layout.addWidget(btn_box)

@@ -25,6 +25,7 @@ from PySide6.QtWidgets import (
     QMenu, QProgressBar, QPushButton, QScrollArea, QSizePolicy, QVBoxLayout, QWidget,
 )
 
+from src.core.i18n import translate
 from src.core.models import PersonInfo
 from src.faces.face_database import FaceDatabase, _SIM_SUGGEST
 from src.ui.loading_label import LoadingLabel
@@ -268,7 +269,8 @@ class _ClusterRefreshThread(QThread):
     def run(self) -> None:
         try:
             # ── Récupération initiale (rapide) — N encore inconnu ──────────
-            self.progress.emit(0, 0, "Récupération des groupes de visages…")
+            self.progress.emit(0, 0, translate(
+                "FaceClusterWorkers", "Récupération des groupes de visages…"))
             clusters = self._face_db.get_unnamed_clusters()
 
             _empty = {
@@ -277,7 +279,8 @@ class _ClusterRefreshThread(QThread):
                 "person_cluster_embeddings": {}, "is_partial": False,
             }
             if not clusters:
-                self.progress.emit(1, 1, "Aucun groupe à analyser")
+                self.progress.emit(1, 1, translate(
+                    "FaceClusterWorkers", "Aucun groupe à analyser"))
                 self.initial_ready.emit(_empty)
                 self.data_ready.emit(_empty)
                 return
@@ -285,7 +288,6 @@ class _ClusterRefreshThread(QThread):
             cluster_ids = [cid for cid, _ in clusters]
             face_counts = {cid: fc for cid, fc in clusters}
             n  = len(cluster_ids)
-            s  = "s" if n > 1 else ""
 
             # Total d'étapes = 5 fixes + ≤100 mises à jour Union-Find + 1 suggestions.
             # Les suggestions sont vectorisées (1 opération matricielle) donc 1 seule étape.
@@ -295,7 +297,9 @@ class _ClusterRefreshThread(QThread):
 
             # ── Phase 1 : structure plate, sans suggestion ─────────────────
             step += 1
-            self.progress.emit(step, N, f"Chargement des visages représentatifs ({n} groupe{s})…")
+            self.progress.emit(step, N, translate(
+                "FaceClusterWorkers",
+                "Chargement des visages représentatifs (%n groupe(s))…", None, n))
             representative_faces = self._face_db.get_all_representative_faces(cluster_ids)
             flat_groups = [[cid] for cid in cluster_ids]   # déjà trié DESC par face_count
 
@@ -319,11 +323,12 @@ class _ClusterRefreshThread(QThread):
             # de la matrice de ~68k à ~32k — temps divisé par ~4.
             non_solo_ids = [cid for cid in cluster_ids if face_counts.get(cid, 0) > 1]
             n_ns = len(non_solo_ids)
-            s_ns = "s" if n_ns > 1 else ""
 
             step += 1
-            self.progress.emit(step, N,
-                f"Calcul des représentations vectorielles ({n_ns} groupe{s_ns} non-isolé{s_ns})…")
+            self.progress.emit(step, N, translate(
+                "FaceClusterWorkers",
+                "Calcul des représentations vectorielles (%n groupe(s) non-isolé(s))…",
+                None, n_ns))
             cluster_embeddings = self._face_db.get_all_cluster_centroids(cluster_ids)
 
             # Affiner N maintenant qu'on connaît les embeddings disponibles
@@ -339,18 +344,21 @@ class _ClusterRefreshThread(QThread):
 
             # ── Phase 2 : personnes connues ───────────────────────────────
             step += 1
-            self.progress.emit(step, N, "Récupération des personnes connues…")
+            self.progress.emit(step, N, translate(
+                "FaceClusterWorkers", "Récupération des personnes connues…"))
             persons    = self._catalog.get_persons()
             np_        = len(persons)
-            sp         = "s" if np_ > 1 else ""
 
             step += 1
-            self.progress.emit(step, N, f"Analyse des personnes connues ({np_} personne{sp})…")
+            self.progress.emit(step, N, translate(
+                "FaceClusterWorkers", "Analyse des personnes connues (%n personne(s))…",
+                None, np_))
             self._face_db.enrich_persons(persons)
             person_ids = [p.id for p in persons]
 
             step += 1
-            self.progress.emit(step, N, "Représentations vectorielles des personnes…")
+            self.progress.emit(step, N, translate(
+                "FaceClusterWorkers", "Représentations vectorielles des personnes…"))
             person_cluster_embeddings = self._face_db.get_all_person_cluster_centroids(person_ids)
 
             # ── Phase 2 : Union-Find par blocs, progression au % près ─────
@@ -367,14 +375,21 @@ class _ClusterRefreshThread(QThread):
                     step += 1
                     self.progress.emit(
                         step, N,
-                        f"Regroupement des visages similaires… {pct} %"
-                        + (f"  ({m_emb} groupes, blocs de {_UF_CHUNK})" if pct == 0 else ""),
+                        translate("FaceClusterWorkers",
+                                  "Regroupement des visages similaires… {pct} %"
+                                  ).format(pct=pct)
+                        + (translate("FaceClusterWorkers",
+                                     "  ({groups} groupes, blocs de {chunk})"
+                                     ).format(groups=m_emb, chunk=_UF_CHUNK)
+                           if pct == 0 else ""),
                     )
 
             if n_ns > UNION_FIND_MAX:
                 # Trop grand même en mode blocs : skip UF
-                self.progress.emit(step + 1, step + 1,
-                    f"{n_ns} groupes — regroupement désactivé (limite : {UNION_FIND_MAX})")
+                self.progress.emit(step + 1, step + 1, translate(
+                    "FaceClusterWorkers",
+                    "{groups} groupes — regroupement désactivé (limite : {limit})"
+                    ).format(groups=n_ns, limit=UNION_FIND_MAX))
                 raw_groups: dict[int, list[int]] = {cid: [cid] for cid in cluster_ids}
             else:
                 # _compute_cluster_groups_bg absorbe elle-même _AnalysisCancelled
@@ -402,7 +417,9 @@ class _ClusterRefreshThread(QThread):
             # ── Phase 2 : étiquettes des groupes multi-clusters (vectorisé) ─
             step += 1
             n_multi = sum(1 for g in groups_sorted if len(g) > 1)
-            self.progress.emit(step, N, f"Calcul des étiquettes de groupes ({n_multi} groupe{('s' if n_multi > 1 else '')})…")
+            self.progress.emit(step, N, translate(
+                "FaceClusterWorkers", "Calcul des étiquettes de groupes (%n groupe(s))…",
+                None, n_multi))
             N += 1   # on ajoute une étape au total pour cette phase
 
             try:
@@ -435,12 +452,20 @@ class _ClusterRefreshThread(QThread):
                 if len(group) > 1:
                     avg_sim = _avg_sim_np(sorted(group, key=lambda c: -face_counts.get(c, 0)))
                     pct     = int(avg_sim * 100)
-                    n_faces = sum(face_counts.get(c, 0) for c in group)
-                    fp      = "s" if n_faces > 1 else ""
+                    n_faces  = sum(face_counts.get(c, 0) for c in group)
+                    n_groups = len(group)
                     label   = (
-                        f"≈ Probablement la même personne"
-                        f"  —  {len(group)} groupes, {n_faces} visage{fp}"
-                        f"  (sim. {pct} %)"
+                        translate("FaceClusterWorkers",
+                                  "≈ Probablement la même personne")
+                        + "  —  "
+                        + translate("FaceClusterWorkers", "%n groupes",
+                                    None, n_groups)
+                        + ", "
+                        + translate("FaceClusterWorkers", "%n visage(s)",
+                                    None, n_faces)
+                        + "  "
+                        + translate("FaceClusterWorkers", "(sim. {pct} %)"
+                                    ).format(pct=pct)
                     )
                     color = "#7aabdb" if avg_sim >= _SIM_STRONG else "#aaa"
                     group_labels[root] = (label, color)
@@ -451,8 +476,10 @@ class _ClusterRefreshThread(QThread):
             step += 1
             self.progress.emit(
                 step, N,
-                "Calcul des suggestions d'identification…"
-                + (f"  —  {np_} personne{sp} connue{sp}" if np_ else ""),
+                translate("FaceClusterWorkers", "Calcul des suggestions d'identification…")
+                + (("  —  " + translate("FaceClusterWorkers",
+                                        "%n personne(s) connue(s)", None, np_))
+                   if np_ else ""),
             )
             suggestions = _compute_all_suggestions_bg(
                 cluster_ids, cluster_embeddings, persons, person_cluster_embeddings

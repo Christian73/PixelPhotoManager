@@ -31,6 +31,7 @@ from src.faces.face_database import FaceDatabase
 from src.ui.loading_label import LoadingLabel
 from src.ui.ui_utils import install_menu_width_fix
 from src.ui.people_panel import _AssignDialog, _face_bytes, _load_edit_rotations
+from src.core.i18n import translate
 
 logger = logging.getLogger(__name__)
 
@@ -179,7 +180,7 @@ class _FaceThumb(QFrame):
         self._btn_accept.setGeometry(_THUMB_W - _BTN_OVL - 3, _y, _BTN_OVL, _BTN_OVL)
         self._btn_accept.setStyleSheet(_BTN_ACCEPT_STYLE)
         self._btn_accept.setCursor(Qt.PointingHandCursor)
-        self._btn_accept.setToolTip("Accepter cette suggestion")
+        self._btn_accept.setToolTip(translate("FaceThumb", "Accepter cette suggestion"))
         self._btn_accept.hide()
         self._btn_accept.clicked.connect(lambda: self.accept_clicked.emit(self._face_id))
 
@@ -187,7 +188,7 @@ class _FaceThumb(QFrame):
         self._btn_reject.setGeometry(3, _y, _BTN_OVL, _BTN_OVL)
         self._btn_reject.setStyleSheet(_BTN_REJECT_STYLE)
         self._btn_reject.setCursor(Qt.PointingHandCursor)
-        self._btn_reject.setToolTip("Rejeter cette suggestion")
+        self._btn_reject.setToolTip(translate("FaceThumb", "Rejeter cette suggestion"))
         self._btn_reject.hide()
         self._btn_reject.clicked.connect(lambda: self.reject_clicked.emit(self._face_id))
 
@@ -289,7 +290,8 @@ class PersonClusterView(QWidget):
             self._person = person
             self._refresh()
         else:
-            self._lbl_title.setText(f"Visages de {person.name}")
+            self._lbl_title.setText(
+                translate("PersonClusterView", "Visages de {name}").format(name=person.name))
             self._person = person
 
     def refresh(self) -> None:
@@ -311,7 +313,7 @@ class PersonClusterView(QWidget):
         h.setContentsMargins(12, 0, 12, 0)
         h.setSpacing(8)
 
-        btn_back = QPushButton("← Retour")
+        btn_back = QPushButton(translate("PersonClusterView", "← Retour"))
         btn_back.setStyleSheet(
             "QPushButton { color: #7aabdb; border: none; font-size: 12px; background: transparent; }"
             "QPushButton:hover { color: #9fcbf5; }"
@@ -353,14 +355,14 @@ class PersonClusterView(QWidget):
 
         pending_hdr = QHBoxLayout()
         pending_hdr.setSpacing(8)
-        lbl_pending = QLabel("En attente de vérification")
+        lbl_pending = QLabel(translate("PersonClusterView", "En attente de vérification"))
         lbl_pending.setStyleSheet(
             "color: #e8a040; font-size: 11px; font-weight: bold; background: transparent;"
         )
         pending_hdr.addWidget(lbl_pending)
         pending_hdr.addStretch()
 
-        self._btn_reject_all = QPushButton("✗ Rejeter toutes")
+        self._btn_reject_all = QPushButton(translate("PersonClusterView", "✗ Rejeter toutes"))
         self._btn_reject_all.setCursor(Qt.PointingHandCursor)
         self._btn_reject_all.setFixedHeight(24)
         self._btn_reject_all.setStyleSheet(
@@ -371,7 +373,7 @@ class PersonClusterView(QWidget):
         self._btn_reject_all.clicked.connect(self._on_reject_all)
         pending_hdr.addWidget(self._btn_reject_all)
 
-        self._btn_accept_all = QPushButton("✓ Accepter toutes")
+        self._btn_accept_all = QPushButton(translate("PersonClusterView", "✓ Accepter toutes"))
         self._btn_accept_all.setCursor(Qt.PointingHandCursor)
         self._btn_accept_all.setFixedHeight(24)
         self._btn_accept_all.setStyleSheet(
@@ -414,7 +416,7 @@ class PersonClusterView(QWidget):
         self._scroll.setWidget(self._content)
         root.addWidget(self._scroll, stretch=1)
 
-        self._lbl_empty = QLabel("Aucun visage associé à cette personne.")
+        self._lbl_empty = QLabel(translate("PersonClusterView", "Aucun visage associé à cette personne."))
         self._lbl_empty.setAlignment(Qt.AlignCenter)
         self._lbl_empty.setStyleSheet("color: #555; font-size: 13px;")
         self._lbl_empty.hide()
@@ -465,7 +467,8 @@ class PersonClusterView(QWidget):
     def _refresh(self) -> None:
         if self._person is None:
             return
-        self._lbl_title.setText(f"Visages de {self._person.name}")
+        self._lbl_title.setText(
+            translate("PersonClusterView", "Visages de {name}").format(name=self._person.name))
         self._stop_loaders()
         self._clear_grid()
         self._refresh_flat()
@@ -479,7 +482,7 @@ class PersonClusterView(QWidget):
 
         if not confirmed and not pending:
             self._scroll.hide()
-            self._lbl_empty.setText("Aucun visage associé à cette personne.")
+            self._lbl_empty.setText(translate("PersonClusterView", "Aucun visage associé à cette personne."))
             self._lbl_empty.show()
             return
 
@@ -500,10 +503,11 @@ class PersonClusterView(QWidget):
                     continue
                 thumb = _FaceThumb(face, self._content)
                 thumb.set_pending(True)
-                plural = "s" if face_count > 1 else ""
                 thumb.setToolTip(
-                    f"{os.path.basename(face.photo_path)}\n"
-                    f"Suggestion {int(score * 100)} % — {face_count} visage{plural}"
+                    os.path.basename(face.photo_path) + "\n"
+                    + translate("PersonClusterView",
+                                "Suggestion {pct} % — %n visage(s)", None, face_count
+                                ).format(pct=int(score * 100))
                 )
                 thumb.double_clicked.connect(self.photo_requested)
                 thumb.context_menu_requested.connect(self._on_pending_thumb_context_menu)
@@ -627,8 +631,8 @@ class PersonClusterView(QWidget):
         menu = QMenu(self)
         install_menu_width_fix(menu)
         menu.setStyleSheet(_MENU_STYLE)
-        act_accept = menu.addAction("✓ Accepter cette suggestion")
-        act_reject = menu.addAction("✗ Rejeter cette suggestion")
+        act_accept = menu.addAction(translate("PersonClusterView", "✓ Accepter cette suggestion"))
+        act_reject = menu.addAction(translate("PersonClusterView", "✗ Rejeter cette suggestion"))
         chosen = menu.exec(pos)
         if chosen == act_accept:
             self.suggestion_accepted.emit(cluster_id)
@@ -743,7 +747,6 @@ class PersonClusterView(QWidget):
             self._apply_selection_style()
 
         n = len(self._selection)
-        s = "s" if n > 1 else ""
 
         # Photos uniques pour la sélection courante (dédoublonnage par chemin)
         selected_paths = {
@@ -751,18 +754,23 @@ class PersonClusterView(QWidget):
             for fid in self._selection if fid in self._flat_cards
         }
         np = len(selected_paths)
-        lbl_photos = f"les {np} photo(s)" if np > 1 else "cette photo"
+        lbl_photos = (translate("PersonClusterView", "les {n} photos").format(n=np)
+                      if np > 1 else translate("PersonClusterView", "cette photo"))
 
         menu = QMenu(self)
         install_menu_width_fix(menu)
         menu.setStyleSheet(_MENU_STYLE)
-        act_reassign = menu.addAction(f"Réassigner {n} visage{s} à une autre personne…")
-        act_unassign = menu.addAction(f"Dé-associer {n} visage{s} de la personne")
+        act_reassign = menu.addAction(translate(
+            "PersonClusterView", "Réassigner %n visage(s) à une autre personne…", None, n))
+        act_unassign = menu.addAction(translate(
+            "PersonClusterView", "Dé-associer %n visage(s) de la personne", None, n))
         menu.addSeparator()
-        act_cover = menu.addAction("Utiliser ce visage comme vignette principale")
+        act_cover = menu.addAction(translate("PersonClusterView", "Utiliser ce visage comme vignette principale"))
         menu.addSeparator()
-        act_add_album = menu.addAction(f"Ajouter {lbl_photos} à un album…")
-        act_new_album = menu.addAction(f"Créer un nouvel album avec {lbl_photos}…")
+        act_add_album = menu.addAction(translate(
+            "PersonClusterView", "Ajouter {photos} à un album…").format(photos=lbl_photos))
+        act_new_album = menu.addAction(translate(
+            "PersonClusterView", "Créer un nouvel album avec {photos}…").format(photos=lbl_photos))
 
         chosen = menu.exec(pos)
         if chosen == act_reassign:
@@ -802,9 +810,8 @@ class PersonClusterView(QWidget):
 
         dlg = _AssignDialog(-1, other_persons, show_ignore=False, parent=self)
         n   = len(face_ids)
-        dlg.setWindowTitle(
-            f"Réassigner {n} visage{'s' if n > 1 else ''} à une autre personne"
-        )
+        dlg.setWindowTitle(translate(
+            "PersonClusterView", "Réassigner %n visage(s) à une autre personne", None, n))
         if dlg.exec() != QDialog.Accepted:
             return
 
@@ -832,7 +839,7 @@ class PersonClusterView(QWidget):
         self._selection.clear()
         if not self._flat_cards:
             self._scroll.hide()
-            self._lbl_empty.setText("Aucun visage associé à cette personne.")
+            self._lbl_empty.setText(translate("PersonClusterView", "Aucun visage associé à cette personne."))
             self._lbl_empty.show()
         else:
             self._reflow()

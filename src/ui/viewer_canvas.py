@@ -28,6 +28,7 @@ from src.ui.ui_utils import install_menu_width_fix
 from src.ui.annotation_renderer import (
     render_annotations, hit_test_annotations, annotation_screen_bounds,
 )
+from src.core.i18n import translate
 
 logger = logging.getLogger(__name__)
 
@@ -41,11 +42,12 @@ def _make_rect_quad(x0: float, y0: float, x1: float, y1: float) -> list:
 # Formats de recadrage : (libellé, tooltip, ratio w/h ou None)
 # L'icône de chaque bouton montre visuellement l'orientation paysage/portrait.
 _CROP_FORMAT_DATA: list[tuple[str, str, float | None]] = [
-    ("Libre",  "Format libre — quadrilatère quelconque",  None),
-    ("10×15",  "10×15 horizontal  (ratio 3:2)",           3 / 2),
-    ("10×15",  "10×15 vertical  (ratio 2:3)",             2 / 3),
-    ("13×18",  "13×18 horizontal  (ratio 18:13)",         18 / 13),
-    ("13×18",  "13×18 vertical  (ratio 13:18)",           13 / 18),
+    (translate("ViewerCanvas", "Libre"),
+     translate("ViewerCanvas", "Format libre — quadrilatère quelconque"),  None),
+    ("10×15", translate("ViewerCanvas", "10×15 horizontal  (ratio 3:2)"),  3 / 2),
+    ("10×15", translate("ViewerCanvas", "10×15 vertical  (ratio 2:3)"),    2 / 3),
+    ("13×18", translate("ViewerCanvas", "13×18 horizontal  (ratio 18:13)"), 18 / 13),
+    ("13×18", translate("ViewerCanvas", "13×18 vertical  (ratio 13:18)"),   13 / 18),
 ]
 
 _CORNER_CURSORS = [
@@ -2239,14 +2241,14 @@ class _Canvas(QWidget):
             elif self._annotation_selected_ids:
                 menu = QMenu(self)
                 install_menu_width_fix(menu)
-                menu.addAction("Effacer\tSuppr", self.delete_selected_annotation)
+                menu.addAction(translate("Canvas", "Effacer\tSuppr"), self.delete_selected_annotation)
                 if len(self._annotation_selected_ids) >= 2:
-                    menu.addAction("Grouper", self.group_selected_annotations)
+                    menu.addAction(translate("Canvas", "Grouper"), self.group_selected_annotations)
                 if any(
                     a.get("group") for a in self._annotations
                     if a.get("id") in self._annotation_selected_ids
                 ):
-                    menu.addAction("Dégrouper", self.ungroup_selected_annotations)
+                    menu.addAction(translate("Canvas", "Dégrouper"), self.ungroup_selected_annotations)
                 menu.exec(event.globalPos())
             return
         if not self._crop_mode and not self._red_eye_mode and not self._face_add_mode:

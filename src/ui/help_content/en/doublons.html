@@ -1,0 +1,79 @@
+<h2>Duplicate detection</h2>
+<p>PixelPhotoManager spots visually similar photos even when they have been resized, lightly
+edited or cropped.</p>
+
+<h3>When the detection happens</h3>
+<p>Detection is <b>automatic and continuous</b>: it starts after every scan of the library,
+with no button to click and no completion report. It runs in the background on a fraction of
+the CPU cores, and the application stays fully usable.</p>
+<ul>
+  <li>The analysis is <b>incremental</b>: only new or modified photos are compared against the
+      rest of the library. Later passes are therefore far quicker than the first one.</li>
+  <li>Groups appear <b>as they are found</b>, without waiting for the end of the analysis.</li>
+  <li><b>Tools › Duplicate status…</b> shows a snapshot: number of groups and of photos
+      involved, date of the last check, and — if a pass is running — a live progress bar. Two
+      buttons: <b>View the groups</b> and <b>Check now</b> (to force an immediate pass).</li>
+  <li>If unreadable files are encountered, a <b>⚠ N corrupted files</b> counter appears in the
+      status bar; clicking it opens the list.</li>
+</ul>
+
+<h3>How it works — two passes</h3>
+<table>
+  <tr><th>Pass</th><th>Technique</th><th>Cases covered</th></tr>
+  <tr><td><b>1 — pHash</b></td><td>Perceptual fingerprint (Hamming)</td>
+      <td>Exact, resized and lightly edited duplicates (colour, brightness)</td></tr>
+  <tr><td><b>2 — ORB + RANSAC</b></td><td>Key-point matching</td>
+      <td>Cropped duplicates (up to ~60 % of the area cut away) — only for the photos not
+          grouped by pass 1</td></tr>
+</table>
+<p class="tip"><b>Note:</b> Videos are not analysed for duplicates.</p>
+
+<h3>Duplicate badge</h3>
+<ul>
+  <li>Thumbnails belonging to a duplicate group show a <b>⧉</b> badge.</li>
+  <li>Clicking that badge opens a view listing every photo of the group side by side.</li>
+</ul>
+
+<h3>Grid of duplicate groups &nbsp;<span style="font-weight:normal;color:#888;">(“Duplicates” button in the sidebar)</span></h3>
+<p>The <b>Duplicates</b> button in the sidebar (the badge shows the number of groups) opens a
+dedicated grid listing every duplicate group at once: one card per group, a thumbnail of the
+first copy, and the number of copies.</p>
+<ul>
+  <li><b>Double-click</b> a card: opens the copies of the group in the viewer for a quick
+      comparison.</li>
+  <li><b>✕</b> on a card: dissolves the whole group (no file is deleted). The decision is
+      <b>persistent</b>: that group will never be formed again as long as none of its members
+      changes. A new file similar to one of them is still detected normally.</li>
+  <li><b>Check now</b> button at the top of the grid to force an immediate pass.</li>
+</ul>
+
+<h3>Recommended workflow</h3>
+<ul>
+  <li>Let the detection happen: the <b>⧉</b> badges appear by themselves on the thumbnails
+      concerned, as the analysis progresses.</li>
+  <li>Click a badge to examine the group of similar photos.</li>
+  <li>Select the copies to keep / delete, then press <kbd>Del</kbd>.</li>
+</ul>
+<p class="tip">Deleting a duplicate sends the file to the <b>Windows recycle bin</b>
+(recoverable) — check the photos carefully before confirming.</p>
+
+<h3>Corrupted files found during the analysis</h3>
+<p>If a file cannot be read during the analysis (damaged JPEG, interrupted copy…), it is
+reported rather than silently skipped. Two ways in: the <b>⚠ N corrupted files</b> counter in
+the status bar, and <b>Tools › Corrupted files…</b> — which offers <b>List…</b> (the list of
+files, where you can target only some of them) and <b>Repair…</b>.</p>
+<ul>
+  <li>A confirmation is asked for before any repair attempt.</li>
+  <li>PixelPhotoManager tries to save a clean copy of the file using a decoder more tolerant
+      than the one used for the analysis.</li>
+  <li>The original is always backed up before being modified (hidden
+      <code>.tmp_originals</code> folder next to the file), and the Windows modification and
+      creation dates are preserved exactly.</li>
+  <li>A <b>Repair finished</b> summary lists the files repaired, then those that could not be
+      (corruption too severe). For the latter only, a <b>Delete these files…</b> button is
+      offered — deletion goes through the Windows recycle bin, and the paths stay available
+      afterwards through <b>Tools › Deleted corrupted files…</b>.</li>
+</ul>
+<p class="tip"><b>Tools › Problem history…</b> keeps a record of every analysis that ran into
+corrupted files (date, number found, number repaired) with direct access to the list of files
+that were not repaired.</p>

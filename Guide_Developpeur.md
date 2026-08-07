@@ -102,7 +102,7 @@ PixelPhotoManager/
 │   │   ├── settings_dialog.py     # Outils › Paramètres
 │   │   ├── loading_label.py       # Indicateur de chargement générique
 │   │   ├── ui_utils.py            # fmt_size(), install_menu_width_fix(), utilitaires UI
-│   │   ├── help_dialog.py         # Dialogue Aide/À propos (contenu dans help_content/*.html)
+│   │   ├── help_dialog.py         # Dialogue Aide/À propos (contenu dans help_content/<langue>/*.html)
 │   │   ├── face_panel.py          # Panneau visages dans la visionneuse
 │   │   ├── people_panel.py        # Vue « Personnes » (groupes non identifiés) + assignation
 │   │   ├── person_cluster_view.py # Vue détaillée d'une personne (visages confirmés/en attente)
@@ -881,13 +881,23 @@ un `_ProblemsReportDialog` générant un diagnostic texte copiable.
 
 ### `help_dialog.py` — Aide / À propos
 
-`HelpDialog(QDialog)` charge le contenu de chaque onglet depuis `src/ui/help_content/*.html`
-(un fichier par onglet + `_style.html` partagé) plutôt que de l'avoir en dur dans le code Python —
-objectif : pouvoir corriger l'aide sans toucher au code. `_load_tab_html()` résout le dossier via
-`sys._MEIPASS / "help_content"` en mode figé (PyInstaller, cf. §14 Packaging) ou
-`Path(__file__).parent / "help_content"` en développement, et substitue `__VERSION__` /
-`__VERSION_CHECK__`. **Toute modification du contenu d'aide passe par ces fichiers HTML, jamais
-par du texte en dur dans `help_dialog.py`.**
+`HelpDialog(QDialog)` charge le contenu de chaque onglet depuis
+`src/ui/help_content/<langue>/*.html` (un fichier par onglet + `_style.html` partagé) plutôt que
+de l'avoir en dur dans le code Python — objectif : pouvoir corriger l'aide sans toucher au code.
+`_load_tab_html()` résout le dossier via `sys._MEIPASS / "help_content"` en mode figé
+(PyInstaller, cf. §14 Packaging) ou `Path(__file__).parent / "help_content"` en développement, et
+substitue `__VERSION__` / `__VERSION_CHECK__`. **Toute modification du contenu d'aide passe par
+ces fichiers HTML, jamais par du texte en dur dans `help_dialog.py`.**
+
+Le sous-dossier de langue est choisi **fichier par fichier** par `_help_file()`, à partir de
+`active_language()` (la langue réellement installée, pas `ui.language` en config — qui peut déjà
+porter la langue du *prochain* démarrage), avec repli sur `fr/` si la page n'existe pas dans la
+langue courante. Une page traduite en retard reste donc lisible en français au lieu de
+disparaître, et `_style.html` (CSS pur) n'existe qu'en `fr/`.
+
+Les onglets sont identifiés par une **clé française** (`_TABS`, paramètre `tab=` de
+`HelpDialog`) et affichés via `_TAB_LABELS` — cf. la règle « chaîne qui sert aussi de clé » du
+CLAUDE.md.
 
 Barre de recherche (`self._search_edit`, `HelpDialog._search()`) : cherche dans l'onglet
 `QTextBrowser` courant via `QTextBrowser.find()` (Qt, insensible à la casse et **substring**, cf.

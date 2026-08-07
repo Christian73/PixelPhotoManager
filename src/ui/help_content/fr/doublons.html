@@ -2,15 +2,21 @@
 <p>PixelPhotoManager repère les photos visuellement similaires même lorsqu'elles ont
 été redimensionnées, légèrement retouchées ou recadrées.</p>
 
-<h3>Lancer la détection</h3>
+<h3>Quand la détection a lieu</h3>
+<p>La détection est <b>automatique et continue</b> : elle démarre après chaque scan de la
+bibliothèque, sans bouton à cliquer ni rapport de fin. Elle tourne en arrière-plan sur une
+fraction des cœurs du processeur, l'application reste pleinement utilisable.</p>
 <ul>
-  <li><b>Outils › Détecter les doublons…</b> — lance l'analyse en arrière-plan.</li>
-  <li>La durée dépend de la taille de la bibliothèque ; l'application reste utilisable.</li>
-  <li>Une barre de progression et un bouton <b>Annuler</b> apparaissent dans la barre de statut
-      pendant l'analyse ; les résultats n'apparaissent qu'à la fin.</li>
-  <li>Cliquer sur <b>Annuler</b> demande confirmation — les résultats déjà calculés seraient perdus.</li>
-  <li>Fermer l'application pendant une analyse en cours affiche un avertissement (le résultat
-      serait perdu), avec le choix de fermer quand même ou d'annuler la fermeture.</li>
+  <li>L'analyse est <b>incrémentale</b> : seules les photos nouvelles ou modifiées sont
+      comparées au reste de la bibliothèque. Les passes suivantes sont donc bien plus rapides
+      que la première.</li>
+  <li>Les groupes apparaissent <b>au fil de l'eau</b>, sans attendre la fin de l'analyse.</li>
+  <li><b>Outils › État des doublons…</b> affiche un instantané : nombre de groupes et de photos
+      concernées, date de la dernière vérification, et — si une passe est en cours — une barre
+      de progression en direct. Deux boutons : <b>Voir les groupes</b> et
+      <b>Vérifier maintenant</b> (pour forcer une passe immédiate).</li>
+  <li>Si des fichiers illisibles sont rencontrés, un compteur <b>⚠ N fichiers corrompus</b>
+      apparaît dans la barre de statut ; cliquer dessus ouvre la liste.</li>
 </ul>
 
 <h3>Comment ça marche — deux passes</h3>
@@ -37,15 +43,16 @@ exemplaire, nombre d'exemplaires.</p>
 <ul>
   <li><b>Double-clic</b> sur une carte : ouvre les exemplaires du groupe dans la visionneuse
       pour une comparaison rapide.</li>
-  <li><b>✕</b> sur une carte : dissout le groupe entier (aucun fichier supprimé) — non
-      persistant, une future détection complète peut reformer le même groupe.</li>
-  <li>Bouton <b>Détecter les doublons…</b> en haut de la grille pour relancer une analyse.</li>
+  <li><b>✕</b> sur une carte : dissout le groupe entier (aucun fichier supprimé). La décision
+      est <b>persistante</b> : ce groupe ne sera plus jamais reformé tant qu'aucun de ses
+      membres ne change. Un nouveau fichier semblable à l'un d'eux reste détecté normalement.</li>
+  <li>Bouton <b>Vérifier maintenant</b> en haut de la grille pour forcer une passe immédiate.</li>
 </ul>
 
 <h3>Workflow recommandé</h3>
 <ul>
-  <li>Lancez la détection via <b>Outils › Détecter les doublons…</b>.</li>
-  <li>Quand l'analyse est terminée, les badges <b>⧉</b> apparaissent sur les vignettes concernées.</li>
+  <li>Laissez la détection se faire : les badges <b>⧉</b> apparaissent d'eux-mêmes sur les
+      vignettes concernées, au fil de l'analyse.</li>
   <li>Cliquez sur un badge pour examiner le groupe de photos similaires.</li>
   <li>Sélectionnez les exemplaires à conserver / supprimer, puis appuyez sur <kbd>Suppr</kbd>.</li>
 </ul>
@@ -54,9 +61,10 @@ exemplaire, nombre d'exemplaires.</p>
 
 <h3>Fichiers corrompus détectés pendant l'analyse</h3>
 <p>Si un fichier ne peut pas être lu pendant l'analyse (JPEG endommagé, copie
-interrompue…), il est signalé plutôt qu'ignoré silencieusement. Le bilan de fin
-d'analyse indique alors le nombre de fichiers concernés, avec un bouton
-<b>Réparer…</b>.</p>
+interrompue…), il est signalé plutôt qu'ignoré silencieusement. Deux accès :
+le compteur <b>⚠ N fichiers corrompus</b> de la barre de statut, et
+<b>Outils › Fichiers corrompus…</b> — qui propose <b>Lister…</b> (la liste des
+fichiers, où l'on peut n'en cibler qu'une partie) et <b>Réparer…</b>.</p>
 <ul>
   <li>Une confirmation est demandée avant toute tentative de réparation.</li>
   <li>PixelPhotoManager essaie de ré-enregistrer une copie propre du fichier à
@@ -64,9 +72,11 @@ d'analyse indique alors le nombre de fichiers concernés, avec un bouton
   <li>L'original est toujours sauvegardé avant modification (dossier caché
       <code>.tmp_originals</code> à côté du fichier), et les dates Windows de
       modification et de création sont préservées à l'identique.</li>
-  <li>Un second bilan indique le nombre de fichiers réparés. Les fichiers qui
-      n'ont pas pu être réparés (corruption trop importante) sont listés dans
-      un fichier texte horodaté.</li>
+  <li>Un bilan <b>Réparation terminée</b> liste les fichiers réparés, puis ceux
+      qui n'ont pas pu l'être (corruption trop importante). Pour ces derniers
+      seulement, un bouton <b>Supprimer ces fichiers…</b> est proposé — la
+      suppression passe par la corbeille Windows, et les chemins restent
+      consultables ensuite via <b>Outils › Fichiers corrompus supprimés…</b>.</li>
 </ul>
 <p class="tip"><b>Outils › Historique des problèmes…</b> conserve la trace de
 chaque analyse ayant rencontré des fichiers corrompus (date, nombre détecté,

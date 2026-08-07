@@ -64,6 +64,7 @@ from src.ui.background_workers import (  # noqa: E402
 from src.ui.export_dialogs import _ExportDialog, _SaveOptionsDialog  # noqa: E402
 from src.ui.reset_faces_dialog import _ResetFacesDialog  # noqa: E402
 from src.ui.duplicates_popup import _DuplicatesPopup  # noqa: E402
+from src.core.i18n import translate
 
 
 
@@ -110,15 +111,20 @@ class FacesController:
 
         parts = []
         if n_photos:
-            parts.append(f"{n_photos} photo(s) avec des visages identifiés")
+            parts.append(translate(
+                "FacesController", "%n photo(s) avec des visages identifiés", None, n_photos))
         if n_edits:
-            parts.append(f"{n_edits} photo(s) avec des retouches")
-        details = " et ".join(parts)
+            parts.append(translate(
+                "FacesController", "%n photo(s) avec des retouches", None, n_edits))
+        details = translate("FacesController", " et ").join(parts)
 
         reply = QMessageBox.question(
-            self, "Données Picasa détectées",
-            f"Le dossier ajouté contient des données Picasa :\n{details}.\n\n"
-            "Voulez-vous les importer pour ce dossier ?",
+            self, translate("FacesController", "Données Picasa détectées"),
+            translate(
+                "FacesController",
+                "Le dossier ajouté contient des données Picasa :\n{details}.\n\n"
+                "Voulez-vous les importer pour ce dossier ?"
+            ).format(details=details),
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.Yes,
         )
@@ -129,21 +135,32 @@ class FacesController:
             self._catalog, self._face_db, [folder], self._edit_db, self,
         )
         self._folder_picasa_thread.finished.connect(self._on_folder_picasa_import_finished)
-        self._lbl_action.setText("Import Picasa du nouveau dossier en cours…")
+        self._lbl_action.setText(translate("FacesController", "Import Picasa du nouveau dossier en cours…"))
         self._folder_picasa_thread.start()
 
     def _on_folder_picasa_import_finished(self, result) -> None:
         self._lbl_action.setText("")
         if result.edited_map:
             self._on_picasa_edits_imported(result.edited_map)
+        n_persons = result.persons_created
+        n_faces   = result.faces_imported
+        n_photos  = result.photos_processed
+        n_edits   = result.edits_imported
         parts = [
-            f"{result.persons_created} personne(s) créée(s)",
-            f"{result.faces_imported} annotation(s) de visage dans {result.photos_processed} photo(s)",
+            translate("FacesController", "%n personne(s) créée(s)",
+                      None, n_persons),
+            # Deux comptes dans une même phrase : `%n` n'en accorde qu'un, le
+            # second passe donc par sa propre chaîne plurielle imbriquée.
+            translate("FacesController", "%n annotation(s) de visage dans {photos}",
+                      None, n_faces).format(
+                photos=translate("FacesController", "%n photo(s)",
+                                 None, n_photos)),
         ]
         if result.edits_imported:
-            parts.append(f"{result.edits_imported} retouche(s) importée(s)")
+            parts.append(translate("FacesController", "%n retouche(s) importée(s)",
+                                   None, n_edits))
         QMessageBox.information(
-            self, "Import Picasa terminé", ", ".join(parts) + ".",
+            self, translate("FacesController", "Import Picasa terminé"), ", ".join(parts) + ".",
         )
 
     # ------------------------------------------------------------------ faces
@@ -169,7 +186,9 @@ class FacesController:
             threads_to_wait.append(self._cluster_thread)
 
         # ── Mise à jour UI immédiate ─────────────────────────────────────────
-        msg = "Arrêt des analyses en cours…" if threads_to_wait else "Réinitialisation en cours…"
+        msg = (translate("FacesController", "Arrêt des analyses en cours…")
+               if threads_to_wait
+               else translate("FacesController", "Réinitialisation en cours…"))
         self._lbl_action.setText(msg)
 
         # ── Worker hors UI : attend les threads + reset DB ───────────────────
@@ -192,17 +211,19 @@ class FacesController:
             self._grid.set_index_error_paths([])
 
         if choice == _ResetFacesDialog.RESET_CLUSTERING:
-            msg = (
+            msg = translate(
+                "FacesController",
                 "La réinitialisation des groupes est terminée.\n\n"
                 "Le regroupement HDBSCAN va redémarrer."
             )
         else:
-            msg = (
+            msg = translate(
+                "FacesController",
                 "La réinitialisation complète est terminée.\n\n"
                 "L'analyse des visages va redémarrer. Cette opération peut\n"
                 "prendre plusieurs heures selon la taille de la bibliothèque."
             )
-        QMessageBox.information(self, "Réinitialisation terminée", msg)
+        QMessageBox.information(self, translate("FacesController", "Réinitialisation terminée"), msg)
 
         if choice == _ResetFacesDialog.RESET_CLUSTERING:
             self._run_clustering()
@@ -231,9 +252,9 @@ class FacesController:
         if hasattr(self, "_similarity_thread") and self._similarity_thread.isRunning():
             QMessageBox.information(
                 self,
-                "Recherche en cours",
-                "Une recherche de visages similaires est déjà en cours.\n"
-                "Suivez sa progression dans la barre de statut.",
+                translate("FacesController", "Recherche en cours"),
+                translate("FacesController", "Une recherche de visages similaires est déjà en cours.\n"
+                "Suivez sa progression dans la barre de statut."),
             )
             return
         self._start_similarity_search()
@@ -252,7 +273,7 @@ class FacesController:
 
         self._sb_progress_bar.setRange(0, 0)
         self._sb_progress_bar.show()
-        self._lbl_action.setText("Recherche de visages similaires…")
+        self._lbl_action.setText(translate("FacesController", "Recherche de visages similaires…"))
         self._similarity_thread = SimilaritySearchThread(self._face_db, self)
         self._similarity_thread.progress.connect(self._on_similarity_progress)
         self._similarity_thread.finished.connect(self._on_similarity_finished)
@@ -261,14 +282,20 @@ class FacesController:
     def _on_similarity_progress(self, current: int, total: int) -> None:
         self._sb_progress_bar.setRange(0, max(total, 1))
         self._sb_progress_bar.setValue(current)
-        self._lbl_action.setText(f"Recherche similarité… {current} / {total} groupes")
+        self._lbl_action.setText(translate(
+            "FacesController", "Recherche similarité… {cur} / {total} groupes"
+        ).format(cur=current, total=total))
 
     def _on_similarity_finished(self, made: int, total: int) -> None:
         self._sb_progress_bar.hide()
         self._sb_progress_bar.setValue(0)
         self._lbl_action.setText("")
         self.statusBar().showMessage(
-            f"Recherche terminée : {made} suggestion(s) créée(s) sur {total} groupe(s) vérifiés.",
+            translate(
+                "FacesController",
+                "Recherche terminée : {made} suggestion(s) créée(s) sur "
+                "{total} groupe(s) vérifiés."
+            ).format(made=made, total=total),
             8000,
         )
         if made > 0 and self._stack.currentWidget() is self._person_cluster_view:
@@ -298,11 +325,11 @@ class FacesController:
         from src.ui.picasa_import_dialog import PicasaImportDialog
 
         dlg = QMessageBox(self)
-        dlg.setWindowTitle("Importer depuis Picasa")
+        dlg.setWindowTitle(translate("FacesController", "Importer depuis Picasa"))
         dlg.setIcon(QMessageBox.Icon.Information)
-        dlg.setText("<b>Import des annotations de visages depuis Google Picasa</b>")
+        dlg.setText(translate("FacesController", "<b>Import des annotations de visages depuis Google Picasa</b>"))
         dlg.setInformativeText(
-            "<b>Ce que cette option fait :</b><br>"
+            translate("FacesController", "<b>Ce que cette option fait :</b><br>"
             "• Parcourt les fichiers <code>.picasa.ini</code> de vos dossiers photos.<br>"
             "• Importe les noms et régions de visages annotés dans Picasa.<br>"
             "• Crée ou enrichit les personnes correspondantes dans PixelPhotoManager.<br><br>"
@@ -311,7 +338,7 @@ class FacesController:
             "l'import terminé.<br>"
             "• N'écrase pas les associations que vous avez faites manuellement.<br>"
             "• Les visages Picasa non appariés à une détection InsightFace créent "
-            "des entrées sans embedding (non utilisables pour le clustering)."
+            "des entrées sans embedding (non utilisables pour le clustering).")
         )
         dlg.setStandardButtons(
             QMessageBox.StandardButton.Ok | QMessageBox.StandardButton.Cancel
@@ -347,19 +374,20 @@ class FacesController:
             self._lbl_action.setText("")
             from src.ui.face_backup_dialog import _parse_ts
             QMessageBox.information(
-                self, "Sauvegarde créée",
-                f"Sauvegarde enregistrée :\n{_parse_ts(path)}\n\n"
-                f"({path.name})",
+                self, translate("FacesController", "Sauvegarde créée"),
+                translate("FacesController",
+                          "Sauvegarde enregistrée :\n{when}\n\n({name})"
+                          ).format(when=_parse_ts(path), name=path.name),
             )
 
         def _on_err(msg):
             self._lbl_action.setText("")
-            QMessageBox.critical(self, "Erreur de sauvegarde", msg)
+            QMessageBox.critical(self, translate("FacesController", "Erreur de sauvegarde"), msg)
 
         self._face_backup_thread.succeeded.connect(_on_done)
         self._face_backup_thread.failed.connect(_on_err)
         self._face_backup_thread.finished.connect(self._face_backup_thread.deleteLater)
-        self._lbl_action.setText("Sauvegarde de la reconnaissance en cours…")
+        self._lbl_action.setText(translate("FacesController", "Sauvegarde de la reconnaissance en cours…"))
         self._face_backup_thread.start()
 
     def _manage_face_backups(self) -> None:
@@ -394,9 +422,11 @@ class FacesController:
     @Slot(int, int)
     def _on_face_progress(self, current: int, total: int) -> None:
         if current == 0:
-            self._lbl_action.setText("Initialisation de l'analyse des visages…")
+            self._lbl_action.setText(translate("FacesController", "Initialisation de l'analyse des visages…"))
         else:
-            self._lbl_action.setText(f"Analyse visages… {current}/{total}")
+            self._lbl_action.setText(translate(
+                "FacesController", "Analyse visages… {cur}/{total}"
+            ).format(cur=current, total=total))
 
     @Slot(int, int)
     def _on_face_indexing_finished(self, indexed: int, faces: int) -> None:
@@ -426,9 +456,9 @@ class FacesController:
         if self._cluster_thread and self._cluster_thread.isRunning():
             QMessageBox.information(
                 self,
-                "Regroupement en cours",
-                "Un regroupement des visages est déjà en cours.\n"
-                "Suivez sa progression dans la barre de statut.",
+                translate("FacesController", "Regroupement en cours"),
+                translate("FacesController", "Un regroupement des visages est déjà en cours.\n"
+                "Suivez sa progression dans la barre de statut."),
             )
             return
 
@@ -437,25 +467,29 @@ class FacesController:
         n_unidentified = n_total - n_identified
 
         dlg = QMessageBox(self)
-        dlg.setWindowTitle("Regrouper les visages")
+        dlg.setWindowTitle(translate("FacesController", "Regrouper les visages"))
         dlg.setIcon(QMessageBox.Icon.Information)
-        dlg.setText("<b>Regroupement automatique des visages (clustering)</b>")
+        dlg.setText(translate("FacesController", "<b>Regroupement automatique des visages (clustering)</b>"))
         dlg.setInformativeText(
-            "Cette opération analyse les visages non encore identifiés et les regroupe "
-            "automatiquement par similarité (algorithme HDBSCAN sur vecteurs ArcFace).<br><br>"
-            f"<b>{n_unidentified:,}</b> visages non identifiés seront traités "
-            f"({n_identified:,} visages déjà identifiés sont conservés intacts).<br><br>"
-            "Les groupes obtenus apparaîtront dans <i>Identifier les personnes…</i> "
-            "pour que vous puissiez nommer chaque groupe.<br><br>"
-            "<b>Durée estimée : 15 à 30 minutes.</b> "
-            "La progression s'affiche dans la barre de statut en bas de la fenêtre."
+            translate(
+                "FacesController",
+                "Cette opération analyse les visages non encore identifiés et les regroupe "
+                "automatiquement par similarité (algorithme HDBSCAN sur vecteurs "
+                "ArcFace).<br><br>"
+                "<b>{unidentified}</b> visages non identifiés seront traités "
+                "({identified} visages déjà identifiés sont conservés intacts).<br><br>"
+                "Les groupes obtenus apparaîtront dans <i>Identifier les personnes…</i> "
+                "pour que vous puissiez nommer chaque groupe.<br><br>"
+                "<b>Durée estimée : 15 à 30 minutes.</b> "
+                "La progression s'affiche dans la barre de statut en bas de la fenêtre."
+            ).format(unidentified=f"{n_unidentified:,}", identified=f"{n_identified:,}")
         )
         dlg.setStandardButtons(
             QMessageBox.StandardButton.Ok | QMessageBox.StandardButton.Cancel
         )
         dlg.setDefaultButton(QMessageBox.StandardButton.Ok)
-        dlg.button(QMessageBox.StandardButton.Ok).setText("Démarrer")
-        dlg.button(QMessageBox.StandardButton.Cancel).setText("Annuler")
+        dlg.button(QMessageBox.StandardButton.Ok).setText(translate("FacesController", "Démarrer"))
+        dlg.button(QMessageBox.StandardButton.Cancel).setText(translate("FacesController", "Annuler"))
         if dlg.exec() != QMessageBox.StandardButton.Ok:
             return
 
@@ -474,14 +508,14 @@ class FacesController:
             lambda msg: logger.warning("Clustering: %s", msg)
         )
         self._act_cluster_faces.setEnabled(False)
-        self._act_cluster_faces.setText("Regroupement en cours…")
+        self._act_cluster_faces.setText(translate("FacesController", "Regroupement en cours…"))
         self._cluster_start_time = time.monotonic()
         self._cluster_thread.start()
 
     @Slot(int)
     def _on_clustering_finished(self, n_clusters: int) -> None:
         self._cluster_start_time = None
-        self._act_cluster_faces.setText("Regrouper les visages…")
+        self._act_cluster_faces.setText(translate("FacesController", "Regrouper les visages…"))
         self._act_cluster_faces.setEnabled(True)
         self._refresh_persons()
         self._face_cluster_grid.refresh()
@@ -499,9 +533,9 @@ class FacesController:
         self._lbl_action.setText("")
         QMessageBox.information(
             self,
-            "Reconnaissance faciale indisponible",
-            "Le module insightface n'est pas installé.\n\n"
-            "pip install insightface onnxruntime",
+            translate("FacesController", "Reconnaissance faciale indisponible"),
+            translate("FacesController", "Le module insightface n'est pas installé.\n\n"
+            "pip install insightface onnxruntime"),
         )
 
     def _open_people_dialog(self) -> None:
@@ -608,7 +642,7 @@ class FacesController:
     @Slot(object)
     def _on_person_rename_requested(self, person: PersonInfo) -> None:
         name, ok = QInputDialog.getText(
-            self, "Renommer la personne", "Nouveau nom :", text=person.name
+            self, translate("FacesController", "Renommer la personne"), translate("FacesController", "Nouveau nom :"), text=person.name
         )
         if ok and name.strip() and name.strip() != person.name:
             self._catalog.rename_person(person.id, name.strip())
@@ -619,9 +653,12 @@ class FacesController:
         """Supprime le nom d'une personne : désassocie toutes ses faces et efface l'entrée."""
         reply = QMessageBox.question(
             self,
-            "Effacer le nom",
-            f"Effacer « {person.name} » et supprimer toutes ses associations de visages ?\n\n"
-            "Les visages retourneront dans leurs groupes anonymes.",
+            translate("FacesController", "Effacer le nom"),
+            translate(
+                "FacesController",
+                "Effacer « {name} » et supprimer toutes ses associations de "
+                "visages ?\n\nLes visages retourneront dans leurs groupes anonymes."
+            ).format(name=person.name),
             QMessageBox.Yes | QMessageBox.Cancel,
             QMessageBox.Cancel,
         )
@@ -828,8 +865,8 @@ class FacesController:
         précédemment en erreur (timeout/crash)."""
         if self._retry_face_thread and self._retry_face_thread.isRunning():
             QMessageBox.information(
-                self, "Tentative en cours",
-                "Une autre tentative d'identification est déjà en cours.",
+                self, translate("FacesController", "Tentative en cours"),
+                translate("FacesController", "Une autre tentative d'identification est déjà en cours."),
             )
             return
         if self._retry_face_thread is not None:
@@ -837,7 +874,9 @@ class FacesController:
         self._retry_face_thread = RetryFaceIndexThread(self._face_db, photo.path, self)
         self._retry_face_thread.finished.connect(self._on_retry_face_index_finished)
         self._retry_face_thread.cluster_requested.connect(self._run_clustering)
-        self._lbl_action.setText(f"Nouvelle tentative d'identification : {photo.filename}…")
+        self._lbl_action.setText(translate(
+            "FacesController", "Nouvelle tentative d'identification : {name}…"
+        ).format(name=photo.filename))
         self._retry_face_thread.start()
 
     def _on_retry_face_index_finished(self, photo_path: str, success: bool, face_count: int) -> None:
@@ -851,24 +890,32 @@ class FacesController:
             if self._face_panel.isVisible():
                 self._face_panel.set_photo(photo_path)
             QMessageBox.information(
-                self, "Identification réussie",
-                f"« {filename} » : {face_count} visage(s) détecté(s).",
+                self, translate("FacesController", "Identification réussie"),
+                translate("FacesController", "« {name} » : %n visage(s) détecté(s).",
+                          None, face_count).format(name=filename),
             )
             return
 
         box = QMessageBox(self)
         box.setIcon(QMessageBox.Warning)
-        box.setWindowTitle("Échec de l'identification")
+        box.setWindowTitle(translate("FacesController", "Échec de l'identification"))
         box.setText(
-            f"L'identification des visages a de nouveau échoué pour « {filename} »."
+            translate(
+                "FacesController",
+                "L'identification des visages a de nouveau échoué pour « {name} »."
+            ).format(name=filename)
         )
         box.setInformativeText(
-            "Voulez-vous supprimer ce fichier, ou l'exclure définitivement du scan "
-            "et de la reconnaissance faciale (il restera dans la photothèque) ?"
+            translate("FacesController", "Voulez-vous supprimer ce fichier, ou l'exclure définitivement du scan "
+            "et de la reconnaissance faciale (il restera dans la photothèque) ?")
         )
-        btn_delete  = box.addButton("Supprimer le fichier…", QMessageBox.DestructiveRole)
-        btn_exclude = box.addButton("Exclure définitivement", QMessageBox.ActionRole)
-        box.addButton("Laisser en erreur", QMessageBox.RejectRole)
+        btn_delete  = box.addButton(
+            translate("FacesController", "Supprimer le fichier…"),
+            QMessageBox.DestructiveRole)
+        btn_exclude = box.addButton(
+            translate("FacesController", "Exclure définitivement"), QMessageBox.ActionRole)
+        box.addButton(
+            translate("FacesController", "Laisser en erreur"), QMessageBox.RejectRole)
         box.exec()
 
         clicked = box.clickedButton()
@@ -894,8 +941,8 @@ class FacesController:
             return
         if self._force_redetect_thread and self._force_redetect_thread.isRunning():
             QMessageBox.information(
-                self, "Détection en cours",
-                "Une nouvelle détection est déjà en cours sur cette photo.",
+                self, translate("FacesController", "Détection en cours"),
+                translate("FacesController", "Une nouvelle détection est déjà en cours sur cette photo."),
             )
             return
         if self._force_redetect_thread is not None:
@@ -905,7 +952,9 @@ class FacesController:
         )
         self._force_redetect_thread.finished.connect(self._on_force_redetect_finished)
         self._force_redetect_thread.cluster_requested.connect(self._run_clustering)
-        self._lbl_action.setText(f"Nouvelle détection sans limite de taille : {photo.filename}…")
+        self._lbl_action.setText(translate(
+            "FacesController", "Nouvelle détection sans limite de taille : {name}…"
+        ).format(name=photo.filename))
         self._force_redetect_thread.start()
 
     def _on_force_redetect_finished(self, photo_path: str, face_count: int) -> None:
@@ -913,8 +962,9 @@ class FacesController:
         if self._face_panel.isVisible():
             self._face_panel.set_photo(photo_path)
         QMessageBox.information(
-            self, "Détection terminée",
-            f"« {os.path.basename(photo_path)} » : {face_count} visage(s) détecté(s), "
-            "aucun ignoré par taille.",
+            self, translate("FacesController", "Détection terminée"),
+            translate("FacesController",
+                      "« {name} » : %n visage(s) détecté(s), aucun ignoré par taille.",
+                      None, face_count).format(name=os.path.basename(photo_path)),
         )
 

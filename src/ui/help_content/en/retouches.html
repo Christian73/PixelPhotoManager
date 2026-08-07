@@ -1,0 +1,187 @@
+<h2>Non-destructive editing</h2>
+<p>Adjustments are never written into the original file. They are stored in a separate
+SQLite database and applied on the fly, both on screen and on export.</p>
+
+<h3>Tonal corrections</h3>
+<table>
+  <tr><th>Correction</th><th>Range</th><th>Description</th></tr>
+  <tr><td><b>Brightness</b></td><td>−1.00 to +1.00</td><td>Lightens or darkens the whole image</td></tr>
+  <tr><td><b>Contrast</b></td><td>−1.00 to +1.00</td><td>Widens or narrows the tonal range</td></tr>
+  <tr><td><b>Saturation</b></td><td>−1.00 to +1.00</td><td>Strengthens or weakens the colours (−1 = B&amp;W)</td></tr>
+  <tr><td><b>Gamma</b></td><td>0.10 to 3.00</td><td>Brightness curve (1.0 = neutral)</td></tr>
+</table>
+
+<h3>Colours (Black &amp; White with channel mixing)</h3>
+<ul>
+  <li>Tick <b>Black &amp; White</b> and dose the Red/Green/Blue contributions (−1 to +1).</li>
+  <li>Example: Red +1, Blue −1 → dark sky and light skin tones (the film-era red filter).</li>
+</ul>
+
+<h3>Vignette</h3>
+<ul>
+  <li>Adds a progressive darkening (or lightening) around the edges of the image.</li>
+  <li><b>Strength</b> — from 0.00 (no effect) to 1.00 (maximum effect).</li>
+  <li><b>Colour</b> — Black (dark fade, film look) or White (light fade, retro look).</li>
+  <li>The shape and position of the vignette are adjusted directly on the photo:</li>
+</ul>
+<table>
+  <tr><th>Handle</th><th>Effect</th></tr>
+  <tr><td>Inner circle (dotted)</td><td>Start of the fade</td></tr>
+  <tr><td>Outer circle</td><td>End of the fade</td></tr>
+  <tr><td>Round handle at the top</td><td>Rotate the ellipse</td></tr>
+  <tr><td>Cross in the middle</td><td>Move the centre of the vignette</td></tr>
+</table>
+
+<h3>Geometry</h3>
+<ul>
+  <li><b>↺ / ↻</b> — rotate 90° anticlockwise / clockwise.</li>
+  <li><b>Straighten</b> — corrects the tilt of the horizon (−10° to +10°), with a reference grid.</li>
+  <li><b>Crop</b> — free selection, or the 10×15 / 13×18 formats (portrait or landscape).
+      The crop area is remembered between sessions.</li>
+  <li><b>Mirror H / V</b> — horizontal or vertical flip.</li>
+</ul>
+
+<h3>Red eyes</h3>
+<ul>
+  <li>Click <b>Red eyes</b>, then click each affected eye directly on the photo.</li>
+  <li><b>Size</b> — radius of the correction (0.5&nbsp;% to 8&nbsp;% of the smallest dimension of the image).</li>
+  <li><b>Clear all</b> — removes every correction placed. <b>Done</b>
+      (or <kbd>Esc</kbd>) — leaves the mode without losing anything.</li>
+</ul>
+
+<h3>Decorative frame</h3>
+<p>The <b>Frame</b> button opens a gallery of previews of the current photo, one per pattern.
+The frame is added <b>around</b> the photo: it covers no pixel of the image, which simply
+comes out larger on export. Two exceptions, described below: the foliage surrounds, a few
+motifs of which bite into the edge of the image, and the second frame of the flat surround.</p>
+<table>
+  <tr><th>Pattern</th><th>Description</th></tr>
+  <tr><td><b>Flat surround</b></td><td>A single flat colour, no relief (black, white or any colour)</td></tr>
+  <tr><td><b>Simple</b> / <b>Double</b></td><td>Moulding in relief, one or two bands separated by a gap</td></tr>
+  <tr><td><b>Gilt baroque</b></td><td>Acanthus leaves and shells carved into a gilded ogee, with worn gold</td></tr>
+  <tr><td><b>Egg-and-dart</b></td><td>Classical frieze: eggs and darts, a row of beads and olives</td></tr>
+  <tr><td><b>Greek key</b></td><td>Continuous Greek meander, rosettes at the corners</td></tr>
+  <tr><td><b>Art deco</b></td><td>Silvered steps, chevrons and bars from the 1930s</td></tr>
+  <tr><td><b>Carved wood</b></td><td>Walnut hollowed with gadroons and fillets, visible grain</td></tr>
+  <tr><td><b>Vine leaves</b>, <b>Roses</b>, <b>Flowers</b></td><td>Carved foliage surrounds (patinated bronze, carmine lacquer, painted porcelain)</td></tr>
+  <tr><td><b>Metallic</b>, <b>Highlights</b></td><td>Imitated materials (brushed metal and rivets, varnished lacquer)</td></tr>
+</table>
+<ul>
+  <li><b>Thickness</b> (or <b>Outer frame</b>), <b>Gap</b> and <b>Inner frame</b>
+      are set as a percentage of the short side of the photo: the same setting looks the same
+      on a thumbnail and on a full-resolution export.</li>
+  <li>Carved patterns need some thickness to read: picking one of them
+      <b>automatically raises</b> the thickness if it is too small. Each thumbnail in the
+      gallery shows exactly the frame you get by clicking it.</li>
+  <li><b>Fill style</b> (solid, gradient, glitter) and <b>second colour</b>: reserved for the
+      Simple and Double patterns.</li>
+</ul>
+
+<h4>Foliage surrounds that spill over</h4>
+<p>On <b>Vine leaves</b>, <b>Roses</b> and <b>Flowers</b>, a few shoots, roses or bunches pass
+<i>over</i> the edge of the photo, with their drop shadow, as on a carved frame that bites into
+the canvas. They are deliberately irregular — a spill at regular intervals would turn back into
+a frieze — and stay attached to the band: the centre of the image is never touched. Nothing to
+set: the pattern brings it. Cropping, red eyes, annotations and faces keep working on the whole
+photo.</p>
+
+<h4>Second frame of the flat surround</h4>
+<p>For the <b>Flat surround</b> only, tick <b>Second frame over the photo</b>: a line is drawn
+<i>onto</i> the photo, away from the edge —
+the strip of image left visible between the two frames is precisely the intended effect.
+<b>Gap</b> sets that distance, <b>Second frame</b> its thickness.</p>
+<p>This line can take the shape of a piece of <b>ironwork</b>:</p>
+<table>
+  <tr><th>Ironwork</th><th>Effect</th></tr>
+  <tr><td><b>Plain line</b></td><td>A clean stroke (the default choice)</td></tr>
+  <tr><td><b>Corner scrolls</b></td><td>Forged coils in the four corners</td></tr>
+  <tr><td><b>Running scrollwork</b></td><td>Corner scrolls + motifs repeated along the sides</td></tr>
+  <tr><td><b>Twisted bar</b></td><td>Twisted bar, finials at the corners and in the middle of the sides</td></tr>
+  <tr><td><b>Forged studs</b></td><td>A row of round-headed studs, larger at the corners</td></tr>
+</table>
+<ul>
+  <li><b>Rendering</b> — <b>Light relief</b> (light and shade on the metal) or <b>Flat colour</b>
+      (solid silhouette, more graphic). No effect on the plain line, always flat.</li>
+  <li><b>Ornaments</b> — size of the motifs, from 40&nbsp;% to 250&nbsp;%. The ornaments grow
+      towards the inside of the photo: they never spill onto the outer frame.</li>
+</ul>
+<p class="tip">The gallery previews update with your settings, and the viewer shows the result
+live. Nothing is saved until you have clicked <b>Apply</b> — <b>Cancel</b> closes the dialog
+without changing anything.</p>
+
+<h3>Annotations</h3>
+<p>A non-destructive drawing and text layer, laid over the photo — independent of the tonal
+corrections and of the geometry.</p>
+<ul>
+  <li><b>Tools</b> — pen (freehand), line, curve (click the waypoints, double-click to
+      confirm), rectangle, ellipse, text, and selection (to change or move an item already
+      placed).</li>
+  <li><b>Style</b> — stroke/text colour, thickness, fill colour and opacity of the shapes,
+      blur of the photo under the shape, font/size/bold/italic for text.</li>
+  <li>Double-click an existing text (Selection tool): reopens the editor in place.</li>
+  <li><b>Delete the selection</b> — removes the selected item.
+      <b>Clear annotations</b> — removes the whole layer from the photo.</li>
+  <li><b>✏ Annotations</b> button at the top of the window (next to EXIF) — shows/hides the
+      layer without deleting anything; this setting is not saved, it only lasts for the session.</li>
+</ul>
+<p class="tip">Annotations are included in the export and when saving the processed image, like
+the other edits — unless the layer is hidden with the ✏ Annotations button at the time of the
+export.</p>
+
+<h3>Workflow</h3>
+<ul>
+  <li><b>Only one tool active at a time</b> — selecting a new tool (Crop, Red eyes,
+      Annotations, Brightness/Contrast/Colours/Vignette/Straighten…) automatically confirms
+      the work in progress in the previous tool, then closes it.</li>
+  <li>Double-click a slider: resets the value to zero.</li>
+  <li>The preview updates in real time (≤ 60 ms).</li>
+  <li><b>There is no “Save” button</b>: every edit you confirm is written to the edit database
+      straight away, and you will find it unchanged next time you open the photo. The original
+      file on disk, however, is never modified.</li>
+  <li><kbd>Ctrl</kbd>+<kbd>Z</kbd> / <kbd>Ctrl</kbd>+<kbd>Y</kbd> — undo/redo, persistent
+      between sessions (50 states max per photo).</li>
+  <li><b>Reset every edit</b> — removes at once every edit and the history of the photo
+      (without confirmation), to start again from the original. The file on disk is never
+      modified.</li>
+  <li><b>Restore every edit</b> — puts back the edits removed by the last <b>Reset</b> on this
+      photo. This button is disabled as soon as a new edit is applied after the reset (the
+      snapshot is no longer valid).</li>
+</ul>
+
+<h3>Writing the edits into a file</h3>
+<p>The edits live in a separate database: the original file is never touched. To get a really
+edited version on disk, there are two distinct routes.</p>
+
+<h4>Save the edited image &nbsp;<span style="font-weight:normal;color:#888;">(<kbd>Ctrl</kbd>+<kbd>S</kbd>, or right-click the photo)</span></h4>
+<p>One photo at a time, at its original resolution. The dialog offers two options:</p>
+<ul>
+  <li><b>Overwrite the original file</b> — irreversible. A checkbox, ticked by default, first
+      copies the original into the hidden <code>.tmp_originals</code> folder next to the
+      file.</li>
+  <li><b>Save to another location…</b> — opens the file browser, with a name already suggested,
+      suffixed <code>_edited</code>.</li>
+</ul>
+
+<h4>Export &nbsp;<span style="font-weight:normal;color:#888;">(<b>⬆ Export</b> button, at the top of the window)</span></h4>
+<p>Exports into a destination folder: the photo shown in the viewer, or <b>every photo selected</b>
+in the grid. This is where — and only where — the four size presets are offered:</p>
+<table>
+  <tr><th>Preset</th><th>Max. resolution</th><th>Estimated weight</th><th>Typical use</th></tr>
+  <tr><td><b>Maximum size</b></td><td>Original resolution</td><td>variable</td>
+      <td>Archiving, large-format printing, editing in another program</td></tr>
+  <tr><td><b>Large (~4 Mpx)</b></td><td>≈ 2,600 × 1,500 px</td><td>600–1,600 KB</td>
+      <td>A4/A3 printing, high-quality sharing</td></tr>
+  <tr><td><b>Medium (~2 Mpx)</b></td><td>≈ 1,800 × 1,100 px</td><td>320–800 KB</td>
+      <td>On-screen display, slideshows, light e-mail attachment</td></tr>
+  <tr><td><b>Small (~500 kpx)</b></td><td>≈ 900 × 560 px</td><td>75–300 KB</td>
+      <td>Social networks, web preview, mobile messaging</td></tr>
+</table>
+<p class="tip"><b>Tip:</b> To send a photo by e-mail or post it on a social network, prefer
+<b>Medium</b> or <b>Small</b> — a photo at maximum size can exceed 5 MB and be refused, or slow
+the upload down. The original on disk is never modified.</p>
+
+<h3>EXIF</h3>
+<ul>
+  <li><kbd>I</kbd> key (or the <b>[i]</b> button): shows/hides the EXIF panel in the viewer.</li>
+  <li><b>Tools › Sync creation dates with EXIF</b> — corrects the dates in bulk.</li>
+</ul>

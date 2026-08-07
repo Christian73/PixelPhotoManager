@@ -20,6 +20,7 @@ from PySide6.QtWidgets import (
 )
 
 from src.core.models import EditInfo
+from src.core.i18n import translate
 
 logger = logging.getLogger(__name__)
 
@@ -156,12 +157,12 @@ class EditSlider(QWidget):
         )
         btn_up = QPushButton("▲")
         btn_up.setStyleSheet(_arrow_style)
-        btn_up.setToolTip("Augmenter d'un pas")
+        btn_up.setToolTip(translate("EditSlider", "Augmenter d'un pas"))
         btn_up.clicked.connect(lambda: self._nudge(self._step_size))
         arrows.addWidget(btn_up)
         btn_dn = QPushButton("▼")
         btn_dn.setStyleSheet(_arrow_style)
-        btn_dn.setToolTip("Diminuer d'un pas")
+        btn_dn.setToolTip(translate("EditSlider", "Diminuer d'un pas"))
         btn_dn.clicked.connect(lambda: self._nudge(-self._step_size))
         arrows.addWidget(btn_dn)
         layout.addLayout(arrows)

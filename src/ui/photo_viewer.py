@@ -43,6 +43,7 @@ from src.ui.viewer_canvas import (  # noqa: E402,F401
     _ANNOTATION_CORNER_CURSORS, _CORNER_CURSORS, _CROP_FORMAT_DATA,
     _EDGE_INDICES, _HANDLE_HIT, _Canvas, _InlineTextEdit, _make_rect_quad,
 )
+from src.core.i18n import translate
 
 _BTN_CROP_STYLE = """
 QToolButton {
@@ -118,7 +119,7 @@ class _RatingStars(QWidget):
                 "QPushButton { color: #ccc; border: none; padding: 0; font-size: 14px; }"
                 "QPushButton:hover { color: #ffd200; }"
             )
-            btn.setToolTip(f"Noter {i} étoile{'s' if i > 1 else ''}")
+            btn.setToolTip(translate("PhotoViewer", "Noter %n étoile(s)", None, i))
             btn.clicked.connect(lambda _checked=False, n=i: self._on_star_clicked(n))
             layout.addWidget(btn)
             self._btns.append(btn)
@@ -161,7 +162,7 @@ class _TagDropdown(QComboBox):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setEditable(False)
-        self.setToolTip("Aucun mot-clé")
+        self.setToolTip(translate("TagDropdown", "Aucun mot-clé"))
         self.setFixedWidth(150)
         # Le triangle CSS habituel (::down-arrow avec des bordures en biseau)
         # ne se dessine pas ici : ce sous-contrôle bascule en mode "image
@@ -210,11 +211,11 @@ class _TagDropdown(QComboBox):
         self._apply_style()
         n = len(self._active)
         if n == 0:
-            label = "🏷 Mots-clés"
+            label = translate("PhotoViewer", "🏷 Mots-clés")
         elif n == 1:
             label = f"🏷 {next(iter(self._active))}"
         else:
-            label = f"🏷 Mots-clés ({n})"
+            label = translate("PhotoViewer", "🏷 Mots-clés ({n})").format(n=n)
         self.setPlaceholderText(label)
 
     def set_tags(self, all_tags: list[str], active_tags: list[str]) -> None:
@@ -232,7 +233,8 @@ class _TagDropdown(QComboBox):
         self.setCurrentIndex(-1)
         self.blockSignals(False)
         self._set_placeholder()
-        self.setToolTip(", ".join(sorted(self._active)) if self._active else "Aucun mot-clé")
+        self.setToolTip(", ".join(sorted(self._active)) if self._active
+                        else translate("PhotoViewer", "Aucun mot-clé"))
 
     def _on_activated(self, index: int) -> None:
         tag = self.itemData(index, Qt.UserRole)
@@ -357,7 +359,7 @@ class PhotoViewer(QWidget):
         tb_layout.setContentsMargins(8, 4, 8, 4)
 
         self._btn_back = QPushButton("←")
-        self._btn_back.setToolTip("Retour à la grille  (Echap)")
+        self._btn_back.setToolTip(translate("PhotoViewer", "Retour à la grille  (Echap)"))
         self._btn_back.setFixedWidth(32)
         self._btn_back.clicked.connect(self.closed.emit)
         tb_layout.addWidget(self._btn_back)
@@ -371,7 +373,7 @@ class PhotoViewer(QWidget):
         tb_layout.addWidget(self._lbl_name, stretch=1)
 
         self._btn_fav = QPushButton("♡")
-        self._btn_fav.setToolTip("Marquer comme favori")
+        self._btn_fav.setToolTip(translate("PhotoViewer", "Marquer comme favori"))
         self._btn_fav.setFixedWidth(32)
         self._btn_fav.setCheckable(True)
         self._btn_fav.setStyleSheet(
@@ -399,19 +401,19 @@ class PhotoViewer(QWidget):
         tb_layout.addWidget(self._ext_apps_container)
 
         self._btn_fit = QPushButton("⊡")
-        self._btn_fit.setToolTip("Ajuster à la fenêtre  (F)")
+        self._btn_fit.setToolTip(translate("PhotoViewer", "Ajuster à la fenêtre  (F)"))
         self._btn_fit.setFixedWidth(32)
         self._btn_fit.clicked.connect(self.zoom_fit)
         tb_layout.addWidget(self._btn_fit)
 
         self._btn_100 = QPushButton("1:1")
-        self._btn_100.setToolTip("Zoom 100%  (Z)")
+        self._btn_100.setToolTip(translate("PhotoViewer", "Zoom 100%  (Z)"))
         self._btn_100.setFixedWidth(36)
         self._btn_100.clicked.connect(self.zoom_100)
         tb_layout.addWidget(self._btn_100)
 
         self._btn_close = QPushButton("✕")
-        self._btn_close.setToolTip("Fermer  (Echap)")
+        self._btn_close.setToolTip(translate("PhotoViewer", "Fermer  (Echap)"))
         self._btn_close.setFixedWidth(32)
         self._btn_close.clicked.connect(self.closed.emit)
         tb_layout.addWidget(self._btn_close)
@@ -447,7 +449,7 @@ class PhotoViewer(QWidget):
         nav_layout = QHBoxLayout(self._navbar)
         nav_layout.setContentsMargins(16, 6, 16, 6)
 
-        self._btn_prev = QPushButton("◀  Plus ancienne")
+        self._btn_prev = QPushButton(translate("PhotoViewer", "◀  Plus ancienne"))
         self._btn_prev.setFixedHeight(36)
         self._btn_prev.clicked.connect(lambda: self.navigate.emit(1))
         nav_layout.addWidget(self._btn_prev)
@@ -459,8 +461,8 @@ class PhotoViewer(QWidget):
         nav_layout.addWidget(self._nav_position_label)
 
         # Boutons de format de recadrage (masqués hors mode crop)
-        self._btn_play_video = QPushButton("▶  Ouvrir la vidéo")
-        self._btn_play_video.setToolTip("Ouvrir dans le lecteur vidéo par défaut")
+        self._btn_play_video = QPushButton(translate("PhotoViewer", "▶  Ouvrir la vidéo"))
+        self._btn_play_video.setToolTip(translate("PhotoViewer", "Ouvrir dans le lecteur vidéo par défaut"))
         self._btn_play_video.setFixedHeight(36)
         self._btn_play_video.setStyleSheet(
             "QPushButton { background:#2a6a2a; color:white; border:none;"
@@ -497,32 +499,32 @@ class PhotoViewer(QWidget):
         self._crop_format_widget.hide()
         nav_layout.addWidget(self._crop_format_widget)
 
-        self._btn_crop_confirm = QPushButton("✓  Confirmer le recadrage")
-        self._btn_crop_confirm.setToolTip("Valider le recadrage  (Entrée)")
+        self._btn_crop_confirm = QPushButton(translate("PhotoViewer", "✓  Confirmer le recadrage"))
+        self._btn_crop_confirm.setToolTip(translate("PhotoViewer", "Valider le recadrage  (Entrée)"))
         self._btn_crop_confirm.setFixedHeight(36)
         self._btn_crop_confirm.setStyleSheet("background: #2a6a2a; color: white;")
         self._btn_crop_confirm.clicked.connect(self.confirm_crop)
         self._btn_crop_confirm.hide()
         nav_layout.addWidget(self._btn_crop_confirm)
 
-        self._btn_crop_cancel = QPushButton("✕  Annuler")
-        self._btn_crop_cancel.setToolTip("Annuler le recadrage  (Echap)")
+        self._btn_crop_cancel = QPushButton(translate("PhotoViewer", "✕  Annuler"))
+        self._btn_crop_cancel.setToolTip(translate("PhotoViewer", "Annuler le recadrage  (Echap)"))
         self._btn_crop_cancel.setFixedHeight(36)
         self._btn_crop_cancel.setStyleSheet("background: #6a2a2a; color: white;")
         self._btn_crop_cancel.clicked.connect(self.cancel_crop)
         self._btn_crop_cancel.hide()
         nav_layout.addWidget(self._btn_crop_cancel)
 
-        self._btn_face_confirm = QPushButton("✓  Valider la position")
-        self._btn_face_confirm.setToolTip("Valider la position du visage  (Entrée)")
+        self._btn_face_confirm = QPushButton(translate("PhotoViewer", "✓  Valider la position"))
+        self._btn_face_confirm.setToolTip(translate("PhotoViewer", "Valider la position du visage  (Entrée)"))
         self._btn_face_confirm.setFixedHeight(36)
         self._btn_face_confirm.setStyleSheet("background: #2a6a2a; color: white;")
         self._btn_face_confirm.clicked.connect(self.confirm_face_add)
         self._btn_face_confirm.hide()
         nav_layout.addWidget(self._btn_face_confirm)
 
-        self._btn_face_cancel = QPushButton("✕  Annuler")
-        self._btn_face_cancel.setToolTip("Annuler l'ajout du visage  (Echap)")
+        self._btn_face_cancel = QPushButton(translate("PhotoViewer", "✕  Annuler"))
+        self._btn_face_cancel.setToolTip(translate("PhotoViewer", "Annuler l'ajout du visage  (Echap)"))
         self._btn_face_cancel.setFixedHeight(36)
         self._btn_face_cancel.setStyleSheet("background: #6a2a2a; color: white;")
         self._btn_face_cancel.clicked.connect(self.cancel_face_add_mode)
@@ -531,7 +533,7 @@ class PhotoViewer(QWidget):
 
         nav_layout.addStretch()
 
-        self._btn_next = QPushButton("Plus récente  ▶")
+        self._btn_next = QPushButton(translate("PhotoViewer", "Plus récente  ▶"))
         self._btn_next.setFixedHeight(36)
         self._btn_next.clicked.connect(lambda: self.navigate.emit(-1))
         nav_layout.addWidget(self._btn_next)
@@ -539,8 +541,8 @@ class PhotoViewer(QWidget):
         layout.addWidget(self._navbar)
 
         # ---- Badge doublons (flottant sur le canvas) ----
-        self._dup_badge = QPushButton("⧉ Doublons", self)
-        self._dup_badge.setToolTip("Cette photo a des doublons — cliquer pour voir")
+        self._dup_badge = QPushButton(translate("PhotoViewer", "⧉ Doublons"), self)
+        self._dup_badge.setToolTip(translate("PhotoViewer", "Cette photo a des doublons — cliquer pour voir"))
         self._dup_badge.setStyleSheet(
             "QPushButton{"
             "  background:rgba(255,140,0,210);color:white;border:none;"
@@ -954,7 +956,7 @@ class PhotoViewer(QWidget):
                 continue
             shown += 1
             btn = QToolButton()
-            btn.setToolTip(f"Ouvrir avec {name}")
+            btn.setToolTip(translate("PhotoViewer", "Ouvrir avec {app}").format(app=name))
             # Nom accessible pour l'automatisation pywinauto (e2e) — même
             # convention que ThumbnailCell/_DuplicateCard : ce bouton n'a pas
             # de texte propre (icône seule), donc pas de window_text() unique.
@@ -1001,22 +1003,23 @@ class PhotoViewer(QWidget):
         menu = QMenu(self)
         install_menu_width_fix(menu)
 
-        fav_label = "Retirer des favoris" if photo.is_favorite else "Marquer comme favori"
+        fav_label = (translate("PhotoViewer", "Retirer des favoris") if photo.is_favorite
+                     else translate("PhotoViewer", "Marquer comme favori"))
         menu.addAction(fav_label, self._toggle_fav_from_menu)
-        menu.addAction("Mots-clés…", lambda: self.edit_tags_requested.emit([photo]))
-        menu.addAction("Renommer…", lambda: self.rename_requested.emit(photo))
-        menu.addAction("Déplacer vers…", lambda: self.move_requested.emit(photo))
-        menu.addAction("Enregistrer l'image traitée sur le disque\tCtrl+S",
+        menu.addAction(translate("PhotoViewer", "Mots-clés…"), lambda: self.edit_tags_requested.emit([photo]))
+        menu.addAction(translate("PhotoViewer", "Renommer…"), lambda: self.rename_requested.emit(photo))
+        menu.addAction(translate("PhotoViewer", "Déplacer vers…"), lambda: self.move_requested.emit(photo))
+        menu.addAction(translate("PhotoViewer", "Enregistrer l'image traitée sur le disque\tCtrl+S"),
                        lambda: self.save_requested.emit(photo))
         menu.addSeparator()
-        menu.addAction("Révéler dans l'Explorateur",
+        menu.addAction(translate("PhotoViewer", "Révéler dans l'Explorateur"),
                        lambda: os.startfile(os.path.dirname(photo.path)))
-        menu.addAction("Afficher le dossier dans la grille",
+        menu.addAction(translate("PhotoViewer", "Afficher le dossier dans la grille"),
                        lambda: self.folder_grid_requested.emit(photo))
         menu.addSeparator()
 
         gps_coords = self._resolve_gps(photo)
-        act_map = menu.addAction("Localiser sur la carte")
+        act_map = menu.addAction(translate("PhotoViewer", "Localiser sur la carte"))
         act_map.setEnabled(gps_coords is not None)
         if gps_coords is not None:
             lat, lon = gps_coords
@@ -1027,14 +1030,14 @@ class PhotoViewer(QWidget):
             )
 
         menu.addSeparator()
-        menu.addAction("Forcer une nouvelle détection sans limite de taille",
+        menu.addAction(translate("PhotoViewer", "Forcer une nouvelle détection sans limite de taille"),
                        lambda: self.force_redetect_requested.emit(photo))
         menu.addSeparator()
         if self._album_id is not None:
-            menu.addAction("Retirer de l'album\tSuppr",
+            menu.addAction(translate("PhotoViewer", "Retirer de l'album\tSuppr"),
                            lambda: self.remove_from_album_requested.emit([photo]))
         else:
-            menu.addAction("Effacer le fichier…\tSuppr", lambda: self.delete_requested.emit([photo]))
+            menu.addAction(translate("PhotoViewer", "Effacer le fichier…\tSuppr"), lambda: self.delete_requested.emit([photo]))
 
         menu.exec(pos)
 

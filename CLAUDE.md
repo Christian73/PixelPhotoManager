@@ -535,6 +535,110 @@ Corollaire : **chaque action utilisateur a un retour visuel immédiat**, même q
 
 ---
 
+## Internationalisation (français, anglais, allemand)
+
+`src/core/i18n.py` — le français est la **langue source** : les chaînes sont écrites
+en français dans le code et toute chaîne non traduite y retombe automatiquement.
+La langue est un réglage de config (`ui.language`) appliqué **au redémarrage** : les
+widgets construisent leurs libellés une fois, il n'y a pas de `retranslate_ui()`.
+`install()` pose deux traducteurs, `ppm_<code>.qm` (l'application) et
+`qtbase_<code>.qm` (les dialogues standard Qt — sans lui, une interface allemande
+garde des boutons « OK/Cancel » en anglais).
+
+Catalogues dans `translations/` : `.ts` versionnés, `.qm` compilés, régénérés par
+`tools/update_translations.py` (lupdate → post-traitement pluriels → lrelease). Le
+`.spec` PyInstaller embarque `translations/ppm_*.qm` par glob — un nouveau code de
+langue n'y demande aucune modification.
+
+**Une seule forme de marquage dans tout le projet** :
+
+```python
+from src.core.i18n import translate
+translate("MainWindow", "Texte affiché")
+```
+
+Trois interdits, tous vérifiés par `tests/test_i18n.py` — leur point commun est de
+ne **rien** casser de visible : le programme tourne, la chaîne est juste absente du
+catalogue, donc jamais traduite.
+
+- **Jamais `self.tr()`.** PySide6 résout son contexte sur la classe de *l'instance*,
+  lupdate l'extrait sous la classe qui *écrit* l'appel. Les deux divergent dès qu'il
+  y a héritage — les mixins de `MainWindow` (`main_window_faces.py`,
+  `main_window_duplicates.py`) sont dans ce cas. Le contexte littéral supprime la
+  question : y écrire le nom de la classe **d'exécution** (« MainWindow » pour un
+  mixin de MainWindow).
+- **Jamais d'alias.** `_t = lambda s: translate("Ctx", s)` compile et tourne, et ne
+  produit zéro chaîne extractible : lupdate lit le code, il ne l'exécute pas.
+  Contexte et source doivent être des littéraux sur place.
+- **Le 4e argument (le compte) doit être un simple nom de variable.** Si c'est une
+  expression (`len(faces)`, `result.persons_created`, `n + 1`), lupdate **retire le
+  message du catalogue**, sans erreur ni trace. Hisser le compte dans une locale
+  d'abord (`n_faces = len(faces)`).
+
+**Pluriels** — une chaîne `%n` est écrite au neutre dans le code (« %n visage(s) »)
+puisqu'un même littéral sert au singulier et au pluriel. C'est le seul contenu de
+`ppm_fr.ts` : le français a son propre catalogue **uniquement** pour porter les deux
+formes réelles (« %n visage » / « %n visages »), le reste y est vide. Sans lui,
+`QCoreApplication.translate` substitue `%n` dans la source et l'utilisateur lit
+« 3 visage(s) » — une régression par rapport au code d'avant l'i18n.
+
+`update_translations.py::restore_numerus()` est le seul endroit qui sait qu'un `%n`
+vaut pluriel, et il tourne après **chaque** lupdate : celui-ci ne marque
+`numerus="yes"` que sur un littéral entier (jamais le cas en vrai code) et, pire,
+ré-aplatit à chaque passe les pluriels déjà traduits en n'en gardant que la première
+forme. Les formes sont donc relevées avant (`harvest_numerus`) puis réécrites après.
+Deux comptes dans une même phrase : `%n` n'en accorde qu'un, le second passe par sa
+propre chaîne plurielle imbriquée (cf. `main_window_faces.py`,
+« %n annotation(s) de visage dans {photos} »).
+
+**Chaîne qui sert aussi de clé** — plusieurs endroits utilisaient un libellé français
+à la fois comme texte affiché et comme identifiant interne (clé de dict, discriminant
+d'aiguillage, nom d'opération persisté en base, paramètre `tab=`). Règle : **garder
+le français comme clé, traduire au seul site d'affichage** via une table de
+correspondance et un accesseur. Traduire la clé casserait le code en silence dès le
+changement de langue. Instances en place : `MainWindow._context_label`,
+`_MEDIA_SCOPE_VALUES`/`_media_scope_label`, `edit_panel._TOOL_LABELS`/`_tool_label`,
+`help_dialog._TABS`/`_TAB_LABELS`. Corollaire vécu : comparer un texte de widget à
+un littéral français (`if combo.currentText() == "(tous)"`) ne matche plus dès que
+l'interface change de langue — comparer l'index ou une clé, jamais le libellé.
+
+**Corps de message : `translate(...).format(...)`, jamais une f-string.** Une f-string
+est évaluée avant d'atteindre `translate` — lupdate n'y voit qu'une expression, la chaîne
+n'entre pas au catalogue, et l'utilisateur lit un message français dans une interface
+allemande. C'est le trou qui a laissé passer une trentaine de corps de `QMessageBox`
+(titre traduit, corps non). Écrire les substitutions en `{nom}` nommés dans la source
+traduisible, jamais en positionnel : l'ordre des mots change d'une langue à l'autre.
+
+**`install()` avant tout import de `src.ui`.** Beaucoup de libellés sont des
+**constantes de module** — `frames.FRAME_TYPES`, `edit_panel._TREATMENTS`,
+`help_dialog._TAB_LABELS`, les tables de `exif_panel`, les mois de `thumbnail_grid`… :
+312 `translate()` s'évaluent à l'import, une seule fois. Un module importé avant
+`i18n.install()` fige donc sa source française pour toute la durée du processus, et
+l'interface sort à moitié traduite sans la moindre erreur. D'où l'ordre de `main()` :
+QApplication → `i18n.install()` → *ensuite* seulement les imports de `src.ui` (tous
+différés dans le corps de `main()`, aucun en tête de `main.py`). Verrouillé par
+`tests/test_i18n.py::TestInstallHappensBeforeUiImports`, dont le détecteur est
+**transitif** : `main_window` n'a aucune constante traduite en propre mais importe
+`help_dialog` et `edit_panel`, qui en ont.
+
+**Aide intégrée** — `src/ui/help_content/<langue>/*.html`, un sous-dossier par langue
+(`fr/` `en/` `de/`, 9 pages chacun). `help_dialog._help_file()` résout **fichier par
+fichier** depuis `active_language()`, avec repli sur `fr/` : une page pas encore
+traduite s'affiche en français au lieu de faire perdre toute l'aide de la langue.
+Résoudre depuis `active_language()` et non depuis `ui.language` en config — cette
+dernière peut déjà porter la langue du *prochain* démarrage alors que l'interface
+affichée est encore dans l'ancienne. `_style.html` est du CSS pur : il n'existe qu'en
+`fr/` et vit du repli. Le `.spec` PyInstaller embarque `help_content` par dossier, un
+nouveau sous-dossier de langue n'y demande rien.
+
+**Volontairement non traduits** : les messages de `logger`/`journal`, les textes
+d'exception, le DDL SQL, et le corps du rapport de diagnostic de
+`thread_journal_dialog.py` (`build_problems_report`/`_HINTS`) — destiné à être collé
+tel quel dans un signalement de bug, il reste en français quelle que soit
+l'interface. Seul le chrome de ce dialogue est traduit.
+
+---
+
 ## Système de plugins
 
 Un plugin = un dossier dans `plugins/` avec `plugin.json` + `plugin.py`.

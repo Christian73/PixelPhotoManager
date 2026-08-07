@@ -13,10 +13,11 @@ from PySide6.QtWidgets import (
 
 from src.faces.face_database import FaceDatabase
 from src.library.thumbnail_cache import ThumbnailCache
+from src.core.i18n import translate
 
 _ERROR_LABELS = {
-    "timeout": "Timeout pendant la détection",
-    "crash": "Crash du sous-processus de détection",
+    "timeout": translate("IndexErrorsDialog", "Timeout pendant la détection"),
+    "crash": translate("IndexErrorsDialog", "Crash du sous-processus de détection"),
 }
 
 
@@ -76,8 +77,8 @@ class _ErrorRow(QWidget):
 
         row.addLayout(info_col, stretch=1)
 
-        btn_retry = QPushButton("⟳  Réessayer")
-        btn_retry.setToolTip("Relancer l'identification des visages pour ce seul fichier")
+        btn_retry = QPushButton(translate("ErrorRow", "⟳  Réessayer"))
+        btn_retry.setToolTip(translate("ErrorRow", "Relancer l'identification des visages pour ce seul fichier"))
         btn_retry.setStyleSheet(
             "QPushButton { background: #2a5080; color: white; border: none;"
             " border-radius: 3px; padding: 4px 12px; }"
@@ -97,7 +98,7 @@ class IndexErrorsDialog(QDialog):
         super().__init__(parent)
         self._face_db = face_db
         self._thumb_cache = thumb_cache
-        self.setWindowTitle("Visualisation des erreurs d'identification")
+        self.setWindowTitle(translate("IndexErrorsDialog", "Visualisation des erreurs d'identification"))
         self.setMinimumWidth(560)
         self.setMinimumHeight(420)
         self.setAttribute(Qt.WA_DeleteOnClose)
@@ -108,14 +109,14 @@ class IndexErrorsDialog(QDialog):
         root.setSpacing(10)
         root.setContentsMargins(16, 16, 16, 14)
 
-        lbl = QLabel("Photos en erreur d'identification faciale")
+        lbl = QLabel(translate("IndexErrorsDialog", "Photos en erreur d'identification faciale"))
         lbl.setStyleSheet("font-size: 13px; font-weight: bold; color: #ccc;")
         root.addWidget(lbl)
 
         note = QLabel(
-            "Ces fichiers ont provoqué un timeout ou un crash pendant la détection "
+            translate("IndexErrorsDialog", "Ces fichiers ont provoqué un timeout ou un crash pendant la détection "
             "des visages. Ils sont automatiquement exclus des analyses tant que le "
-            "problème persiste — relancez le traitement fichier par fichier."
+            "problème persiste — relancez le traitement fichier par fichier.")
         )
         note.setStyleSheet("color: #888; font-size: 10px;")
         note.setWordWrap(True)
@@ -138,7 +139,7 @@ class IndexErrorsDialog(QDialog):
 
         btn_row = QHBoxLayout()
         btn_row.addStretch()
-        btn_close = QPushButton("Fermer")
+        btn_close = QPushButton(translate("IndexErrorsDialog", "Fermer"))
         btn_close.setFixedWidth(80)
         btn_close.clicked.connect(self.accept)
         btn_row.addWidget(btn_close)
@@ -155,7 +156,7 @@ class IndexErrorsDialog(QDialog):
 
         paths = self._face_db.get_error_paths()
         if not paths:
-            empty = QLabel("Aucune erreur d'identification en attente.")
+            empty = QLabel(translate("IndexErrorsDialog", "Aucune erreur d'identification en attente."))
             empty.setStyleSheet("color: #555; font-size: 11px; padding: 24px;")
             empty.setAlignment(Qt.AlignCenter)
             self._layout.insertWidget(0, empty)

@@ -16,6 +16,8 @@ import logging
 import platform
 import sys
 
+from src.core.i18n import translate
+
 logger = logging.getLogger(__name__)
 
 _configured: bool = False
@@ -40,13 +42,14 @@ def configure() -> str:
     try:
         import tensorflow as tf
     except ImportError:
-        _device_label = "CPU (TensorFlow non disponible)"
+        _device_label = translate("GpuUtils", "CPU (TensorFlow non disponible)")
         return _device_label
 
     try:
         gpus = tf.config.list_physical_devices("GPU")
     except Exception as exc:
-        _device_label = f"CPU (erreur détection GPU : {exc})"
+        _device_label = translate("GpuUtils", "CPU (erreur détection GPU : {err})"
+                                  ).format(err=exc)
         logger.warning("gpu_utils : %s", _device_label)
         return _device_label
 
@@ -60,26 +63,29 @@ def configure() -> str:
 
         backend = _detect_backend()
         names = [_gpu_detail(gpu.name) for gpu in gpus]
-        _device_label = "GPU : " + ", ".join(names) + f"  [{backend}]"
+        _device_label = (translate("GpuUtils", "GPU : ") + ", ".join(names)
+                         + f"  [{backend}]")
         logger.info("gpu_utils : %s", _device_label)
         return _device_label
 
     # Pas de GPU utilisable par TF — chercher quand même le matériel présent
     hw = _hardware_gpu_name()
     if hw and sys.platform == "win32":
-        _device_label = (
-            f"CPU  (GPU détecté : {hw} — "
-            f"accélération GPU non disponible sur Windows natif avec TF ≥ 2.11)"
-        )
+        _device_label = translate(
+            "GpuUtils",
+            "CPU  (GPU détecté : {hw} — "
+            "accélération GPU non disponible sur Windows natif avec TF ≥ 2.11)"
+        ).format(hw=hw)
         logger.info("gpu_utils : %s", _device_label)
     elif hw:
-        _device_label = (
-            f"CPU  (GPU détecté : {hw} — "
-            f"CUDA/cuDNN requis pour l'utiliser)"
-        )
+        _device_label = translate(
+            "GpuUtils",
+            "CPU  (GPU détecté : {hw} — "
+            "CUDA/cuDNN requis pour l'utiliser)"
+        ).format(hw=hw)
         logger.info("gpu_utils : %s", _device_label)
     else:
-        _device_label = "CPU  (aucun GPU détecté)"
+        _device_label = translate("GpuUtils", "CPU  (aucun GPU détecté)")
         logger.info("gpu_utils : %s", _device_label)
 
     return _device_label

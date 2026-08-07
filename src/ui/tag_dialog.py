@@ -13,6 +13,7 @@ from PySide6.QtWidgets import (
 )
 
 from src.core.models import PhotoInfo
+from src.core.i18n import translate
 
 logger = logging.getLogger(__name__)
 
@@ -67,7 +68,7 @@ class TagEditDialog(QDialog):
         self, photos: list[PhotoInfo], all_tags: list[str], parent: QWidget | None = None
     ) -> None:
         super().__init__(parent)
-        self.setWindowTitle("Mots-clés")
+        self.setWindowTitle(translate("TagEditDialog", "Mots-clés"))
         self.setMinimumWidth(320)
         self._photos = photos
         self._all_tags = all_tags
@@ -82,10 +83,11 @@ class TagEditDialog(QDialog):
 
         count = len(self._photos)
         if count > 1:
-            layout.addWidget(QLabel(f"{count} photos sélectionnées"))
+            layout.addWidget(QLabel(
+                translate("TagEditDialog", "%n photo(s) sélectionnée(s)", None, count)))
 
         self._input = QLineEdit()
-        self._input.setPlaceholderText("Ajouter un mot-clé…")
+        self._input.setPlaceholderText(translate("TagEditDialog", "Ajouter un mot-clé…"))
         self._input.setClearButtonEnabled(True)
         completer = QCompleter(self._all_tags, self)
         completer.setCaseSensitivity(Qt.CaseInsensitive)

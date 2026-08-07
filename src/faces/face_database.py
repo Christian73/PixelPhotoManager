@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Optional
 
 from src.core.app_dirs import APP_DATA_DIR
+from src.core.i18n import translate
 from src.core.models import FaceInfo, PersonInfo
 
 logger = logging.getLogger(__name__)
@@ -679,7 +680,10 @@ class FaceDatabase:
                 conn.executemany("UPDATE faces SET cluster_id=? WHERE id=?", chunk)
                 if progress_cb:
                     done = min(start + _CHUNK, total)
-                    progress_cb(f"Clustering : sauvegarde {done:,}/{total:,} visages…".replace(",", " "))
+                    progress_cb(translate(
+                        "FaceDatabase", "Clustering : sauvegarde {done}/{total} visages…"
+                    ).format(done=f"{done:,}".replace(",", " "),
+                             total=f"{total:,}".replace(",", " ")))
             # Nettoyer les faces ArcFace qui sont devenues bruit (cluster_id=NULL)
             # mais conservent un person_id résiduel d'un clustering précédent.
             # Les faces sans embedding (placeholders Picasa) sont préservées.

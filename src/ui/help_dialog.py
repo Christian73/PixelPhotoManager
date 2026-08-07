@@ -2,11 +2,15 @@
 # SPDX-License-Identifier: Apache-2.0
 """Dialogue Aide / À propos.
 
-Le contenu des onglets vit dans src/ui/help_content/*.html (un fichier par
-onglet + _style.html partagé) — extrait de ce module en 2026-07 pour que
-l'aide soit éditable sans toucher au code. En mode figé (PyInstaller), le
-dossier est embarqué sous _internal/help_content (cf. pixelphotomanager.spec,
-entrée datas) et résolu via sys._MEIPASS."""
+Le contenu des onglets vit dans src/ui/help_content/<langue>/*.html (un fichier
+par onglet + _style.html partagé) — extrait de ce module en 2026-07 pour que
+l'aide soit éditable sans toucher au code, puis réparti par langue en 2026-08.
+En mode figé (PyInstaller), le dossier est embarqué sous _internal/help_content
+(cf. pixelphotomanager.spec, entrée datas) et résolu via sys._MEIPASS.
+
+La résolution se fait **fichier par fichier** (_help_file), avec repli sur le
+français : une langue dont un seul onglet n'est pas encore traduit affiche cet
+onglet en français au lieu de perdre toute son aide."""
 
 import logging
 import sys
@@ -22,10 +26,14 @@ from src.core.app_version import get_app_version
 from src.core.update_checker import (
     UpdateCheckThread, STATUS_UPDATE_AVAILABLE, STATUS_UP_TO_DATE, STATUS_VERSION_UNKNOWN,
 )
+from src.core.i18n import DEFAULT_LANGUAGE, active_language, translate
 
 logger = logging.getLogger(__name__)
 
-# (titre d'onglet, fichier dans help_content/)
+# (clé d'onglet, fichier dans help_content/)
+# Le 1er élément est une CLÉ, pas un libellé : il sert d'identifiant d'onglet
+# (paramètre `tab=` de HelpDialog, comparaisons internes). Il reste en français
+# quelle que soit la langue — l'affichage passe par _TAB_LABELS.
 _TABS = [
     ("Vue d'ensemble",  "vue_densemble.html"),
     ("Navigation",      "navigation.html"),
@@ -38,6 +46,19 @@ _TABS = [
     ("À propos",        "a_propos.html"),
 ]
 
+#: Libellés affichés des onglets, indexés par leur clé (cf. _TABS).
+_TAB_LABELS: dict[str, str] = {
+    "Vue d'ensemble": translate("HelpDialog", "Vue d'ensemble"),
+    "Navigation":     translate("HelpDialog", "Navigation"),
+    "Diaporama":      translate("HelpDialog", "Diaporama"),
+    "Retouches":      translate("HelpDialog", "Retouches"),
+    "Visages":        translate("HelpDialog", "Visages"),
+    "Doublons":       translate("HelpDialog", "Doublons"),
+    "Raccourcis":     translate("HelpDialog", "Raccourcis"),
+    "Paramètres":     translate("HelpDialog", "Paramètres"),
+    "À propos":       translate("HelpDialog", "À propos"),
+}
+
 
 def _content_dir() -> Path:
     """Dossier des fichiers d'aide — bundle PyInstaller ou arborescence source."""
@@ -46,14 +67,23 @@ def _content_dir() -> Path:
     return Path(__file__).parent / "help_content"
 
 
+def _help_file(filename: str) -> Path:
+    """Chemin du fichier d'aide dans la langue courante, avec repli sur le
+    français (page non encore traduite, ou langue inconnue)."""
+    base = _content_dir()
+    localized = base / active_language() / filename
+    if localized.is_file():
+        return localized
+    return base / DEFAULT_LANGUAGE / filename
+
+
 def _load_tab_html(filename: str) -> str:
     """Contenu d'un onglet : <style> partagé + fichier de l'onglet, avec la
     version de l'application substituée. Un fichier manquant produit un
     message d'erreur affichable plutôt qu'un crash."""
-    base = _content_dir()
     try:
-        style = (base / "_style.html").read_text(encoding="utf-8")
-        body = (base / filename).read_text(encoding="utf-8")
+        style = _help_file("_style.html").read_text(encoding="utf-8")
+        body = _help_file(filename).read_text(encoding="utf-8")
     except OSError as exc:
         logger.error("Aide : fichier introuvable %s (%s)", filename, exc)
         return f"<p>Contenu d'aide indisponible ({filename}).</p>"
@@ -105,7 +135,7 @@ class HelpDialog(QDialog):
         # laissait le QDialog et son QThread de vérification de version en vie
         # indéfiniment, parentés à MainWindow — fuite qui grossit à chaque ouverture.
         self.setAttribute(Qt.WA_DeleteOnClose)
-        self.setWindowTitle("Aide — PixelPhotoManager")
+        self.setWindowTitle(translate("HelpDialog", "Aide — PixelPhotoManager"))
         self.resize(760, 560)
 
         layout = QVBoxLayout(self)
@@ -113,7 +143,7 @@ class HelpDialog(QDialog):
         layout.setSpacing(6)
 
         self._search_edit = QLineEdit()
-        self._search_edit.setPlaceholderText("Rechercher dans l'aide…  (Entrée : occurrence suivante)")
+        self._search_edit.setPlaceholderText(translate("HelpDialog", "Rechercher dans l'aide…  (Entrée : occurrence suivante)"))
         self._search_edit.setClearButtonEnabled(True)
         self._search_edit.textChanged.connect(lambda text: self._search(text, continue_search=False))
         self._search_edit.returnPressed.connect(
@@ -135,11 +165,13 @@ class HelpDialog(QDialog):
                 self._about_browser = browser
                 html = html.replace(
                     "__VERSION_CHECK__",
-                    '<span style="color:#888;">Vérification de la version…</span>',
+                    '<span style="color:#888;">'
+                    + translate("HelpDialog", "Vérification de la version…")
+                    + '</span>',
                 )
             browser.setHtml(html)
             browser.verticalScrollBar().setValue(0)
-            tabs.addTab(browser, title)
+            tabs.addTab(browser, _TAB_LABELS.get(title, title))
 
         if tab is not None:
             for i, (title, _) in enumerate(_TABS):
@@ -221,21 +253,34 @@ class HelpDialog(QDialog):
             return
         if status == STATUS_UPDATE_AVAILABLE:
             fragment = (
-                '<span style="color:#e0a030;">⚠ Une nouvelle version est disponible : '
-                f'<b>{version}</b> — <a href="{html_url}" style="color:#6aacf0;">'
-                "ouvrir la page de téléchargement</a></span>"
+                '<span style="color:#e0a030;">'
+                + translate("HelpDialog",
+                            "⚠ Une nouvelle version est disponible : <b>{version}</b> — "
+                            '<a href="{url}" style="color:#6aacf0;">'
+                            "ouvrir la page de téléchargement</a>"
+                            ).format(version=version, url=html_url)
+                + "</span>"
             )
         elif status == STATUS_UP_TO_DATE:
-            fragment = '<span style="color:#6abf6a;">✓ Vous disposez de la dernière version.</span>'
+            fragment = ('<span style="color:#6abf6a;">'
+                        + translate("HelpDialog", "✓ Vous disposez de la dernière version.")
+                        + "</span>")
         elif status == STATUS_VERSION_UNKNOWN:
             fragment = (
-                '<span style="color:#888;">Version locale non comparable (mode développement) — '
-                f"dernière version publiée : <b>{version}</b>.</span>"
+                '<span style="color:#888;">'
+                + translate("HelpDialog",
+                            "Version locale non comparable (mode développement) — "
+                            "dernière version publiée : <b>{version}</b>."
+                            ).format(version=version)
+                + "</span>"
             )
         else:
             fragment = (
-                '<span style="color:#888;">Impossible de vérifier la disponibilité '
-                "d'une nouvelle version (pas de connexion ?).</span>"
+                '<span style="color:#888;">'
+                + translate("HelpDialog",
+                            "Impossible de vérifier la disponibilité d'une nouvelle "
+                            "version (pas de connexion ?).")
+                + "</span>"
             )
         scroll_pos = self._about_browser.verticalScrollBar().value()
         self._about_browser.setHtml(

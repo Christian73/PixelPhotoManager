@@ -7,6 +7,7 @@ from typing import Callable
 
 from PySide6.QtCore import QThread, Signal
 
+from src.core.i18n import translate
 from src.faces.face_database import FaceDatabase
 
 logger = logging.getLogger(__name__)
@@ -192,7 +193,8 @@ def _run_clustering(
 
     n_synthetic = face_db.assign_person_synthetic_clusters()
     if n_synthetic and progress_cb:
-        progress_cb(f"Clustering : {_fmt_n(n_synthetic)} visages identifiés pré-assignés…")
+        progress_cb(translate("Clusterer", "Clustering : {n} visages identifiés pré-assignés…"
+                              ).format(n=_fmt_n(n_synthetic)))
 
     X, face_ids = face_db.get_all_embeddings(only_unidentified=True)
     n = len(face_ids)
@@ -209,7 +211,8 @@ def _run_clustering(
 
     logger.info("Clustering HDBSCAN: %d visages non identifiés", n)
     if progress_cb:
-        progress_cb(f"Clustering : normalisation ({_fmt_n(n)} visages)…")
+        progress_cb(translate("Clusterer", "Clustering : normalisation ({n} visages)…"
+                              ).format(n=_fmt_n(n)))
 
     if n == 1:
         face_db.update_clusters(face_ids, [0])
@@ -270,7 +273,9 @@ def _run_clustering(
                     hdbscan_start = time.monotonic()
                     if progress_cb:
                         progress_cb(
-                            f"Clustering : HDBSCAN ({n_fmt} visages) — 0:00…"
+                            translate("Clusterer",
+                                      "Clustering : HDBSCAN ({n} visages) — {time}…"
+                                      ).format(n=n_fmt, time="0:00")
                         )
                 elif tag == "result":
                     _, n_clusters, n_singletons, result_labels = msg
@@ -285,8 +290,9 @@ def _run_clustering(
                     elapsed = int(time.monotonic() - hdbscan_start)
                     m, s = divmod(elapsed, 60)
                     progress_cb(
-                        f"Clustering : HDBSCAN ({n_fmt} visages)"
-                        f" — {m}:{s:02d}…"
+                        translate("Clusterer",
+                                  "Clustering : HDBSCAN ({n} visages) — {time}…"
+                                  ).format(n=n_fmt, time=f"{m}:{s:02d}")
                     )
                 if not proc.is_alive():
                     exitcode = proc.exitcode

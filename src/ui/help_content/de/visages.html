@@ -1,0 +1,201 @@
+<h2>Gesichtserkennung und -zuordnung</h2>
+
+<p>Die Erkennung läuft in drei Schritten ab:</p>
+<p style="text-align:center; font-size:13px;">
+  <b>① Analysieren</b> (automatisch) &nbsp;→&nbsp; <b>② Gruppieren</b> &nbsp;→&nbsp; <b>③ Identifizieren</b>
+</p>
+<p>Nur die Schritte ② und ③ erfordern eine Aktion Ihrerseits.
+Die folgenden Punkte stehen in der Reihenfolge, in der sie im Menü <b>Gesichter</b>
+erscheinen. Lesen Sie die Beschreibungen, bevor Sie einen davon verwenden: Manche sind
+umfangreich.</p>
+
+<hr/>
+
+<h3>① Gesichter analysieren &nbsp;<span style="font-weight:normal;color:#888;">(automatisch, keine Aktion nötig)</span></h3>
+<p><b>Was es tut:</b> Sobald ein Durchlauf der Bibliothek neue Fotos findet, startet die
+Analyse automatisch im Hintergrund: InsightFace (Modell buffalo_l) erkennt die Gesichter und
+berechnet je Gesicht einen 512D-ArcFace-Vektor. Am Ende startet auch die Gruppierung
+automatisch. Der Fortschritt erscheint in der Statusleiste.</p>
+<p><b>Umfang:</b> Nur die <u>noch nie analysierten</u> Fotos (neu zur Bibliothek hinzugefügte
+Fotos). Bereits verarbeitete Fotos werden übergangen, auch wenn sie als „ignoriert“ markierte
+Gesichter enthalten.</p>
+<p class="tip">Dauer: von wenigen Sekunden (ein neues Foto) bis zu mehreren Stunden (erste
+Analyse einer großen Bibliothek). Die Anwendung bleibt währenddessen nutzbar.</p>
+
+<hr/>
+
+<h3>Picasa-Import &nbsp;<span style="font-weight:normal;color:#888;">(Gesichter › Aus Picasa importieren…)</span></h3>
+<ul>
+  <li>Importiert die Gesichtsanmerkungen aus den Dateien <code>.picasa.ini</code> von Google
+      Picasa: Namen und Gesichtsbereiche.</li>
+  <li>Die Namen werden automatisch bestehenden Personen zugeordnet oder legen neue Personen
+      an.</li>
+</ul>
+<p class="tip"><b>Nur ein einziges Mal durchführen.</b> Ein erneuter Import fügt alle bereits
+bekannten Picasa-Namen und -Anmerkungen wieder ein, was Duplikate erzeugen oder gelöschte
+Zuordnungen zurückbringen kann. Beim Versuch, den Import erneut zu starten, erscheint eine
+Warnung.</p>
+
+<hr/>
+
+<h3>Zurücksetzen und neu indizieren &nbsp;<span style="font-weight:normal;color:#888;">(Gesichter › Zurücksetzen und neu indizieren…)</span></h3>
+<p>Zwei Möglichkeiten zur Wahl, mit Vorsicht zu verwenden:</p>
+<table>
+  <tr><th>Option</th><th>Was gelöscht wird</th><th>Was erhalten bleibt</th></tr>
+  <tr>
+    <td><b>Clustering zurücksetzen</b></td>
+    <td>Nur die HDBSCAN-Gruppen</td>
+    <td>Vektoren, Namen und Zuordnungen Person ↔ Gesicht</td>
+  </tr>
+  <tr>
+    <td><b>Vollständige Neuindizierung</b></td>
+    <td>Alles (Vektoren, Gruppen, Namen, Zuordnungen)</td>
+    <td>— (nichts)</td>
+  </tr>
+</table>
+<p class="tip"><b>Die vollständige Neuindizierung dauert mehrere Stunden</b>, je nach Größe der
+Bibliothek. Legen Sie vorher eine Sicherung an.</p>
+
+<hr/>
+
+<h3>② Gesichter gruppieren &nbsp;<span style="font-weight:normal;color:#888;">(Gesichter › Gesichter gruppieren…)</span></h3>
+<p><b>Was es tut:</b> Gruppiert die bereits analysierten Gesichter nach Ähnlichkeit, mit dem
+Algorithmus HDBSCAN auf den ArcFace-Vektoren. Die Gruppen werden anschließend unter
+<i>Personen identifizieren…</i> dargestellt.</p>
+<p><b>Umfang:</b> Alle Gesichter mit gespeichertem Vektor, <u>außer</u> den bereits
+identifizierten (mit zugewiesener person_id). Bestätigte Zuordnungen bleiben unangetastet.</p>
+<p><b>Was es NICHT tut:</b></p>
+<ul>
+  <li>Es startet die InsightFace-Erkennung nicht erneut.</li>
+  <li>Es löscht keine bereits bestätigten Namen oder Zuordnungen.</li>
+  <li>Es verarbeitet keine als „ignoriert“ markierten Gesichter.</li>
+</ul>
+<p class="tip">Dauer: 15 bis 30 Minuten, je nach Größe der Bibliothek. Nach einer Änderung der
+Ähnlichkeitstoleranz in den Einstellungen erneut ausführen.</p>
+<p class="tip">Sobald neue Gruppen gebildet sind, vergleicht die Anwendung automatisch den
+Schwerpunkt (mittlerer Vektor) jeder Gruppe mit den bereits benannten Personen. Drei
+Vertrauensstufen, je nach Kosinus-Ähnlichkeit mit der nächstgelegenen Person:</p>
+<table>
+  <tr><th>Ähnlichkeit</th><th>Wirkung</th></tr>
+  <tr><td>≥ 70&nbsp;%</td><td>Automatische Zuordnung zur Person, <b>ohne Rückfrage</b></td></tr>
+  <tr><td>≥ 55&nbsp;%</td><td>Vorschlag gespeichert: Die Gruppe erscheint unter „Warten auf
+      Überprüfung“ in der Ansicht der betreffenden Person — siehe Schritt ③ weiter unten</td></tr>
+  <tr><td>≥ 50&nbsp;%</td><td>Bezeichnung „Wahrscheinlich X“ (blau) als Vorschau im
+      Identifizierungsfenster, ohne dass bereits ein Vorschlag gespeichert wird</td></tr>
+</table>
+<p class="tip">Dieser Vergleich läuft still ab und startet InsightFace nie erneut. Unterhalb von
+70&nbsp;% wird nie ein Gesicht ohne Ihre Bestätigung einer Person zugeordnet.</p>
+
+<hr/>
+
+<h3>Fehleransicht &nbsp;<span style="font-weight:normal;color:#888;">(Gesichter › Fehleransicht…)</span></h3>
+<p><b>Was es tut:</b> Listet die Fotos auf, bei denen Schritt ① (Analyse) fehlgeschlagen ist —
+Zeitüberschreitung oder Absturz des Erkennungs-Teilprozesses — mit Miniaturbild, Dateiname und
+Fehlerart. Die Schaltfläche <b>⟳ Erneut versuchen</b> startet die Analyse nur für diese eine
+Datei; die Zeile verschwindet aus der Liste, sobald die Verarbeitung gelingt.</p>
+<p><b>Umfang:</b> Nur die fehlerhaften Fotos. Solange ein Foto fehlerhaft bleibt, wird es von
+den folgenden automatischen Analysen ausgeschlossen (es wird nicht bei jedem Durchlauf erneut
+versucht).</p>
+<p class="tip">Diese Fotos sind auch direkt im Raster erkennbar: Ein Rechtsklick auf ein
+fehlerhaftes Miniaturbild bietet im Kontextmenü die Option „Gesichtserkennung erneut
+versuchen“.</p>
+
+<hr/>
+
+<h3>Sichern und wiederherstellen</h3>
+<ul>
+  <li><b>Gesichter › Erkennung sichern…</b> — legt eine mit Zeitstempel versehene Sicherung der
+      gesamten <code>faces.db</code> an (Vektoren, Gruppen, Personen, Anmerkungen).</li>
+  <li><b>Gesichter › Sicherungen verwalten…</b> — listet, stellt wieder her oder löscht die
+      Sicherungen. Der aktuelle Stand wird vor jeder Wiederherstellung automatisch
+      gesichert.</li>
+</ul>
+
+<hr/>
+
+<h3>Zähler &nbsp;<span style="font-weight:normal;color:#888;">(Gesichter › Zähler…)</span></h3>
+<p>Zeigt eine zahlenmäßige Übersicht der Gesichtserkennung: Anzahl der identifizierten
+Personen, der identifizierten / erkannten / auf Bestätigung wartenden / unbekannten Gesichter
+sowie die Zähler des Picasa-Imports. Es wird nichts gestartet — es ist eine reine
+Bestandsaufnahme.</p>
+
+<hr/>
+
+<h3>③ Personen identifizieren &nbsp;<span style="font-weight:normal;color:#888;">(Schaltfläche „Identifizieren…“ in der Seitenleiste)</span></h3>
+<p>Die Schaltfläche <b>Identifizieren…</b> in der Seitenleiste (mit einer Kennzahl für die
+Anzahl offener Gruppen) öffnet die Ansicht der anonymen Gruppen, um sie zu benennen. Eine nicht
+identifizierte Gruppe kann einen Namensvorschlag anzeigen, je nach Ähnlichkeit mit einer bereits
+benannten Person:</p>
+<ul>
+  <li><b>„Wahrscheinlich X“</b> (blau) — Ähnlichkeit ≥ 50&nbsp;%</li>
+  <li><b>„Vielleicht X“</b> (grau) — Ähnlichkeit ≥ 45&nbsp;%</li>
+</ul>
+<p>Denselben Namen mehreren Gruppen zu geben, führt sie in derselben Person zusammen.</p>
+<p>Es wird nichts gestartet — das ist reine Navigation.</p>
+
+<h3>Ansicht der Gesichter einer Person</h3>
+<p>Klicken Sie in der Seitenleiste auf eine Person, um ihre Detailansicht zu öffnen. Sie zeigt
+zwei Abschnitte:</p>
+<ul>
+  <li><b>Bestätigte Gesichter</b> — bereits dieser Person zugeordnete Gesichter.
+    <ul>
+      <li>Einfacher Klick: ein Gesicht auswählen.</li>
+      <li><kbd>Strg</kbd>+Klick: Mehrfachauswahl. <kbd>Umschalt</kbd>+Klick: Bereichsauswahl.</li>
+      <li>Doppelklick: das zugehörige Foto im Betrachter öffnen.</li>
+    </ul>
+  </li>
+</ul>
+<p><b>Rechtsklick</b> auf ein bestätigtes Gesicht:</p>
+<table>
+  <tr><th>Aktion</th><th>Wirkung</th></tr>
+  <tr><td><b>Zuordnen</b></td><td>Verschiebt das oder die ausgewählten Gesichter zu einer anderen Person</td></tr>
+  <tr><td><b>Lösen</b></td><td>Nimmt das Gesicht von der Person weg; es wird für andere Personen neu bewertet</td></tr>
+  <tr><td><b>Als Hauptminiatur verwenden</b></td><td>Verwendet dieses Gesicht als Bild in der Seitenleiste</td></tr>
+</table>
+<ul>
+  <li><b>Warten auf Überprüfung</b> — Gruppen, deren Zuordnung zu dieser Person das System
+      vorschlägt.
+    <ul>
+      <li>Fahren Sie über ein Miniaturbild, um <b>✓</b> (annehmen) und <b>✗</b> (ablehnen)
+          einzublenden.</li>
+      <li><b>Rechtsklick</b>: die gesamte Gruppe annehmen oder ablehnen.</li>
+      <li>Schaltflächen <b>Alle annehmen</b> / <b>Alle ablehnen</b> in der Kopfzeile des
+          Abschnitts.</li>
+    </ul>
+  </li>
+</ul>
+<p class="tip">Ein abgelehntes Gesicht geht nie verloren: Es bleibt einzeln stehen und kommt
+weiterhin als Vorschlag für andere Personen in Frage.</p>
+
+<h3>Personen verwalten (Seitenleiste)</h3>
+<ul>
+  <li>Benannte Personen erscheinen in der Seitenleiste unter <b>Personen</b>.</li>
+  <li>Eine orangefarbene Kennzahl zwischen Miniaturbild und Name gibt die Anzahl der offenen
+      Vorschläge an.</li>
+  <li>Im Betrachter listet das Bedienfeld <b>Gesichter</b> die Gesichter des geöffneten Fotos
+      auf.</li>
+</ul>
+<p><b>Rechtsklick</b> auf eine Person in der Seitenleiste:</p>
+<table>
+  <tr><th>Aktion</th><th>Wirkung</th></tr>
+  <tr><td><b>Umbenennen…</b></td><td>Ändert den Namen in der gesamten Bibliothek</td></tr>
+  <tr><td><b>Zusammenführen mit…</b></td><td>Führt alle Gesichter dieser Person mit denen einer anderen zusammen</td></tr>
+  <tr><td><b>Namen löschen…</b></td><td>Entfernt den Namen — die Gesichter werden wieder zu anonymen Gruppen</td></tr>
+</table>
+
+<hr/>
+
+<h3>Ignorierte Gesichter</h3>
+<p>Ein Gesicht kann auf zwei Arten ignoriert werden:</p>
+<ul>
+  <li><b>Automatisch</b> bei der Erkennung: Größe unterhalb der anteiligen Schwelle oder
+      Vertrauenswert &lt; 0,65. Das Gesicht wird gespeichert, aber vom Clustering
+      ausgeschlossen.</li>
+  <li><b>Von Hand</b> über die Schaltfläche ✕ im Bedienfeld Gesichter (Fehlerkennung, Double,
+      Hintergrund). Das Gesicht bleibt über <b>Ignorierte Gesichter…</b> (siehe unten)
+      wiederherstellbar.</li>
+</ul>
+<p>Die Schaltfläche <b>Ignorierte Gesichter…</b> unten im Bedienfeld Gesichter zeigt die
+ignorierten Gesichter Foto für Foto an und stellt sie wieder her.</p>
+
+<hr/>

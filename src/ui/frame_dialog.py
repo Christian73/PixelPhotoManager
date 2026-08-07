@@ -43,6 +43,7 @@ from src.processing.frames import (
 )
 from src.ui.edit_icons import _TOGGLE_BTN_STYLE
 from src.ui.edit_sliders import EditSlider
+from src.core.i18n import translate
 
 logger = logging.getLogger(__name__)
 
@@ -186,7 +187,7 @@ class FrameDialog(QDialog):
         self._pending_kinds: list[str] = []
         self._dirty_kinds: set[str] = set()
 
-        self.setWindowTitle("Cadre")
+        self.setWindowTitle(translate("FrameDialog", "Cadre"))
         self.setWindowFlags(Qt.Tool | Qt.WindowStaysOnTopHint)
         self.setMinimumWidth(700)
 
@@ -206,9 +207,9 @@ class FrameDialog(QDialog):
         layout.setSpacing(10)
         layout.setContentsMargins(14, 14, 14, 10)
 
-        hint = QLabel("Choisissez un cadre — il se place autour de la photo, sans "
+        hint = QLabel(translate("FrameDialog", "Choisissez un cadre — il se place autour de la photo, sans "
                       "recouvrir l'image (sauf le second cadre de l'entourage uni, "
-                      "à activer explicitement).")
+                      "à activer explicitement)."))
         hint.setStyleSheet("color: #999; font-size: 10px;")
         hint.setWordWrap(True)
         layout.addWidget(hint)
@@ -239,7 +240,7 @@ class FrameDialog(QDialog):
         layout.addWidget(scroll, stretch=1)
 
         # ---- Réglages des cadres paramétriques ----
-        self._params = QGroupBox("Réglages du cadre")
+        self._params = QGroupBox(translate("FrameDialog", "Réglages du cadre"))
         pl = QVBoxLayout(self._params)
         pl.setContentsMargins(8, 10, 8, 8)
         pl.setSpacing(6)
@@ -250,7 +251,7 @@ class FrameDialog(QDialog):
         style_row = QHBoxLayout(self._style_row_host)
         style_row.setContentsMargins(0, 0, 0, 0)
         style_row.setSpacing(6)
-        style_row.addWidget(QLabel("Couleur :"))
+        style_row.addWidget(QLabel(translate("FrameDialog", "Couleur :")))
         self._style_buttons: dict[str, QPushButton] = {}
         for style_id, style_label in COLOR_STYLES:
             btn = QPushButton(style_label)
@@ -261,12 +262,14 @@ class FrameDialog(QDialog):
             self._style_buttons[style_id] = btn
             style_row.addWidget(btn)
 
-        self._btn_color = _ColorButton(self._edit.frame_color, "Couleur principale")
+        self._btn_color = _ColorButton(self._edit.frame_color,
+                                       translate("FrameDialog", "Couleur principale"))
         self._btn_color.color_changed.connect(
             lambda c: self._set_attr("frame_color", c, reload_tiles=True))
         style_row.addWidget(self._btn_color)
-        self._btn_color2 = _ColorButton(self._edit.frame_color2,
-                                        "Seconde couleur (dégradé, éclats du pailleté)")
+        self._btn_color2 = _ColorButton(
+            self._edit.frame_color2,
+            translate("FrameDialog", "Seconde couleur (dégradé, éclats du pailleté)"))
         self._btn_color2.color_changed.connect(
             lambda c: self._set_attr("frame_color2", c, reload_tiles=True))
         style_row.addWidget(self._btn_color2)
@@ -285,7 +288,7 @@ class FrameDialog(QDialog):
         # Les largeurs sont des fractions du petit côté de la photo, exposées en
         # pourcentage (0,1 % de précision — 2 décimales sur une fraction ne
         # donneraient qu'un pas de 1 %, bien trop grossier).
-        self._sl_width = EditSlider("Cadre extérieur", 0.5, 25.0,
+        self._sl_width = EditSlider(translate("FrameDialog", "Cadre extérieur"), 0.5, 25.0,
                                     self._edit.frame_width * 100.0, 1)
         self._sl_width.value_changed.connect(
             lambda v: self._set_attr("frame_width", v / 100.0, reload_tiles=True,
@@ -294,10 +297,10 @@ class FrameDialog(QDialog):
 
         # Second cadre de l'entourage uni : facultatif (il empiète sur la photo,
         # ce n'est pas un défaut acceptable sans un geste explicite).
-        self._chk_inner = QCheckBox("Second cadre par-dessus la photo")
+        self._chk_inner = QCheckBox(translate("FrameDialog", "Second cadre par-dessus la photo"))
         self._chk_inner.setToolTip(
-            "Ajoute un cadre intérieur peint sur l'image ; une bande de photo\n"
-            "reste visible entre les deux cadres."
+            translate("FrameDialog", "Ajoute un cadre intérieur peint sur l'image ; une bande de photo\n"
+            "reste visible entre les deux cadres.")
         )
         self._chk_inner.setChecked(bool(self._edit.frame_inner_enabled))
         self._chk_inner.toggled.connect(self._set_inner_enabled)
@@ -310,13 +313,13 @@ class FrameDialog(QDialog):
         dl.setContentsMargins(0, 0, 0, 0)
         dl.setSpacing(6)
 
-        self._sl_gap = EditSlider("Intervalle", 0.0, 15.0,
+        self._sl_gap = EditSlider(translate("FrameDialog", "Intervalle"), 0.0, 15.0,
                                   self._edit.frame_gap * 100.0, 1)
         self._sl_gap.value_changed.connect(
             lambda v: self._set_attr("frame_gap", v / 100.0, reload_tiles=True))
         dl.addWidget(self._sl_gap)
 
-        self._sl_inner = EditSlider("Cadre intérieur", 0.0, 15.0,
+        self._sl_inner = EditSlider(translate("FrameDialog", "Cadre intérieur"), 0.0, 15.0,
                                     self._edit.frame_inner_width * 100.0, 1)
         self._sl_inner.value_changed.connect(
             lambda v: self._set_attr("frame_inner_width", v / 100.0, reload_tiles=True))
@@ -331,7 +334,7 @@ class FrameDialog(QDialog):
 
         motif_row = QHBoxLayout()
         motif_row.setSpacing(6)
-        motif_row.addWidget(QLabel("Ferronnerie :"))
+        motif_row.addWidget(QLabel(translate("FrameDialog", "Ferronnerie :")))
         self._motif_buttons: dict[str, QPushButton] = {}
         for motif_id, motif_label in INNER_MOTIFS:
             btn = QPushButton(motif_label)
@@ -352,7 +355,7 @@ class FrameDialog(QDialog):
         relief_row = QHBoxLayout(self._relief_row)
         relief_row.setContentsMargins(0, 0, 0, 0)
         relief_row.setSpacing(6)
-        relief_row.addWidget(QLabel("Rendu :"))
+        relief_row.addWidget(QLabel(translate("FrameDialog", "Rendu :")))
         self._relief_buttons: dict[bool, QPushButton] = {}
         for relief_value, relief_label in INNER_RELIEFS:
             btn = QPushButton(relief_label)
@@ -368,7 +371,7 @@ class FrameDialog(QDialog):
 
         # Échelle des ornements, en pourcentage (l'échelle interne d'EditSlider
         # est figée à 100 : un facteur 0,4-2,5 se règle donc de 40 à 250 %).
-        self._sl_ornament = EditSlider("Ornements",
+        self._sl_ornament = EditSlider(translate("FrameDialog", "Ornements"),
                                        INNER_ORNAMENT_MIN * 100.0,
                                        INNER_ORNAMENT_MAX * 100.0,
                                        self._edit.frame_inner_ornament * 100.0, 0)
@@ -383,16 +386,18 @@ class FrameDialog(QDialog):
 
         inner_colors = QHBoxLayout()
         inner_colors.setSpacing(6)
-        inner_colors.addWidget(QLabel("Intervalle :"))
-        self._btn_gap_color = _ColorButton(self._edit.frame_gap_color,
-                                           "Couleur de l'intervalle")
+        inner_colors.addWidget(QLabel(translate("FrameDialog", "Intervalle :")))
+        self._btn_gap_color = _ColorButton(
+            self._edit.frame_gap_color,
+            translate("FrameDialog", "Couleur de l'intervalle"))
         self._btn_gap_color.color_changed.connect(
             lambda c: self._set_attr("frame_gap_color", c, reload_tiles=True))
         inner_colors.addWidget(self._btn_gap_color)
         inner_colors.addSpacing(12)
-        inner_colors.addWidget(QLabel("Cadre intérieur :"))
-        self._btn_inner_color = _ColorButton(self._edit.frame_inner_color,
-                                             "Couleur du cadre intérieur")
+        inner_colors.addWidget(QLabel(translate("FrameDialog", "Cadre intérieur :")))
+        self._btn_inner_color = _ColorButton(
+            self._edit.frame_inner_color,
+            translate("FrameDialog", "Couleur du cadre intérieur"))
         self._btn_inner_color.color_changed.connect(
             lambda c: self._set_attr("frame_inner_color", c, reload_tiles=True))
         inner_colors.addWidget(self._btn_inner_color)
@@ -405,8 +410,8 @@ class FrameDialog(QDialog):
         layout.addWidget(self._params)
 
         btn_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
-        btn_box.button(QDialogButtonBox.Ok).setText("Valider")
-        btn_box.button(QDialogButtonBox.Cancel).setText("Annuler")
+        btn_box.button(QDialogButtonBox.Ok).setText(translate("FrameDialog", "Valider"))
+        btn_box.button(QDialogButtonBox.Cancel).setText(translate("FrameDialog", "Annuler"))
         btn_box.accepted.connect(self.accept)
         btn_box.rejected.connect(self.reject)
         layout.addWidget(btn_box)
@@ -540,14 +545,16 @@ class FrameDialog(QDialog):
         for btn in self._style_buttons.values():
             btn.setVisible(styled)
         self._btn_color2.setVisible(styled)
-        self._sl_width.set_label("Cadre extérieur" if styled else "Épaisseur")
+        self._sl_width.set_label(translate("FrameDialog", "Cadre extérieur") if styled
+                                 else translate("FrameDialog", "Épaisseur"))
         # Le second cadre est proposé (et donc réglable) pour le seul entourage uni ;
         # pour le cadre double, l'intervalle et le cadre intérieur font partie du motif.
         plain = kind == "plain"
         inner_on = plain and bool(self._edit.frame_inner_enabled)
         self._chk_inner.setVisible(plain)
         self._inner_rows.setVisible(kind == "double" or inner_on)
-        self._sl_inner.set_label("Second cadre" if plain else "Cadre intérieur")
+        self._sl_inner.set_label(translate("FrameDialog", "Second cadre") if plain
+                                 else translate("FrameDialog", "Cadre intérieur"))
         # La ferronnerie n'a de sens que sur le second cadre ; la ligne simple
         # n'a aucun ornement à dimensionner.
         self._inner_motif_rows.setVisible(inner_on)

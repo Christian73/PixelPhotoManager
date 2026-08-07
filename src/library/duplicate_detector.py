@@ -31,6 +31,7 @@ from src.core.cpu_throttle import (
     throttle_tick,
     throttled_worker_count,
 )
+from src.core.i18n import translate
 from src.library.dedup_cache import DedupCache
 from src.library.image_loader import RAW_EXT
 
@@ -1105,7 +1106,8 @@ def generate_html_report(groups: dict, output_path: str) -> None:
     """Génère un rapport HTML listant tous les groupes de doublons."""
     n_groups = len(groups)
     n_files  = sum(len(v) for v in groups.values())
-    now      = datetime.now().strftime("%d/%m/%Y à %H:%M")
+    now      = datetime.now().strftime(
+        translate("DuplicateReport", "%d/%m/%Y à %H:%M"))
 
     lines = [
         "<!DOCTYPE html>",
@@ -1131,17 +1133,28 @@ def generate_html_report(groups: dict, output_path: str) -> None:
         "</style>",
         "</head>",
         "<body>",
-        "<h1>Rapport de doublons — PixelPhotoManager</h1>",
-        f"<div class='summary'>Généré le {now} &nbsp;·&nbsp; "
-        f"<b>{n_groups}</b> groupe{'s' if n_groups != 1 else ''} de doublons"
-        f" &nbsp;·&nbsp; <b>{n_files}</b> fichiers concernés</div>",
+        "<h1>" + translate("DuplicateReport",
+                           "Rapport de doublons — PixelPhotoManager") + "</h1>",
+        "<div class='summary'>"
+        + translate("DuplicateReport", "Généré le {date}").format(date=now)
+        + " &nbsp;·&nbsp; "
+        + translate("DuplicateReport", "<b>%n</b> groupe(s) de doublons",
+                    None, n_groups)
+        + " &nbsp;·&nbsp; "
+        + translate("DuplicateReport", "<b>%n</b> fichier(s) concerné(s)",
+                    None, n_files)
+        + "</div>",
     ]
 
     for gid, members in groups.items():
         lines.append("<div class='group'>")
+        n_members = len(members)
         lines.append(
-            f"<div class='gtitle'>Groupe&nbsp;#{gid}"
-            f" — {len(members)} fichier{'s' if len(members) != 1 else ''}</div>"
+            "<div class='gtitle'>"
+            + translate("DuplicateReport", "Groupe&nbsp;#{id}").format(id=gid)
+            + " — "
+            + translate("DuplicateReport", "%n fichier(s)", None, n_members)
+            + "</div>"
         )
         for path in members:
             fname = os.path.basename(path)
