@@ -1,23 +1,23 @@
 # Copyright 2026 Christian Guyot
 # SPDX-License-Identifier: Apache-2.0
-"""Scénario bout-en-bout : retouche non destructive de bout en bout, dans la
-vraie visionneuse.
+"""End-to-end scenario: non-destructive editing from end to end, in the
+real viewer.
 
-Chemin exercé : double-clic sur une vignette (photo_activated) -> show_viewer
-bascule _left_stack sur l'EditPanel réel -> clic sur le bouton de traitement
-"Brightness" (QToolButton, cf. edit_panel.py::_TREATMENTS/_make_treatment_button)
--> ouverture de LuminositeTreatmentDialog (QDialog non modal, dlg.show()) ->
-glissé du QSlider interne (EditSlider -> MarkedSlider -> QSlider, seul slider
-visible tant que "Advanced options…" n'est pas coché) -> "Apply" ->
-EditPanel._finish() persiste via EditDatabase.save() (table photo_edits,
-colonne brightness) -> vérification directe sur edits.db, PAS sur l'UI (la
-seule source de vérité pour la non-régression, cf. tests/e2e/conftest.py).
+The path exercised: double-click on a thumbnail (photo_activated) -> show_viewer
+switches _left_stack to the real EditPanel -> click on the treatment button
+"Brightness" (a QToolButton, cf. edit_panel.py::_TREATMENTS/_make_treatment_button)
+-> LuminositeTreatmentDialog opens (a non-modal QDialog, dlg.show()) ->
+drag of the internal QSlider (EditSlider -> MarkedSlider -> QSlider, the only
+visible slider as long as "Advanced options…" is not ticked) -> "Apply" ->
+EditPanel._finish() persists through EditDatabase.save() (the photo_edits table,
+the brightness column) -> checked directly on edits.db, NOT on the UI (the
+only source of truth for the non-regression, cf. tests/e2e/conftest.py).
 
-Puis Ctrl+Z (bouton "Undo" de l'EditPanel, raccourci Ctrl+Z réel,
-edit_panel.py:1514) -> re-vérification en base -> ré-ouverture de la même
-photo (nouvelle instance logique de visionneuse, undo_stack rechargé depuis
-la DB, cf. CLAUDE.md "Retouches non destructives") -> re-vérification de la
-persistance de l'annulation."""
+Then Ctrl+Z (the "Undo" button of the EditPanel, the real Ctrl+Z shortcut,
+edit_panel.py:1514) -> checked again in the database -> reopening the same
+photo (a logically new viewer instance, undo_stack reloaded from the DB,
+cf. CLAUDE.md "Non-destructive editing") -> the persistence of the undo
+checked again."""
 import pytest
 
 from tests.e2e.conftest import double_click_element, open_photo_in_viewer, find_dialog_button, find_thumbnail, query_one, wait_for_condition
@@ -37,7 +37,7 @@ def test_luminosity_edit_applies_persists_and_undoes(isolated_app):
     edits_db = isolated_app.edits_db
     photo = manifest.control_photos[0]
 
-    # Le scan initial doit être terminé pour que la vignette existe dans la grille.
+    # The initial scan must have finished for the thumbnail to exist in the grid.
     wait_for_condition(
         lambda: query_one(
             isolated_app.catalog_db, "SELECT COUNT(*) FROM photos WHERE path=?", (str(photo),)
@@ -48,13 +48,13 @@ def test_luminosity_edit_applies_persists_and_undoes(isolated_app):
 
     open_photo_in_viewer(window, photo)
 
-    # Bouton de traitement "Brightness" (QToolButton, texte exact) — descendant
-    # de la fenêtre principale, apparaît une fois l'EditPanel affiché (_left_stack -> index 1).
+    # The "Brightness" treatment button (a QToolButton, exact text) -- a descendant
+    # of the main window, appears once the EditPanel is displayed (_left_stack -> index 1).
     btn_luminosite = find_dialog_button(window, ["Brightness"], exact=True, timeout=15.0)
     btn_luminosite.click_input()
 
-    # LuminositeTreatmentDialog : un seul QSlider visible tant que "Fonctions
-    # avancées…" n'est pas coché (le gamma slider est masqué par défaut).
+    # LuminositeTreatmentDialog: a single visible QSlider as long as "Advanced
+    # options…" is not ticked (the gamma slider is hidden by default).
     slider = _wait_for_slider(window)
     slider.set_value(int(_BRIGHTNESS_TARGET * 100))
 
@@ -67,25 +67,25 @@ def test_luminosity_edit_applies_persists_and_undoes(isolated_app):
         message="la retouche de luminosité n'a pas été persistée dans edits.db",
     )
 
-    # Undo (bouton undo de l'EditPanel). Libellé DYNAMIQUE depuis
-    # l'évolution UI : « Undo  <opération> » (ex. « Undo  Luminosité »),
-    # d'où la recherche non exacte — le « Cancel » du dialogue de traitement
-    # est fermé à ce stade, pas d'ambiguïté.
+    # Undo (the undo button of the EditPanel). A DYNAMIC label since the
+    # UI evolved: "Undo  <operation>" (e.g. "Undo  Luminosité"),
+    # hence the non-exact search -- the "Cancel" of the treatment dialog
+    # is closed by that point, so there is no ambiguity.
     find_dialog_button(window, ["Undo"], exact=False, timeout=10.0).click_input()
 
-    # État vierge restauré : depuis l'évolution d'EditDatabase, une photo
-    # revenue à l'état d'origine voit sa ligne photo_edits SUPPRIMÉE (et non
-    # brightness=0) — l'absence de ligne est donc le succès attendu.
+    # Pristine state restored: since EditDatabase evolved, a photo
+    # back to its original state has its photo_edits row DELETED (and not
+    # brightness=0) -- the absence of a row is therefore the expected success.
     wait_for_condition(
         lambda: _brightness(edits_db, photo) is None or abs(_brightness(edits_db, photo)) < 0.02,
         timeout=20.0,
         message="l'annulation (undo) n'a pas restauré la luminosité d'origine dans edits.db",
     )
 
-    # Re-navigation (retour à la grille puis ré-ouverture) : la persistance de
-    # l'annulation ne doit pas dépendre de l'état en mémoire de l'EditPanel.
-    # Bouton "✕" de la visionneuse (PhotoViewer → closed → show_grid) — le
-    # bouton "▦" de la barre de statut est caché en mode visionneuse.
+    # Re-navigation (back to the grid then reopening): the persistence of
+    # the undo must not depend on the in-memory state of the EditPanel.
+    # The "✕" button of the viewer (PhotoViewer -> closed -> show_grid) -- the
+    # "▦" button of the status bar is hidden in viewer mode.
     find_dialog_button(window, ["✕"], exact=True, timeout=10.0).click_input()
     open_photo_in_viewer(window, photo)
     b = _brightness(edits_db, photo)

@@ -1,15 +1,15 @@
 # Copyright 2026 Christian Guyot
 # SPDX-License-Identifier: Apache-2.0
-"""Régression/couverture : détection d'un dossier « copie de DVD » (VIDEO_TS)
-sans photo cataloguée, et ouverture de son contenu dans une application
-externe déjà configurée (MainWindow._open_dvd_folder/_external_apps_menu/
+"""Regression/coverage: detecting a "DVD copy" folder (VIDEO_TS)
+with no catalogued photo, and opening its content in an already configured
+external application (MainWindow._open_dvd_folder/_external_apps_menu/
 _launch_external_app, main_window.py).
 
-Comme test_delete_queueing.py, les méthodes réelles de MainWindow sont
-appelées en non lié (`MainWindow._methode(fake, ...)`) contre un objet minimal
-ne portant que les attributs lus par le chemin testé — pas de QMainWindow
-complet. Un QWidget minimal est nécessaire ici (pas un objet Python nu) car
-QMessageBox(self)/QMenu(self)/self.cursor() exigent un vrai QWidget."""
+Like test_delete_queueing.py, the real methods of MainWindow are called
+unbound (`MainWindow._method(fake, ...)`) against a minimal object carrying
+only the attributes read by the tested path -- no complete QMainWindow. A
+minimal QWidget is needed here (not a bare Python object) because
+QMessageBox(self)/QMenu(self)/self.cursor() require a real QWidget."""
 from PySide6.QtWidgets import QMessageBox, QWidget
 
 from src.library.thumbnail_cache import ThumbnailCache
@@ -27,10 +27,10 @@ class _FakeConfig:
 
 
 class _FakeMainWindow(QWidget):
-    """Porte uniquement les attributs lus par _open_dvd_folder et consorts."""
+    """Carries only the attributes read by _open_dvd_folder and friends."""
 
-    # Réutilise l'implémentation réelle (ne dépend que de self pour le
-    # QMessageBox.warning en cas d'échec, sans autre attribut MainWindow).
+    # Reuses the real implementation (it only depends on self for the
+    # QMessageBox.warning on failure, with no other MainWindow attribute).
     _launch_external_app = MainWindow._launch_external_app
 
     def __init__(self, apps):
@@ -71,9 +71,9 @@ class TestOpenDvdFolderSingleApp:
 
 
 class TestOpenDvdFolderImageOnlyAppExcluded:
-    """Régression : une application externe taguée média "image" (ex. un
-    éditeur photo) n'a pas de sens pour ouvrir un dossier VIDEO_TS — elle ne
-    doit ni être lancée directement, ni apparaître dans le menu de choix."""
+    """Regression: an external application tagged with the "image" media
+    scope (e.g. a photo editor) makes no sense for opening a VIDEO_TS folder --
+    it must neither be launched directly, nor appear in the choice menu."""
 
     def test_single_image_scoped_app_shows_information_message(self, qtbot, monkeypatch):
         fake = _FakeMainWindow(apps=[{"name": "Editeur", "path": "C:/Editeur.exe", "media": "image"}])
@@ -132,13 +132,13 @@ class TestExternalAppsMenu:
 
 
 class TestEmptyMessageButtonRealClick:
-    """Régression exacte du bug signalé : QPushButton.clicked émet un bool
-    (checked=False), qui écrasait silencieusement le paramètre par défaut
-    `fp=folder_path` de la lambda câblée dans _on_photo_query_ready — Popen
-    recevait alors ce bool en guise de chemin ("expected str, bytes or
-    os.PathLike object, not bool"), échec invisible car seulement loggé.
-    Doit passer par un vrai clic Qt (grid._empty_action_btn.click()), pas un
-    appel direct de la lambda, sinon le bug ne se manifeste pas."""
+    """The exact regression of the reported bug: QPushButton.clicked emits a
+    bool (checked=False), which silently clobbered the default parameter
+    `fp=folder_path` of the lambda wired in _on_photo_query_ready -- Popen
+    then received that bool as the path ("expected str, bytes or
+    os.PathLike object, not bool"), an invisible failure since it was only
+    logged. Must go through a real Qt click (grid._empty_action_btn.click()),
+    not a direct call of the lambda, otherwise the bug does not show up."""
 
     def test_real_click_passes_folder_path_not_bool(self, qtbot, tmp_path):
         (tmp_path / "VIDEO_TS").mkdir()
@@ -174,10 +174,10 @@ class TestEmptyMessageButtonRealClick:
 
 class TestLaunchExternalApp:
     def test_popen_failure_is_logged_not_raised(self, qtbot, monkeypatch):
-        """Régression : l'échec de Popen (ex. chemin d'application invalide)
-        ne doit ni lever d'exception, ni rester invisible pour l'utilisateur —
-        un simple logger.warning() donnait l'impression que le bouton "Ouvrir
-        avec un lecteur externe" ne faisait rien."""
+        """Regression: a failure of Popen (e.g. an invalid application path)
+        must neither raise an exception, nor stay invisible to the user --
+        a plain logger.warning() gave the impression that the "Open with an
+        external player" button did nothing."""
         fake = _FakeMainWindow(apps=[])
         qtbot.addWidget(fake)
         warning_calls: list = []

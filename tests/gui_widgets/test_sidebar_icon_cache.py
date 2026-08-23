@@ -1,9 +1,9 @@
 # Copyright 2026 Christian Guyot
 # SPDX-License-Identifier: Apache-2.0
-"""Tests du cache session d'icônes de personnes (Sidebar) : refresh_persons ne
-doit re-décoder depuis les originaux que les couvertures absentes du cache, et
-persons_thumbnails_ready doit être émis dans tous les cas (gate du démarrage
-de la détection de doublons, cf. main_window)."""
+"""Tests of the session cache of person icons (Sidebar): refresh_persons must
+only re-decode from the originals the covers absent from the cache, and
+persons_thumbnails_ready must be emitted in every case (it gates the start of
+duplicate detection, cf. main_window)."""
 from src.core.models import PersonInfo
 from src.ui.sidebar import Sidebar
 
@@ -26,13 +26,13 @@ class TestIconCache:
     def test_all_cached_emits_ready_without_loader(self, qtbot):
         sb = _make_sidebar(qtbot)
         persons = [_person(1, "Alice", "C:/photos/a.jpg")]
-        # Pré-remplit le cache comme si le premier chargement avait eu lieu
+        # Pre-fills the cache as if the first load had taken place
         sb._icon_bytes_cache[Sidebar._icon_cache_key(persons[0])] = b"png"
 
         with qtbot.waitSignal(sb.persons_thumbnails_ready, timeout=1000):
             sb.refresh_persons(persons)
 
-        # Tout venait du cache : aucun loader démarré
+        # Everything came from the cache: no loader started
         assert sb._face_loader is None
 
     def test_no_persons_emits_ready(self, qtbot):
@@ -48,23 +48,23 @@ class TestIconCache:
         with qtbot.waitSignal(sb.persons_thumbnails_ready, timeout=2000):
             sb.refresh_persons(persons)
 
-        # Un loader a bien été créé pour la couverture manquante (le décodage
-        # échoue silencieusement, le fichier n'existe pas — seul le flux nous
-        # intéresse ici : ready émis à la fin du loader).
+        # A loader was indeed created for the missing cover (the decoding
+        # fails silently, the file does not exist -- only the flow matters to us
+        # here: ready emitted at the end of the loader).
         assert sb._face_loader is not None
-        sb._face_loader.wait(2000)   # thread réellement terminé avant teardown
+        sb._face_loader.wait(2000)   # thread really finished before teardown
 
     def test_icon_ready_feeds_cache(self, qtbot):
         sb = _make_sidebar(qtbot)
         persons = [_person(1, "Alice", "C:/photos/a.jpg")]
-        # Attendre la fin du loader : détruire la Sidebar avec un
-        # _FaceIconLoader encore en vol bloque le teardown du test.
+        # Wait for the loader to finish: destroying the Sidebar with a
+        # _FaceIconLoader still in flight blocks the teardown of the test.
         with qtbot.waitSignal(sb.persons_thumbnails_ready, timeout=2000):
             sb.refresh_persons(persons)
         if sb._face_loader is not None:
             sb._face_loader.wait(2000)
 
-        # 1×1 PNG valide
+        # a valid 1x1 PNG
         png = (
             b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00"
             b"\x01\x08\x02\x00\x00\x00\x90wS\xde\x00\x00\x00\x0cIDATx\x9cc\xf8"

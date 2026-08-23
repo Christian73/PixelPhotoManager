@@ -1,10 +1,10 @@
 # Copyright 2026 Christian Guyot
 # SPDX-License-Identifier: Apache-2.0
-"""Teste `src/library/exif_reader.py` sur de vraies fixtures : images JPEG avec
-EXIF complet écrit via piexif (dates + sous-secondes, appareil, objectif, ISO,
-exposition, ouverture, focale, GPS N/S/E/W), correction d'orientation,
-`ascii_safe_path` (passthrough, hardlink, repli copie), `preserve_file_dates`,
-`_parse_subsec`, et `VideoMetadataReader` sur une vraie vidéo cv2."""
+"""Tests `src/library/exif_reader.py` on real fixtures: JPEG images with
+complete EXIF written through piexif (dates + subseconds, camera, lens, ISO,
+exposure, aperture, focal length, GPS N/S/E/W), orientation correction,
+`ascii_safe_path` (passthrough, hardlink, copy fallback), `preserve_file_dates`,
+`_parse_subsec`, and `VideoMetadataReader` on a real cv2 video."""
 import os
 from datetime import datetime
 
@@ -92,7 +92,7 @@ class TestAsciiSafePath:
         p.write_bytes(b"contenu")
         with ascii_safe_path(str(p)) as safe:
             assert safe != str(p)
-            safe.encode("ascii")  # ne doit pas lever
+            safe.encode("ascii")  # must not raise
             assert open(safe, "rb").read() == b"contenu"
             temp_used = safe
         assert not os.path.exists(temp_used)
@@ -142,7 +142,7 @@ class TestExifReaderRead:
         _save_jpg_with_exif(p, _FULL_EXIF)
         r = ExifReader.read(str(p))
 
-        # DateTimeOriginal prioritaire sur DateTime, avec sous-secondes
+        # DateTimeOriginal takes precedence over DateTime, with subseconds
         assert r["date_taken"] == datetime(2021, 2, 3, 4, 5, 6, 560000)
         assert r["camera_make"] == "Canon"       # strip()
         assert r["camera_model"] == "EOS R5"
@@ -178,7 +178,7 @@ class TestExifReaderRead:
             p, {"0th": {piexif.ImageIFD.Orientation: 6}}, size=(100, 50)
         )
         r = ExifReader.read(str(p))
-        # orientation 6 (90° CW) : dimensions permutées
+        # orientation 6 (90 degrees CW): dimensions swapped
         assert (r["width"], r["height"]) == (50, 100)
 
     def test_gps_south_west_negative(self, tmp_path):
@@ -214,7 +214,7 @@ class TestExifReaderRead:
 
 class TestParseGpsDirect:
     def test_raw_tuples(self):
-        # (num, denom) bruts : couvre la branche _to_float sans IFDRational
+        # raw (num, denom): covers the _to_float branch without IFDRational
         gps_info = {
             1: "N",
             2: ((48, 1), (30, 1), (0, 1)),
@@ -237,7 +237,7 @@ class TestParseGpsDirect:
 
 @pytest.fixture(scope="module")
 def real_video(tmp_path_factory):
-    """Vraie vidéo mp4v : 10 frames à 5 fps en 64×48 → durée 2 s."""
+    """A real mp4v video: 10 frames at 5 fps in 64x48 -> a 2 s duration."""
     import cv2
     import numpy as np
 
