@@ -33,7 +33,7 @@ _MIME_PHOTOS = 'application/x-pixelphoto-paths'
 
 
 class _FolderTree(QTreeWidget):
-    """QTreeWidget qui accepte les drops internes de photos depuis la grille."""
+    """QTreeWidget accepting the internal drops of photos from the grid."""
     files_dropped = Signal(list, str)   # (file_paths, dest_folder_path)
 
     def __init__(self, parent=None):
@@ -75,15 +75,15 @@ class _FolderTree(QTreeWidget):
             event.ignore()
 
 
-_SPECIAL_PERSON   = "__person__"    # préfixe pour l'identifiant de contexte personne
-_SPECIAL_FILENAME = "__filename__"  # album virtuel "Par nom de fichier"
-_SPECIAL_TAG = "__tag__"            # album virtuel "Par mot-clé" (en-tête du groupe)
-_SPECIAL_TAG_ITEM_PREFIX = "__tag__:"  # préfixe des sous-éléments un-mot-clé-par-ligne
-_SPECIAL_RATED_ITEM_PREFIX = "__rated__:"  # préfixe des sous-éléments note minimale (1 à 5)
+_SPECIAL_PERSON   = "__person__"    # prefix for the person context identifier
+_SPECIAL_FILENAME = "__filename__"  # virtual album "By filename"
+_SPECIAL_TAG = "__tag__"            # virtual album "By keyword" (header of the group)
+_SPECIAL_TAG_ITEM_PREFIX = "__tag__:"  # prefix of the one-keyword-per-line sub-entries
+_SPECIAL_RATED_ITEM_PREFIX = "__rated__:"  # prefix of the minimum-rating sub-entries (1 to 5)
 
 
 class _BadgeButton(QPushButton):
-    """QPushButton avec un simple point rouge en coin supérieur droit tant que le compte est > 0."""
+    """QPushButton with a simple red dot in the top-right corner as long as the count is > 0."""
 
     _DOT_DIAMETER = 9
 
@@ -115,13 +115,13 @@ class _BadgeButton(QPushButton):
 
 
 class _FaceIconLoader(QThread):
-    """Charge les crops de visages en arrière-plan pour éviter de freezer le thread UI.
+    """Loads the face crops in the background to avoid freezing the UI thread.
 
-    Ne reçoit que les (index de ligne, personne) dont l'icône n'est pas déjà
-    dans le cache session de la Sidebar — les icônes en cache sont posées
-    immédiatement par refresh_persons, sans re-décoder les originaux."""
+    Only receives the (row index, person) pairs whose icon is not already
+    in the session cache of the Sidebar - the cached icons are set
+    immediately by refresh_persons, without re-decoding the originals."""
 
-    icon_ready = Signal(int, bytes)   # (index dans la liste, PNG bytes)
+    icon_ready = Signal(int, bytes)   # (index in the list, PNG bytes)
 
     def __init__(self, items: "list[tuple[int, object]]", parent=None) -> None:
         super().__init__(parent)
@@ -157,9 +157,9 @@ class _FaceIconLoader(QThread):
 
 
 class _FolderTrashThread(QThread):
-    """Envoie un dossier entier à la corbeille hors du thread UI."""
+    """Sends a whole folder to the recycle bin off the UI thread."""
 
-    done = Signal(str, str)   # (path, message d'erreur — vide si succès)
+    done = Signal(str, str)   # (path, error message - empty on success)
 
     def __init__(self, path: str, parent=None) -> None:
         super().__init__(parent)
@@ -175,9 +175,9 @@ class _FolderTrashThread(QThread):
 
 
 class _SingleFaceIconLoader(QThread):
-    """Charge le crop d'un seul visage en arrière-plan pour mettre à jour une icône."""
+    """Loads the crop of a single face in the background to update an icon."""
 
-    icon_ready = Signal(int, bytes)   # (index dans la liste, PNG bytes)
+    icon_ready = Signal(int, bytes)   # (index in the list, PNG bytes)
 
     def __init__(self, index: int, face, parent=None) -> None:
         super().__init__(parent)
@@ -195,9 +195,9 @@ class _SingleFaceIconLoader(QThread):
 
 
 class _PendingBadgeDelegate(QStyledItemDelegate):
-    """Affiche un badge orange avec le nombre de suggestions entre la vignette et le nom."""
+    """Displays an orange badge with the number of suggestions between the thumbnail and the name."""
 
-    _R = 9   # rayon du badge en px
+    _R = 9   # radius of the badge in px
 
     def paint(self, painter, option, index) -> None:
         person = index.data(Qt.UserRole)
@@ -212,21 +212,21 @@ class _PendingBadgeDelegate(QStyledItemDelegate):
         widget = self.parent()
         style = widget.style() if widget else QApplication.style()
 
-        # 1. Fond (sélection, survol…)
+        # 1. Background (selection, hover...)
         style.drawPrimitive(QStyle.PE_PanelItemViewItem, opt, painter, widget)
 
-        # 2. Icône
+        # 2. Icon
         icon_rect = style.subElementRect(QStyle.SE_ItemViewItemDecoration, opt, None)
         if not opt.icon.isNull() and icon_rect.isValid():
             mode = QIcon.Selected if (opt.state & QStyle.State_Selected) else QIcon.Normal
             opt.icon.paint(painter, icon_rect, Qt.AlignCenter, mode)
 
-        # 3. Position du badge (juste après l'icône)
+        # 3. Position of the badge (just after the icon)
         r = self._R
         bx = (icon_rect.right() + 3) if icon_rect.isValid() else (opt.rect.left() + 44)
         by = opt.rect.center().y() - r
 
-        # 4. Texte décalé après le badge
+        # 4. Text shifted after the badge
         text_rect = style.subElementRect(QStyle.SE_ItemViewItemText, opt, None)
         text_rect.setLeft(bx + r * 2 + 5)
         color = (opt.palette.color(QPalette.HighlightedText)
@@ -258,24 +258,24 @@ class _PendingBadgeDelegate(QStyledItemDelegate):
 class Sidebar(QWidget):
     folder_selected    = Signal(str)
     album_selected     = Signal(object)   # AlbumInfo | str (special key)
-    album_delete_requested = Signal(object)  # AlbumInfo à supprimer
-    tag_delete_requested = Signal(str)    # mot-clé à retirer de toutes les photos
+    album_delete_requested = Signal(object)  # AlbumInfo to delete
+    tag_delete_requested = Signal(str)    # keyword to remove from every photo
     scan_requested     = Signal(str)
     folder_removed     = Signal(str)
-    folder_created     = Signal(str)      # chemin du nouveau sous-dossier créé
-    folder_moved       = Signal(str, str) # (ancien_chemin, nouveau_chemin)
-    folder_deleted     = Signal(str)      # dossier supprimé du disque
+    folder_created     = Signal(str)      # path of the newly created subfolder
+    folder_moved       = Signal(str, str) # (old_path, new_path)
+    folder_deleted     = Signal(str)      # folder deleted from the disk
     photos_dropped     = Signal(list, str) # (file_paths, dest_folder_path)
-    duplicates_requested   = Signal()         # ouvrir la grille des groupes de doublons
+    duplicates_requested   = Signal()         # open the grid of the duplicate groups
     person_selected        = Signal(object)   # PersonInfo
-    identify_requested     = Signal()         # ouvrir PeopleDialog
-    person_merge_requested  = Signal(object)   # PersonInfo à fusionner
-    person_rename_requested = Signal(object)  # PersonInfo à renommer
-    person_clear_requested  = Signal(object)  # PersonInfo dont on efface le nom
-    tree_state_changed     = Signal(list)     # list[str] — chemins dépliés
-    section_collapse_changed = Signal(str, bool)  # ("ratings"|"tags", replié ?)
-    persons_thumbnails_ready = Signal()       # vignettes de visages des personnes connues chargées
-    advanced_search_requested = Signal()      # bouton loupe à côté du filtre
+    identify_requested     = Signal()         # open PeopleDialog
+    person_merge_requested  = Signal(object)   # PersonInfo to merge
+    person_rename_requested = Signal(object)  # PersonInfo to rename
+    person_clear_requested  = Signal(object)  # PersonInfo whose name is being cleared
+    tree_state_changed     = Signal(list)     # list[str] - expanded paths
+    section_collapse_changed = Signal(str, bool)  # ("ratings"|"tags", collapsed?)
+    persons_thumbnails_ready = Signal()       # face thumbnails of the known people loaded
+    advanced_search_requested = Signal()      # magnifier button next to the filter
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -283,11 +283,11 @@ class Sidebar(QWidget):
         self._restoring: bool = False
         self._face_loader: _FaceIconLoader | None = None
         self._pending_person_id: int | None = None
-        # Cache session des icônes de visage (36 px, PNG) par
-        # (cover_path, cover_bbox) : refresh_persons re-décodait sinon TOUTES
-        # les couvertures depuis les photos originales à chaque rebuild
-        # (fin de scan, renommage, assignation…) alors que la quasi-totalité
-        # n'a pas changé. Purgé des entrées orphelines à chaque rebuild.
+        # Session cache of the face icons (36 px, PNG) by
+        # (cover_path, cover_bbox): refresh_persons otherwise re-decoded ALL
+        # the covers from the original photos at every rebuild
+        # (end of scan, renaming, assignment...) while nearly all of them
+        # had not changed. Purged of its orphan entries at every rebuild.
         self._icon_bytes_cache: dict[tuple, bytes] = {}
         self._folder_order_mode: str = "alpha"   # "alpha" | "chrono"
         self._folder_order_dir: str = "asc"       # "asc" | "desc"
@@ -295,11 +295,11 @@ class Sidebar(QWidget):
         self._setup_ui()
 
     def set_folder_count_provider(self, provider) -> None:
-        """Injecte la fonction de comptage récursif (typiquement
-        Catalog.get_recursive_photo_counts) utilisée pour afficher le nombre de
-        photos/vidéos à côté de chaque dossier de l'arbre. Sidebar ne dépend ainsi
-        pas directement de Catalog — cohérent avec le fait que refresh_folders()
-        ne reçoit déjà que des chemins, jamais d'objet catalogue."""
+        """Injects the recursive counting function (typically
+        Catalog.get_recursive_photo_counts) used to display the number of
+        photos/videos next to each folder of the tree. Sidebar therefore does not
+        depend directly on Catalog - consistent with the fact that refresh_folders()
+        already only receives paths, never a catalog object."""
         self._folder_count_provider = provider
 
     def _setup_ui(self) -> None:
@@ -471,7 +471,7 @@ class Sidebar(QWidget):
 
         self._add_special_albums()
 
-    # ── persistance des positions de bordures ──────────────────────────────
+    # ── border position persistence ────────────────────────────────────────
 
     def save_splitter_state(self) -> str:
         import base64
@@ -524,7 +524,7 @@ class Sidebar(QWidget):
         self._albums_list.addItem(item_tag)
         self._tag_header_item = item_tag
 
-    # ── filtrage live ──────────────────────────────────────────────────────────
+    # ── live filtering ─────────────────────────────────────────────────────────
 
     @Slot(str)
     def _apply_filter(self, text: str) -> None:
@@ -541,9 +541,9 @@ class Sidebar(QWidget):
             self._filter_tree_item(self._folder_tree.topLevelItem(i), q)
 
     def _filter_tree_item(self, item: QTreeWidgetItem, q: str) -> bool:
-        """Cache/montre item selon q. Retourne True si item ou un descendant matche."""
+        """Hides/shows item according to q. Returns True if item or a descendant matches."""
         if item.data(0, Qt.UserRole) is None:
-            return True  # placeholder lazy-load, ne pas toucher
+            return True  # lazy-load placeholder, do not touch
         self_match = not q or q in item.text(0).lower()
         child_match = False
         for i in range(item.childCount()):
@@ -562,11 +562,11 @@ class Sidebar(QWidget):
             name = person.name if isinstance(person, PersonInfo) else item.text()
             item.setHidden(bool(q) and q not in name.lower())
 
-    # ── persistance des positions de bordures ──────────────────────────────
+    # ── border position persistence ────────────────────────────────────────
 
     def set_section_collapsed_state(self, ratings_collapsed: bool, tags_collapsed: bool) -> None:
-        """Restaure l'état plié/déplié de "Par notes"/"Par mot-clé" mémorisé en
-        config (appeler avant refresh_tags(), au démarrage)."""
+        """Restores the collapsed/expanded state of "By ratings"/"By keyword" memorised in
+        the config (to be called before refresh_tags(), at startup)."""
         self._ratings_collapsed = ratings_collapsed
         self._tags_collapsed = tags_collapsed
         self._rated_header_item.setText(self._rated_header_label())
@@ -575,13 +575,13 @@ class Sidebar(QWidget):
         self._render_tag_subitems()
 
     def set_tree_expanded_paths(self, paths: list[str]) -> None:
-        """Initialise l'état mémorisé depuis la config (appeler avant refresh_folders)."""
+        """Initialises the memorised state from the config (to be called before refresh_folders)."""
         self._expanded_paths = set(paths)
 
     def set_folder_order(self, mode: str, direction: str) -> None:
-        """Définit l'ordre de tri du panneau Dossiers (racines + sous-dossiers).
-        mode: "alpha" | "chrono" — direction: "asc" | "desc".
-        Pris en compte au prochain refresh_folders()/expand."""
+        """Sets the sort order of the Folders panel (roots + subfolders).
+        mode: "alpha" | "chrono" - direction: "asc" | "desc".
+        Taken into account at the next refresh_folders()/expand."""
         self._folder_order_mode = mode
         self._folder_order_dir = direction
 
@@ -597,12 +597,12 @@ class Sidebar(QWidget):
         return sorted(paths, key=lambda p: (os.path.basename(p) or p).lower(), reverse=reverse)
 
     def _mark_if_dvd_copy(self, item: QTreeWidgetItem, path: str, count) -> None:
-        """Badge « copie de DVD » (icône disque + tooltip) si path contient un
-        sous-dossier VIDEO_TS. Restreint aux dossiers sans photo cataloguée
-        (count vide/nul) : c'est justement le cas où le dossier semblerait
-        vide sans cette indication, et ça évite un os.scandir supplémentaire
-        par dossier affiché — cf. le commentaire de _populate_subfolders sur
-        le coût d'un scandir par enfant sur un volume réseau."""
+        """"DVD copy" badge (disc icon + tooltip) if path contains a
+        VIDEO_TS subfolder. Restricted to the folders with no catalogued photo
+        (count empty/zero): that is precisely the case where the folder would look
+        empty without this indication, and it avoids one more os.scandir
+        per displayed folder - cf. the comment of _populate_subfolders on
+        the cost of a scandir per child on a network volume."""
         if count:
             return
         if find_dvd_video_ts(path) is None:
@@ -622,14 +622,14 @@ class Sidebar(QWidget):
             root_item.setData(0, Qt.UserRole, folder)
             root_item.setToolTip(0, folder)
             self._mark_if_dvd_copy(root_item, folder, count)
-            # Placeholder : rend le nœud dépliable sans toucher le disque.
-            # Les sous-dossiers sont chargés à la demande dans _on_folder_expanded.
+            # Placeholder: makes the node expandable without touching the disk.
+            # The subfolders are loaded on demand in _on_folder_expanded.
             root_item.addChild(QTreeWidgetItem([""]))
             self._folder_tree.addTopLevelItem(root_item)
-            # Pas de setExpanded() ici : avec >100 dossiers, _populate_subfolders
-            # sur chaque racine bloque l'UI (scandir × N dossiers).
+            # No setExpanded() here: with >100 folders, _populate_subfolders
+            # on each root blocks the UI (scandir x N folders).
 
-        # Restaurer l'état d'expansion mémorisé
+        # Restore the memorised expansion state
         if self._expanded_paths:
             self._restoring = True
             try:
@@ -639,13 +639,13 @@ class Sidebar(QWidget):
                 self._restoring = False
 
     def _populate_subfolders(self, parent_item: QTreeWidgetItem, folder_path: str) -> None:
-        """Ajoute les sous-dossiers immédiats de folder_path sous parent_item.
-        Chaque enfant reçoit systématiquement un placeholder (lazy loading à
-        l'expansion) — même principe que les nœuds racine dans refresh_folders :
-        vérifier s'il a réellement des sous-dossiers coûterait un os.scandir
-        par enfant (très lent sur un volume réseau), pour seul bénéfice de
-        masquer le chevron des nœuds vides. Un nœud sans sous-dossier se
-        replie simplement à la première expansion."""
+        """Adds the immediate subfolders of folder_path under parent_item.
+        Each child systematically receives a placeholder (lazy loading on
+        expansion) - the same principle as the root nodes in refresh_folders:
+        checking whether it really has subfolders would cost one os.scandir
+        per child (very slow on a network volume), for the sole benefit of
+        hiding the chevron of the empty nodes. A node without a subfolder simply
+        collapses at the first expansion."""
         try:
             dirs = [e for e in os.scandir(folder_path)
                     if e.is_dir() and not e.name.startswith(".")]
@@ -674,20 +674,20 @@ class Sidebar(QWidget):
                 child.setToolTip(0, entry.path)
                 self._mark_if_dvd_copy(child, entry.path, count)
                 parent_item.addChild(child)
-                # Placeholder → rend le nœud dépliable
+                # Placeholder -> makes the node expandable
                 child.addChild(QTreeWidgetItem([""]))
         except PermissionError:
             pass
 
     def _on_folder_expanded(self, item: QTreeWidgetItem) -> None:
-        """Lazy loading + mémorisation de l'état d'expansion."""
-        # Lazy loading si le nœud n'a qu'un placeholder sans données
+        """Lazy loading + memorising of the expansion state."""
+        # Lazy loading if the node only has a placeholder without data
         if item.childCount() == 1 and item.child(0).data(0, Qt.UserRole) is None:
             folder_path = item.data(0, Qt.UserRole)
             if folder_path:
                 item.removeChild(item.child(0))
                 self._populate_subfolders(item, folder_path)
-        # Mémoriser
+        # Memorise
         if not self._restoring:
             path = item.data(0, Qt.UserRole)
             if path:
@@ -701,7 +701,7 @@ class Sidebar(QWidget):
         if not path:
             return
         self._expanded_paths.discard(path)
-        # Supprimer aussi tous les descendants (plus visibles)
+        # Also delete every descendant (no longer visible)
         prefix = os.path.normcase(path + os.sep)
         self._expanded_paths = {
             p for p in self._expanded_paths
@@ -710,7 +710,7 @@ class Sidebar(QWidget):
         self.tree_state_changed.emit(list(self._expanded_paths))
 
     def _restore_expand(self, target: str) -> None:
-        """Cherche target dans l'arbre et déplie le chemin vers lui."""
+        """Looks for target in the tree and expands the path to it."""
         norm_target = os.path.normcase(target)
         for i in range(self._folder_tree.topLevelItemCount()):
             root = self._folder_tree.topLevelItem(i)
@@ -723,19 +723,19 @@ class Sidebar(QWidget):
                 return
 
     def _expand_toward(self, item: QTreeWidgetItem, norm_target: str) -> None:
-        """Déplie récursivement vers norm_target, en chargeant les nœuds lazy si besoin."""
+        """Recursively expands towards norm_target, loading the lazy nodes if needed."""
         item_path = item.data(0, Qt.UserRole)
         if not item_path:
             return
         norm_item = os.path.normcase(item_path)
-        # Peupler si placeholder non encore chargé
+        # Populate if the placeholder has not been loaded yet
         if item.childCount() == 1 and item.child(0).data(0, Qt.UserRole) is None:
             item.removeChild(item.child(0))
             self._populate_subfolders(item, item_path)
         item.setExpanded(True)
         if norm_item == norm_target:
             return
-        # Descendre vers l'enfant qui contient target
+        # Go down to the child containing target
         for j in range(item.childCount()):
             child = item.child(j)
             child_path = child.data(0, Qt.UserRole)
@@ -748,26 +748,26 @@ class Sidebar(QWidget):
 
     def refresh_albums(self, albums: list[AlbumInfo]) -> None:
         self._albums = albums
-        # Remove existing album items (keep the 6 special ones at top : Chronologie,
-        # Favoris, Vidéos, Par notes, Par nom de fichier, Par mot-clé — plus les
-        # sous-éléments de notes et de mots-clés déjà insérés juste après leurs
-        # en-têtes respectifs).
+        # Remove existing album items (keep the 6 special ones at top: Chronologie,
+        # Favoris, Videos, Par notes, Par nom de fichier, Par mot-cle - plus the
+        # rating and keyword sub-entries already inserted right after their
+        # respective headers).
         base = 6 + self._rated_items_count + self._tag_items_count
         while self._albums_list.count() > base:
             self._albums_list.takeItem(base)
         for album in albums:
-            item = QListWidgetItem(f"📁 {album.name} ({album.photo_count})")  # noms d'album : données utilisateur
+            item = QListWidgetItem(f"📁 {album.name} ({album.photo_count})")  # album names: user data
             item.setData(Qt.UserRole, album)
             self._albums_list.addItem(item)
 
     def refresh_tags(self, tags: list[str]) -> None:
-        """Reconstruit les sous-éléments (un par mot-clé existant) sous l'en-tête
-        « Par mot-clé », juste avant les albums utilisateur. Sélectionner l'un
-        de ces sous-éléments affiche directement les photos portant ce mot-clé
-        (cf. main_window._on_album_selected, préfixe _SPECIAL_TAG_ITEM_PREFIX).
-        Si la section est repliée (_tags_collapsed), les sous-éléments sont
-        mémorisés dans _tag_names_cache mais pas insérés dans la liste — ils
-        réapparaissent tels quels au prochain dépli, sans nouveau refresh_tags."""
+        """Rebuilds the sub-entries (one per existing keyword) under the
+        "By keyword" header, just before the user albums. Selecting one
+        of those sub-entries directly displays the photos carrying that keyword
+        (cf. main_window._on_album_selected, prefix _SPECIAL_TAG_ITEM_PREFIX).
+        If the section is collapsed (_tags_collapsed), the sub-entries are
+        memorised in _tag_names_cache but not inserted in the list - they
+        reappear as they are at the next expansion, without a new refresh_tags."""
         self._tag_names_cache = tags
         self._render_tag_subitems()
 
@@ -807,7 +807,7 @@ class Sidebar(QWidget):
         self._rated_items_count = 5
 
     def select_album_item(self, data) -> None:
-        """Sélectionne silencieusement un album dans la liste (sans émettre de signal)."""
+        """Silently selects an album in the list (without emitting a signal)."""
         for i in range(self._albums_list.count()):
             item = self._albums_list.item(i)
             item_data = item.data(Qt.UserRole)
@@ -824,7 +824,7 @@ class Sidebar(QWidget):
                 return
 
     def select_folder_item(self, path: str) -> None:
-        """Sélectionne silencieusement un dossier dans l'arbre (sans émettre de signal)."""
+        """Silently selects a folder in the tree (without emitting a signal)."""
         def _search(item: QTreeWidgetItem) -> bool:
             if item.data(0, Qt.UserRole) == path:
                 self._albums_list.clearSelection()
@@ -832,9 +832,9 @@ class Sidebar(QWidget):
                 self._folder_tree.blockSignals(True)
                 self._folder_tree.setCurrentItem(item)
                 self._folder_tree.blockSignals(False)
-                # Différé : au premier affichage, la géométrie de l'arbre
-                # (lignes/scrollbar) n'est pas encore résolue au moment de cet
-                # appel (cf. _ensure_left_pane_min_width, même piège de layout).
+                # Deferred: on the first display, the geometry of the tree
+                # (rows/scrollbar) is not resolved yet at the time of this
+                # call (cf. _ensure_left_pane_min_width, the same layout trap).
                 QTimer.singleShot(
                     0,
                     lambda it=item: self._folder_tree.scrollToItem(
@@ -893,7 +893,7 @@ class Sidebar(QWidget):
             menu.addAction(translate("Sidebar", "Delete this keyword…"),
                            lambda: self.tag_delete_requested.emit(tag))
             menu.exec(self._albums_list.mapToGlobal(pos))
-        # autres albums spéciaux (Chronologie, Favoris, Vidéos…) : pas de menu
+        # other special albums (Timeline, Favorites, Videos...): no menu
 
     def _folder_context_menu(self, pos) -> None:
         item = self._folder_tree.itemAt(pos)
@@ -971,7 +971,7 @@ class Sidebar(QWidget):
             return
         new_path = os.path.join(dst, folder_name)
         if os.path.normcase(new_path) == os.path.normcase(path):
-            return  # même emplacement, rien à faire
+            return  # the same location, nothing to do
         if os.path.exists(new_path):
             QMessageBox.warning(self, translate("Sidebar", "Folder already exists"),
                                 translate("Sidebar", "“{path}” already exists.")
@@ -999,15 +999,15 @@ class Sidebar(QWidget):
             self,
         )
         box.setDefaultButton(QMessageBox.Cancel)
-        # « Delete » et non « Remove » : le bouton « Remove » du gestionnaire de
-        # dossiers retire seulement le dossier de la surveillance, celui-ci
-        # l'envoie à la corbeille avec tout son contenu.
+        # "Delete" and not "Remove": the "Remove" button of the folder manager
+        # only takes the folder out of the watch list, this one
+        # sends it to the recycle bin with all its content.
         box.button(QMessageBox.Yes).setText(translate("Sidebar", "Delete"))
         if box.exec() != QMessageBox.Yes:
             return
-        # Mise à la corbeille dans un thread : sur un gros dossier (ou un
-        # volume lent) l'opération dépasse largement les 50 ms de la règle
-        # « l'UI ne bloque jamais » — l'ancien shutil.rmtree la violait déjà.
+        # Sending to the recycle bin in a thread: on a large folder (or a
+        # slow volume) the operation goes far beyond the 50 ms of the
+        # "the UI never blocks" rule - the old shutil.rmtree already violated it.
         QApplication.setOverrideCursor(Qt.BusyCursor)
         self._trash_thread = _FolderTrashThread(path, self)
         self._trash_thread.done.connect(self._on_folder_trashed)
@@ -1036,11 +1036,11 @@ class Sidebar(QWidget):
     # ------------------------------------------------------------------ persons
 
     def set_pending_person_id(self, person_id: int | None) -> None:
-        """Définit la personne à sélectionner/scroller lors du prochain refresh_persons."""
+        """Sets the person to select/scroll to at the next refresh_persons."""
         self._pending_person_id = person_id
 
     def get_selected_person_id(self) -> int | None:
-        """Retourne l'id de la personne actuellement sélectionnée, ou None."""
+        """Returns the id of the currently selected person, or None."""
         cur = self._persons_list.currentItem()
         if cur is not None:
             p = cur.data(Qt.UserRole)
@@ -1049,10 +1049,10 @@ class Sidebar(QWidget):
         return None
 
     def _cancel_face_loader(self) -> None:
-        """Arrête un chargement d'icônes en cours et libère le thread Qt enfant.
-        À appeler avant toute opération qui change les indices de ligne de la liste
-        (clear+rebuild, takeItem) : les signaux icon_ready(index, ...) en vol portent
-        des index qui deviendraient sinon associés à la mauvaise personne."""
+        """Stops an icon loading in progress and releases the child Qt thread.
+        To be called before any operation changing the row indices of the list
+        (clear+rebuild, takeItem): the icon_ready(index, ...) signals in flight carry
+        indices that would otherwise become associated with the wrong person."""
         if self._face_loader is None:
             return
         try:
@@ -1073,7 +1073,7 @@ class Sidebar(QWidget):
     def refresh_persons(self, persons: list[PersonInfo]) -> None:
         self._persons = persons
         self._persons_count_lbl.setText(f"({len(persons)})")
-        # Mémoriser la personne actuellement sélectionnée pour la restaurer après rebuild
+        # Memorise the currently selected person so as to restore them after the rebuild
         selected_id: int | None = None
         selected_row: int = -1
         scroll_to_selected: bool = False
@@ -1084,10 +1084,10 @@ class Sidebar(QWidget):
                 selected_id = p.id
                 selected_row = self._persons_list.row(cur)
         elif self._pending_person_id is not None:
-            # Restauration au démarrage depuis la config
+            # Restoration at startup from the config
             selected_id = self._pending_person_id
             scroll_to_selected = True
-        self._pending_person_id = None  # consommé dans tous les cas
+        self._pending_person_id = None  # consumed in every case
         self._cancel_face_loader()
         self._persons_list.clear()
         to_load: list[tuple[int, PersonInfo]] = []
@@ -1096,8 +1096,8 @@ class Sidebar(QWidget):
             item = QListWidgetItem(label)
             item.setData(Qt.UserRole, person)
             self._persons_list.addItem(item)
-            # Icône depuis le cache session si la couverture n'a pas changé,
-            # sinon à charger en arrière-plan (décodage de l'original).
+            # Icon from the session cache if the cover has not changed,
+            # otherwise to be loaded in the background (decoding of the original).
             cached = self._icon_bytes_cache.get(self._icon_cache_key(person))
             if cached is not None:
                 pix = QPixmap()
@@ -1111,24 +1111,24 @@ class Sidebar(QWidget):
                 if scroll_to_selected:
                     self._persons_list.scrollToItem(item)
                 self._persons_list.blockSignals(False)
-                selected_id = None  # trouvé — pas de fallback nécessaire
-        # Personne supprimée/fusionnée : sélectionner silencieusement le voisin le plus proche
-        # (ne s'applique pas à la restauration depuis la config — on préfère ne rien sélectionner)
+                selected_id = None  # found - no fallback needed
+        # Person deleted/merged: silently select the closest neighbour
+        # (does not apply to the restoration from the config - we prefer to select nothing)
         if selected_id is not None and not scroll_to_selected and self._persons_list.count() > 0:
             fallback_row = min(selected_row, self._persons_list.count() - 1)
             self._persons_list.blockSignals(True)
             self._persons_list.setCurrentRow(fallback_row)
             self._persons_list.blockSignals(False)
-        # Réappliquer le filtre en cours (rebuild efface le masquage des items)
+        # Reapply the current filter (the rebuild erases the masking of the items)
         self._filter_persons_list(self.filter_text.lower())
-        # Purge des entrées orphelines (personne supprimée/fusionnée, couverture changée)
+        # Purge of the orphan entries (person deleted/merged, cover changed)
         valid_keys = {self._icon_cache_key(p) for p in persons}
         self._icon_bytes_cache = {
             k: v for k, v in self._icon_bytes_cache.items() if k in valid_keys
         }
-        # Charger en arrière-plan uniquement les icônes absentes du cache.
-        # persons_thumbnails_ready doit être émis dans tous les cas : il sert
-        # de gate au démarrage de la détection de doublons (main_window).
+        # Load in the background only the icons absent from the cache.
+        # persons_thumbnails_ready must be emitted in every case: it serves
+        # as a gate to the start of the duplicate detection (main_window).
         if to_load:
             self._face_loader = _FaceIconLoader(to_load, self)
             self._face_loader.icon_ready.connect(self._on_face_icon_ready)
@@ -1149,8 +1149,8 @@ class Sidebar(QWidget):
             pix = QPixmap()
             pix.loadFromData(data)
             item.setIcon(QIcon(pix))
-            # Alimente le cache session : la clé est dérivée de la personne
-            # portée par l'item (robuste aux rebuilds entre l'emit et ici).
+            # Feeds the session cache: the key is derived from the person
+            # carried by the item (robust to the rebuilds between the emit and here).
             person = item.data(Qt.UserRole)
             if isinstance(person, PersonInfo):
                 self._icon_bytes_cache[self._icon_cache_key(person)] = data
@@ -1160,8 +1160,8 @@ class Sidebar(QWidget):
         self.persons_thumbnails_ready.emit()
 
     def update_persons_data(self, persons: list) -> None:
-        """Met à jour compteurs et icônes des personnes sans reconstruire la liste.
-        Si l'ensemble des personnes a changé (ajout/suppression), bascule sur refresh_persons."""
+        """Updates the counters and icons of the people without rebuilding the list.
+        If the set of people has changed (addition/deletion), switches to refresh_persons."""
         self._persons = persons
         self._persons_count_lbl.setText(f"({len(persons)})")
         new_by_id = {p.id: p for p in persons if p.id is not None}
@@ -1208,8 +1208,8 @@ class Sidebar(QWidget):
 
     def apply_person_merge(self, source_id: int, target_id: int, new_count: int) -> None:
         """Remove source from list and update target count after a merge. No icon reload."""
-        # takeItem() ci-dessous décale les index de ligne : un chargement d'icônes
-        # encore en vol appliquerait ses icônes à la mauvaise personne (cf. _cancel_face_loader).
+        # takeItem() below shifts the row indices: an icon loading
+        # still in flight would apply its icons to the wrong person (cf. _cancel_face_loader).
         self._cancel_face_loader()
         self._persons = [p for p in self._persons if p.id != source_id]
         for p in self._persons:
@@ -1244,9 +1244,9 @@ class Sidebar(QWidget):
                 break
 
     def remove_person(self, person_id: int) -> None:
-        """Retire une personne de la liste (nom effacé/supprimé). No icon reload."""
-        # takeItem() ci-dessous décale les index de ligne : un chargement d'icônes
-        # encore en vol appliquerait ses icônes à la mauvaise personne (cf. _cancel_face_loader).
+        """Removes a person from the list (name cleared/deleted). No icon reload."""
+        # takeItem() below shifts the row indices: an icon loading
+        # still in flight would apply its icons to the wrong person (cf. _cancel_face_loader).
         self._cancel_face_loader()
         self._persons = [p for p in self._persons if p.id != person_id]
         for i in range(self._persons_list.count()):
@@ -1257,7 +1257,7 @@ class Sidebar(QWidget):
                 break
 
     def update_person_icon(self, person_id: int, face) -> None:
-        """Mise à jour immédiate de l'icône d'une personne sans reconstruire toute la liste."""
+        """Immediate update of the icon of a person without rebuilding the whole list."""
         for i in range(self._persons_list.count()):
             item = self._persons_list.item(i)
             p = item.data(Qt.UserRole)
@@ -1269,11 +1269,11 @@ class Sidebar(QWidget):
                 break
 
     def update_cluster_badge(self, count: int) -> None:
-        """Mettre à jour le badge du bouton Identifier avec le nombre de groupes en attente."""
+        """Update the badge of the Identify button with the number of pending groups."""
         self._btn_identify.set_badge(count)
 
     def update_duplicates_badge(self, count: int) -> None:
-        """Mettre à jour le badge du bouton Dupliquées avec le nombre de groupes détectés."""
+        """Update the badge of the Duplicates button with the number of detected groups."""
         self._btn_duplicates.set_badge(count)
 
     def _on_person_clicked(self, item: QListWidgetItem) -> None:

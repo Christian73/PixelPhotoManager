@@ -21,18 +21,18 @@ from src.core.i18n import translate
 
 logger = logging.getLogger(__name__)
 
-#: Nom affiché de la touche Suppr dans les libellés « Libellé\tTouche ».
-#: Séparé du libellé parce que celui-ci varie (singulier/pluriel, album ou non) :
-#: concaténé hors de `translate()`, il restait français en toutes langues
-#: (« Delete the file…\tSuppr »). photo_viewer.py peut l'inclure dans son
-#: littéral traduit, lui, puisque le sien est fixe.
+#: Displayed name of the Del key in the "Label\tKey" labels.
+#: Separated from the label because the latter varies (singular/plural, album or not):
+#: concatenated outside `translate()`, it stayed French in every language
+#: ("Delete the file...\tSuppr"). photo_viewer.py can include it in its
+#: translated literal, since its own is fixed.
 _DEL_KEY = "\t" + translate("ThumbnailGrid", "Del")
 
 _img_thumb_pool: "QThreadPool | None" = None
 
 def _get_thumb_pool() -> QThreadPool:
-    """Pool dédié aux vignettes image, limité à 4 threads.
-    Évite la saturation RAM + I/O disque lors du décodage JPEG simultané."""
+    """Pool dedicated to the image thumbnails, limited to 4 threads.
+    Avoids the RAM + disk I/O saturation during the simultaneous JPEG decoding."""
     global _img_thumb_pool
     if _img_thumb_pool is None:
         _img_thumb_pool = QThreadPool()
@@ -43,9 +43,9 @@ def _get_thumb_pool() -> QThreadPool:
 _video_thumb_pool: "QThreadPool | None" = None
 
 def _get_video_thumb_pool() -> QThreadPool:
-    """Pool dédié aux vignettes vidéo, limité à 2 threads.
-    Évite la saturation I/O disque quand de nombreux cv2.VideoCapture s'ouvrent
-    simultanément — ce qui ralentit aussi le thread UI par contention disque."""
+    """Pool dedicated to the video thumbnails, limited to 2 threads.
+    Avoids the disk I/O saturation when many cv2.VideoCapture open
+    simultaneously - which also slows the UI thread down through disk contention."""
     global _video_thumb_pool
     if _video_thumb_pool is None:
         _video_thumb_pool = QThreadPool()
@@ -61,32 +61,32 @@ _MONTHS = [
     translate("ThumbnailGrid", "November"), translate("ThumbnailGrid", "December"),
 ]
 
-# Nombre de colonnes cibles par rangée (extrême, intermédiaire, centre, …).
-# Les facteurs de taille sont l'inverse : moins de colonnes = cellules plus grandes.
-# Intermédiaire = moyenne géométrique de extrême et centre → sqrt(37×4) ≈ 12.
-_RIBBON_COLS_TARGET = (37, 12, 4, 12, 37)  # cibles indicatives (dépendent de la largeur)
+# Target number of columns per row (outer, intermediate, centre, ...).
+# The size factors are the inverse: fewer columns = larger cells.
+# Intermediate = geometric mean of outer and centre -> sqrt(37x4) ~ 12.
+_RIBBON_COLS_TARGET = (37, 12, 4, 12, 37)  # indicative targets (depend on the width)
 
-# Facteurs de taille : proportionnels à 1/n_cols, normalisés pour que centre = 2.0
-# 4/37 ≈ 0.108, ×2 → 0.216  |  4/12 ≈ 0.333, ×2 → 0.667  |  4/4 = 1.0, ×2 → 2.0
+# Size factors: proportional to 1/n_cols, normalised so that centre = 2.0
+# 4/37 ~ 0.108, x2 -> 0.216  |  4/12 ~ 0.333, x2 -> 0.667  |  4/4 = 1.0, x2 -> 2.0
 _RIBBON_FACTORS = (0.216, 0.667, 2.0, 0.667, 0.216)
-_RIBBON_CENTER  = 2   # index de la rangée centrale
-_RIBBON_SPACING = 6   # px entre les rangées
+_RIBBON_CENTER  = 2   # index of the centre row
+_RIBBON_SPACING = 6   # px between the rows
 
-# Inertie du ruban (molette)
-# Design : 1 pas immédiat par clic + impulsion de coasting accumulable.
-# Clic lent  → 1 pas + ~2 pas de glissement  ≈ 3 total.
-# Scroll rapide (10 clics) → 10 pas + ~17 de glissement ≈ 27 total.
-_INERTIA_IMPULSE  = 0.20  # impulsion de coasting ajoutée par clic (en plus du pas immédiat)
-_INERTIA_MAX_VEL  = 12.0  # vitesse maximale de coasting
-_INERTIA_FRICTION = 0.85  # freinage par frame (≈16 ms)
-_INERTIA_STOP     = 0.08  # seuil d'arrêt
+# Inertia of the ribbon (wheel)
+# Design: 1 immediate step per click + a cumulative coasting impulse.
+# Slow click  -> 1 step + ~2 steps of gliding  ~ 3 in total.
+# Fast scroll (10 clicks) -> 10 steps + ~17 of gliding ~ 27 in total.
+_INERTIA_IMPULSE  = 0.20  # coasting impulse added per click (on top of the immediate step)
+_INERTIA_MAX_VEL  = 12.0  # maximum coasting speed
+_INERTIA_FRICTION = 0.85  # braking per frame (~16 ms)
+_INERTIA_STOP     = 0.08  # stopping threshold
 
 
 class _ThumbSignals(QObject):
-    # Utilise 'object' (PyObject) pour garantir le marshaling cross-thread en PySide6.
-    # 3e argument : empreinte des retouches appliquées à la vignette produite —
-    # transmise plutôt que relue côté UI, sinon deux retouches rapprochées
-    # pourraient faire ranger le pixmap de la première sous l'empreinte de la seconde.
+    # Uses 'object' (PyObject) to guarantee the cross-thread marshaling in PySide6.
+    # 3rd argument: fingerprint of the edits applied to the thumbnail produced -
+    # passed along rather than read back on the UI side, otherwise two edits made
+    # in quick succession could file the pixmap of the first under the fingerprint of the second.
     ready = Signal(str, object, str)  # photo_path, jpeg_bytes (Python bytes), edit_sig
 
 
@@ -103,10 +103,10 @@ class _ThumbWorker(QRunnable):
 
     def run(self) -> None:
         try:
-            # Vérifier DB avant de relancer PIL — évite le décodage JPEG si déjà
-            # en cache. L'empreinte garantit qu'on ne réutilise pas une vignette
-            # produite avec un autre état de retouches (ni l'inverse : une
-            # vignette retouchée déjà en cache n'est pas régénérée pour rien).
+            # Check the DB before starting PIL again - avoids the JPEG decoding if already
+            # in cache. The fingerprint guarantees that we do not reuse a thumbnail
+            # produced with another edit state (nor the reverse: an edited
+            # thumbnail already in cache is not regenerated for nothing).
             data = self._cache.get_bytes(self._path, self._sig)
             if data is None:
                 data = self._cache.generate(self._path, self._edit)
@@ -128,15 +128,15 @@ class ThumbnailCell(QWidget):
     right_clicked    = Signal(object, object)
     clicked          = Signal(object, Qt.KeyboardModifier)
     drag_started     = Signal(object)
-    duplicate_clicked = Signal(object)  # PhotoInfo — clic sur le badge de doublon
+    duplicate_clicked = Signal(object)  # PhotoInfo - click on the duplicate badge
 
     def __init__(self, photo: PhotoInfo, cache: ThumbnailCache, size: int, parent=None,
                  edit=None):
         super().__init__(parent)
         self._photo = photo
         self._cache = cache
-        # Retouches en cours sur cette photo (None = aucune) : la vignette doit
-        # les refléter (rotation, recadrage…), cf. ThumbnailGrid._edits.
+        # Edits in progress on this photo (None = none): the thumbnail must
+        # reflect them (rotation, crop...), cf. ThumbnailGrid._edits.
         self._edit  = edit
         self._size  = size
         self._selected = False
@@ -145,7 +145,7 @@ class ThumbnailCell(QWidget):
         self._signals = _ThumbSignals()
         self._signals.ready.connect(self._on_thumb_ready)
         self._drag_start_pos: QPoint | None = None
-        self._dup_badge_rect = None   # QRect dans les coordonnées du widget
+        self._dup_badge_rect = None   # QRect in the coordinates of the widget
         self._worker: "_ThumbWorker | None" = None
         self._worker_pool: "QThreadPool | None" = None
         self._setup_ui()
@@ -153,9 +153,9 @@ class ThumbnailCell(QWidget):
     def _setup_ui(self) -> None:
         self.setFixedSize(self._size + 8, self._size + 8)
         self.setCursor(Qt.PointingHandCursor)
-        # Nom accessible (UIA/QAccessible) : permet aux tests bout-en-bout
-        # (tests/e2e, pywinauto) de cibler une vignette précise par chemin de
-        # photo plutôt que par coordonnées écran devinées.
+        # Accessible name (UIA/QAccessible): lets the end-to-end tests
+        # (tests/e2e, pywinauto) target a precise thumbnail by photo path
+        # rather than by guessed screen coordinates.
         self.setAccessibleName(f"thumb::{self._photo.path}")
         layout = QVBoxLayout(self)
         layout.setContentsMargins(4, 4, 4, 4)
@@ -170,8 +170,8 @@ class ThumbnailCell(QWidget):
         if self._load_requested:
             return
         self._load_requested = True
-        # Vérifier uniquement le cache RAM dans le thread UI (non bloquant).
-        # La vérification DB et la génération PIL sont déléguées au worker.
+        # Check only the RAM cache in the UI thread (non-blocking).
+        # The DB check and the PIL generation are delegated to the worker.
         pixmap = self._cache.get_ram(self._photo.path, edit_signature(self._edit))
         if pixmap:
             self._set_pixmap(pixmap)
@@ -188,28 +188,28 @@ class ThumbnailCell(QWidget):
             pool.start(worker, priority)
 
     def cancel_pending_load(self) -> None:
-        """Retire le worker de la file du pool s'il n'a pas encore démarré.
-        À appeler quand la cellule sort du champ (scroll) avant sa suppression :
-        sans ça, le worker décode quand même la vignette pour une photo devenue
-        invisible, au détriment des photos réellement affichées (cf. demande
-        utilisateur : les requêtes d'affichage les plus anciennes doivent être
-        abandonnées quand elles s'accumulent)."""
+        """Removes the worker from the queue of the pool if it has not started yet.
+        To be called when the cell goes out of view (scroll) before its deletion:
+        without that, the worker decodes the thumbnail anyway for a photo that has become
+        invisible, at the expense of the photos really displayed (cf. user
+        request: the oldest display requests must be
+        abandoned when they pile up)."""
         if self._worker is not None and self._worker_pool is not None:
             try:
                 self._worker_pool.tryTake(self._worker)
             except RuntimeError:
-                # Le worker a AutoDelete=True : s'il a déjà démarré/terminé, Qt a
-                # détruit l'objet C++ sous-jacent avant qu'on ait pu le retirer.
+                # The worker has AutoDelete=True: if it has already started/finished, Qt has
+                # destroyed the underlying C++ object before we could remove it.
                 pass
         self._worker = None
         self._worker_pool = None
 
     def reload_with_edit(self, edit) -> None:
-        """Régénère la vignette pour un nouvel état de retouches.
+        """Regenerates the thumbnail for a new edit state.
 
-        Pas d'invalidate() du cache : l'entrée stockée porte l'empreinte de
-        l'ancien état, elle ne peut donc pas être resservie pour le nouveau, et
-        generate() la remplacera (clé primaire = chemin)."""
+        No invalidate() of the cache: the stored entry carries the fingerprint of
+        the old state, it therefore cannot be served again for the new one, and
+        generate() will replace it (primary key = path)."""
         self._edit = edit
         worker = _ThumbWorker(self._photo.path, self._cache, self._signals, edit)
         _get_thumb_pool().start(worker)
@@ -222,9 +222,9 @@ class ThumbnailCell(QWidget):
             if not pixmap.isNull():
                 self._cache.store_pixmap(path, pixmap, edit_sig)
                 if edit_sig != edit_signature(self._edit):
-                    # Résultat d'une génération devancée par une retouche plus
-                    # récente : mis en cache (il est valide pour son empreinte),
-                    # mais pas affiché — le worker en cours a le dernier mot.
+                    # Result of a generation overtaken by a more
+                    # recent edit: put in cache (it is valid for its fingerprint),
+                    # but not displayed - the worker in progress has the last word.
                     return
                 self._set_pixmap(pixmap)
             else:
@@ -237,8 +237,8 @@ class ThumbnailCell(QWidget):
         if self._photo.media_type == "video":
             scaled = self._add_video_badge(scaled)
         if self._photo.duplicate_group_id is not None:
-            # Calculer la position du badge dans les coordonnées du widget
-            # (_img_label débute à (4,4), pixmap centré dans le label)
+            # Compute the position of the badge in the coordinates of the widget
+            # (_img_label starts at (4,4), pixmap centred in the label)
             pw = scaled.width()
             ph = scaled.height()
             lbl_ox = (self._size - pw) // 2
@@ -316,7 +316,7 @@ class ThumbnailCell(QWidget):
 
     def set_size(self, size: int) -> None:
         self._size = size
-        self._load_requested = False          # permet un rechargement à la nouvelle taille
+        self._load_requested = False          # allows a reload at the new size
         self.setFixedSize(size + 8, size + 8)
         self._img_label.setFixedSize(size, size)
         if self._pixmap:
@@ -376,8 +376,8 @@ class ThumbnailCell(QWidget):
 
 class _GridContainer(QWidget):
     """
-    Conteneur virtuel pour la grille uniforme (mode scroll).
-    En mode ruban la hauteur est gérée par le QScrollArea parent.
+    Virtual container for the uniform grid (scroll mode).
+    In ribbon mode the height is managed by the parent QScrollArea.
     """
     layout_changed = Signal()
 
@@ -388,7 +388,7 @@ class _GridContainer(QWidget):
         self._cell_h  = 188
         self._spacing = 6
         self._cols    = 1
-        self._managed_height = True   # False en mode ruban (taille gérée par Qt)
+        self._managed_height = True   # False in ribbon mode (size managed by Qt)
 
     def configure(self, total: int, cell_w: int, cell_h: int) -> None:
         self._total  = total
@@ -439,7 +439,7 @@ class _GridContainer(QWidget):
     def resizeEvent(self, event) -> None:
         super().resizeEvent(event)
         if not self._managed_height:
-            # Mode ruban : le conteneur remplit le viewport, on signale le changement
+            # Ribbon mode: the container fills the viewport, we signal the change
             self.layout_changed.emit()
         else:
             self._recompute(check_cols=True)
@@ -447,22 +447,22 @@ class _GridContainer(QWidget):
 
 class ThumbnailGrid(QScrollArea):
     """
-    Grille virtuelle de vignettes.
+    Virtual grid of thumbnails.
 
-    Mode scroll (par défaut)
-    ───────────────────────
-    Grille uniforme défilante. Au premier affichage, seule la partie visible est
-    instanciée (départ rapide). Dès le premier déplacement dans la grille, une
-    marge d'un écran plein est maintenue au-dessus et en dessous de la zone
-    visible (cf. _visible_range/_buffer_active) pour anticiper la suite du
-    défilement. Supporte 100 000+ photos.
+    Scroll mode (default)
+    ─────────────────────
+    A scrolling uniform grid. At the first display, only the visible part is
+    instantiated (fast start). From the first movement in the grid on, a
+    margin of one full screen is maintained above and below the visible
+    area (cf. _visible_range/_buffer_active) to anticipate the rest of the
+    scrolling. Supports 100,000+ photos.
 
-    Mode ruban (set_ribbon_mode(True))
+    Ribbon mode (set_ribbon_mode(True))
     ───────────────────────────────────
-    5 rangées de tailles lenticulaires (extrême·intermédiaire·CENTRE·intermédiaire·extrême)
-    occupent exactement la zone d'affichage. La grille est fixe ; les photos défilent
-    en ruban via la molette (↑ = décalage droite d'1 case, ↓ = décalage gauche d'1 case).
-    La fin d'une rangée enchaîne au début de la rangée suivante.
+    5 rows of lenticular sizes (outer.intermediate.CENTRE.intermediate.outer)
+    occupy exactly the display area. The grid is fixed; the photos scroll
+    as a ribbon through the wheel (up = shift right by 1 cell, down = shift left by 1 cell).
+    The end of a row carries on at the beginning of the following row.
     """
 
     photo_activated           = Signal(object)
@@ -470,57 +470,57 @@ class ThumbnailGrid(QScrollArea):
     rename_requested          = Signal(object)
     move_requested            = Signal(object)
     delete_requested          = Signal(list)
-    remove_from_album_requested = Signal(list)    # list[PhotoInfo] — retirer de l'album affiché
+    remove_from_album_requested = Signal(list)    # list[PhotoInfo] - remove from the displayed album
     save_requested            = Signal(object)
-    duplicate_clicked         = Signal(object)   # PhotoInfo — badge de doublon cliqué
-    add_to_album_requested    = Signal(list)      # list[PhotoInfo] — ajouter à album existant
-    create_album_with_requested = Signal(list)    # list[PhotoInfo] — créer nouvel album
-    retry_face_index_requested = Signal(object)   # PhotoInfo — retenter l'identification des visages
-    favorite_toggle_requested = Signal(object)    # PhotoInfo — bascule favori demandée
-    rating_change_requested  = Signal(list, int)  # list[PhotoInfo], note 0-5 — changement de note demandé
-    edit_tags_requested       = Signal(list)      # list[PhotoInfo] — édition des mots-clés demandée
+    duplicate_clicked         = Signal(object)   # PhotoInfo - duplicate badge clicked
+    add_to_album_requested    = Signal(list)      # list[PhotoInfo] - add to an existing album
+    create_album_with_requested = Signal(list)    # list[PhotoInfo] - create a new album
+    retry_face_index_requested = Signal(object)   # PhotoInfo - retry the face identification
+    favorite_toggle_requested = Signal(object)    # PhotoInfo - favourite toggle requested
+    rating_change_requested  = Signal(list, int)  # list[PhotoInfo], rating 0-5 - rating change requested
+    edit_tags_requested       = Signal(list)      # list[PhotoInfo] - keyword editing requested
 
     def __init__(self, cache: ThumbnailCache, parent=None):
         super().__init__(parent)
         self._cache       = cache
         self._thumb_size  = 180
         self._photos: list[PhotoInfo] = []
-        # Index chemin → PhotoInfo, maintenu en parallèle de _photos : évite les
-        # parcours O(n) de toute la liste à chaque changement de sélection
-        # (get_selected/select_photo sont sur le chemin chaud clic/clavier).
+        # Path -> PhotoInfo index, maintained in parallel with _photos: avoids the
+        # O(n) walks of the whole list at every selection change
+        # (get_selected/select_photo are on the hot click/keyboard path).
         self._by_path: dict[str, PhotoInfo] = {}
         self._selected: set[str] = set()
         self._materialized: dict[int, ThumbnailCell] = {}
-        # Album affiché (via set_album_context()), sinon None : pilote l'action
-        # "Retirer de l'album" du menu contextuel et le comportement de la touche Del.
+        # Album displayed (through set_album_context()), otherwise None: governs the
+        # "Remove from the album" action of the context menu and the behaviour of the Del key.
         self._album_id: int | None = None
-        # False tant qu'aucun scroll n'a eu lieu depuis le dernier affichage : seule
-        # la partie visible est alors préparée. Passe à True au 1er _on_scroll(),
-        # ce qui active la marge d'un écran au-dessus/en dessous (cf. _visible_range).
+        # False as long as no scroll has happened since the last display: only
+        # the visible part is prepared then. Switches to True at the 1st _on_scroll(),
+        # which activates the margin of one screen above/below (cf. _visible_range).
         self._buffer_active = False
-        # Chemins (normpath) des photos en erreur d'indexation faciale (timeout/crash,
-        # non exclues) — pilote l'affichage de "Retenter l'identification des visages"
-        # dans le menu contextuel. Mis à jour par MainWindow.set_index_error_paths().
+        # Paths (normpath) of the photos in face indexing error (timeout/crash,
+        # not excluded) - governs the display of "Retry the face identification"
+        # in the context menu. Updated by MainWindow.set_index_error_paths().
         self._index_error_paths: set[str] = set()
-        # Retouches en cours, par chemin normalisé — les vignettes doivent les
-        # refléter (rotation, recadrage…). Rechargées en une requête à chaque
-        # set_photos() via le fournisseur posé par MainWindow, et maintenues au
-        # coup par coup par refresh_photo() : une grille virtualisée n'a aucune
-        # cellule à rafraîchir pour une photo hors champ au moment de la retouche.
+        # Edits in progress, by normalised path - the thumbnails must
+        # reflect them (rotation, crop...). Reloaded in a single query at every
+        # set_photos() through the provider set by MainWindow, and maintained one
+        # by one by refresh_photo(): a virtualised grid has no cell
+        # to refresh for a photo out of view at the time of the edit.
         self._edits: dict[str, object] = {}
         self._edit_provider = None
 
-        # ── Mode ruban ──
+        # ── Ribbon mode ──
         self._ribbon_mode   = False
         self._ribbon_offset = 0
-        # Métriques calculées depuis la taille du conteneur
-        self._r_thumb: list[int] = []    # taille thumb par rangée
-        self._r_widget: list[int] = []   # taille widget (thumb+8) par rangée
-        self._r_cols: list[int]   = []   # nb colonnes par rangée
-        self._r_row_y: list[int]  = []   # Y de chaque rangée
-        self._r_total: int        = 0    # total photos visibles
+        # Metrics computed from the size of the container
+        self._r_thumb: list[int] = []    # thumb size per row
+        self._r_widget: list[int] = []   # widget size (thumb+8) per row
+        self._r_cols: list[int]   = []   # nb of columns per row
+        self._r_row_y: list[int]  = []   # Y of each row
+        self._r_total: int        = 0    # total visible photos
 
-        # Inertie (molette) : vitesse fractionnaire + accumulation de reste
+        # Inertia (wheel): fractional speed + accumulation of the remainder
         self._inertia_vel  = 0.0
         self._inertia_frac = 0.0
         self._inertia_timer = QTimer(self)
@@ -536,7 +536,7 @@ class ThumbnailGrid(QScrollArea):
         self.setWidgetResizable(True)
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
 
-        # Timers pour le mode scroll uniquement
+        # Timers for the scroll mode only
         self._placeholder_timer = QTimer(self)
         self._placeholder_timer.setSingleShot(True)
         self._placeholder_timer.setInterval(0)
@@ -549,7 +549,7 @@ class ThumbnailGrid(QScrollArea):
 
         self.verticalScrollBar().valueChanged.connect(self._on_scroll)
 
-        # Indicateur de date (vue chronologique)
+        # Date indicator (chronological view)
         self._date_overlay_enabled = False
         self._date_label = QLabel("", self.viewport())
         self._date_label.setAttribute(Qt.WA_TransparentForMouseEvents)
@@ -565,9 +565,9 @@ class ThumbnailGrid(QScrollArea):
         )
         self._date_label.hide()
 
-        # État vide avec message + action (ex. dossier "copie de DVD" sans
-        # photo cataloguée) — générique, sans connaissance du cas d'usage :
-        # l'appelant fournit le texte et le callback du bouton.
+        # Empty state with a message + action (e.g. a "DVD copy" folder with no
+        # catalogued photo) - generic, with no knowledge of the use case:
+        # the caller supplies the text and the callback of the button.
         self._empty_overlay = QWidget(self.viewport())
         self._empty_overlay.setStyleSheet(
             "QWidget { background-color: rgba(40,40,40,220); border-radius: 10px; }"
@@ -585,9 +585,9 @@ class ThumbnailGrid(QScrollArea):
         _empty_layout.addWidget(self._empty_action_btn)
         self._empty_overlay.hide()
 
-        # Indicateur "Chargement…" pendant une requête photo (dossier/album
-        # sélectionné) : retour visuel immédiat au clic dans la sidebar. Différé
-        # de 150 ms pour ne pas clignoter quand la requête répond vite.
+        # "Loading..." indicator during a photo query (folder/album
+        # selected): immediate visual feedback on a click in the sidebar. Deferred
+        # by 150 ms so as not to flicker when the query answers quickly.
         self._loading_label = QLabel(translate("ThumbnailGrid", "Loading…"), self.viewport())
         self._loading_label.setAttribute(Qt.WA_TransparentForMouseEvents)
         self._loading_label.setStyleSheet(
@@ -605,23 +605,23 @@ class ThumbnailGrid(QScrollArea):
         self._loading_delay_timer.setInterval(150)
         self._loading_delay_timer.timeout.connect(self._show_loading_label)
 
-        # Ascenseur de navigation rapide (mode ruban uniquement)
-        # La barre est fournie de l'extérieur via bind_ribbon_nav_bar()
-        # et placée dans le layout parent — pas en overlay sur le viewport.
+        # Fast navigation scrollbar (ribbon mode only)
+        # The bar is supplied from the outside through bind_ribbon_nav_bar()
+        # and placed in the parent layout - not as an overlay on the viewport.
         self._nav_bar: QScrollBar | None = None
         self._nav_bar_updating = False
-        self._nav_scrolling = False   # True pendant le scroll rapide via l'ascenseur
+        self._nav_scrolling = False   # True during the fast scroll through the scrollbar
         self._nav_settle_timer = QTimer(self)
         self._nav_settle_timer.setSingleShot(True)
         self._nav_settle_timer.setInterval(500)
         self._nav_settle_timer.timeout.connect(self._on_nav_settled)
 
-    # ══════════════════════════════════════════════════════════════════ chargement
+    # ══════════════════════════════════════════════════════════════════ loading
 
     def set_loading(self, on: bool) -> None:
-        """Affiche (après 150 ms) ou masque l'indicateur "Chargement…" — appelé
-        par main_window quand une requête photo démarre/aboutit. set_photos()
-        et clear() le masquent aussi automatiquement."""
+        """Displays (after 150 ms) or hides the "Loading..." indicator - called
+        by main_window when a photo query starts/completes. set_photos()
+        and clear() hide it automatically too."""
         if on:
             self._loading_delay_timer.start()
         else:
@@ -637,14 +637,14 @@ class ThumbnailGrid(QScrollArea):
         self._loading_label.show()
         self._loading_label.raise_()
 
-    # ══════════════════════════════════════════════════════════════════ données
+    # ══════════════════════════════════════════════════════════════════ data
 
     def set_edit_provider(self, provider) -> None:
-        """Fournisseur des retouches en cours : callable() -> dict[chemin, EditInfo].
+        """Provider of the edits in progress: callable() -> dict[path, EditInfo].
 
-        Interrogé à chaque set_photos() plutôt qu'injecté par l'appelant : la
-        grille est repeuplée depuis une douzaine d'endroits différents, dont
-        aucun n'aurait à connaître les retouches."""
+        Queried at every set_photos() rather than injected by the caller: the
+        grid is repopulated from a dozen different places, none of
+        which would have to know about the edits."""
         self._edit_provider = provider
         self._reload_edits()
 
@@ -675,12 +675,12 @@ class ThumbnailGrid(QScrollArea):
             self._ribbon_offset = 0
             QTimer.singleShot(0, self._ribbon_full_update)
         else:
-            # configure() peut réduire la hauteur du conteneur et forcer un
-            # clampage de la scrollbar (ancienne position invalide dans la
-            # nouvelle liste, plus courte) : cela émettrait valueChanged →
-            # _on_scroll() → réactiverait la marge tampon avant même le 1er
-            # affichage. On bloque le signal le temps du redimensionnement
-            # pour garantir un rendu "visible uniquement" au premier affichage.
+            # configure() may reduce the height of the container and force a
+            # clamping of the scrollbar (old position invalid in the
+            # new, shorter list): that would emit valueChanged ->
+            # _on_scroll() -> would reactivate the buffer margin even before the 1st
+            # display. We block the signal for the duration of the resizing
+            # to guarantee a "visible only" render at the first display.
             vbar = self.verticalScrollBar()
             blocked = vbar.blockSignals(True)
             self._container.configure(len(photos), self._thumb_size + 8, self._thumb_size + 8)
@@ -724,8 +724,8 @@ class ThumbnailGrid(QScrollArea):
         self.selection_changed.emit(self.get_selected())
 
     def scroll_to_photo(self, path: str) -> None:
-        """Ramène la vignette de path dans la zone visible : centrée en mode
-        ruban (chronologique), défilement minimal juste suffisant sinon."""
+        """Brings the thumbnail of path back into the visible area: centred in
+        ribbon (chronological) mode, minimal just-sufficient scrolling otherwise."""
         idx = next((i for i, p in enumerate(self._photos) if p.path == path), None)
         if idx is None:
             return
@@ -747,13 +747,13 @@ class ThumbnailGrid(QScrollArea):
                 vbar.setValue(rect.bottom() - vp_h + spacing)
 
     def refresh_photo(self, photo_path: str, edit) -> None:
-        """Prend acte d'un nouvel état de retouches pour une photo.
+        """Takes note of a new edit state for a photo.
 
-        La table est mise à jour dans tous les cas — c'est elle qui fera
-        régénérer la vignette à la prochaine matérialisation de la cellule si la
-        photo n'est pas à l'écran (grille virtualisée : au moment où
-        l'utilisateur retouche depuis la visionneuse, sa cellule n'existe le plus
-        souvent pas)."""
+        The table is updated in every case - it is what will make the
+        thumbnail regenerate at the next materialisation of the cell if the
+        photo is not on screen (a virtualised grid: at the moment when
+        the user edits from the viewer, its cell most
+        often does not exist)."""
         key = os.path.normpath(photo_path)
         if edit is not None and edit.is_modified():
             self._edits[key] = edit
@@ -788,12 +788,12 @@ class ThumbnailGrid(QScrollArea):
             self._selected.discard(old_path)
             self._selected.add(new_path)
 
-    # ══════════════════════════════════════════════════════════════════ sélection
+    # ══════════════════════════════════════════════════════════════════ selection
 
     def get_selected(self) -> list[PhotoInfo]:
-        # O(sélection) et non O(bibliothèque) — appelé à chaque clic/flèche.
-        # L'ordre n'est pas celui de la grille (ordre du set) : les
-        # consommateurs actuels traitent le résultat comme un ensemble.
+        # O(selection) and not O(library) - called at every click/arrow.
+        # The order is not that of the grid (order of the set): the
+        # current consumers treat the result as a set.
         return [self._by_path[p] for p in self._selected if p in self._by_path]
 
     def select_all(self) -> None:
@@ -803,7 +803,7 @@ class ThumbnailGrid(QScrollArea):
         self.selection_changed.emit(self.get_selected())
 
     def select_photo(self, path: str) -> None:
-        """Sélectionne une seule photo par chemin et émet selection_changed."""
+        """Selects a single photo by path and emits selection_changed."""
         if path not in self._by_path:
             return
         self._clear_selection()
@@ -814,7 +814,7 @@ class ThumbnailGrid(QScrollArea):
     def set_thumbnail_size(self, size: int) -> None:
         self._thumb_size = size
         if self._ribbon_mode:
-            return          # taille déterminée par viewport, pas par ce réglage
+            return          # size determined by the viewport, not by this setting
         self._cancel_pending_workers()
         self._dematerialize_all()
         vbar = self.verticalScrollBar()
@@ -825,9 +825,9 @@ class ThumbnailGrid(QScrollArea):
         QTimer.singleShot(0, self._update_materialized)
 
     def bind_ribbon_nav_bar(self, bar: QScrollBar) -> None:
-        """Associe la QScrollBar externe qui pilote la navigation du ruban.
+        """Binds the external QScrollBar governing the navigation of the ribbon.
 
-        Doit être appelé une seule fois depuis main_window, avant toute navigation.
+        Must be called only once from main_window, before any navigation.
         """
         if self._nav_bar is not None:
             self._nav_bar.valueChanged.disconnect(self._on_nav_bar_scroll)
@@ -836,7 +836,7 @@ class ThumbnailGrid(QScrollArea):
         self._nav_bar.hide()
         self._nav_bar.valueChanged.connect(self._on_nav_bar_scroll)
 
-    # ══════════════════════════════════════════════════════════════════ mode ruban
+    # ══════════════════════════════════════════════════════════════════ ribbon mode
 
     def set_ribbon_mode(self, enabled: bool) -> None:
         if self._ribbon_mode == enabled:
@@ -848,8 +848,8 @@ class ThumbnailGrid(QScrollArea):
 
         if enabled:
             self._container._managed_height = False
-            # Effacer les contraintes setFixedHeight héritées du mode scroll
-            # pour que setWidgetResizable puisse redimensionner librement le conteneur.
+            # Clear the setFixedHeight constraints inherited from the scroll mode
+            # so that setWidgetResizable can resize the container freely.
             self._container.setMinimumHeight(0)
             self._container.setMaximumHeight(16777215)
             self.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
@@ -868,14 +868,14 @@ class ThumbnailGrid(QScrollArea):
             QTimer.singleShot(0, self._update_materialized)
 
     def _clamp_ribbon_offset(self) -> None:
-        """Ajuste ribbon_offset pour que la 1re/dernière photo puisse être centrée.
+        """Adjusts ribbon_offset so that the 1st/last photo can be centred.
 
-        Plage autorisée :
-          min = -(position de la photo centrale dans le ruban)
-               → première photo au centre de la rangée centrale
+        Allowed range:
+          min = -(position of the centre photo in the ribbon)
+               -> first photo at the centre of the centre row
           max = (N-1) - center_pos
-               → dernière photo au centre de la rangée centrale
-        Les slots hors [0, N-1] restent simplement vides.
+               -> last photo at the centre of the centre row
+        The slots outside [0, N-1] simply stay empty.
         """
         if not self._r_cols or not self._photos:
             self._ribbon_offset = 0
@@ -885,23 +885,23 @@ class ThumbnailGrid(QScrollArea):
         hi = max(lo, len(self._photos) - 1 - center_pos)
         self._ribbon_offset = max(lo, min(self._ribbon_offset, hi))
 
-    # ── Ascenseur de navigation ────────────────────────────────────────────────
+    # ── Navigation scrollbar ───────────────────────────────────────────────────
 
     def _center_pos(self) -> int:
-        """Index de la cellule centrale dans le ruban (rangée centrale, colonne médiane)."""
+        """Index of the centre cell in the ribbon (centre row, middle column)."""
         if not self._r_cols:
             return 0
         return sum(self._r_cols[:_RIBBON_CENTER]) + self._r_cols[_RIBBON_CENTER] // 2
 
     def center_photo_index(self) -> int | None:
-        """Retourne l'index de la photo au centre du ruban, ou None hors mode ruban."""
+        """Returns the index of the photo at the centre of the ribbon, or None outside ribbon mode."""
         if not self._ribbon_mode or not self._photos:
             return None
         idx = self._ribbon_offset + self._center_pos()
         return idx if 0 <= idx < len(self._photos) else None
 
     def _update_nav_bar(self) -> None:
-        """Affiche/cache et synchronise l'ascenseur externe (appelé après resize)."""
+        """Shows/hides and synchronises the external scrollbar (called after a resize)."""
         if self._nav_bar is None:
             return
         if not self._ribbon_mode or not self._photos or not self._r_cols:
@@ -911,7 +911,7 @@ class ThumbnailGrid(QScrollArea):
         self._sync_nav_bar()
 
     def _sync_nav_bar(self) -> None:
-        """Met à jour plage et valeur de l'ascenseur sans le repositionner."""
+        """Updates the range and value of the scrollbar without repositioning it."""
         if self._nav_bar is None or not self._ribbon_mode or not self._r_cols or not self._photos:
             return
         center      = self._ribbon_offset + self._center_pos()
@@ -930,44 +930,44 @@ class ThumbnailGrid(QScrollArea):
         self._ribbon_offset = value - self._center_pos()
         self._clamp_ribbon_offset()
         self._nav_bar_updating = True
-        # Pendant le scroll rapide : vider la grille une seule fois et ne mettre
-        # à jour que la date. Les cellules seront recréées après 500 ms d'inactivité.
+        # During the fast scroll: empty the grid only once and only update
+        # the date. The cells will be recreated after 500 ms of inactivity.
         if not self._nav_scrolling:
             self._nav_scrolling = True
             self._dematerialize_all()
         self._update_date_overlay()
         self._nav_bar_updating = False
         self._sync_nav_bar()
-        self._nav_settle_timer.start()   # relance le délai à chaque mouvement
+        self._nav_settle_timer.start()   # restarts the delay at every movement
 
     def _on_nav_settled(self) -> None:
-        """Déclenché 500 ms après le dernier mouvement de l'ascenseur de navigation."""
+        """Triggered 500 ms after the last movement of the navigation scrollbar."""
         self._nav_scrolling = False
         self._update_ribbon_cells()
 
     # ──────────────────────────────────────────────────────────────────────────
 
     def _ribbon_full_update(self) -> None:
-        """Recalcule les métriques puis replace les cellules."""
+        """Recomputes the metrics then places the cells again."""
         self._recompute_ribbon_layout()
         self._update_ribbon_cells()
         self._update_nav_bar()
         self._update_date_overlay()
 
     def _recompute_ribbon_layout(self) -> None:
-        """Calcule les tailles et positions de rangées pour remplir exactement le viewport.
+        """Computes the sizes and row positions to fill the viewport exactly.
 
-        Utilise viewport().height()/width() et non container.height()/width() :
-        le conteneur peut garder une ancienne contrainte setFixedHeight héritée
-        du mode scroll, ce qui fausserait totalement le calcul de base_size.
+        Uses viewport().height()/width() and not container.height()/width():
+        the container may keep an old setFixedHeight constraint inherited
+        from the scroll mode, which would completely falsify the computation of base_size.
         """
         vp_h = max(100, self.viewport().height())
         vp_w = max(100, self.viewport().width())
         n    = len(_RIBBON_FACTORS)
         s    = _RIBBON_SPACING
 
-        # base_size : résout sum(f*base + 8) + (n-1)*s = vp_h
-        # → base * sum_f = vp_h - n*8 - (n-1)*s
+        # base_size: solves sum(f*base + 8) + (n-1)*s = vp_h
+        # -> base * sum_f = vp_h - n*8 - (n-1)*s
         sum_f = sum(_RIBBON_FACTORS)
         base  = max(20.0, (vp_h - n * 8 - (n - 1) * s) / sum_f)
 
@@ -978,7 +978,7 @@ class ThumbnailGrid(QScrollArea):
             for ws in self._r_widget
         ]
 
-        # Positions Y : rangées empilées sans espacement initial, espacement entre elles
+        # Y positions: rows stacked with no initial spacing, spacing between them
         self._r_row_y = []
         y = 0
         for i, ws in enumerate(self._r_widget):
@@ -989,7 +989,7 @@ class ThumbnailGrid(QScrollArea):
         self._r_total = sum(self._r_cols)
 
     def _update_ribbon_cells(self) -> None:
-        """Place les cellules selon ribbon_offset sans recalculer les métriques."""
+        """Places the cells according to ribbon_offset without recomputing the metrics."""
         if not self._ribbon_mode or not self._r_thumb:
             return
         if not self._photos:
@@ -998,7 +998,7 @@ class ThumbnailGrid(QScrollArea):
 
         self._clamp_ribbon_offset()
 
-        # Construire la cible : {photo_idx: (QRect, thumb_size)}
+        # Build the target: {photo_idx: (QRect, thumb_size)}
         vp_w = self.viewport().width()
         target: dict[int, tuple[QRect, int]] = {}
         rb_pos = 0
@@ -1007,7 +1007,7 @@ class ThumbnailGrid(QScrollArea):
             ws     = self._r_widget[row_idx]
             ts     = self._r_thumb[row_idx]
             y      = self._r_row_y[row_idx]
-            # Centrage horizontal de la rangée centrale uniquement
+            # Horizontal centring of the centre row only
             if row_idx == _RIBBON_CENTER:
                 row_w   = n_cols * ws + max(0, n_cols - 1) * _RIBBON_SPACING
                 x_start = max(0, (vp_w - row_w) // 2)
@@ -1020,15 +1020,15 @@ class ThumbnailGrid(QScrollArea):
                     target[photo_idx] = (QRect(x, y, ws, ws), ts)
                 rb_pos += 1
 
-        # Supprimer les cellules obsolètes
+        # Delete the obsolete cells
         for idx in list(self._materialized.keys()):
             if idx not in target:
                 cell = self._materialized.pop(idx)
                 cell.cancel_pending_load()
-                cell.hide()   # jamais setParent(None) sur un widget visible (fenêtre fantôme)
+                cell.hide()   # never setParent(None) on a visible widget (ghost window)
                 cell.setParent(None)
 
-        # Mettre à jour ou créer les cellules
+        # Update or create the cells
         for photo_idx, (rect, ts) in target.items():
             photo = self._photos[photo_idx]
             if photo_idx in self._materialized:
@@ -1049,7 +1049,7 @@ class ThumbnailGrid(QScrollArea):
 
         self._sync_nav_bar()
 
-    # ══════════════════════════════════════════════════════════════════ mode scroll
+    # ══════════════════════════════════════════════════════════════════ scroll mode
 
     def _visible_range(self) -> tuple[int, int]:
         scroll_y = self.verticalScrollBar().value()
@@ -1062,9 +1062,9 @@ class ThumbnailGrid(QScrollArea):
         last_visible_row  = (scroll_y + vp_h - spacing) // row_h
 
         if self._buffer_active:
-            # Marge d'un écran plein au-dessus/en dessous, activée seulement après
-            # le 1er déplacement dans la grille (cf. _on_scroll) — le tout premier
-            # affichage ne prépare que la partie visible pour un rendu immédiat.
+            # Margin of one full screen above/below, activated only after
+            # the 1st movement in the grid (cf. _on_scroll) - the very first
+            # display only prepares the visible part for an immediate render.
             buffer_rows = max(1, -(-vp_h // row_h))  # ceil(vp_h / row_h)
             first_row = max(0, first_visible_row - buffer_rows)
             last_row  = last_visible_row + buffer_rows
@@ -1095,7 +1095,7 @@ class ThumbnailGrid(QScrollArea):
             if i not in needed:
                 cell = self._materialized.pop(i)
                 cell.cancel_pending_load()
-                cell.hide()   # jamais setParent(None) sur un widget visible (fenêtre fantôme)
+                cell.hide()   # never setParent(None) on a visible widget (ghost window)
                 cell.setParent(None)
 
         for i in needed:
@@ -1126,7 +1126,7 @@ class ThumbnailGrid(QScrollArea):
             if i not in needed:
                 cell = self._materialized.pop(i)
                 cell.cancel_pending_load()
-                cell.hide()   # jamais setParent(None) sur un widget visible (fenêtre fantôme)
+                cell.hide()   # never setParent(None) on a visible widget (ghost window)
                 cell.setParent(None)
 
         for i in needed:
@@ -1145,21 +1145,21 @@ class ThumbnailGrid(QScrollArea):
 
         self._update_date_overlay()
 
-    # ══════════════════════════════════════════════════════════════════ commun
+    # ══════════════════════════════════════════════════════════════════ common
 
     def _cancel_pending_workers(self) -> None:
-        """Annule les workers en attente dans les pools (pas encore démarrés).
-        À appeler avant toute réinitialisation majeure de la grille pour éviter
-        que des dizaines de workers lisent le disque pour des photos invisibles.
-        Les workers déjà en cours d'exécution ne sont pas interrompus ; leurs
-        résultats seront stockés dans le cache RAM et réutilisables."""
+        """Cancels the workers waiting in the pools (not started yet).
+        To be called before any major reinitialisation of the grid to avoid
+        dozens of workers reading the disk for invisible photos.
+        The workers already running are not interrupted; their
+        results will be stored in the RAM cache and remain reusable."""
         _get_thumb_pool().clear()
         _get_video_thumb_pool().clear()
 
     def _dematerialize_all(self) -> None:
         for cell in self._materialized.values():
             cell.cancel_pending_load()
-            cell.hide()   # jamais setParent(None) sur un widget visible (fenêtre fantôme)
+            cell.hide()   # never setParent(None) on a visible widget (ghost window)
             cell.setParent(None)
         self._materialized.clear()
 
@@ -1188,7 +1188,7 @@ class ThumbnailGrid(QScrollArea):
             if not self._r_cols:
                 self._date_label.hide()
                 return
-            # Photo centrale de la rangée du milieu
+            # Centre photo of the middle row
             center_start = sum(self._r_cols[:_RIBBON_CENTER])
             center_mid   = center_start + self._r_cols[_RIBBON_CENTER] // 2
             first_idx    = self._ribbon_offset + center_mid
@@ -1221,13 +1221,13 @@ class ThumbnailGrid(QScrollArea):
         self._date_label.show()
         self._date_label.raise_()
 
-    # ══════════════════════════════════════════════════════════════════ état vide
+    # ══════════════════════════════════════════════════════════════════ empty state
 
     def show_empty_message(self, text: str, action_label: str = None, action_callback=None) -> None:
-        """Affiche un message centré par-dessus la grille (ex. dossier vide de
-        photos mais contenant en réalité une copie de DVD). Effacé automatiquement
-        par set_photos()/clear() ; l'appelant le redemande si la condition tient
-        toujours après le prochain affichage."""
+        """Displays a centred message over the grid (e.g. a folder empty of
+        photos but actually containing a DVD copy). Erased automatically
+        by set_photos()/clear(); the caller asks for it again if the condition still
+        holds after the next display."""
         self._empty_label.setText(text)
         if action_label and action_callback is not None:
             self._empty_action_btn.setText(action_label)
@@ -1260,7 +1260,7 @@ class ThumbnailGrid(QScrollArea):
         super().resizeEvent(event)
         self._reposition_empty_overlay()
 
-    # ══════════════════════════════════════════════════════════════════ molette
+    # ══════════════════════════════════════════════════════════════════ wheel
 
     def wheelEvent(self, event) -> None:
         if not self._ribbon_mode:
@@ -1269,7 +1269,7 @@ class ThumbnailGrid(QScrollArea):
 
         delta = event.angleDelta().y()
         if delta > 0:
-            # Pas immédiat (réactivité) + impulsion de coasting pour le scroll rapide
+            # Immediate step (responsiveness) + coasting impulse for the fast scroll
             self._ribbon_offset -= 1
             self._inertia_vel = min(_INERTIA_MAX_VEL, self._inertia_vel + _INERTIA_IMPULSE)
         elif delta < 0:
@@ -1288,32 +1288,32 @@ class ThumbnailGrid(QScrollArea):
         event.accept()
 
     def _inertia_tick(self) -> None:
-        """Tick du timer d'inertie (~60 fps) : applique la vélocité et la freine."""
+        """Tick of the inertia timer (~60 fps): applies the velocity and brakes it."""
         self._inertia_frac += self._inertia_vel
-        steps = int(self._inertia_frac)          # tronque vers zéro
+        steps = int(self._inertia_frac)          # truncates towards zero
         if steps:
             self._inertia_frac -= steps
             old = self._ribbon_offset
-            self._ribbon_offset -= steps          # vel > 0 → offset ↓ → photos vers droite
+            self._ribbon_offset -= steps          # vel > 0 -> offset down -> photos towards the right
             self._clamp_ribbon_offset()
             if self._ribbon_offset != old:
                 self._update_ribbon_cells()
                 self._update_date_overlay()
             else:
-                # Butée atteinte : couper l'élan
+                # End stop reached: cut the momentum
                 self._inertia_vel  = 0.0
                 self._inertia_frac = 0.0
                 self._inertia_timer.stop()
                 return
 
-        # Freinage
+        # Braking
         self._inertia_vel *= _INERTIA_FRICTION
         if abs(self._inertia_vel) < _INERTIA_STOP:
             self._inertia_vel  = 0.0
             self._inertia_frac = 0.0
             self._inertia_timer.stop()
 
-    # ══════════════════════════════════════════════════════════════════ fabrique
+    # ══════════════════════════════════════════════════════════════════ factory
 
     def _make_cell(self, photo: PhotoInfo, size: int | None = None) -> ThumbnailCell:
         if size is None:
@@ -1326,7 +1326,7 @@ class ThumbnailGrid(QScrollArea):
         cell.duplicate_clicked.connect(self.duplicate_clicked.emit)
         return cell
 
-    # ══════════════════════════════════════════════════════════════════ événements clavier/souris
+    # ══════════════════════════════════════════════════════════════════ keyboard/mouse events
 
     @Slot(object, object)
     def _on_cell_clicked(self, photo: PhotoInfo, modifiers) -> None:
@@ -1403,19 +1403,19 @@ class ThumbnailGrid(QScrollArea):
         drag.exec(Qt.MoveAction)
 
     def set_album_context(self, album_id: int | None) -> None:
-        """Indique si la grille affiche le contenu d'un album (et lequel), pour
-        proposer "Retirer de l'album" et faire pointer la touche Del dessus plutôt
-        que sur l'effacement définitif du fichier."""
+        """States whether the grid displays the content of an album (and which one), so as
+        to offer "Remove from the album" and to point the Del key at it rather
+        than at erasing the file permanently."""
         self._album_id = album_id
 
     def set_index_error_paths(self, paths) -> None:
-        """Met à jour l'ensemble des photos en erreur d'indexation faciale
-        (timeout/crash) — pilote l'action "Retenter l'identification des visages"
-        du menu contextuel."""
+        """Updates the set of photos in face indexing error
+        (timeout/crash) - governs the "Retry the face identification" action
+        of the context menu."""
         self._index_error_paths = {os.path.normpath(p) for p in paths}
 
     def refresh_duplicate_status(self, assignments: dict) -> None:
-        """Met à jour les badges de doublons. assignments = {path: group_id | None}."""
+        """Updates the duplicate badges. assignments = {path: group_id | None}."""
         for photo in self._photos:
             if photo.path in assignments:
                 photo.duplicate_group_id = assignments[photo.path]
@@ -1424,7 +1424,7 @@ class ThumbnailGrid(QScrollArea):
                 cell.set_duplicate_group(assignments[cell.photo.path])
 
     def refresh_rating(self, ratings: dict) -> None:
-        """Met à jour les badges de notation. ratings = {path: rating (0-5)}."""
+        """Updates the rating badges. ratings = {path: rating (0-5)}."""
         for photo in self._photos:
             if photo.path in ratings:
                 photo.rating = ratings[photo.path]
@@ -1486,9 +1486,9 @@ class ThumbnailGrid(QScrollArea):
                            lambda: self.retry_face_index_requested.emit(photo))
         menu.addSeparator()
         if self._album_id is not None:
-            # Vue album : seul le retrait (non destructif) est proposé — jamais
-            # l'effacement du fichier, même en multi-sélection (même règle que la
-            # visionneuse et que la touche Del, cf. _emit_delete_or_remove).
+            # Album view: only the (non-destructive) removal is offered - never
+            # the erasing of the file, even in multi-selection (the same rule as the
+            # viewer and as the Del key, cf. _emit_delete_or_remove).
             rm_lbl = (translate("ThumbnailGrid", "Remove the photos from the album") if n > 1
                       else translate("ThumbnailGrid", "Remove from the album"))
             menu.addAction(rm_lbl + _DEL_KEY, lambda p=photos: self.remove_from_album_requested.emit(p))
@@ -1499,8 +1499,8 @@ class ThumbnailGrid(QScrollArea):
         menu.exec(pos)
 
     def _emit_delete_or_remove(self, photos: list) -> None:
-        """Touche Del : retire de l'album affiché s'il y en a un, sinon efface
-        définitivement le(s) fichier(s)."""
+        """Del key: removes from the displayed album if there is one, otherwise erases
+        the file(s) permanently."""
         if not photos:
             return
         if self._album_id is not None:
@@ -1509,7 +1509,7 @@ class ThumbnailGrid(QScrollArea):
             self.delete_requested.emit(photos)
 
     def _emit_save_for_single(self, photos: list) -> None:
-        """Ctrl+S : n'a de sens que pour une photo unique et non ambiguë."""
+        """Ctrl+S: only makes sense for a single, unambiguous photo."""
         if len(photos) == 1:
             self.save_requested.emit(photos[0])
 
