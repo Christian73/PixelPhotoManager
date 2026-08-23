@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 
 _UNDO_MAX = 20
 
-# Noms d'affichage pour les opérations stockées en DB (undo/redo persistant)
+# Display names of the operations stored in the DB (persistent undo/redo)
 _OP_LABELS: dict[str, str] = {
     "rotation":           translate("EditPanel", "Rotation"),
     "flip_h":             translate("EditPanel", "Mirror H"),
@@ -65,12 +65,12 @@ _OP_LABELS: dict[str, str] = {
 }
 
 
-# Noms d'affichage des outils. Comme pour _OP_LABELS, la clé est le nom INTERNE
-# de l'outil (1er élément de _TREATMENTS, cf. treatment_dialogs.py) : il reste en
-# français en toutes langues parce qu'il sert d'identifiant — clé de
-# _treatment_buttons, discriminant de _open_treatment, et nom d'opération
-# persisté dans edits.db (historique undo/redo cross-session). Ne jamais
-# traduire ces chaînes ailleurs qu'ici, sous peine de casser l'aiguillage.
+# Display names of the tools. As for _OP_LABELS, the key is the INTERNAL name
+# of the tool (1st element of _TREATMENTS, cf. treatment_dialogs.py): it stays in
+# French in every language because it serves as an identifier - key of
+# _treatment_buttons, discriminant of _open_treatment, and operation name
+# persisted in edits.db (cross-session undo/redo history). Never translate
+# these strings anywhere but here, on pain of breaking the dispatch.
 _TOOL_LABELS: dict[str, str] = {
     "Luminosité": translate("EditPanel", "Brightness"),
     "Contraste":  translate("EditPanel", "Contrast"),
@@ -82,7 +82,7 @@ _TOOL_LABELS: dict[str, str] = {
 
 
 def _tool_label(name: str) -> str:
-    """Libellé affiché d'un outil, à partir de son nom interne."""
+    """Displayed label of a tool, from its internal name."""
     return _TOOL_LABELS.get(name, name)
 
 
@@ -94,9 +94,9 @@ def _op_label(op: str) -> str:
     return op.replace("_", " ").capitalize()
 
 
-# ------------------------------------------------------------------ icônes
+# ------------------------------------------------------------------ icons
 
-# Icônes dessinées par code : regroupées dans edit_icons.py (2026-07).
+# Icons drawn by code: gathered in edit_icons.py (2026-07).
 from src.ui.edit_icons import (  # noqa: E402,F401
     _ANNOTATION_TOOL_BTN_STYLE, _ICON_SIZE, _base_pixmap,
     _icon_ann_curve,
@@ -120,13 +120,13 @@ from src.ui.edit_icons import (  # noqa: E402,F401
 
 
 
-# ------------------------------------------------------------------ repères de curseur
+# ------------------------------------------------------------------ slider markers
 
 
-# ------------------------------------------------------------------ classes extraites
-# (2026-07) Curseurs et dialogues de traitement déplacés dans leurs modules ;
-# ré-exportés ici sous leurs noms historiques (main_window, settings_dialog et
-# les tests importent MarkedSlider/EditSlider depuis edit_panel).
+# ------------------------------------------------------------------ extracted classes
+# (2026-07) Sliders and treatment dialogs moved into their own modules;
+# re-exported here under their historical names (main_window, settings_dialog and
+# the tests import MarkedSlider/EditSlider from edit_panel).
 from src.ui.edit_sliders import EditSlider, MarkedSlider, _Ruler  # noqa: E402,F401
 from src.ui.treatment_dialogs import (  # noqa: E402,F401
     _ACTIVE_TOOL_STYLE, _TREATMENTS, CouleursTreatmentDialog, GammaCurveWidget,
@@ -138,14 +138,14 @@ from src.ui.treatment_dialogs import (  # noqa: E402,F401
 class EditPanel(QWidget):
     edits_changed           = Signal(object)       # EditInfo
     crop_mode_requested     = Signal()
-    crop_confirm_requested  = Signal()             # un autre outil a été sélectionné pendant un recadrage en cours
+    crop_confirm_requested  = Signal()             # another tool was selected during a crop in progress
     grid_visibility_changed = Signal(bool)
-    photo_saved             = Signal(str, object)  # (photo_path, EditInfo) — uniquement lors d'un enregistrement réel
-    rotation_stepped        = Signal(str, int)     # (photo_path, new_rotation_degrees) — émis uniquement pour les rotations 90°
-    red_eye_mode_requested  = Signal(bool, float)  # (active, radius) — bascule le mode yeux rouges dans le canvas
-    wb_pick_requested       = Signal(bool)         # True = démarrer la pipette, False = annuler
+    photo_saved             = Signal(str, object)  # (photo_path, EditInfo) - only on a real save
+    rotation_stepped        = Signal(str, int)     # (photo_path, new_rotation_degrees) - emitted only for the 90 degree rotations
+    red_eye_mode_requested  = Signal(bool, float)  # (active, radius) - toggles the red-eye mode in the canvas
+    wb_pick_requested       = Signal(bool)         # True = start the eyedropper, False = cancel
     vignette_edit_mode      = Signal(bool, object) # (active: bool, edit: EditInfo)
-    annotation_mode_requested            = Signal(bool, str)   # (active, tool) — bascule le mode annotation dans le canvas
+    annotation_mode_requested            = Signal(bool, str)   # (active, tool) - toggles the annotation mode in the canvas
     annotation_style_changed             = Signal(str, float, str, float, bool, bool, str, float, float)
     # (color_argb, width, font_family, font_size, bold, italic, fill_color_argb, opacity, blur)
     annotation_delete_selected_requested = Signal()
@@ -156,7 +156,7 @@ class EditPanel(QWidget):
         self._edit = EditInfo()
         self._undo_stack: list[EditInfo] = []
         self._redo_stack: list[EditInfo] = []
-        # path normalisé -> (état avant reset_all(), pile d'undo d'avant le reset)
+        # normalised path -> (state before reset_all(), undo stack from before the reset)
         self._reset_snapshots: dict[str, tuple] = {}
         self._db = EditDatabase()
         self._red_eye_active = False
@@ -171,9 +171,9 @@ class EditPanel(QWidget):
         self._active_color_dlg: "CouleursTreatmentDialog | None" = None
         self._active_vignette_dlg: "VignetteTreatmentDialog | None" = None
         self._active_frame_dlg: "QDialog | None" = None
-        self._active_generic_dlg: "QDialog | None" = None    # Luminosité/Contraste/Redresser… non modal
+        self._active_generic_dlg: "QDialog | None" = None    # Brightness/Contrast/Straighten... non-modal
         self._active_generic_dlg_title: "str | None" = None
-        self._treatment_buttons: dict = {}   # nom de traitement -> QToolButton (surbrillance active/inactive)
+        self._treatment_buttons: dict = {}   # treatment name -> QToolButton (active/inactive highlight)
         self._setup_ui()
 
     def _setup_ui(self) -> None:
@@ -181,7 +181,7 @@ class EditPanel(QWidget):
         root.setContentsMargins(4, 4, 4, 4)
         root.setSpacing(6)
 
-        # Barre titre
+        # Title bar
         self._title_label = QLabel(translate("EditPanel", "Editing"))
         self._title_label.setStyleSheet("font-weight: bold;")
         root.addWidget(self._title_label)
@@ -194,7 +194,7 @@ class EditPanel(QWidget):
         inner_layout.setSpacing(8)
         inner_layout.setContentsMargins(2, 2, 2, 2)
 
-        # Grille de boutons de traitement
+        # Grid of treatment buttons
         lbl_corrections = QLabel(translate("EditPanel", "Corrections"))
         lbl_corrections.setStyleSheet("color: #aaa; font-size: 10px;")
         inner_layout.addWidget(lbl_corrections)
@@ -205,12 +205,12 @@ class EditPanel(QWidget):
             btn = self._make_treatment_button(name, icon_fn(), sliders_def)
             self._treatment_buttons[name] = btn
             grid.addWidget(btn, idx // 2, idx % 2)
-        # Les deux boutons suivants poursuivent le remplissage de la grille :
-        # leur position dépend du nombre de traitements (une case en dur
-        # écraserait le dernier bouton dès qu'un traitement est ajouté).
+        # The two following buttons carry on filling the grid:
+        # their position depends on the number of treatments (a hard-coded cell
+        # would overwrite the last button as soon as a treatment is added).
         _next = len(_TREATMENTS)
 
-        # Bouton Yeux rouges
+        # Red-eye button
         self._btn_red_eye = QToolButton()
         self._btn_red_eye.setText(translate("EditPanel", "Red eyes"))
         self._btn_red_eye.setIcon(QIcon(_icon_red_eye()))
@@ -223,7 +223,7 @@ class EditPanel(QWidget):
         self._btn_red_eye.clicked.connect(self._toggle_red_eye_mode)
         grid.addWidget(self._btn_red_eye, _next // 2, _next % 2)
 
-        # Bouton Annotations
+        # Annotations button
         self._btn_annotations = QToolButton()
         self._btn_annotations.setText(translate("EditPanel", "Annotations"))
         self._btn_annotations.setIcon(QIcon(_icon_ann_pen()))
@@ -238,7 +238,7 @@ class EditPanel(QWidget):
         grid.addWidget(self._btn_annotations, (_next + 1) // 2, (_next + 1) % 2)
         inner_layout.addLayout(grid)
 
-        # Panneau de contrôle yeux rouges (masqué hors mode)
+        # Red-eye control panel (hidden outside the mode)
         self._red_eye_panel = QGroupBox(translate("EditPanel", "Red-eye correction"))
         re_layout = QVBoxLayout(self._red_eye_panel)
         re_layout.setContentsMargins(6, 8, 6, 6)
@@ -253,8 +253,8 @@ class EditPanel(QWidget):
         radius_row = QHBoxLayout()
         radius_row.addWidget(QLabel(translate("EditPanel", "Size:")))
         self._red_eye_slider = MarkedSlider(Qt.Horizontal, fmt=lambda v: f"{v/10:.1f}%")
-        self._red_eye_slider.setRange(5, 80)   # 0.5% – 8% de la plus petite dimension
-        self._red_eye_slider.setValue(30)       # défaut : 3%
+        self._red_eye_slider.setRange(5, 80)   # 0.5% - 8% of the smallest dimension
+        self._red_eye_slider.setValue(30)       # default: 3%
         self._red_eye_slider.setToolTip(translate("EditPanel", "Correction radius (% of the "
                                                                "image)"))
         self._red_eye_slider.valueChanged.connect(self._on_red_eye_radius_changed)
@@ -276,7 +276,7 @@ class EditPanel(QWidget):
         self._red_eye_panel.hide()
         inner_layout.addWidget(self._red_eye_panel)
 
-        # Panneau de contrôle du calque d'annotations (masqué hors mode)
+        # Control panel of the annotation layer (hidden outside the mode)
         self._annotation_panel = QGroupBox(translate("EditPanel", "Annotations"))
         an_layout = QVBoxLayout(self._annotation_panel)
         an_layout.setContentsMargins(6, 8, 6, 6)
@@ -322,10 +322,10 @@ class EditPanel(QWidget):
         style_row.addWidget(self._btn_annotation_color)
         style_row.addWidget(QLabel(translate("EditPanel", "Thickness")))
         self._annotation_width_spin = QDoubleSpinBox()
-        self._annotation_width_spin.setRange(0.0, 4.0)   # % de la plus petite dimension — 0 = pas de contour
+        self._annotation_width_spin.setRange(0.0, 4.0)   # % of the smallest dimension - 0 = no outline
         self._annotation_width_spin.setSingleStep(0.1)
         self._annotation_width_spin.setDecimals(1)
-        self._annotation_width_spin.setValue(0.6)         # défaut : 0.6%
+        self._annotation_width_spin.setValue(0.6)         # default: 0.6%
         self._annotation_width_spin.setSuffix(" %")
         self._annotation_width_spin.setToolTip(translate("EditPanel", "Stroke thickness (% of "
                                                                       "the image)"))
@@ -362,7 +362,7 @@ class EditPanel(QWidget):
         blur_pair.setSpacing(4)
         blur_pair.addWidget(QLabel(translate("EditPanel", "Blur")))
         self._annotation_blur_spin = QDoubleSpinBox()
-        self._annotation_blur_spin.setRange(0.0, 10.0)   # % de la plus petite dimension
+        self._annotation_blur_spin.setRange(0.0, 10.0)   # % of the smallest dimension
         self._annotation_blur_spin.setSingleStep(0.5)
         self._annotation_blur_spin.setDecimals(1)
         self._annotation_blur_spin.setValue(0.0)
@@ -386,7 +386,7 @@ class EditPanel(QWidget):
         self._annotation_font_combo.currentFontChanged.connect(self._on_annotation_style_changed)
         font_row.addWidget(self._annotation_font_combo, stretch=1)
         self._annotation_font_size = QSpinBox()
-        self._annotation_font_size.setRange(1, 20)   # % de la plus petite dimension
+        self._annotation_font_size.setRange(1, 20)   # % of the smallest dimension
         self._annotation_font_size.setValue(4)
         self._annotation_font_size.setSuffix(" %")
         self._annotation_font_size.setToolTip(translate("EditPanel", "Text size (% of the "
@@ -457,7 +457,7 @@ class EditPanel(QWidget):
         self._annotation_panel.hide()
         inner_layout.addWidget(self._annotation_panel)
 
-        # Annuler / Rétablir
+        # Undo / Redo
         undo_row = QHBoxLayout()
         undo_row.setSpacing(4)
         self._btn_undo = QPushButton(translate("EditPanel", "Undo"))
@@ -473,7 +473,7 @@ class EditPanel(QWidget):
         undo_row.addWidget(self._btn_redo)
         inner_layout.addLayout(undo_row)
 
-        # Réinitialiser toutes les retouches / Remettre toutes les retouches
+        # Reset every edit / Restore every edit
         reset_row = QHBoxLayout()
         reset_row.setSpacing(4)
         self._btn_reset = QPushButton(translate("EditPanel", "Reset\nevery edit"))
@@ -501,7 +501,7 @@ class EditPanel(QWidget):
         reset_row.addWidget(self._btn_restore)
         inner_layout.addLayout(reset_row)
 
-        # Géométrie (boutons directs)
+        # Geometry (direct buttons)
         grp_geo = QGroupBox(translate("EditPanel", "Geometry"))
         grp_geo.setLayout(QVBoxLayout())
         grp_geo.layout().setSpacing(4)
@@ -518,7 +518,7 @@ class EditPanel(QWidget):
             row_rot.addWidget(btn)
         grp_geo.layout().addLayout(row_rot)
 
-        # Redresser + Recadrer côte à côte
+        # Straighten + Crop side by side
         row_sr = QHBoxLayout()
         row_sr.setSpacing(4)
 
@@ -575,27 +575,26 @@ class EditPanel(QWidget):
         scroll.setWidget(inner)
         self._scroll = scroll
         self._scroll_inner = inner
-        # QScrollArea ne propage jamais le minimumSizeHint() de son widget
-        # interne vers le sien (comportement voulu pour permettre un contenu
-        # plus grand que la vue) — sans ce plancher explicite, rien n'empêche
-        # le splitter de comprimer le panneau sous la largeur requise par la
-        # grille de boutons à 2 colonnes, rendant la 2e colonne (Contraste,
-        # Vignette, Annotations…) invisible et inatteignable au clic. Valeur
-        # posée ici à titre de filet de sécurité minimal ; le calcul faisant
-        # foi pour le splitter est `content_min_width()`, interrogé à la
-        # demande car le style Qt applicatif (`app.setStyleSheet` dans
-        # main.py) n'est pleinement résolu qu'après le premier affichage —
-        # une valeur figée ici, avant le show(), sous-estime la largeur
-        # réelle des boutons une fois stylés.
+        # QScrollArea never propagates the minimumSizeHint() of its inner
+        # widget to its own (intended behaviour, to allow content larger than
+        # the view) - without this explicit floor, nothing prevents the
+        # splitter from squeezing the panel below the width required by the
+        # 2-column grid of buttons, making the 2nd column (Contrast,
+        # Vignette, Annotations...) invisible and unreachable by click. Value
+        # set here as a minimal safety net; the computation that governs the
+        # splitter is `content_min_width()`, queried on demand because the
+        # application Qt style (`app.setStyleSheet` in main.py) is only fully
+        # resolved after the first display - a value frozen here, before the
+        # show(), underestimates the real width of the buttons once styled.
         scroll.setMinimumWidth(inner.minimumSizeHint().width() + 2 * scroll.frameWidth() + 4)
         root.addWidget(scroll, stretch=1)
 
     def content_min_width(self) -> int:
-        """Largeur minimale, recalculée à la demande, pour afficher la
-        grille de boutons de traitement (2 colonnes) sans troncature ni
-        recours à la scrollbar horizontale — cf. commentaire sur
-        `scroll.setMinimumWidth` dans `_setup_ui` pour pourquoi ce calcul
-        ne peut pas être figé une fois pour toutes à la construction."""
+        """Minimum width, recomputed on demand, to display the
+        grid of treatment buttons (2 columns) without truncation nor
+        recourse to the horizontal scrollbar - cf. the comment on
+        `scroll.setMinimumWidth` in `_setup_ui` for why this computation
+        cannot be frozen once and for all at construction time."""
         margins = self.layout().contentsMargins()
         return (self._scroll_inner.minimumSizeHint().width()
                 + 2 * self._scroll.frameWidth()
@@ -603,13 +602,13 @@ class EditPanel(QWidget):
                 + margins.left() + margins.right() + 4)
 
     def _vertical_scrollbar_width(self) -> int:
-        """Largeur prise par l'ascenseur vertical de la QScrollArea.
+        """Width taken by the vertical scrollbar of the QScrollArea.
 
-        Le contenu du panneau dépasse toujours la hauteur disponible : la barre
-        verticale est présente en pratique et mange autant de largeur au
-        viewport. Sans elle dans le calcul, la 2e colonne de boutons ressort de
-        quelques pixels hors du viewport — exactement le défaut que
-        content_min_width() est censé empêcher."""
+        The content of the panel always exceeds the available height: the
+        vertical bar is present in practice and eats that much width from the
+        viewport. Without it in the computation, the 2nd column of buttons comes
+        out a few pixels outside the viewport - exactly the defect that
+        content_min_width() is supposed to prevent."""
         if self._scroll.verticalScrollBarPolicy() == Qt.ScrollBarAlwaysOff:
             return 0
         return self._scroll.verticalScrollBar().sizeHint().width()
@@ -626,17 +625,17 @@ class EditPanel(QWidget):
         btn.clicked.connect(lambda: self._open_treatment(name, sliders_def))
         return btn
 
-    # ------------------------------------------------------------------ dialogues
+    # ------------------------------------------------------------------ dialogs
 
     def _compute_dialog_pos(self, dw: int, dh: int) -> QPoint:
-        """Positionne le dialogue en bas-gauche de la zone image.
-        Appelé depuis TreatmentDialog.showEvent — dw/dh sont les dimensions réelles.
-        Ancres : _navbar et _toolbar du PhotoViewer (coordonnées exactes, évite
-        de couvrir les boutons Précédente/Suivante)."""
+        """Positions the dialog at the bottom-left of the image area.
+        Called from TreatmentDialog.showEvent - dw/dh are the real dimensions.
+        Anchors: _navbar and _toolbar of the PhotoViewer (exact coordinates, avoids
+        covering the Previous/Next buttons)."""
         from PySide6.QtWidgets import QSplitter
         margin = 16
 
-        # Naviguer vers PhotoViewer : self → _left_stack → _splitter → _stack → viewer
+        # Navigate to PhotoViewer: self -> _left_stack -> _splitter -> _stack -> viewer
         splitter = self.parentWidget().parentWidget() if self.parentWidget() else None
         viewer = None
         if isinstance(splitter, QSplitter) and splitter.count() >= 2:
@@ -648,18 +647,18 @@ class EditPanel(QWidget):
             navbar = viewer._navbar
             vtb   = viewer._toolbar
 
-            # Bas utilisable  = sommet de la barre prev/suivante, moins sa propre hauteur
+            # Usable bottom = top of the prev/next bar, minus its own height
             nav_tl    = navbar.mapToGlobal(QPoint(0, 0))
             bottom_y  = nav_tl.y() - navbar.height() - margin
 
-            # Haut utilisable = bas de la toolbar du viewer
+            # Usable top    = bottom of the viewer toolbar
             top_y = vtb.mapToGlobal(QPoint(0, vtb.height())).y() + margin
 
-            # Gauche/droite depuis la navbar (même largeur que le viewer)
+            # Left/right from the navbar (the same width as the viewer)
             img_left  = nav_tl.x() + margin
             img_right = nav_tl.x() + navbar.width() - margin
         else:
-            # Repli : coin supérieur-droit du panneau gauche
+            # Fallback: top-right corner of the left panel
             tr       = self.mapToGlobal(QPoint(self.width(), 0))
             img_left  = tr.x() + margin
             img_right = tr.x() + self.window().width() - self.width() - margin
@@ -671,7 +670,7 @@ class EditPanel(QWidget):
         x = min(x, img_right - dw)
         y = max(y, top_y)
 
-        # Clamper aux limites de l'écran
+        # Clamp to the limits of the screen
         from PySide6.QtWidgets import QApplication
         screen = QApplication.screenAt(QPoint(x + dw // 2, y + dh // 2)) or QApplication.primaryScreen()
         if screen:
@@ -682,12 +681,13 @@ class EditPanel(QWidget):
         return QPoint(x, y)
 
     def _deactivate_other_tools(self, current: str) -> None:
-        """Un seul outil d'édition actif à la fois : sélectionner un outil désactive
-        celui actuellement en cours (mode canvas interactif ou dialogue de réglage
-        non modal encore ouvert). ``current`` est le nom de l'outil qu'on active
-        (ex. "Recadrer", "Yeux rouges", "Annotations", ou un titre de _TREATMENTS).
-        La sortie équivaut à une validation (pas une annulation) : le travail en
-        cours dans l'outil quitté est appliqué, jamais perdu silencieusement."""
+        """A single editing tool active at a time: selecting a tool deactivates
+        the one currently in progress (interactive canvas mode or non-modal
+        settings dialog still open). ``current`` is the name of the tool being
+        activated (e.g. "Recadrer", "Yeux rouges", "Annotations", or a title from
+        _TREATMENTS). Leaving is equivalent to a validation (not a cancellation):
+        the work in progress in the tool being left is applied, never lost
+        silently."""
         if current != "Yeux rouges" and self._red_eye_active:
             self._btn_red_eye.setChecked(False)
             self._toggle_red_eye_mode(False)
@@ -706,14 +706,14 @@ class EditPanel(QWidget):
             self._active_generic_dlg.accept()
 
     def _highlight_treatment_button(self, title: str, active: bool) -> None:
-        """Même surbrillance que le bouton Annotations autour de l'icône, tant que
-        l'outil ``title`` est actif (dialogue ouvert ou mode canvas en cours)."""
+        """The same highlight as the Annotations button around the icon, as long as
+        the ``title`` tool is active (dialog open or canvas mode in progress)."""
         btn = self._treatment_buttons.get(title)
         if btn is not None:
             btn.setStyleSheet(_ACTIVE_TOOL_STYLE if active else "")
 
     def _open_treatment(self, title: str, sliders_def: list) -> None:
-        # Déjà ouvert : le ramener au premier plan plutôt que d'en ouvrir un second.
+        # Already open: bring it to the front rather than opening a second one.
         if self._active_generic_dlg is not None and self._active_generic_dlg_title == title:
             self._active_generic_dlg.raise_()
             self._active_generic_dlg.activateWindow()
@@ -774,13 +774,13 @@ class EditPanel(QWidget):
         self.crop_mode_requested.emit()
 
     def on_crop_mode_ended(self) -> None:
-        """Reçu depuis la visionneuse quand le mode recadrage se termine
-        (validation ou annulation) — retire la surbrillance du bouton."""
+        """Received from the viewer when the crop mode ends
+        (validation or cancellation) - removes the highlight from the button."""
         self._crop_active = False
         self._btn_crop.setStyleSheet("")
 
     def _open_couleurs_treatment(self) -> None:
-        # Si le dialogue est déjà ouvert, le ramener au premier plan
+        # If the dialog is already open, bring it to the front
         if self._active_color_dlg is not None:
             self._active_color_dlg.raise_()
             self._active_color_dlg.activateWindow()
@@ -792,7 +792,7 @@ class EditPanel(QWidget):
         dlg._panel = self
         self._active_color_dlg = dlg
 
-        # Pipette : forward du signal vers main_window → visionneuse
+        # Eyedropper: forward the signal to main_window -> viewer
         dlg.wb_pick_requested.connect(self.wb_pick_requested)
 
         def _on_accepted() -> None:
@@ -809,7 +809,7 @@ class EditPanel(QWidget):
             self.edits_changed.emit(copy.copy(self._edit))
 
         def _cleanup() -> None:
-            # Annuler le mode pipette si toujours actif
+            # Cancel the eyedropper mode if still active
             self.wb_pick_requested.emit(False)
             self._active_color_dlg = None
             self._highlight_treatment_button("Couleurs", False)
@@ -823,7 +823,7 @@ class EditPanel(QWidget):
 
     @Slot(int, int, int)
     def on_wb_pixel_received(self, r: int, g: int, b: int) -> None:
-        """Appelé par main_window quand l'utilisateur a cliqué sur la visionneuse en mode pipette."""
+        """Called by main_window when the user has clicked on the viewer in eyedropper mode."""
         if self._active_color_dlg is not None:
             self._active_color_dlg.apply_wb_pixel(r, g, b)
             self._active_color_dlg.raise_()
@@ -868,9 +868,9 @@ class EditPanel(QWidget):
             return
 
         original = copy.copy(self._edit)
-        # Point de départ visible : sans vignette enregistrée, l'outil s'ouvrait
-        # sur une intensité nulle, donc sur une image inchangée. `original` est
-        # déjà capturé, l'annulation revient donc bien à 0.
+        # Visible starting point: with no saved vignette, the tool used to open
+        # on a zero strength, hence on an unchanged image. `original` is
+        # already captured, so cancelling does go back to 0.
         if self._edit.vignette_strength <= 0.0:
             self._edit.vignette_strength = VIGNETTE_DEFAULT_STRENGTH
             self.edits_changed.emit(copy.copy(self._edit))
@@ -883,9 +883,9 @@ class EditPanel(QWidget):
             self._active_vignette_dlg = None
             self._highlight_treatment_button("Vignette", False)
             if accepted:
-                # Pousser l'état AVANT ouverture (original), pas self._edit qui a
-                # déjà été modifié par on_vignette_changed pendant le glissement.
-                # Aussi sauvegarder dans la DB pour l'undo cross-session.
+                # Push the state BEFORE opening (original), not self._edit which has
+                # already been modified by on_vignette_changed during the drag.
+                # Also save to the DB for the cross-session undo.
                 if self._photo:
                     self._db.push_history(self._photo.path, original, "Vignette")
                 self._undo_stack.append((original, "Vignette"))
@@ -893,8 +893,8 @@ class EditPanel(QWidget):
                     self._undo_stack.pop(0)
                 self._redo_stack.clear()
                 self._update_undo_buttons()
-                # La géométrie (cx/cy/rx/ry/angle) est déjà dans self._edit
-                # via on_vignette_changed ; seuls force et couleur viennent du dialogue.
+                # The geometry (cx/cy/rx/ry/angle) is already in self._edit
+                # through on_vignette_changed; only the strength and the colour come from the dialog.
                 new_edit = dlg.get_edit()
                 self._edit.vignette_strength = new_edit.vignette_strength
                 self._edit.vignette_color    = new_edit.vignette_color
@@ -912,7 +912,7 @@ class EditPanel(QWidget):
         dlg.show()
         dlg.raise_()
 
-    # Attributs de cadre recopiés entre le dialogue et l'état du panneau.
+    # Frame attributes copied between the dialog and the state of the panel.
     _FRAME_ATTRS = (
         "frame_type", "frame_width", "frame_inner_width", "frame_gap",
         "frame_style", "frame_color", "frame_color2", "frame_inner_color",
@@ -931,9 +931,9 @@ class EditPanel(QWidget):
         original = copy.copy(self._edit)
         photo_path = self._photo.path if self._photo else None
         dlg = FrameDialog(self._edit, photo_path=photo_path, parent=self)
-        # Aperçu en direct : l'EditInfo du dialogue (copie complète de l'état du
-        # panneau) part telle quelle vers la visionneuse. self._edit n'est pas
-        # touché avant validation, pour que _push_undo empile bien l'état d'avant.
+        # Live preview: the EditInfo of the dialog (a complete copy of the state of the
+        # panel) goes as-is to the viewer. self._edit is not touched
+        # before validation, so that _push_undo really stacks the previous state.
         dlg.preview.connect(self._on_preview)
         dlg._panel = self
         self._active_frame_dlg = dlg
@@ -959,14 +959,14 @@ class EditPanel(QWidget):
         dlg.raise_()
 
     def _on_vignette_preview(self, edit: EditInfo) -> None:
-        """Mise à jour depuis le slider d'intensité ou bouton couleur du dialogue."""
+        """Update from the strength slider or the colour button of the dialog."""
         self._edit.vignette_strength = edit.vignette_strength
         self._edit.vignette_color    = edit.vignette_color
         self.edits_changed.emit(copy.copy(self._edit))
 
     @Slot(object)
     def on_vignette_changed(self, edit: EditInfo) -> None:
-        """Appelé par main_window quand l'utilisateur a manipulé les poignées sur la visionneuse."""
+        """Called by main_window when the user has manipulated the handles on the viewer."""
         self._edit.vignette_cx    = edit.vignette_cx
         self._edit.vignette_cy    = edit.vignette_cy
         self._edit.vignette_rx1   = edit.vignette_rx1
@@ -984,11 +984,11 @@ class EditPanel(QWidget):
     # ------------------------------------------------------------------ public
 
     def set_photo(self, photo: PhotoInfo) -> None:
-        self._deactivate_other_tools("")   # aucun outil ne doit rester actif au changement de photo
+        self._deactivate_other_tools("")   # no tool must stay active when the photo changes
         self._photo = photo
         self._edit = self._db.load(photo.path)
-        # get_history retourne aussi l'état courant (dernier enregistrement).
-        # On le retire : la pile ne doit contenir que les états PRÉCÉDENTS.
+        # get_history also returns the current state (the last save).
+        # We remove it: the stack must only contain the PREVIOUS states.
         history = self._db.get_history(photo.path, limit=_UNDO_MAX + 1)
         if history:
             history.pop()
@@ -1028,14 +1028,14 @@ class EditPanel(QWidget):
     # ------------------------------------------------------------------ private
 
     def _emit_rotation_if_changed(self, before: float) -> None:
-        """Émet rotation_stepped si la rotation vient de changer.
+        """Emits rotation_stepped if the rotation has just changed.
 
-        Les boutons ↻/↺ émettent eux-mêmes ; ce helper couvre les chemins qui
-        changent la rotation sans passer par eux (undo, redo, reset_all,
-        restore_all). Sans ça, indexed_photos.rotation reste figé sur
-        l'orientation de la dernière détection alors que la photo est revenue à
-        une autre : la re-détection ne retrouve plus qu'une partie des visages
-        et aucune action de l'UI ne permet d'en sortir."""
+        The buttons emit by themselves; this helper covers the paths that
+        change the rotation without going through them (undo, redo, reset_all,
+        restore_all). Without it, indexed_photos.rotation stays frozen on
+        the orientation of the last detection while the photo has gone back to
+        another one: the re-detection then only finds part of the faces
+        and no UI action makes it possible to get out of that."""
         if not self._photo:
             return
         after = int(self._edit.rotation) % 360
@@ -1049,16 +1049,16 @@ class EditPanel(QWidget):
                 self.photo_saved.emit(self._photo.path, copy.copy(self._edit))
 
     def _checkpoint(self, op_label: str) -> None:
-        """Sauvegarde l'état courant dans l'historique DB avant une opération.
+        """Saves the current state in the DB history before an operation.
 
-        Permet l'undo cross-session : au prochain démarrage, cet état sera
-        disponible dans la pile même si la session précédente n'a pas fait d'undo.
+        Allows the cross-session undo: at the next start, that state will be
+        available in the stack even if the previous session did not undo anything.
         """
         if self._photo:
             self._db.push_history(self._photo.path, self._edit, op_label)
 
     def _checkpoint_state(self, edit: EditInfo, op_label: str) -> None:
-        """Comme _checkpoint(), mais pour un état arbitraire (réinjection d'historique)."""
+        """Like _checkpoint(), but for an arbitrary state (history reinjection)."""
         if self._photo:
             self._db.push_history(self._photo.path, edit, op_label)
 
@@ -1067,8 +1067,8 @@ class EditPanel(QWidget):
         if len(self._undo_stack) > _UNDO_MAX:
             self._undo_stack.pop(0)
         self._redo_stack.clear()
-        # une nouvelle retouche après un reset_all() invalide l'instantané de restauration
-        # (sinon un futur restore_all() écraserait silencieusement cette retouche)
+        # a new edit after a reset_all() invalidates the restoration snapshot
+        # (otherwise a future restore_all() would silently overwrite that edit)
         if self._photo:
             self._reset_snapshots.pop(os.path.normpath(self._photo.path), None)
         self._update_undo_buttons()
@@ -1095,15 +1095,15 @@ class EditPanel(QWidget):
         self._btn_restore.setEnabled(can_restore)
 
     def reset_all(self) -> None:
-        """Supprime toutes les retouches et l'historique pour la photo courante.
+        """Deletes every edit and the history for the current photo.
 
-        Pas de confirmation : l'action est réversible via restore_all()."""
+        No confirmation: the action is reversible through restore_all()."""
         if not self._photo:
             return
         before = self._edit.rotation
-        # L'historique est sauvegardé avec l'état : restore_all() doit rendre les
-        # retouches ET la possibilité de les défaire une par une (sinon un
-        # reset + restauration écrase définitivement l'historique de la photo).
+        # The history is saved with the state: restore_all() must give back the
+        # edits AND the possibility of undoing them one by one (otherwise a
+        # reset + restoration definitively overwrites the history of the photo).
         self._reset_snapshots[os.path.normpath(self._photo.path)] = (
             copy.copy(self._edit), list(self._undo_stack),
         )
@@ -1117,7 +1117,7 @@ class EditPanel(QWidget):
         self._emit_rotation_if_changed(before)
 
     def restore_all(self) -> None:
-        """Remet en place les retouches supprimées par le dernier reset_all() sur cette photo."""
+        """Puts back the edits deleted by the last reset_all() on this photo."""
         if not self._photo:
             return
         snapshot = self._reset_snapshots.pop(os.path.normpath(self._photo.path), None)
@@ -1129,9 +1129,9 @@ class EditPanel(QWidget):
         self._edit = prev_edit
         self._undo_stack = list(prev_history)
         self._redo_stack.clear()
-        # reset_all() a effacé edit_history en DB : on la réinsère avant _save()
-        # (qui y empile l'état courant) pour que l'undo pas-à-pas reste possible,
-        # y compris après redémarrage de l'application.
+        # reset_all() erased edit_history in the DB: we reinsert it before _save()
+        # (which stacks the current state there) so that the step-by-step undo stays
+        # possible, including after restarting the application.
         for hist_edit, op_label in self._undo_stack:
             self._checkpoint_state(hist_edit, op_label)
         self._save("restore_all")
@@ -1178,7 +1178,7 @@ class EditPanel(QWidget):
         self.edits_changed.emit(copy.copy(self._edit))
         self._save("crop")
 
-    # ------------------------------------------------------------------ yeux rouges
+    # ------------------------------------------------------------------ red eyes
 
     def _toggle_red_eye_mode(self, checked: bool) -> None:
         self._red_eye_active = checked
@@ -1211,7 +1211,7 @@ class EditPanel(QWidget):
         self._toggle_red_eye_mode(False)
 
     def on_red_eye_added(self, cx: float, cy: float) -> None:
-        """Reçu depuis le canvas quand l'utilisateur clique sur un œil rouge."""
+        """Received from the canvas when the user clicks on a red eye."""
         self._checkpoint("Yeux rouges")
         self._push_undo("Yeux rouges")
         radius = self._red_eye_slider.value() / 1000.0
@@ -1245,9 +1245,9 @@ class EditPanel(QWidget):
         self._update_annotation_style_controls_visibility()
 
     def _annotation_active_kind(self) -> "str | None":
-        """Détermine à quel groupe de contrôles de style le contexte courant se rapporte :
-        'line' (trait : stylo/ligne/courbe), 'shape' (rectangle/ellipse), 'text',
-        ou None si rien n'est pertinent (ex. outil Sélection sans élément sélectionné)."""
+        """Determines which group of style controls the current context relates to:
+        'line' (stroke: pen/line/curve), 'shape' (rectangle/ellipse), 'text',
+        or None if nothing is relevant (e.g. the Selection tool with no element selected)."""
         if self._annotation_tool in ("pen", "line", "curve"):
             return "line"
         if self._annotation_tool in ("rect", "ellipse"):
@@ -1297,9 +1297,9 @@ class EditPanel(QWidget):
         self._btn_annotation_text_color.setStyleSheet(style)
 
     def _pick_annotation_fill_color(self) -> None:
-        # Pas de canal alpha ici : l'opacité de la surface est régie exclusivement
-        # par _annotation_opacity_spin, pour éviter deux contrôles de transparence
-        # qui se composent silencieusement.
+        # No alpha channel here: the opacity of the surface is governed exclusively
+        # by _annotation_opacity_spin, to avoid two transparency controls
+        # that compose silently.
         color = QColorDialog.getColor(self._annotation_fill_color, self,
                                       translate("EditPanel", "Fill colour"))
         if color.isValid():
@@ -1337,8 +1337,8 @@ class EditPanel(QWidget):
                                   font_size: float, bold: bool, italic: bool,
                                   fill_color: str = "#ffff0000", opacity: float = 0.4,
                                   blur: float = 0.0) -> None:
-        """Applique le style courant (couleur/épaisseur/police/fond) aux éléments sélectionnés,
-        plutôt qu'au seul style par défaut des prochains éléments dessinés."""
+        """Applies the current style (colour/width/font/background) to the selected elements,
+        rather than only to the default style of the next elements drawn."""
         ids = self._annotation_selected_ids
         new_list = []
         any_updated = False
@@ -1385,7 +1385,7 @@ class EditPanel(QWidget):
         self._toggle_annotation_mode(False)
 
     def on_annotation_added(self, annotation: dict) -> None:
-        """Reçu depuis le canvas quand l'utilisateur valide un nouvel élément (trait/texte)."""
+        """Received from the canvas when the user validates a new element (stroke/text)."""
         self._checkpoint("Annotation")
         self._push_undo("Annotation")
         self._edit.annotations = list(self._edit.annotations) + [dict(annotation)]
@@ -1393,7 +1393,7 @@ class EditPanel(QWidget):
         self._save("annotation")
 
     def on_annotation_deleted(self, annotation_id: str) -> None:
-        """Reçu depuis le canvas quand l'utilisateur supprime l'élément sélectionné."""
+        """Received from the canvas when the user deletes the selected element."""
         self._checkpoint("annotation_delete")
         self._push_undo("annotation_delete")
         self._edit.annotations = [a for a in self._edit.annotations if a.get("id") != annotation_id]
@@ -1401,7 +1401,7 @@ class EditPanel(QWidget):
         self._save("annotation_delete")
 
     def on_annotation_deleted_multi(self, annotation_ids) -> None:
-        """Reçu depuis le canvas quand l'utilisateur supprime plusieurs éléments sélectionnés."""
+        """Received from the canvas when the user deletes several selected elements."""
         ids = set(annotation_ids or [])
         if not ids:
             return
@@ -1422,8 +1422,8 @@ class EditPanel(QWidget):
         self._update_annotation_style_controls_visibility()
 
     def _load_style_into_controls(self, ann: dict) -> None:
-        """Reflète le style de l'élément sélectionné (couleur/épaisseur/police) dans les
-        contrôles du panneau, sans déclencher de ré-application en cascade sur l'élément."""
+        """Reflects the style of the selected element (colour/width/font) in the
+        controls of the panel, without triggering a cascading re-application on the element."""
         widgets = [
             self._annotation_width_spin, self._annotation_font_combo,
             self._annotation_font_size, self._btn_annotation_bold, self._btn_annotation_italic,
@@ -1454,8 +1454,8 @@ class EditPanel(QWidget):
                 w.blockSignals(False)
 
     def on_annotation_moved(self, annotation_id: str, updated: dict) -> None:
-        """Reçu depuis le canvas quand l'utilisateur relâche la souris après avoir
-        déplacé l'élément sélectionné (outil Sélection)."""
+        """Received from the canvas when the user releases the mouse after having
+        moved the selected element (Selection tool)."""
         self._checkpoint("annotation_move")
         self._push_undo("annotation_move")
         self._edit.annotations = [
@@ -1465,8 +1465,8 @@ class EditPanel(QWidget):
         self._save("annotation_move")
 
     def on_annotation_moved_multi(self, updated) -> None:
-        """Reçu depuis le canvas quand l'utilisateur relâche la souris après avoir
-        déplacé plusieurs éléments sélectionnés en une fois (outil Sélection)."""
+        """Received from the canvas when the user releases the mouse after having
+        moved several selected elements at once (Selection tool)."""
         if not updated:
             return
         self._checkpoint("annotation_move_multi")
@@ -1478,8 +1478,8 @@ class EditPanel(QWidget):
         self._save("annotation_move_multi")
 
     def on_annotation_resized(self, annotation_id: str, updated: dict) -> None:
-        """Reçu depuis le canvas quand l'utilisateur relâche la souris après avoir
-        redimensionné/tourné l'élément sélectionné via ses ancres (outil Sélection)."""
+        """Received from the canvas when the user releases the mouse after having
+        resized/rotated the selected element through its handles (Selection tool)."""
         self._checkpoint("Redimensionner annotation")
         self._push_undo("Redimensionner annotation")
         self._edit.annotations = [
@@ -1491,7 +1491,7 @@ class EditPanel(QWidget):
         self._save("annotation_resize")
 
     def on_annotation_grouped(self, updated) -> None:
-        """Reçu depuis le canvas après un Grouper/Dégrouper (menu contextuel)."""
+        """Received from the canvas after a Group/Ungroup (context menu)."""
         if not updated:
             return
         is_group = any(v.get("group") for v in updated.values())

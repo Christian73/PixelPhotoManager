@@ -1,16 +1,16 @@
 ﻿# Copyright 2026 Christian Guyot
 # SPDX-License-Identifier: Apache-2.0
 """
-FaceClusterGrid — grille des groupes de visages non identifiés.
+FaceClusterGrid - grid of the unidentified face groups.
 
-Affichée dans la zone principale à la place de la grille de photos.
-1 clic  : sélectionner / désélectionner un groupe (multi-sélection cumulative).
-2 clics : ouvrir les photos du groupe.
-Barre d'action (visible dès qu'1+ groupes sont sélectionnés) :
-  • Voir les photos    (1 seul groupe sélectionné)
-  • Associer à…       (ouvrir le dialogue d'assignation pour tous les groupes)
-  • Ignorer           (ignorer tous les groupes sélectionnés)
-  • ✕ Désélectionner  (vider la sélection)
+Displayed in the main area in place of the photo grid.
+1 click  : select / deselect a group (cumulative multi-selection).
+2 clicks : open the photos of the group.
+Action bar (visible as soon as 1+ groups are selected):
+  * See the photos     (a single group selected)
+  * Assign to...       (open the assignment dialog for every group)
+  * Ignore             (ignore every selected group)
+  * X Deselect         (empty the selection)
 """
 
 import logging
@@ -35,16 +35,16 @@ _CARD_IMG     = 130
 _CARD_W       = 148
 _CARD_SPACING  = 10
 _COLS_MIN      = 2
-_SIM_GROUP     = 0.72   # seuil pour regrouper deux clusters "même personne probable"
-_BUILD_BATCH   = 10     # cartes créées par tick de l'event loop (évite de bloquer l'UI)
-_PAGE_SIZE     = 200    # nombre de cartes rendues par page (pagination)
-_UF_CHUNK      = 500    # lignes par bloc dans le produit matriciel de l'Union-Find
-                        # RAM pic ≈ _UF_CHUNK × n × 4 octets  (500 × 50k × 4 = 100 Mo)
-UNION_FIND_MAX = 80_000 # skip UF au-delà (temps > 2 min même en mode blocs)
+_SIM_GROUP     = 0.72   # threshold to group two clusters as "probably the same person"
+_BUILD_BATCH   = 10     # cards created per event-loop tick (avoids blocking the UI)
+_PAGE_SIZE     = 200    # number of cards rendered per page (pagination)
+_UF_CHUNK      = 500    # rows per block in the matrix product of the Union-Find
+                        # RAM peak ~ _UF_CHUNK x n x 4 bytes  (500 x 50k x 4 = 100 MB)
+UNION_FIND_MAX = 80_000 # skip the UF beyond that (> 2 min even in block mode)
 
-# ------------------------------------------------------------------ modules extraits
-# (2026-07) Cartes/sections, dialogue de fusion et threads déplacés dans leurs
-# modules ; noms ré-exportés sous leurs noms historiques.
+# ------------------------------------------------------------------ extracted modules
+# (2026-07) Cards/sections, merge dialog and threads moved into their own
+# modules; names re-exported under their historical names.
 from src.ui.face_cluster_cards import (  # noqa: E402,F401
     _BTN_ACCEPT_STYLE, _BTN_OVL, _BTN_REJECT_STYLE, _ClusterCard, _SectionWidget,
 )
@@ -57,10 +57,10 @@ from src.core.i18n import translate
 
 class _ProgressPopup(QDialog):
     """
-    Dialogue modal-less affiché pendant le calcul Union-Find.
+    Modal-less dialog displayed during the Union-Find computation.
 
-    Sans cadre (pas de barre de titre système) : le déplacement est assuré
-    par un glisser-déposer sur n'importe quelle zone vide de la popup
+    Frameless (no system title bar): the dragging is provided by a
+    drag-and-drop on any empty area of the popup
     (cf. mousePressEvent/mouseMoveEvent).
     """
 
@@ -129,9 +129,9 @@ class _ProgressPopup(QDialog):
         btn_row.addWidget(btn_cancel)
         vbox.addLayout(btn_row)
 
-    # -------------------------------------------------------------- déplacement
-    # Fenêtre sans cadre : Qt ne fournit aucun déplacement natif, on l'implémente
-    # à la main (offset mémorisé au clic, move() à chaque mouvement).
+    # ------------------------------------------------------------------ dragging
+    # Frameless window: Qt provides no native dragging, we implement it by hand
+    # (offset remembered on click, move() on every movement).
 
     def mousePressEvent(self, event) -> None:
         if event.button() == Qt.MouseButton.LeftButton:
@@ -164,7 +164,7 @@ class _ProgressPopup(QDialog):
             self._bar.setValue(pct)
             self._lbl_pct.setText(f"{pct} %")
         else:
-            self._bar.setRange(0, 0)   # animation indéterminée
+            self._bar.setRange(0, 0)   # indeterminate animation
             self._lbl_pct.setText("")
 
     def center_on_parent(self) -> None:
@@ -180,19 +180,19 @@ class _ProgressPopup(QDialog):
 
 class FaceClusterGrid(QWidget):
     """
-    Zone principale affichant les groupes de visages non identifiés.
+    Main area displaying the unidentified face groups.
 
     Signals
     -------
-    cluster_named(cluster_id, name)           — créer une personne et l'assigner
-    cluster_assigned(cluster_id, pid)         — assigner à une personne existante
-    clusters_named(cluster_ids, name)         — créer une personne pour N groupes
-    clusters_assigned(cluster_ids, pid)       — assigner N groupes à une personne
-    cluster_ignored(cluster_id)               — ignorer un groupe
-    clusters_ignored(cluster_ids)             — ignorer N groupes/visages sélectionnés
-    cluster_merged(source_id, target_id)      — fusionner deux groupes
-    back_requested()                          — retourner à la grille de photos
-    photos_requested(cluster_id, label)       — afficher les photos d'un groupe
+    cluster_named(cluster_id, name)           - create a person and assign them
+    cluster_assigned(cluster_id, pid)         - assign to an existing person
+    clusters_named(cluster_ids, name)         - create a person for N groups
+    clusters_assigned(cluster_ids, pid)       - assign N groups to a person
+    cluster_ignored(cluster_id)               - ignore a group
+    clusters_ignored(cluster_ids)             - ignore N selected groups/faces
+    cluster_merged(source_id, target_id)      - merge two groups
+    back_requested()                          - go back to the photo grid
+    photos_requested(cluster_id, label)       - display the photos of a group
     """
 
     cluster_named      = Signal(int, str)
@@ -204,7 +204,7 @@ class FaceClusterGrid(QWidget):
     cluster_merged     = Signal(int, int)
     back_requested     = Signal()
     photos_requested   = Signal(int, str)
-    persons_updated    = Signal()             # des suggestions ont été promu → rafraîchir la sidebar
+    persons_updated    = Signal()             # some suggestions were promoted -> refresh the sidebar
 
     def __init__(self, face_db: FaceDatabase, catalog, parent=None) -> None:
         super().__init__(parent)
@@ -218,11 +218,11 @@ class FaceClusterGrid(QWidget):
         self._loader  = None
         self._refresh_thread: _ClusterRefreshThread | None = None
         self._selected_ids: set[int] = set()
-        # Cache des bytes JPEG d'avatars : persiste entre la phase 1 et la phase 2
-        # pour éviter de relire les fichiers lors du rebuild avec suggestions.
+        # Cache of the avatar JPEG bytes: persists between phase 1 and phase 2 so as
+        # not to read the files again during the rebuild with suggestions.
         self._avatar_cache: dict[int, bytes] = {}
-        self._build_generation: int = 0   # annule les lots en file si un nouveau build démarre
-        self._cached_data: dict | None = None  # dernières données complètes (phase 2)
+        self._build_generation: int = 0   # cancels the queued batches if a new build starts
+        self._cached_data: dict | None = None  # last complete data (phase 2)
         # Pagination
         self._all_combined:      list            = []
         self._rendered_count:    int             = 0
@@ -230,12 +230,12 @@ class FaceClusterGrid(QWidget):
         self._solo_section:      "_SectionWidget | None" = None
         self._load_more_btn:     "QPushButton | None"    = None
         self._pending_build_data: "dict | None"          = None
-        # Mémorisation de la position de scroll pour restore()
+        # Memorising the scroll position for restore()
         self._saved_scroll_pos:       int  = 0
         self._restore_scroll_on_build: bool = False
-        # Ancre pour la sélection étendue Maj+clic
+        # Anchor for the extended Shift+click selection
         self._anchor_id: "int | None" = None
-        # Popup de progression (affiché pendant le calcul Union-Find)
+        # Progress popup (displayed during the Union-Find computation)
         self._progress_popup: "_ProgressPopup | None" = None
         self._setup_ui()
 
@@ -246,7 +246,7 @@ class FaceClusterGrid(QWidget):
         root.setContentsMargins(12, 8, 12, 8)
         root.setSpacing(6)
 
-        # Barre de titre
+        # Title bar
         bar = QHBoxLayout()
         btn_back = QPushButton(translate("FaceClusterGrid", "← Photos"))
         btn_back.setToolTip(translate("FaceClusterGrid", "Back to the photo grid"))
@@ -259,7 +259,7 @@ class FaceClusterGrid(QWidget):
         bar.addStretch()
         root.addLayout(bar)
 
-        # Barre de progression (visible pendant le chargement, cachée ensuite)
+        # Progress bar (visible during the loading, hidden afterwards)
         self._progress_widget = QWidget()
         self._progress_widget.setVisible(False)
         _pw_vbox = QVBoxLayout(self._progress_widget)
@@ -289,7 +289,7 @@ class FaceClusterGrid(QWidget):
         _pw_vbox.addWidget(self._progress_bar)
         root.addWidget(self._progress_widget)
 
-        # Barre d'action multi-sélection (cachée par défaut)
+        # Multi-selection action bar (hidden by default)
         self._action_bar = QFrame()
         self._action_bar.setStyleSheet(
             "QFrame { background: #1e3040; border-radius: 4px; }"
@@ -329,7 +329,7 @@ class FaceClusterGrid(QWidget):
         self._action_bar.setVisible(False)
         root.addWidget(self._action_bar)
 
-        # Zone de défilement
+        # Scroll area
         self._content = QWidget()
         self._content_vbox = QVBoxLayout(self._content)
         self._content_vbox.setContentsMargins(0, 0, 0, 8)
@@ -358,12 +358,12 @@ class FaceClusterGrid(QWidget):
             section.reflow(self._current_cols)
 
     def _force_reflow(self) -> None:
-        """Recalcule les colonnes depuis la largeur réelle et replace toutes les cartes.
-        Appelé en différé après un build pour corriger le cas où le viewport
-        n'était pas encore dimensionné au moment du calcul initial."""
+        """Recomputes the columns from the real width and places every card again.
+        Called deferred after a build to correct the case where the viewport
+        was not sized yet at the time of the initial computation."""
         available = self._scroll.viewport().width()
         if available <= 0:
-            QTimer.singleShot(50, self._force_reflow)  # viewport pas encore prêt
+            QTimer.singleShot(50, self._force_reflow)  # viewport not ready yet
             return
         self._current_cols = max(_COLS_MIN, available // (_CARD_W + _CARD_SPACING))
         self._reflow()
@@ -371,8 +371,8 @@ class FaceClusterGrid(QWidget):
     # ------------------------------------------------------------------ public
 
     def refresh(self) -> None:
-        """Lance le chargement en arrière-plan et affiche un indicateur immédiatement."""
-        # Arrêter le loader d'avatars en cours et libérer le thread Qt enfant
+        """Starts the background loading and displays an indicator immediately."""
+        # Stop the avatar loader in progress and release the child Qt thread
         if self._loader is not None:
             try:
                 self._loader.avatar_ready.disconnect(self._on_avatar_ready)
@@ -384,7 +384,7 @@ class FaceClusterGrid(QWidget):
                 self._loader.deleteLater()
             self._loader = None
 
-        # Arrêter un refresh précédent encore en cours et libérer le thread Qt enfant
+        # Stop a previous refresh still in progress and release the child Qt thread
         if self._refresh_thread is not None:
             if self._refresh_thread.isRunning():
                 self._refresh_thread.cancel()
@@ -398,17 +398,17 @@ class FaceClusterGrid(QWidget):
                 self._refresh_thread.deleteLater()
             self._refresh_thread = None
 
-        # Vider le cache d'avatars : les cluster_id changent à chaque re-clustering,
-        # les anciennes entrées s'accumuleraient sans cette purge.
+        # Empty the avatar cache: the cluster_ids change at every re-clustering,
+        # the old entries would pile up without this purge.
         self._avatar_cache.clear()
 
-        self._build_generation += 1   # annule tout build par lots encore en file d'attente
+        self._build_generation += 1   # cancels any batch build still queued
         self._cards.clear()
         self._sections.clear()
         self._selected_ids.clear()
         self._action_bar.setVisible(False)
         self._anchor_id = None
-        # Pagination : reset
+        # Pagination: reset
         self._all_combined = []
         self._rendered_count = 0
         self._flat_section = None
@@ -421,7 +421,7 @@ class FaceClusterGrid(QWidget):
             if item.widget():
                 item.widget().deleteLater()
 
-        # Cacher la petite barre interne et ouvrir la popup de progression
+        # Hide the small internal bar and open the progress popup
         self._progress_widget.setVisible(False)
         self._lbl_title.setText(translate("FaceClusterGrid", "Loading…"))
 
@@ -441,11 +441,11 @@ class FaceClusterGrid(QWidget):
         self._refresh_thread.start()
 
     def remove_clusters(self, cluster_ids: list[int]) -> None:
-        """Retire les groupes donnés de l'affichage sans relancer les calculs.
+        """Removes the given groups from the display without restarting the computations.
 
-        Supprime les cartes directement et met à jour _cached_data.
-        Si un thread est en cours (Phase 2 non terminée), relance refresh()
-        pour repartir sur des données fraîches du DB."""
+        Deletes the cards directly and updates _cached_data.
+        If a thread is in progress (Phase 2 not finished), restarts refresh()
+        so as to start again from fresh DB data."""
         if not cluster_ids:
             return
         if (self._refresh_thread and self._refresh_thread.isRunning()) or self._cached_data is None:
@@ -454,7 +454,7 @@ class FaceClusterGrid(QWidget):
 
         cid_set = set(cluster_ids)
 
-        # Cartes : retirer du registre et de l'avatar cache
+        # Cards: remove from the registry and from the avatar cache
         removed_from_sel = cid_set & self._selected_ids
         self._selected_ids -= removed_from_sel
         for cid in cid_set:
@@ -463,7 +463,7 @@ class FaceClusterGrid(QWidget):
                 card.deleteLater()
             self._avatar_cache.pop(cid, None)
 
-        # Sections : filtrer les entrées, reflow si encore peuplée, supprimer sinon
+        # Sections: filter the entries, reflow if still populated, delete otherwise
         sections_to_keep = []
         for section in self._sections:
             section._entries = [(c, w) for c, w in section._entries if c not in cid_set]
@@ -477,7 +477,7 @@ class FaceClusterGrid(QWidget):
                 section.deleteLater()
         self._sections = sections_to_keep
 
-        # Cache : supprimer les clusters des dicts et reconstruire groups_sorted / group_labels
+        # Cache: remove the clusters from the dicts and rebuild groups_sorted / group_labels
         data = self._cached_data
         for cid in cid_set:
             data["face_counts"].pop(cid, None)
@@ -496,13 +496,13 @@ class FaceClusterGrid(QWidget):
         data["groups_sorted"] = new_groups
         data["group_labels"]  = new_labels
 
-        # Pagination : retirer aussi des entrées non encore rendues
+        # Pagination: also remove the entries not rendered yet
         self._all_combined = [
             (kind, [c for c in group if c not in cid_set])
             for kind, group in self._all_combined
         ]
         self._all_combined = [(k, g) for k, g in self._all_combined if g]
-        # Mettre à jour le bouton si les données pendantes changent
+        # Update the button if the pending data changes
         if self._load_more_btn is not None:
             remaining = len(self._all_combined) - self._rendered_count
             if remaining <= 0:
@@ -516,19 +516,19 @@ class FaceClusterGrid(QWidget):
                     + translate("FaceClusterGrid", "(%n left)", None, remaining)
                 )
 
-        # Barre d'action
+        # Action bar
         if removed_from_sel:
             self._update_action_bar()
 
     def restore(self) -> None:
-        """Restaure la grille depuis le cache sans relancer les calculs lourds.
-        Appelé lors d'un retour de navigation (ex : retour depuis les photos d'un groupe).
-        Si aucune donnée n'est en cache, déclenche un refresh() complet."""
+        """Restores the grid from the cache without restarting the heavy computations.
+        Called on a navigation return (e.g. coming back from the photos of a group).
+        If no data is in cache, triggers a full refresh()."""
         if self._cached_data is None:
             self.refresh()
             return
 
-        # Arrêter un loader d'avatars en cours et libérer le thread Qt enfant
+        # Stop an avatar loader in progress and release the child Qt thread
         if self._loader is not None:
             try:
                 self._loader.avatar_ready.disconnect(self._on_avatar_ready)
@@ -547,7 +547,7 @@ class FaceClusterGrid(QWidget):
         self._selected_ids.clear()
         self._action_bar.setVisible(False)
         self._anchor_id = None
-        # Pagination : reset (le while loop suivant supprime load_more_btn du layout)
+        # Pagination: reset (the following while loop removes load_more_btn from the layout)
         self._all_combined = []
         self._rendered_count = 0
         self._flat_section = None
@@ -565,14 +565,14 @@ class FaceClusterGrid(QWidget):
 
     @Slot()
     def _on_progress_cancelled(self) -> None:
-        """Bouton Annuler de la popup de progression : interrompt l'analyse en cours.
+        """Cancel button of the progress popup: interrupts the analysis in progress.
 
-        Le thread vérifie son drapeau _cancelled à intervalles réguliers ; si
-        l'annulation survient pendant l'Union-Find (la partie longue), il ne
-        s'arrête pas net : il termine avec les fusions déjà trouvées et émet
-        quand même data_ready peu après (résultat partiel mais valide, marqué
-        `was_cancelled`). Ce signal reste donc connecté — _on_data_ready
-        remplacera ce message dès qu'il arrive."""
+        The thread checks its _cancelled flag at regular intervals; if the
+        cancellation happens during the Union-Find (the long part), it does not
+        stop dead: it finishes with the merges already found and emits
+        data_ready anyway shortly afterwards (a partial but valid result, marked
+        `was_cancelled`). That signal therefore stays connected - _on_data_ready
+        will replace this message as soon as it arrives."""
         if self._refresh_thread is not None and self._refresh_thread.isRunning():
             self._refresh_thread.cancel()
         if self._progress_popup is not None:
@@ -597,10 +597,10 @@ class FaceClusterGrid(QWidget):
 
     @Slot(object)
     def _on_initial_ready(self, data: object) -> None:
-        """Phase 1 : affiche immédiatement les cartes en liste plate (sans suggestions).
-        Si la popup de progression est visible, on attend la phase 2 pour afficher."""
+        """Phase 1: immediately displays the cards in a flat list (without suggestions).
+        If the progress popup is visible, we wait for phase 2 to display."""
         if self._progress_popup is not None:
-            return   # la popup est ouverte — on saute la phase 1 et attend data_ready
+            return   # the popup is open - we skip phase 1 and wait for data_ready
         while self._content_vbox.count():
             item = self._content_vbox.takeAt(0)
             if item.widget():
@@ -611,7 +611,7 @@ class FaceClusterGrid(QWidget):
 
     @Slot(object)
     def _on_data_ready(self, data: object) -> None:
-        """Phase 2 : reconstruit la vue avec groupes similaires et suggestions."""
+        """Phase 2: rebuilds the view with similar groups and suggestions."""
         if self._progress_popup is not None:
             self._progress_popup.close()
             self._progress_popup = None
@@ -620,16 +620,16 @@ class FaceClusterGrid(QWidget):
             self._lbl_title.setText(translate("FaceClusterGrid", "Error while loading"))
             return
         if data.get("is_partial"):
-            return  # ne devrait pas arriver, mais garde-fou
+            return  # should not happen, but a safeguard
 
-        # Mémoriser les données finales pour restore()
+        # Memorise the final data for restore()
         self._cached_data = data
 
-        # Si des suggestions ont été promu en Phase 2, notifier la sidebar
+        # If suggestions were promoted in Phase 2, notify the sidebar
         if data.get("n_promoted", 0) > 0:
             self.persons_updated.emit()
 
-        # Arrêter le loader d'avatars de la phase 1 (les bytes sont dans _avatar_cache)
+        # Stop the avatar loader of phase 1 (the bytes are in _avatar_cache)
         if self._loader is not None:
             try:
                 self._loader.avatar_ready.disconnect(self._on_avatar_ready)
@@ -641,7 +641,7 @@ class FaceClusterGrid(QWidget):
                 self._loader.deleteLater()
             self._loader = None
 
-        # Vider et reconstruire
+        # Empty and rebuild
         while self._content_vbox.count():
             item = self._content_vbox.takeAt(0)
             if item.widget():
@@ -650,7 +650,7 @@ class FaceClusterGrid(QWidget):
         self._sections.clear()
         self._selected_ids.clear()
         self._action_bar.setVisible(False)
-        # Pagination : reset (le while loop a purgé load_more_btn du layout)
+        # Pagination: reset (the while loop purged load_more_btn from the layout)
         self._all_combined = []
         self._rendered_count = 0
         self._flat_section = None
@@ -660,15 +660,15 @@ class FaceClusterGrid(QWidget):
         self._build_from_data(data)
 
     def _build_from_data(self, data: dict) -> None:
-        """Construit la grille en lots (ne bloque pas l'UI).
+        """Builds the grid in batches (does not block the UI).
 
-        Affiche les _PAGE_SIZE premières cartes immédiatement, puis offre
-        un bouton "Charger N de plus" pour les pages suivantes.
+        Displays the first _PAGE_SIZE cards immediately, then offers
+        a "Load N more" button for the following pages.
 
-        Stratégie de mise en page :
-        • Groupes de 2+ clusters similaires → section dédiée avec en-tête.
-        • Clusters isolés avec face_count > 1 → section plate commune.
-        • Clusters de 1 seul visage (visages isolés) → section "Visages isolés" en bas.
+        Layout strategy:
+        * Groups of 2+ similar clusters -> dedicated section with a header.
+        * Isolated clusters with face_count > 1 -> common flat section.
+        * Clusters of a single face (isolated faces) -> "Isolated faces" section at the bottom.
         """
         face_counts               = data["face_counts"]
         groups_sorted             = data["groups_sorted"]
@@ -708,9 +708,9 @@ class FaceClusterGrid(QWidget):
         if is_partial:
             suffix = translate("FaceClusterGrid", " — analysis running…")
         elif data.get("was_cancelled"):
-            # Annulation pendant l'Union-Find : certains groupes qui auraient
-            # fusionné plus tard restent séparés (rien n'est jamais fusionné à
-            # tort, juste pas encore découvert) — cf. _compute_cluster_groups_bg.
+            # Cancellation during the Union-Find: some groups that would have
+            # merged later stay separate (nothing is ever merged wrongly, just not
+            # discovered yet) - cf. _compute_cluster_groups_bg.
             suffix = translate("FaceClusterGrid",
                                " — analysis interrupted, partial grouping")
         else:
@@ -724,7 +724,7 @@ class FaceClusterGrid(QWidget):
         self._build_generation += 1
         gen = self._build_generation
 
-        # ── Regrouper les singletons partageant la même suggestion de personne ──
+        # ── Group the singletons sharing the same person suggestion ──
         if suggestions:
             persons_by_id = {p.id: p for p in (self._persons or [])}
             singleton_by_person: dict[int, list[int]] = {}
@@ -860,7 +860,7 @@ class FaceClusterGrid(QWidget):
                         0, lambda items=list(avatar_items): self._start_cluster_loader(items)
                     )
                 QTimer.singleShot(0, self._force_reflow)
-            # Restaurer la position de scroll après retour de navigation
+            # Restore the scroll position after a navigation return
             if self._restore_scroll_on_build:
                 self._restore_scroll_on_build = False
                 _pos = self._saved_scroll_pos
@@ -908,12 +908,12 @@ class FaceClusterGrid(QWidget):
 
         QTimer.singleShot(0, lambda: _next(0, 0))
 
-    # ------------------------------------------------------------------ sélection
+    # ------------------------------------------------------------------ selection
 
     def _on_card_selection_toggled(self, cluster_id: int, selected: bool) -> None:
         if selected:
             self._selected_ids.add(cluster_id)
-            self._anchor_id = cluster_id   # ancre pour Maj+clic
+            self._anchor_id = cluster_id   # anchor for Shift+click
         else:
             self._selected_ids.discard(cluster_id)
         self._update_action_bar()
@@ -945,7 +945,7 @@ class FaceClusterGrid(QWidget):
         self._anchor_id = None
         self._action_bar.setVisible(False)
 
-    # ------------------------------------------------------------------ slots cartes individuelles
+    # ------------------------------------------------------------------ slots of the individual cards
 
     def _on_card_view_requested(self, cluster_id: int) -> None:
         self._saved_scroll_pos = self._scroll.verticalScrollBar().value()
@@ -969,9 +969,9 @@ class FaceClusterGrid(QWidget):
         self.cluster_ignored.emit(cluster_id)
 
     def _on_card_ignore_selection_requested(self) -> None:
-        """Ignore tous les groupes/visages isolés actuellement sélectionnés
-        (menu contextuel « Ignorer ces groupes », visible seulement en
-        multi-sélection — cf. _ClusterCard.mousePressEvent)."""
+        """Ignores every group/isolated face currently selected
+        (context menu « Ignore these groups », visible only in
+        multi-selection - cf. _ClusterCard.mousePressEvent)."""
         cluster_ids = list(self._selected_ids)
         if not cluster_ids:
             return
@@ -984,17 +984,17 @@ class FaceClusterGrid(QWidget):
         self.clusters_assigned.emit([cluster_id], person_id)
 
     def _on_card_eject_from_section(self, cluster_id: int) -> None:
-        """Retire le cluster de sa section de suggestion et le place dans les groupes isolés."""
+        """Removes the cluster from its suggestion section and places it among the isolated groups."""
         self._face_db.clear_cluster_suggestion(cluster_id)
 
-        # Supprimer l'ancienne carte
+        # Delete the old card
         old_card = self._cards.pop(cluster_id, None)
         if old_card is not None:
             old_card.deleteLater()
         self._avatar_cache.pop(cluster_id, None)
         self._selected_ids.discard(cluster_id)
 
-        # Retirer de sa section — supprimer la section si elle devient vide
+        # Remove from its section - delete the section if it becomes empty
         sections_to_keep = []
         for section in self._sections:
             if section is self._flat_section or section is self._solo_section:
@@ -1014,7 +1014,7 @@ class FaceClusterGrid(QWidget):
                 sections_to_keep.append(section)
         self._sections = sections_to_keep
 
-        # Mettre à jour _cached_data
+        # Update _cached_data
         if self._cached_data:
             self._cached_data["suggestions"].pop(cluster_id, None)
             old_group_labels = self._cached_data.get("group_labels", {})
@@ -1026,8 +1026,8 @@ class FaceClusterGrid(QWidget):
                     new_g = [c for c in g if c != cluster_id]
                     if new_g:
                         new_groups.append(new_g)
-                        # Le groupe restant garde son étiquette, réindexée sur son
-                        # nouveau premier élément si le cluster éjecté était le root.
+                        # The remaining group keeps its label, reindexed on its
+                        # new first element if the ejected cluster was the root.
                         if new_g[0] != old_root:
                             new_group_labels[new_g[0]] = old_group_labels.get(old_root, ("", ""))
                     new_groups.append([cluster_id])
@@ -1037,14 +1037,14 @@ class FaceClusterGrid(QWidget):
             new_group_labels[cluster_id] = ("", "")
             self._cached_data["group_labels"] = new_group_labels
 
-        # Retirer de _all_combined (la carte sera ajoutée directement à flat_section)
+        # Remove from _all_combined (the card will be added directly to flat_section)
         self._all_combined = [
             (k, [c for c in g if c != cluster_id])
             for k, g in self._all_combined
         ]
         self._all_combined = [(k, g) for k, g in self._all_combined if g]
 
-        # Créer la nouvelle carte dans flat_section
+        # Create the new card in flat_section
         flat = self._flat_section
         data = self._pending_build_data
         if flat is not None and data is not None:
@@ -1070,7 +1070,7 @@ class FaceClusterGrid(QWidget):
                 QTimer.singleShot(
                     0, lambda r=rep, cid=cluster_id: self._start_cluster_loader([(cid, r)])
                 )
-            # S'assurer que flat_section est dans le layout
+            # Make sure flat_section is in the layout
             if self._content_vbox.indexOf(flat) < 0:
                 ref = None
                 if self._solo_section and self._content_vbox.indexOf(self._solo_section) >= 0:
@@ -1098,9 +1098,9 @@ class FaceClusterGrid(QWidget):
             self.cluster_merged.emit(cluster_id, target_id)
 
     def _on_card_associate_requested(self) -> None:
-        """Fusionne tous les groupes/visages isolés actuellement sélectionnés
-        dans un même groupe (sans les assigner à une personne), pour pouvoir
-        les identifier ensemble en une seule fois."""
+        """Merges every group/isolated face currently selected
+        into a single group (without assigning them to a person), so as to be able
+        to identify them together in one go."""
         cluster_ids = list(self._selected_ids)
         if len(cluster_ids) < 2:
             return
@@ -1139,7 +1139,7 @@ class FaceClusterGrid(QWidget):
         else:
             self.cluster_assigned.emit(cluster_id, dlg.existing_person_id())
 
-    # ------------------------------------------------------------------ barre d'action
+    # ------------------------------------------------------------------ action bar
 
     def _on_action_view(self) -> None:
         if len(self._selected_ids) == 1:
@@ -1187,9 +1187,9 @@ class FaceClusterGrid(QWidget):
         for cid in cluster_ids:
             self._face_db.ignore_cluster(cid)
         self._anchor_id = None
-        self.remove_clusters(cluster_ids)   # un seul reflow UI
+        self.remove_clusters(cluster_ids)   # a single UI reflow
 
-    # ------------------------------------------------------------------ slots sections
+    # ------------------------------------------------------------------ slots of the sections
 
     def _on_section_accept(self, cluster_ids: list, person_id: int) -> None:
         self.clusters_assigned.emit(cluster_ids, person_id)
@@ -1207,7 +1207,7 @@ class FaceClusterGrid(QWidget):
     # ------------------------------------------------------------------ pagination
 
     def _load_more_cards(self) -> None:
-        """Affiche la prochaine page de _PAGE_SIZE cartes depuis self._all_combined."""
+        """Displays the next page of _PAGE_SIZE cards from self._all_combined."""
         if not self._all_combined or self._pending_build_data is None:
             return
         start = self._rendered_count
@@ -1313,7 +1313,7 @@ class FaceClusterGrid(QWidget):
                     for cluster_id in group_by_size:
                         _add_card(cluster_id, section, eject=(best_pid is not None))
                     section.reflow(self._current_cols)
-                    # Insérer avant flat/solo pour respecter l'ordre visuel
+                    # Insert before flat/solo to respect the visual order
                     ref = None
                     if flat_section and self._content_vbox.indexOf(flat_section) >= 0:
                         ref = flat_section
@@ -1336,10 +1336,10 @@ class FaceClusterGrid(QWidget):
 
         QTimer.singleShot(0, lambda: _next_more(start, 0))
 
-    # ------------------------------------------------------------------ sélection étendue (Maj+clic)
+    # ------------------------------------------------------------------ extended selection (Shift+click)
 
     def _get_ordered_card_ids(self) -> list[int]:
-        """Retourne les cluster_ids dans l'ordre visuel (section par section, entrée par entrée)."""
+        """Returns the cluster_ids in visual order (section by section, entry by entry)."""
         result: list[int] = []
         for section in self._sections:
             for cid, _ in section._entries:
@@ -1347,14 +1347,14 @@ class FaceClusterGrid(QWidget):
         return result
 
     def _on_range_select(self, cluster_id: int) -> None:
-        """Sélectionne toutes les cartes entre l'ancre et cluster_id (inclus)."""
+        """Selects every card between the anchor and cluster_id (inclusive)."""
         ordered = self._get_ordered_card_ids()
         if not ordered:
             return
 
         anchor = self._anchor_id
         if anchor is None or anchor not in self._cards:
-            # Pas d'ancre : comportement de clic normal
+            # No anchor: normal click behaviour
             card = self._cards.get(cluster_id)
             if card:
                 card._is_selected = not card._is_selected
@@ -1398,7 +1398,7 @@ class FaceClusterGrid(QWidget):
         self._loader.start()
 
     def _on_avatar_ready(self, cluster_id: int, data: bytes) -> None:
-        self._avatar_cache[cluster_id] = data   # conservé pour la phase 2
+        self._avatar_cache[cluster_id] = data   # kept for phase 2
         card = self._cards.get(cluster_id)
         if card:
             card.set_avatar(data)
