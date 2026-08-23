@@ -1,16 +1,16 @@
 # Copyright 2026 Christian Guyot
 # SPDX-License-Identifier: Apache-2.0
-"""Lance PixelPhotoManager en sous-processus avec un profil `%LOCALAPPDATA%`
-isolé, jetable, distinct du profil réel de l'utilisateur.
+"""Launches PixelPhotoManager in a subprocess with an isolated, disposable
+`%LOCALAPPDATA%` profile, distinct from the real profile of the user.
 
-`src/core/app_dirs.py::APP_DATA_DIR` est une constante de module calculée une
-seule fois à l'import (`Path(os.environ.get("LOCALAPPDATA", ...)) / "PixelPhotoManager"`),
-reprise telle quelle par 13 modules dépendants. Il n'existe ni variable d'env
-dédiée ni argument CLI pour la surcharger — la seule façon supportée de
-rediriger l'appli entière est de fixer `LOCALAPPDATA` dans le bloc
-d'environnement d'un **sous-processus**, avant son premier import de code
-applicatif. Ce module ne mute jamais la variable d'environnement du process
-appelant.
+`src/core/app_dirs.py::APP_DATA_DIR` is a module constant computed only
+once at import time (`Path(os.environ.get("LOCALAPPDATA", ...)) / "PixelPhotoManager"`),
+taken as-is by 13 dependent modules. There is neither a dedicated env variable
+nor a CLI argument to override it -- the only supported way to
+redirect the whole application is to set `LOCALAPPDATA` in the environment
+block of a **subprocess**, before its first import of application
+code. This module never mutates the environment variable of the calling
+process.
 """
 from __future__ import annotations
 
@@ -40,9 +40,9 @@ def prepare_app_data_dir(
     scan_folders: list[str],
     extra_config: dict | None = None,
 ) -> None:
-    """Prépare un `%LOCALAPPDATA%\\PixelPhotoManager` isolé : un `config.json`
-    minimal suffit — `Catalog`/`ThumbnailCache`/`FaceDatabase` s'auto-créent et
-    s'auto-migrent au premier lancement, aucune base à pré-semer."""
+    """Prepares an isolated `%LOCALAPPDATA%\\PixelPhotoManager`: a minimal
+    `config.json` is enough -- `Catalog`/`ThumbnailCache`/`FaceDatabase` create and
+    migrate themselves on the first launch, no database to pre-seed."""
     app_data_dir = Path(app_data_dir)
     ppm_dir = app_data_dir / "PixelPhotoManager"
     ppm_dir.mkdir(parents=True, exist_ok=True)
@@ -64,33 +64,33 @@ def launch_app(
     python_exe: Path | None = None,
     repo_root: Path | None = None,
 ) -> LaunchedApp:
-    """Lance `main.py` en sous-processus, `LOCALAPPDATA` redirigé UNIQUEMENT
-    dans le bloc d'environnement de cet enfant (jamais dans le process appelant)."""
+    """Launches `main.py` in a subprocess, `LOCALAPPDATA` redirected ONLY
+    in the environment block of that child (never in the calling process)."""
     app_data_dir = Path(app_data_dir)
     repo_root = Path(repo_root) if repo_root else _REPO_ROOT
     python_exe = Path(python_exe) if python_exe else repo_root / ".venv" / "Scripts" / "python.exe"
 
     prepare_app_data_dir(app_data_dir, scan_folders, extra_config)
 
-    # PPM_SUPPRESS_EXPLORER=1 : l'export ouvre normalement le dossier de
-    # destination dans l'Explorateur (main_window.py::_run_export) — en e2e,
-    # cette fenêtre passerait devant la fenêtre pilotée par UIA et resterait
-    # ouverte après la fin du test (explorer.exe n'est pas un enfant du
-    # processus applicatif, donc jamais fermé par terminate()), perturbant
-    # les scénarios suivants.
+    # PPM_SUPPRESS_EXPLORER=1: the export normally opens the destination
+    # folder in Explorer (main_window.py::_run_export) -- in e2e,
+    # that window would come in front of the window driven by UIA and would stay
+    # open after the end of the test (explorer.exe is not a child of the
+    # application process, so it is never closed by terminate()), disturbing
+    # the following scenarios.
     child_env = {
         **os.environ,
         "LOCALAPPDATA": str(app_data_dir),
         "PPM_SUPPRESS_EXPLORER": "1",
     }
 
-    # PPM_E2E_COVERAGE=1 : lancer l'appli sous coverage.py pour que les
-    # scénarios e2e créditent la couverture du code UI. `parallel = true`
-    # (.coveragerc) fait écrire un fichier .coverage.<hôte>.<pid> distinct
-    # dans le cwd (racine du dépôt), à fusionner ensuite avec
-    # `coverage combine` avant `coverage report`. Nécessite une fermeture
-    # PROPRE de l'application (cf. _graceful_close dans tests/e2e/conftest.py) :
-    # un TerminateProcess n'exécute pas le hook atexit qui écrit les données.
+    # PPM_E2E_COVERAGE=1: run the application under coverage.py so that the
+    # e2e scenarios credit the coverage of the UI code. `parallel = true`
+    # (.coveragerc) makes it write a distinct .coverage.<host>.<pid> file
+    # in the cwd (the root of the repository), to be merged afterwards with
+    # `coverage combine` before `coverage report`. Requires a CLEAN shutdown
+    # of the application (cf. _graceful_close in tests/e2e/conftest.py):
+    # a TerminateProcess does not run the atexit hook that writes the data.
     cmd = [str(python_exe), "main.py"]
     if os.environ.get("PPM_E2E_COVERAGE") == "1":
         cmd = [
@@ -105,9 +105,9 @@ def launch_app(
         env=child_env,
     )
 
-    # main.py ne redirige les logs vers %LOCALAPPDATA% qu'en mode figé
-    # (PyInstaller, sys.frozen) ; en mode dev (ce lanceur), ils vont toujours
-    # dans <repo>/logs/, indépendamment de LOCALAPPDATA.
+    # main.py only redirects the logs towards %LOCALAPPDATA% in frozen mode
+    # (PyInstaller, sys.frozen); in dev mode (this launcher), they always go
+    # into <repo>/logs/, independently of LOCALAPPDATA.
     log_path = repo_root / "logs" / "pixelphotomanager.log"
 
     return LaunchedApp(
@@ -119,20 +119,20 @@ def launch_app(
 
 
 def terminate(app: LaunchedApp, window_pid: int | None = None, *, timeout: float = 10.0) -> None:
-    """Termine explicitement le(s) PID connu(s) de l'application isolée —
-    jamais un `taskkill /IM` large. `window_pid` (résolu séparément, ex. via
-    pywinauto) peut différer du PID lanceur `app.launcher_pid`.
+    """Explicitly terminates the known PID(s) of the isolated application --
+    never a broad `taskkill /IM`. `window_pid` (resolved separately, e.g. through
+    pywinauto) may differ from the launcher PID `app.launcher_pid`.
 
-    Inclut aussi tous les descendants (`psutil.children(recursive=True)`),
-    capturés AVANT de terminer les parents : Windows ne tue jamais les enfants
-    d'un process terminé (pas de cascade automatique comme sur POSIX), et
-    InsightFace/scikit-learn démarrent des workers `multiprocessing` (procédé
-    `spawn`, donc des `python.exe` indépendants) pendant l'indexation des
-    visages. Sans ce ramassage explicite, chaque run e2e laissait de vrais
-    processus orphelins (confirmé empiriquement : ~20 `python.exe`
-    `--multiprocessing-fork` à parent mort après une poignée de runs), qui
-    finissent par épuiser la mémoire/le fichier de pagination au point de
-    faire échouer le chargement des modèles ONNX du run suivant."""
+    Also includes every descendant (`psutil.children(recursive=True)`),
+    captured BEFORE terminating the parents: Windows never kills the children
+    of a terminated process (no automatic cascade as on POSIX), and
+    InsightFace/scikit-learn start `multiprocessing` workers (the `spawn`
+    method, hence independent `python.exe` processes) during face
+    indexing. Without that explicit collection, every e2e run left real
+    orphan processes behind (confirmed empirically: ~20 `python.exe`
+    `--multiprocessing-fork` with a dead parent after a handful of runs), which
+    end up exhausting the memory/page file to the point of
+    failing the loading of the ONNX models of the next run."""
     pids: set[int] = {app.launcher_pid}
     if window_pid is not None:
         pids.add(window_pid)

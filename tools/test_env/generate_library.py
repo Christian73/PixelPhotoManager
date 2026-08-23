@@ -1,21 +1,21 @@
 # Copyright 2026 Christian Guyot
 # SPDX-License-Identifier: Apache-2.0
-"""Génère une petite bibliothèque de photos synthétique et reproductible,
-utilisée par les tests de non-régression (Layer 1 unitaire, Layer 3 e2e).
+"""Generates a small synthetic and reproducible photo library,
+used by the non-regression tests (Layer 1 unit, Layer 3 e2e).
 
-Volontairement procédural (PIL + numpy, seed fixe) plutôt que des fichiers
-binaires committés dans le dépôt : `build_library()` régénère à l'identique
-la bibliothèque à chaque appel avec le même `seed`.
+Deliberately procedural (PIL + numpy, a fixed seed) rather than binary
+files committed into the repository: `build_library()` regenerates the
+library identically on every call with the same `seed`.
 
-Contient :
-- 3 photos "témoin" sans doublon (dates EXIF différentes, pour la chronologie).
-- Une paire de doublons exacts (copie d'octets).
-- Une paire de doublons redimensionnés (couvre le Tier 1 — pHash).
-- Une paire de doublons recadrés (crop pixel-exact, pas de redimensionnement —
-  couvre le Tier 2 — ORB/RANSAC, cf. src/library/duplicate_detector.py).
-- Un fichier JPEG corrompu (tronqué), pour src/library/file_repair.py.
-- Une vidéo synthétique best-effort (peut être absente si l'encodeur manque
-  sur la machine — les scénarios doivent gérer `video is None`).
+Contains:
+- 3 "witness" photos with no duplicate (different EXIF dates, for the timeline).
+- A pair of exact duplicates (a byte copy).
+- A pair of resized duplicates (covers Tier 1 -- pHash).
+- A pair of cropped duplicates (a pixel-exact crop, no resizing --
+  covers Tier 2 -- ORB/RANSAC, cf. src/library/duplicate_detector.py).
+- A corrupted (truncated) JPEG file, for src/library/file_repair.py.
+- A best-effort synthetic video (which may be missing if the encoder is absent
+  on the machine -- the scenarios must handle `video is None`).
 """
 from __future__ import annotations
 
@@ -33,29 +33,29 @@ from PIL import Image, ImageDraw, ImageEnhance, ImageFilter
 
 SEED = 20260715
 
-_IMG_SIZE = (900, 700)  # (W, H) — assez grand pour ~300 keypoints ORB distincts
-_N_SHAPES = 40          # formes dessinées par image — texture riche sur tout le canevas
+_IMG_SIZE = (900, 700)  # (W, H) -- large enough for ~300 distinct ORB keypoints
+_N_SHAPES = 40          # shapes drawn per image -- a rich texture over the whole canvas
 
-# Crop pour la paire Tier 2 : recadrage central ~70% x 70% (~49% de l'aire),
-# ratio d'aire ≈ 2.0 — largement sous _ORB_AREA_FACTOR=6.0 du détecteur.
-# Recadrage pixel-exact (pas de redimensionnement) : les keypoints ORB de la
-# zone commune restent identiques entre les deux fichiers, ce qui garantit un
-# nombre d'inliers RANSAC très supérieur au seuil _ORB_MIN_INLIERS=40.
+# Crop for the Tier 2 pair: a central crop of ~70% x 70% (~49% of the area),
+# area ratio ~= 2.0 -- well under the detector's _ORB_AREA_FACTOR=6.0.
+# A pixel-exact crop (no resizing): the ORB keypoints of the
+# common area stay identical between the two files, which guarantees a
+# number of RANSAC inliers far above the _ORB_MIN_INLIERS=40 threshold.
 _CROP_BOX_RATIO = (0.15, 0.15, 0.85, 0.85)
 
-# Paire "rafale" (même arrière-plan texturé partagé, sujet de premier plan
-# différent) : rectangle opaque fixe noir/blanc couvrant ~30% de l'aire,
-# peint au même endroit dans les deux variantes. Reproduit le faux positif
-# du Tier 2 (cf. src/library/duplicate_detector.py::_ORB_MAX_MEAN_DIFF) :
-# l'arrière-plan seul fournit largement plus d'inliers RANSAC que
-# _ORB_MIN_INLIERS, alors que les photos ne se ressemblent pas réellement.
+# A "burst" pair (the same shared textured background, a different
+# foreground subject): a fixed opaque black/white rectangle covering ~30% of the
+# area, painted at the same place in both variants. Reproduces the Tier 2 false
+# positive (cf. src/library/duplicate_detector.py::_ORB_MAX_MEAN_DIFF):
+# the background alone provides far more RANSAC inliers than
+# _ORB_MIN_INLIERS, while the photos do not really look alike.
 _BURST_BOX_RATIO = (0.28, 0.25, 0.73, 0.85)
 
 _BASE_DATE = datetime(2026, 1, 1, 10, 0, 0)
 
-# Retouche luminosité/contraste modérée : garde anti-régression pour la
-# vérification post-hash du Tier 1 (cf. src/library/duplicate_detector.py::
-# _HASH_PIXEL_MAX_DIFF) — une vraie retouche légitime doit rester groupée.
+# A moderate brightness/contrast edit: an anti-regression guard for the
+# post-hash check of Tier 1 (cf. src/library/duplicate_detector.py::
+# _HASH_PIXEL_MAX_DIFF) -- a genuinely legitimate edit must stay grouped.
 _EDIT_BRIGHTNESS = 1.25
 _EDIT_CONTRAST = 1.15
 
@@ -75,8 +75,8 @@ class LibraryManifest:
     images: list[Path] = field(default_factory=list)
 
     def rebased(self, new_root: Path) -> "LibraryManifest":
-        """Retourne un manifeste équivalent dont tous les chemins pointent sous
-        `new_root` au lieu de `self.root` (après un `shutil.copytree`)."""
+        """Returns an equivalent manifest whose paths all point under
+        `new_root` instead of `self.root` (after a `shutil.copytree`)."""
         new_root = Path(new_root)
 
         def _r(p: Path) -> Path:
@@ -99,9 +99,9 @@ class LibraryManifest:
 
 
 def _make_base_image(rng: np.random.Generator, index: int) -> Image.Image:
-    """Image texturée : bruit lissé + formes aléatoires distinctes sur tout le
-    canevas, pour que n'importe quel recadrage conserve assez de features
-    ORB (contrairement à une image à fond plat)."""
+    """A textured image: smoothed noise + distinct random shapes over the whole
+    canvas, so that any crop keeps enough ORB features
+    (unlike an image with a flat background)."""
     w, h = _IMG_SIZE
     arr = rng.integers(0, 256, size=(h, w, 3), dtype=np.uint8)
     img = Image.fromarray(arr, mode="RGB").filter(ImageFilter.GaussianBlur(1.2))
@@ -138,9 +138,9 @@ def _save_jpeg(img: Image.Image, path: Path, dt: datetime | None = None) -> None
 
 
 def _make_corrupted_jpeg(path: Path, rng: np.random.Generator) -> None:
-    """Écrit un JPEG valide puis le tronque après un en-tête partiel : le
-    fichier garde les octets magiques JPEG (0xFFD8) mais échoue à un décodage
-    complet — cf. src/library/file_repair.py, qui cible exactement ce cas."""
+    """Writes a valid JPEG then truncates it after a partial header: the
+    file keeps the JPEG magic bytes (0xFFD8) but fails a complete
+    decoding -- cf. src/library/file_repair.py, which targets exactly that case."""
     buf = io.BytesIO()
     img = Image.fromarray(rng.integers(0, 256, size=(400, 400, 3), dtype=np.uint8), mode="RGB")
     img.save(buf, "JPEG", quality=90)
@@ -150,9 +150,9 @@ def _make_corrupted_jpeg(path: Path, rng: np.random.Generator) -> None:
 
 
 def _make_video(path: Path, rng: np.random.Generator) -> Path | None:
-    """Best-effort : certaines machines n'ont pas d'encodeur mp4v disponible
-    pour OpenCV — dans ce cas on renvoie None plutôt que d'échouer la
-    génération de toute la bibliothèque."""
+    """Best-effort: some machines have no mp4v encoder available
+    for OpenCV -- in that case None is returned rather than failing the
+    generation of the whole library."""
     try:
         import cv2
     except ImportError:
@@ -173,8 +173,8 @@ def _make_video(path: Path, rng: np.random.Generator) -> Path | None:
 
 
 def build_library(dest_dir: Path, *, seed: int = SEED) -> LibraryManifest:
-    """Construit la bibliothèque synthétique dans `dest_dir` (créé si absent,
-    doit être vide/dédié — le contenu existant n'est pas nettoyé)."""
+    """Builds the synthetic library in `dest_dir` (created if absent,
+    must be empty/dedicated -- the existing content is not cleaned up)."""
     dest_dir = Path(dest_dir)
     dest_dir.mkdir(parents=True, exist_ok=True)
     rng = np.random.default_rng(seed)
@@ -187,7 +187,7 @@ def build_library(dest_dir: Path, *, seed: int = SEED) -> LibraryManifest:
         dated_photos[p] = dt
         return p
 
-    # -- Photos témoin (aucun doublon) --------------------------------------
+    # -- Witness photos (no duplicate) ---------------------------------------
     control_photos: list[Path] = []
     for i in range(3):
         p = dest_dir / f"control_{i + 1}.jpg"
@@ -196,7 +196,7 @@ def build_library(dest_dir: Path, *, seed: int = SEED) -> LibraryManifest:
         control_photos.append(p)
         images.append(p)
 
-    # -- Paire doublons exacts (Tier 1 : distance de Hamming ≈ 0) -----------
+    # -- Exact duplicate pair (Tier 1: a Hamming distance of ~0) -------------
     exact_a = dest_dir / "exact_a.jpg"
     exact_b = dest_dir / "exact_b.jpg"
     _save_jpeg(_make_base_image(rng, index=1), exact_a)
@@ -205,7 +205,7 @@ def build_library(dest_dir: Path, *, seed: int = SEED) -> LibraryManifest:
     _dated(exact_b, offset_days=10)
     images += [exact_a, exact_b]
 
-    # -- Paire doublons redimensionnés (Tier 1 : pHash robuste à l'échelle) --
+    # -- Resized duplicate pair (Tier 1: pHash is robust to scale) -----------
     resized_a = dest_dir / "resized_a.jpg"
     resized_b = dest_dir / "resized_b.jpg"
     base_resized = _make_base_image(rng, index=2)
@@ -218,7 +218,7 @@ def build_library(dest_dir: Path, *, seed: int = SEED) -> LibraryManifest:
     _dated(resized_b, offset_days=20)
     images += [resized_a, resized_b]
 
-    # -- Paire doublons recadrés (Tier 2 : ORB + RANSAC) --------------------
+    # -- Cropped duplicate pair (Tier 2: ORB + RANSAC) -----------------------
     crop_a = dest_dir / "crop_a.jpg"
     crop_b = dest_dir / "crop_b.jpg"
     base_crop = _make_base_image(rng, index=3)
@@ -231,8 +231,8 @@ def build_library(dest_dir: Path, *, seed: int = SEED) -> LibraryManifest:
     _dated(crop_b, offset_days=30)
     images += [crop_a, crop_b]
 
-    # -- Paire "rafale" (arrière-plan partagé, sujet différent — ne doit --
-    # -- PAS être groupée, cf. _ORB_MAX_MEAN_DIFF) ---------------------------
+    # -- "Burst" pair (a shared background, a different subject -- must ------
+    # -- NOT be grouped, cf. _ORB_MAX_MEAN_DIFF) -----------------------------
     burst_a_path = dest_dir / "burst_a.jpg"
     burst_b_path = dest_dir / "burst_b.jpg"
     base_burst = _make_base_image(rng, index=4)
@@ -249,8 +249,8 @@ def build_library(dest_dir: Path, *, seed: int = SEED) -> LibraryManifest:
     _dated(burst_b_path, offset_days=40)
     images += [burst_a_path, burst_b_path]
 
-    # -- Paire retouchée (luminosité + contraste — doit rester groupée --
-    # -- malgré la vérification post-hash du Tier 1, cf. _HASH_PIXEL_MAX_DIFF) -
+    # -- Edited pair (brightness + contrast -- must stay grouped -------------
+    # -- despite the post-hash check of Tier 1, cf. _HASH_PIXEL_MAX_DIFF) ----
     edited_a = dest_dir / "edited_a.jpg"
     edited_b = dest_dir / "edited_b.jpg"
     base_edited = _make_base_image(rng, index=5)
@@ -263,11 +263,11 @@ def build_library(dest_dir: Path, *, seed: int = SEED) -> LibraryManifest:
     _dated(edited_b, offset_days=50)
     images += [edited_a, edited_b]
 
-    # -- Fichier corrompu ----------------------------------------------------
+    # -- Corrupted file ------------------------------------------------------
     corrupted = dest_dir / "corrupted.jpg"
     _make_corrupted_jpeg(corrupted, rng)
 
-    # -- Vidéo (best-effort) --------------------------------------------------
+    # -- Video (best-effort) -------------------------------------------------
     video = _make_video(dest_dir / "clip.mp4", rng)
 
     return LibraryManifest(
