@@ -1,13 +1,13 @@
 # Copyright 2026 Christian Guyot
 # SPDX-License-Identifier: Apache-2.0
-"""Tests de l'internationalisation (src/core/i18n.py + translations/*.ts).
+"""Tests of the internationalisation (src/core/i18n.py + translations/*.ts).
 
-L'essentiel de ce fichier ne teste pas du code applicatif mais les **conventions
-d'écriture** des chaînes traduisibles, parce que les enfreindre ne casse rien de
-visible : le programme tourne, les tests passent, et la chaîne est simplement
-absente du catalogue — donc jamais traduite, en silence. Chaque classe ci-dessous
-correspond à un piège réellement rencontré, documenté dans le docstring de
-`src/core/i18n.py` et de `tools/update_translations.py`.
+Most of this file does not test application code but the **writing
+conventions** of the translatable strings, because breaking them breaks nothing
+visible: the program runs, the tests pass, and the string is simply
+absent from the catalog - hence never translated, silently. Each class below
+corresponds to a trap really encountered, documented in the docstring of
+`src/core/i18n.py` and of `tools/update_translations.py`.
 """
 import ast
 import xml.etree.ElementTree as ET
@@ -31,7 +31,7 @@ def _parse(path: Path) -> ast.Module:
 
 
 def _translate_calls():
-    """(chemin, nœud Call) pour chaque appel `translate(...)` du code source."""
+    """(path, Call node) for every `translate(...)` call of the source code."""
     for path in _python_sources():
         for node in ast.walk(_parse(path)):
             if (isinstance(node, ast.Call)
@@ -45,21 +45,21 @@ def _where(path: Path, node: ast.AST) -> str:
 
 
 # --------------------------------------------------------------------------
-# Conventions d'écriture
+# Writing conventions
 # --------------------------------------------------------------------------
 
 class TestMarkerConventions:
     def test_translate_is_qt_translate(self):
-        """`pyside6-lupdate` reconnaît le nom `translate` tel quel — encore
-        faut-il que ce soit bien la fonction de Qt qui traduise à l'exécution."""
+        """`pyside6-lupdate` recognises the name `translate` as such - it still
+        has to be the Qt function that translates at runtime."""
         from PySide6.QtCore import QCoreApplication
         assert translate is QCoreApplication.translate
 
     def test_no_self_tr(self):
-        """`self.tr()` résout son contexte sur la classe de l'*instance*, alors
-        que lupdate l'extrait sous la classe qui écrit l'appel. Les deux
-        divergent dès qu'il y a héritage (les mixins de MainWindow) : chaîne
-        extraite sous un contexte, cherchée sous un autre, jamais traduite."""
+        """`self.tr()` resolves its context on the class of the *instance*, whereas
+        lupdate extracts it under the class that writes the call. The two
+        diverge as soon as there is inheritance (the mixins of MainWindow): string
+        extracted under one context, looked up under another, never translated."""
         bad = []
         for path in _python_sources():
             for node in ast.walk(_parse(path)):
@@ -72,8 +72,8 @@ class TestMarkerConventions:
         assert not bad, "utiliser translate(\"Contexte\", …) : " + ", ".join(bad)
 
     def test_translate_is_never_aliased(self):
-        """`_t = lambda s: translate("Ctx", s)` compile, tourne, et ne produit
-        aucune chaîne extractible : lupdate ne lit que des appels littéraux."""
+        """`_t = lambda s: translate("Ctx", s)` compiles, runs, and produces
+        no extractable string: lupdate only reads literal calls."""
         bad = []
         for path in _python_sources():
             for node in ast.walk(_parse(path)):
@@ -85,8 +85,8 @@ class TestMarkerConventions:
         assert not bad, "ne pas ré-exporter translate sous un autre nom : " + ", ".join(bad)
 
     def test_context_and_source_are_literals(self):
-        """Contexte et source doivent être des littéraux : lupdate lit le code,
-        il ne l'exécute pas."""
+        """Context and source must be literals: lupdate reads the code,
+        it does not execute it."""
         bad = []
         for path, node in _translate_calls():
             args = node.args
@@ -101,13 +101,13 @@ class TestMarkerConventions:
 
 
 class TestPluralConventions:
-    """Le 4e argument de translate() — le piège le plus coûteux du lot."""
+    """The 4th argument of translate() - the costliest trap of the lot."""
 
     def test_count_argument_is_a_plain_name(self):
-        """Si le compte est une expression (`len(x)`, `obj.attr`, `n + 1`),
-        lupdate **retire purement et simplement le message du catalogue** :
-        pas d'erreur, pas de trace, la chaîne devient juste intraduisible.
-        D'où la règle : hisser le compte dans une variable locale d'abord."""
+        """If the count is an expression (`len(x)`, `obj.attr`, `n + 1`),
+        lupdate **removes the message from the catalog purely and simply**:
+        no error, no trace, the string just becomes untranslatable.
+        Hence the rule: hoist the count into a local variable first."""
         bad = []
         for path, node in _translate_calls():
             if len(node.args) < 4:
@@ -121,7 +121,7 @@ class TestPluralConventions:
             + ", ".join(bad))
 
     def test_plural_sources_declare_a_count(self):
-        """Une source en `%n` sans 4e argument affiche « %n » tel quel."""
+        """A `%n` source with no 4th argument displays "%n" as such."""
         bad = []
         for path, node in _translate_calls():
             source = node.args[1] if len(node.args) > 1 else None
@@ -134,8 +134,8 @@ class TestPluralConventions:
         assert not bad, "chaîne %n sans compte : " + ", ".join(bad)
 
     def test_count_argument_implies_plural_source(self):
-        """Réciproquement, un compte passé à une source sans `%n` ne se voit
-        nulle part — le nombre est perdu."""
+        """Conversely, a count passed to a source with no `%n` shows
+        nowhere - the number is lost."""
         bad = []
         for path, node in _translate_calls():
             if len(node.args) < 4:
@@ -147,12 +147,12 @@ class TestPluralConventions:
 
 
 class TestInstallHappensBeforeUiImports:
-    """Beaucoup de libellés sont des **constantes de module** (`_TREATMENTS`,
-    `FRAME_TYPES`, `_TAB_LABELS`, tables EXIF…) : leur `translate()` s'évalue à
-    l'import, une seule fois. Un module importé avant `i18n.install()` fige donc
-    la source anglaise pour toute la durée du processus — l'interface se
-    retrouve à moitié traduite, sans la moindre erreur. D'où l'ordre imposé dans
-    `main()`, que ces deux tests verrouillent."""
+    """Many labels are **module constants** (`_TREATMENTS`,
+    `FRAME_TYPES`, `_TAB_LABELS`, EXIF tables...): their `translate()` is evaluated at
+    import time, once. A module imported before `i18n.install()` therefore freezes
+    the English source for the whole life of the process - the interface comes
+    out half translated, without the slightest error. Hence the order imposed in
+    `main()`, which these two tests lock down."""
 
     @staticmethod
     def _main_body() -> list[ast.stmt]:
@@ -163,10 +163,10 @@ class TestInstallHappensBeforeUiImports:
 
     @staticmethod
     def _imports_translated_constants(module: str, _seen=None) -> bool:
-        """Vrai si importer `module` évalue un translate(), directement ou via
-        un de ses imports de tête. La transitivité compte autant que le reste :
-        `src.ui.main_window` n'a aucune constante traduite en propre, mais
-        importe `help_dialog`, `edit_panel`… qui en ont."""
+        """True if importing `module` evaluates a translate(), directly or through
+        one of its module-level imports. The transitivity counts as much as the rest:
+        `src.ui.main_window` has no translated constant of its own, but
+        imports `help_dialog`, `edit_panel`... which do."""
         _seen = _seen if _seen is not None else set()
         if module in _seen:
             return False
@@ -187,8 +187,8 @@ class TestInstallHappensBeforeUiImports:
                for n in ast.walk(tree)):
             return True
 
-        # Seuls les imports de tête de module sont suivis : un import différé
-        # dans une fonction ne s'exécute pas à l'import.
+        # Only the module-level imports are followed: a deferred import
+        # inside a function does not run at import time.
         for node in tree.body:
             if isinstance(node, ast.ImportFrom) and node.module:
                 children = [node.module]
@@ -204,8 +204,8 @@ class TestInstallHappensBeforeUiImports:
         return False
 
     def test_no_ui_import_at_module_level(self):
-        """Un import de `src.ui` en tête de `main.py` s'exécuterait avant même
-        la QApplication : aucun traducteur n'est encore posé."""
+        """An import of `src.ui` at the top of `main.py` would run before even
+        the QApplication: no translator is installed yet."""
         bad = []
         for node in _parse(ROOT / "main.py").body:
             if isinstance(node, ast.ImportFrom) and (node.module or "").startswith("src.ui"):
@@ -218,8 +218,8 @@ class TestInstallHappensBeforeUiImports:
             + ", ".join(bad))
 
     def test_install_precedes_every_translated_import(self):
-        """Dans `main()`, tout import d'un module à constantes traduites doit
-        venir après `i18n.install(...)`."""
+        """In `main()`, every import of a module with translated constants must
+        come after `i18n.install(...)`."""
         body = self._main_body()
         install_at = next(
             (i for i, stmt in enumerate(body)
@@ -246,7 +246,7 @@ class TestInstallHappensBeforeUiImports:
 
 
 # --------------------------------------------------------------------------
-# Catalogues
+# Catalogs
 # --------------------------------------------------------------------------
 
 def _messages(code: str):
@@ -266,10 +266,10 @@ class TestCatalogues:
             "lancer tools/update_translations.py")
 
     def test_every_percent_n_message_is_numerus(self, code):
-        """lupdate ne marque `numerus="yes"` que sur un littéral entier, et
-        ré-aplatit les pluriels déjà traduits à chaque passe ; c'est
-        `update_translations.restore_numerus()` qui rattrape les deux. Sans lui,
-        un message pluriel n'a qu'une forme et le singulier vaut le pluriel."""
+        """lupdate only marks `numerus="yes"` on an integer literal, and
+        re-flattens the already translated plurals at every pass; it is
+        `update_translations.restore_numerus()` that catches both. Without it,
+        a plural message has only one form and the singular equals the plural."""
         bad = [f"{ctx} | {msg.findtext('source')}"
                for ctx, msg in _messages(code)
                if "%n" in (msg.findtext("source") or "")
@@ -277,8 +277,8 @@ class TestCatalogues:
         assert not bad, "message %n sans numerus : " + " ; ".join(bad)
 
     def test_numerus_messages_have_two_forms(self, code):
-        """fr/en/de ont deux formes ; une forme manquante sort vide à
-        l'affichage au lieu du texte attendu."""
+        """fr/en/de have two forms; a missing form comes out empty on
+        display instead of the expected text."""
         bad = []
         for ctx, msg in _messages(code):
             if msg.get("numerus") != "yes":
@@ -291,11 +291,11 @@ class TestCatalogues:
         assert not bad, "formes plurielles incomplètes : " + " ; ".join(bad)
 
     def test_no_plural_form_is_empty(self, code):
-        """Une forme plurielle **vide** est le pire des cas : `lrelease` compte
-        le message « finished » (il a bien une `<translation>` à deux formes) et
-        rien ne signale quoi que ce soit — mais à l'exécution, le seul `n`
-        concerné rend une chaîne vide. Quatre messages étaient passés par ce
-        trou, dans les trois langues à la fois."""
+        """An **empty** plural form is the worst case: `lrelease` counts
+        the message "finished" (it does have a `<translation>` with two forms) and
+        nothing signals anything at all - but at runtime, the only `n`
+        concerned renders an empty string. Four messages had gone through that
+        hole, in all three languages at once."""
         bad = []
         for ctx, msg in _messages(code):
             if msg.get("numerus") != "yes":
@@ -310,9 +310,9 @@ class TestCatalogues:
                          "tools/update_translations.py : " + " ; ".join(bad))
 
     def test_every_message_is_translated(self, code):
-        """Aucun message inachevé, sauf dans le catalogue de la langue SOURCE :
-        celui-ci n'existe que pour porter les pluriels, tout le reste y est
-        volontairement vide et retombe sur la source écrite dans le code."""
+        """No unfinished message, except in the catalog of the SOURCE language:
+        that one exists only to carry the plurals, all the rest of it is
+        deliberately empty and falls back on the source written in the code."""
         if code == DEFAULT_LANGUAGE:
             pytest.skip(f"{code} est la langue source (catalogue de pluriels)")
         bad = []
@@ -321,7 +321,7 @@ class TestCatalogues:
             if tr is None or tr.get("type") in ("vanished", "obsolete"):
                 continue
             if msg.get("numerus") == "yes":
-                continue          # couvert par test_no_plural_form_is_empty
+                continue          # covered by test_no_plural_form_is_empty
             if tr.get("type") == "unfinished" or not (tr.text or "").strip():
                 bad.append(f"{ctx} | {msg.findtext('source')}")
         assert not bad, (f"{len(bad)} message(s) non traduit(s) en « {code} » — "
@@ -330,11 +330,11 @@ class TestCatalogues:
 
 class TestSourcesAreInTheCatalogue:
     def test_every_plural_string_of_the_code_is_extracted(self):
-        """Filet contre les deux façons de perdre un pluriel : l'oubli de
-        régénérer les catalogues, et la disparition silencieuse due au 4e
-        argument. Restreint aux chaînes `%n`, les seules dont la perte ne se
-        voit pas (une chaîne simple non extraite retombe sur un anglais
-        correct, un pluriel non extrait affiche « 3 face(s) »)."""
+        """A net against the two ways of losing a plural: forgetting to
+        regenerate the catalogs, and the silent disappearance due to the 4th
+        argument. Restricted to the `%n` strings, the only ones whose loss does not
+        show (a simple string not extracted falls back on correct
+        English, a plural not extracted displays "3 face(s)")."""
         catalogue = {(ctx, msg.findtext("source") or "")
                      for ctx, msg in _messages(DEFAULT_LANGUAGE)}
         bad = []
@@ -392,20 +392,20 @@ class TestLanguagePreference:
         assert current_language(config) == "de"
 
     def test_unsupported_value_is_normalised_on_write(self):
-        """Une config corrompue à la main ne doit pas produire une langue
-        inexistante, qui ferait échouer le chargement du catalogue."""
+        """A config corrupted by hand must not produce a non-existent
+        language, which would make the loading of the catalog fail."""
         config = _FakeConfig()
         set_language(config, "it")
         assert current_language(config) == DEFAULT_LANGUAGE
 
 
 class TestRuntimePlurals:
-    """Vérifie la chaîne complète : .qm chargé → forme correcte affichée.
+    """Checks the whole chain: .qm loaded -> correct form displayed.
 
-    C'est le seul test qui prouve que l'**anglais** a bien un catalogue, alors
-    qu'il est la langue source : sans `ppm_en.qm`, `QCoreApplication.translate`
-    retombe sur la source et substitue quand même `%n` — l'utilisateur lit
-    « 3 photo(s) », soit une régression par rapport au code d'avant l'i18n.
+    It is the only test that proves that **English** really has a catalog, while
+    it is the source language: without `ppm_en.qm`, `QCoreApplication.translate`
+    falls back on the source and substitutes `%n` anyway - the user reads
+    "3 photo(s)", that is a regression compared to the code before the i18n.
     """
 
     SOURCE = "%n photo(s)"
@@ -416,7 +416,7 @@ class TestRuntimePlurals:
         try:
             assert i18n.translate("MainWindow", self.SOURCE, None, 1) == "1 photo"
             assert i18n.translate("MainWindow", self.SOURCE, None, 3) == "3 photos"
-            # 0 se dit au pluriel en anglais (pas en français).
+            # 0 takes the plural in English (not in French).
             assert i18n.translate("MainWindow", self.SOURCE, None, 0) == "0 photos"
         finally:
             i18n.install(qapp, DEFAULT_LANGUAGE)
@@ -427,7 +427,7 @@ class TestRuntimePlurals:
         try:
             assert i18n.translate("MainWindow", self.SOURCE, None, 1) == "1 photo"
             assert i18n.translate("MainWindow", self.SOURCE, None, 3) == "3 photos"
-            # 0 se dit au singulier en français (pas en anglais).
+            # 0 takes the singular in French (not in English).
             assert i18n.translate("MainWindow", self.SOURCE, None, 0) == "0 photo"
         finally:
             i18n.install(qapp, DEFAULT_LANGUAGE)

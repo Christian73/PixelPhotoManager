@@ -1,8 +1,8 @@
 # Copyright 2026 Christian Guyot
 # SPDX-License-Identifier: Apache-2.0
-"""Tests de widget Qt isolés (Layer 2, pytest-qt) pour ThumbnailGrid — pas de
-catalogue ni de bibliothèque réelle : ThumbnailCache et les PhotoInfo sont
-entièrement synthétiques, instanciés en process."""
+"""Isolated Qt widget tests (Layer 2, pytest-qt) for ThumbnailGrid - no
+catalog and no real library: ThumbnailCache and the PhotoInfo objects are
+entirely synthetic, instantiated in process."""
 import io
 
 from PIL import Image
@@ -18,7 +18,7 @@ def _photo(path: str, **kw) -> PhotoInfo:
 
 
 def _jpeg_bytes(size=(32, 24)) -> bytes:
-    """Octets JPEG valides — ce que le worker de vignette émet."""
+    """Valid JPEG bytes - what the thumbnail worker emits."""
     buf = io.BytesIO()
     Image.new("RGB", size, (10, 120, 200)).save(buf, format="JPEG")
     return buf.getvalue()
@@ -51,9 +51,9 @@ class TestSetPhotos:
 
 
 class TestEmptyMessage:
-    """show_empty_message/clear_empty_message — utilisé par MainWindow pour
-    signaler un dossier vide de photos cataloguées mais contenant en réalité
-    une copie de DVD (VIDEO_TS), avec une action pour l'ouvrir en externe."""
+    """show_empty_message/clear_empty_message - used by MainWindow to
+    signal a folder empty of catalogued photos but in fact containing
+    a DVD copy (VIDEO_TS), with an action to open it externally."""
 
     def test_show_empty_message_displays_text_and_action(self, qtbot, tmp_path):
         grid = _make_grid(qtbot, tmp_path)
@@ -100,8 +100,8 @@ class TestEmptyMessage:
         assert not grid._empty_overlay.isVisible()
 
     def test_second_action_replaces_first_connection(self, qtbot, tmp_path):
-        """Un second show_empty_message ne doit pas empiler les connexions du
-        signal clicked (sinon un clic déclenche N callbacks après N appels)."""
+        """A second show_empty_message must not stack the connections of the
+        clicked signal (otherwise a click triggers N callbacks after N calls)."""
         grid = _make_grid(qtbot, tmp_path)
         calls: list = []
         grid.show_empty_message("Message 1", "Open", lambda: calls.append("first"))
@@ -156,9 +156,9 @@ class TestCellClickSelection:
 
 class TestDuplicateBadgeForwarding:
     def test_cell_duplicate_clicked_forwards_to_grid_signal(self, qtbot, tmp_path):
-        """Régression de câblage : le badge de doublon d'une cellule doit
-        remonter jusqu'au signal `duplicate_clicked` de la grille elle-même
-        (cf. _make_cell dans thumbnail_grid.py)."""
+        """Wiring regression: the duplicate badge of a cell must
+        reach the `duplicate_clicked` signal of the grid itself
+        (cf. _make_cell in thumbnail_grid.py)."""
         grid = _make_grid(qtbot, tmp_path)
         photo = _photo("C:/lib/dup.jpg", duplicate_group_id=3)
         cell = grid._make_cell(photo)
@@ -171,13 +171,13 @@ class TestDuplicateBadgeForwarding:
 
 class TestNoGhostCellWindows:
     def test_dematerialize_leaves_no_visible_toplevel_cells(self, qtbot, tmp_path):
-        """Garde préventive — même racine que le bug des cartes de
-        DuplicateGrid (2026-07-19) : setParent(None) sur un widget encore
-        visible en fait une fenêtre top-level affichable. Contrairement aux
-        cartes (référencées jusqu'au deleteLater), les cellules détachées
-        sont détruites par le GC dès _materialized.clear(), donc le fantôme
-        n'est pas reproductible ici sans le correctif — ce test verrouille
-        l'invariant « cellule détachée ⇒ cachée » sans prouver la régression."""
+        """Preventive guard - the same root as the bug of the cards of
+        DuplicateGrid (2026-07-19): setParent(None) on a widget still
+        visible turns it into a displayable top-level window. Unlike the
+        cards (referenced until the deleteLater), the detached cells
+        are destroyed by the GC as soon as _materialized.clear(), so the ghost
+        is not reproducible here without the fix - this test locks down
+        the invariant "detached cell => hidden" without proving the regression."""
         from PySide6.QtWidgets import QApplication
         from src.ui.thumbnail_grid import ThumbnailCell
 
@@ -186,14 +186,14 @@ class TestNoGhostCellWindows:
         grid.show()
         qtbot.waitExposed(grid)
         grid.set_photos([_photo(f"C:/lib/p{i}.jpg") for i in range(12)])
-        qtbot.wait(150)   # matérialisation de la zone visible
-        assert grid._materialized   # précondition : des cellules existent
+        qtbot.wait(150)   # materialisation of the visible area
+        assert grid._materialized   # precondition: cells exist
 
         grid.set_ribbon_mode(True)  # _dematerialize_all()
 
-        # processEvents et non qtbot.wait : cf. TestNoGhostWindows dans
-        # test_duplicate_grid.py — un exec() traiterait les DeferredDelete
-        # et masquerait la fenêtre fantôme.
+        # processEvents and not qtbot.wait: cf. TestNoGhostWindows in
+        # test_duplicate_grid.py - an exec() would process the DeferredDelete
+        # events and hide the ghost window.
         import time
         deadline = time.monotonic() + 0.3
         while time.monotonic() < deadline:
@@ -210,10 +210,10 @@ class TestNoGhostCellWindows:
 
 class TestFavoriteToggleFromMenu:
     def test_toggle_favorite_flips_state_and_emits_signal(self, qtbot, tmp_path):
-        """Régression : le menu contextuel « Marquer comme favori » n'était
-        câblé à aucun callback (fav_label ajouté sans action) — l'action ne
-        faisait donc strictement rien. Ce test aurait échoué avant le
-        correctif puisqu'aucun signal n'était jamais émis."""
+        """Regression: the "Mark as favourite" context menu was
+        wired to no callback (fav_label added with no action) - the action
+        therefore did strictly nothing. This test would have failed before the
+        fix since no signal was ever emitted."""
         grid = _make_grid(qtbot, tmp_path)
         photo = _photo("C:/lib/fav.jpg", is_favorite=False)
         grid.set_photos([photo])
@@ -276,10 +276,10 @@ class TestRatingBadge:
         cell.set_rating(4)
 
         assert cell.photo.rating == 4
-        assert cell._pixmap is not None  # badge redessiné sans planter
+        assert cell._pixmap is not None  # badge redrawn without crashing
 
     def test_set_pixmap_with_rating_does_not_crash(self, qtbot, tmp_path):
-        """_add_rating_badge doit s'appliquer sans erreur pour chaque note 1-5."""
+        """_add_rating_badge must apply without error for each rating 1-5."""
         from PySide6.QtGui import QPixmap
 
         grid = _make_grid(qtbot, tmp_path)
@@ -307,9 +307,9 @@ class TestRemovePhotos:
 
 
 class TestScrollToPhoto:
-    """scroll_to_photo en mode normal (hors ruban) : retour de la visionneuse
-    vers la grille, la vignette de la dernière photo affichée doit redevenir
-    visible sans défilement inutile si elle l'est déjà."""
+    """scroll_to_photo in normal mode (outside the ribbon): returning from the viewer
+    to the grid, the thumbnail of the last photo displayed must become
+    visible again with no useless scrolling if it already is."""
 
     def test_offscreen_photo_scrolls_into_view(self, qtbot, tmp_path):
         grid = _make_grid(qtbot, tmp_path)
@@ -346,14 +346,14 @@ class TestScrollToPhoto:
         grid = _make_grid(qtbot, tmp_path)
         grid.set_photos([_photo("C:/lib/a.jpg")])
 
-        grid.scroll_to_photo("C:/lib/missing.jpg")   # ne doit pas lever
+        grid.scroll_to_photo("C:/lib/missing.jpg")   # must not raise
 
 
 class TestLoadingIndicator:
-    """set_loading — retour visuel immédiat quand une requête photo démarre
-    (clic dossier/album dans la sidebar) : l'indicateur "Chargement…" n'apparaît
-    qu'après 150 ms (pas de clignotement sur les requêtes rapides) et est masqué
-    automatiquement dès que set_photos() livre le résultat."""
+    """set_loading - immediate visual feedback when a photo query starts
+    (folder/album click in the sidebar): the "Loading..." indicator only appears
+    after 150 ms (no flicker on the quick queries) and is hidden
+    automatically as soon as set_photos() delivers the result."""
 
     def test_indicator_appears_after_delay(self, qtbot, tmp_path):
         grid = _make_grid(qtbot, tmp_path)
@@ -361,7 +361,7 @@ class TestLoadingIndicator:
         qtbot.waitExposed(grid)
 
         grid.set_loading(True)
-        assert not grid._loading_label.isVisible()   # différé de 150 ms
+        assert not grid._loading_label.isVisible()   # deferred by 150 ms
 
         qtbot.waitUntil(lambda: grid._loading_label.isVisible(), timeout=2000)
 
@@ -371,7 +371,7 @@ class TestLoadingIndicator:
         qtbot.waitExposed(grid)
 
         grid.set_loading(True)
-        grid.set_photos([_photo("C:/lib/a.jpg")])    # réponse avant les 150 ms
+        grid.set_photos([_photo("C:/lib/a.jpg")])    # answer before the 150 ms
 
         assert not grid._loading_label.isVisible()
         assert not grid._loading_delay_timer.isActive()
@@ -389,11 +389,11 @@ class TestLoadingIndicator:
 
 
 class TestEditedThumbnails:
-    """Une photo tournée/recadrée dans la visionneuse doit apparaître retouchée
-    dans la grille. Difficulté : la grille est virtualisée — au moment de la
-    retouche, la cellule de la photo n'existe le plus souvent pas, il n'y a donc
-    rien à rafraîchir. L'état est mémorisé dans grid._edits et transmis à la
-    cellule au moment où elle est (re)construite."""
+    """A photo rotated/cropped in the viewer must appear retouched
+    in the grid. Difficulty: the grid is virtualised - at the moment of the
+    edit, the cell of the photo most often does not exist, so there is
+    nothing to refresh. The state is memorised in grid._edits and passed to the
+    cell at the moment it is (re)built."""
 
     def test_refresh_photo_records_edit_without_materialized_cell(self, qtbot, tmp_path):
         grid = _make_grid(qtbot, tmp_path)
@@ -406,8 +406,8 @@ class TestEditedThumbnails:
         assert grid._edit_for("C:/lib/a.jpg") is edit
 
     def test_cell_built_later_receives_the_recorded_edit(self, qtbot, tmp_path):
-        """Le cœur du correctif : la cellule créée après coup connaît la retouche
-        et demandera donc la vignette retouchée, pas celle d'origine."""
+        """The core of the fix: the cell created afterwards knows about the edit
+        and will therefore ask for the retouched thumbnail, not the original one."""
         grid = _make_grid(qtbot, tmp_path)
         photo = _photo("C:/lib/a.jpg")
         grid.set_photos([photo])
@@ -420,7 +420,7 @@ class TestEditedThumbnails:
         assert cell._edit is edit
 
     def test_reset_removes_the_recorded_edit(self, qtbot, tmp_path):
-        """Annulation des retouches : la cellule suivante doit repartir de zéro."""
+        """Cancellation of the edits: the next cell must start again from scratch."""
         grid = _make_grid(qtbot, tmp_path)
         photo = _photo("C:/lib/a.jpg")
         grid.set_photos([photo])
@@ -434,9 +434,9 @@ class TestEditedThumbnails:
         assert cell._edit is None
 
     def test_edits_are_keyed_on_normalized_paths(self, qtbot, tmp_path):
-        """La visionneuse et le catalogue ne livrent pas toujours le chemin avec
-        les mêmes séparateurs — sans normalisation, la retouche serait enregistrée
-        sous une clé que _edit_for() ne retrouve jamais."""
+        """The viewer and the catalog do not always deliver the path with
+        the same separators - without normalisation, the edit would be recorded
+        under a key that _edit_for() never finds again."""
         grid = _make_grid(qtbot, tmp_path)
         edit = EditInfo(rotation=90)
 
@@ -445,9 +445,9 @@ class TestEditedThumbnails:
         assert grid._edit_for("C:\\lib\\sub\\a.jpg") is edit
 
     def test_set_photos_reloads_edits_from_provider(self, qtbot, tmp_path):
-        """Au démarrage comme à chaque changement de dossier, les retouches déjà
-        enregistrées en base doivent être reprises — sans quoi une photo retouchée
-        lors d'une session précédente réapparaîtrait non retouchée."""
+        """At startup as at every folder change, the edits already
+        recorded in the database must be picked up - otherwise a photo retouched
+        during a previous session would reappear unretouched."""
         grid = _make_grid(qtbot, tmp_path)
         edit = EditInfo(rotation=90)
         grid.set_edit_provider(lambda: {"C:\\lib\\a.jpg": edit})
@@ -457,8 +457,8 @@ class TestEditedThumbnails:
         assert grid._edit_for("C:/lib/a.jpg") is edit
 
     def test_provider_failure_does_not_break_the_grid(self, qtbot, tmp_path):
-        """Une base de retouches illisible ne doit pas empêcher d'afficher les
-        photos (dégradation : vignettes non retouchées)."""
+        """An unreadable edit database must not prevent displaying the
+        photos (degradation: unretouched thumbnails)."""
         grid = _make_grid(qtbot, tmp_path)
         grid._edit_provider = lambda: (_ for _ in ()).throw(RuntimeError("db down"))
 
@@ -469,8 +469,8 @@ class TestEditedThumbnails:
 
 
 class TestCellEditSignature:
-    """ThumbnailCell — l'empreinte de retouches accompagne la vignette de bout en
-    bout (demande au cache, génération, mise en cache, affichage)."""
+    """ThumbnailCell - the edit fingerprint accompanies the thumbnail from end to
+    end (request to the cache, generation, caching, display)."""
 
     def _cell(self, qtbot, tmp_path, edit):
         cache = ThumbnailCache(db_path=tmp_path / "thumbs.db")
@@ -479,21 +479,21 @@ class TestCellEditSignature:
         return cell
 
     def test_ready_result_from_a_superseded_edit_is_not_displayed(self, qtbot, tmp_path):
-        """L'utilisateur enchaîne deux rotations : le résultat de la première ne
-        doit pas écraser l'affichage de la seconde (elles arrivent dans un ordre
-        non garanti, deux workers distincts)."""
+        """The user chains two rotations: the result of the first must
+        not overwrite the display of the second (they arrive in an order
+        that is not guaranteed, two distinct workers)."""
         cell = self._cell(qtbot, tmp_path, EditInfo(rotation=180))
         data = _jpeg_bytes()
-        # Le chemin émis est celui du worker, donc celui de PhotoInfo — normalisé
-        # par __post_init__ (séparateurs Windows). Passer le littéral en «/» ferait
-        # échouer la garde `path == self._photo.path` et le test passerait pour de
-        # mauvaises raisons (rien de stocké, rien d'affiché).
+        # The emitted path is that of the worker, hence that of PhotoInfo - normalised
+        # by __post_init__ (Windows separators). Passing the literal with "/" would make
+        # the `path == self._photo.path` guard fail and the test would pass for the
+        # wrong reasons (nothing stored, nothing displayed).
         path = cell._photo.path
 
         cell._on_thumb_ready(path, data, edit_signature(EditInfo(rotation=90)))
 
         assert cell._pixmap is None
-        # …mais le résultat périmé reste mis en cache pour son empreinte
+        # ...but the stale result stays cached for its fingerprint
         assert cell._cache.get_ram(path, edit_signature(EditInfo(rotation=90)))
 
     def test_ready_result_for_the_current_edit_is_displayed(self, qtbot, tmp_path):

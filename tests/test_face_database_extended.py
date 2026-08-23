@@ -1,12 +1,12 @@
 # Copyright 2026 Christian Guyot
 # SPDX-License-Identifier: Apache-2.0
-"""Extension de test_face_database.py : méthodes non couvertes par le fichier
-d'origine — comptages/embeddings, update_clusters (propagation, bruit,
-libération Picasa), suggestions de clusters (set/clear/accept/resuggest,
-find_similar_to_persons, isolate_and_suggest), faces représentatives et
-centroïdes par lots, isolation/ajout manuel, recalculate_size_ignored,
-save_picasa_annotations (placeholders, consommation par personne et par
-chevauchement), maintenance (reset, delete/update paths, stats)."""
+"""Extension of test_face_database.py: methods not covered by the original
+file - counts/embeddings, update_clusters (propagation, noise,
+Picasa release), cluster suggestions (set/clear/accept/resuggest,
+find_similar_to_persons, isolate_and_suggest), representative faces and
+centroids by batch, isolation/manual addition, recalculate_size_ignored,
+save_picasa_annotations (placeholders, consumption by person and by
+overlap), maintenance (reset, delete/update paths, stats)."""
 import os
 import sqlite3
 
@@ -82,7 +82,7 @@ class TestCountsAndEmbeddings:
     def test_count_embeddings_excludes_pinned(self, db):
         _insert_face(db, "a.jpg", embedding=_base_vec(0))
         _insert_face(db, "b.jpg", embedding=_base_vec(1), pinned=1)
-        _insert_face(db, "c.jpg")  # sans embedding
+        _insert_face(db, "c.jpg")  # without embedding
         assert db.count_embeddings() == 1
 
     def test_count_identified_faces(self, db):
@@ -133,7 +133,7 @@ class TestUpdateClusters:
         assert _q1(db, "SELECT person_id FROM faces WHERE id=?", (f,))[0] is None
 
     def test_empty_input_noop(self, db):
-        db.update_clusters([], [])  # ne doit pas lever
+        db.update_clusters([], [])  # must not raise
 
     def test_progress_callback_called(self, db):
         f = _insert_face(db, "a.jpg", embedding=_base_vec(0))
@@ -147,7 +147,7 @@ class TestUpdateClusters:
 
 class TestClusterSuggestions:
     def _cluster_with_person(self, db):
-        """cluster 1 non identifié (vec 0), personne 9 nommée (vec 0 aussi)."""
+        """cluster 1 unidentified (vec 0), person 9 named (vec 0 too)."""
         _insert_face(db, "c1.jpg", cluster_id=1,
                      embedding=_similar_vec(_base_vec(0), seed=1))
         _insert_face(db, "c2.jpg", cluster_id=1,
@@ -157,14 +157,14 @@ class TestClusterSuggestions:
 
     def test_set_and_get_suggestions(self, db):
         self._cluster_with_person(db)
-        db.set_cluster_suggestions({1: (9, 0.65)})  # sous _SIM_AUTO_ASSIGN → en attente
+        db.set_cluster_suggestions({1: (9, 0.65)})  # below _SIM_AUTO_ASSIGN -> pending
         assert db.get_suggested_clusters_for_person(9) == [(1, 2, 0.65)]
         assert db.get_persons_pending_count() == {9: 1}
 
     def test_set_suggestions_idempotent(self, db):
         self._cluster_with_person(db)
         db.set_cluster_suggestions({1: (9, 0.65)})
-        db.set_cluster_suggestions({1: (7, 0.9)})  # déjà suggéré → inchangé (même au palier auto-assign)
+        db.set_cluster_suggestions({1: (7, 0.9)})  # already suggested -> unchanged (even at the auto-assign tier)
         assert db.get_suggested_clusters_for_person(9) != []
         assert db.get_suggested_clusters_for_person(7) == []
 
@@ -184,14 +184,14 @@ class TestClusterSuggestions:
 
     def test_accept_without_suggestion_noop(self, db):
         self._cluster_with_person(db)
-        db.accept_cluster_suggestion(1)  # aucune suggestion → return silencieux
+        db.accept_cluster_suggestion(1)  # no suggestion -> silent return
         rows = _qall(db, "SELECT person_id FROM faces WHERE cluster_id=1")
         assert all(r[0] is None for r in rows)
 
     def test_resuggest_finds_best_person(self, db):
         self._cluster_with_person(db)
         db.resuggest_clusters([1])
-        # similarité > 0.9 >= _SIM_AUTO_ASSIGN → allocation directe, pas de suggestion en attente
+        # similarity > 0.9 >= _SIM_AUTO_ASSIGN -> direct assignment, no pending suggestion
         rows = _qall(db, "SELECT person_id FROM faces WHERE cluster_id=1")
         assert all(r[0] == 9 for r in rows)
         assert db.get_suggested_clusters_for_person(9) == []
@@ -206,8 +206,8 @@ class TestClusterSuggestions:
 
     def test_set_cluster_suggestions_auto_assign_idempotent_against_pending(self, db):
         self._cluster_with_person(db)
-        db.set_cluster_suggestions({1: (9, 0.65)})  # en attente d'abord
-        db.set_cluster_suggestions({1: (7, 0.95)})  # auto-tier mais déjà suggéré → inchangé
+        db.set_cluster_suggestions({1: (9, 0.65)})  # pending first
+        db.set_cluster_suggestions({1: (7, 0.95)})  # auto tier but already suggested -> unchanged
         rows = _qall(db, "SELECT person_id FROM faces WHERE cluster_id=1")
         assert all(r[0] is None for r in rows)
         assert db.get_suggested_clusters_for_person(9) != []
@@ -219,7 +219,7 @@ class TestClusterSuggestions:
         assert db.get_suggested_clusters_for_person(9) == []
 
     def test_resuggest_empty_input(self, db):
-        db.resuggest_clusters([])  # ne doit pas lever
+        db.resuggest_clusters([])  # must not raise
 
     def test_find_similar_to_persons(self, db):
         self._cluster_with_person(db)
@@ -230,7 +230,7 @@ class TestClusterSuggestions:
         assert created == 1
         assert checked == 1
         assert calls == [(1, 1)]
-        # similarité > 0.9 >= _SIM_AUTO_ASSIGN → allocation directe (pas de suggestion en attente)
+        # similarity > 0.9 >= _SIM_AUTO_ASSIGN -> direct assignment (no pending suggestion)
         rows = _qall(db, "SELECT person_id FROM faces WHERE cluster_id=1")
         assert all(r[0] == 9 for r in rows)
 
@@ -244,14 +244,14 @@ class TestClusterSuggestions:
         assert checked == 1
 
     def test_pending_suggestion_never_lands_on_an_identified_face(self, db):
-        """Régression : la branche « en attente » de set_cluster_suggestions
-        oubliait `AND person_id IS NULL`, contrairement à sa docstring. Un
-        cluster partiellement identifié se retrouvait avec une suggestion posée
-        sur ses visages déjà nommés — invisible dans l'UI (les vues de
-        suggestions filtrent sur person_id IS NULL) mais bloquant pour toujours
-        toute suggestion ultérieure sur ce cluster, puisque tous les
-        producteurs gardent `suggestion_person_id IS NULL`. Cause racine des
-        2 290 suggestions résiduelles trouvées en base réelle."""
+        """Regression: the "pending" branch of set_cluster_suggestions
+        forgot `AND person_id IS NULL`, contrary to its docstring. A
+        partially identified cluster ended up with a suggestion laid down
+        on its already named faces - invisible in the UI (the suggestion
+        views filter on person_id IS NULL) but blocking forever
+        any later suggestion on that cluster, since every
+        producer keeps `suggestion_person_id IS NULL`. Root cause of the
+        2,290 residual suggestions found in a real database."""
         named = _insert_face(db, "n.jpg", cluster_id=1, person_id=3,
                              embedding=_base_vec(0))
         free = _insert_face(db, "f.jpg", cluster_id=1, embedding=_base_vec(0))
@@ -264,9 +264,9 @@ class TestClusterSuggestions:
                    (free,))[0] == 9
 
     def test_startup_purges_suggestions_left_on_identified_faces(self, tmp_path):
-        """Les suggestions résiduelles déjà en base (posées avant le correctif
-        ci-dessus) sont purgées à l'ouverture — sinon elles gèlent définitivement
-        leur cluster."""
+        """The residual suggestions already in the database (laid down before the fix
+        above) are purged at opening - otherwise they freeze
+        their cluster definitively."""
         db = FaceDatabase(db_path=tmp_path / "faces.db")
         stale = _insert_face(db, "n.jpg", cluster_id=1, person_id=3,
                              suggestion_person_id=9)
@@ -281,9 +281,9 @@ class TestClusterSuggestions:
 
 
 class TestBestPersonPerCluster:
-    """Le cœur vectorisé de find_similar_to_persons : c'est lui qui décide quels
-    groupes deviennent « en attente de vérification ». Testé sans base — la
-    bascule entre paliers, elle, est du ressort de set_cluster_suggestions."""
+    """The vectorised core of find_similar_to_persons: it is what decides which
+    groups become "awaiting verification". Tested without a database - the
+    switch between tiers is the business of set_cluster_suggestions."""
 
     def _run(self, cid_to_embs, person_centroids, **kw):
         return FaceDatabase._best_person_per_cluster(
@@ -291,8 +291,8 @@ class TestBestPersonPerCluster:
         )
 
     def test_keeps_only_clusters_above_the_suggestion_threshold(self):
-        # vec(0) et vec(1) sont quasi orthogonaux : similarité ~0.02, très en
-        # dessous de _SIM_SUGGEST.
+        # vec(0) and vec(1) are near orthogonal: similarity ~0.02, far
+        # below _SIM_SUGGEST.
         res = self._run(
             {1: [_base_vec(0)], 2: [_base_vec(1)]},
             {9: _base_vec(0)},
@@ -312,9 +312,9 @@ class TestBestPersonPerCluster:
         assert res[1][0] == 8
 
     def test_averages_the_embeddings_of_the_cluster(self):
-        """Le score porte sur le centroïde du groupe, pas sur son meilleur
-        visage : un groupe hétérogène dont un seul membre correspond ne franchit
-        pas le seuil, alors que le même visage seul le franchit."""
+        """The score is about the centroid of the group, not about its best
+        face: a heterogeneous group of which a single member matches does not cross
+        the threshold, whereas the same face alone does."""
         person = {9: _base_vec(0)}
 
         alone = self._run({1: [_base_vec(0)]}, person)
@@ -336,8 +336,8 @@ class TestBestPersonPerCluster:
         assert calls[-1] == (3, 3)
 
     def test_scalar_fallback_agrees_with_the_vectorised_path(self, monkeypatch):
-        """Le repli sans numpy (branche ImportError) doit classer les mêmes
-        groupes — c'est lui qui s'exécute si l'import échoue au runtime."""
+        """The fallback without numpy (the ImportError branch) must classify the same
+        groups - it is what runs if the import fails at runtime."""
         import builtins
         cid_to_embs = {1: [_base_vec(0)], 2: [_base_vec(1)], 3: [_base_vec(2)]}
         persons = {9: _base_vec(0), 8: _base_vec(2)}
@@ -354,7 +354,7 @@ class TestBestPersonPerCluster:
         try:
             fallback = self._run(cid_to_embs, persons)
         finally:
-            monkeypatch.undo()      # ne pas laisser le patch actif pendant les asserts
+            monkeypatch.undo()      # do not leave the patch active during the asserts
 
         assert set(fallback) == set(expected)
         for cid in expected:
@@ -388,7 +388,7 @@ class TestRepresentativeFaces:
 
     def test_set_cover_unclustered_noop(self, db):
         f = _insert_face(db, "a.jpg", cluster_id=None)
-        db.set_cover_face(f)  # return silencieux
+        db.set_cover_face(f)  # silent return
         assert _q1(db, "SELECT is_cover FROM faces WHERE id=?", (f,))[0] == 0
 
     def test_by_person(self, db):
@@ -414,9 +414,9 @@ class TestRepresentativeFaces:
         _insert_face(db, "big2.jpg", cluster_id=2, bbox=(0, 0, 50, 50))
         _insert_face(db, "ign.jpg", cluster_id=3, ignored=1)
         result = db.get_all_representative_faces([1, 2, 3])
-        assert result[1].id == f_cover          # cover prioritaire
+        assert result[1].id == f_cover          # cover takes priority
         assert result[2].photo_path == "big2.jpg"
-        assert 3 not in result                  # que des ignorés
+        assert 3 not in result                  # only ignored ones
         assert db.get_all_representative_faces([]) == {}
 
 
@@ -490,17 +490,17 @@ class TestIsolation:
         )
         assert row[0] == "photo.jpg"
         assert (row[1], row[2]) == (10, 30)
-        assert row[3] is None          # embedding NULL par construction
-        assert row[4] < 0              # cluster isolé
+        assert row[3] is None          # embedding NULL by construction
+        assert row[4] < 0              # isolated cluster
         assert row[5] == 7
         assert row[6] == 1             # pinned
         assert row[7] == 1.0
 
     def test_isolate_and_suggest_creates_suggestion(self, db):
-        # personne 1 = vec0, personne 2 = vec1
+        # person 1 = vec0, person 2 = vec1
         _insert_face(db, "p1.jpg", person_id=1, cluster_id=10, embedding=_base_vec(0))
         _insert_face(db, "p2.jpg", person_id=2, cluster_id=11, embedding=_base_vec(1))
-        # visage assigné à tort à la personne 1, mais ressemble à la personne 2
+        # face wrongly assigned to person 1, but looks like person 2
         f = _insert_face(db, "x.jpg", person_id=1, cluster_id=10,
                          embedding=_similar_vec(_base_vec(1), seed=3))
 
@@ -514,13 +514,13 @@ class TestIsolation:
         )
         assert row[0] < 0
         assert row[1] == 1
-        # similarité > 0.9 >= _SIM_AUTO_ASSIGN → allocation directe à la personne 2
-        # (pas la 1, exclue), pas de suggestion en attente
+        # similarity > 0.9 >= _SIM_AUTO_ASSIGN -> direct assignment to person 2
+        # (not 1, excluded), no pending suggestion
         assert row[2] == 2
         assert row[3] is None
 
     def test_isolate_and_suggest_empty_input(self, db):
-        db.isolate_and_suggest([])  # ne doit pas lever
+        db.isolate_and_suggest([])  # must not raise
 
     def test_unassign_person_from_face(self, db):
         f = _insert_face(db, "a.jpg", person_id=5, cluster_id=1)
@@ -553,9 +553,9 @@ class TestAssignPersonToCluster:
 class TestEnrichment:
     def test_get_person_photo_count(self, db):
         _insert_face(db, "a.jpg", person_id=5, cluster_id=1)
-        _insert_face(db, "a.jpg", person_id=5, cluster_id=1)  # même photo
+        _insert_face(db, "a.jpg", person_id=5, cluster_id=1)  # same photo
         _insert_face(db, "b.jpg", person_id=5, cluster_id=1)
-        _insert_face(db, "c.jpg", person_id=5, cluster_id=None)  # hors cluster
+        _insert_face(db, "c.jpg", person_id=5, cluster_id=None)  # outside the cluster
         assert db.get_person_photo_count(5) == 2
 
     def test_enrich_persons_photo_count(self, db):
@@ -564,7 +564,7 @@ class TestEnrichment:
         db.enrich_persons_photo_count(persons)
         assert persons[0].photo_count == 1
         assert persons[1].photo_count == 0
-        db.enrich_persons_photo_count([])  # ne doit pas lever
+        db.enrich_persons_photo_count([])  # must not raise
 
     def test_enrich_persons_full(self, db):
         _insert_face(db, "small.jpg", person_id=5, cluster_id=1, bbox=(0, 0, 10, 10))
@@ -576,7 +576,7 @@ class TestEnrichment:
         assert p.cover_path == "big.jpg"
         assert p.cover_bbox == (4, 5, 90, 90)
         assert p.pending_count == 0
-        db.enrich_persons([])  # ne doit pas lever
+        db.enrich_persons([])  # must not raise
 
 
 # ------------------------------------------------------------------ recalculate_size_ignored
@@ -587,7 +587,7 @@ class TestRecalculateSizeIgnored:
         photo = tmp_path / "photo.jpg"
         Image.new("RGB", (400, 300)).save(str(photo))
         path = str(photo)
-        # premier plan 100×100 (≥ 60 = 20 % de 300) → seuil effectif = 100/4 = 25
+        # foreground 100x100 (>= 60 = 20 % of 300) -> effective threshold = 100/4 = 25
         _insert_face(db, path, bbox=(0, 0, 100, 100), embedding=_base_vec(0),
                      det_score=0.9)
         f_mid = _insert_face(db, path, bbox=(0, 0, 40, 40), embedding=_base_vec(1),
@@ -640,13 +640,13 @@ class TestSavePicasaAnnotations:
                      bbox=(200, 200, 50, 50))
         db.save_picasa_annotations("a.jpg", [{"bbox": (1, 2, 30, 40), "person_id": 7}])
         assert _q1(db, "SELECT consumed FROM picasa_annotations")[0] == 1
-        # pas de placeholder ajouté
+        # no placeholder added
         n = _q1(db, "SELECT COUNT(*) FROM faces WHERE photo_path='a.jpg'")[0]
         assert n == 1
 
     def test_consumed_on_spatial_overlap(self, db):
-        # face ArcFace non identifiée au même endroit → l'annotation lui est
-        # appliquée par IoU et consommée, pas de placeholder
+        # unidentified ArcFace face at the same place -> the annotation is
+        # applied to it by IoU and consumed, no placeholder
         f = _insert_face(db, "a.jpg", embedding=_base_vec(0), bbox=(10, 10, 50, 50))
         db.save_picasa_annotations(
             "a.jpg", [{"bbox": (12, 12, 48, 48), "person_id": 7}]
@@ -680,7 +680,7 @@ class TestMaintenance:
     def test_reset_index_clears_faces_keeps_annotations(self, db):
         _insert_face(db, "a.jpg", cluster_id=1)
         db.save_picasa_annotations("b.jpg", [{"bbox": (0, 0, 30, 30), "person_id": 7}])
-        # forcer consumed=1 pour vérifier la réinitialisation
+        # force consumed=1 to check the reset
         conn = sqlite3.connect(db._db_path)
         conn.execute("UPDATE picasa_annotations SET consumed=1")
         conn.commit()
@@ -705,7 +705,7 @@ class TestMaintenance:
         _insert_face(db, "c.jpg")
         db.delete_for_paths(["a.jpg", "b.jpg"])
         assert _q1(db, "SELECT COUNT(*) FROM faces")[0] == 1
-        db.delete_for_paths([])  # ne doit pas lever
+        db.delete_for_paths([])  # must not raise
 
     def test_update_path(self, db):
         _insert_face(db, os.path.normpath("d/old.jpg"))
@@ -744,7 +744,7 @@ class TestMaintenance:
         assert counters["clusters"] == 2
 
     def test_restore_orphaned_ignored_faces(self, db):
-        # groupe (photo, personne) entièrement ignoré → le plus grand est restauré
+        # (photo, person) group entirely ignored -> the largest one is restored
         _insert_face(db, "a.jpg", person_id=5, bbox=(0, 0, 30, 30), ignored=1)
         f_big = _insert_face(db, "a.jpg", person_id=5, bbox=(0, 0, 90, 90), ignored=1)
         restored = db.restore_orphaned_ignored_faces()
