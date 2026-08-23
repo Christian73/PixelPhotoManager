@@ -14,15 +14,15 @@ class GeometryProcessor:
 
     @staticmethod
     def apply_straighten_with_crop(image: Image.Image, degrees: float) -> Image.Image:
-        """Rotation fine + recadrage automatique au plus grand rectangle inscrit
-        de même format que l'original (pas de coins noirs)."""
+        """Fine rotation + automatic crop to the largest inscribed rectangle of
+        the same aspect ratio as the original (no black corners)."""
         if degrees == 0.0:
             return image
         W, H = image.size
         theta = math.radians(abs(degrees))
         cos_t = math.cos(theta)
         sin_t = math.sin(theta)
-        # s = rapport de la diagonale inscrite au rectangle d'origine
+        # s = ratio of the inscribed diagonal to the original rectangle
         s = min(W / (W * cos_t + H * sin_t),
                 H / (W * sin_t + H * cos_t))
         W_crop = max(1, round(W * s))
@@ -54,7 +54,7 @@ class GeometryProcessor:
             return image.crop((left, top, right, bottom))
 
         if len(crop) == 8:
-            # Format quadrilatère : x0,y0,x1,y1,x2,y2,x3,y3 (TL, TR, BR, BL)
+            # Quadrilateral format: x0,y0,x1,y1,x2,y2,x3,y3 (TL, TR, BR, BL)
             iw, ih = image.size
             pts = [(crop[i] * iw, crop[i + 1] * ih) for i in range(0, 8, 2)]
             tl, tr, br, bl = pts
@@ -64,7 +64,7 @@ class GeometryProcessor:
             rgt_h  = math.hypot(br[0] - tr[0], br[1] - tr[1])
             out_w  = max(1, int((top_w + bot_w) / 2))
             out_h  = max(1, int((left_h + rgt_h) / 2))
-            # Transformation de perspective via OpenCV (privilégié)
+            # Perspective transform through OpenCV (preferred)
             try:
                 import cv2
                 import numpy as np
@@ -76,7 +76,7 @@ class GeometryProcessor:
                 return Image.fromarray(warped)
             except ImportError:
                 pass
-            # Fallback PIL avec calcul analytique des coefficients
+            # PIL fallback with an analytical computation of the coefficients
             try:
                 coeffs = GeometryProcessor._perspective_coeffs(tl, tr, br, bl, out_w, out_h)
                 return image.convert('RGB').transform(
@@ -102,22 +102,22 @@ class GeometryProcessor:
         crop=None,
         pre_rotation: float = 0.0,
     ) -> "tuple[list, tuple]":
-        """Reporte une liste de bboxes (x, y, w, h en pixels) à travers la même
-        séquence géométrique que apply_rotation/apply_straighten_with_crop/
-        apply_flip/apply_crop (dans cet ordre), sans manipuler de pixels — utilisé
-        pour recaler les bboxes de visages après enregistrement d'une photo
-        retouchée (crop/rotation/redressement bakés dans le fichier).
+        """Carries a list of bboxes (x, y, w, h in pixels) through the same
+        geometric sequence as apply_rotation/apply_straighten_with_crop/
+        apply_flip/apply_crop (in that order), without touching a single pixel —
+        used to realign the face bboxes after an edited photo is saved
+        (crop/rotation/straightening baked into the file).
 
-        `size` est la taille du repère dans lequel les bboxes sont actuellement
-        exprimées. `pre_rotation` (CW, typiquement `FaceInfo.detected_rotation`)
-        est appliquée en sens inverse en tout premier, pour ramener les bboxes
-        au repère de base (photo orientée EXIF, avant toute retouche) avant
-        d'appliquer la séquence d'édition normale.
+        `size` is the size of the frame of reference the bboxes are currently
+        expressed in. `pre_rotation` (CW, typically `FaceInfo.detected_rotation`)
+        is applied in reverse first of all, to bring the bboxes back to the base
+        frame (the EXIF-oriented photo, before any edit) before applying the
+        normal editing sequence.
 
-        Retourne (liste de (x, y, w, h) entiers, ou None si la bbox est tombée
-        hors cadre ; taille finale (w, h)). Le cas de recadrage quadrilatère
-        (8 valeurs) n'est approximé que par la boîte englobante du quadrilatère
-        source, comme le recours ultime de apply_crop lui-même.
+        Returns (a list of integer (x, y, w, h), or None if the bbox fell out of
+        frame; the final size (w, h)). The quadrilateral crop case (8 values) is
+        only approximated by the bounding box of the source quadrilateral, like
+        the last resort of apply_crop itself.
         """
         W, H = float(size[0]), float(size[1])
         frame = [(0.0, 0.0), (W, 0.0), (W, H), (0.0, H)]
@@ -209,18 +209,18 @@ class GeometryProcessor:
 
     @staticmethod
     def _perspective_coeffs(tl, tr, br, bl, out_w, out_h):
-        """Coefficients PIL PERSPECTIVE pour le mapping inverse output→input.
+        """PIL PERSPECTIVE coefficients for the inverse output→input mapping.
 
-        PIL applique : x_in = (a*xo + b*yo + c) / (g*xo + h*yo + 1)
-                       y_in = (d*xo + e*yo + f) / (g*xo + h*yo + 1)
-        Les coins de sortie (0,0),(W,0),(W,H),(0,H) doivent correspondre à tl,tr,br,bl.
+        PIL applies: x_in = (a*xo + b*yo + c) / (g*xo + h*yo + 1)
+                     y_in = (d*xo + e*yo + f) / (g*xo + h*yo + 1)
+        The output corners (0,0),(W,0),(W,H),(0,H) must map to tl,tr,br,bl.
         """
         x0, y0 = float(tl[0]), float(tl[1])
         x1, y1 = float(tr[0]), float(tr[1])
         x2, y2 = float(br[0]), float(br[1])
         x3, y3 = float(bl[0]), float(bl[1])
         W, H = float(out_w), float(out_h)
-        # Résolution du système 2×2 pour g et h
+        # Solving the 2×2 system for g and h
         det = W * (x1 - x2) * H * (y3 - y2) - H * (x3 - x2) * W * (y1 - y2)
         if abs(det) < 1e-6:
             g, h = 0.0, 0.0

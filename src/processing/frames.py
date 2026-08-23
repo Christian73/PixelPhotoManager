@@ -1,59 +1,60 @@
 # Copyright 2026 Christian Guyot
 # SPDX-License-Identifier: Apache-2.0
-"""Cadres décoratifs — retouche non destructive appliquée AUTOUR de la photo.
+"""Decorative frames — a non-destructive edit applied AROUND the photo.
 
-Le cadre n'empiète jamais sur l'image : la photo est collée telle quelle au
-centre d'un canevas agrandi de ``border_px()`` pixels sur chaque bord. Toutes
-les largeurs sont exprimées en fraction du plus petit côté de la photo, pour
-qu'un même réglage rende identiquement sur une vignette de 220 px et sur un
-export pleine résolution.
+The frame never encroaches on the image: the photo is pasted as-is in the
+centre of a canvas enlarged by ``border_px()`` pixels on each edge. Every width
+is expressed as a fraction of the short side of the photo, so that one same
+setting renders identically on a 220 px thumbnail and on a full-resolution
+export.
 
-Unique exception, explicitement demandée : le **second cadre facultatif** du
-motif ``plain`` (``frame_inner_enabled``) est peint PAR-DESSUS la photo, à
-``frame_gap`` du bord — la bande d'image laissée visible entre les deux cadres
-est l'effet recherché. Il n'agrandit pas le canevas et n'entre donc pas dans
-``border_px()``/``content_box()`` : la géométrie des outils interactifs reste
-celle de la photo entière. Ce second cadre porte une **ferronnerie**
-(``INNER_MOTIFS`` : ligne simple, volutes d'angle, rinceaux courants, barreau
-torsadé, clous forgés), rendue en relief léger ou en aplat strict
-(``frame_inner_relief``) et dimensionnée par le curseur « Ornements »
-(``frame_inner_ornament``). Les ornements se développent vers l'INTÉRIEUR depuis
-la ligne : ils restent dans la photo et ne touchent jamais le bandeau extérieur.
+One single exception, explicitly requested: the **optional second frame** of the
+``plain`` pattern (``frame_inner_enabled``) is painted ON TOP OF the photo, at
+``frame_gap`` from the edge — the strip of image left visible between the two
+frames is the intended effect. It does not enlarge the canvas and therefore does
+not enter ``border_px()``/``content_box()``: the geometry of the interactive
+tools stays that of the whole photo. That second frame carries an **ironwork**
+(``INNER_MOTIFS``: a plain line, corner scrolls, running scrolls, a twisted bar,
+forged studs), rendered in light relief or as a strict flat fill
+(``frame_inner_relief``) and sized by the "Ornaments" slider
+(``frame_inner_ornament``). The ornaments grow INWARDS from the line: they stay
+inside the photo and never touch the outer band.
 
-Deux familles de motifs :
+Two families of patterns:
 
-- **paramétriques** (``plain``, ``simple``, ``double``) — l'utilisateur choisit
-  couleurs et largeurs. ``plain`` est un simple aplat d'une couleur (noir, blanc
-  ou libre) sans aucun relief ; ``simple``/``double`` ajoutent un style de
-  remplissage (uni / dégradé / pailleté), une moulure et, pour ``double``, un
-  intervalle et un cadre intérieur ;
-- **décoratifs** (baroque, oves et perles, grecque, art déco, vigne, roses, bois
-  sculpté, métal, reflets, fleurs) — entièrement dessinés par code (aucune
-  ressource image embarquée, donc aucun ajout au packaging et un rendu net à
-  n'importe quelle résolution).
+- **parametric** (``plain``, ``simple``, ``double``) — the user chooses the
+  colours and widths. ``plain`` is a plain flat fill of a single colour (black,
+  white or free) with no relief whatsoever; ``simple``/``double`` add a fill
+  style (solid / gradient / glitter), a moulding and, for ``double``, a gap and
+  an inner frame;
+- **decorative** (baroque, egg-and-dart, Greek key, art deco, vine, roses,
+  carved wood, metal, reflections, flowers) — drawn entirely by code (not a
+  single embedded image resource, hence nothing added to the packaging and a
+  crisp rendering at any resolution).
 
-Rendu des cadres décoratifs — c'est un moteur de RELIEF, pas un dessin :
+Rendering of the decorative frames — this is a RELIEF engine, not a drawing:
 
-1. une **section de moulure** (``_PROFILE_SEGMENTS`` : chant, tore, scotie,
-   doucine, filet, feuillure) donne la hauteur du bandeau en fonction de la
-   distance au bord ;
-2. les **ornements sont gravés** dans cette carte de hauteurs
-   (``_Carver``/``_CARVERS`` : acanthes, coquilles, oves, perles, grecque,
-   godrons, roses, grappes…) et non peints en aplat ;
-3. ``_shade_relief()`` éclaire le tout — normales déduites du gradient, diffus
-   de Lambert, reflet de Blinn-Phong, occlusion approchée des creux et patine
-   qui s'y dépose (bol rouge sous la dorure, vert-de-gris du bronze).
+1. a **moulding cross-section** (``_PROFILE_SEGMENTS``: edge, torus, scotia,
+   ogee, fillet, rebate) gives the height of the band as a function of the
+   distance to the edge;
+2. the **ornaments are carved** into that height map
+   (``_Carver``/``_CARVERS``: acanthus, shells, eggs, beads, Greek key,
+   gadroons, roses, grape bunches…) rather than painted as a flat fill;
+3. ``_shade_relief()`` lights the whole thing — normals deduced from the
+   gradient, Lambertian diffuse, Blinn-Phong highlight, approximate occlusion of
+   the hollows and the patina that settles in them (the red bole under the
+   gilding, the verdigris of bronze).
 
-C'est l'étape 3 qui fait la différence entre un motif qui se lit comme un
-autocollant et un motif qui se lit comme de la matière sculptée : un ornement
-plaqué en couleur reste plat quel que soit son dessin, le même ornement en
-relief prend la lumière du cadre et projette ses ombres dans ses propres creux.
+Stage 3 is what makes the difference between a motif that reads as a sticker and
+a motif that reads as carved material: an ornament laid down in flat colour
+stays flat whatever its drawing, while the same ornament in relief takes the
+light of the frame and casts its shadows into its own hollows.
 
-Le bandeau est produit à une résolution de travail bornée par ``_WORK_MAX`` puis
-agrandi à la taille finale (un relief éclairé est un motif doux — l'agrandissement
-ne se voit pas, alors qu'un rendu pleine résolution coûterait plusieurs secondes
-et centaines de Mo sur un export 6000 px). Les ornements sont gravés en
-suréchantillonnage ``_SS`` puis réduits, faute d'anticrénelage dans ``ImageDraw``.
+The band is produced at a working resolution bounded by ``_WORK_MAX`` then
+enlarged to the final size (a lit relief is a soft motif — the enlargement does
+not show, whereas a full-resolution rendering would cost several seconds and
+hundreds of MB on a 6000 px export). The ornaments are carved with ``_SS``
+supersampling then downscaled, for lack of antialiasing in ``ImageDraw``.
 """
 import logging
 import math
@@ -64,7 +65,7 @@ from src.core.i18n import translate
 
 logger = logging.getLogger(__name__)
 
-# (identifiant, libellé affiché)
+# (identifier, displayed label)
 FRAME_TYPES: list[tuple[str, str]] = [
     ("none",    translate("Frames", "None")),
     ("plain",   translate("Frames", "Flat surround")),
@@ -82,36 +83,36 @@ FRAME_TYPES: list[tuple[str, str]] = [
     ("gloss",   translate("Frames", "Highlights")),
 ]
 
-# Un cadre sculpté n'a de sens qu'à partir d'une certaine épaisseur : sous ~8 %
-# du petit côté, les acanthes ou les oves tiennent dans quelques pixels et se
-# réduisent à une bouillie. Le dialogue relève la largeur à ce plancher quand on
-# choisit un motif décoratif — visiblement, dans le curseur, jamais en douce au
-# moment du rendu (le curseur mentirait sur le résultat).
+# A carved frame only makes sense from a certain thickness on: below ~8 % of
+# the short side, the acanthus leaves or the egg-and-dart hold in a handful of
+# pixels and boil down to mush. The dialog raises the width to that floor when
+# a decorative pattern is chosen — visibly, in the slider, never quietly at
+# render time (the slider would lie about the result).
 DECOR_MIN_WIDTH = 0.08
 
 FRAME_LABELS: dict[str, str] = dict(FRAME_TYPES)
 
-# Motifs dont les couleurs / largeurs sont réglables par l'utilisateur.
+# Patterns whose colours / widths are adjustable by the user.
 PARAMETRIC_FRAMES = {"plain", "simple", "double"}
 
-# Sous-ensemble des cadres paramétriques offrant un style de remplissage
-# (uni / dégradé / pailleté) et donc une seconde couleur. ``plain`` en est
-# volontairement exclu : c'est un aplat d'une seule couleur, sans relief.
+# Subset of the parametric frames offering a fill style (solid / gradient /
+# glitter) and hence a second colour. ``plain`` is deliberately excluded from
+# it: it is a flat fill of a single colour, with no relief.
 STYLED_FRAMES = {"simple", "double"}
 
-# Cadres végétaux dont quelques motifs débordent sur la photo (cf. la section
-# « débordements » plus bas) : les seuls, avec le second cadre de ``plain``, à
-# poser de la matière par-dessus l'image.
+# Foliage frames a few motifs of which spill over the photo (cf. the
+# "spills" section further down): the only ones, along with the second frame
+# of ``plain``, to lay material on top of the image.
 SPILL_FRAMES = {"vine", "roses", "flowers"}
 
-# Couleurs prêtes à l'emploi proposées à côté du sélecteur (identifiant hexa, libellé).
+# Ready-made colours offered next to the picker (hex identifier, label).
 QUICK_COLORS: list[tuple[str, str]] = [
     ("#000000", translate("Frames", "Black")),
     ("#ffffff", translate("Frames", "White")),
 ]
 
-# Ferronnerie du second cadre de « plain » (identifiant, libellé). « line » est
-# le motif historique — un simple trait — et reste le défaut.
+# Ironwork of the second frame of "plain" (identifier, label). "line" is the
+# historical motif — a plain line — and remains the default.
 INNER_MOTIFS: list[tuple[str, str]] = [
     ("line",    translate("Frames", "Plain line")),
     ("corners", translate("Frames", "Corner scrolls")),
@@ -122,39 +123,39 @@ INNER_MOTIFS: list[tuple[str, str]] = [
 
 INNER_MOTIF_LABELS: dict[str, str] = dict(INNER_MOTIFS)
 
-# Motifs dont la taille des ornements dépend du curseur « Ornements ».
+# Motifs whose ornament size depends on the "Ornaments" slider.
 ORNAMENTED_MOTIFS = {"corners", "scrolls", "twist", "studs"}
 
-# Bornes du curseur « Ornements » (facteur d'échelle des motifs).
+# Bounds of the "Ornaments" slider (scale factor of the motifs).
 INNER_ORNAMENT_MIN = 0.4
 INNER_ORNAMENT_MAX = 2.5
 
-# Rendu de la ferronnerie : relief léger (biseau clair/sombre) ou aplat strict.
+# Rendering of the ironwork: light relief (a light/dark bevel) or a strict flat fill.
 INNER_RELIEFS: list[tuple[bool, str]] = [
     (True,  translate("Frames", "Light relief")),
     (False, translate("Frames", "Flat colour")),
 ]
 
-# Styles de remplissage des cadres paramétriques
+# Fill styles of the parametric frames
 COLOR_STYLES: list[tuple[str, str]] = [
     ("solid",    translate("Frames", "Solid")),
     ("gradient", translate("Frames", "Gradient")),
     ("glitter",  translate("Frames", "Glitter")),
 ]
 
-# Résolution maximale de rendu du bandeau (cf. docstring du module).
+# Maximum rendering resolution of the band (cf. the module docstring).
 _WORK_MAX = 2000
-# Suréchantillonnage des ornements (polygones sans anticrénelage dans PIL).
+# Supersampling of the ornaments (polygons without antialiasing in PIL).
 _SS = 2
-# Largeur maximale d'un cadre, en fraction du plus petit côté (garde-fou : au
-# delà, la photo disparaîtrait sous son propre cadre).
+# Maximum width of a frame, as a fraction of the shortest side (a safeguard:
+# beyond it, the photo would vanish under its own frame).
 _MAX_FRACTION = 0.30
 
 
-# ------------------------------------------------------------------ utilitaires
+# ------------------------------------------------------------------ utilities
 
 def _hex_to_rgb(value, default=(255, 255, 255)) -> tuple[int, int, int]:
-    """'#rrggbb' / '#rgb' → (r, g, b). Retourne ``default`` si illisible."""
+    """'#rrggbb' / '#rgb' → (r, g, b). Returns ``default`` if unreadable."""
     try:
         s = str(value).strip().lstrip("#")
         if len(s) == 3:
@@ -167,7 +168,7 @@ def _hex_to_rgb(value, default=(255, 255, 255)) -> tuple[int, int, int]:
 
 
 def _shade(color, factor: float) -> tuple[int, int, int]:
-    """Éclaircit (>1) ou assombrit (<1) une couleur RGB."""
+    """Lightens (>1) or darkens (<1) an RGB colour."""
     return tuple(max(0, min(255, int(round(c * factor)))) for c in color)
 
 
@@ -190,20 +191,20 @@ def frame_type(edit) -> str:
 
 
 def suggested_width(kind: str, current: float) -> float:
-    """Largeur à proposer quand l'utilisateur choisit ``kind``.
+    """Width to offer when the user chooses ``kind``.
 
-    Un motif sculpté a besoin de matière : en dessous de ``DECOR_MIN_WIDTH``, la
-    frise n'a plus la place d'exister. On relève donc la largeur courante — sans
-    jamais la réduire, un choix plus large restant celui de l'utilisateur."""
+    A carved motif needs material: below ``DECOR_MIN_WIDTH``, the frieze no
+    longer has the room to exist. The current width is therefore raised — never
+    reduced, a wider choice remaining the user's own."""
     if kind in PARAMETRIC_FRAMES or kind == "none":
         return current
     return max(current, DECOR_MIN_WIDTH)
 
 
 def _raw_total(edit) -> float:
-    """Somme brute des bandes, avant plafonnement — sert de dénominateur au
-    découpage concentric du cadre double, qui doit rester proportionnel même
-    quand le total est ramené à _MAX_FRACTION."""
+    """Raw sum of the bands, before capping — serves as the denominator of the
+    concentric split of the double frame, which must stay proportional even
+    when the total is brought back down to _MAX_FRACTION."""
     kind = frame_type(edit)
     if kind == "none":
         return 0.0
@@ -215,14 +216,15 @@ def _raw_total(edit) -> float:
 
 
 def border_fraction(edit) -> float:
-    """Épaisseur totale du cadre, en fraction du plus petit côté de la photo,
-    plafonnée à ``_MAX_FRACTION`` (au delà, la photo disparaîtrait sous le cadre —
-    le plafond par bande ne suffit pas, trois bandes au maximum les cumuleraient)."""
+    """Total thickness of the frame, as a fraction of the short side of the photo,
+    capped at ``_MAX_FRACTION`` (beyond it the photo would vanish under the
+    frame — the per-band cap is not enough, three bands at the maximum would
+    add up)."""
     return min(_MAX_FRACTION, _raw_total(edit))
 
 
 def border_px(edit, width: int, height: int) -> int:
-    """Épaisseur du cadre en pixels pour une photo ``width`` × ``height``."""
+    """Thickness of the frame in pixels for a ``width`` × ``height`` photo."""
     frac = border_fraction(edit)
     if frac <= 0.0 or width <= 0 or height <= 0:
         return 0
@@ -230,13 +232,13 @@ def border_px(edit, width: int, height: int) -> int:
 
 
 def inner_overlay_px(edit, width: int, height: int) -> tuple[int, int]:
-    """Second cadre de « plain », posé SUR la photo : ``(intervalle, épaisseur)`` en px.
+    """Second frame of "plain", laid ON the photo: ``(gap, thickness)`` in px.
 
-    Retourne ``(0, 0)`` si le motif n'en a pas. Contrairement au cadre extérieur,
-    ce cadre-là n'agrandit pas le canevas : il est peint par-dessus l'image, à
-    ``intervalle`` px du bord de la photo — la bande d'image restée entre les deux
-    cadres est justement l'effet recherché. ``width``/``height`` sont les
-    dimensions de la PHOTO (hors cadre extérieur)."""
+    Returns ``(0, 0)`` if the pattern has none. Unlike the outer frame, that one
+    does not enlarge the canvas: it is painted on top of the image, at ``gap``
+    px from the edge of the photo — the strip of image left between the two
+    frames is precisely the intended effect. ``width``/``height`` are the
+    dimensions of the PHOTO (outer frame excluded)."""
     if frame_type(edit) != "plain" or not getattr(edit, "frame_inner_enabled", False):
         return (0, 0)
     short = min(width, height)
@@ -246,8 +248,8 @@ def inner_overlay_px(edit, width: int, height: int) -> tuple[int, int]:
     if thick <= 0:
         return (0, 0)
     gap = int(round(_attr_frac(edit, "frame_gap", 0.02) * short))
-    # Garde-fou : le second cadre ne doit jamais se refermer sur lui-même au
-    # centre de la photo (les deux réglages se cumulent, chacun plafonné isolément).
+    # Safeguard: the second frame must never close in on itself at the centre
+    # of the photo (the two settings add up, each capped on its own).
     limit = max(1, short // 2 - 1)
     gap = max(0, min(gap, limit - 1))
     thick = max(1, min(thick, limit - gap))
@@ -255,13 +257,13 @@ def inner_overlay_px(edit, width: int, height: int) -> tuple[int, int]:
 
 
 def inner_motif(edit) -> str:
-    """Motif de ferronnerie du second cadre (« line » si absent ou inconnu)."""
+    """Ironwork motif of the second frame ("line" if absent or unknown)."""
     motif = getattr(edit, "frame_inner_motif", "line") or "line"
     return motif if motif in INNER_MOTIF_LABELS else "line"
 
 
 def inner_ornament_scale(edit) -> float:
-    """Facteur d'échelle des ornements (curseur « Ornements »), borné."""
+    """Scale factor of the ornaments ("Ornaments" slider), clamped."""
     try:
         value = float(getattr(edit, "frame_inner_ornament", 1.0))
     except (TypeError, ValueError):
@@ -270,30 +272,31 @@ def inner_ornament_scale(edit) -> float:
 
 
 def inner_relief(edit) -> bool:
-    """Vrai si la ferronnerie est rendue en relief léger, faux en aplat strict."""
+    """True if the ironwork is rendered in light relief, false as a strict flat fill."""
     return bool(getattr(edit, "frame_inner_relief", True))
 
 
 def content_box(edit, framed_w: float, framed_h: float) -> tuple[float, float, float, float]:
-    """Inverse de ``border_px`` : zone occupée par la photo dans une image encadrée.
+    """Inverse of ``border_px``: the area taken by the photo in a framed image.
 
-    Retourne ``(x, y, w, h)``. Sert à la visionneuse, qui reçoit le pixmap déjà
-    encadré mais doit exprimer les coordonnées des outils interactifs
-    (recadrage, yeux rouges, vignette, cadres de visages) dans l'espace de la
-    photo, pas du cadre."""
+    Returns ``(x, y, w, h)``. Of use to the viewer, which receives the already
+    framed pixmap but must express the coordinates of the interactive tools
+    (crop, red eyes, vignette, face boxes) in the space of the photo, not of the
+    frame."""
     frac = border_fraction(edit)
     if frac <= 0.0 or framed_w <= 0 or framed_h <= 0:
         return (0.0, 0.0, float(framed_w), float(framed_h))
-    # border_px arrondit à l'entier : on résout d'abord en continu (b = frac × petit
-    # côté du contenu, framed = contenu + 2b), puis on cherche l'entier voisin qui
-    # redonne exactement border_px — sans ça l'inverse dérive d'un pixel, et tout
-    # ce qui est calé sur content_box (recadrage, bbox de visage) glisse d'autant.
+    # border_px rounds to the integer: it is solved continuously first (b = frac ×
+    # short side of the content, framed = content + 2b), then the neighbouring
+    # integer that gives exactly border_px back is looked for — without that the
+    # inverse drifts by a pixel, and everything aligned on content_box (crop, face
+    # bbox) slides by as much.
     framed_s = min(framed_w, framed_h)
     b = int(round(frac * framed_s / (1.0 + 2.0 * frac)))
     for cand in (b, b - 1, b + 1, b - 2, b + 2):
         if cand < 0 or 2 * cand >= framed_s:
             continue
-        s = framed_s - 2 * cand   # petit côté du contenu pour ce candidat
+        s = framed_s - 2 * cand   # short side of the content for this candidate
         if border_px(edit, s, s) == cand:
             b = cand
             break
@@ -302,14 +305,14 @@ def content_box(edit, framed_w: float, framed_h: float) -> tuple[float, float, f
             max(1.0, float(framed_w) - 2 * b), max(1.0, float(framed_h) - 2 * b))
 
 
-# ------------------------------------------------------------------ cartes numpy
+# ------------------------------------------------------------------ numpy maps
 
 def _edge_distance(np, width: int, height: int):
-    """(distance au bord le plus proche, index du bord) — float32 (h, w).
+    """(distance to the nearest edge, index of that edge) — float32 (h, w).
 
-    L'index du bord (0 haut, 1 gauche, 2 droite, 3 bas) découpe le bandeau en
-    quatre trapèzes joints à 45° dans les coins, exactement comme les
-    moulures d'un cadre réel."""
+    The index of the edge (0 top, 1 left, 2 right, 3 bottom) cuts the band into
+    four trapezoids joined at 45° in the corners, exactly like the mouldings of
+    a real frame."""
     ys = np.arange(height, dtype=np.float32)[:, None]
     xs = np.arange(width, dtype=np.float32)[None, :]
     d_top = np.broadcast_to(ys, (height, width))
@@ -325,7 +328,7 @@ def _edge_distance(np, width: int, height: int):
 
 
 def _smooth_noise(np, width: int, height: int, cells_x: int, cells_y: int, rng):
-    """Bruit lisse (0-1) obtenu par agrandissement bicubique d'une petite grille."""
+    """Smooth noise (0-1) obtained by bicubic upscaling of a small grid."""
     cells_x = max(2, cells_x)
     cells_y = max(2, cells_y)
     small = (rng.random((cells_y, cells_x)) * 255).astype("uint8")
@@ -334,10 +337,10 @@ def _smooth_noise(np, width: int, height: int, cells_x: int, cells_y: int, rng):
 
 
 def _gauss(np, arr, radius: float, hi: float = 1.4):
-    """Flou gaussien d'une carte flottante (0..``hi``), via PIL.
+    """Gaussian blur of a float map (0..``hi``), through PIL.
 
-    La quantification sur 8 bits est sans conséquence ici : cette carte ne sert
-    qu'à l'occlusion des creux, pas au relief lui-même."""
+    The quantisation to 8 bits is of no consequence here: this map only serves
+    the occlusion of the hollows, not the relief itself."""
     if radius < 0.5:
         return arr
     img = Image.fromarray(np.clip(arr * (255.0 / hi), 0, 255).astype("uint8"), mode="L")
@@ -345,26 +348,26 @@ def _gauss(np, arr, radius: float, hi: float = 1.4):
     return np.asarray(img, dtype="float32") * (hi / 255.0)
 
 
-# ------------------------------------------------------------------ profils de moulure
+# ------------------------------------------------------------------ moulding profiles
 #
-# Une moulure réelle a une SECTION — chant extérieur, tore, scotie creuse,
-# doucine, filet, feuillure — et c'est elle, bien plus que la couleur, qui fait
-# qu'un cadre « tient » sous la lumière. Chaque profil est décrit par des
-# segments (largeur relative, forme, hauteur de départ, hauteur d'arrivée,
-# amplitude), échantillonnés une fois en table puis interpolés sur la carte de
-# distance au bord : t = 0 sur l'arête extérieure, t = 1 contre la photo.
+# A real moulding has a CROSS-SECTION — outer edge, torus, hollow scotia,
+# ogee, fillet, rebate — and it is that, far more than the colour, which makes
+# a frame "hold" under the light. Each profile is described by segments
+# (relative width, shape, start height, end height, amplitude), sampled once
+# into a table then interpolated over the distance-to-edge map: t = 0 on the
+# outer edge, t = 1 against the photo.
 
 _PROFILE_N = 320
 
-# Lumière du studio : haute, à gauche, légèrement en avant. Toutes les moulures
-# du projet sont éclairées par elle — c'est ce qui rend les cadres cohérents
-# entre eux (et avec l'ombre portée que l'œil attend en haut à gauche).
+# Studio light: high, on the left, slightly to the front. Every moulding of
+# the project is lit by it — that is what makes the frames consistent with one
+# another (and with the drop shadow the eye expects at the top left).
 _LIGHT = (-0.4364, -0.5624, 0.7025)
-_HALF = (-0.2564, -0.3305, 0.9083)      # normalisé (L + vue) — Blinn-Phong
+_HALF = (-0.2564, -0.3305, 0.9083)      # normalised (L + view) — Blinn-Phong
 
 
 def _profile_lut(segments) -> tuple[list, list]:
-    """(ts, hs) — table hauteur(t) d'une section de moulure."""
+    """(ts, hs) — height(t) table of a moulding cross-section."""
     total = sum(s[0] for s in segments) or 1.0
     ts: list[float] = []
     hs: list[float] = []
@@ -374,7 +377,7 @@ def _profile_lut(segments) -> tuple[list, list]:
         for i in range(count):
             u = i / (count - 1)
             base = h0 + (h1 - h0) * u
-            if shape == "round":            # tore / doucine bombée
+            if shape == "round":            # torus / domed ogee
                 v = base + amp * math.sin(math.pi * u)
             elif shape == "cove":           # scotie creuse
                 v = base - amp * math.sin(math.pi * u)
@@ -388,10 +391,10 @@ def _profile_lut(segments) -> tuple[list, list]:
     return ts, hs
 
 
-# (largeur, forme, h_départ, h_arrivée, amplitude)
+# (width, shape, start height, end height, amplitude)
 _PROFILE_SEGMENTS: dict[str, list] = {
-    # Cadre doré classique : chant, tore, grande scotie, doucine à ornements,
-    # filet, puis feuillure qui redescend contre la photo.
+    # Classic gilded frame: edge, torus, large scotia, ogee with ornaments,
+    # fillet, then a rebate coming back down against the photo.
     "ogee": [
         (0.05, "step",  0.28, 0.66, 0.0),
         (0.11, "round", 0.66, 0.60, 0.15),
@@ -400,7 +403,7 @@ _PROFILE_SEGMENTS: dict[str, list] = {
         (0.10, "round", 0.66, 0.52, 0.11),
         (0.16, "step",  0.52, 0.14, 0.0),
     ],
-    # Moulure creuse peinte (bois, roses) — large gorge, épaulement intérieur.
+    # Painted hollow moulding (wood, roses) — a wide throat, an inner shoulder.
     "cove": [
         (0.07, "step",  0.32, 0.62, 0.0),
         (0.12, "round", 0.62, 0.58, 0.13),
@@ -408,8 +411,8 @@ _PROFILE_SEGMENTS: dict[str, list] = {
         (0.22, "round", 0.50, 0.64, 0.15),
         (0.15, "step",  0.64, 0.18, 0.0),
     ],
-    # Plate-bande à peine bombée : la section des cadres réglables, qui doivent
-    # rendre la couleur choisie sans la noyer sous un relief.
+    # A barely domed flat band: the section of the adjustable frames, which must
+    # render the chosen colour without drowning it under relief.
     "flat": [
         (0.05, "step",  0.44, 0.74, 0.0),
         (0.10, "round", 0.74, 0.72, 0.06),
@@ -417,7 +420,7 @@ _PROFILE_SEGMENTS: dict[str, list] = {
         (0.08, "round", 0.72, 0.66, 0.05),
         (0.15, "step",  0.66, 0.26, 0.0),
     ],
-    # Chanfreins vifs : métal, art déco.
+    # Sharp chamfers: metal, art deco.
     "bevel": [
         (0.04, "step",  0.38, 0.80, 0.0),
         (0.34, "line",  0.80, 0.56, 0.0),
@@ -425,14 +428,14 @@ _PROFILE_SEGMENTS: dict[str, list] = {
         (0.19, "line",  0.58, 0.76, 0.0),
         (0.15, "step",  0.76, 0.20, 0.0),
     ],
-    # Demi-rond plein : laque, verre.
+    # Solid half-round: lacquer, glass.
     "round": [
         (0.05, "step",  0.30, 0.54, 0.0),
         (0.76, "round", 0.54, 0.52, 0.34),
         (0.19, "step",  0.52, 0.16, 0.0),
     ],
-    # Gradins : la section en escalier de l'Art déco, où le décor n'est pas
-    # rapporté sur la moulure — c'est la moulure elle-même.
+    # Steps: the stepped section of Art Deco, where the decoration is not
+    # applied onto the moulding — it is the moulding itself.
     "steps": [
         (0.04, "step",  0.34, 0.60, 0.0),
         (0.10, "line",  0.60, 0.60, 0.0),
@@ -446,17 +449,17 @@ _PROFILE_SEGMENTS: dict[str, list] = {
         (0.08, "line",  0.42, 0.42, 0.0),
         (0.14, "step",  0.42, 0.16, 0.0),
     ],
-    # Gorge de porcelaine : creux doux et lèvre relevée.
+    # Porcelain throat: a soft hollow and a raised lip.
     "scoop": [
         (0.07, "step",  0.40, 0.68, 0.0),
         (0.58, "cove",  0.68, 0.58, 0.26),
         (0.20, "round", 0.58, 0.68, 0.11),
         (0.15, "step",  0.68, 0.22, 0.0),
     ],
-    # Champ plat entre deux baguettes : la section des cadres dont le décor
-    # couvre TOUTE la largeur (vigne, roses, fleurs). Une moulure creuse y
-    # ajouterait son propre relief, qui se superpose à celui des ornements et
-    # noie le dessin — ici la sculpture est seule à porter la lumière.
+    # A flat field between two beads: the section of the frames whose
+    # decoration covers the WHOLE width (vine, roses, flowers). A hollow
+    # moulding would add its own relief there, superimposed on that of the
+    # ornaments and drowning the drawing — here the carving alone carries the light.
     "field": [
         (0.05, "step",  0.30, 0.72, 0.0),
         (0.07, "round", 0.72, 0.60, 0.09),
@@ -474,13 +477,13 @@ def _profile_height(np, t, name: str):
     return np.interp(t, ts, hs).astype("float32")
 
 
-# ------------------------------------------------------------------ matériaux
+# ------------------------------------------------------------------ materials
 #
-# Un matériau = albédo (couleur diffuse), part spéculaire, dureté du reflet,
-# occlusion des creux et teinte qui s'y dépose (bol rouge sous la dorure,
-# vert-de-gris du bronze, encrassement d'un bois ancien). C'est ce dernier
-# point qui donne l'aspect « ancien » : un cadre neuf est propre au fond de
-# ses creux, un cadre travaillé ne l'est jamais.
+# A material = albedo (diffuse colour), specular share, hardness of the
+# highlight, occlusion of the hollows and the tint that settles in them (the red
+# bole under the gilding, the verdigris of bronze, the grime of an old wood).
+# That last point is what gives the "aged" look: a new frame is clean at the
+# bottom of its hollows, a worked frame never is.
 
 _MATERIAL_DEFAULTS = dict(
     albedo=(200, 200, 200), ambient=0.34, spec=0.35, shine=26,
@@ -509,8 +512,8 @@ _MATERIALS: dict[str, dict] = {
                         cavity_tint=(44, 24, 10), cavity_mix=0.55),
     "lacquer": _material(albedo=(24, 26, 31), ambient=0.24, spec=1.00, shine=110,
                          ao=0.38, relief=0.75),
-    # Le décor peint qui la recouvre doit rester velouté : un spéculaire de
-    # laque sur des pétales leur donne un aspect de plastique moulé.
+    # The painted decoration covering it must stay velvety: a lacquer
+    # specular on petals gives them the look of moulded plastic.
     "carmine": _material(albedo=(112, 26, 34), ambient=0.36, spec=0.24, shine=28,
                          ao=0.50, cavity_tint=(46, 12, 16), cavity_mix=0.45),
     "porcelain": _material(albedo=(244, 237, 224), ambient=0.50, spec=0.42, shine=44,
@@ -521,14 +524,14 @@ _MATERIALS: dict[str, dict] = {
 
 
 def _shade_relief(np, height, albedo, mat: dict, border: float):
-    """Éclaire une carte de hauteurs — le cœur du rendu « sculpté ».
+    """Lights a height map — the heart of the "carved" rendering.
 
-    Les normales sont déduites du gradient de la carte (l'amplitude du relief
-    est proportionnelle à l'épaisseur du cadre, donc identique sur une vignette
-    et sur un export), puis éclairées en Lambert + Blinn-Phong. L'occlusion
-    approchée (différence entre la carte et sa version floutée) assombrit les
-    creux et y dépose la patine : sans elle, un relief correct reste plat à
-    l'œil."""
+    The normals are deduced from the gradient of the map (the amplitude of the
+    relief is proportional to the thickness of the frame, hence identical on a
+    thumbnail and on an export), then lit in Lambert + Blinn-Phong. The
+    approximate occlusion (the difference between the map and its blurred
+    version) darkens the hollows and deposits the patina in them: without it, a
+    correct relief still looks flat to the eye."""
     amp = float(mat["relief"]) * max(border, 1.0) * 0.55
     gy, gx = np.gradient(height * np.float32(amp))
     inv = 1.0 / np.sqrt(gx * gx + gy * gy + 1.0)
@@ -553,20 +556,20 @@ def _shade_relief(np, height, albedo, mat: dict, border: float):
     return arr
 
 
-# ------------------------------------------------------------------ chemin du bandeau
+# ------------------------------------------------------------------ band path
 
 def _ring_samples(width: float, height: float, border: float, step: float,
                   frac: float = 0.5) -> list:
-    """Échantillonne une ligne continue du bandeau, à ``frac`` × ``border`` de
-    l'arête extérieure (0,5 = ligne médiane).
+    """Samples a continuous line of the band, at ``frac`` × ``border`` from the
+    outer edge (0.5 = the median line).
 
-    Retourne ``[(x, y, tx, ty, nx, ny, s)]`` — position, tangente unitaire,
-    normale unitaire dirigée vers l'intérieur, abscisse curviligne. Parcours
-    horaire : la normale intérieure vaut toujours la tangente tournée de +90°.
+    Returns ``[(x, y, tx, ty, nx, ny, s)]`` — position, unit tangent, unit
+    normal pointing inwards, curvilinear abscissa. Clockwise walk: the inner
+    normal is always the tangent rotated by +90°.
 
-    Contrairement à ``_band_sides``, l'abscisse curviligne court sans rupture
-    d'un côté à l'autre : c'est ce qui permet à une ondulation (sarment, ruban)
-    de garder sa phase en passant les angles."""
+    Unlike ``_band_sides``, the curvilinear abscissa runs without a break from
+    one side to the next: that is what lets an undulation (a vine stem, a
+    ribbon) keep its phase around the corners."""
     half = border * frac
     x0, y0 = half, half
     x1, y1 = width - half, height - half
@@ -582,7 +585,7 @@ def _ring_samples(width: float, height: float, border: float, step: float,
             continue
         count = max(1, int(round(length / step)))
         tx, ty = (bx - ax) / length, (by - ay) / length
-        nx, ny = -ty, tx          # rotation +90° → vers l'intérieur (parcours horaire)
+        nx, ny = -ty, tx          # a +90° rotation → inwards (clockwise walk)
         for k in range(count):
             f = (k + 0.5) / count
             samples.append((ax + (bx - ax) * f, ay + (by - ay) * f, tx, ty, nx, ny, s + f * length))
@@ -599,11 +602,10 @@ def _corner_points(width: float, height: float, border: float) -> list:
 
 
 def _band_sides(w: float, h: float, b: float, frac: float) -> list:
-    """Les 4 côtés d'une ligne tracée à ``frac`` × ``b`` de l'arête extérieure.
+    """The 4 sides of a line drawn at ``frac`` × ``b`` from the outer edge.
 
-    Chaque entrée vaut ``(départ, arrivée, tangente, normale vers l'intérieur)``
-    — de quoi répartir un motif le long d'une moulure sans réécrire la
-    trigonométrie à chaque fois."""
+    Each entry is ``(start, end, tangent, inner normal)`` — enough to spread a
+    motif along a moulding without rewriting the trigonometry every time."""
     d = b * frac
     x0, y0 = d, d
     x1, y1 = w - 1.0 - d, h - 1.0 - d
@@ -621,15 +623,15 @@ def _band_corners(w: float, h: float, b: float, frac: float) -> list:
 
 
 _DIAG = math.sqrt(0.5)
-# Bissectrices vers l'intérieur, dans l'ordre de _band_corners.
+# Bisectors pointing inwards, in the order of _band_corners.
 _CORNER_DIRS = [(_DIAG, _DIAG), (-_DIAG, _DIAG), (-_DIAG, -_DIAG), (_DIAG, -_DIAG)]
 
 
 def _distribute(length: float, spacing: float, margin: float) -> list:
-    """Abscisses d'un motif répété, centrées sur le côté et à l'écart des angles.
+    """Abscissas of a repeated motif, centred on the side and clear of the corners.
 
-    Centrer plutôt que partir d'un bout est ce qui distingue une frise dessinée
-    d'une frise réelle : les deux extrémités d'un côté doivent se répondre."""
+    Centring rather than starting from one end is what distinguishes a drawn
+    frieze from a real one: the two ends of a side must answer each other."""
     spacing = max(spacing, 1.0)
     free = length - 2.0 * margin
     if free <= spacing:
@@ -639,22 +641,22 @@ def _distribute(length: float, spacing: float, margin: float) -> list:
     return [start + k * spacing for k in range(count)]
 
 
-# ------------------------------------------------------------------ sculpture
+# ------------------------------------------------------------------ carving
 #
-# Les ornements ne sont pas peints : ils sont GRAVÉS dans la carte de hauteurs,
-# puis éclairés par _shade_relief avec le reste de la moulure. Un motif peint en
-# aplat se lit comme un autocollant ; le même motif en relief prend la lumière du
-# cadre, projette ses ombres dans ses creux et devient de la matière.
+# The ornaments are not painted: they are CARVED into the height map, then lit
+# by _shade_relief along with the rest of the moulding. A motif painted as a flat
+# fill reads as a sticker; the same motif in relief takes the light of the frame,
+# casts its shadows into its hollows and becomes material.
 #
-# Le calque de couleur (facultatif) sert aux motifs réellement peints —
-# porcelaine, roses — dont la teinte ne se déduit pas du matériau du bandeau.
+# The colour layer (optional) serves the motifs that are genuinely painted —
+# porcelain, roses — whose tint cannot be deduced from the material of the band.
 
 class _Carver:
-    """Ciseau du sculpteur : écrit dans la carte de hauteurs (et la couleur).
+    """The sculptor's chisel: writes into the height map (and the colour).
 
-    La carte est une image « L » dont 128 est le niveau du bandeau : au-dessus
-    on ajoute de la matière, en dessous on creuse. Les tracés s'écrasent dans
-    l'ordre d'appel, comme des passes de gouge successives."""
+    The map is an "L" image in which 128 is the level of the band: above it,
+    material is added, below it, material is hollowed out. The strokes overwrite
+    one another in call order, like successive passes of a gouge."""
 
     def __init__(self, hdraw, cdraw, unit: float, mdraw=None) -> None:
         self._h = hdraw
@@ -672,11 +674,11 @@ class _Carver:
             self._c.polygon(poly, fill=color)
             self.painted = True
 
-    # Silhouette des ornements — utile au seul calque de débordement, qui doit
-    # savoir où il couvre la photo. Seules les passes qui AJOUTENT de la matière
-    # (dome/flat/ridge) y contribuent : une rainure ne fait jamais silhouette,
-    # elle se creuse dans un motif déjà posé, et l'inscrire ici laisserait
-    # traîner des griffures noires sur l'image là où elle dépasse du contour.
+    # Silhouette of the ornaments — of use only to the spill layer, which must
+    # know where it covers the photo. Only the passes that ADD material
+    # (dome/flat/ridge) contribute to it: a groove never makes a silhouette, it is
+    # hollowed into a motif already laid down, and writing it here would leave
+    # black scratches trailing on the image wherever it overflows the outline.
     def _cover(self, poly) -> None:
         if self._m is not None:
             self._m.polygon(poly, fill=255)
@@ -688,11 +690,11 @@ class _Carver:
 
     def dome(self, poly, peak: float, color=None, layers: int = 4,
              base: float | None = None, edge: float = 0.0) -> None:
-        """Bosse arrondie : contours emboîtés du plus large au plus haut.
+        """Rounded bump: nested outlines from the widest to the highest.
 
-        ``edge`` creuse en plus une rainure le long du contour — c'est le trait
-        de séparation que le sculpteur donne autour de chaque motif, et sans lui
-        deux ornements voisins fusionnent en une seule masse molle."""
+        ``edge`` additionally carves a groove along the outline — that is the
+        separating stroke the sculptor puts around each motif, and without it
+        two neighbouring ornaments merge into a single soft mass."""
         if len(poly) < 3:
             return
         sx = sy = 0.0
@@ -706,9 +708,9 @@ class _Carver:
             y0 = y if y < y0 else y0
             y1 = y if y > y1 else y1
         cx, cy = sx / len(poly), sy / len(poly)
-        # Sous une dizaine de pixels, les contours emboîtés qui arrondissent la
-        # bosse tombent tous dans le même pixel après réduction : on garde le
-        # dessin, on abandonne le modelé qui ne se verrait pas de toute façon.
+        # Below about ten pixels, the nested outlines that round the bump all fall
+        # into the same pixel after the downscale: the drawing is kept, the
+        # modelling that would not be visible anyway is dropped.
         if max(x1 - x0, y1 - y0) < 12.0:
             layers = min(layers, 2)
         low = peak * 0.30 if base is None else base
@@ -736,7 +738,7 @@ class _Carver:
                   edge=edge)
 
     def ridge(self, pts, width: float, peak: float, color=None, layers: int = 3) -> None:
-        """Filet en relief : passes de plus en plus fines et hautes."""
+        """Raised fillet: passes that grow finer and higher."""
         if len(pts) < 2:
             return
         low = peak * 0.35
@@ -750,7 +752,7 @@ class _Carver:
             self.painted = True
 
     def groove(self, pts, width: float, depth: float) -> None:
-        """Rainure creusée (nervure de feuille, gorge d'une moulure)."""
+        """Hollowed groove (a leaf vein, the throat of a moulding)."""
         if len(pts) < 2:
             return
         self._h.line(pts, fill=self._lvl(-abs(depth)), width=max(1, int(round(width))),
@@ -767,28 +769,26 @@ def _wrap_pi(angle: float) -> float:
 
 
 def _detail_steps(span: float, full: int, minimum: int = 6) -> int:
-    """Nombre de sommets d'un contour, proportionné à sa taille réelle.
+    """Number of vertices of an outline, proportioned to its real size.
 
-    Un motif qui couvre 15 px n'a pas besoin des 54 sommets qu'il lui faut à
-    150 px : au-delà d'un sommet tous les ~2,5 px la tessellation ne se voit
-    plus, elle ne coûte que du temps Python. Les cadres végétaux tracent
-    plusieurs centaines de contours par bandeau, et ce nombre ne dépend pas de
-    la résolution (l'espacement des motifs est une fraction de la largeur du
-    bandeau) — sans ce plafond, une vignette de galerie paye exactement le même
-    calcul de sommets qu'un export 6000 × 4000, ce qui rend les treize aperçus
-    du dialogue de cadre inutilisables."""
+    A motif covering 15 px does not need the 54 vertices it takes at 150 px:
+    beyond one vertex every ~2.5 px the tessellation no longer shows, it only
+    costs Python time. The foliage frames draw several hundred outlines per
+    band, and that number does not depend on the resolution (the spacing of the
+    motifs is a fraction of the width of the band) — without this cap, a gallery
+    thumbnail pays exactly the same vertex cost as a 6000 × 4000 export, which
+    makes the thirteen previews of the frame dialog unusable."""
     return max(minimum, min(full, int(span / 2.5)))
 
 
 def _vine_leaf_polygon(cx: float, cy: float, size: float, angle: float) -> list:
-    """Feuille de vigne : cinq lobes, sinus profonds, base cordiforme, bord denté.
+    """Vine leaf: five lobes, deep sinuses, a cordate base, a toothed edge.
 
-    Une feuille lobée générique (rayon en cosinus, deux lobes et demi) se lit
-    comme une tache ronde dès qu'elle est petite — ce sont les sinus entre lobes
-    et la denture du bord qui la font reconnaître comme de la vigne. Le rayon
-    est la somme de cinq bosses gaussiennes plutôt qu'un cosinus : chaque lobe
-    garde ainsi sa propre largeur, comme sur la feuille réelle où le lobe
-    terminal domine."""
+    A generic lobed leaf (cosine radius, two and a half lobes) reads as a round
+    blotch as soon as it is small — it is the sinuses between the lobes and the
+    toothing of the edge that make it recognisable as a vine. The radius is the
+    sum of five Gaussian bumps rather than a cosine: each lobe thus keeps its
+    own width, as on the real leaf where the terminal lobe dominates."""
     lobes = ((0.00, 1.00, 0.40), (0.72, 0.80, 0.32), (-0.72, 0.80, 0.32),
              (1.50, 0.54, 0.28), (-1.50, 0.54, 0.28))
     pts = []
@@ -798,7 +798,7 @@ def _vine_leaf_polygon(cx: float, cy: float, size: float, angle: float) -> list:
         r = 0.28
         for centre, amp, wide in lobes:
             r += amp * math.exp(-(_wrap_pi(th - centre) / wide) ** 2)
-        r += 0.022 * math.sin(11.0 * th)                     # denture du bord
+        r += 0.022 * math.sin(11.0 * th)                     # toothing of the edge
         r *= 1.0 - 0.60 * math.exp(-(_wrap_pi(th - math.pi) / 0.40) ** 2)
         x, y = _rotate(size * r * math.cos(th), size * r * math.sin(th), angle)
         pts.append((cx + x, cy + y))
@@ -807,15 +807,15 @@ def _vine_leaf_polygon(cx: float, cy: float, size: float, angle: float) -> list:
 
 def _petal_polygon(cx: float, cy: float, length: float, width: float,
                    angle: float, notch: float = 0.0) -> list:
-    """Pétale en goutte, attaché en ``(cx, cy)`` et pointé vers ``angle``.
+    """Teardrop petal, attached at ``(cx, cy)`` and pointing towards ``angle``.
 
-    Étroit à la base, large aux deux tiers, arrondi sur la pointe — un pétale
-    en ellipse (le raccourci employé jusqu'ici) donne une marguerite de
-    pictogramme, et un pétale qui s'effile en pointe donne une étoile. D'où le
-    produit de deux termes : ``s ** 0.55`` resserre la base, ``sin(πs) ** 0.35``
-    maintient la largeur presque jusqu'au bout avant de la refermer d'un coup.
-    ``notch`` échancre l'extrémité, ce qui distingue une rose ou un pommier
-    d'une fleur à pétales lancéolés."""
+    Narrow at the base, wide at two thirds, rounded at the tip — an elliptical
+    petal (the shortcut used until now) gives a pictogram daisy, and a petal
+    tapering to a point gives a star. Hence the product of two terms:
+    ``s ** 0.55`` tightens the base, ``sin(πs) ** 0.35`` keeps the width almost
+    to the end before closing it up abruptly. ``notch`` indents the tip, which
+    distinguishes a rose or an apple blossom from a flower with lanceolate
+    petals."""
     steps = _detail_steps(length, 26, 5)
     left, right = [], []
     for i in range(steps + 1):
@@ -836,13 +836,12 @@ def _petal_polygon(cx: float, cy: float, length: float, width: float,
 
 def _cup_polygon(cx: float, cy: float, radius: float, angle: float, span: float,
                  thickness: float, steps: int = 0) -> list:
-    """Pétale en coupe : croissant entre deux arcs concentriques.
+    """Cupped petal: a crescent between two concentric arcs.
 
-    C'est la forme réelle d'un pétale de rose vu de face — il *enveloppe* le
-    cœur. Des pétales rayonnants en gouttes (``_petal_polygon``) donnent une
-    marguerite quel que soit leur nombre ; seul l'enveloppement produit une
-    rose. Le bord extérieur est légèrement ondulé, sinon le croissant se lit
-    comme une pièce de ferronnerie."""
+    That is the real shape of a rose petal seen from the front — it *wraps* the
+    heart. Radiating teardrop petals (``_petal_polygon``) give a daisy whatever
+    their number; only the wrapping produces a rose. The outer edge is slightly
+    wavy, failing which the crescent reads as a piece of ironwork."""
     inner = radius * max(0.05, 1.0 - thickness)
     a0, a1 = angle - span / 2.0, angle + span / 2.0
     steps = steps or _detail_steps(abs(span) * radius, 20, 5)
@@ -886,11 +885,11 @@ def _arc_points(cx: float, cy: float, rx: float, ry: float, angle: float,
 
 def _acanthus_polygon(cx: float, cy: float, length: float, angle: float,
                       lobes: int = 5, width: float = 0.40, sweep: float = 0.34) -> list:
-    """Feuille d'acanthe : nervure incurvée, lobes décroissants, pointe recourbée.
+    """Acanthus leaf: a curved midrib, decreasing lobes, a curled-back tip.
 
-    C'est LE motif du cadre sculpté européen. Une feuille lobée symétrique se
-    lit comme une pastille ; l'acanthe doit s'effiler et se recourber, sans
-    quoi la frise ressemble à une rangée de trèfles."""
+    THE motif of the European carved frame. A symmetrical lobed leaf reads as a
+    pastille; the acanthus must taper and curl back, failing which the frieze
+    looks like a row of clover leaves."""
     steps = 26
     spine = [(length * (i / steps), length * sweep * (i / steps) ** 1.8)
              for i in range(steps + 1)]
@@ -914,7 +913,7 @@ def _acanthus_polygon(cx: float, cy: float, length: float, angle: float,
 
 def _carve_acanthus(cv: _Carver, cx: float, cy: float, length: float, angle: float,
                     peak: float, lobes: int = 5) -> None:
-    """Feuille d'acanthe complète : masse en relief, nervure creusée, lobes marqués."""
+    """Complete acanthus leaf: mass in relief, hollowed midrib, marked lobes."""
     cv.dome(_acanthus_polygon(cx, cy, length, angle, lobes), peak, layers=5,
             edge=peak * 0.9)
     spine = [(cx, cy)]
@@ -934,7 +933,7 @@ def _carve_acanthus(cv: _Carver, cx: float, cy: float, length: float, angle: flo
 
 def _carve_shell(cv: _Carver, cx: float, cy: float, radius: float, angle: float,
                  peak: float) -> None:
-    """Coquille d'angle : éventail de côtes sous un bourrelet, façon cartouche."""
+    """Corner shell: a fan of ribs under a bead, cartouche style."""
     ribs = 9
     span = math.pi * 0.86
     step = span / (ribs - 1)
@@ -972,15 +971,15 @@ def _carve_rosette(cv: _Carver, cx: float, cy: float, radius: float, peak: float
 
 def _carve_rose(cv: _Carver, cx: float, cy: float, radius: float, peak: float,
                 color=None, heart=None, angle: float = 0.0) -> None:
-    """Rose sculptée : trois couronnes de pétales échancrés, cœur en spirale.
+    """Carved rose: three rings of notched petals, a spiral heart.
 
-    Les pétales enveloppent le cœur (``_cup_polygon``) au lieu d'en rayonner, et
-    chaque couronne est peinte dans sa propre valeur — claire à l'extérieur,
-    profonde au cœur. C'est ce dégradé qui fait la fleur : à couleur constante,
-    des pétales même bien sculptés se noient dans un aplat rose dès que le
-    cadre est vu en vignette, parce que leur relief est trop fin pour survivre
-    à la réduction. La valeur, elle, survit toujours."""
-    # (rayon, hauteur, nombre, décalage angulaire, épaisseur, teinte)
+    The petals wrap the heart (``_cup_polygon``) instead of radiating from it,
+    and each ring is painted in its own value — light on the outside, deep at
+    the heart. It is that gradation which makes the flower: at a constant
+    colour, even well carved petals drown in a flat pink as soon as the frame is
+    seen as a thumbnail, because their relief is too fine to survive the
+    downscale. Value, on the other hand, always survives."""
+    # (radius, height, count, angular offset, thickness, tint)
     rings = ((1.00, 0.55, 5, 0.00, 0.44, 0.34),
              (0.70, 0.80, 4, 0.72, 0.50, 0.06),
              (0.44, 1.00, 3, 1.55, 0.60, -0.26))
@@ -988,8 +987,8 @@ def _carve_rose(cv: _Carver, cx: float, cy: float, radius: float, peak: float,
         pr = radius * scale
         shade = (_mix(color, (255, 255, 255), tone) if tone >= 0.0
                  else _mix(color, (58, 14, 26), -tone))
-        # Chevauchement juste suffisant pour fermer la couronne : au-delà, les
-        # croissants fusionnent en un disque et la rose redevient une pastille.
+        # Just enough overlap to close the ring: beyond it, the crescents merge
+        # into a disc and the rose becomes a pastille again.
         span = 2.0 * math.pi / count * 1.06
         for k in range(count):
             a = 2.0 * math.pi * k / count + spin + angle
@@ -997,8 +996,8 @@ def _carve_rose(cv: _Carver, cx: float, cy: float, radius: float, peak: float,
             cv.dome(_cup_polygon(cx, cy, pr, a, span, thick), peak * lift,
                     color=petal, layers=4, base=peak * lift * 0.30,
                     edge=peak * 0.95)
-    # Cœur roulé : deux virgules imbriquées et sombres, jamais un disque clair —
-    # un rond pâle au milieu des pétales se lit comme un œil.
+    # Rolled heart: two nested, dark commas, never a light disc — a pale round
+    # in the middle of the petals reads as an eye.
     core = _mix(color, (52, 12, 24), 0.45)
     for sgn in (1.0, -1.0):
         cv.dome(_cup_polygon(cx, cy, radius * 0.30,
@@ -1013,13 +1012,13 @@ def _carve_rose(cv: _Carver, cx: float, cy: float, radius: float, peak: float,
 def _carve_blossom(cv: _Carver, cx: float, cy: float, radius: float, peak: float,
                    petals: int = 6, color=None, heart=None, notch: float = 0.0,
                    twist: float = 0.0, rng=None) -> None:
-    """Corolle ouverte : pétales en goutte creusés en cuillère, cœur d'étamines.
+    """Open corolla: teardrop petals hollowed like spoons, a heart of stamens.
 
-    Chaque pétale est dômé depuis une base basse vers une crête proche de la
-    pointe — c'est ce qui creuse la corolle autour du cœur au lieu d'en faire
-    une pastille bombée. Le désordre léger (``rng``) est indispensable : quinze
-    fleurs rigoureusement identiques le long d'une moulure se lisent comme un
-    tampon répété, pas comme un semis."""
+    Each petal is domed from a low base towards a ridge near the tip — that is
+    what hollows the corolla around the heart instead of making it a domed
+    pastille. The slight disorder (``rng``) is essential: fifteen strictly
+    identical flowers along a moulding read as a repeated stamp, not as a
+    sowing."""
     for k in range(petals):
         a = 2.0 * math.pi * k / petals + twist
         span = radius
@@ -1037,7 +1036,7 @@ def _carve_blossom(cv: _Carver, cx: float, cy: float, radius: float, peak: float
                     cy + math.sin(a) * span * 0.82)],
                   max(1.0, radius * 0.055), peak * 0.45)
     cv.disc(cx, cy, radius * 0.24, peak * 0.60, color=heart, layers=3)
-    for k in range(5):                                  # étamines
+    for k in range(5):                                  # stamens
         a = 2.0 * math.pi * k / 5.0 + twist * 0.5
         cv.disc(cx + math.cos(a) * radius * 0.13, cy + math.sin(a) * radius * 0.13,
                 max(1.0, radius * 0.075), peak * 1.25, color=heart, layers=2)
@@ -1045,7 +1044,7 @@ def _carve_blossom(cv: _Carver, cx: float, cy: float, radius: float, peak: float
 
 def _carve_bud(cv: _Carver, cx: float, cy: float, size: float, angle: float,
                peak: float, color=None, leaf=None) -> None:
-    """Bouton : ovale fermé, deux pétales enroulés, sépales ouverts au calice."""
+    """Bud: a closed oval, two rolled petals, sepals opening at the calyx."""
     cv.dome(_ellipse_polygon(cx, cy, size * 0.62, size * 0.40, angle),
             peak * 0.80, color=color, layers=4, edge=peak * 0.6)
     for sgn in (1.0, -1.0):
@@ -1065,18 +1064,18 @@ def _carve_bud(cv: _Carver, cx: float, cy: float, size: float, angle: float,
 def _carve_foliage(cv: _Carver, cx: float, cy: float, size: float, angle: float,
                    peak: float, color=None, count: int = 3,
                    spread: float = 0.72) -> None:
-    """Touffe de feuilles lancéolées en éventail — le remplissage des vides.
+    """Tuft of lanceolate leaves in a fan — the filler of the gaps.
 
-    Sans elle, un massif de fleurs laisse voir le fond entre chaque corolle et
-    le cadre retombe en frise ponctuelle. C'est le motif le plus répété des
-    cadres végétaux (plusieurs centaines par bandeau, quelle que soit la
-    taille de rendu) : y ajouter une passe de plus — une nervure, une couche de
-    dôme — se paie sur chacune des treize vignettes de la galerie."""
+    Without it, a clump of flowers lets the ground show between each corolla and
+    the frame falls back to a punctuated frieze. It is the most repeated motif
+    of the foliage frames (several hundred per band, whatever the rendering
+    size): adding one more pass to it — a vein, a layer of dome — is paid for on
+    each of the thirteen thumbnails of the gallery."""
     for k in range(count):
         a = angle + (k - (count - 1) / 2.0) * spread
         poly = _petal_polygon(cx, cy, size, size * 0.26, a)
-        # Feuilles de valeurs différentes dans une même touffe : uniformes,
-        # elles fusionnent en une tache verte dès la réduction en vignette.
+        # Leaves of different values within one same tuft: uniform, they merge
+        # into a green blotch as soon as the thumbnail is downscaled.
         tint = None if color is None else _mix(
             color, (18, 34, 14) if k % 2 else (206, 226, 168), 0.20)
         cv.dome(poly, peak, color=tint, layers=3, base=peak * 0.25,
@@ -1085,15 +1084,15 @@ def _carve_foliage(cv: _Carver, cx: float, cy: float, size: float, angle: float,
 
 def _carve_tendril(cv: _Carver, cx: float, cy: float, dx: float, dy: float,
                    size: float, peak: float, sign: float = 1.0) -> None:
-    """Vrille : le filament enroulé qui accroche la treille — il boucle les
-    vides que le feuillage ne couvre pas."""
+    """Tendril: the coiled filament that grips the trellis — it closes the gaps
+    the foliage does not cover."""
     pts = _volute_points(cx, cy, dx, dy, size, sign, turns=1.55, steps=34)
     cv.ridge(pts, max(1.0, size * 0.20), peak, layers=3)
 
 
 def _carve_rope(cv: _Carver, w: float, h: float, b: float, frac: float,
                 radius: float, peak: float) -> None:
-    """Cordon torsadé le long d'une ligne du bandeau : brins obliques serrés."""
+    """Twisted cord along a line of the band: tight oblique strands."""
     for (ax, ay), (bx, by), (tx, ty), (nx, ny) in _band_sides(w, h, b, frac):
         length = math.hypot(bx - ax, by - ay)
         ang = math.atan2(ty, tx) + 0.62
@@ -1105,7 +1104,7 @@ def _carve_rope(cv: _Carver, w: float, h: float, b: float, frac: float,
 
 def _carve_grapes(cv: _Carver, cx: float, cy: float, size: float, angle: float,
                   peak: float, color=None) -> None:
-    """Grappe : trois rangs de grains décroissants, dans l'axe ``angle``."""
+    """Bunch: three rows of decreasing grapes, along the ``angle`` axis."""
     rows = ((3, 0.0, 1.0), (2, 0.60, 0.88), (1, 1.15, 0.74))
     r = size * 0.26
     for count, depth, scale in rows:
@@ -1118,12 +1117,12 @@ def _carve_grapes(cv: _Carver, cx: float, cy: float, size: float, angle: float,
 
 def _carve_bead_reel(cv: _Carver, w: float, h: float, b: float, frac: float,
                      radius: float, peak: float) -> None:
-    """Rang de perles : perle, bobine, perle… le long d'une ligne du bandeau."""
+    """Row of beads: bead, spool, bead… along a line of the band."""
     for (ax, ay), (bx, by), (tx, ty), (nx, ny) in _band_sides(w, h, b, frac):
         length = math.hypot(bx - ax, by - ay)
         for i, d in enumerate(_distribute(length, radius * 2.6, b * 0.5)):
             px, py = ax + tx * d, ay + ty * d
-            if i % 3 == 2:                      # bobine : deux disques serrés
+            if i % 3 == 2:                      # spool: two tight discs
                 for sgn in (-1.0, 1.0):
                     cv.dome(_ellipse_polygon(px + tx * radius * 0.34 * sgn,
                                              py + ty * radius * 0.34 * sgn,
@@ -1135,7 +1134,7 @@ def _carve_bead_reel(cv: _Carver, w: float, h: float, b: float, frac: float,
 
 def _carve_egg_and_dart(cv: _Carver, w: float, h: float, b: float, frac: float,
                         size: float, peak: float) -> None:
-    """Oves et fers de lance — la frise classique par excellence."""
+    """Eggs and darts — the classical frieze par excellence."""
     for (ax, ay), (bx, by), (tx, ty), (nx, ny) in _band_sides(w, h, b, frac):
         length = math.hypot(bx - ax, by - ay)
         ang = math.atan2(ny, nx)
@@ -1144,7 +1143,7 @@ def _carve_egg_and_dart(cv: _Carver, w: float, h: float, b: float, frac: float,
             cv.dome(_ellipse_polygon(px, py, size * 0.60, size * 0.44, ang),
                     peak * 0.55, layers=3)                    # coquille
             cv.dome(_ellipse_polygon(px, py, size * 0.42, size * 0.30, ang),
-                    peak, layers=4)                           # œuf
+                    peak, layers=4)                           # egg
             cv.groove(_arc_points(px, py, size * 0.52, size * 0.38, ang,
                                   -math.pi * 0.85, math.pi * 0.85),
                       max(1.0, size * 0.09), peak * 0.7)
@@ -1153,7 +1152,7 @@ def _carve_egg_and_dart(cv: _Carver, w: float, h: float, b: float, frac: float,
 
 
 def _carve_meander(cv: _Carver, w: float, h: float, b: float, peak: float) -> None:
-    """Grecque (méandre courant) : rail continu + spirale par cellule."""
+    """Greek key (running meander): a continuous rail + one spiral per cell."""
     cell_pts = [(0.10, 0.00), (0.10, 0.82), (0.82, 0.82), (0.82, 0.26),
                 (0.36, 0.26), (0.36, 0.58), (0.60, 0.58)]
     lw = max(1.0, b * 0.085)
@@ -1173,7 +1172,7 @@ def _carve_meander(cv: _Carver, w: float, h: float, b: float, peak: float) -> No
 
 def _carve_gadroons(cv: _Carver, w: float, h: float, b: float, frac: float,
                     peak: float) -> None:
-    """Godrons : lobes bombés en travers de la moulure, serrés comme des cannelures."""
+    """Gadroons: domed lobes across the moulding, tight like flutes."""
     for (ax, ay), (bx, by), (tx, ty), (nx, ny) in _band_sides(w, h, b, frac):
         length = math.hypot(bx - ax, by - ay)
         ang = math.atan2(ny, nx)
@@ -1189,7 +1188,7 @@ def _carve_gadroons(cv: _Carver, w: float, h: float, b: float, frac: float,
 
 
 def _carve_fillets(cv: _Carver, w: float, h: float, b: float, specs) -> None:
-    """Filets et gorges continus (``(fraction, largeur, hauteur signée)``)."""
+    """Continuous fillets and grooves (``(fraction, width, signed height)``)."""
     for frac, width, level in specs:
         for (a, bb, _t, _n) in _band_sides(w, h, b, frac):
             if level >= 0:
@@ -1198,16 +1197,16 @@ def _carve_fillets(cv: _Carver, w: float, h: float, b: float, specs) -> None:
                 cv.groove([a, bb], max(1.0, b * width), -level)
 
 
-# --------------------------------------------------------------- motifs par cadre
+# --------------------------------------------------------------- motifs per frame
 
 def _carve_baroque(cv: _Carver, w: float, h: float, b: float, rng) -> None:
-    """Cadre doré : frise d'acanthes sur la doucine, coquilles d'angle, perles."""
+    """Gilded frame: an acanthus frieze on the ogee, corner shells, beads."""
     for (ax, ay), (bx, by), (tx, ty), (nx, ny) in _band_sides(w, h, b, 0.60):
         length = math.hypot(bx - ax, by - ay)
         ang = math.atan2(ty, tx)
         for i, d in enumerate(_distribute(length, b * 1.30, b * 1.9)):
             px, py = ax + tx * d, ay + ty * d
-            # Rinceau : une grande feuille couchée, une petite qui la relève.
+            # Scroll: a large reclining leaf, a small one lifting it back up.
             _carve_acanthus(cv, px - tx * b * 0.62 - nx * b * 0.16,
                             py - ty * b * 0.62 - ny * b * 0.16,
                             b * 1.22, ang + 0.30, 0.36)
@@ -1222,7 +1221,7 @@ def _carve_baroque(cv: _Carver, w: float, h: float, b: float, rng) -> None:
 
 
 def _carve_pearl(cv: _Carver, w: float, h: float, b: float, rng) -> None:
-    """Oves et perles : la moulure néo-classique, sobre et très travaillée."""
+    """Eggs and beads: the neo-classical moulding, sober and highly worked."""
     _carve_egg_and_dart(cv, w, h, b, 0.60, b * 0.42, 0.34)
     _carve_bead_reel(cv, w, h, b, 0.86, b * 0.070, 0.28)
     _carve_bead_reel(cv, w, h, b, 0.14, b * 0.055, 0.22)
@@ -1232,7 +1231,7 @@ def _carve_pearl(cv: _Carver, w: float, h: float, b: float, rng) -> None:
 
 
 def _carve_greek(cv: _Carver, w: float, h: float, b: float, rng) -> None:
-    """Grecque dorée sur fond sombre — moulure Empire."""
+    """Gilded Greek key on a dark ground — an Empire moulding."""
     _carve_meander(cv, w, h, b, 0.34)
     _carve_bead_reel(cv, w, h, b, 0.90, b * 0.065, 0.26)
     _carve_fillets(cv, w, h, b, ((0.08, 0.05, 0.22), (0.80, 0.04, 0.18),
@@ -1242,9 +1241,9 @@ def _carve_greek(cv: _Carver, w: float, h: float, b: float, rng) -> None:
 
 
 def _carve_artdeco(cv: _Carver, w: float, h: float, b: float, rng) -> None:
-    """Art déco : la moulure est déjà en gradins (profil ``steps``) — le décor se
-    limite à des barrettes rythmées et à un éventail d'angle. La sobriété fait
-    le style : un ornement continu détruirait la lecture des gradins."""
+    """Art deco: the moulding is already stepped (the ``steps`` profile) — the
+    decoration is limited to rhythmic bars and a corner fan. Sobriety makes the
+    style: a continuous ornament would destroy the reading of the steps."""
     for (ax, ay), (bx, by), (tx, ty), (nx, ny) in _band_sides(w, h, b, 0.44):
         length = math.hypot(bx - ax, by - ay)
         for d in _distribute(length, b * 0.90, b * 1.7):
@@ -1255,7 +1254,7 @@ def _carve_artdeco(cv: _Carver, w: float, h: float, b: float, rng) -> None:
                           (px + tx * off + nx * b * 0.16, py + ty * off + ny * b * 0.16)],
                          max(1.0, b * 0.070), 0.30)
     for cx, cy in _band_corners(w, h, b, 0.5):
-        for k, size in enumerate((0.86, 0.56, 0.28)):    # bloc d'angle à gradins
+        for k, size in enumerate((0.86, 0.56, 0.28)):    # stepped corner block
             r = b * size * 0.5
             cv.ridge([(cx - r, cy - r), (cx + r, cy - r), (cx + r, cy + r),
                       (cx - r, cy + r), (cx - r, cy - r)],
@@ -1263,7 +1262,7 @@ def _carve_artdeco(cv: _Carver, w: float, h: float, b: float, rng) -> None:
 
 
 def _carve_wood(cv: _Carver, w: float, h: float, b: float, rng) -> None:
-    """Noyer sculpté : godrons, rosaces d'angle, gorges de moulure."""
+    """Carved walnut: gadroons, corner rosettes, moulding grooves."""
     _carve_gadroons(cv, w, h, b, 0.58, 0.30)
     for (cx, cy), _d in zip(_band_corners(w, h, b, 0.55), _CORNER_DIRS):
         _carve_rosette(cv, cx, cy, b * 0.44, 0.32, petals=6)
@@ -1272,7 +1271,7 @@ def _carve_wood(cv: _Carver, w: float, h: float, b: float, rng) -> None:
 
 
 def _carve_metal(cv: _Carver, w: float, h: float, b: float, rng) -> None:
-    """Acier : arêtes vives, rivets forgés, gorge centrale."""
+    """Steel: sharp edges, forged rivets, a central groove."""
     _carve_fillets(cv, w, h, b, ((0.18, 0.05, 0.22), (0.50, 0.10, -0.16),
                                  (0.84, 0.05, 0.22)))
     spots = list(_band_corners(w, h, b, 0.5))
@@ -1286,21 +1285,20 @@ def _carve_metal(cv: _Carver, w: float, h: float, b: float, rng) -> None:
         cv.groove(ring + [ring[0]], max(1.0, b * 0.035), 0.20)
 
 
-# Palettes des trois cadres végétaux — au niveau module parce que le bandeau et
-# les motifs qui débordent sur la photo (cf. « débordements » plus bas) doivent
-# être taillés dans les mêmes teintes : un ornement qui passe par-dessus l'image
-# dans une couleur voisine se lit comme un autocollant, pas comme la suite de la
-# sculpture.
-_VINE_LIT = (188, 156, 96)        # bronze frotté, arêtes exposées
-_VINE_SHADE = (118, 106, 62)      # bronze verdi des dessous
-_VINE_DEEP = (86, 76, 46)         # fond de patine
+# Palettes of the three foliage frames — at module level because the band and
+# the motifs that spill over the photo (cf. "spills" further down) must be cut
+# from the same tints: an ornament passing over the image in a neighbouring
+# colour reads as a sticker, not as the continuation of the carving.
+_VINE_LIT = (188, 156, 96)        # rubbed bronze, exposed edges
+_VINE_SHADE = (118, 106, 62)      # greened bronze of the undersides
+_VINE_DEEP = (86, 76, 46)         # bottom of the patina
 
 _ROSE_HUES = ((196, 82, 104), (170, 54, 80), (222, 130, 146), (206, 100, 118))
 _ROSE_HEART = (244, 214, 168)
 _ROSE_LEAVES = ((62, 98, 52), (88, 124, 66), (74, 110, 58))
 
-# Teintes rompues de blanc : sur porcelaine, une couleur pure vire au
-# décalcomanie. Le blanc de la pâte doit rester perceptible dans chaque ton.
+# Broken tints of white: on porcelain, a pure colour turns into a decal.
+# The white of the paste must stay perceptible in every tone.
 _PORCELAIN = (250, 244, 234)
 _FLOWER_PALETTE = tuple(_mix(c, _PORCELAIN, 0.30) for c in
                         ((206, 84, 116), (228, 162, 70), (104, 138, 208),
@@ -1313,17 +1311,17 @@ _FLOWER_GOLD = (198, 158, 76)
 
 def _carve_grape_leaf(cv: _Carver, cx: float, cy: float, size: float,
                       angle: float, peak: float, color=None) -> None:
-    """Feuille de vigne complète : masse en relief, nervures palmées, sinus.
+    """Complete vine leaf: mass in relief, palmate veins, sinuses.
 
-    Les cinq nervures partent du pétiole vers les cinq lobes de
-    ``_vine_leaf_polygon`` — elles doivent viser les mêmes directions, sinon le
-    nervuré traverse les sinus et la feuille redevient une tache."""
+    The five veins run from the petiole towards the five lobes of
+    ``_vine_leaf_polygon`` — they must aim in the same directions, failing which
+    the veining crosses the sinuses and the leaf becomes a blotch again."""
     base_x = cx - math.cos(angle) * size * 0.62
     base_y = cy - math.sin(angle) * size * 0.62
-    # Bombé faible et large plutôt que haut : une feuille est une plaque
-    # légèrement gondolée, pas un coussin. Avec cinq contours emboîtés elle
-    # gonflait en ballon lisse et se lisait comme un poisson — c'est la nervure
-    # creusée, pas le volume, qui la fait reconnaître.
+    # A weak, wide dome rather than a tall one: a leaf is a slightly buckled
+    # plate, not a cushion. With five nested outlines it swelled into a smooth
+    # balloon and read as a fish — it is the hollowed vein, not the volume, that
+    # makes it recognisable.
     cv.dome(_vine_leaf_polygon(cx, cy, size, angle), peak, color=color, layers=3,
             base=peak * 0.62, edge=peak * 0.95)
     for centre, reach in ((0.00, 1.15), (0.72, 0.92), (-0.72, 0.92),
@@ -1336,29 +1334,28 @@ def _carve_grape_leaf(cv: _Carver, cx: float, cy: float, size: float,
 
 
 def _carve_vine(cv: _Carver, w: float, h: float, b: float, rng) -> None:
-    """Treille de bronze : deux sarments entrelacés, feuillage jointif, vrilles
-    et grappes — la moulure est couverte d'une arête à l'autre.
+    """Bronze trellis: two interlaced vine stems, contiguous foliage, tendrils
+    and bunches — the moulding is covered from one edge to the other.
 
-    Un cep unique bordé de petites feuilles (la version précédente) laissait les
-    deux tiers de la moulure nus. La couverture ne vient pas d'ajouter des
-    motifs, mais de les mettre à l'échelle du bandeau : une feuille dont
-    l'envergure vaut la moitié de la largeur du cadre, portée alternativement de
-    part et d'autre du sarment, couvre la moulure à elle seule — la grappe et la
-    vrille du côté opposé ne font que boucher l'entre-deux. Le sarment est tracé
-    sur ``_ring_samples`` (abscisse curviligne continue) pour que l'ondulation
-    ne se brise pas dans les angles.
+    A single stem lined with small leaves (the previous version) left two thirds
+    of the moulding bare. The covering does not come from adding motifs, but
+    from putting them at the scale of the band: a leaf whose span is half the
+    width of the frame, carried alternately on either side of the stem, covers
+    the moulding on its own — the bunch and the tendril on the opposite side
+    merely plug the gap between them. The stem is drawn on ``_ring_samples`` (a
+    continuous curvilinear abscissa) so that the undulation does not break in
+    the corners.
 
-    Les motifs sont **teintés**, alors que le bandeau est un bronze uni : ce ne
-    sont pas des couleurs mais des valeurs de la même patine (bronze clair,
-    bronze verdi, bronze sombre). Sans elles, une treille aussi couverte devient
-    illisible dès la vignette — le relief seul se moyenne en une bosselure
-    uniforme, alors qu'un écart de valeur survit à n'importe quelle réduction."""
+    The motifs are **tinted**, whereas the band is a plain bronze: these are not
+    colours but values of the same patina (light bronze, greened bronze, dark
+    bronze). Without them, a trellis this covered becomes illegible from the
+    thumbnail on — relief alone averages out into a uniform bumpiness, whereas a
+    difference in value survives any downscaling."""
     lit, shade, deep = _VINE_LIT, _VINE_SHADE, _VINE_DEEP
-    # Tapis de petites feuilles d'abord, sur toute la largeur : les grandes
-    # feuilles seules laissent le bronze nu contre les deux arêtes, où le
-    # sarment ne passe jamais. Les touffes visent EN TRAVERS du bandeau (± la
-    # normale) — un éventail couvre un secteur, pas un disque, et orienté au
-    # hasard il ouvre un quadrillage de vides en diagonale.
+    # A carpet of small leaves first, across the whole width: the large leaves
+    # alone leave the bronze bare against both edges, where the vine stem never
+    # passes. The tufts aim ACROSS the band (± the normal) — a fan covers a
+    # sector, not a disc, and oriented at random it opens a diagonal grid of gaps.
     for row, depth in enumerate((0.18, 0.82)):
         for (ax, ay), (bx, by), (tx, ty), (nx, ny) in _band_sides(w, h, b, depth):
             length = math.hypot(bx - ax, by - ay)
@@ -1392,7 +1389,7 @@ def _carve_vine(cv: _Carver, w: float, h: float, b: float, rng) -> None:
         cv.groove([(sx, sy), (lx, ly)], max(1.0, b * 0.035), 0.18)
         _carve_grape_leaf(cv, lx, ly, b * (0.36 + 0.04 * jit), ang, 0.34,
                           color=lit if n % 2 else _mix(lit, shade, 0.55))
-        # De l'autre côté du sarment, dans le creux laissé entre deux feuilles.
+        # On the other side of the stem, in the hollow left between two leaves.
         ox = sx - nx * sign * b * 0.26 + tx * b * 0.33
         oy = sy - ny * sign * b * 0.26 + ty * b * 0.33
         if n % 2:
@@ -1405,31 +1402,30 @@ def _carve_vine(cv: _Carver, w: float, h: float, b: float, rng) -> None:
 
 
 def _carve_roses(cv: _Carver, w: float, h: float, b: float, rng) -> None:
-    """Massif de roses sur laque carmin : le bandeau entier est fleuri.
+    """Clump of roses on carmine lacquer: the whole band is in flower.
 
-    Deux rangs en quinconce — les fleurs de l'un bouchent les intervalles de
-    l'autre, et leurs corolles se recouvrent en travers de la moulure — plus des
-    boutons et du feuillage dans les interstices, entre deux cordons torsadés
-    qui bordent le massif. La composition tient à ce recouvrement : un rang
-    unique, si dense soit-il, laisse toujours voir la laque de part et
-    d'autre."""
+    Two staggered rows — the flowers of one plug the gaps of the other, and
+    their corollas overlap across the moulding — plus buds and foliage in the
+    interstices, between two twisted cords bordering the clump. The composition
+    hangs on that overlap: a single row, however dense, always lets the lacquer
+    show on either side."""
     rose_hues, heart, leaves = _ROSE_HUES, _ROSE_HEART, _ROSE_LEAVES
 
     _carve_rope(cv, w, h, b, 0.06, b * 0.075, 0.26)
     _carve_rope(cv, w, h, b, 0.94, b * 0.062, 0.24)
 
-    # Tapis de feuillage d'abord, fleurs ensuite : c'est ce fond continu qui
-    # fait disparaître la laque entre les corolles. Trois rangs se recouvrant
-    # en travers du bandeau, avec des orientations qui tournent d'un motif à
-    # l'autre pour ne pas donner une texture peignée.
+    # A carpet of foliage first, flowers afterwards: it is that continuous
+    # background which makes the lacquer disappear between the corollas. Three
+    # rows overlapping across the band, with orientations turning from one motif
+    # to the next so as not to give a combed texture.
     for row, depth in enumerate((0.16, 0.46, 0.78)):
         for (ax, ay), (bx, by), (tx, ty), (nx, ny) in _band_sides(w, h, b, depth):
             length = math.hypot(bx - ax, by - ay)
             for i, d in enumerate(_distribute(length, b * 0.40, 0.0)):
                 px, py = ax + tx * d, ay + ty * d
-                # Les touffes visent EN TRAVERS du bandeau (± la normale) : un
-                # éventail orienté au hasard laisse des coins de laque nus,
-                # parce qu'il couvre un secteur et non un disque.
+                # The tufts aim ACROSS the band (± the normal): a fan oriented at
+                # random leaves bare corners of lacquer, because it covers a sector
+                # and not a disc.
                 sgn = 1.0 if (i + row) % 2 else -1.0
                 ang = math.atan2(ny * sgn, nx * sgn) + (float(rng.random()) - 0.5) * 0.9
                 _carve_foliage(cv, px, py, b * (0.42 + 0.09 * float(rng.random())),
@@ -1442,13 +1438,13 @@ def _carve_roses(cv: _Carver, w: float, h: float, b: float, rng) -> None:
             length = math.hypot(bx - ax, by - ay)
             spacing = b * 0.62
             for i, d in enumerate(_distribute(length, spacing, b * 0.50)):
-                # Décalage d'un demi-pas entre les deux rangs, plus un flottement :
-                # sans lui les fleurs des deux rangs s'alignent par endroits et le
-                # massif se lit comme une rangée de « 8 ».
+                # A half-step offset between the two rows, plus a jitter: without it the
+                # flowers of the two rows line up in places and the clump reads as a row
+                # of "8"s.
                 d += (shift + 0.22 * (float(rng.random()) - 0.5)) * spacing
                 px, py = ax + tx * d, ay + ty * d
                 if (i + 2 * row) % 5 == 4:
-                    # Bouton : il aère le rang et évite l'effet de pochoir.
+                    # A bud: it airs the row out and avoids the stencil effect.
                     _carve_bud(cv, px, py, b * 0.26,
                                math.atan2(ty, tx) + (1.0 if row else -1.0) * 1.4,
                                0.34, color=rose_hues[(i + row) % 4],
@@ -1469,14 +1465,13 @@ def _carve_roses(cv: _Carver, w: float, h: float, b: float, rng) -> None:
 
 
 def _carve_flowers(cv: _Carver, w: float, h: float, b: float, rng) -> None:
-    """Porcelaine peinte : semis mille-fleurs couvrant tout le bandeau.
+    """Painted porcelain: a mille-fleurs sowing covering the whole band.
 
-    Le principe est celui d'un décor de faïence : un fond de feuillage clair,
-    des corolles de plusieurs espèces (à cinq, six et huit pétales, échancrés
-    ou non) semées en quinconce, des bouquets de myosotis dans les vides, et
-    deux filets d'or qui bordent le semis. La variété est ici le sujet — un
-    semis d'une seule fleur répétée n'est pas un mille-fleurs, c'est un
-    papier peint."""
+    The principle is that of a faience decoration: a ground of light foliage,
+    corollas of several species (with five, six and eight petals, notched or
+    not) sown in a staggered layout, posies of forget-me-nots in the gaps, and
+    two gold fillets bordering the sowing. Variety is the subject here — a
+    sowing of one single repeated flower is not a mille-fleurs, it is wallpaper."""
     palette, hearts, leaves = _FLOWER_PALETTE, _FLOWER_HEARTS, _FLOWER_LEAVES
     gold = _FLOWER_GOLD
 
@@ -1491,7 +1486,7 @@ def _carve_flowers(cv: _Carver, w: float, h: float, b: float, rng) -> None:
                                ang, 0.20, color=leaves[(i + row) % 3], count=3,
                                spread=0.88)
 
-    # (nombre de pétales, échancrure) — trois espèces qui alternent.
+    # (number of petals, notch) — three species alternating.
     species = ((5, 0.20), (6, 0.0), (8, 0.10))
     for row, (depth, radius, shift) in enumerate(((0.31, 0.235, 0.0),
                                                   (0.69, 0.215, 0.5))):
@@ -1503,8 +1498,8 @@ def _carve_flowers(cv: _Carver, w: float, h: float, b: float, rng) -> None:
                 px, py = ax + tx * d, ay + ty * d
                 n = i + 2 * row
                 if n % 5 == 4:
-                    # Myosotis : trois corolles minuscules serrées, le liant du
-                    # semis — sans elles les grandes fleurs restent des îlots.
+                    # Forget-me-nots: three tiny, tight corollas, the binder of the
+                    # sowing — without them the large flowers stay islands.
                     for k in range(3):
                         a = 2.0 * math.pi * k / 3.0 + 0.5
                         _carve_blossom(cv, px + math.cos(a) * b * 0.13,
@@ -1528,44 +1523,44 @@ def _carve_flowers(cv: _Carver, w: float, h: float, b: float, rng) -> None:
 
 
 def _carve_gloss(cv: _Carver, w: float, h: float, b: float, rng) -> None:
-    """Laque noire : deux filets d'or, rien d'autre — le reflet fait le reste."""
+    """Black lacquer: two gold fillets, nothing else — the reflection does the rest."""
     gold = (206, 168, 88)
     for frac, width in ((0.12, 0.05), (0.88, 0.038)):
         for (a, bb, _t, _n) in _band_sides(w, h, b, frac):
             cv.ridge([a, bb], max(1.0, b * width), 0.22, color=gold)
 
 
-# ------------------------------------------------------------- débordements
+# ------------------------------------------------------------- spills
 #
-# Les trois cadres végétaux laissent quelques motifs PASSER PAR-DESSUS la photo.
-# C'est la seconde (et dernière) dérogation à l'invariant « le cadre ne recouvre
-# jamais un pixel de l'image » — cf. le second cadre de `plain`. Comme lui, elle
-# est purement d'affichage : elle n'entre ni dans `border_px()` ni dans
-# `content_box()`, et la géométrie des outils interactifs (recadrage, yeux
-# rouges, visages, annotations) reste celle de la photo entière.
+# The three foliage frames let a few motifs PASS OVER the photo. This is the
+# second (and last) exception to the invariant "the frame never covers a single
+# pixel of the image" — cf. the second frame of `plain`. Like it, it is purely a
+# display matter: it enters neither `border_px()` nor `content_box()`, and the
+# geometry of the interactive tools (crop, red eyes, faces, annotations) stays
+# that of the whole photo.
 #
-# Deux choses font que le débordement se lit comme une sculpture qui surplombe
-# l'image plutôt que comme un autocollant :
-#  - l'OMBRE PORTÉE sur la photo (`_SPILL_SHADOW`), décalée dans l'axe de
-#    `_LIGHT` — c'est elle, bien plus que le motif, qui crée la profondeur ;
-#  - le fait que chaque motif reste ACCROCHÉ au bandeau par une tige qui part
-#    de sous l'arête : un ornement qui flotte au milieu de l'image ne ressemble
-#    à rien.
-# « Parfois » est essentiel au réalisme : un débordement à intervalle régulier
-# redevient une frise. D'où un tirage par site (`_SPILL_SKIP`) et un espacement
-# de plusieurs largeurs de bandeau.
+# Two things make a spill read as a sculpture overhanging the image rather
+# than as a sticker:
+#  - the DROP SHADOW on the photo (`_SPILL_SHADOW`), offset along the axis of
+#    `_LIGHT` — it is that, far more than the motif, which creates the depth;
+#  - the fact that every motif stays ATTACHED to the band by a stem starting
+#    from under the edge: an ornament floating in the middle of the image
+#    looks like nothing at all.
+# "Sometimes" is essential to the realism: a spill at regular intervals is a
+# frieze again. Hence a per-site draw (`_SPILL_SKIP`) and a spacing of several
+# band widths.
 
-_SPILL_SHADOW = 0.5          # opacité de l'ombre portée sur la photo
-_SPILL_SKIP = 0.34           # proportion de sites laissés vides
-_SPILL_SPACING = 3.6         # espacement des sites, en largeurs de bandeau
+_SPILL_SHADOW = 0.5          # opacity of the drop shadow on the photo
+_SPILL_SKIP = 0.34           # proportion of sites left empty
+_SPILL_SPACING = 3.6         # spacing of the sites, in band widths
 
 
 def _spill_sites(w: float, h: float, b: float, rng, inset: float) -> list:
-    """Points d'accroche à cheval sur l'arête intérieure du bandeau.
+    """Anchor points astride the inner edge of the band.
 
-    Retourne ``[(x, y, tx, ty, nx, ny)]`` — le point est décalé de ``inset``
-    vers l'intérieur de la photo, si bien que le motif qu'on y taille repose
-    pour moitié sur le cadre et pour moitié sur l'image."""
+    Returns ``[(x, y, tx, ty, nx, ny)]`` — the point is offset by ``inset``
+    towards the inside of the photo, so that the motif carved there rests half
+    on the frame and half on the image."""
     sites = []
     for (ax, ay), (bx, by), (tx, ty), (nx, ny) in _band_sides(w, h, b, 1.0):
         length = math.hypot(bx - ax, by - ay)
@@ -1583,11 +1578,11 @@ def _spill_sites(w: float, h: float, b: float, rng, inset: float) -> list:
 
 
 def _spill_corners(w: float, h: float, b: float, inset: float) -> list:
-    """Les 4 angles, décalés en diagonale vers l'intérieur de la photo.
+    """The 4 corners, offset diagonally towards the inside of the photo.
 
-    Un angle qui déborde est le geste le plus caractéristique d'un cadre
-    sculpté réel — c'est là que le bois ou la porcelaine se permet de mordre
-    sur la toile."""
+    A corner that spills over is the most characteristic gesture of a real
+    carved frame — that is where the wood or the porcelain allows itself to bite
+    into the canvas."""
     out = []
     for (cx, cy), (dx, dy) in zip(_band_corners(w, h, b, 1.0), _CORNER_DIRS):
         out.append((cx + dx * inset, cy + dy * inset, dx, dy))
@@ -1597,11 +1592,11 @@ def _spill_corners(w: float, h: float, b: float, inset: float) -> list:
 def _spill_stem(cv: _Carver, px: float, py: float, nx: float, ny: float,
                 tx: float, ty: float, length: float, width: float,
                 color, peak: float) -> None:
-    """Tige qui rattache un motif débordant au bandeau, en trois points.
+    """Stem attaching a spilling motif to the band, at three points.
 
-    Elle part de SOUS l'arête et reste assez courte pour disparaître sous le
-    feuillage : une tige droite et longue traverse les ornements du bandeau et
-    se lit comme une épingle plantée dans le cadre."""
+    It starts from UNDER the edge and stays short enough to disappear under the
+    foliage: a straight, long stem crosses the ornaments of the band and reads
+    as a pin stuck into the frame."""
     cv.ridge([(px - nx * length - tx * length * 0.28,
                py - ny * length - ty * length * 0.28),
               (px - nx * length * 0.45, py - ny * length * 0.45),
@@ -1609,15 +1604,15 @@ def _spill_stem(cv: _Carver, px: float, py: float, nx: float, ny: float,
 
 
 def _spill_vine(cv: _Carver, w: float, h: float, b: float, rng) -> None:
-    """Sarments qui franchissent la feuillure : feuille, vrille, parfois grappe."""
+    """Vine stems crossing the rebate: a leaf, a tendril, sometimes a bunch."""
     mid = _mix(_VINE_LIT, _VINE_SHADE, 0.55)
     for px, py, tx, ty, nx, ny in _spill_sites(w, h, b, rng, b * 0.16):
         ang = math.atan2(ny, nx) + (float(rng.random()) - 0.5) * 0.7
         _spill_stem(cv, px, py, nx, ny, tx, ty, b * 0.55, b * 0.055,
                     _VINE_SHADE, 0.20)
-        # Même tapis de feuillage que sur le bandeau, mais étalé DANS la
-        # photo : sans lui le sarment se réduit à une feuille posée seule sur
-        # l'image, qui se lit comme une broche épinglée.
+        # The same carpet of foliage as on the band, but spread INTO the photo:
+        # without it the vine stem boils down to a leaf sitting alone on the
+        # image, which reads as a brooch pinned on.
         for k, (side, out, size, turn) in enumerate(
                 ((-0.46, 0.26, 0.46, 1.05), (0.46, 0.30, 0.46, -1.05))):
             _carve_foliage(cv, px - ny * b * side + nx * b * out,
@@ -1625,15 +1620,15 @@ def _spill_vine(cv: _Carver, w: float, h: float, b: float, rng) -> None:
                            b * size, ang + turn, 0.18,
                            color=_VINE_DEEP if k else mid,
                            count=3, spread=0.82)
-        # Feuille franchement plate : isolée sur la photo, une feuille de vigne
-        # bombée se lit comme une étoile de mer en pâte à modeler. Sous ce
-        # relief-là ce sont le contour et les nervures qui la dessinent, pas le
-        # volume — d'où aussi une taille modeste, la masse revenant au feuillage.
+        # A distinctly flat leaf: isolated on the photo, a domed vine leaf reads
+        # as a starfish made of modelling clay. Under that relief it is the
+        # outline and the veins that draw it, not the volume — hence a modest
+        # size too, the mass going to the foliage.
         _carve_grape_leaf(cv, px, py, b * (0.42 + 0.06 * float(rng.random())),
                           ang, 0.15, color=_VINE_LIT)
-        # La grappe est ce qui pend naturellement d'une treille : c'est elle,
-        # plus que la feuille, qui justifie le débordement — donc la plus grosse
-        # masse de la touffe.
+        # A bunch of grapes is what naturally hangs from a trellis: it is that,
+        # more than the leaf, which justifies the spill — hence the largest mass
+        # of the tuft.
         _carve_grapes(cv, px + tx * b * 0.44 + nx * b * 0.42,
                       py + ty * b * 0.44 + ny * b * 0.42,
                       b * 0.54, ang, 0.30, color=_VINE_SHADE)
@@ -1650,20 +1645,20 @@ def _spill_vine(cv: _Carver, w: float, h: float, b: float, rng) -> None:
         _carve_grapes(cv, cx - dy * b * 0.48 + dx * b * 0.30,
                       cy + dx * b * 0.48 + dy * b * 0.30, b * 0.52,
                       ang, 0.30, color=_VINE_SHADE)
-        # La vrille reste cantonnée aux angles : répétée le long de l'arête,
-        # cette boucle brillante et fermée se lit comme un anneau de porte-clés.
+        # The tendril stays confined to the corners: repeated along the edge,
+        # that shiny, closed loop reads as a keyring ring.
         _carve_tendril(cv, cx + dx * b * 0.46, cy + dy * b * 0.46, -dy, dx,
                        b * 0.16, 0.18, 1.0)
 
 
 def _spill_roses(cv: _Carver, w: float, h: float, b: float, rng) -> None:
-    """Roses qui retombent sur l'image, portées par leur feuillage."""
+    """Roses falling back onto the image, carried by their foliage."""
     for i, (px, py, tx, ty, nx, ny) in enumerate(_spill_sites(w, h, b, rng, b * 0.12)):
         ang = math.atan2(ny, nx)
         _spill_stem(cv, px, py, nx, ny, tx, ty, b * 0.45, b * 0.055,
                     _ROSE_LEAVES[1], 0.18)
-        # Le feuillage déborde plus loin que la fleur : c'est lui qui rattache
-        # la touffe au bandeau et lui évite l'allure de pendentif accroché.
+        # The foliage spills further than the flower: it is what attaches the
+        # tuft to the band and spares it the look of a hanging pendant.
         for k, (off, size, turn) in enumerate(((-0.34, 0.44, 1.15),
                                                (0.34, 0.44, -1.15),
                                                (0.0, 0.38, 0.0))):
@@ -1686,7 +1681,7 @@ def _spill_roses(cv: _Carver, w: float, h: float, b: float, rng) -> None:
 
 
 def _spill_flowers(cv: _Carver, w: float, h: float, b: float, rng) -> None:
-    """Corolles de porcelaine qui mordent sur l'image, en bouquets."""
+    """Porcelain corollas biting into the image, in posies."""
     species = ((5, 0.20), (6, 0.0), (8, 0.10))
     for i, (px, py, tx, ty, nx, ny) in enumerate(_spill_sites(w, h, b, rng, b * 0.12)):
         ang = math.atan2(ny, nx)
@@ -1702,8 +1697,8 @@ def _spill_flowers(cv: _Carver, w: float, h: float, b: float, rng) -> None:
         _carve_blossom(cv, px, py, b * 0.32, 0.28, petals=petals,
                        color=_FLOWER_PALETTE[i % 6], heart=_FLOWER_HEARTS[i % 3],
                        notch=notch, twist=float(rng.random()) * 1.3, rng=rng)
-        # Un myosotis de chaque côté : c'est le second bouton, jamais la fleur
-        # seule, qui fait lire un bouquet posé plutôt qu'un motif détouré.
+        # One forget-me-not on each side: it is the second bud, never the flower
+        # alone, that makes it read as a posy laid down rather than a cut-out motif.
         for k in range(2):
             a = ang + (1.25 if k else -1.25)
             _carve_blossom(cv, px + math.cos(a) * b * 0.40,
@@ -1743,12 +1738,12 @@ _CARVERS = {
 
 
 def _carve_layers(np, kind: str, width: int, height: int, border: float, rng):
-    """(carte de hauteurs signée, calque de couleur) des ornements d'un motif.
+    """(signed height map, colour layer) of the ornaments of a pattern.
 
-    Le calque est sculpté en suréchantillonnage (les polygones de ``ImageDraw``
-    n'ont pas d'anticrénelage), réduit, puis légèrement flouté : c'est ce flou
-    qui arrondit les arêtes des passes successives et transforme un empilement
-    de contours en volume."""
+    The layer is carved with supersampling (the polygons of ``ImageDraw`` have
+    no antialiasing), downscaled, then blurred slightly: it is that blur which
+    rounds the edges of the successive passes and turns a stack of outlines into
+    volume."""
     carver = _CARVERS.get(kind)
     if carver is None:
         return None, None
@@ -1766,7 +1761,7 @@ def _carve_layers(np, kind: str, width: int, height: int, border: float, rng):
     return harr, (cmap if cv.painted else None)
 
 
-# ------------------------------------------------------------------ remplissages
+# ------------------------------------------------------------------ fills
 
 def _fill_solid(np, width, height, color):
     arr = np.empty((height, width, 3), dtype="float32")
@@ -1784,7 +1779,7 @@ def _fill_gradient(np, width, height, c1, c2):
 
 
 def _fill_glitter(np, width, height, c1, c2, rng):
-    """Base unie + grain fin + éclats brillants — aspect pailleté."""
+    """A solid base + fine grain + bright flecks — a glitter look."""
     arr = _fill_solid(np, width, height, c1)
     grain = (rng.random((height, width, 1)).astype("float32") - 0.5) * 26.0
     arr = arr + grain
@@ -1798,7 +1793,7 @@ def _fill_glitter(np, width, height, c1, c2, rng):
 
 
 def _fill_wood(np, width, height, dist, border, rng, c_dark, c_light):
-    """Veinage parallèle aux bords (comme une moulure débitée dans la longueur)."""
+    """Graining parallel to the edges (like a moulding cut lengthwise)."""
     n_low = _smooth_noise(np, width, height, max(3, width // 90), max(3, height // 90), rng)
     n_fine = _smooth_noise(np, width, height, max(4, width // 12), max(4, height // 12), rng)
     rings = np.sin((dist / max(border, 1.0)) * 21.0 + n_low * 7.0)
@@ -1809,10 +1804,10 @@ def _fill_wood(np, width, height, dist, border, rng, c_dark, c_light):
 
 
 def _fill_brushed(np, width, height, side, rng, c_base):
-    """Métal brossé : stries fines suivant la LONGUEUR de chaque moulure.
+    """Brushed metal: fine striations following the LENGTH of each moulding.
 
-    Une moulure horizontale (haut/bas) est brossée horizontalement : les stries
-    sont donc des lignes horizontales, donc un bruit qui varie vite en y."""
+    A horizontal moulding (top/bottom) is brushed horizontally: the striations
+    are therefore horizontal lines, hence a noise varying fast in y."""
     n_fast_y = _smooth_noise(np, width, height, 6, max(4, height // 2), rng)
     n_fast_x = _smooth_noise(np, width, height, max(4, width // 2), 6, rng)
     vertical = (side == 1) | (side == 2)
@@ -1822,7 +1817,7 @@ def _fill_brushed(np, width, height, side, rng, c_base):
 
 
 def _albedo_map(np, kind: str, mat: dict, width, height, dist, side, border, rng, height_map):
-    """Couleur diffuse du bandeau, avant éclairage."""
+    """Diffuse colour of the band, before lighting."""
     if kind == "wood":
         arr = _fill_wood(np, width, height, dist, border, rng, (78, 44, 20), (172, 116, 62))
     elif kind == "metal":
@@ -1830,7 +1825,7 @@ def _albedo_map(np, kind: str, mat: dict, width, height, dist, side, border, rng
     elif kind == "artdeco":
         arr = _fill_brushed(np, width, height, side, rng, mat["albedo"])
     elif kind == "greek":
-        # Fond laqué sombre, or sur les reliefs : la grecque doit se détacher.
+        # A dark lacquered ground, gold on the reliefs: the Greek key must stand out.
         dark = np.array((36, 30, 26), dtype="float32")
         gold = np.array(mat["albedo"], dtype="float32")
         k = np.clip((height_map - 0.62) * 5.0, 0.0, 1.0)[:, :, None]
@@ -1839,9 +1834,9 @@ def _albedo_map(np, kind: str, mat: dict, width, height, dist, side, border, rng
         arr = _fill_solid(np, width, height, mat["albedo"])
 
     if mat.get("gilding"):
-        # Feuille d'or posée à la main : irrégulière, et usée sur les crêtes où
-        # le bol rouge d'assiette affleure. Sans cette usure, une dorure calculée
-        # reste une surface jaune uniforme, jamais un cadre doré.
+        # Gold leaf laid by hand: irregular, and worn on the ridges where the red
+        # bole of the ground shows through. Without that wear, a computed gilding
+        # stays a uniform yellow surface, never a gilded frame.
         n = _smooth_noise(np, width, height, max(4, width // 40), max(4, height // 40), rng)
         n_fine = _smooth_noise(np, width, height, max(6, width // 8), max(6, height // 8), rng)
         wear = (np.clip((height_map - 0.74) * 3.4, 0.0, 1.0)
@@ -1852,25 +1847,25 @@ def _albedo_map(np, kind: str, mat: dict, width, height, dist, side, border, rng
 
 
 def _paint_over(np, arr, cmap):
-    """Compose le calque de couleur des motifs peints sur l'albédo."""
+    """Composites the colour layer of the painted motifs onto the albedo."""
     col = np.asarray(cmap, dtype="float32")
     a = (col[:, :, 3:4] / 255.0)
     return arr * (1.0 - a) + col[:, :, :3] * a
 
 
-# ------------------------------------------------------------------ bandeaux
+# ------------------------------------------------------------------ bands
 
-# Profil de moulure et matériau de chaque motif décoratif.
+# Moulding profile and material of each decorative motif.
 _DECOR: dict[str, tuple[str, str, float]] = {
-    # motif : (profil, matériau, amplitude des ornements)
+    # motif: (profile, material, amplitude of the ornaments)
     "baroque": ("ogee", "gold", 0.62),
     "pearl": ("ogee", "gold", 0.55),
     "greek": ("bevel", "gold", 0.50),
     "artdeco": ("steps", "silver", 0.50),
     "wood": ("cove", "walnut", 0.58),
     "metal": ("bevel", "silver", 0.45),
-    # Les trois cadres végétaux couvrent tout le bandeau : profil « field »
-    # (champ plat) pour que la sculpture soit seule à porter le relief.
+    # The three foliage frames cover the whole band: the "field" profile (a
+    # flat field) so that the carving alone carries the relief.
     "vine": ("field", "bronze", 0.85),
     "roses": ("field", "carmine", 0.80),
     "flowers": ("field", "porcelain", 0.70),
@@ -1879,14 +1874,14 @@ _DECOR: dict[str, tuple[str, str, float]] = {
 
 
 def _band_array(np, kind: str, width: int, height: int, border: float, edit, rng):
-    """Fond du cadre — tableau float32 (h, w, 3) en 0-255."""
+    """Ground of the frame — a float32 (h, w, 3) array in 0-255."""
     dist, side = _edge_distance(np, width, height)
     t = np.clip(dist / max(border, 1.0), 0.0, 1.0)
 
     if kind == "plain":
-        # Aplat strict : ni moulure, ni liseré, ni dégradé — l'entourage doit
-        # rester exactement la couleur choisie (un noir demandé est un vrai noir,
-        # un blanc un vrai blanc), sans quoi il se lit comme un cadre en relief.
+        # A strict flat fill: no moulding, no fillet, no gradient — the surround
+        # must stay exactly the chosen colour (a requested black is a true black, a
+        # white a true white), failing which it reads as a frame in relief.
         color = _hex_to_rgb(getattr(edit, "frame_color", "#ffffff"), (255, 255, 255))
         return _fill_solid(np, width, height, color)
 
@@ -1902,7 +1897,7 @@ def _band_array(np, kind: str, width: int, height: int, border: float, edit, rng
             arr = _fill_solid(np, width, height, c1)
         hmap = _profile_height(np, t, "flat")
         if kind == "double":
-            # Bandes concentriques : cadre extérieur | intervalle | cadre intérieur.
+            # Concentric bands: outer frame | gap | inner frame.
             total = _raw_total(edit) or 1.0
             outer_t = _attr_frac(edit, "frame_width", 0.05) / total
             gap_t = _attr_frac(edit, "frame_gap", 0.02) / total
@@ -1914,9 +1909,8 @@ def _band_array(np, kind: str, width: int, height: int, border: float, edit, rng
             in_inner = (t > outer_t + gap_t)[:, :, None]
             arr = np.where(in_gap, gap_col, arr)
             arr = np.where(in_inner, inner_col, arr)
-            # Le passe-partout est en retrait entre les deux cadres : c'est ce
-            # décroché, et non un simple changement de couleur, qui donne au
-            # cadre double sa profondeur.
+            # The mount is set back between the two frames: it is that step, and not
+            # a mere change of colour, which gives the double frame its depth.
             hmap = np.where(in_gap[:, :, 0], hmap - 0.16, hmap)
             hmap = np.where(in_inner[:, :, 0], hmap + 0.06, hmap).astype("float32")
         return _shade_relief(np, hmap, arr, _MATERIALS["paint"], border)
@@ -1937,8 +1931,8 @@ def _band_array(np, kind: str, width: int, height: int, border: float, edit, rng
     arr = _shade_relief(np, hmap, arr, mat, border)
 
     if kind == "gloss":
-        # Laque : traînées de lumière en diagonale, par-dessus l'éclairage du
-        # relief (un vernis réfléchit la pièce, pas seulement la source).
+        # Lacquer: diagonal streaks of light, on top of the lighting of the relief
+        # (a varnish reflects the room, not only the source).
         ys = np.linspace(0.0, 1.0, height, dtype="float32")[:, None]
         xs = np.linspace(0.0, 1.0, width, dtype="float32")[None, :]
         u = xs * 0.72 + ys * 0.68
@@ -1950,14 +1944,14 @@ def _band_array(np, kind: str, width: int, height: int, border: float, edit, rng
 
 
 def _spill_array(np, kind: str, width: int, height: int, border: float, rng):
-    """Calque RGBA des motifs qui débordent sur la photo, ou ``None``.
+    """RGBA layer of the motifs spilling over the photo, or ``None``.
 
-    Même sculpture, même matière et même lumière que le bandeau — c'est la
-    condition pour que le morceau qui passe par-dessus l'image se lise comme la
-    suite du cadre. La différence est qu'il n'y a pas de moulure sous les
-    ornements (le plan de base est plat) et qu'une silhouette est suivie en
-    parallèle, pour savoir où le calque couvre la photo et où il la laisse
-    intacte."""
+    The same carving, the same material and the same light as the band — that is
+    the condition for the piece passing over the image to read as the
+    continuation of the frame. The difference is that there is no moulding under
+    the ornaments (the base plane is flat) and that a silhouette is tracked in
+    parallel, to know where the layer covers the photo and where it leaves it
+    untouched."""
     spiller = _SPILLERS.get(kind)
     spec = _DECOR.get(kind)
     if spiller is None or spec is None:
@@ -1988,16 +1982,16 @@ def _spill_array(np, kind: str, width: int, height: int, border: float, rng):
         arr = _paint_over(np, arr, cmap)
     arr = np.clip(_shade_relief(np, harr, arr, mat, border), 0.0, 255.0)
 
-    # Ombre portée : la silhouette floutée, décalée dans l'axe de la lumière
-    # (_LIGHT vient du haut-gauche, l'ombre tombe donc en bas à droite).
+    # Drop shadow: the blurred silhouette, offset along the axis of the light
+    # (_LIGHT comes from the top left, so the shadow falls to the bottom right).
     off = max(1, int(round(border * 0.10)))
     drop = np.roll(np.roll(cover, off, axis=0), off, axis=1)
     shadow = np.clip(_gauss(np, drop, max(1.0, border * 0.10)) * _SPILL_SHADOW,
                      0.0, 1.0) * (1.0 - cover)
 
     alpha = np.clip(cover + shadow, 0.0, 1.0)
-    # L'ombre est du noir pur : en composition « out = rgb·a + photo·(1-a) »,
-    # une teinte nulle avec l'alpha de l'ombre assombrit l'image sans la colorer.
+    # The shadow is pure black: in an "out = rgb·a + photo·(1-a)" composition,
+    # a null tint with the alpha of the shadow darkens the image without colouring it.
     rgb = arr * (cover / np.maximum(alpha, 1e-6))[:, :, None]
     out = np.empty((height, width, 4), dtype="uint8")
     out[:, :, :3] = np.clip(rgb, 0, 255).astype("uint8")
@@ -2006,10 +2000,10 @@ def _spill_array(np, kind: str, width: int, height: int, border: float, rng):
 
 
 def _render_spill(kind: str, width: int, height: int, border: float):
-    """Calque de débordement à la résolution de travail (``None`` si sans objet)."""
+    """Spill layer at the working resolution (``None`` if not applicable)."""
     import numpy as np
 
-    rng = np.random.default_rng(20260805)   # rendu déterministe, comme le bandeau
+    rng = np.random.default_rng(20260805)   # deterministic rendering, like the band
     arr = _spill_array(np, kind, width, height, border, rng)
     if arr is None:
         return None
@@ -2017,21 +2011,20 @@ def _render_spill(kind: str, width: int, height: int, border: float):
 
 
 def _render_band(kind: str, width: int, height: int, border: float, edit) -> Image.Image:
-    """Bandeau complet à la résolution de travail."""
+    """Complete band at the working resolution."""
     import numpy as np
 
-    rng = np.random.default_rng(20260802)   # rendu déterministe d'une session à l'autre
+    rng = np.random.default_rng(20260802)   # deterministic rendering from one session to the next
     arr = _band_array(np, kind, width, height, border, edit, rng)
     return Image.fromarray(np.clip(arr, 0, 255).astype("uint8"), mode="RGB")
 
 
-# ------------------------------------------------------------------ API publique
+# ------------------------------------------------------------------ public API
 
 def apply_frame(image: Image.Image, edit) -> Image.Image:
-    """Retourne une nouvelle image : ``image`` centrée dans son cadre.
+    """Returns a new image: ``image`` centred inside its frame.
 
-    L'image d'origine n'est jamais recouverte — elle est collée en dernier,
-    par-dessus le bandeau."""
+    The original image is never covered — it is pasted last, on top of the band."""
     kind = frame_type(edit)
     if kind == "none":
         return image
@@ -2048,7 +2041,7 @@ def apply_frame(image: Image.Image, edit) -> Image.Image:
 
     try:
         band = _render_band(kind, work_w, work_h, work_b, edit)
-    except Exception as e:                       # pas de retouche perdue si le rendu échoue
+    except Exception as e:                       # no edit lost if the rendering fails
         logger.error("Erreur rendu du cadre %s : %s", kind, e)
         return image
 
@@ -2058,8 +2051,8 @@ def apply_frame(image: Image.Image, edit) -> Image.Image:
     photo = image if image.mode == "RGB" else image.convert("RGB")
     band.paste(photo, (border, border))
 
-    # Débordements : collés APRÈS la photo, sinon elle les recouvrirait. Un
-    # échec ici ne coûte que le débordement, jamais le cadre.
+    # Spills: pasted AFTER the photo, otherwise it would cover them. A failure
+    # here only costs the spill, never the frame.
     try:
         spill = _render_spill(kind, work_w, work_h, work_b)
     except Exception as e:
@@ -2074,24 +2067,24 @@ def apply_frame(image: Image.Image, edit) -> Image.Image:
     return band
 
 
-# ------------------------------------------------------------- ferronnerie
+# ------------------------------------------------------------- ironwork
 #
-# Ornements du second cadre de « plain ». Ils se développent VERS L'INTÉRIEUR
-# de la photo : la bande d'image laissée entre les deux cadres (`frame_gap`)
-# doit rester nette, c'est tout l'intérêt du second cadre. Aucun de ces tracés
-# n'entre dans `border_px()`/`content_box()` — c'est de l'affichage, pas de la
-# géométrie (cf. docstring du module).
+# Ornaments of the second frame of "plain". They grow INWARDS into the photo:
+# the strip of image left between the two frames (`frame_gap`) must stay clean,
+# which is the whole point of the second frame. None of these strokes enters
+# `border_px()`/`content_box()` — this is display, not geometry (cf. the module
+# docstring).
 
 def _iron_shades(color) -> tuple[tuple, tuple]:
-    """Couleurs de biseau (clair, sombre) du relief léger.
+    """Bevel colours (light, dark) of the light relief.
 
-    Mélange vers le blanc / le noir plutôt que multiplication : un cadre noir
-    (le plus courant) n'aurait aucun relief avec un simple facteur."""
+    A blend towards white / black rather than a multiplication: a black frame
+    (the most common one) would have no relief at all with a plain factor."""
     return _mix(color, (255, 255, 255), 0.55), _mix(color, (0, 0, 0), 0.45)
 
 
 def _iron_stroke(draw, pts: list, width: float, color, relief: bool) -> None:
-    """Trait de fer : le cœur, plus un liseré clair/sombre si ``relief``."""
+    """Iron stroke: the core, plus a light/dark edging if ``relief``."""
     w = max(1, int(round(width)))
     if len(pts) < 2:
         return
@@ -2104,7 +2097,7 @@ def _iron_stroke(draw, pts: list, width: float, color, relief: bool) -> None:
 
 
 def _iron_poly(draw, poly: list, color, relief: bool) -> None:
-    """Pièce pleine (fleuron, tête de clou) avec le même relief que les traits."""
+    """Solid piece (finial, stud head) with the same relief as the strokes."""
     if len(poly) < 3:
         return
     if relief:
@@ -2118,10 +2111,10 @@ def _iron_poly(draw, poly: list, color, relief: bool) -> None:
 
 
 def _fleuron_polygon(cx: float, cy: float, size: float, angle: float) -> list:
-    """Fleuron : fer de lance pointé dans la direction ``angle``.
+    """Finial: a dart pointing in the ``angle`` direction.
 
-    Préféré à une feuille lobée pour la ferronnerie — celle-ci se lit
-    comme une pastille ronde à petite taille, une pointe reste identifiable."""
+    Preferred to a lobed leaf for the ironwork — the latter reads as a round
+    pastille at a small size, while a point stays identifiable."""
     shape = [(1.0, 0.0), (0.30, 0.32), (-0.10, 0.17),
              (-0.36, 0.0), (-0.10, -0.17), (0.30, -0.32)]
     pts = []
@@ -2133,8 +2126,8 @@ def _fleuron_polygon(cx: float, cy: float, size: float, angle: float) -> list:
 
 def _volute_points(x: float, y: float, dx: float, dy: float, radius: float,
                    sign: float, turns: float = 1.05, steps: int = 44) -> list:
-    """Volute de ferronnerie : part de (x, y) dans la direction (dx, dy) et
-    s'enroule du côté ``sign`` (± 1) en resserrant son rayon."""
+    """Ironwork volute: starts at (x, y) in the (dx, dy) direction and coils
+    towards the ``sign`` side (± 1) while tightening its radius."""
     ang = math.atan2(dy, dx)
     dang = sign * (turns * 2.0 * math.pi) / steps
     pts = [(x, y)]
@@ -2149,18 +2142,18 @@ def _volute_points(x: float, y: float, dx: float, dy: float, radius: float,
 
 
 def _curl_sign(dx: float, dy: float, nx: float, ny: float) -> float:
-    """Sens de rotation qui ramène la direction (dx, dy) vers la normale intérieure."""
+    """Direction of rotation bringing the (dx, dy) direction back to the inner normal."""
     return 1.0 if (dx * ny - dy * nx) > 0 else -1.0
 
 
 def _draw_corner_iron(draw, corner, e1, e2, unit, lw, color, relief) -> None:
-    """Paire de volutes symétriques dans l'angle, plus un fleuron sur la bissectrice."""
+    """A pair of symmetrical volutes in the corner, plus a finial on the bisector."""
     cx, cy = corner
-    nx, ny = e1[0] + e2[0], e1[1] + e2[1]      # bissectrice, vers l'intérieur
+    nx, ny = e1[0] + e2[0], e1[1] + e2[1]      # bisector, inwards
     norm = math.hypot(nx, ny) or 1.0
     nx, ny = nx / norm, ny / norm
     for ex, ey in (e1, e2):
-        # La volute part de la ligne, revient vers l'angle puis s'enroule à l'intérieur.
+        # The scroll starts from the line, comes back towards the corner then coils inwards.
         sx = cx + ex * unit * 1.25
         sy = cy + ey * unit * 1.25
         sign = _curl_sign(-ex, -ey, nx, ny)
@@ -2173,17 +2166,17 @@ def _draw_corner_iron(draw, corner, e1, e2, unit, lw, color, relief) -> None:
 
 def _draw_iron_motif(draw, motif: str, box: tuple, thick: float, unit: float,
                      color, relief: bool) -> None:
-    """Trace le motif de ferronnerie sur la ligne médiane ``box`` du second cadre."""
+    """Draws the ironwork motif on the ``box`` median line of the second frame."""
     x0, y0, x1, y1 = box
     iw, ih = x1 - x0, y1 - y0
     if iw <= 0 or ih <= 0:
         return
     lw = max(1.0, thick * 0.85)
     corners = [(x0, y0), (x1, y0), (x1, y1), (x0, y1)]
-    # Vecteurs unitaires des deux côtés partant de chaque angle.
+    # Unit vectors of the two sides starting from each corner.
     edges = [((1.0, 0.0), (0.0, 1.0)), ((-1.0, 0.0), (0.0, 1.0)),
              ((-1.0, 0.0), (0.0, -1.0)), ((1.0, 0.0), (0.0, -1.0))]
-    # Côtés : (départ, arrivée, tangente, normale intérieure).
+    # Sides: (start, end, tangent, inner normal).
     sides = [
         ((x0, y0), (x1, y0), (1.0, 0.0), (0.0, 1.0)),
         ((x1, y0), (x1, y1), (0.0, 1.0), (-1.0, 0.0)),
@@ -2191,9 +2184,9 @@ def _draw_iron_motif(draw, motif: str, box: tuple, thick: float, unit: float,
         ((x0, y1), (x0, y0), (0.0, -1.0), (1.0, 0.0)),
     ]
 
-    # Tous les motifs ornent une ligne continue, sauf le barreau torsadé en
-    # aplat : sans relief, seuls les brins obliques séparés donnent la torsade
-    # (une bande pleine derrière eux la ferait disparaître).
+    # Every motif adorns a continuous line, apart from the twisted bar as a flat
+    # fill: with no relief, only the separated oblique strands give the twist (a
+    # solid band behind them would make it disappear).
     if motif != "twist" or relief:
         _iron_stroke(draw, corners + [corners[0]], thick, color, relief)
 
@@ -2207,7 +2200,7 @@ def _draw_iron_motif(draw, motif: str, box: tuple, thick: float, unit: float,
         spacing = max(unit * 1.9, 4.0)
         for (ax, ay), (bx, by), (tx, ty), (nx, ny) in sides:
             length = math.hypot(bx - ax, by - ay)
-            free = length - 2.0 * unit * 2.2          # place tenue par les angles
+            free = length - 2.0 * unit * 2.2          # room taken by the corners
             if free <= spacing:
                 continue
             count = max(1, int(free // spacing))
@@ -2217,8 +2210,8 @@ def _draw_iron_motif(draw, motif: str, box: tuple, thick: float, unit: float,
             for k in range(count):
                 d = start + k * spacing
                 px, py = ax + tx * d, ay + ty * d
-                # Rinceau : deux volutes opposées attachées à la ligne, ouvertes
-                # vers l'intérieur — le motif court d'un angle à l'autre.
+                # Scroll: two opposed volutes attached to the line, opening
+                # inwards — the motif runs from one corner to the next.
                 _iron_stroke(draw, _volute_points(px, py, tx, ty, unit * 0.40, sign),
                              lw, color, relief)
                 _iron_stroke(draw, _volute_points(px, py, -tx, -ty, unit * 0.40, -sign),
@@ -2229,8 +2222,8 @@ def _draw_iron_motif(draw, motif: str, box: tuple, thick: float, unit: float,
                            color, relief)
 
     elif motif == "twist":
-        # Torsade : brins obliques répétés le long du barreau. Le curseur
-        # « Ornements » règle le pas de la torsion (serrée ↔ lâche).
+        # Twist: oblique strands repeated along the bar. The "Ornaments"
+        # slider sets the pitch of the twist (tight ↔ loose).
         period = max(3.0, unit * 0.38)
         half = thick * 0.75
         light, dark = _iron_shades(color)
@@ -2241,14 +2234,14 @@ def _draw_iron_motif(draw, motif: str, box: tuple, thick: float, unit: float,
             for k in range(count + 1):
                 d = length * k / count
                 px, py = ax + tx * d, ay + ty * d
-                # Bâtonnet en biais : la diagonale du barreau donne la torsion.
+                # A slanted stick: the diagonal of the bar gives the twist.
                 sx = px - (tx + nx) * half
                 sy = py - (ty + ny) * half
                 ex = px + (tx + nx) * half
                 ey = py + (ty + ny) * half
                 col = (light if k % 2 == 0 else dark) if relief else color
                 draw.line([(sx, sy), (ex, ey)], fill=col, width=bar)
-        # Fleurons aux angles et au milieu de chaque côté, pointés vers l'intérieur.
+        # Finials at the corners and in the middle of each side, pointing inwards.
         for corner, (e1, e2) in zip(corners, edges):
             nx, ny = e1[0] + e2[0], e1[1] + e2[1]
             norm = math.hypot(nx, ny) or 1.0
@@ -2259,8 +2252,8 @@ def _draw_iron_motif(draw, motif: str, box: tuple, thick: float, unit: float,
                        color, relief)
         for (ax, ay), (bx, by), (tx, ty), (nx, ny) in sides:
             mx, my = (ax + bx) / 2.0, (ay + by) / 2.0
-            # Fleuron posé sur le barreau (pas flottant à côté) : le décalage
-            # reste inférieur à sa demi-longueur.
+            # A finial laid on the bar (not floating beside it): the offset
+            # stays below its half-length.
             _iron_poly(draw, _fleuron_polygon(mx + nx * unit * 0.26, my + ny * unit * 0.26,
                                               unit * 0.42, math.atan2(ny, nx)),
                        color, relief)
@@ -2278,7 +2271,7 @@ def _draw_iron_motif(draw, motif: str, box: tuple, thick: float, unit: float,
                 draw.polygon([(x - d, y - d) for x, y in poly], fill=light)
             draw.polygon(poly, fill=color)
             if relief:
-                # Facette martelée : la tête d'un clou forgé n'est pas lisse.
+                # A hammered facet: the head of a forged stud is not smooth.
                 hr = r * 0.42
                 draw.polygon(_circle_polygon(cx - r * 0.26, cy - r * 0.26, hr, steps=20),
                              fill=light)
@@ -2300,18 +2293,18 @@ def _draw_iron_motif(draw, motif: str, box: tuple, thick: float, unit: float,
 
 def _inner_motif_layer(motif: str, w: int, h: int, gap: int, thick: int,
                        ornament: float, color, relief: bool) -> "Image.Image | None":
-    """Calque RGBA (w × h) de la ferronnerie, prêt à être collé sur la photo.
+    """RGBA layer (w × h) of the ironwork, ready to be pasted onto the photo.
 
-    Rendu à résolution de travail bornée puis suréchantillonné comme les
-    ornements du bandeau (cf. ``_ornament_layer``) : les motifs sont des courbes
-    douces, l'agrandissement final ne se voit pas et le coût reste constant quelle
-    que soit la taille de l'export."""
+    Rendered at a bounded working resolution then supersampled like the
+    ornaments of the band (cf. ``_ornament_layer``): the motifs are smooth
+    curves, the final enlargement does not show and the cost stays constant
+    whatever the size of the export."""
     scale = min(1.0, _WORK_MAX / float(max(w, h)))
     ww = max(16, int(round(w * scale)))
     wh = max(16, int(round(h * scale)))
     ss = _SS if max(ww, wh) * _SS <= 4200 else 1
     lw_px, lh_px = ww * ss, wh * ss
-    k = (lw_px + lh_px) / float(w + h)          # photo → calque
+    k = (lw_px + lh_px) / float(w + h)          # photo → layer
 
     t = max(1.0, thick * k)
     g = gap * k
@@ -2322,10 +2315,9 @@ def _inner_motif_layer(motif: str, w: int, h: int, gap: int, thick: int,
     if x1 - x0 < 4 * t or y1 - y0 < 4 * t:
         return None
 
-    # Taille de référence des ornements : une fraction du petit côté (comme
-    # toutes les largeurs du module, pour un rendu identique à toute résolution),
-    # jamais plus fine que le trait qui les porte ni assez grosse pour envahir
-    # la photo.
+    # Reference size of the ornaments: a fraction of the short side (like every
+    # width of this module, for an identical rendering at any resolution), never
+    # thinner than the line carrying them nor large enough to invade the photo.
     short = min(lw_px, lh_px)
     unit = max(t * 2.0, min(short * 0.09 * ornament, short * 0.22))
 
@@ -2338,7 +2330,7 @@ def _inner_motif_layer(motif: str, w: int, h: int, gap: int, thick: int,
 
 
 def _draw_inner_overlay(canvas: Image.Image, edit, border: int, w: int, h: int) -> None:
-    """Peint le second cadre de « plain » par-dessus la photo déjà collée."""
+    """Paints the second frame of "plain" on top of the already pasted photo."""
     gap, thick = inner_overlay_px(edit, w, h)
     if thick <= 0:
         return
@@ -2353,32 +2345,33 @@ def _draw_inner_overlay(canvas: Image.Image, edit, border: int, w: int, h: int) 
         return
 
     if motif == "line":
-        # Trait historique : aplat strict, sans relief ni ornement, quel que soit
-        # `frame_inner_relief` (réglage de ferronnerie, cf. ORNAMENTED_MOTIFS) —
-        # une base migrée doit rendre exactement le même cadre qu'avant.
-        # `width` dessine le contour VERS L'INTÉRIEUR du rectangle : le bord externe
-        # du trait reste donc exactement à `gap` px du bord de la photo.
+        # The historical stroke: a strict flat fill, with no relief and no ornament,
+        # whatever `frame_inner_relief` (an ironwork setting, cf. ORNAMENTED_MOTIFS) —
+        # a migrated database must render exactly the same frame as before.
+        # `width` draws the outline INWARDS from the rectangle: the outer edge of the
+        # stroke therefore stays exactly `gap` px from the edge of the photo.
         ImageDraw.Draw(canvas).rectangle([x0, y0, x1, y1], outline=color, width=thick)
         return
 
     try:
         layer = _inner_motif_layer(motif, w, h, gap, thick,
                                    inner_ornament_scale(edit), color, relief)
-    except Exception as e:                      # un ornement raté ne perd pas le cadre
+    except Exception as e:                      # a failed ornament does not lose the frame
         logger.error("Erreur rendu de la ferronnerie %s : %s", motif, e)
         layer = None
     if layer is None:
         ImageDraw.Draw(canvas).rectangle([x0, y0, x1, y1], outline=color, width=thick)
         return
-    # Le canal alpha sert de masque : inutile de convertir le canevas en RGBA.
+    # The alpha channel serves as the mask: no need to convert the canvas to RGBA.
     canvas.paste(layer, (border, border), layer)
 
 
 def frame_preview(image: Image.Image, edit, size: int = 160) -> Image.Image:
-    """Aperçu carré-ish d'``image`` encadrée, destiné à la galerie du dialogue.
+    """Squarish preview of ``image`` framed, intended for the dialog gallery.
 
-    Réduit AVANT d'encadrer : les largeurs étant relatives, le rendu reste
-    fidèle à ce que donnera la pleine résolution, pour une fraction du coût."""
+    Downscaled BEFORE framing: since the widths are relative, the rendering
+    stays faithful to what the full resolution will give, for a fraction of the
+    cost."""
     thumb = image.copy()
     thumb.thumbnail((size, size), Image.LANCZOS)
     return apply_frame(thumb, edit)

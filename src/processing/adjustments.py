@@ -10,12 +10,12 @@ from src.processing.geometry import GeometryProcessor
 class ImageAdjuster:
     @staticmethod
     def apply_all(image: Image.Image, edit: EditInfo, with_frame: bool = True) -> Image.Image:
-        """Applique toute la chaîne de retouches, cadre décoratif compris.
+        """Applies the whole edit chain, the decorative frame included.
 
-        ``with_frame=False`` s'arrête avant le cadre : l'export s'en sert pour
-        composer les annotations dans l'espace de la PHOTO (elles sont stockées
-        en coordonnées normalisées de l'image, sans le cadre) puis pose le cadre
-        lui-même par un appel explicite à ``frames.apply_frame()``."""
+        ``with_frame=False`` stops before the frame: the export uses that to
+        composite the annotations in the space of the PHOTO (they are stored in
+        normalised image coordinates, without the frame) then lays the frame
+        itself down through an explicit call to ``frames.apply_frame()``."""
         image = GeometryProcessor.apply_rotation(image, edit.rotation)
         if edit.straighten != 0.0:
             image = GeometryProcessor.apply_straighten_with_crop(image, edit.straighten)
@@ -58,8 +58,8 @@ class ImageAdjuster:
                 edit.vignette_color,
             )
 
-        # Toujours en dernier : le cadre agrandit l'image et doit englober le
-        # résultat de tous les traitements précédents.
+        # Always last: the frame enlarges the image and must enclose the
+        # result of every previous treatment.
         if with_frame and getattr(edit, "frame_type", "none") not in (None, "", "none"):
             from src.processing.frames import apply_frame
             image = apply_frame(image, edit)
@@ -192,7 +192,7 @@ class ImageAdjuster:
 
     @staticmethod
     def apply_color_channels(image: Image.Image, red: float, green: float, blue: float) -> Image.Image:
-        """Ajuste chaque canal indépendamment. Valeurs en [-1, 1] : 0 = neutre."""
+        """Adjusts each channel independently. Values in [-1, 1]: 0 = neutral."""
         import array
         def _lut(v):
             return array.array("B", [int(min(255, max(0, i * (1.0 + v)))) for i in range(256)])
@@ -202,7 +202,7 @@ class ImageAdjuster:
 
     @staticmethod
     def apply_red_eye_correction(image: Image.Image, regions: list) -> Image.Image:
-        """Corrige les yeux rouges dans les zones circulaires définies (coords normalisées 0-1)."""
+        """Corrects red eyes in the given circular areas (normalised 0-1 coordinates)."""
         import numpy as np
         if not regions:
             return image
@@ -236,15 +236,14 @@ class ImageAdjuster:
         angle: float,
         color: str,
     ) -> Image.Image:
-        """Vignette à double ellipse interactive avec dégradé entre ellipse interne et externe.
+        """Interactive double-ellipse vignette with a gradient between the inner and outer ellipse.
 
-        strength : 0–1 — intensité maximale de la vignette
-        cx, cy   : 0–1 — centre normalisé (0-1 des dimensions de l'image)
-        rx1, ry1 : rayons de l'ellipse interne (1.0 = demi-dimension de l'image)
-        rx2, ry2 : rayons de l'ellipse externe
-        angle    : rotation en degrés
-        color    : "black" ou "white"
-        """
+        strength : 0–1 — maximum strength of the vignette
+        cx, cy   : 0–1 — normalised centre (0-1 of the image dimensions)
+        rx1, ry1 : radii of the inner ellipse (1.0 = half an image dimension)
+        rx2, ry2 : radii of the outer ellipse
+        angle    : rotation in degrees
+        color    : "black" or "white" """
         import numpy as np
 
         img = image.convert("RGB")
@@ -262,7 +261,7 @@ class ImageAdjuster:
         dx = (X - px_cx).astype(np.float32)
         dy = (Y - px_cy).astype(np.float32)
 
-        # Rotation inverse pour aligner avec les axes de l'ellipse
+        # Inverse rotation, to align with the axes of the ellipse
         rad = math.radians(angle)
         cos_a = math.cos(-rad)
         sin_a = math.sin(-rad)
@@ -274,10 +273,10 @@ class ImageAdjuster:
         cos_t = np.cos(theta)
         sin_t = np.sin(theta)
 
-        # Distance du pixel au centre (dans l'espace tourné)
+        # Distance from the pixel to the centre (in the rotated space)
         r_pix = np.sqrt(dx_rot ** 2 + dy_rot ** 2)
 
-        # Rayon de l'ellipse dans la direction de chaque pixel (intersection rayon-ellipse)
+        # Radius of the ellipse in the direction of each pixel (ray-ellipse intersection)
         r_inner = (px_rx1 * px_ry1) / np.sqrt(
             (px_ry1 * cos_t) ** 2 + (px_rx1 * sin_t) ** 2 + eps)
         r_outer = (px_rx2 * px_ry2) / np.sqrt(
@@ -286,7 +285,7 @@ class ImageAdjuster:
         gap = np.maximum(r_outer - r_inner, eps)
         t = np.clip((r_pix - r_inner) / gap, 0.0, 1.0)
 
-        # Smoothstep pour une courbe en S naturelle
+        # Smoothstep, for a natural S-curve
         alpha = t * t * (3.0 - 2.0 * t)
         alpha = (alpha * strength)[:, :, np.newaxis]
 

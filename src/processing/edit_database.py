@@ -108,16 +108,16 @@ _CREATE_INDEX = (
 
 
 class EditDatabase:
-    """Stockage SQLite non-destructif des retouches.
+    """Non-destructive SQLite storage of the edits.
 
-    Deux tables :
-    - ``photo_edits``  : état courant par photo (une ligne par photo modifiée).
-    - ``edit_history`` : historique des états sauvegardés (undo/redo persistant).
+    Two tables:
+    - ``photo_edits``  : the current state per photo (one row per edited photo).
+    - ``edit_history`` : history of the saved states (persistent undo/redo).
 
-    Singleton par chemin de base : main_window.py, photo_viewer.py et edit_panel.py
-    créent chacun leur propre EditDatabase() ; sans singleton, chacun a son propre
-    threading.Lock() (donc les 3 ne s'excluent pas mutuellement) et relance la
-    migration complète au démarrage (3x le même coût).
+    A singleton per database path: main_window.py, photo_viewer.py and
+    edit_panel.py each create their own EditDatabase(); without the singleton,
+    each has its own threading.Lock() (so the 3 do not exclude one another) and
+    reruns the full migration at startup (3x the same cost).
     """
 
     _instances: "dict[str, EditDatabase]" = {}
@@ -138,20 +138,20 @@ class EditDatabase:
             return
         self._db_path = db_path
         self._lock = threading.Lock()
-        # Connexion SQLite par thread, créée une fois puis réutilisée (pattern
-        # ThumbnailCache) : load() est appelé à chaque navigation dans la
-        # visionneuse — ouvrir une connexion neuve à chaque flèche coûtait
-        # plus cher que la requête elle-même.
+        # One SQLite connection per thread, created once then reused (the
+        # ThumbnailCache pattern): load() is called on every navigation in the
+        # viewer — opening a fresh connection on every arrow key cost more than
+        # the query itself.
         self._tls = threading.local()
-        # Instantané de all_edits(), invalidé par toute écriture (cf. _invalidate_cache).
-        # Toutes les écritures passent par ce singleton : l'instantané ne peut pas
-        # se désynchroniser dans le dos de l'application.
+        # Snapshot of all_edits(), invalidated by any write (cf. _invalidate_cache).
+        # Every write goes through this singleton: the snapshot cannot fall out of
+        # sync behind the application's back.
         self._all_edits_cache: "dict[str, EditInfo] | None" = None
         self._init_db()
         self._initialized = True
 
     def _invalidate_cache(self) -> None:
-        """À appeler dans toute méthode qui écrit dans photo_edits, sous _lock."""
+        """To be called in every method that writes into photo_edits, under _lock."""
         self._all_edits_cache = None
 
     # ------------------------------------------------------------------ init
@@ -165,7 +165,7 @@ class EditDatabase:
             try:
                 conn.execute(_MIGRATE_STRAIGHTEN)
             except sqlite3.OperationalError:
-                pass  # colonne déjà présente
+                pass  # column already present
             for _sql in _MIGRATE_GAMMA_CURVE:
                 try:
                     conn.execute(_sql)
@@ -203,7 +203,7 @@ class EditDatabase:
             conn.commit()
 
     def _migrate_normalize_paths(self, conn) -> None:
-        """Normalise les séparateurs de chemin dans les données existantes."""
+        """Normalises the path separators in the existing data."""
         for table, col in [("photo_edits", "photo_path"), ("edit_history", "photo_path")]:
             rows = conn.execute(f"SELECT rowid, {col} FROM {table}").fetchall()
             updates = [
@@ -229,7 +229,7 @@ class EditDatabase:
     # ------------------------------------------------------------------ API publique
 
     def load(self, photo_path: str) -> EditInfo:
-        """Charge l'état courant des retouches. Retourne EditInfo() vierge si absent."""
+        """Loads the current edit state. Returns a blank EditInfo() if absent."""
         photo_path = os.path.normpath(photo_path)
         with self._lock:
             try:
@@ -246,15 +246,15 @@ class EditDatabase:
                 return EditInfo()
 
     def all_edits(self) -> dict[str, EditInfo]:
-        """Toutes les retouches en cours, indexées par chemin normalisé.
+        """Every edit in progress, indexed by normalised path.
 
-        La table ne contient que les photos effectivement retouchées (save()
-        supprime la ligne quand plus rien n'est modifié) : le dictionnaire reste
-        donc petit, et une seule requête suffit à alimenter toute une grille —
-        au lieu d'un SELECT par vignette affichée.
+        The table only holds the photos actually edited (save() removes the row
+        when nothing is modified any more): the dictionary therefore stays
+        small, and a single query is enough to feed a whole grid — instead of
+        one SELECT per displayed thumbnail.
 
-        Résultat mémorisé et invalidé par les écritures : la grille le redemande
-        à chaque changement de dossier/album, sur le thread UI."""
+        The result is memoised and invalidated by the writes: the grid asks for
+        it again on every folder/album change, on the UI thread."""
         with self._lock:
             if self._all_edits_cache is not None:
                 return dict(self._all_edits_cache)
@@ -334,15 +334,15 @@ class EditDatabase:
         )
 
     def save(self, photo_path: str, edit: EditInfo, operation: str = "edit") -> bool:
-        """Sauvegarde l'état courant et l'enregistre dans l'historique.
+        """Saves the current state and records it in the history.
 
-        Retourne False en cas d'échec (DB verrouillée, disque plein, etc.) —
-        les appelants doivent vérifier la valeur de retour avant de considérer
-        la sauvegarde comme acquise (ex. avant d'émettre un signal photo_saved)."""
+        Returns False on failure (a locked DB, a full disk, etc.) — the callers
+        must check the return value before considering the save as done (e.g.
+        before emitting a photo_saved signal)."""
         photo_path = os.path.normpath(photo_path)
         with self._lock:
-            # Invalidé avant l'écriture, pas après : un échec en cours de route
-            # laisse ainsi l'instantané périmé écarté plutôt que conservé.
+            # Invalidated before the write, not after: a failure along the way then
+            # leaves the stale snapshot discarded rather than kept.
             self._invalidate_cache()
             try:
                 with self._connect() as conn:
@@ -411,7 +411,7 @@ class EditDatabase:
                         " VALUES (?, ?, ?)",
                         (photo_path, json.dumps(edit.to_dict()), operation),
                     )
-                    # Limite le nombre d'entrées d'historique par photo
+                    # Caps the number of history entries per photo
                     conn.execute(
                         """
                         DELETE FROM edit_history
@@ -445,7 +445,7 @@ class EditDatabase:
                 return False
 
     def delete(self, photo_path: str) -> None:
-        """Supprime l'état courant et tout l'historique pour cette photo."""
+        """Deletes the current state and the whole history for this photo."""
         photo_path = os.path.normpath(photo_path)
         with self._lock:
             self._invalidate_cache()
@@ -462,7 +462,7 @@ class EditDatabase:
                 logger.error(f"Erreur suppression retouches {photo_path}: {e}")
 
     def rename_photo(self, old_path: str, new_path: str) -> None:
-        """Propage un renommage de fichier dans les deux tables."""
+        """Propagates a file rename through both tables."""
         old_path = os.path.normpath(old_path)
         new_path = os.path.normpath(new_path)
         with self._lock:
@@ -482,10 +482,10 @@ class EditDatabase:
                 logger.error(f"Erreur renommage retouches {old_path} → {new_path}: {e}")
 
     def push_history(self, photo_path: str, edit: EditInfo, operation: str = "checkpoint") -> None:
-        """Insère un état dans edit_history sans modifier photo_edits.
+        """Inserts a state into edit_history without modifying photo_edits.
 
-        Utilisé pour sauvegarder l'état PRÉ-opération, afin que l'undo soit
-        possible après redémarrage de l'application (undo cross-session).
+        Used to save the PRE-operation state, so that the undo stays possible
+        after a restart of the application (cross-session undo).
         """
         photo_path = os.path.normpath(photo_path)
         with self._lock:
@@ -513,9 +513,9 @@ class EditDatabase:
                 logger.error("Erreur push_history %s: %s", photo_path, e)
 
     def get_history(self, photo_path: str, limit: int = 20) -> list[tuple]:
-        """Retourne les états précédents du plus ancien au plus récent (pour undo persistant).
+        """Returns the previous states from the oldest to the most recent (for a persistent undo).
 
-        Chaque entrée est un tuple ``(EditInfo, operation_name)``."""
+        Each entry is a ``(EditInfo, operation_name)`` tuple."""
         photo_path = os.path.normpath(photo_path)
         with self._lock:
             try:
