@@ -1,9 +1,9 @@
 # Copyright 2026 Christian Guyot
 # SPDX-License-Identifier: Apache-2.0
-"""Teste l'affichage et l'interaction des suggestions de personne en attente de
-vérification dans FacePanel (panneau visages de la visionneuse) : nom suggéré +
-tick vert/croix rouge superposés sur la vignette pour confirmer/rejeter sans
-passer par le dialogue d'assignation complet."""
+"""Tests the display and the interaction of the person suggestions awaiting
+verification in FacePanel (the faces panel of the viewer): suggested name +
+green tick/red cross overlaid on the thumbnail to confirm/reject without going
+through the full assignment dialog."""
 import math
 import sqlite3
 
@@ -43,9 +43,10 @@ def _raw_insert_face(
 
 
 def _tilted_embedding(angle_rad: float, dim: int = 8) -> list[float]:
-    """Vecteur unitaire dans le plan (e0, e1), incliné de angle_rad par rapport à
-    e0 — permet de fabriquer deux embeddings à une similarité cosinus contrôlée
-    (cos(angle_rad)) sans dépendre d'un vrai modèle de reconnaissance faciale."""
+    """Unit vector in the (e0, e1) plane, tilted by angle_rad with respect to
+    e0 -- makes it possible to fabricate two embeddings at a controlled cosine
+    similarity (cos(angle_rad)) without depending on a real face recognition
+    model."""
     vec = [0.0] * dim
     vec[0] = math.cos(angle_rad)
     vec[1] = math.sin(angle_rad)
@@ -61,13 +62,13 @@ def _make_panel(qtbot, tmp_path):
 
 
 def _load_and_settle(qtbot, panel, photo_path):
-    """set_photo() lance ses chargements dans de vrais QThread ; on attend leur
-    achèvement réel plutôt que d'appeler run() en synchrone, pour couvrir aussi
-    le câblage cross-thread réel (cf. convention CLAUDE.md : garder quelques
-    vrais .start() par module pour la plomberie).
+    """set_photo() starts its loads in real QThreads; we wait for them to
+    really finish rather than calling run() synchronously, so as to cover the
+    real cross-thread wiring too (cf. the CLAUDE.md convention: keep a few real
+    .start() calls per module for the plumbing).
 
-    Sondage (cf. wait_thread_done) et non waitSignal : les threads sont déjà
-    lancés quand on arrive ici, une émission perdue ferait expirer le blocker."""
+    Polling (cf. wait_thread_done) and not waitSignal: the threads are already
+    started when we get here, and a lost emission would make the blocker expire."""
     panel.set_photo(photo_path)
     wait_thread_done(qtbot, panel._data_loader, timeout=2000)
     wait_thread_done(qtbot, panel._loader, timeout=2000)
@@ -115,9 +116,9 @@ class TestAcceptRejectSuggestion:
         )
         _load_and_settle(qtbot, panel, photo)
 
-        # L'écriture (accept_cluster_suggestion) part dans un _DbWriteWorker ;
-        # person_assigned est émis sur le thread UI une fois le worker terminé,
-        # donc après le commit — on attend ce signal avant de lire la DB.
+        # The write (accept_cluster_suggestion) goes into a _DbWriteWorker;
+        # person_assigned is emitted on the UI thread once the worker has finished,
+        # hence after the commit -- we wait for that signal before reading the DB.
         with qtbot.waitSignal(panel.person_assigned, timeout=2000):
             panel._items[face_id]._btn_accept.click()
 
@@ -155,10 +156,10 @@ class TestAcceptRejectSuggestion:
 
 
 class TestProbableMatchInformativeLabel:
-    """Libellé informatif "≈ Probablement/Peut-être X" pour un visage dont la
-    similarité au centroïde d'une personne connue est calculée à la volée
-    (0.45 <= sim < 0.55, sous le seuil de suggestion persistée _SIM_SUGGEST) —
-    pas de coche ✓/✕ à ce niveau de confiance, cf. choix utilisateur explicite."""
+    """Informative "≈ Probably/Maybe X" label for a face whose similarity to
+    the centroid of a known person is computed on the fly (0.45 <= sim < 0.55,
+    below the persisted suggestion threshold _SIM_SUGGEST) -- no ✓/✕ tick at
+    that level of confidence, cf. an explicit user choice."""
 
     def _seed_person_face(self, face_db, catalog, tmp_path, name="Marc de Saint Roman"):
         person = catalog.create_person(name)
@@ -194,7 +195,7 @@ class TestProbableMatchInformativeLabel:
         person = self._seed_person_face(face_db, catalog, tmp_path)
         photo = str(tmp_path / "a.jpg")
         _make_photo(photo)
-        # cos(angle) ~= 0.47 : dans [_SIM_WEAK=0.45, _SIM_STRONG=0.50)
+        # cos(angle) ~= 0.47: within [_SIM_WEAK=0.45, _SIM_STRONG=0.50)
         face_id = _raw_insert_face(
             face_db, photo, cluster_id=77,
             embedding=_tilted_embedding(math.acos(0.47)),
@@ -213,7 +214,7 @@ class TestProbableMatchInformativeLabel:
         self._seed_person_face(face_db, catalog, tmp_path)
         photo = str(tmp_path / "a.jpg")
         _make_photo(photo)
-        # cos(angle) ~= 0.30 : sous _SIM_WEAK (0.45), aucun libellé informatif
+        # cos(angle) ~= 0.30: below _SIM_WEAK (0.45), no informative label
         face_id = _raw_insert_face(
             face_db, photo, cluster_id=77,
             embedding=_tilted_embedding(math.acos(0.30)),

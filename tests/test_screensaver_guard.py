@@ -1,8 +1,8 @@
 # Copyright 2026 Christian Guyot
 # SPDX-License-Identifier: Apache-2.0
-"""Teste `src/core/screensaver_guard.py` : pose/levée de l'inhibition
-(SetThreadExecutionState remplacé par un espion) et reconnaissance du message
-Windows d'annonce de l'économiseur d'écran."""
+"""Tests `src/core/screensaver_guard.py`: setting/releasing the inhibition
+(SetThreadExecutionState replaced by a spy) and recognising the Windows message
+announcing the screen saver."""
 import ctypes.wintypes
 
 import pytest
@@ -12,7 +12,7 @@ from src.core import screensaver_guard as sg
 
 @pytest.fixture
 def calls(monkeypatch):
-    """Espionne _set_execution_state ; renvoie la liste des flags demandés."""
+    """Spies on _set_execution_state; returns the list of the requested flags."""
     seen: list[int] = []
 
     def fake(flags: int) -> bool:
@@ -43,10 +43,10 @@ class TestScreensaverGuard:
     def test_idempotent_both_ways(self, calls):
         guard = sg.ScreensaverGuard()
         guard.inhibit()
-        guard.inhibit()          # déjà actif : aucun appel supplémentaire
+        guard.inhibit()          # already active: no extra call
         assert len(calls) == 1
         guard.release()
-        guard.release()          # déjà relâché : idem
+        guard.release()          # already released: same thing
         assert len(calls) == 2
 
     def test_failure_leaves_guard_inactive(self, monkeypatch):
@@ -54,11 +54,11 @@ class TestScreensaverGuard:
         guard = sg.ScreensaverGuard()
         assert guard.inhibit() is False
         assert guard.active is False
-        guard.release()   # ne doit pas lever
+        guard.release()   # must not raise
 
 
 def _msg(message: int, wparam: int) -> ctypes.wintypes.MSG:
-    """Structure MSG à garder vivante tant que son adresse est utilisée."""
+    """MSG structure to be kept alive as long as its address is used."""
     m = ctypes.wintypes.MSG()
     m.message = message
     m.wParam = wparam
@@ -73,7 +73,7 @@ class TestIsScreensaverCommand:
             b"windows_generic_MSG", ctypes.addressof(msg)) is True
 
     def test_low_bits_of_wparam_are_ignored(self):
-        # Windows réserve les 4 bits de poids faible de wParam.
+        # Windows reserves the 4 low-order bits of wParam.
         msg = _msg(sg.WM_SYSCOMMAND, sg.SC_SCREENSAVE | 0x0002)
         assert sg.is_screensaver_command(
             b"windows_generic_MSG", ctypes.addressof(msg)) is True

@@ -1,9 +1,9 @@
 # Copyright 2026 Christian Guyot
 # SPDX-License-Identifier: Apache-2.0
-"""Le cadre décoratif fait partie du pixmap affiché mais PAS de l'image : tout
-ce qui est exprimé en coordonnées relatives à la photo (recadrage, yeux rouges,
-vignette, cadres de visages, annotations) doit continuer à viser le contenu, pas
-le bandeau. Ces tests verrouillent ce décalage dans _Canvas.
+"""The decorative frame is part of the displayed pixmap but NOT of the image:
+everything expressed in coordinates relative to the photo (crop, red eyes,
+vignette, face boxes, annotations) must keep aiming at the content, not at the
+band. These tests lock that offset down in _Canvas.
 """
 import pytest
 
@@ -15,7 +15,7 @@ from src.processing import frames
 from src.ui.viewer_canvas import _Canvas
 
 
-FRAMED = 240          # côté du pixmap encadré utilisé par les tests
+FRAMED = 240          # side of the framed pixmap used by the tests
 EDIT = EditInfo(frame_type="simple", frame_width=0.10)
 
 
@@ -64,8 +64,8 @@ class TestImgRect:
 
 class TestInteractiveCoordinates:
     def test_red_eye_click_at_content_center_is_relative_to_the_photo(self, canvas, qtbot):
-        """Sans le retrait du cadre, un clic au centre visuel de la photo donnait
-        des coordonnées décalées vers le bas/la droite."""
+        """Without removing the frame, a click at the visual centre of the photo
+        gave coordinates shifted down and to the right."""
         canvas.set_edit(EDIT)
         canvas.enter_red_eye_mode()
         ir = canvas._img_rect()
@@ -87,7 +87,7 @@ class TestInteractiveCoordinates:
 
     def test_face_rect_is_placed_inside_the_content(self, canvas):
         canvas.set_edit(EDIT)
-        canvas.set_orig_size(FRAMED, FRAMED)   # échelle 1:1 avec le contenu affiché
+        canvas.set_orig_size(FRAMED, FRAMED)   # 1:1 scale with the displayed content
 
         class _Face:
             bbox_x, bbox_y, bbox_w, bbox_h = 0, 0, 10, 10
@@ -95,9 +95,9 @@ class TestInteractiveCoordinates:
 
         b = _border()
         rect = canvas._face_screen_rect(_Face())
-        # Un visage en (0,0) de la photo se dessine au coin du CONTENU, pas du pixmap.
+        # A face at (0,0) of the photo is drawn at the corner of the CONTENT, not of the pixmap.
         assert (rect.x(), rect.y()) == (b, b)
-        assert rect.width() < 10   # contenu réduit par rapport à l'original
+        assert rect.width() < 10   # content reduced with respect to the original
 
     def test_bbox_from_screen_rect_inverts_face_screen_rect(self, canvas):
         canvas.set_edit(EDIT)
@@ -112,8 +112,8 @@ class TestInteractiveCoordinates:
         assert bbox == pytest.approx((40, 30, 25, 20), abs=2)
 
     def test_existing_crop_is_restored_inside_the_content(self, canvas):
-        """Un recadrage plein cadre enregistré en base se rouvre exactement sur
-        la photo — pas sur le pixmap encadré, qui déborderait sur la moulure."""
+        """A full-frame crop recorded in the database reopens exactly on the
+        photo -- not on the framed pixmap, which would overflow onto the moulding."""
         canvas.set_edit(EDIT)
         canvas.enter_crop((0.0, 0.0, 1.0, 1.0))
         b = _border()

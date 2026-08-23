@@ -1,15 +1,15 @@
 # Copyright 2026 Christian Guyot
 # SPDX-License-Identifier: Apache-2.0
-"""Régression : alimentation de l'horodatage d'activité utilisateur et
-application du niveau de bridage CPU au démarrage (MainWindow.eventFilter /
-_apply_background_cpu_level), testées en méthodes non liées contre un objet
-minimal — même convention que test_main_window_face_rotation.py.
+"""Regression: feeding the user activity timestamp and applying the CPU
+throttling level at startup (MainWindow.eventFilter /
+_apply_background_cpu_level), tested as unbound methods against a minimal
+object -- the same convention as test_main_window_face_rotation.py.
 
-Bug d'origine : `note_user_activity()` n'était appelé nulle part. `_last_activity`
-restait donc figé à l'heure d'import du module, `user_is_idle()` renvoyait True en
-permanence passé IDLE_GRACE_SECONDS, et `effective_cpu_ratio()` valait toujours
-1.0 — le cycle de service ne bridait jamais rien, quel que soit le niveau choisi
-dans les paramètres."""
+Original bug: `note_user_activity()` was called nowhere. `_last_activity`
+therefore stayed frozen at the module import time, `user_is_idle()` returned
+True permanently past IDLE_GRACE_SECONDS, and `effective_cpu_ratio()` was always
+1.0 -- the duty cycle never throttled anything, whatever the level chosen in the
+settings."""
 import pytest
 from PySide6.QtCore import QEvent, Qt
 from PySide6.QtGui import QKeyEvent
@@ -42,7 +42,7 @@ class _FakeMainWindow(QWidget):
 
 @pytest.fixture
 def noted(monkeypatch):
-    """Compte les appels à note_user_activity() sans toucher aux globales."""
+    """Counts the calls to note_user_activity() without touching the globals."""
     calls: list = []
     monkeypatch.setattr(
         main_window_module, "note_user_activity", lambda: calls.append(1),
@@ -77,8 +77,8 @@ class TestActivityEventFilter:
 
     @pytest.mark.parametrize("event_type", [
         QEvent.Type.Paint,
-        QEvent.Type.MouseMove,       # volontairement exclu : survol ≠ interaction,
-        QEvent.Type.Timer,           # et le filtre voit *tous* les événements
+        QEvent.Type.MouseMove,       # deliberately excluded: hovering != interacting,
+        QEvent.Type.Timer,           # and the filter sees *every* event
         QEvent.Type.UpdateRequest,
     ])
     def test_other_events_are_ignored(self, qtbot, noted, event_type):
@@ -90,8 +90,8 @@ class TestActivityEventFilter:
         assert noted == []
 
     def test_event_is_never_swallowed(self, qtbot, noted):
-        """Le filtre est posé sur l'application entière : renvoyer True
-        empêcherait l'événement d'atteindre le widget destinataire."""
+        """The filter is installed on the whole application: returning True would
+        prevent the event from reaching the target widget."""
         win = _FakeMainWindow()
         qtbot.addWidget(win)
 
@@ -99,8 +99,8 @@ class TestActivityEventFilter:
         assert win.eventFilter(win, QEvent(QEvent.Type.Paint)) is False
 
     def test_activity_from_another_object_counts(self, qtbot, noted):
-        """Dialogues modaux et visionneuse plein écran ne sont pas des enfants
-        de la fenêtre principale — leurs événements passent quand même ici."""
+        """Modal dialogs and the full-screen viewer are not children of the main
+        window -- their events pass through here all the same."""
         win = _FakeMainWindow()
         other = QWidget()
         qtbot.addWidget(win)
@@ -111,8 +111,8 @@ class TestActivityEventFilter:
         assert len(noted) == 1
 
     def test_lifts_the_permanent_idle_state(self, qtbot, monkeypatch):
-        """Le vrai note_user_activity() cette fois : sans le filtre, le bridage
-        est définitivement levé passé le délai de grâce."""
+        """The real note_user_activity() this time: without the filter, the
+        throttling is lifted for good once the grace delay has passed."""
         saved_ratio, saved_activity = cpu_throttle._ratio, cpu_throttle._last_activity
         try:
             cpu_throttle.set_background_cpu_level("low")
@@ -133,10 +133,10 @@ class TestActivityEventFilter:
 
 
 class TestBackgroundCpuLevelAtStartup:
-    """Appliqué au tout début de __init__, avant le démarrage du moindre thread :
-    sans ça, cpu_throttle lirait la configuration paresseusement au premier
-    throttle_tick(), donc depuis un thread de fond, instanciant Config() hors du
-    thread UI."""
+    """Applied at the very beginning of __init__, before the slightest thread
+    is started: without that, cpu_throttle would read the configuration lazily on
+    the first throttle_tick(), hence from a background thread, instantiating
+    Config() outside the UI thread."""
 
     @pytest.fixture(autouse=True)
     def _restore_ratio(self):

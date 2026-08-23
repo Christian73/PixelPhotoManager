@@ -1,15 +1,15 @@
 # Copyright 2026 Christian Guyot
 # SPDX-License-Identifier: Apache-2.0
-"""Régression : coalescence des rotations 90° successives pour la re-détection
-des visages (MainWindow._on_rotation_stepped / _drain_pending_reindex), testée
-en méthode non liée contre un objet minimal — comme test_main_window_tags.py.
+"""Regression: coalescing the successive 90-degree rotations for face
+re-detection (MainWindow._on_rotation_stepped / _drain_pending_reindex), tested
+as an unbound method against a minimal object -- like test_main_window_tags.py.
 
-Bug d'origine : une rotation demandée pendant qu'une re-détection tournait déjà
-était purement abandonnée. Deux clics rapides sur ↻ (la détection d'une photo
-24 Mpx prend plusieurs secondes) laissaient `indexed_photos.rotation` figé sur
-l'orientation *intermédiaire*, alors que la photo affichée était revenue à une
-autre : la détection ne retrouvait plus qu'une partie des visages (2 sur 8 dans
-le cas réel), et aucune action de l'UI ne permettait d'en sortir."""
+Original bug: a rotation requested while a re-detection was already running was
+simply dropped. Two quick clicks on the rotate button (detecting on a 24 Mpx
+photo takes several seconds) left `indexed_photos.rotation` frozen on the
+*intermediate* orientation, while the displayed photo had gone back to another
+one: the detection then only found part of the faces again (2 out of 8 in the
+real case), and no UI action allowed a way out."""
 import pytest
 from PySide6.QtWidgets import QWidget
 
@@ -68,8 +68,8 @@ class TestRotationCoalescing:
 
         win._on_rotation_stepped("C:/lib/a.jpg", 180)
 
-        assert win.started == []                                # rien relancé tout de suite
-        assert win._pending_reindex == ("C:/lib/a.jpg", 180)    # …mais pas perdu
+        assert win.started == []                                # nothing restarted straight away
+        assert win._pending_reindex == ("C:/lib/a.jpg", 180)    # …but not lost either
 
     def test_only_the_last_rotation_is_kept(self, qtbot):
         win = _FakeMainWindow(running_thread=True)
@@ -94,9 +94,9 @@ class TestRotationCoalescing:
         assert win._pending_reindex is None
 
     def test_drain_retries_while_thread_still_running(self, qtbot, monkeypatch):
-        """`finished` est émis depuis run(), donc avant l'arrêt réel du QThread :
-        le drain doit réessayer plus tard plutôt que deleteLater() un thread vivant
-        (fail-fast Qt 0xC0000409)."""
+        """`finished` is emitted from run(), hence before the QThread really
+        stops: the drain must retry later rather than deleteLater() a live
+        thread (Qt fail-fast 0xC0000409)."""
         scheduled: list = []
 
         class _FakeQTimer:
@@ -113,10 +113,10 @@ class TestRotationCoalescing:
         win._drain_pending_reindex()
 
         assert win.started == []
-        assert win._pending_reindex == ("C:/lib/a.jpg", 0)   # toujours en attente
+        assert win._pending_reindex == ("C:/lib/a.jpg", 0)   # still pending
         assert len(scheduled) == 1 and scheduled[0][0] == 50
 
-        # Le thread s'arrête : le rappel programmé relance bien la rotation.
+        # The thread stops: the scheduled callback does restart the rotation.
         win._reindex_thread._running = False
         scheduled[0][1]()
         assert win.started == [("C:/lib/a.jpg", 0)]
@@ -140,8 +140,8 @@ class TestRotationCoalescing:
 
 
 class TestReindexFinishedDrains:
-    """`_on_single_reindex_finished` doit vider la file d'attente — sans ça la
-    rotation mémorisée ne serait jamais relancée."""
+    """`_on_single_reindex_finished` must drain the queue -- without that the
+    memorised rotation would never be restarted."""
 
     def test_finished_calls_drain(self, qtbot):
         class _Host(QWidget):

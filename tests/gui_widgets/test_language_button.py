@@ -1,16 +1,16 @@
 # Copyright 2026 Christian Guyot
 # SPDX-License-Identifier: Apache-2.0
-"""Tests (Layer 2) du sélecteur de langue de la barre du haut.
+"""Tests (Layer 2) of the language selector of the top bar.
 
-Deux choses seulement méritent d'être verrouillées ici, et ce sont les deux qui
-cassent en silence :
+Only two things deserve to be locked down here, and they are the two that break
+silently:
 
-- **le drapeau se voit** — il est dessiné par code, donc rien n'échoue si le
-  tracé produit un carré uniforme ; le test mesure les couleurs réellement
-  rendues, comme `test_theme.py` mesure le contraste d'un indicateur ;
-- **le clic écrit `ui.language`** — le bouton et Paramètres › Langue sont deux
-  points d'entrée sur la même clé de config, et un `QMessageBox` s'ouvre au
-  passage (neutralisé ici).
+- **the flag can be seen** -- it is drawn by code, so nothing fails if the
+  drawing produces a uniform square; the test measures the colours really
+  rendered, the way `test_theme.py` measures the contrast of an indicator;
+- **the click writes `ui.language`** -- the button and Settings › Language are
+  two entry points on the same config key, and a `QMessageBox` opens along the
+  way (neutralised here).
 """
 import pytest
 
@@ -33,11 +33,11 @@ def config(tmp_path, monkeypatch):
 
 @pytest.fixture(autouse=True)
 def _silence_messagebox(monkeypatch):
-    """`_select()` informe du redémarrage — sans cela le test bloque dessus.
+    """`_select()` announces the restart -- without this the test blocks on it.
 
-    Substitution dans l'espace de noms du module, et non `setattr` sur la
-    classe : un `setattr` direct sur une classe Shiboken n'intercepte pas
-    l'appel natif (même raison que `captured_menus` dans
+    Substitution in the namespace of the module, and not `setattr` on the
+    class: a direct `setattr` on a Shiboken class does not intercept the
+    native call (the same reason as `captured_menus` in
     `test_album_mode_no_delete.py`)."""
     class _MuteMessageBox:
         @staticmethod
@@ -48,7 +48,7 @@ def _silence_messagebox(monkeypatch):
 
 
 def _colors(code):
-    """Couleurs distinctes présentes dans la vignette (fond transparent exclu)."""
+    """Distinct colours present in the thumbnail (transparent background excluded)."""
     img = flag_pixmap(code).toImage()
     return {
         img.pixel(x, y) & 0xFFFFFF
@@ -60,8 +60,8 @@ def _colors(code):
 class TestFlagIcons:
     @pytest.mark.parametrize("code", ["en", "fr", "de"])
     def test_flag_is_drawn_and_not_a_flat_square(self, qapp, code):
-        # Un tracé raté (mauvais ordre de peinture, brosse oubliée) donne un
-        # aplat : c'est le seul échec possible, il ne lève aucune exception.
+        # A failed drawing (wrong painting order, forgotten brush) gives a flat
+        # fill: that is the only possible failure, and it raises no exception.
         assert len(_colors(code)) > 3
 
     def test_each_language_has_its_own_flag(self, qapp):
@@ -86,8 +86,8 @@ class TestLanguageButton:
         assert not btn.icon().isNull()
 
     def test_selection_persists_the_language(self, qtbot, config):
-        # Langue de départ posée explicitement : un test qui s'appuie sur le
-        # défaut de `Config` teste ce défaut autant que le bouton.
+        # Starting language set explicitly: a test relying on the default of
+        # `Config` tests that default as much as the button.
         config.set(i18n.CONFIG_KEY, "en")
         btn = LanguageButton(config)
         qtbot.addWidget(btn)
@@ -106,18 +106,19 @@ class TestLanguageButton:
             btn._select("fr")
 
     def test_tooltip_announces_the_pending_restart(self, qtbot, config):
-        """Le drapeau change tout de suite, l'interface non : l'infobulle est le
-        seul endroit qui porte encore l'information une fois le message fermé."""
-        config.set(i18n.CONFIG_KEY, i18n.active_language())   # "en" hors catalogue
+        """The flag changes straight away, the interface does not: the tooltip is
+        the only place that still carries the information once the message is
+        closed."""
+        config.set(i18n.CONFIG_KEY, i18n.active_language())   # "en" outside the catalog
         btn = LanguageButton(config)
         qtbot.addWidget(btn)
         before = btn.toolTip()
         btn._select("de")
 
         assert "Deutsch" in btn.toolTip()
-        # Le nom du produit n'apparaît que dans la variante « au prochain
-        # démarrage » : comparer les longueurs ne dirait rien, « Français » est
-        # plus long que « Deutsch ».
+        # The product name only appears in the "on the next start" variant:
+        # comparing the lengths would say nothing, "Français" is longer than
+        # "Deutsch".
         assert "PixelPhotoManager" not in before
         assert "PixelPhotoManager" in btn.toolTip()
 
