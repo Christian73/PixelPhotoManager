@@ -1,9 +1,9 @@
 # Copyright 2026 Christian Guyot
 # SPDX-License-Identifier: Apache-2.0
-"""Tests (Layer 2) pour Sidebar — filtre live, arbre de dossiers lazy +
-mémorisation d'expansion, albums spéciaux, liste de personnes (cache d'icônes,
-fusion, suppression), badges, drop de photos et opérations de dossier avec
-dialogues monkeypatchés. Complète test_sidebar_icon_cache /
+"""Tests (Layer 2) for Sidebar - live filter, lazy folder tree +
+memorisation of expansion, special albums, list of people (icon cache,
+merge, deletion), badges, drop of photos and folder operations with
+monkeypatched dialogs. Complements test_sidebar_icon_cache /
 test_sidebar_folder_counts / test_sidebar_dvd_badge."""
 import os
 
@@ -34,7 +34,7 @@ def _person(pid, name, count=2, cover=None, bbox=None) -> PersonInfo:
 
 
 def _make_tree(tmp_path, spec: dict) -> str:
-    """Crée une arborescence {nom: sous-dict} sous tmp_path, renvoie la racine."""
+    """Creates a tree {name: sub-dict} under tmp_path, returns the root."""
     root = tmp_path / "racine"
     root.mkdir()
 
@@ -49,7 +49,7 @@ def _make_tree(tmp_path, spec: dict) -> str:
 
 
 # ---------------------------------------------------------------------------
-# tri et arbre de dossiers
+# sorting and folder tree
 
 class TestFolderTreeBasics:
     def test_sort_alpha_and_chrono(self, sidebar, tmp_path):
@@ -79,7 +79,7 @@ class TestFolderTreeBasics:
         assert tree.topLevelItemCount() == 1
         item = tree.topLevelItem(0)
         assert item.data(0, Qt.UserRole) == root
-        # Placeholder lazy : un enfant sans donnée
+        # Lazy placeholder: a child with no data
         assert item.childCount() == 1
         assert item.child(0).data(0, Qt.UserRole) is None
 
@@ -89,7 +89,7 @@ class TestFolderTreeBasics:
         item = sidebar._folder_tree.topLevelItem(0)
 
         with qtbot.waitSignal(sidebar.tree_state_changed, timeout=1000) as blocker:
-            item.setExpanded(True)   # déclenche _on_folder_expanded
+            item.setExpanded(True)   # triggers _on_folder_expanded
 
         names = [item.child(i).text(0) for i in range(item.childCount())]
         assert names == ["sub1", "sub2"]
@@ -120,7 +120,7 @@ class TestFolderTreeBasics:
         assert item.isExpanded()
         sub1 = item.child(0)
         assert sub1.isExpanded()
-        # _restoring : rien n'a été réémis ni ajouté
+        # _restoring: nothing was re-emitted nor added
         assert sidebar._expanded_paths == {deep}
 
     def test_folder_clicked_emits_path(self, sidebar, tmp_path, qtbot):
@@ -153,7 +153,7 @@ class TestFolderTreeBasics:
                              lambda it, hint: calls.append((it, hint)))
 
         sidebar.select_folder_item(root)
-        qtbot.wait(20)   # singleShot(0) du centrage différé
+        qtbot.wait(20)   # singleShot(0) of the deferred centring
 
         assert calls == [(item, QAbstractItemView.PositionAtCenter)]
 
@@ -209,7 +209,7 @@ class TestFolderDrop:
 
 
 # ---------------------------------------------------------------------------
-# filtre
+# filter
 
 class TestFilter:
     def test_filter_hides_non_matching_folders_and_persons(self, sidebar, tmp_path):
@@ -243,10 +243,10 @@ class TestFilter:
 # albums
 
 class TestAlbums:
-    # Disposition par défaut (rien de replié, aucun mot-clé/album) : 0 Chronologie,
-    # 1 Favoris, 2 Vidéos, 3 en-tête "By rating", 4-8 les 5 niveaux d'étoiles
-    # (5 à 1), 9 "Par nom de fichier", 10 en-tête "By keyword" — soit 11 éléments
-    # spéciaux au total avant les mots-clés/albums.
+    # Default layout (nothing collapsed, no keyword/album): 0 Chronologie,
+    # 1 Favoris, 2 Videos, 3 "By rating" header, 4-8 the 5 star levels
+    # (5 down to 1), 9 "Par nom de fichier", 10 "By keyword" header - that is 11 special
+    # items in total before the keywords/albums.
 
     def test_special_albums_present(self, sidebar):
         keys = [sidebar._albums_list.item(i).data(Qt.UserRole) for i in range(11)]
@@ -259,7 +259,7 @@ class TestAlbums:
     def test_refresh_albums_keeps_specials(self, sidebar):
         albums = [AlbumInfo(name="Été", id=1, photo_count=12)]
         sidebar.refresh_albums(albums)
-        sidebar.refresh_albums(albums)   # idempotent : pas de doublon
+        sidebar.refresh_albums(albums)   # idempotent: no duplicate
 
         assert sidebar._albums_list.count() == 12
         assert "Été (12)" in sidebar._albums_list.item(11).text()
@@ -282,8 +282,8 @@ class TestAlbums:
         sidebar.refresh_albums([album])
         assert sidebar._albums_list.item(13).data(Qt.UserRole) is album
 
-        # Un second refresh_tags avec une liste différente remplace les anciens
-        # sous-éléments sans laisser de doublon ni déplacer les albums.
+        # A second refresh_tags with a different list replaces the old
+        # sub-items without leaving a duplicate nor moving the albums.
         sidebar.refresh_tags(["voyage"])
         assert sidebar._albums_list.item(11).data(Qt.UserRole) == _SPECIAL_TAG_ITEM_PREFIX + "voyage"
         assert sidebar._albums_list.item(12).data(Qt.UserRole) is album
@@ -299,27 +299,27 @@ class TestAlbums:
 
     def test_tag_header_click_toggles_collapse(self, sidebar):
         sidebar.refresh_tags(["travail", "vacances"])
-        assert sidebar._albums_list.count() == 13  # 11 spéciaux (dont 5 notes) + 2 mots-clés
+        assert sidebar._albums_list.count() == 13  # 11 special (including 5 ratings) + 2 keywords
         assert sidebar._albums_list.item(10).text().startswith("▾")
 
         sidebar._on_album_clicked(sidebar._albums_list.item(10))
-        assert sidebar._albums_list.count() == 11  # sous-éléments masqués
+        assert sidebar._albums_list.count() == 11  # sub-items hidden
         assert sidebar._albums_list.item(10).text().startswith("▸")
 
         sidebar._on_album_clicked(sidebar._albums_list.item(10))
-        assert sidebar._albums_list.count() == 13  # redéplié
+        assert sidebar._albums_list.count() == 13  # expanded again
         assert sidebar._albums_list.item(10).text().startswith("▾")
         assert sidebar._albums_list.item(11).data(Qt.UserRole) == _SPECIAL_TAG_ITEM_PREFIX + "travail"
 
     def test_collapsed_tags_stay_hidden_across_refresh_tags(self, sidebar):
         sidebar.refresh_tags(["travail"])
-        sidebar._on_album_clicked(sidebar._albums_list.item(10))  # replie
+        sidebar._on_album_clicked(sidebar._albums_list.item(10))  # collapses
         assert sidebar._albums_list.count() == 11
 
         sidebar.refresh_tags(["voyage", "été"])
-        assert sidebar._albums_list.count() == 11  # toujours replié, pas de sous-éléments insérés
+        assert sidebar._albums_list.count() == 11  # still collapsed, no sub-item inserted
 
-        sidebar._on_album_clicked(sidebar._albums_list.item(10))  # déplie
+        sidebar._on_album_clicked(sidebar._albums_list.item(10))  # expands
         assert sidebar._albums_list.count() == 13
         assert sidebar._albums_list.item(11).data(Qt.UserRole) == _SPECIAL_TAG_ITEM_PREFIX + "voyage"
 
@@ -330,7 +330,7 @@ class TestAlbums:
 
     def test_rated_item_clicked_emits_prefixed_data(self, sidebar, qtbot):
         with qtbot.waitSignal(sidebar.album_selected, timeout=1000) as blocker:
-            sidebar._on_album_clicked(sidebar._albums_list.item(6))  # 3e niveau : "3 étoiles ou plus"
+            sidebar._on_album_clicked(sidebar._albums_list.item(6))  # 3rd level: "3 stars or more"
 
         assert blocker.args[0] == _SPECIAL_RATED_ITEM_PREFIX + "3"
 
@@ -338,13 +338,13 @@ class TestAlbums:
         assert sidebar._albums_list.count() == 11
 
         sidebar._on_album_clicked(sidebar._albums_list.item(3))
-        assert sidebar._albums_list.count() == 6  # 5 niveaux masqués
+        assert sidebar._albums_list.count() == 6  # 5 levels hidden
         assert sidebar._albums_list.item(3).text().startswith("▸")
         assert sidebar._albums_list.item(4).data(Qt.UserRole) == _SPECIAL_FILENAME
         assert sidebar._albums_list.item(5).data(Qt.UserRole) == _SPECIAL_TAG
 
         sidebar._on_album_clicked(sidebar._albums_list.item(3))
-        assert sidebar._albums_list.count() == 11  # redéplié
+        assert sidebar._albums_list.count() == 11  # expanded again
         assert sidebar._albums_list.item(3).text().startswith("▾")
         assert sidebar._albums_list.item(4).data(Qt.UserRole) == _SPECIAL_RATED_ITEM_PREFIX + "5"
 
@@ -354,7 +354,7 @@ class TestAlbums:
         assert blocker.args[0] == _SPECIAL_RATED
 
     def test_tag_insertion_index_follows_collapsed_ratings(self, sidebar):
-        sidebar._on_album_clicked(sidebar._albums_list.item(3))  # replie les notes
+        sidebar._on_album_clicked(sidebar._albums_list.item(3))  # collapses the ratings
         sidebar.refresh_tags(["travail"])
 
         assert sidebar._albums_list.item(5).data(Qt.UserRole) == _SPECIAL_TAG
@@ -378,9 +378,9 @@ class TestAlbums:
         sidebar.set_section_collapsed_state(ratings_collapsed=True, tags_collapsed=True)
         sidebar.refresh_tags(["travail"])
 
-        # notes ET mots-clés repliés dès la construction : plus de sous-éléments
-        # (0 Chronologie, 1 Favoris, 2 Vidéos, 3 "By rating", 4 "Par nom de
-        # fichier", 5 "Par mot-clé" — sans les 5 niveaux ni le mot-clé "travail")
+        # ratings AND keywords collapsed from construction on: no more sub-items
+        # (0 Chronologie, 1 Favoris, 2 Videos, 3 "By rating", 4 "Par nom de
+        # fichier", 5 "Par mot-cle" - without the 5 levels nor the "travail" keyword)
         assert sidebar._albums_list.count() == 6
         assert sidebar._albums_list.item(3).text().startswith("▸")
         assert sidebar._albums_list.item(5).data(Qt.UserRole) == _SPECIAL_TAG
@@ -393,17 +393,17 @@ class TestAlbums:
             raise AssertionError("aucun menu ne devrait s'ouvrir sur un niveau de notation")
         monkeypatch.setattr(sidebar_module, "QMenu", _boom)
 
-        for i in range(3, 9):  # en-tête "By rating" + ses 5 sous-éléments
+        for i in range(3, 9):  # "By rating" header + its 5 sub-items
             pos = sidebar._albums_list.visualItemRect(sidebar._albums_list.item(i)).center()
-            sidebar._album_context_menu(pos)  # ne doit pas lever
+            sidebar._album_context_menu(pos)  # must not raise
 
     def test_tag_context_menu_emits_delete_requested(self, sidebar, monkeypatch, qtbot):
-        # QMenu.exec() ouvre une vraie boucle modale bloquante que PySide6
-        # n'expose pas comme un slot Python remplaçable (contrairement à
-        # QMessageBox.exec, réimplémenté côté PySide6 — cf. test_delete_folder_*) :
-        # monkeypatcher QMenu.exec directement ne fonctionne pas (le call C++
-        # d'origine reste résolu). On remplace donc la classe QMenu du module
-        # sidebar par un doublon qui capture l'action sans jamais bloquer.
+        # QMenu.exec() opens a real blocking modal loop that PySide6
+        # does not expose as a replaceable Python slot (unlike
+        # QMessageBox.exec, reimplemented on the PySide6 side - cf. test_delete_folder_*):
+        # monkeypatching QMenu.exec directly does not work (the original C++
+        # call stays resolved). So we replace the QMenu class of the sidebar
+        # module with a stand-in that captures the action without ever blocking.
         import src.ui.sidebar as sidebar_module
         captured: dict[str, object] = {}
 
@@ -441,7 +441,7 @@ class TestAlbums:
         monkeypatch.setattr(sidebar_module, "QMenu", _boom)
 
         pos = sidebar._albums_list.visualItemRect(sidebar._albums_list.item(0)).center()
-        sidebar._album_context_menu(pos)  # ne doit pas lever
+        sidebar._album_context_menu(pos)  # must not raise
 
     def test_select_album_item_silently(self, sidebar):
         album = AlbumInfo(name="Été", id=1)
@@ -458,7 +458,7 @@ class TestAlbums:
 
 
 # ---------------------------------------------------------------------------
-# personnes
+# people
 
 class TestPersons:
     def test_refresh_persons_without_covers_emits_ready(self, sidebar, qtbot):
@@ -476,7 +476,7 @@ class TestPersons:
             sidebar._on_person_clicked(sidebar._persons_list.item(0))
 
         assert blocker.args[0].id == 1
-        assert sidebar.get_selected_person_id() is None   # clic ≠ sélection courante
+        assert sidebar.get_selected_person_id() is None   # click != current selection
 
     def test_selection_restored_after_rebuild(self, sidebar, qtbot):
         persons = [_person(1, "Alice"), _person(2, "Boris")]
@@ -492,9 +492,9 @@ class TestPersons:
         sidebar.refresh_persons([_person(1, "Alice"), _person(2, "Boris")])
         sidebar._persons_list.setCurrentRow(1)   # Boris
 
-        sidebar.refresh_persons([_person(1, "Alice")])   # Boris fusionné/supprimé
+        sidebar.refresh_persons([_person(1, "Alice")])   # Boris merged/deleted
 
-        assert sidebar.get_selected_person_id() == 1     # voisin le plus proche
+        assert sidebar.get_selected_person_id() == 1     # closest neighbour
 
     def test_pending_person_selected_and_consumed(self, sidebar):
         sidebar.set_pending_person_id(2)
@@ -517,7 +517,7 @@ class TestPersons:
         with qtbot.waitSignal(sidebar.persons_thumbnails_ready, timeout=1000):
             sidebar.refresh_persons([alice])
 
-        # Icône posée depuis le cache (aucun loader démarré) + purge orpheline
+        # Icon laid down from the cache (no loader started) + orphan purge
         assert not sidebar._persons_list.item(0).icon().isNull()
         assert sidebar._face_loader is None
         assert list(sidebar._icon_bytes_cache.keys()) == [key]
@@ -551,7 +551,7 @@ class TestPersons:
         photo = str(tmp_path / "c.jpg")
         Image.new("RGB", (120, 120), color=(50, 60, 70)).save(photo)
         alice = _person(1, "Alice", cover=photo, bbox=(10, 10, 50, 50))
-        # refresh_persons démarre un vrai loader — attendre sa fin (plomberie réelle)
+        # refresh_persons starts a real loader - wait for its end (real plumbing)
         with qtbot.waitSignal(sidebar.persons_thumbnails_ready, timeout=3000):
             sidebar.refresh_persons([alice])
 
@@ -575,7 +575,7 @@ class TestPersons:
 
     def test_apply_person_merge(self, sidebar):
         sidebar.refresh_persons([_person(1, "Alice", 3), _person(2, "Boris", 2)])
-        # Sélectionner la source pour vérifier le report de sélection sur la cible
+        # Select the source to check that the selection is carried over to the target
         sidebar._persons_list.setCurrentRow(1)
 
         sidebar.apply_person_merge(source_id=2, target_id=1, new_count=5)
@@ -602,16 +602,16 @@ class TestPersons:
 
 
 # ---------------------------------------------------------------------------
-# splitter et opérations de dossier
+# splitter and folder operations
 
 class TestSplitterAndFolderOps:
     def test_splitter_state_roundtrip(self, sidebar, qtbot):
         state = sidebar.save_splitter_state()
         assert state
 
-        sidebar.restore_splitter_state(state)   # ne doit pas lever
-        sidebar.restore_splitter_state("")      # état vide toléré
-        qtbot.wait(20)   # singleShot(0) de _update_section_arrows
+        sidebar.restore_splitter_state(state)   # must not raise
+        sidebar.restore_splitter_state("")      # empty state tolerated
+        qtbot.wait(20)   # singleShot(0) of _update_section_arrows
 
     def test_create_subfolder(self, sidebar, tmp_path, qtbot, monkeypatch):
         parent = tmp_path / "parent"; parent.mkdir()
@@ -647,19 +647,19 @@ class TestSplitterAndFolderOps:
         assert (tmp_path / "nouveau").is_dir()
 
     def _fake_trash(self, monkeypatch):
-        """Simule la corbeille (un vrai send2trash polluerait celle de
-        l'utilisateur) et interdit tout shutil.rmtree direct dans sidebar."""
+        """Simulates the recycle bin (a real send2trash would pollute that of
+        the user) and forbids any direct shutil.rmtree in sidebar."""
         import shutil
         import src.library.trash as trash_module
         calls = []
-        real_rmtree = shutil.rmtree   # capturé AVANT le patch global du module
+        real_rmtree = shutil.rmtree   # captured BEFORE the global patch of the module
 
         def _fake(path):
             calls.append(os.path.normpath(path))
             real_rmtree(path)
 
         monkeypatch.setattr(trash_module, "move_to_trash", _fake)
-        # shutil est un module partagé : ce patch couvre aussi sidebar.shutil
+        # shutil is a shared module: this patch also covers sidebar.shutil
         monkeypatch.setattr(
             shutil, "rmtree",
             lambda *a, **k: pytest.fail("shutil.rmtree appelé au lieu de la corbeille"),
@@ -674,7 +674,7 @@ class TestSplitterAndFolderOps:
         calls = self._fake_trash(monkeypatch)
         monkeypatch.setattr(QMessageBox, "exec", lambda self: QMessageBox.Yes)
 
-        # La mise à la corbeille part dans un _FolderTrashThread réel
+        # Moving to the recycle bin goes into a real _FolderTrashThread
         with qtbot.waitSignal(sidebar.folder_deleted, timeout=3000) as blocker:
             sidebar._delete_folder(str(doomed))
 
@@ -696,8 +696,8 @@ class TestSplitterAndFolderOps:
     def test_delete_folder_trash_failure_keeps_folder(
         self, sidebar, tmp_path, qtbot, monkeypatch
     ):
-        """Corbeille indisponible → message d'erreur explicite, dossier intact,
-        folder_deleted jamais émis."""
+        """Recycle bin unavailable -> explicit error message, folder untouched,
+        folder_deleted never emitted."""
         import src.library.trash as trash_module
         doomed = tmp_path / "réseau"; doomed.mkdir()
         monkeypatch.setattr(QMessageBox, "exec", lambda self: QMessageBox.Yes)

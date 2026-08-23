@@ -1,10 +1,10 @@
 # Copyright 2026 Christian Guyot
 # SPDX-License-Identifier: Apache-2.0
-"""Teste le vrai algorithme de détection de doublons (Tier 1 pHash + Tier 2
-ORB/RANSAC) en appelant `_detect()` directement, sans passer par `.start()`
-(pas de vrai thread ni de bus d'événements ici — voir
-test_signal_object_cross_thread.py pour la régression spécifique au
-franchissement du QThread)."""
+"""Tests the real duplicate detection algorithm (Tier 1 pHash + Tier 2
+ORB/RANSAC) by calling `_detect()` directly, without going through `.start()`
+(no real thread and no event bus here - see
+test_signal_object_cross_thread.py for the regression specific to
+crossing the QThread)."""
 import os
 from pathlib import Path
 
@@ -17,13 +17,13 @@ from tools.test_env.generate_library import build_library
 class TestDetectRealLibrary:
     def _run(self, tmp_path, cache_db_path=None):
         manifest = build_library(tmp_path / "lib")
-        # str, pas Path : c'est ce que le catalogue fournit en usage réel, et
-        # _load_gray() (Tier 2) échoue silencieusement sur un objet Path
-        # (`path.encode("ascii")` n'existe pas sur Path, capturé par un except
-        # Exception large -> image traitée comme illisible).
-        # cache_db_path pointe par défaut vers un fichier isolé dans tmp_path :
-        # sans ça, ces tests toucheraient le vrai dedup_cache.db de la machine
-        # (état partagé non-hermétique entre runs de pytest).
+        # str, not Path: that is what the catalog provides in real use, and
+        # _load_gray() (Tier 2) fails silently on a Path object
+        # (`path.encode("ascii")` does not exist on Path, caught by a broad except
+        # Exception -> image treated as unreadable).
+        # cache_db_path points by default at an isolated file in tmp_path:
+        # without that, these tests would touch the real dedup_cache.db of the machine
+        # (non-hermetic shared state between pytest runs).
         thread = DuplicateDetectorThread(
             [str(p) for p in manifest.images],
             cache_db_path=cache_db_path or str(tmp_path / "dedup_cache.db"),
@@ -51,8 +51,8 @@ class TestDetectRealLibrary:
         assert members_by_path[a] == members_by_path[b]
 
     def test_crop_duplicate_pair_grouped_by_tier2(self, tmp_path):
-        """La paire recadrée ne doit PAS matcher au Tier 1 (pHash) — c'est le
-        Tier 2 (ORB/RANSAC) qui doit la grouper. Preuve que Tier 2 tourne bien."""
+        """The cropped pair must NOT match at Tier 1 (pHash) - it is
+        Tier 2 (ORB/RANSAC) that must group it. Proof that Tier 2 really runs."""
         manifest, groups = self._run(tmp_path)
         a, b = (str(p) for p in manifest.crop_duplicate_pair)
         members_by_path = {p: gid for gid, members in groups.items() for p in members}
@@ -60,11 +60,11 @@ class TestDetectRealLibrary:
         assert members_by_path[a] == members_by_path[b]
 
     def test_burst_pair_not_grouped_despite_shared_background(self, tmp_path):
-        """Même arrière-plan texturé partagé, sujet de premier plan différent
-        (simule une rafale) : l'arrière-plan seul fournit assez d'inliers
-        RANSAC pour dépasser _ORB_MIN_INLIERS, mais les photos ne se
-        ressemblent pas réellement une fois recalées — ne doit pas être
-        groupée (cf. _ORB_MAX_MEAN_DIFF)."""
+        """Same shared textured background, different foreground subject
+        (simulates a burst): the background alone provides enough RANSAC
+        inliers to go beyond _ORB_MIN_INLIERS, but the photos do not
+        really look alike once realigned - must not be
+        grouped (cf. _ORB_MAX_MEAN_DIFF)."""
         manifest, groups = self._run(tmp_path)
         a, b = (str(p) for p in manifest.burst_pair)
         members_by_path = {p: gid for gid, members in groups.items() for p in members}
@@ -72,9 +72,9 @@ class TestDetectRealLibrary:
                     and members_by_path[a] == members_by_path[b])
 
     def test_edited_duplicate_pair_still_grouped(self, tmp_path):
-        """Retouche luminosité+contraste légitime : garde anti-régression
-        pour la vérification post-hash du Tier 1 (cf. _HASH_PIXEL_MAX_DIFF) —
-        doit rester groupée malgré le nouveau filtre pixel."""
+        """Legitimate brightness+contrast retouch: anti-regression guard
+        for the post-hash check of Tier 1 (cf. _HASH_PIXEL_MAX_DIFF) -
+        must stay grouped despite the new pixel filter."""
         manifest, groups = self._run(tmp_path)
         a, b = (str(p) for p in manifest.edited_duplicate_pair)
         members_by_path = {p: gid for gid, members in groups.items() for p in members}
@@ -93,13 +93,13 @@ class TestDetectRealLibrary:
         assert str(manifest.corrupted_file) not in members_by_path
 
     def test_corrupted_file_persisted_to_cache_db(self, tmp_path):
-        """Complète TestCorruptedFilesPersistence (test_dedup_cache.py, qui
-        teste DedupCache en isolation) : vérifie qu'un vrai passage de
-        _detect() persiste bien self._corrupted dans corrupted_files (finally
-        de _detect(), cf. duplicate_detector.py), pas seulement en mémoire.
-        manifest.corrupted_file n'est volontairement pas dans manifest.images
-        (cf. generate_library.py) : il faut l'ajouter explicitement aux
-        chemins scannés, comme test_corrupted_file_rediscovered_after_repair."""
+        """Complements TestCorruptedFilesPersistence (test_dedup_cache.py, which
+        tests DedupCache in isolation): checks that a real run of
+        _detect() really persists self._corrupted into corrupted_files (finally
+        of _detect(), cf. duplicate_detector.py), not only in memory.
+        manifest.corrupted_file is deliberately not in manifest.images
+        (cf. generate_library.py): it must be added explicitly to the
+        scanned paths, like test_corrupted_file_rediscovered_after_repair."""
         from src.library.dedup_cache import DedupCache
 
         manifest = build_library(tmp_path / "lib")
@@ -127,14 +127,14 @@ class TestDetectRealLibrary:
         assert received["groups"] == {}
 
     def test_file_disappearing_after_prefilter_does_not_crash(self, tmp_path, monkeypatch):
-        """Simule la disparition d'un fichier entre le pré-filtre os.path.isfile()
-        et l'ouverture réelle (PIL) dans _compute_fingerprint — le cas exact
-        rapporté par l'utilisateur ("un fichier que je supprime se retrouve
-        dans la liste des fichiers corrompus"). Image.open() échoue de la
-        même façon (FileNotFoundError) pour un fichier disparu que pour un
-        fichier réellement corrompu : le garde-fou re-vérifie os.path.exists()
-        avant de classer corrompu, donc un fichier disparu est simplement
-        ignoré, jamais proposé à la réparation/suppression pour rien."""
+        """Simulates the disappearance of a file between the os.path.isfile()
+        pre-filter and the real opening (PIL) in _compute_fingerprint - the exact case
+        reported by the user ("a file I delete ends up
+        in the list of corrupted files"). Image.open() fails the
+        same way (FileNotFoundError) for a file gone as for a
+        really corrupted file: the guard re-checks os.path.exists()
+        before classifying as corrupted, so a file gone is simply
+        ignored, never offered for repair/deletion for nothing."""
         manifest = build_library(tmp_path / "lib")
         paths = [str(p) for p in manifest.images]
         vanishing = paths[0]
@@ -148,14 +148,14 @@ class TestDetectRealLibrary:
 
         monkeypatch.setattr(dd.os.path, "isfile", _lying_isfile)
 
-        # cache_db_path isolé : sans ça, _detect() écrirait dans le vrai
-        # dedup_cache.db de la machine (et, depuis la persistance de
-        # corrupted_files, en écraserait intégralement le contenu réel —
+        # isolated cache_db_path: without that, _detect() would write into the real
+        # dedup_cache.db of the machine (and, since the persistence of
+        # corrupted_files, would overwrite its real content entirely -
         # cf. DedupCache.replace_corrupted_paths).
         thread = DuplicateDetectorThread(paths, cache_db_path=str(tmp_path / "dedup_cache.db"))
         received = {}
         thread.finished.connect(lambda groups: received.update(groups=groups))
-        thread._detect()  # ne doit pas lever d'exception
+        thread._detect()  # must not raise an exception
 
         assert "groups" in received
         assert vanishing not in thread.corrupted_paths
@@ -183,10 +183,10 @@ class TestDatesDiffer:
 
 
 class TestDuplicateExifDateExclusion:
-    """Vérifie la règle explicite de l'utilisateur : deux photos dont les
-    dates EXIF sont toutes deux connues et différentes ne doivent jamais
-    être groupées comme doublons, même si pHash/ORB les jugent identiques
-    (cas d'une rafale : contenu quasi-identique, instants différents)."""
+    """Checks the explicit rule of the user: two photos whose
+    EXIF dates are both known and different must never
+    be grouped as duplicates, even if pHash/ORB judge them identical
+    (the case of a burst: near-identical content, different instants)."""
 
     def _run(self, tmp_path, dates=None):
         manifest = build_library(tmp_path / "lib")
@@ -235,8 +235,8 @@ class TestDuplicateExifDateExclusion:
         assert members_by_path[a] == members_by_path[b]
 
     def test_tier1_pair_still_grouped_when_dates_unknown(self, tmp_path):
-        """Absence de dates (dates=None) : comportement inchangé par rapport
-        à avant l'ajout de cette règle."""
+        """Absence of dates (dates=None): behaviour unchanged compared
+        to before this rule was added."""
         manifest, groups = self._run(tmp_path, dates=None)
         a, b = (str(p) for p in manifest.exact_duplicate_pair)
         members_by_path = {p: gid for gid, members in groups.items() for p in members}
@@ -262,13 +262,13 @@ class TestDuplicateExifDateExclusion:
 
 class TestLoadGrayTiffBypassesCv2:
     def test_tiff_never_reaches_cv2_imread(self, tmp_path, monkeypatch):
-        """Certains TIFF réels (tags de métadonnées exotiques) déclenchent un
-        bug connu du décodeur libtiff d'OpenCV pouvant aller jusqu'à un
-        abort() du process, non rattrapable par try/except (cf. rapport
-        utilisateur : assertion "original_ptr == real_mat.data" dans
-        loadsave.cpp). _load_gray doit donc ne jamais appeler cv2.imread pour
-        un .tif/.tiff, quel que soit le chemin — vérifié ici en faisant
-        échouer cv2.imread s'il est appelé."""
+        """Some real TIFFs (exotic metadata tags) trigger a
+        known bug of the libtiff decoder of OpenCV that can go as far as an
+        abort() of the process, not catchable by try/except (cf. user
+        report: assertion "original_ptr == real_mat.data" in
+        loadsave.cpp). _load_gray must therefore never call cv2.imread for
+        a .tif/.tiff, whatever the path - checked here by making
+        cv2.imread fail if it is called."""
         import cv2
         from PIL import Image
 
@@ -286,11 +286,11 @@ class TestLoadGrayTiffBypassesCv2:
 
 
 class TestRawFilesNeverFlaggedCorrupted:
-    """Un .cr2 (ni PIL ni cv2.imread ne peuvent le décoder sans rawpy — non
-    monkeypatché ici) doit être exclu du prélèvement de _detect() comme les
-    vidéos (_VIDEO_EXT), pas classé « corrompu » et proposé à la suppression.
-    Style test_tiff_never_reaches_cv2_imread : contenu délibérément non
-    décodable, pour vérifier l'exclusion en amont plutôt que le décodage."""
+    """A .cr2 (neither PIL nor cv2.imread can decode it without rawpy - not
+    monkeypatched here) must be excluded from the sampling of _detect() like the
+    videos (_VIDEO_EXT), not classified "corrupted" and offered for deletion.
+    In the style of test_tiff_never_reaches_cv2_imread: deliberately undecodable
+    content, to check the exclusion upstream rather than the decoding."""
 
     def test_raw_file_excluded_from_corrupted_and_from_groups(self, tmp_path):
         from tools.test_env.generate_library import build_library
@@ -346,18 +346,18 @@ class TestMergeUnionFind:
 
 
 def _grouping_as_sets(groups: dict) -> set:
-    """Les identifiants numériques de groupe dépendent de l'ordre d'arrivée
-    des futures dans le ThreadPoolExecutor (as_completed), non déterministe
-    d'un run à l'autre — y compris sans aucun cache. Seule la composition des
-    groupes (quelles photos sont ensemble) est stable et comparable."""
+    """The numeric group identifiers depend on the arrival order
+    of the futures in the ThreadPoolExecutor (as_completed), not deterministic
+    from one run to the next - including with no cache at all. Only the composition of the
+    groups (which photos are together) is stable and comparable."""
     return {frozenset(members) for members in groups.values()}
 
 
 class TestDedupCachePersistence:
-    """Vérifie que le cache dedup_cache.db (Tier 1 pHash + Tier 2 ORB) rend un
-    scan interruptible/reprenable : un 2e run sur un cache déjà peuplé ne doit
-    pas redécoder/recalculer ce qui n'a pas changé, tout en restant correct
-    face aux photos ajoutées/supprimées/modifiées entre deux runs."""
+    """Checks that the dedup_cache.db cache (Tier 1 pHash + Tier 2 ORB) makes a
+    scan interruptible/resumable: a 2nd run on an already populated cache must
+    not decode/recompute what has not changed, while staying correct
+    in the face of photos added/removed/modified between two runs."""
 
     def test_second_run_reuses_cached_fingerprints(self, tmp_path, monkeypatch):
         manifest = build_library(tmp_path / "lib")
@@ -380,19 +380,19 @@ class TestDedupCachePersistence:
 
         monkeypatch.setattr(PILImage, "open", _spy_open)
 
-        # seed_groups reflète l'état catalogue au moment du 2e déclenchement
-        # (c'est le rôle de Catalog.get_duplicate_group_assignments() en
-        # usage réel) : sans lui, compared_tier1 (déjà peuplée par thread1)
-        # ferait considérer toutes les paires comme "anciennes" et aucune
-        # comparaison ne serait ré-évaluée pour (re)former les groupes.
+        # seed_groups reflects the state of the catalog at the moment of the 2nd trigger
+        # (that is the role of Catalog.get_duplicate_group_assignments() in
+        # real use): without it, compared_tier1 (already populated by thread1)
+        # would make every pair look "old" and no
+        # comparison would be re-evaluated to (re)form the groups.
         seed_groups = {p: gid for gid, members in received1["groups"].items() for p in members}
         thread2 = DuplicateDetectorThread(paths, seed_groups=seed_groups, cache_db_path=cache_db)
         received2 = {}
         thread2.finished.connect(lambda groups: received2.update(groups=groups))
         thread2._detect()
 
-        # Rien n'a changé entre les deux runs : Tier 1 doit être 100% cache hit,
-        # donc Image.open() ne doit être rappelé pour aucune photo.
+        # Nothing changed between the two runs: Tier 1 must be 100% cache hit,
+        # so Image.open() must not be called again for any photo.
         assert opened == []
         assert _grouping_as_sets(received2["groups"]) == _grouping_as_sets(received1["groups"])
 
@@ -417,18 +417,18 @@ class TestDedupCachePersistence:
 
         monkeypatch.setattr(dd, "_load_gray", _spy_load_gray)
 
-        # cf. test_second_run_reuses_cached_fingerprints : seed_groups requis
-        # pour que le 2e run reforme les mêmes groupes malgré compared_tier1/2
-        # déjà peuplées par thread1.
+        # cf. test_second_run_reuses_cached_fingerprints: seed_groups required
+        # so that the 2nd run reforms the same groups despite compared_tier1/2
+        # already populated by thread1.
         seed_groups = {p: gid for gid, members in received1["groups"].items() for p in members}
         thread2 = DuplicateDetectorThread(paths, seed_groups=seed_groups, cache_db_path=cache_db)
         received2 = {}
         thread2.finished.connect(lambda groups: received2.update(groups=groups))
         thread2._detect()
 
-        # La paire recadrée (Tier 2) ne doit pas être redécodée : c'est
-        # précisément le cas d'usage motivant la mise en cache de l'image de
-        # travail, pas seulement des points-clés/descripteurs.
+        # The cropped pair (Tier 2) must not be decoded again: that is
+        # precisely the use case motivating the caching of the working
+        # image, and not only of the keypoints/descriptors.
         a, b = (str(p) for p in manifest.crop_duplicate_pair)
         assert a not in loaded
         assert b not in loaded
@@ -524,9 +524,9 @@ class TestDedupCachePersistence:
 
     def test_cancellation_mid_scan_persists_partial_progress(self, tmp_path, monkeypatch):
         import src.library.duplicate_detector as dd
-        # Sans ce throttle, une petite bibliothèque de test se traite en bien
-        # moins de _PROGRESS_INTERVAL (0.5s) et le signal progress ne serait
-        # émis qu'une seule fois tout à la fin — trop tard pour annuler à mi-course.
+        # Without this throttle, a small test library is processed in far
+        # less than _PROGRESS_INTERVAL (0.5s) and the progress signal would only be
+        # emitted once right at the end - too late to cancel midway.
         monkeypatch.setattr(dd, "_PROGRESS_INTERVAL", 0)
 
         manifest = build_library(tmp_path / "lib")
@@ -554,13 +554,13 @@ class TestDedupCachePersistence:
         assert 0 < n_fp < len(paths)
 
     def _cancel_during_comparison(self, tmp_path, monkeypatch, after_snapshots: int):
-        """Lance un scan et l'annule pendant la *boucle de comparaison* du Tier 1
-        (et non pendant le calcul des empreintes, déjà couvert ci-dessus).
+        """Starts a scan and cancels it during the *comparison loop* of Tier 1
+        (and not during the computation of the fingerprints, already covered above).
 
-        Les deux intervalles sont mis à 0 : sur une bibliothèque de test, la
-        boucle se termine en bien moins que leurs valeurs réelles et aucun
-        instantané ne serait émis avant la fin. Retourne (chemins, base de
-        cache, derniers groupes diffusés)."""
+        Both intervals are set to 0: on a test library, the
+        loop finishes in far less than their real values and no
+        snapshot would be emitted before the end. Returns (paths, cache
+        database, last groups broadcast)."""
         import src.library.duplicate_detector as dd
         monkeypatch.setattr(dd, "_PROGRESS_INTERVAL", 0)
         monkeypatch.setattr(dd, "_LIVE_SNAPSHOT_INTERVAL", 0)
@@ -587,11 +587,11 @@ class TestDedupCachePersistence:
     def test_cancellation_mid_comparison_checkpoints_compared_tier1(
         self, tmp_path, monkeypatch
     ):
-        """Régression : `compared_tier1` n'était écrite qu'une fois la boucle de
-        comparaison *entièrement* terminée. Une passe interrompue (fermeture de
-        l'application) ne persistait donc aucune comparaison et repartait de zéro
-        au démarrage suivant — sur une grosse bibliothèque, la même heure de CPU
-        rejouée à chaque session, indéfiniment."""
+        """Regression: `compared_tier1` was only written once the comparison
+        loop was *entirely* finished. An interrupted pass (closing of
+        the application) therefore persisted no comparison and started again from scratch
+        at the next startup - on a large library, the same hour of CPU
+        replayed at every session, indefinitely."""
         paths, cache_db, _ = self._cancel_during_comparison(
             tmp_path, monkeypatch, after_snapshots=3
         )
@@ -603,22 +603,22 @@ class TestDedupCachePersistence:
         finally:
             conn.close()
 
-        # Strictement entre les deux : « > 0 » est le correctif lui-même,
-        # « < len(paths) » vérifie qu'on a bien annulé en cours de route (sinon
-        # le test passerait aussi sur un scan complet, sans rien prouver).
+        # Strictly between the two: "> 0" is the fix itself,
+        # "< len(paths)" checks that we really cancelled along the way (otherwise
+        # the test would also pass on a full scan, proving nothing).
         assert 0 < n_compared < len(paths)
 
     def test_resumed_scan_finds_the_same_groups(self, tmp_path, monkeypatch):
-        """La reprise ne doit pas seulement être rapide : elle doit aboutir au
-        même résultat qu'une passe ininterrompue. Le jalon est volontairement en
-        retard d'un instantané sur la progression réelle, précisément pour
-        qu'aucune fusion diffusée trop tard ne soit perdue."""
+        """The resumption must not only be fast: it must reach the
+        same result as an uninterrupted pass. The milestone is deliberately one
+        snapshot behind the real progress, precisely so
+        that no merge broadcast too late is lost."""
         paths, cache_db, partial_groups = self._cancel_during_comparison(
             tmp_path, monkeypatch, after_snapshots=3
         )
 
-        # Reprise : seed_groups = ce que le catalogue contient à ce stade,
-        # c'est-à-dire le dernier instantané diffusé (cf. _on_partial dans
+        # Resumption: seed_groups = what the catalog contains at this stage,
+        # that is the last snapshot broadcast (cf. _on_partial in
         # main_window_duplicates.py).
         seed_groups = {p: gid for gid, members in partial_groups.items() for p in members}
         resumed = DuplicateDetectorThread(
@@ -629,7 +629,7 @@ class TestDedupCachePersistence:
         resumed._detect()
         assert "groups" in got_resumed
 
-        # Référence : la même bibliothèque scannée d'un seul tenant, cache neuf.
+        # Reference: the same library scanned in one go, with a fresh cache.
         reference = DuplicateDetectorThread(
             paths, cache_db_path=str(tmp_path / "dedup_cache_ref.db")
         )
@@ -669,18 +669,18 @@ class TestDedupCachePersistence:
 
 class TestKeypointRoundtrip:
     def test_crop_pair_still_grouped_when_orb_cache_hit(self, tmp_path):
-        """Validation de bout en bout de la sérialisation des cv2.KeyPoint :
-        sur un 2e run, la paire recadrée est entièrement servie depuis le
-        cache ORB (points-clés reconstruits + image de travail redécodée du
-        JPEG stocké) — _compare_chunk doit produire le même résultat que sur
-        des données fraîchement calculées."""
+        """End-to-end validation of the serialisation of the cv2.KeyPoint objects:
+        on a 2nd run, the cropped pair is entirely served from the
+        ORB cache (keypoints rebuilt + working image decoded again from the
+        stored JPEG) - _compare_chunk must produce the same result as on
+        freshly computed data."""
         manifest = build_library(tmp_path / "lib")
         paths = [str(p) for p in manifest.images]
         cache_db = str(tmp_path / "dedup_cache.db")
 
-        # seed_groups requis dès la 2e itération : sinon compared_tier1/2
-        # (déjà peuplées par la 1re) feraient considérer toutes les paires
-        # comme "anciennes" et aucun groupe ne serait reformé.
+        # seed_groups required from the 2nd iteration on: otherwise compared_tier1/2
+        # (already populated by the 1st) would make every pair look
+        # "old" and no group would be reformed.
         received: dict = {}
         seed_groups: dict[str, int] = {}
         for _ in range(2):
@@ -697,18 +697,18 @@ class TestKeypointRoundtrip:
 
 
 class TestPartialResultsSignal:
-    """Vérifie que `partial_results` (instantanés provisoires pendant le
-    scan) est émis avant `finished`, et que chaque instantané reste cohérent
-    avec le résultat final — cf. duplicate_detector.py::_merge : les groupes
-    ne font que croître, un instantané partiel ne peut donc jamais contredire
-    le résultat final (des chemins ensemble à un instant T ne peuvent que
-    rester ensemble, jamais se séparer)."""
+    """Checks that `partial_results` (provisional snapshots during the
+    scan) is emitted before `finished`, and that each snapshot stays consistent
+    with the final result - cf. duplicate_detector.py::_merge: the groups
+    only ever grow, so a partial snapshot can never contradict
+    the final result (paths together at an instant T can only
+    stay together, never split)."""
 
     def test_partial_results_emitted_before_finished(self, tmp_path, monkeypatch):
         import src.library.duplicate_detector as dd
-        # Sans throttle nul, une petite bibliothèque de test se traite en
-        # bien moins de _LIVE_SNAPSHOT_INTERVAL et aucun instantané ne serait
-        # émis avant la fin.
+        # Without a zero throttle, a small test library is processed in
+        # far less than _LIVE_SNAPSHOT_INTERVAL and no snapshot would be
+        # emitted before the end.
         monkeypatch.setattr(dd, "_LIVE_SNAPSHOT_INTERVAL", 0)
         monkeypatch.setattr(dd, "_PROGRESS_INTERVAL", 0)
 
@@ -734,8 +734,8 @@ class TestPartialResultsSignal:
         for groups, corrupted in snapshots:
             assert isinstance(corrupted, list)
             for members in groups.values():
-                # Tous les membres d'un groupe partiel doivent appartenir au
-                # même groupe dans le résultat final (jamais éclaté ensuite).
+                # Every member of a partial group must belong to the
+                # same group in the final result (never split up afterwards).
                 final_gids = {final_members_by_path.get(p) for p in members}
                 assert len(final_gids) == 1 and None not in final_gids
 
@@ -745,8 +745,8 @@ class TestPartialResultsSignal:
         monkeypatch.setattr(dd, "_PROGRESS_INTERVAL", 0)
 
         manifest = build_library(tmp_path / "lib")
-        # manifest.corrupted_file n'est volontairement pas dans manifest.images
-        # (cf. tools/test_env/generate_library.py) — il faut l'ajouter explicitement.
+        # manifest.corrupted_file is deliberately not in manifest.images
+        # (cf. tools/test_env/generate_library.py) - it must be added explicitly.
         paths = [str(p) for p in manifest.images] + [str(manifest.corrupted_file)]
         cache_db = str(tmp_path / "dedup_cache.db")
 
@@ -762,19 +762,19 @@ class TestPartialResultsSignal:
 
 
 class TestIncrementalComparison:
-    """Vérifie la vraie incrémentalité de la Phase 2 (comparaison par paires,
-    cf. duplicate_detector.py::_detect) : seed_groups amorce group_of, et
-    seules les paires impliquant au moins un fichier nouveau/modifié (jamais
-    comparé lors d'une passe complète antérieure, ou modifié depuis) sont
-    évaluées — les paires ancien×ancien ne sont jamais itérées."""
+    """Checks the real incrementality of Phase 2 (pairwise comparison,
+    cf. duplicate_detector.py::_detect): seed_groups seeds group_of, and
+    only the pairs involving at least one new/modified file (never
+    compared during an earlier full pass, or modified since) are
+    evaluated - the old x old pairs are never iterated."""
 
     @staticmethod
     def _seed_from(groups: dict) -> dict[str, int]:
         return {p: gid for gid, members in groups.items() for p in members}
 
     def test_no_seed_groups_first_pass_behaves_as_before(self, tmp_path):
-        """Régression : omettre seed_groups (nouveau paramètre du constructeur)
-        doit produire exactement le même résultat qu'avant son introduction."""
+        """Regression: omitting seed_groups (a new parameter of the constructor)
+        must produce exactly the same result as before its introduction."""
         manifest = build_library(tmp_path / "lib")
         paths = [str(p) for p in manifest.images]
         thread = DuplicateDetectorThread(paths, cache_db_path=str(tmp_path / "dedup_cache.db"))
@@ -845,9 +845,9 @@ class TestIncrementalComparison:
         thread2.finished.connect(lambda groups: received2.update(groups=groups))
         thread2._detect()
 
-        # Un seul fichier nouveau (b) : n*(n-1)/2 + n*len(old_list) avec n=1
-        # -> exactement len(subset) comparaisons nouveau×ancien, aucune paire
-        # ancien×ancien ré-évaluée parmi les fichiers déjà connus.
+        # A single new file (b): n*(n-1)/2 + n*len(old_list) with n=1
+        # -> exactly len(subset) new x old comparisons, no old x old pair
+        # re-evaluated among the files already known.
         assert calls["n"] == len(subset)
         members2 = self._seed_from(received2["groups"])
         assert members2[a] == members2[b]
@@ -883,17 +883,17 @@ class TestIncrementalComparison:
         thread2.finished.connect(lambda groups: received2.update(groups=groups))
         thread2._detect()
 
-        # Seul le fichier modifié redevient "nouveau" : comparé contre tous
-        # les autres (déjà "anciens"), jamais entre eux.
+        # Only the modified file becomes "new" again: compared against all
+        # the others (already "old"), never among themselves.
         assert calls["n"] == len(all_paths) - 1
 
     def test_bridging_new_file_merges_two_seed_groups(self, tmp_path):
-        """Un nouveau fichier "pont" pHash-proche de deux groupes seed
-        distincts (déjà stables via compared_tier1) doit les fusionner en un
-        seul, via les seules comparaisons nouveau×ancien. Distances de
-        Hamming (hash 64 bits) vérifiées indépendamment :
-        a<->pont = 10 (<= _HASH_THRESHOLD=10), pont<->b = 1,
-        a<->b = 11 (pas de match direct sans le pont)."""
+        """A new "bridge" file pHash-close to two distinct seed
+        groups (already stable through compared_tier1) must merge them into a
+        single one, through the new x old comparisons alone. Hamming
+        distances (64-bit hash) checked independently:
+        a<->bridge = 10 (<= _HASH_THRESHOLD=10), bridge<->b = 1,
+        a<->b = 11 (no direct match without the bridge)."""
         from src.library.dedup_cache import DedupCache
 
         lib_dir = tmp_path / "bridge_lib"
@@ -919,9 +919,9 @@ class TestIncrementalComparison:
                 (str(b2), os.path.getmtime(b2), "00000000000007ff", 64, 64, micro),
                 (str(bridge), os.path.getmtime(bridge), "00000000000003ff", 64, 64, micro),
             ])
-            # compared_tier1 pré-rempli pour tout sauf bridge : a1/a2/b1/b2
-            # sont déjà "anciens" (groupes stables), bridge est le seul
-            # "nouveau" -> seules ses comparaisons nouveau×ancien s'exécutent.
+            # compared_tier1 pre-filled for everything except bridge: a1/a2/b1/b2
+            # are already "old" (stable groups), bridge is the only
+            # "new" one -> only its new x old comparisons run.
             cache.store_compared_tier1([
                 (str(a1), os.path.getmtime(a1)),
                 (str(a2), os.path.getmtime(a2)),
@@ -964,17 +964,17 @@ class TestIncrementalComparison:
         thread2.finished.connect(lambda groups: received2.update(groups=groups))
         thread2._detect()
 
-        # _renumber() exclut les groupes réduits à un seul membre (a, désormais
-        # seul dans son groupe seed puisque b n'est plus dans photo_paths).
+        # _renumber() excludes the groups reduced to a single member (a, now
+        # alone in its seed group since b is no longer in photo_paths).
         members2 = self._seed_from(received2["groups"])
         assert a not in members2
 
     def test_corrupted_file_rediscovered_after_repair(self, tmp_path):
-        """Non-régression : un fichier corrompu n'écrit jamais de ligne dans
-        fingerprints/orb_features (écriture seulement en cas de succès), donc
-        il retombe systématiquement dans to_compute à chaque passe,
-        indépendamment de l'incrémentalité de la comparaison — une fois
-        réparé, il doit rejoindre normalement son groupe de doublons."""
+        """Non-regression: a corrupted file never writes a row into
+        fingerprints/orb_features (write only on success), so
+        it systematically falls back into to_compute at every pass,
+        independently of the incrementality of the comparison - once
+        repaired, it must normally rejoin its duplicate group."""
         import shutil
 
         manifest = build_library(tmp_path / "lib")

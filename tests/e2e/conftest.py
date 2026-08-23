@@ -1,17 +1,17 @@
 # Copyright 2026 Christian Guyot
 # SPDX-License-Identifier: Apache-2.0
-"""Fixtures et utilitaires communs aux scénarios bout-en-bout (Layer 3).
+"""Fixtures and utilities shared by the end-to-end scenarios (Layer 3).
 
-Ces tests pilotent la vraie application (`main.py`) en sous-processus, avec
-un `%LOCALAPPDATA%` isolé (voir `tools/test_env/launch_isolated.py`), contre
-une bibliothèque synthétique reproductible (voir
-`tools/test_env/generate_library.py`). Aucun test de ce dossier ne touche au
-profil réel de l'utilisateur.
+These tests drive the real application (`main.py`) in a subprocess, with
+an isolated `%LOCALAPPDATA%` (see `tools/test_env/launch_isolated.py`), against
+a reproducible synthetic library (see
+`tools/test_env/generate_library.py`). No test of this folder touches the
+real profile of the user.
 
-`pywinauto` est une dépendance optionnelle (`requirements-test-e2e.txt`,
-Windows-only) : si elle est absente, les scénarios de `scenarios/` sont
-retirés de la collecte (`collect_ignore_glob` ci-dessous) pour que
-`pytest tests/` (Layers 1+2) continue de fonctionner sans elle."""
+`pywinauto` is an optional dependency (`requirements-test-e2e.txt`,
+Windows-only): if it is absent, the scenarios of `scenarios/` are
+removed from the collection (`collect_ignore_glob` below) so that
+`pytest tests/` (Layers 1+2) keeps working without it."""
 from __future__ import annotations
 
 import shutil
@@ -48,8 +48,8 @@ class IsolatedApp:
 
 @pytest.fixture(scope="session")
 def synthetic_library_master(tmp_path_factory) -> LibraryManifest:
-    """Construit la bibliothèque synthétique une seule fois par session
-    (génération procédurale : quelques secondes, formes ORB incluses)."""
+    """Builds the synthetic library only once per session
+    (procedural generation: a few seconds, ORB shapes included)."""
     root = tmp_path_factory.mktemp("ppm_e2e_library_master")
     return build_library(root)
 
@@ -57,11 +57,11 @@ def synthetic_library_master(tmp_path_factory) -> LibraryManifest:
 def _build_isolated_app(tmp_path: Path, synthetic_library_master: LibraryManifest, *,
                          extra_photo_files: tuple[Path, ...] = (),
                          extra_config: dict | None = None):
-    """Copie la bibliothèque master dans un dossier de photos dédié au test
-    (+ éventuels fichiers photo supplémentaires, ex. fixtures visages), lance
-    l'application avec un `%LOCALAPPDATA%` isolé pointant dessus, et garantit
-    la terminaison du processus même si le test échoue en cours de setup ou
-    d'exécution. Partagé par `isolated_app` et `isolated_app_with_faces`."""
+    """Copies the master library into a photo folder dedicated to the test
+    (+ any additional photo files, e.g. face fixtures), starts
+    the application with an isolated `%LOCALAPPDATA%` pointing at it, and guarantees
+    the termination of the process even if the test fails during setup or
+    execution. Shared by `isolated_app` and `isolated_app_with_faces`."""
     photos_dir = tmp_path / "photos"
     shutil.copytree(synthetic_library_master.root, photos_dir)
     manifest = synthetic_library_master.rebased(photos_dir)
@@ -95,8 +95,8 @@ def _build_isolated_app(tmp_path: Path, synthetic_library_master: LibraryManifes
 
 @pytest.fixture
 def isolated_app(request, tmp_path, synthetic_library_master):
-    """Instance isolée standard, sans photo de visage. Accepte une
-    configuration de départ non par défaut via une paramétrisation indirecte :
+    """Standard isolated instance, with no face photo. Accepts a
+    non-default starting configuration through an indirect parametrisation:
     `@pytest.mark.parametrize("isolated_app", [{"ui.delete_no_confirm": False}], indirect=True)`."""
     extra_config = getattr(request, "param", None)
     yield from _build_isolated_app(tmp_path, synthetic_library_master, extra_config=extra_config)
@@ -107,10 +107,10 @@ _FACES_FIXTURES_DIR = Path(__file__).parent / "fixtures" / "faces"
 
 @pytest.fixture
 def isolated_app_with_faces(tmp_path, synthetic_library_master):
-    """Comme `isolated_app`, avec en plus les photos de visages de
-    `tests/e2e/fixtures/faces/` (3 solo « Personne A », 3 solo « Personne B »,
-    1 photo des deux ensemble) copiées dans le dossier de photos surveillé,
-    pour les scénarios d'identification/fusion/reset de visages."""
+    """Like `isolated_app`, with in addition the face photos of
+    `tests/e2e/fixtures/faces/` (3 solo "Personne A", 3 solo "Personne B",
+    1 photo of both together) copied into the watched photo folder,
+    for the face identification/merge/reset scenarios."""
     face_files = sorted(_FACES_FIXTURES_DIR.glob("*.jpg"))
     if not face_files:
         pytest.skip(f"Aucune fixture visage trouvée dans {_FACES_FIXTURES_DIR}")
@@ -118,12 +118,12 @@ def isolated_app_with_faces(tmp_path, synthetic_library_master):
 
 
 def _graceful_close(window, app, timeout: float = 20.0) -> None:
-    """Tente une fermeture propre de l'application avant le terminate() de
-    secours. Indispensable quand l'appli tourne sous coverage
-    (PPM_E2E_COVERAGE=1, cf. launch_isolated) : TerminateProcess n'exécute
-    jamais le hook atexit qui écrit les données de couverture. Best-effort :
-    confirme l'éventuel avertissement « analyse en cours » puis attend la fin
-    du processus ; en cas d'échec, terminate() reprend la main."""
+    """Attempts a clean closing of the application before the fallback
+    terminate(). Indispensable when the application runs under coverage
+    (PPM_E2E_COVERAGE=1, cf. launch_isolated): TerminateProcess never
+    runs the atexit hook that writes the coverage data. Best-effort:
+    confirms the possible "analysis in progress" warning then waits for the end
+    of the process; on failure, terminate() takes over."""
     if window is None:
         return
     try:
@@ -131,8 +131,8 @@ def _graceful_close(window, app, timeout: float = 20.0) -> None:
     except Exception:
         return
     try:
-        # closeEvent peut demander confirmation (ex. détection de doublons en
-        # cours) — cliquer Oui si le bouton apparaît, sinon continuer.
+        # closeEvent may ask for confirmation (e.g. duplicate detection in
+        # progress) - click Yes if the button appears, otherwise carry on.
         try:
             find_dialog_button(window, ["Oui", "Yes", "&Oui", "&Yes"], timeout=3.0).click_input()
         except Exception:
@@ -143,15 +143,15 @@ def _graceful_close(window, app, timeout: float = 20.0) -> None:
 
 
 def _find_window_pid(launcher_pid: int, timeout: float = 30.0) -> int:
-    """Résout le PID propriétaire de la fenêtre principale UIA.
+    """Resolves the PID owning the main UIA window.
 
-    Confirmé empiriquement sur ce poste : `subprocess.Popen([python_exe,
-    "main.py"], ...).pid` (= `launcher_pid`) N'EST PAS le PID propriétaire de
-    la fenêtre — `.venv\\Scripts\\python.exe` relance un vrai process enfant
-    (`python.exe`) qui, lui, possède la fenêtre "PixelPhotoManager". Chercher
-    par titre parmi `launcher_pid` ET ses descendants (`psutil`), jamais par
-    `launcher_pid` seul (cf. bug initial : timeout systématique alors que
-    l'appli tournait correctement — 18 fenêtres desktop trouvées, 0 pour
+    Confirmed empirically on this machine: `subprocess.Popen([python_exe,
+    "main.py"], ...).pid` (= `launcher_pid`) IS NOT the PID owning
+    the window - `.venv\\Scripts\\python.exe` restarts a real child process
+    (`python.exe`) which, for its part, owns the "PixelPhotoManager" window. Search
+    by title among `launcher_pid` AND its descendants (`psutil`), never by
+    `launcher_pid` alone (cf. the initial bug: systematic timeout while
+    the application was running correctly - 18 desktop windows found, 0 for
     `process=launcher_pid`)."""
     import psutil
     from pywinauto import findwindows
@@ -188,14 +188,14 @@ def _connect_main_window(window_pid: int, timeout: float = 30.0):
     while time.monotonic() < deadline:
         try:
             app = Application(backend="uia").connect(process=window_pid)
-            # class_name="MainWindow" est nécessaire en plus du titre : un QMenu
-            # contextuel ouvert plus tard dans le test expose lui aussi
-            # Name="PixelPhotoManager" via UIA (popup top-level Qt, même
-            # control_type="Window", mais class_name="QMenu" — confirmé par sonde
-            # `Desktop(backend="uia").windows()` pendant qu'un menu était ouvert),
-            # ce qui rend `app.window(title="PixelPhotoManager")` seul ambigu
-            # (ElementAmbiguousError, 2 éléments) dès qu'un menu contextuel est
-            # affiché.
+            # class_name="MainWindow" is necessary on top of the title: a context
+            # QMenu opened later in the test also exposes
+            # Name="PixelPhotoManager" through UIA (top-level Qt popup, same
+            # control_type="Window", but class_name="QMenu" - confirmed by a
+            # `Desktop(backend="uia").windows()` probe while a menu was open),
+            # which makes `app.window(title="PixelPhotoManager")` alone ambiguous
+            # (ElementAmbiguousError, 2 elements) as soon as a context menu is
+            # displayed.
             win = app.window(title="PixelPhotoManager", class_name="MainWindow")
             win.wait("exists", timeout=5)
             return win
@@ -208,17 +208,17 @@ def _connect_main_window(window_pid: int, timeout: float = 30.0):
 
 
 def click_menu_item(window, top_level_text: str, item_text: str, *, timeout: float = 10.0) -> None:
-    """Ouvre un menu de la barre de menu principale puis clique un de ses
-    éléments — remplace `window.menu_select("A->B")`, qui échoue sur cette
-    appli avec un `AttributeError` (`menu_select()` cherche un
-    `children(control_type="MenuBar")` ou un `descendants(control_type="Menu")`
-    directement sur `window`, alors qu'ici le `MenuBar` est bien présent mais
-    ses menus déroulants (`Outils`, etc.) sont peuplés paresseusement par Qt :
-    les `MenuItem` du sous-menu (ex. "Détecter les doublons…") n'existent dans
-    l'arbre UIA qu'une fois le menu de premier niveau réellement ouvert par un
-    clic, jamais avant). Cible donc le `MenuItem` de premier niveau par texte,
-    clique pour l'ouvrir, puis cherche le `MenuItem` voulu parmi les
-    descendants nouvellement apparus."""
+    """Opens a menu of the main menu bar then clicks one of its
+    items - replaces `window.menu_select("A->B")`, which fails on this
+    application with an `AttributeError` (`menu_select()` looks for a
+    `children(control_type="MenuBar")` or a `descendants(control_type="Menu")`
+    directly on `window`, whereas here the `MenuBar` is indeed present but
+    its drop-down menus (`Tools`, etc.) are populated lazily by Qt:
+    the `MenuItem` objects of the submenu (e.g. "Detect the duplicates...") only exist in
+    the UIA tree once the top-level menu has really been opened by a
+    click, never before). So it targets the top-level `MenuItem` by text,
+    clicks to open it, then looks for the wanted `MenuItem` among the
+    newly appeared descendants."""
     deadline = time.monotonic() + timeout
     last_exc: Exception | None = None
     top_item = None
@@ -253,12 +253,12 @@ def click_menu_item(window, top_level_text: str, item_text: str, *, timeout: flo
 
 
 def find_dialog_button(window, texts: list[str], exact: bool = False, *, timeout: float = 10.0):
-    """Cherche un bouton parmi les descendants de `window` (les QMessageBox
-    natifs ne sont PAS des fenêtres top-level UIA distinctes — ce sont des
-    descendants de la fenêtre principale) dont le texte correspond à l'une des
-    variantes de `texts` (utile pour les libellés localisés : ex.
-    `["Oui", "Yes"]`). Retente jusqu'à `timeout` : le dialogue peut apparaître
-    avec un léger délai après l'action qui le déclenche."""
+    """Looks for a button among the descendants of `window` (the native
+    QMessageBox objects are NOT distinct top-level UIA windows - they are
+    descendants of the main window) whose text matches one of the
+    variants of `texts` (useful for localised labels: e.g.
+    `["Oui", "Yes"]`). Retries until `timeout`: the dialog may appear
+    with a slight delay after the action that triggers it."""
     deadline = time.monotonic() + timeout
     last_exc: Exception | None = None
     last_labels: list[str] = []
@@ -284,51 +284,51 @@ def invoke_button(
     window, texts: list[str], exact: bool = False, *, timeout: float = 10.0,
     wait_gone: bool = True, gone_timeout: float = 10.0,
 ) -> None:
-    """Clique un bouton via le pattern UIA Invoke plutôt qu'un clic souris
-    simulé (`click_input`, SendInput à des coordonnées écran) — nécessaire
-    pour les boutons de `FolderManagerDialog` (« Re-scanner », « Retirer »,
-    « Fermer », et la `QMessageBox`/confirmation qui en découlent) : confirmé
-    empiriquement (instrumentation temporaire côté appli, cf. session du
-    2026-07-21) que `click_input()` n'y déclenche jamais le signal `clicked()`
-    de Qt — ni exception, ni log, le bouton retrouvé par `find_dialog_button`
-    a pourtant un rectangle et un état (`is_enabled`/`is_visible`) valides.
-    `invoke()` (pattern `IUIAutomation::Invoke`, indépendant du focus/
-    foreground OS) fonctionne à tir sûr sur ce même bouton. Cause probable :
-    `FolderManagerDialog` s'ouvre de façon synchrone dans le slot d'une
-    `QAction` de menu (`click_menu_item`), sans que la fenêtre native ait eu
-    le temps de devenir réellement la fenêtre au premier plan avant que le
-    clic simulé n'atteigne l'écran. Partout ailleurs dans la suite,
-    `click_input()` reste fiable (menus, listes, vignettes, autres
-    `QMessageBox` parentées directement à `MainWindow`) : ne migrer que ce qui
-    est prouvé fragile plutôt que remplacer `click_input()` partout par
-    précaution.
+    """Clicks a button through the UIA Invoke pattern rather than a simulated
+    mouse click (`click_input`, SendInput at screen coordinates) - necessary
+    for the buttons of `FolderManagerDialog` ("Rescan", "Remove",
+    "Close", and the `QMessageBox`/confirmation that follow from them): confirmed
+    empirically (temporary instrumentation on the application side, cf. the session of
+    2026-07-21) that `click_input()` never triggers the `clicked()` signal
+    of Qt there - no exception, no log, yet the button found by `find_dialog_button`
+    does have a valid rectangle and state (`is_enabled`/`is_visible`).
+    `invoke()` (the `IUIAutomation::Invoke` pattern, independent of the OS focus/
+    foreground) works every time on that same button. Probable cause:
+    `FolderManagerDialog` opens synchronously in the slot of a
+    menu `QAction` (`click_menu_item`), without the native window having had
+    the time to really become the foreground window before the
+    simulated click reaches the screen. Everywhere else in the suite,
+    `click_input()` stays reliable (menus, lists, thumbnails, other
+    `QMessageBox` parented directly to `MainWindow`): only migrate what
+    is proven fragile rather than replacing `click_input()` everywhere as a
+    precaution.
 
-    Par défaut (`wait_gone=True`), attend après l'invocation que CE bouton
-    précis (l'instance retournée par `find_dialog_button`, pas une nouvelle
-    recherche par libellé) devienne invisible (dialogue fermé) avant de
-    rendre la main — sans ça, un enchaînement `invoke_button(..., "OK")` puis
-    `invoke_button(..., "Close")` peut invoquer « Close » sur la boîte de
-    dialogue parente (`FolderManagerDialog`) alors que la `QMessageBox`
-    enfant n'a pas fini de se fermer : comme `.invoke()` est indépendant du
-    focus/z-order OS, il ne passe pas par le filtrage de modalité de Qt
-    (`QApplication::notify`) et peut donc réussir à fermer le parent
-    *pendant* que la boucle d'événements imbriquée de l'enfant tourne encore
-    — orphelinant cette `QMessageBox` : elle reste affichée et modale au
-    niveau OS (elle continue de capter tous les clics souris, d'où des sons
-    système de « bip » sur les tentatives de clic suivantes en dehors
-    d'elle), alors que son parent logique a déjà disparu. Observé en direct
-    (popup bloquée à l'écran + bips système) sur `test_folder_management.py`
-    avant ce correctif.
-    Vérifier CETTE instance précise plutôt que refaire une recherche par
-    libellé est nécessaire : des libellés génériques comme « Fermer »/« OK »
-    coïncident avec des contrôles toujours présents ailleurs (ex. le bouton
-    natif « Fermer » de la barre de titre de `MainWindow` elle-même) — une
-    recherche par libellé après coup donne un faux « toujours ouvert »
-    permanent (confirmé empiriquement : `window.descendants(...)` remontait
-    `['Réduire', 'Agrandir', 'Fermer', ...]`, les boutons de la barre de
-    titre de `MainWindow`, alors que `FolderManagerDialog` était déjà bel et
-    bien fermé). Utiliser `wait_gone=False` pour les boutons dont
-    l'invocation ne ferme pas de dialogue (« Re-scanner », « Retirer »)."""
+    By default (`wait_gone=True`), waits after the invocation for THIS
+    precise button (the instance returned by `find_dialog_button`, not a new
+    search by label) to become invisible (dialog closed) before
+    handing back - without that, a sequence `invoke_button(..., "OK")` then
+    `invoke_button(..., "Close")` may invoke "Close" on the parent
+    dialog box (`FolderManagerDialog`) while the child `QMessageBox`
+    has not finished closing: since `.invoke()` is independent of the
+    OS focus/z-order, it does not go through the modality filtering of Qt
+    (`QApplication::notify`) and may therefore succeed in closing the parent
+    *while* the nested event loop of the child is still running
+    - orphaning that `QMessageBox`: it stays displayed and modal at the
+    OS level (it keeps capturing every mouse click, hence system
+    "beep" sounds on the following click attempts outside
+    it), while its logical parent has already disappeared. Observed live
+    (popup stuck on screen + system beeps) on `test_folder_management.py`
+    before this fix.
+    Checking THAT precise instance rather than doing a new search by
+    label is necessary: generic labels such as "Close"/"OK"
+    coincide with controls always present elsewhere (e.g. the native
+    "Close" button of the title bar of `MainWindow` itself) - a
+    search by label after the fact gives a permanent false "still open"
+    (confirmed empirically: `window.descendants(...)` returned
+    `['Minimise', 'Maximise', 'Close', ...]`, the buttons of the title
+    bar of `MainWindow`, while `FolderManagerDialog` was already well and
+    truly closed). Use `wait_gone=False` for the buttons whose
+    invocation does not close a dialog ("Rescan", "Remove")."""
     button = find_dialog_button(window, texts, exact=exact, timeout=timeout)
     button.invoke()
     if not wait_gone:
@@ -338,7 +338,7 @@ def invoke_button(
         try:
             return bool(button.is_visible())
         except Exception:
-            # Élément UIA devenu invalide/stale : le widget a disparu.
+            # UIA element gone invalid/stale: the widget has disappeared.
             return False
 
     deadline = time.monotonic() + gone_timeout
@@ -353,11 +353,11 @@ def invoke_button(
 
 
 def find_checkbox(window, text: str, *, timeout: float = 10.0):
-    """Cherche une `QCheckBox` parmi les descendants de `window` dont le texte
-    contient `text` — analogue à `find_dialog_button` mais filtré sur
-    `control_type="CheckBox"` (ex. « Fonctions avancées… », « Fonctions très
-    avancées… » dans le dialogue Luminosité, ou « Ne plus demander » dans la
-    confirmation de suppression)."""
+    """Looks for a `QCheckBox` among the descendants of `window` whose text
+    contains `text` - analogous to `find_dialog_button` but filtered on
+    `control_type="CheckBox"` (e.g. "Advanced functions...", "Very
+    advanced functions..." in the Brightness dialog, or "Do not ask again" in the
+    deletion confirmation)."""
     deadline = time.monotonic() + timeout
     last_exc: Exception | None = None
     while time.monotonic() < deadline:
@@ -372,12 +372,12 @@ def find_checkbox(window, text: str, *, timeout: float = 10.0):
 
 
 def find_radio_button(window, text: str, *, timeout: float = 10.0):
-    """Cherche un `QRadioButton` parmi les descendants de `window` dont le
-    texte contient `text` — analogue à `find_checkbox` mais filtré sur
-    `control_type="RadioButton"` (ex. choisir une personne existante dans
-    `_AssignDialog`/`MergePersonsDialog`/`_ResetFacesDialog`, dont les
-    libellés incluent un compte de photos variable, d'où une recherche par
-    sous-chaîne plutôt que par égalité exacte)."""
+    """Looks for a `QRadioButton` among the descendants of `window` whose
+    text contains `text` - analogous to `find_checkbox` but filtered on
+    `control_type="RadioButton"` (e.g. choosing an existing person in
+    `_AssignDialog`/`MergePersonsDialog`/`_ResetFacesDialog`, whose
+    labels include a variable photo count, hence a search by
+    substring rather than by exact equality)."""
     deadline = time.monotonic() + timeout
     last_exc: Exception | None = None
     while time.monotonic() < deadline:
@@ -400,9 +400,9 @@ def click_no(window) -> None:
 
 
 def click_list_item(window, text: str, *, exact: bool = True, timeout: float = 10.0):
-    """Clique un élément d'une QListWidget (ex. la liste Albums de la sidebar :
-    Chronologie/Favoris/Vidéos/Par nom de fichier, ou un album nommé) — les
-    `QListWidgetItem` se mappent sur `control_type="ListItem"` côté UIA."""
+    """Clicks an item of a QListWidget (e.g. the Albums list of the sidebar:
+    Chronology/Favorites/Videos/By filename, or a named album) - the
+    `QListWidgetItem` objects map onto `control_type="ListItem"` on the UIA side."""
     deadline = time.monotonic() + timeout
     last_exc: Exception | None = None
     while time.monotonic() < deadline:
@@ -419,15 +419,15 @@ def click_list_item(window, text: str, *, exact: bool = True, timeout: float = 1
 
 
 def click_popup_list_item(class_name: str, text: str, *, exact: bool = False, timeout: float = 10.0) -> None:
-    """Clique un élément d'une `QListWidget` hébergée dans une fenêtre top-level
-    séparée de la fenêtre principale (ex. `_DuplicatesPopup`, widget `Qt.Popup`)
-    — même piège que le `QMenu` contextuel documenté dans
-    `click_context_menu_item` : confirmé empiriquement (probe
-    `Desktop(backend="uia").windows()` pendant que la popup était ouverte)
-    qu'elle est une fenêtre top-level distincte (`class_name="_DuplicatesPopup"`),
-    malgré un nom accessible partagé "PixelPhotoManager" — ses `ListItem` ne
-    sont donc jamais trouvés via `window.descendants(...)` (`click_list_item`),
-    seulement via le Desktop."""
+    """Clicks an item of a `QListWidget` hosted in a top-level window
+    separate from the main window (e.g. `_DuplicatesPopup`, a `Qt.Popup` widget)
+    - the same trap as the context `QMenu` documented in
+    `click_context_menu_item`: confirmed empirically (a
+    `Desktop(backend="uia").windows()` probe while the popup was open)
+    that it is a distinct top-level window (`class_name="_DuplicatesPopup"`),
+    despite a shared accessible name "PixelPhotoManager" - its `ListItem`
+    objects are therefore never found through `window.descendants(...)` (`click_list_item`),
+    only through the Desktop."""
     from pywinauto import Desktop
 
     deadline = time.monotonic() + timeout
@@ -449,24 +449,24 @@ def click_popup_list_item(class_name: str, text: str, *, exact: bool = False, ti
 
 
 def right_click_element(element) -> None:
-    """Ouvre un menu contextuel Qt réel par clic droit (SendInput) — à la
-    différence du double-clic (cf. `double_click_element`), un simple clic
-    droit passe sans souci par `right_click_input()` de pywinauto."""
+    """Opens a real Qt context menu by right click (SendInput) - unlike
+    the double click (cf. `double_click_element`), a simple right
+    click goes through `right_click_input()` of pywinauto without trouble."""
     element.right_click_input()
 
 
 def click_context_menu_item(window, text: str, *, exact: bool = False, timeout: float = 10.0) -> None:
-    """Clique un élément d'un `QMenu` contextuel déjà ouvert (typiquement après
-    `right_click_element` sur une vignette).
+    """Clicks an item of a context `QMenu` already open (typically after
+    `right_click_element` on a thumbnail).
 
-    Confirmé empiriquement (probe `Desktop(backend="uia").windows()` pendant
-    qu'un menu contextuel était ouvert) : un `QMenu` popup Qt est une fenêtre
-    top-level **séparée** de la fenêtre principale (même s'il partage son titre
-    UIA "PixelPhotoManager", cf. `_connect_main_window` ci-dessus), PAS un
-    descendant de `window` — chercher ses `MenuItem` via `window.descendants(...)`
-    ne trouve donc jamais que la barre de menus permanente (Fichier/Affichage/…),
-    jamais les items d'un popup contextuel, même quand celui-ci s'est bien
-    ouvert. Il faut retrouver la fenêtre `QMenu` elle-même via le Desktop."""
+    Confirmed empirically (a `Desktop(backend="uia").windows()` probe while
+    a context menu was open): a Qt `QMenu` popup is a top-level window
+    **separate** from the main window (even if it shares its
+    UIA title "PixelPhotoManager", cf. `_connect_main_window` above), NOT a
+    descendant of `window` - looking for its `MenuItem` objects through `window.descendants(...)`
+    therefore only ever finds the permanent menu bar (File/View/...),
+    never the items of a context popup, even when that one did
+    open. The `QMenu` window itself must be found through the Desktop."""
     from pywinauto import Desktop
 
     deadline = time.monotonic() + timeout
@@ -489,19 +489,19 @@ def right_click_and_click_context_menu_item(
     get_element, window, text: str, *, exact: bool = False, timeout: float = 20.0,
     attempt_timeout: float = 3.0,
 ) -> None:
-    """Combine `right_click_element` + `click_context_menu_item` en boucle de
-    retenue du clic droit lui-même, pas seulement de la recherche du menu.
+    """Combines `right_click_element` + `click_context_menu_item` in a retry
+    loop of the right click itself, not only of the search for the menu.
 
-    Observé empiriquement sur l'arbre de dossiers de la sidebar
-    (`test_folder_management.py`) : un clic droit isolé peut occasionnellement
-    n'ouvrir aucun `QMenu` (rien trouvé même après plusieurs secondes de
-    scrutation), en particulier juste après qu'une opération de fond (indexation
-    visages, clustering) vient de se terminer et que la boucle d'événements Qt
-    rattrape une rafale de signaux — le clic droit "se perd" plutôt que d'être
-    simplement retardé. `get_element` doit renvoyer une référence *fraîche* de
-    l'élément à chaque appel (p. ex. `lambda: _find_tree_item(window, name)`),
-    pas un élément déjà résolu, pour re-cibler correctement si l'arbre a été
-    reconstruit (`QTreeWidget.clear()` + repeuplement) entre deux tentatives."""
+    Observed empirically on the folder tree of the sidebar
+    (`test_folder_management.py`): an isolated right click may occasionally
+    open no `QMenu` at all (nothing found even after several seconds of
+    scanning), in particular just after a background operation (face
+    indexing, clustering) has just finished and the Qt event loop
+    catches up with a burst of signals - the right click "gets lost" rather than being
+    simply delayed. `get_element` must return a *fresh* reference of
+    the element at every call (e.g. `lambda: _find_tree_item(window, name)`),
+    not an already resolved element, so as to re-target correctly if the tree has been
+    rebuilt (`QTreeWidget.clear()` + repopulation) between two attempts."""
     from pywinauto import Desktop
 
     deadline = time.monotonic() + timeout
@@ -525,12 +525,12 @@ def right_click_and_click_context_menu_item(
 
 
 def type_into_sidebar_filter(window, text: str, *, timeout: float = 10.0) -> None:
-    """Tape du texte dans le champ de filtre de la sidebar (`Sidebar._filter_box`,
-    QLineEdit sans texte par défaut ni nom accessible — placeholder uniquement,
-    cf. sidebar.py:273-277). Sur l'écran principal (grille, ni visionneuse ni
-    dialogue ouverts), c'est le seul contrôle `Edit` présent, donc identifiable
-    sans ambiguïté par élimination plutôt que par contenu (vide par défaut,
-    contrairement au champ de destination d'export)."""
+    """Types text into the filter field of the sidebar (`Sidebar._filter_box`,
+    a QLineEdit with no default text nor accessible name - placeholder only,
+    cf. sidebar.py:273-277). On the main screen (grid, neither viewer nor
+    dialog open), it is the only `Edit` control present, hence identifiable
+    unambiguously by elimination rather than by content (empty by default,
+    unlike the export destination field)."""
     deadline = time.monotonic() + timeout
     last_exc: Exception | None = None
     while time.monotonic() < deadline:
@@ -549,10 +549,10 @@ def type_into_sidebar_filter(window, text: str, *, timeout: float = 10.0) -> Non
 
 def wait_for_log(log_path: Path, pattern: str, *, since_offset: int = 0,
                   timeout: float = 60.0, poll: float = 0.5) -> str:
-    """Attend qu'une ligne contenant `pattern` apparaisse dans `log_path` après
-    `since_offset` (octets). Retourne la ligne trouvée. Lève `TimeoutError`
-    sinon — capture les dernières lignes du log dans le message pour faciliter
-    le diagnostic d'un scénario en échec."""
+    """Waits for a line containing `pattern` to appear in `log_path` after
+    `since_offset` (bytes). Returns the line found. Raises `TimeoutError`
+    otherwise - captures the last lines of the log in the message to make
+    the diagnosis of a failing scenario easier."""
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         if log_path.exists():
@@ -571,17 +571,17 @@ def wait_for_log(log_path: Path, pattern: str, *, since_offset: int = 0,
 
 
 def log_offset(log_path: Path) -> int:
-    """Taille actuelle du log, à capturer avant de déclencher une opération
-    pour que `wait_for_log` ne matche pas une ligne d'un run précédent."""
+    """Current size of the log, to be captured before triggering an operation
+    so that `wait_for_log` does not match a line of a previous run."""
     return log_path.stat().st_size if log_path.exists() else 0
 
 
 def find_by_accessible_name(window, name: str, *, timeout: float = 15.0):
-    """Retrouve un élément UIA par son nom accessible exact, sans filtrer sur
-    `control_type` — contrairement à `find_thumbnail` (toujours `"Group"` pour
-    un `QWidget` nommé), le rôle UIA d'un `QFrame` nommé (ex. `_DuplicateCard`,
-    `dupgroup::<id>`) n'est pas garanti identique. `descendants()` reste rapide
-    ici (arbre bien plus petit que la grille de vignettes virtualisée)."""
+    """Finds a UIA element by its exact accessible name, without filtering on
+    `control_type` - unlike `find_thumbnail` (always `"Group"` for
+    a named `QWidget`), the UIA role of a named `QFrame` (e.g. `_DuplicateCard`,
+    `dupgroup::<id>`) is not guaranteed to be identical. `descendants()` stays fast
+    here (a tree far smaller than the virtualised thumbnail grid)."""
     deadline = time.monotonic() + timeout
     last_exc: Exception | None = None
     while time.monotonic() < deadline:
@@ -596,13 +596,13 @@ def find_by_accessible_name(window, name: str, *, timeout: float = 15.0):
 
 
 def wait_for_duplicate_detection(window, catalog_db, pairs, *, timeout: float = 90.0) -> None:
-    """Attend que la détection continue de doublons ait assigné un
-    `duplicate_group_id` au premier membre de chaque paire de `pairs` (liste de
-    tuples `(photo_a, photo_b)`) ; si l'auto-détection (déclenchée après le scan,
-    cf. CLAUDE.md « Détection de doublons — continue et incrémentale ») tarde,
-    repli via Outils > État des doublons… > Vérifier maintenant (retenté deux
-    fois, l'arbre UIA peut être lent à se peupler sous charge). Partagé par
-    `test_duplicate_detection.py` et `test_duplicates_ui.py`."""
+    """Waits for the continuous duplicate detection to have assigned a
+    `duplicate_group_id` to the first member of each pair of `pairs` (a list of
+    `(photo_a, photo_b)` tuples); if the auto-detection (triggered after the scan,
+    cf. CLAUDE.md "Duplicate detection - continuous and incremental") is slow,
+    falls back on Tools > Duplicate status... > Check now (retried twice,
+    the UIA tree can be slow to populate under load). Shared by
+    `test_duplicate_detection.py` and `test_duplicates_ui.py`."""
     def _done() -> bool:
         return all(
             query_one(
@@ -634,16 +634,16 @@ def wait_for_duplicate_detection(window, catalog_db, pairs, *, timeout: float = 
 
 
 def find_thumbnail(window, photo_path: str, *, timeout: float = 15.0):
-    """Retrouve l'élément UIA d'une vignette précise via son nom accessible
-    `thumb::<chemin>` (cf. `ThumbnailCell._setup_ui` dans thumbnail_grid.py) —
-    plus robuste que deviner des coordonnées écran dans la grille virtuelle.
+    """Finds the UIA element of a precise thumbnail through its accessible name
+    `thumb::<path>` (cf. `ThumbnailCell._setup_ui` in thumbnail_grid.py) -
+    more robust than guessing screen coordinates in the virtual grid.
 
-    Confirmé empiriquement (probe UIA) : un `QWidget` avec `setAccessibleName`
-    mais sans rôle explicite se mappe par le pont d'accessibilité Qt sur
-    `control_type="Group"`, PAS `"Pane"` — la grille ne virtualise que les
-    cellules hors de `_visible_range()` (+ marge d'un écran), donc une photo
-    doit être scrollée dans le champ pour que sa cellule (et son nom
-    accessible) existe dans l'arbre UIA."""
+    Confirmed empirically (UIA probe): a `QWidget` with `setAccessibleName`
+    but with no explicit role maps through the Qt accessibility bridge onto
+    `control_type="Group"`, NOT `"Pane"` - the grid only virtualises the
+    cells outside `_visible_range()` (+ one screen of margin), so a photo
+    must be scrolled into view for its cell (and its accessible
+    name) to exist in the UIA tree."""
     name = f"thumb::{photo_path}"
     deadline = time.monotonic() + timeout
     last_exc: Exception | None = None
@@ -657,28 +657,28 @@ def find_thumbnail(window, photo_path: str, *, timeout: float = 15.0):
 
 
 def scroll_grid_into_view(window, photo_path: str, *, max_attempts: int = 30) -> None:
-    """Scrolle la grille (molette réelle, `wheel_mouse_input`) jusqu'à ce que
-    la vignette de `photo_path` existe dans l'arbre UIA.
+    """Scrolls the grid (real wheel, `wheel_mouse_input`) until
+    the thumbnail of `photo_path` exists in the UIA tree.
 
-    Nécessaire après toute navigation qui a pu laisser la position de scroll
-    loin du haut de la grille (ex. retour depuis `FaceClusterGrid` via son
-    bouton « ← Photos ») : `ThumbnailGrid` ne matérialise que les cellules de
-    `_visible_range()` (+ marge d'un écran, cf. docstring de `find_thumbnail`)
-    — une vignette précédemment visible peut être sortie du champ sans qu'un
-    scroll manuel ne l'y ramène. Molette plutôt que touches clavier (Page
-    Down/End) : pas d'hypothèse fiable sur le widget qui a le focus clavier à
-    l'instant de l'appel, alors que la molette suit uniquement la position du
-    curseur."""
+    Necessary after any navigation that may have left the scroll position
+    far from the top of the grid (e.g. returning from `FaceClusterGrid` through its
+    "<- Photos" button): `ThumbnailGrid` only materialises the cells of
+    `_visible_range()` (+ one screen of margin, cf. the docstring of `find_thumbnail`)
+    - a previously visible thumbnail may have gone out of view without a
+    manual scroll bringing it back. Wheel rather than keyboard keys (Page
+    Down/End): no reliable assumption about which widget has the keyboard focus at
+    the moment of the call, whereas the wheel only follows the position of
+    the cursor."""
     try:
         find_thumbnail(window, photo_path, timeout=1.0)
         return
     except TimeoutError:
         pass
     rect = window.rectangle()
-    # coords de wheel_mouse_input()/click_input() sont relatives au client de
-    # `window` (passées à client_to_screen() en interne) : PAS des coordonnées
-    # écran absolues, malgré `window.rectangle()` qui, lui, renvoie des
-    # coordonnées écran.
+    # the coords of wheel_mouse_input()/click_input() are relative to the client of
+    # `window` (passed to client_to_screen() internally): NOT absolute screen
+    # coordinates, despite `window.rectangle()` which, for its part, returns
+    # screen coordinates.
     coords = (int((rect.right - rect.left) * 0.65), int((rect.bottom - rect.top) * 0.5))
     for _ in range(max_attempts):
         window.wheel_mouse_input(coords=coords, wheel_dist=-3)
@@ -695,15 +695,15 @@ def scroll_grid_into_view(window, photo_path: str, *, max_attempts: int = 30) ->
 
 
 def double_click_element(element, *, gap_s: float = 0.10) -> None:
-    """Double-clic réel sur un élément UIA, par SendInput brut.
+    """Real double click on a UIA element, through raw SendInput.
 
-    Ne PAS utiliser `element.double_click_input()` : pywinauto envoie ses deux
-    clics à ~1 ms d'écart, trop rapprochés pour que Qt 6.11 synthétise un
-    QEvent.MouseButtonDblClick (les deux arrivent comme deux Press simples) ;
-    et deux `click_input()` successifs retombent au-delà des 500 ms de la
-    fenêtre système à cause des Timings internes de pywinauto. Constaté
-    empiriquement le 2026-07-20 : fenêtre valide ≈ 20-500 ms, d'où ce helper
-    à ~100 ms."""
+    Do NOT use `element.double_click_input()`: pywinauto sends its two
+    clicks ~1 ms apart, too close together for Qt 6.11 to synthesise a
+    QEvent.MouseButtonDblClick (both arrive as two simple Presses);
+    and two successive `click_input()` fall beyond the 500 ms of the
+    system window because of the internal Timings of pywinauto. Established
+    empirically on 2026-07-20: valid window ~ 20-500 ms, hence this helper
+    at ~100 ms."""
     import ctypes
 
     user32 = ctypes.windll.user32
@@ -722,29 +722,29 @@ def double_click_element(element, *, gap_s: float = 0.10) -> None:
 
 
 def open_photo_in_viewer(window, photo_path, *, attempts: int = 4) -> None:
-    """Ouvre une photo dans la visionneuse via le menu contextuel « Ouvrir »
-    de sa vignette (clic droit unique), PAS un double-clic.
+    """Opens a photo in the viewer through the "Open" context menu
+    of its thumbnail (a single right click), NOT a double click.
 
-    Un double-clic nécessite deux clics distincts à la même position écran, à
-    ~100 ms d'intervalle (cf. `double_click_element`) : si la grille se
-    réordonne entre les deux — pendant/juste après le scan initial, après un
-    retour depuis `FaceClusterGrid`, ou même sous simple charge de fond élevée
-    qui retarde le traitement du 2e clic — celui-ci peut atterrir sur une
-    AUTRE cellule que la première. Confirmé empiriquement (test_duplicates_ui.py,
-    puis de façon déterministe et reproductible dans
-    test_faces_identify_and_reset.py, y compris avec un délai d'attente de
-    stabilité de position ajouté avant le clic) : le double-clic peut
-    « réussir » (bouton « 1:1 » présent) tout en affichant une photo
-    différente de celle visée — pas un cas rare, un mode de défaillance stable.
-    Le menu contextuel « Open » (`thumbnail_grid.py::_on_right_click`,
+    A double click requires two distinct clicks at the same screen position,
+    ~100 ms apart (cf. `double_click_element`): if the grid
+    reorders between the two - during/just after the initial scan, after a
+    return from `FaceClusterGrid`, or even under simple high background load
+    that delays the processing of the 2nd click - that one may land on
+    ANOTHER cell than the first. Confirmed empirically (test_duplicates_ui.py,
+    then deterministically and reproducibly in
+    test_faces_identify_and_reset.py, including with a position stability
+    wait added before the click): the double click may
+    "succeed" ("1:1" button present) while displaying a photo
+    different from the intended one - not a rare case, a stable failure mode.
+    The "Open" context menu (`thumbnail_grid.py::_on_right_click`,
     `menu.addAction("Open", lambda: self.photo_activated.emit(photo))`)
-    n'a besoin que d'un seul clic pour atterrir sur la bonne cellule, et
-    capture la `PhotoInfo` cliquée dans la fermeture du callback dès
-    l'ouverture du menu — aucune fenêtre de réassignation entre deux clics.
-    `right_click_and_click_context_menu_item` retente déjà tout l'enchaînement
-    clic droit + recherche de menu si besoin (cf. sa propre docstring).
-    Vérifie quand même `PhotoViewer._lbl_name` (chemin complet affiché,
-    photo_viewer.py:388) après coup, par défense en profondeur."""
+    only needs a single click to land on the right cell, and
+    captures the clicked `PhotoInfo` in the closure of the callback as soon as
+    the menu opens - no reassignment window between two clicks.
+    `right_click_and_click_context_menu_item` already retries the whole sequence
+    right click + menu search if needed (cf. its own docstring).
+    Still checks `PhotoViewer._lbl_name` (full path displayed,
+    photo_viewer.py:388) afterwards, as defence in depth."""
     last_exc: Exception | None = None
     for _ in range(attempts):
         try:
@@ -768,9 +768,9 @@ def open_photo_in_viewer(window, photo_path, *, attempts: int = 4) -> None:
             return
         except (LookupError, TimeoutError) as exc:
             last_exc = exc
-            # La visionneuse peut être ouverte sur la mauvaise photo : la
-            # refermer avant de retenter, sinon la prochaine ouverture
-            # échoue silencieusement (la visionneuse reste affichée).
+            # The viewer may be opened on the wrong photo: close it
+            # again before retrying, otherwise the next opening
+            # fails silently (the viewer stays displayed).
             try:
                 find_dialog_button(window, ["✕"], exact=True, timeout=2.0).click_input()
             except LookupError:
@@ -784,9 +784,9 @@ def open_photo_in_viewer(window, photo_path, *, attempts: int = 4) -> None:
 
 def wait_for_condition(predicate, *, timeout: float = 30.0, poll: float = 0.3,
                         message: str = "condition non remplie") -> None:
-    """Attend qu'une fonction sans argument devienne vraie — utilisé pour
-    sonder directement `catalog.db`/`edits.db` (fichiers SQLite réels), plus
-    robuste qu'un texte affiché dans une grille custom peinte à la main."""
+    """Waits for a function with no argument to become true - used to
+    probe `catalog.db`/`edits.db` directly (real SQLite files), more
+    robust than a text displayed in a custom grid painted by hand."""
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         if predicate():

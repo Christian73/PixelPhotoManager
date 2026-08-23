@@ -1,9 +1,9 @@
 # Copyright 2026 Christian Guyot
 # SPDX-License-Identifier: Apache-2.0
-"""Teste `src/library/catalog.py` en pur Python (sqlite3, sans Qt) : les trois
-migrations automatiques au démarrage (chacune pré-semée avec l'ancien schéma
-brut, sans passer par Catalog), le CRUD de base, les groupes de doublons,
-`cleanup_asset_dirs` et les comptages."""
+"""Tests `src/library/catalog.py` in pure Python (sqlite3, without Qt): the three
+automatic migrations at startup (each pre-seeded with the old raw
+schema, without going through Catalog), the basic CRUD, the duplicate groups,
+`cleanup_asset_dirs` and the counts."""
 import os
 import sqlite3
 from datetime import datetime
@@ -26,9 +26,9 @@ def _make_photo(path: str, **kwargs) -> PhotoInfo:
 
 class TestMigrateNormalizePaths:
     def test_dedups_paths_after_normalization(self, tmp_path):
-        """Deux chemins qui ne diffèrent que par le séparateur ('/' vs '\\')
-        doivent fusionner en une seule ligne après migration (le premier vu
-        est conservé)."""
+        """Two paths differing only by the separator ('/' vs '\')
+        must merge into a single row after migration (the first one seen
+        is kept)."""
         db_path = tmp_path / "catalog.db"
         conn = sqlite3.connect(str(db_path))
         conn.execute(
@@ -113,7 +113,7 @@ class TestMigrateVideoFields:
 class TestMigrateDuplicateFields:
     def test_adds_duplicate_group_id_column_without_crashing(self, tmp_path):
         db_path = tmp_path / "catalog.db"
-        # Schéma post-migration vidéo mais pré-migration doublons.
+        # Schema after the video migration but before the duplicates migration.
         conn = sqlite3.connect(str(db_path))
         conn.execute(
             """
@@ -144,8 +144,8 @@ class TestMigrateDuplicateFields:
 
         catalog = Catalog(db_path=db_path)
 
-        # La colonne existe et set_duplicate_groups()/get_duplicate_groups() fonctionnent
-        # (deux membres : un groupe de 1 serait dissous par l'invariant, cf.
+        # The column exists and set_duplicate_groups()/get_duplicate_groups() work
+        # (two members: a group of 1 would be dissolved by the invariant, cf.
         # TestDuplicateGroups.test_set_duplicate_groups_dissolves_singletons).
         catalog.set_duplicate_groups({
             os.path.normpath("C:/photos/a.jpg"): 1,
@@ -158,15 +158,15 @@ class TestMigrateDuplicateFields:
     def test_init_db_is_idempotent(self, tmp_path):
         db_path = tmp_path / "catalog.db"
         Catalog(db_path=db_path)
-        # Ré-instancier sur la même DB ré-exécute toutes les migrations : ne
-        # doit pas planter (pattern try/ALTER TABLE/except déjà en place).
+        # Re-instantiating on the same DB runs every migration again: it must
+        # not crash (the try/ALTER TABLE/except pattern already in place).
         Catalog(db_path=db_path)
 
 
 class TestMigrateRatingField:
     def test_adds_rating_column_without_crashing(self, tmp_path):
         db_path = tmp_path / "catalog.db"
-        # Schéma post-migration doublons mais pré-migration notation.
+        # Schema after the duplicates migration but before the rating migration.
         conn = sqlite3.connect(str(db_path))
         conn.execute(
             """
@@ -213,13 +213,13 @@ class TestPhotoCrud:
         saved_again = catalog.add_or_update_photo(updated)
 
         assert saved_again.width == 999
-        assert len(catalog.get_all_photos()) == 1  # ON CONFLICT DO UPDATE, pas de doublon
+        assert len(catalog.get_all_photos()) == 1  # ON CONFLICT DO UPDATE, no duplicate
 
     def test_add_or_update_photo_preserves_favorite_across_rescan(self, tmp_path):
-        """is_favorite n'est volontairement PAS dans le ON CONFLICT DO UPDATE :
-        un re-scan (qui reconstruit un PhotoInfo neuf, is_favorite=False par
-        défaut) ne doit jamais écraser un favori déjà marqué par l'utilisateur
-        (cf. set_favorite(), le seul chemin censé le modifier)."""
+        """is_favorite is deliberately NOT in the ON CONFLICT DO UPDATE:
+        a rescan (which rebuilds a fresh PhotoInfo, is_favorite=False by
+        default) must never overwrite a favourite already marked by the user
+        (cf. set_favorite(), the only path meant to modify it)."""
         catalog = Catalog(db_path=tmp_path / "catalog.db")
         saved = catalog.add_or_update_photo(_make_photo("C:/photos/a.jpg"))
         catalog.set_favorite(saved.id, True)
@@ -229,9 +229,9 @@ class TestPhotoCrud:
         assert rescanned.is_favorite is True
 
     def test_add_or_update_photo_preserves_rating_across_rescan(self, tmp_path):
-        """rating n'est volontairement PAS dans le ON CONFLICT DO UPDATE (même
-        raisonnement que is_favorite) : un re-scan ne doit jamais écraser une
-        note déjà posée par l'utilisateur."""
+        """rating is deliberately NOT in the ON CONFLICT DO UPDATE (the same
+        reasoning as is_favorite): a rescan must never overwrite a
+        rating already given by the user."""
         catalog = Catalog(db_path=tmp_path / "catalog.db")
         saved = catalog.add_or_update_photo(_make_photo("C:/photos/a.jpg"))
         catalog.set_rating(saved.id, 3)
@@ -241,10 +241,10 @@ class TestPhotoCrud:
         assert rescanned.rating == 3
 
     def test_add_or_update_photo_preserves_tags_across_rescan(self, tmp_path):
-        """tags n'est volontairement plus dans le ON CONFLICT DO UPDATE (retiré
-        en même temps que la fonctionnalité Mots-clés, même raisonnement que
-        is_favorite/rating) : un re-scan forcé ne doit jamais effacer les tags
-        déjà posés par l'utilisateur."""
+        """tags is deliberately no longer in the ON CONFLICT DO UPDATE (removed
+        at the same time as the Keywords feature, the same reasoning as
+        is_favorite/rating): a forced rescan must never erase the tags
+        already entered by the user."""
         catalog = Catalog(db_path=tmp_path / "catalog.db")
         saved = catalog.add_or_update_photo(_make_photo("C:/photos/a.jpg"))
         catalog.set_tags(saved.id, ["vacances", "famille"])
@@ -307,7 +307,7 @@ class TestPhotoCrud:
         catalog = Catalog(db_path=tmp_path / "catalog.db")
         catalog.add_or_update_photo(_make_photo(r"C:\old\sub\a.jpg"))
         catalog.add_or_update_photo(_make_photo(r"C:\old\b.jpg"))
-        catalog.add_or_update_photo(_make_photo(r"C:\other\c.jpg"))  # hors de l'arborescence déplacée
+        catalog.add_or_update_photo(_make_photo(r"C:\other\c.jpg"))  # outside the moved tree
 
         catalog.update_paths_prefix(r"C:\old", r"C:\new")
 
@@ -339,10 +339,10 @@ class TestDuplicateGroups:
         assert catalog.count_duplicate_groups() == 0
 
     def test_repeated_set_duplicate_groups_after_single_clear(self, tmp_path):
-        """Pattern utilisé par le scan de doublons progressif (main_window.py) :
-        clear_duplicate_groups() une seule fois au démarrage, puis plusieurs
-        appels croissants à set_duplicate_groups() au fil du scan — ne doit
-        laisser aucune ligne orpheline ni incohérence."""
+        """Pattern used by the progressive duplicate scan (main_window.py):
+        clear_duplicate_groups() a single time at the start, then several
+        growing calls to set_duplicate_groups() as the scan goes - must
+        leave no orphan row nor inconsistency."""
         catalog = Catalog(db_path=tmp_path / "catalog.db")
         catalog.add_or_update_photo(_make_photo("C:/photos/a.jpg"))
         catalog.add_or_update_photo(_make_photo("C:/photos/b.jpg"))
@@ -351,7 +351,7 @@ class TestDuplicateGroups:
 
         catalog.clear_duplicate_groups()
 
-        # Instantané 1 : un seul groupe trouvé jusqu'ici
+        # Snapshot 1: a single group found so far
         catalog.set_duplicate_groups({
             os.path.normpath("C:/photos/a.jpg"): 1,
             os.path.normpath("C:/photos/b.jpg"): 1,
@@ -360,7 +360,7 @@ class TestDuplicateGroups:
         assert set(groups.keys()) == {1}
         assert {p.filename for p in groups[1]} == {"a.jpg", "b.jpg"}
 
-        # Instantané 2 : un second groupe apparaît, le premier ne change pas
+        # Snapshot 2: a second group appears, the first does not change
         catalog.set_duplicate_groups({
             os.path.normpath("C:/photos/a.jpg"): 1,
             os.path.normpath("C:/photos/b.jpg"): 1,
@@ -410,12 +410,12 @@ class TestDuplicateGroups:
         assert catalog.get_duplicate_group_assignments() == {a: 1, b: 1}
 
     def test_set_duplicate_groups_none_clears_stale_assignment(self, tmp_path):
-        """Technique utilisée par _apply_duplicate_results (main_window.py) pour
-        effacer les groupes obsolètes après une passe incrémentale :
-        set_duplicate_groups({p: None for p in stale}). Ici un 3e membre reste
-        dans le groupe pour vérifier que seul le chemin explicitement effacé
-        perd son groupe (cf. test suivant pour le cas où plus aucun membre
-        valide ne reste)."""
+        """Technique used by _apply_duplicate_results (main_window.py) to
+        erase the obsolete groups after an incremental pass:
+        set_duplicate_groups({p: None for p in stale}). Here a 3rd member stays
+        in the group to check that only the explicitly erased path
+        loses its group (cf. the following test for the case where no valid
+        member is left at all)."""
         catalog = Catalog(db_path=tmp_path / "catalog.db")
         catalog.add_or_update_photo(_make_photo("C:/photos/a.jpg"))
         catalog.add_or_update_photo(_make_photo("C:/photos/b.jpg"))
@@ -434,17 +434,17 @@ class TestDuplicateGroups:
         assert rows == [(None,)]
 
     def test_set_duplicate_groups_dissolves_leftover_singleton(self, tmp_path):
-        """Régression : un DuplicateDetectorThread en cours au moment d'une
-        suppression peut réécrire, via set_duplicate_groups(), le groupe d'un
-        membre survivant seul (l'autre membre a disparu de la table `photos`
-        entre-temps — l'UPDATE le concernant est un no-op silencieux). Sans
-        dissolution automatique ici, ce groupe de 1 restait affiché jusqu'au
-        prochain delete_photo(s)/redémarrage (cf. dedup_singleton_groups_any_
-        delete_path en mémoire)."""
+        """Regression: a DuplicateDetectorThread running at the moment of a
+        deletion may rewrite, through set_duplicate_groups(), the group of a
+        member left alone (the other member disappeared from the `photos` table
+        in the meantime - the UPDATE concerning it is a silent no-op). Without
+        automatic dissolution here, that group of 1 stayed displayed until the
+        next delete_photo(s)/restart (cf. dedup_singleton_groups_any_
+        delete_path in memory)."""
         catalog = Catalog(db_path=tmp_path / "catalog.db")
         catalog.add_or_update_photo(_make_photo("C:/photos/a.jpg"))
-        # b.jpg n'est PAS inséré dans le catalogue : simule sa suppression
-        # pendant que le thread de détection avait déjà A et B fusionnés.
+        # b.jpg is NOT inserted into the catalog: simulates its deletion
+        # while the detection thread had already merged A and B.
         b = os.path.normpath("C:/photos/b.jpg")
         a = os.path.normpath("C:/photos/a.jpg")
 
@@ -465,9 +465,9 @@ class TestCleanupAssetDirs:
         assert [p.filename for p in catalog.get_all_photos()] == ["real.jpg"]
 
     def test_updates_album_photo_count(self, tmp_path):
-        # Non-régression : une photo dans un dossier *_assets et ajoutée à un
-        # album laissait une entrée album_photos orpheline après cleanup,
-        # gonflant AlbumInfo.photo_count au-delà des photos réellement présentes.
+        # Non-regression: a photo in a *_assets folder and added to an
+        # album left an orphan album_photos row after cleanup,
+        # inflating AlbumInfo.photo_count beyond the photos really present.
         catalog = Catalog(db_path=tmp_path / "catalog.db")
         album = catalog.create_album("Vacances")
         asset_photo = catalog.add_or_update_photo(_make_photo(r"C:\photos\LR_assets\preview.jpg"))
@@ -521,11 +521,11 @@ class TestCounts:
     def test_get_recursive_photo_counts_many_folders_does_not_hit_sqlite_expression_limit(
         self, tmp_path
     ):
-        # Non-régression : la version d'origine construisait un WHERE avec une
-        # condition "directory=? OR directory LIKE ?" par dossier demandé — un
-        # dossier avec plusieurs centaines de sous-dossiers (ex. _populate_subfolders
-        # de la sidebar appelé sur un dossier à 1500 enfants) dépassait la profondeur
-        # d'arbre d'expression maximale de SQLite (1000) et levait
+        # Non-regression: the original version built a WHERE with one
+        # "directory=? OR directory LIKE ?" condition per requested folder - a
+        # folder with several hundred subfolders (e.g. _populate_subfolders
+        # of the sidebar called on a folder with 1500 children) exceeded the maximum
+        # expression tree depth of SQLite (1000) and raised
         # "sqlite3.OperationalError: Expression tree is too large".
         catalog = Catalog(db_path=tmp_path / "catalog.db")
         many_folders = [rf"C:\lib\sub{i}" for i in range(1500)]
@@ -547,11 +547,11 @@ class TestCounts:
 
 
 class TestThreadLocalConnection:
-    """_conn() met la connexion en cache par (instance, thread) — pattern
-    ThumbnailCache généralisé en 2026-07. Ces tests verrouillent les
-    invariants du refactor : réutilisation, visibilité inter-instances (WAL),
-    connexion utilisable après une écriture échouée (garde rollback), et
-    absence d'exception sous lecture/écriture concurrentes."""
+    """_conn() caches the connection per (instance, thread) - the
+    ThumbnailCache pattern generalised in 2026-07. These tests lock down the
+    invariants of the refactor: reuse, inter-instance visibility (WAL),
+    connection usable after a failed write (rollback guard), and
+    absence of exception under concurrent read/write."""
 
     def test_same_thread_reuses_single_connection(self, tmp_path):
         catalog = Catalog(db_path=tmp_path / "catalog.db")
@@ -570,25 +570,25 @@ class TestThreadLocalConnection:
         assert cat1._conn() is not cat2._conn()
 
     def test_failed_write_leaves_connection_usable(self, tmp_path):
-        """Une écriture qui échoue ne doit pas laisser la connexion cachée au
-        milieu d'une transaction (sinon : « database is locked » pour toutes
-        les écritures suivantes)."""
+        """A write that fails must not leave the cached connection in the
+        middle of a transaction (otherwise: "database is locked" for every
+        subsequent write)."""
         catalog = Catalog(db_path=tmp_path / "catalog.db")
         try:
-            # photo_id inexistant + album_id None → IntegrityError sur la PK
+            # non-existent photo_id + album_id None -> IntegrityError on the PK
             catalog.add_photos_to_album(None, [None])
         except sqlite3.IntegrityError:
             pass
         assert not catalog._conn().in_transaction
 
-        # La connexion reste pleinement utilisable
+        # The connection stays fully usable
         p = catalog.add_or_update_photo(_make_photo("C:/photos/a.jpg"))
         assert p.id is not None
 
     def test_concurrent_reader_and_writer(self, tmp_path):
-        """Un écrivain (add_or_update_photo en boucle) et un lecteur
-        (get_all_photos en boucle) sur la même instance ne doivent lever
-        aucune exception (WAL + verrou Python)."""
+        """One writer (add_or_update_photo in a loop) and one reader
+        (get_all_photos in a loop) on the same instance must raise
+        no exception (WAL + Python lock)."""
         import threading as _threading
 
         catalog = Catalog(db_path=tmp_path / "catalog.db")
@@ -620,8 +620,8 @@ class TestThreadLocalConnection:
 
 class TestIndexes:
     def test_query_indexes_exist(self, tmp_path):
-        """Les index qui évitent les full scans (favoris, vidéos, groupes de
-        doublons) doivent être créés au démarrage."""
+        """The indexes that avoid the full scans (favourites, videos, duplicate
+        groups) must be created at startup."""
         catalog = Catalog(db_path=tmp_path / "catalog.db")
         names = {r[1] for r in _raw_query_all(catalog, "PRAGMA index_list('photos')")}
         assert "idx_photos_favorite" in names
@@ -697,7 +697,7 @@ class TestAlbumCrud:
         catalog = Catalog(db_path=tmp_path / "catalog.db")
         album = catalog.create_album("Vacances")
         p1 = catalog.add_or_update_photo(_make_photo("C:/photos/a.jpg"))
-        catalog.add_or_update_photo(_make_photo("C:/photos/b.jpg"))  # pas dans l'album
+        catalog.add_or_update_photo(_make_photo("C:/photos/b.jpg"))  # not in the album
         catalog.add_photo_to_album(album.id, p1.id)
 
         photos = catalog.get_photos_in_album(album.id)
@@ -740,10 +740,10 @@ class TestAlbumCrud:
         assert catalog.get_albums()[0].photo_count == 0
 
     def test_startup_purges_preexisting_orphaned_album_photos(self, tmp_path):
-        # Non-régression : des entrées album_photos orphelines (photo_id sans
-        # ligne photos correspondante, ex. créées avant le correctif de
-        # cleanup_asset_dirs) doivent être purgées par le filet de sécurité au
-        # démarrage, sinon AlbumInfo.photo_count reste gonflé indéfiniment.
+        # Non-regression: orphan album_photos rows (photo_id with no
+        # corresponding photos row, e.g. created before the fix of
+        # cleanup_asset_dirs) must be purged by the safety net at
+        # startup, otherwise AlbumInfo.photo_count stays inflated indefinitely.
         catalog = Catalog(db_path=tmp_path / "catalog.db")
         album = catalog.create_album("Vacances")
         real_photo = catalog.add_or_update_photo(_make_photo("C:/photos/a.jpg"))
@@ -755,7 +755,7 @@ class TestAlbumCrud:
         )
         conn.commit()
         conn.close()
-        assert catalog.get_albums()[0].photo_count == 2  # orphelin compté avant purge
+        assert catalog.get_albums()[0].photo_count == 2  # orphan counted before the purge
 
         catalog2 = Catalog(db_path=tmp_path / "catalog.db")
 
@@ -768,7 +768,7 @@ class TestAlbumCrud:
         p2 = catalog.add_or_update_photo(_make_photo("C:/photos/b.jpg"))
         catalog.add_photo_to_album(album.id, p1.id)
 
-        # p1 déjà présent (ignoré), p2 nouveau → 1 seul ajout effectif
+        # p1 already present (ignored), p2 new -> a single effective addition
         added = catalog.add_photos_to_album(album.id, [p1.id, p2.id])
 
         assert added == 1
@@ -788,7 +788,7 @@ class TestAlbumCrud:
 
         remaining = {p.path for p in catalog.get_photos_in_album(album.id)}
         assert remaining == {photos[1].path}
-        # Les photos retirées restent dans le catalogue
+        # The removed photos stay in the catalog
         assert catalog.get_photo_by_path(photos[0].path) is not None
 
     def test_remove_photo_from_album_keeps_photo_in_catalog(self, tmp_path):
@@ -804,7 +804,7 @@ class TestAlbumCrud:
         assert catalog.get_albums()[0].photo_count == 1
         remaining = {p.path for p in catalog.get_photos_in_album(album.id)}
         assert remaining == {p2.path}
-        # La photo retirée de l'album reste dans le catalogue.
+        # The photo removed from the album stays in the catalog.
         assert catalog.get_photo_by_path(p1.path) is not None
 
     def test_get_favorites_only_returns_flagged_photos(self, tmp_path):
@@ -859,7 +859,7 @@ class TestRating:
         catalog = Catalog(db_path=tmp_path / "catalog.db")
         catalog.add_or_update_photo(_make_photo("C:/photos/a.jpg"))
 
-        catalog.set_rating_for_ids([], 5)  # ne doit pas lever
+        catalog.set_rating_for_ids([], 5)  # must not raise
 
         assert catalog.get_all_photos()[0].rating == 0
 
@@ -955,8 +955,8 @@ class TestTags:
         assert catalog.get_photo_by_path(p2.path).tags == []
 
     def test_get_photos_by_tag_exact_match_not_substring(self, tmp_path):
-        """'vacances' ne doit pas matcher 'vacances2024' (correspondance
-        d'élément exact, pas de sous-chaîne)."""
+        """'vacances' must not match 'vacances2024' (exact element
+        match, not substring)."""
         catalog = Catalog(db_path=tmp_path / "catalog.db")
         p1 = catalog.add_or_update_photo(_make_photo("C:/photos/a.jpg"))
         p2 = catalog.add_or_update_photo(_make_photo("C:/photos/b.jpg"))
