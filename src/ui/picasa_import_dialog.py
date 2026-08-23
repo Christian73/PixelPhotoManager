@@ -1,8 +1,8 @@
 ﻿# Copyright 2026 Christian Guyot
 # SPDX-License-Identifier: Apache-2.0
 """
-Dialogue d'import des données Picasa (visages + personnes).
-Peut être déclenché au démarrage ou manuellement depuis le menu Visages.
+Dialog importing the Picasa data (faces + people).
+Can be triggered at startup or manually from the Faces menu.
 """
 
 import logging
@@ -20,14 +20,14 @@ logger = logging.getLogger(__name__)
 
 class PicasaImportDialog(QDialog):
     """
-    Propose l'import des données de reconnaissance faciale Picasa.
+    Offers to import the Picasa face recognition data.
 
-    Paramètres
+    Parameters
     ----------
-    config   : Config — pour lire les dossiers et écrire le flag d'import
+    config   : Config — to read the folders and write the import flag
     catalog  : Catalog
     face_db  : FaceDatabase
-    parent   : widget parent optionnel
+    parent   : optional parent widget
     """
 
     def __init__(self, config, catalog, face_db, edit_db=None, parent=None,
@@ -210,7 +210,7 @@ class PicasaImportDialog(QDialog):
         self._btn_skip.setEnabled(True)
         self._btn_skip.clicked.disconnect()
         self._btn_skip.clicked.connect(self.accept)
-        self._btn_row.insertStretch(0)  # centre le bouton Fermer
+        self._btn_row.insertStretch(0)  # centres the Close button
 
         if self._on_edits_imported and result.edited_map:
             self._on_edits_imported(result.edited_map)

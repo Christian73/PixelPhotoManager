@@ -1,8 +1,8 @@
 ﻿# Copyright 2026 Christian Guyot
 # SPDX-License-Identifier: Apache-2.0
-"""Chargement et construction des pixmaps de la visionneuse (extraits de
-photo_viewer.py) : image de base 1024 px, application des retouches, frames
-vidéo. Aussi utilisés par le diaporama (_build_pixmap)."""
+"""Loading and building of the viewer pixmaps (extracted from
+photo_viewer.py): the 1024 px base image, applying the edits, video frames.
+Also used by the slideshow (_build_pixmap)."""
 import copy
 import io
 import logging
@@ -30,15 +30,15 @@ from src.ui.annotation_renderer import (
 
 logger = logging.getLogger(__name__)
 
-# Résolution maximale pour l'affichage à l'écran.
-# Les retouches (rotation, recadrage, etc.) s'appliquent sur cette copie réduite.
+# Maximum resolution for the on-screen display.
+# The edits (rotation, crop, etc.) are applied on this reduced copy.
 
 _PREVIEW_MAX_PX = 1024
 
 
 def _to_rgb(img):
-    """Convertit une image PIL en RGB pour l'enregistrement JPEG.
-    RGBA est aplati sur fond blanc ; les autres modes (CMYK, P…) sont convertis directement."""
+    """Converts a PIL image to RGB for JPEG saving.
+    RGBA is flattened on a white background; the other modes (CMYK, P…) are converted directly."""
     if img.mode == "RGBA":
         from PIL import Image as _Image
         bg = _Image.new("RGB", img.size, (255, 255, 255))
@@ -50,8 +50,8 @@ def _to_rgb(img):
 
 
 def _build_pixmap(photo: PhotoInfo, edit: EditInfo | None) -> "tuple[QPixmap, int, int] | None":
-    """Retourne (pixmap, orig_w, orig_h) — dimensions de l'image EXIF-corrigée avant
-    tout edit, à utiliser pour mapper les bbox de détection faciale."""
+    """Returns (pixmap, orig_w, orig_h) — the dimensions of the EXIF-corrected
+    image before any edit, to be used to map the face detection bboxes."""
     from pathlib import Path as _Path
     from src.library.exif_reader import VIDEO_EXT
     if _Path(photo.path).suffix.lower() in VIDEO_EXT:
@@ -61,7 +61,7 @@ def _build_pixmap(photo: PhotoInfo, edit: EditInfo | None) -> "tuple[QPixmap, in
         from src.library.image_loader import open_image
         with open_image(photo.path) as img:
             img = ImageOps.exif_transpose(img)
-            orig_w, orig_h = img.size   # dimensions EXIF-corrigées (référence pour les bbox)
+            orig_w, orig_h = img.size   # EXIF-corrected dimensions (the reference for the bboxes)
             if max(orig_w, orig_h) > _PREVIEW_MAX_PX:
                 scale = _PREVIEW_MAX_PX / max(orig_w, orig_h)
                 img = img.resize(
@@ -83,13 +83,13 @@ def _build_pixmap(photo: PhotoInfo, edit: EditInfo | None) -> "tuple[QPixmap, in
 
 def _build_video_base_image(video_path: str) -> "tuple[bytes, int, int] | None":
     """
-    Extrait la première frame de la vidéo sans aucun seek.
-    Retourne (jpeg_bytes, orig_w, orig_h).
+    Extracts the first frame of the video without any seek.
+    Returns (jpeg_bytes, orig_w, orig_h).
 
-    Utilise CAP_FFMPEG pour éviter les appels COM/DirectShow qui peuvent marshaler
-    du travail sur le thread UI (STA) et provoquer des freezes.
-    Ne lit jamais CAP_PROP_FRAME_COUNT ni cap.set(POS_FRAMES) : ces deux appels
-    peuvent scanner ou décoder tout le fichier pour les formats sans index.
+    Uses CAP_FFMPEG to avoid the COM/DirectShow calls, which can marshal work
+    onto the UI thread (STA) and cause freezes.
+    Never reads CAP_PROP_FRAME_COUNT nor cap.set(POS_FRAMES): both calls can
+    scan or decode the whole file for the formats without an index.
     """
     try:
         import cv2
@@ -127,10 +127,11 @@ def _build_video_base_image(video_path: str) -> "tuple[bytes, int, int] | None":
 
 def _build_base_image(photo: PhotoInfo) -> "tuple[bytes, int, int] | None":
     """
-    Charge l'image (ou la première frame vidéo), applique la correction EXIF et réduit
-    à _PREVIEW_MAX_PX. Retourne (jpeg_bytes, orig_w, orig_h) SANS retouche.
-    Résultat mis en cache dans PhotoViewer._base_lru : évite de relire le fichier
-    complet à chaque mouvement de slider (preview de retouche).
+    Loads the image (or the first video frame), applies the EXIF correction
+    and reduces it to _PREVIEW_MAX_PX. Returns (jpeg_bytes, orig_w, orig_h)
+    WITHOUT any edit.
+    The result is cached in PhotoViewer._base_lru: avoids re-reading the whole
+    file at every slider movement (edit preview).
     """
     from pathlib import Path as _Path
     from src.library.exif_reader import VIDEO_EXT
@@ -158,13 +159,13 @@ def _build_base_image(photo: PhotoInfo) -> "tuple[bytes, int, int] | None":
 
 def _apply_edit_to_base(base_bytes: bytes, edit: "EditInfo | None") -> "QPixmap | None":
     """
-    Applique les retouches sur l'image de base en cache (bytes JPEG 1024px).
-    Aucune lecture disque — remplace _build_pixmap pour les previews.
+    Applies the edits on the cached base image (1024 px JPEG bytes).
+    No disk read — replaces _build_pixmap for the previews.
     """
     try:
         if edit is None or not edit.is_modified():
-            # Aucune retouche : décodage JPEG direct par Qt, sans l'aller-retour
-            # PIL (décodage + ré-encodage) — chemin chaud de la navigation.
+            # No edit: direct JPEG decoding by Qt, without the PIL round trip
+            # (decoding + re-encoding) — the hot path of the navigation.
             pixmap = QPixmap()
             pixmap.loadFromData(base_bytes)
             if not pixmap.isNull():
@@ -185,7 +186,7 @@ def _apply_edit_to_base(base_bytes: bytes, edit: "EditInfo | None") -> "QPixmap 
 
 
 def _build_video_pixmap(video_path: str) -> "tuple[QPixmap, int, int] | None":
-    """Extrait une frame de la vidéo pour l'afficher dans la visionneuse."""
+    """Extracts a frame of the video to show it in the viewer."""
     try:
         import cv2
         from PIL import Image

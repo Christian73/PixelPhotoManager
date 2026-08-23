@@ -1,19 +1,18 @@
 # Copyright 2026 Christian Guyot
 # SPDX-License-Identifier: Apache-2.0
-"""Sélecteur de langue de la barre du haut (drapeaux).
+"""Language selector of the top bar (flags).
 
-Doublon assumé de Paramètres › Langue : la langue est le seul réglage qu'un
-utilisateur doit pouvoir trouver **sans savoir lire l'interface**. Une entrée
-de menu nommée « Settings » ne remplit pas cette condition ; un drapeau visible
-en permanence, si. Les deux points d'entrée écrivent la même clé de config
-(`ui.language`) — `refresh()` resynchronise le bouton après un passage par le
-dialogue de paramètres.
+A deliberate duplicate of Settings › Language: the language is the only
+setting a user must be able to find **without being able to read the
+interface**. A menu entry named "Settings" does not meet that condition; a
+permanently visible flag does. Both entry points write the same config key
+(`ui.language`) — `refresh()` resynchronises the button after a visit to the
+settings dialog.
 
-Le changement ne prend effet qu'au redémarrage (les widgets construisent leurs
-libellés une seule fois, cf. `src/core/i18n.py`). Le bouton affiche malgré tout
-**immédiatement** le drapeau choisi : c'est le choix de l'utilisateur qu'il
-montre, et l'infobulle dit alors explicitement que l'interface est encore dans
-l'ancienne langue.
+The change only takes effect on restart (widgets build their labels once, cf.
+`src/core/i18n.py`). The button nevertheless shows the chosen flag
+**immediately**: what it shows is the user's choice, and the tooltip then says
+explicitly that the interface is still in the previous language.
 """
 
 from PySide6.QtCore import QSize, Signal
@@ -27,32 +26,32 @@ from src.ui.ui_utils import install_menu_width_fix
 
 
 class LanguageButton(QPushButton):
-    """Bouton drapeau ouvrant la liste des langues d'interface."""
+    """Flag button opening the list of the interface languages."""
 
-    #: Émis avec le code retenu quand l'utilisateur change de langue.
+    #: Emitted with the code selected when the user changes language.
     language_changed = Signal(str)
 
     def __init__(self, config, parent=None) -> None:
         super().__init__(parent)
         self._config = config
-        # Nom accessible pour l'automatisation pywinauto (e2e) — même
-        # convention que settings::language::<code> : le bouton n'a aucun
-        # texte, et son infobulle est traduite.
+        # Accessible name for the pywinauto automation (e2e) — the same
+        # convention as settings::language::<code>: the button has no text at
+        # all, and its tooltip is translated.
         self.setAccessibleName("toolbar::language")
-        # Sans `setIconSize`, QPushButton rabat l'icône sur la taille par défaut
-        # du style (16 px) : le drapeau serait rendu deux fois plus petit que la
-        # vignette fournie, quel que soit le soin mis à la dessiner.
+        # Without `setIconSize`, QPushButton falls back to the default icon size
+        # of the style (16 px): the flag would be rendered twice as small as the
+        # thumbnail provided, however carefully it is drawn.
         self.setIconSize(QSize(FLAG_WIDTH, FLAG_HEIGHT))
         self.clicked.connect(self._show_menu)
         self.refresh()
 
-    # ------------------------------------------------------------------ état
+    # ------------------------------------------------------------------ state
 
     def current_code(self) -> str:
         return i18n.current_language(self._config)
 
     def refresh(self) -> None:
-        """Recale le drapeau et l'infobulle sur la config (cf. docstring)."""
+        """Realigns the flag and the tooltip on the config (cf. the docstring)."""
         code = self.current_code()
         self.setIcon(flag_icon(code))
         self.setText("")
@@ -74,8 +73,8 @@ class LanguageButton(QPushButton):
         group.setExclusive(True)
         current = self.current_code()
         for code, name in i18n.LANGUAGES.items():
-            # Le nom de la langue reste écrit dans cette langue (cf. LANGUAGES) :
-            # le traduire rendrait la liste illisible pour qui cherche la sienne.
+            # The name of the language stays written in that language (cf. LANGUAGES):
+            # translating it would make the list unreadable for whoever is looking for theirs.
             act = QAction(flag_icon(code), name, menu)
             act.setCheckable(True)
             act.setChecked(code == current)

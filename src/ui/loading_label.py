@@ -1,11 +1,10 @@
 ﻿# Copyright 2026 Christian Guyot
 # SPDX-License-Identifier: Apache-2.0
 """
-LoadingLabel — QLabel avec animation spinner pendant le chargement.
+LoadingLabel — a QLabel with a spinner animation during loading.
 
-Toutes les instances actives partagent un seul QTimer de classe (~10 fps)
-pour ne pas surcharger le CPU quand des dizaines de vignettes chargent
-en parallèle.
+Every active instance shares a single class QTimer (~10 fps) so as not to
+overload the CPU when dozens of thumbnails load in parallel.
 """
 
 import math
@@ -17,15 +16,15 @@ from PySide6.QtWidgets import QLabel
 
 class LoadingLabel(QLabel):
     """
-    QLabel qui affiche 8 points tournants pendant le chargement,
-    puis l'image dès que setPixmap() est appelé.
+    A QLabel showing 8 rotating dots during loading, then the image as soon
+    as setPixmap() is called.
 
-    Usage :
+    Usage:
         lbl = LoadingLabel("#1a1a1a")
         lbl.setFixedSize(130, 130)
-        lbl.start_loading()          # démarre le spinner
+        lbl.start_loading()          # starts the spinner
         ...
-        lbl.setPixmap(pixmap)        # arrête le spinner, affiche l'image
+        lbl.setPixmap(pixmap)        # stops the spinner, shows the image
     """
 
     _timer: "QTimer | None" = None
@@ -38,13 +37,13 @@ class LoadingLabel(QLabel):
         self._loading = False
         self._bg = QColor(bg_color)
 
-    # ------------------------------------------------------------------ timer partagé
+    # ------------------------------------------------------------------ shared timer
 
     @classmethod
     def _ensure_timer(cls) -> None:
         if cls._timer is None:
             cls._timer = QTimer()
-            cls._timer.setInterval(100)   # 10 fps — suffisant pour un spinner
+            cls._timer.setInterval(100)   # 10 fps — enough for a spinner
             cls._timer.timeout.connect(cls._tick)
 
     @classmethod
@@ -56,7 +55,7 @@ class LoadingLabel(QLabel):
                 lbl.update()
                 alive.append(lbl)
             except RuntimeError:
-                pass   # objet C++ déjà détruit, on le retire silencieusement
+                pass   # C++ object already destroyed, remove it silently
         cls._active = alive
         if not cls._active:
             cls._timer.stop()
@@ -64,7 +63,7 @@ class LoadingLabel(QLabel):
     # ------------------------------------------------------------------ API publique
 
     def start_loading(self) -> None:
-        """Affiche le spinner. Sans effet si déjà en cours de chargement."""
+        """Shows the spinner. No effect if already loading."""
         if self._loading:
             return
         self._loading = True
@@ -74,7 +73,7 @@ class LoadingLabel(QLabel):
         self.update()
 
     def setPixmap(self, pix: QPixmap) -> None:  # noqa: N802
-        """Arrête le spinner et affiche le pixmap."""
+        """Stops the spinner and shows the pixmap."""
         super().setPixmap(pix)
         self._stop()
 
@@ -95,7 +94,7 @@ class LoadingLabel(QLabel):
         super().hideEvent(event)
         self._stop()
 
-    # ------------------------------------------------------------------ dessin
+    # ------------------------------------------------------------------ drawing
 
     def paintEvent(self, event) -> None:
         if not self._loading:
@@ -107,8 +106,8 @@ class LoadingLabel(QLabel):
         p.fillRect(self.rect(), self._bg)
 
         cx, cy = self.width() // 2, self.height() // 2
-        r  = max(6, min(self.width(), self.height()) // 6)   # rayon de la ronde
-        dr = max(2, r // 4)                                   # rayon de chaque point
+        r  = max(6, min(self.width(), self.height()) // 6)   # radius of the ring
+        dr = max(2, r // 4)                                   # radius of each dot
 
         for i in range(self._N):
             angle = 2 * math.pi * i / self._N - math.pi / 2

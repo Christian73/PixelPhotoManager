@@ -1,14 +1,14 @@
 # Copyright 2026 Christian Guyot
 # SPDX-License-Identifier: Apache-2.0
 """
-AdvancedSearchDialog — recherche multi-critères (dates, appareil, dossier,
-personne, note min, mots-clés, favoris, type média).
+AdvancedSearchDialog — multi-criteria search (dates, camera, folder,
+person, minimum rating, keywords, favorites, media type).
 
-La personne n'est PAS un critère de Catalog.search_advanced() : catalog.db et
-faces.db sont deux bases séparées, sans JOIN possible entre elles (cf.
-CLAUDE.md). get_person_id() renvoie l'id sélectionné à part ; c'est à
-l'appelant (MainWindow) de résoudre face_db.get_photos_for_person(person_id)
-et d'intersecter avec le résultat de search_advanced() en Python.
+The person is NOT a criterion of Catalog.search_advanced(): catalog.db and
+faces.db are two separate databases, with no JOIN possible between them (cf.
+CLAUDE.md). get_person_id() returns the selected id separately; it is up to
+the caller (MainWindow) to resolve face_db.get_photos_for_person(person_id)
+and to intersect it with the result of search_advanced() in Python.
 """
 
 import logging
@@ -25,8 +25,8 @@ from src.core.i18n import translate
 
 logger = logging.getLogger(__name__)
 
-# (libellé affiché, valeur de media_type) — le libellé est purement d'affichage,
-# c'est le 2e élément qui est la donnée.
+# (displayed label, media_type value) — the label is purely for display,
+# the 2nd element is the data.
 _MEDIA_TYPES = [
     (translate("AdvancedSearchDialog", "All"),   None),
     (translate("AdvancedSearchDialog", "Photos"), "image"),
@@ -35,8 +35,8 @@ _MEDIA_TYPES = [
 
 
 class AdvancedSearchPrepLoader(QThread):
-    """Précharge les listes appareils/personnes/tags hors du thread UI avant
-    l'ouverture du dialogue (pattern _AssignPrepLoader de face_panel.py)."""
+    """Preloads the camera/person/tag lists off the UI thread before the dialog
+    is opened (the _AssignPrepLoader pattern of face_panel.py)."""
 
     ready = Signal(list, list, list)   # cameras, persons, all_tags
 
@@ -56,11 +56,11 @@ class AdvancedSearchPrepLoader(QThread):
 
 
 class AdvancedSearchDialog(QDialog):
-    """Formulaire de recherche avancée.
+    """Advanced search form.
 
-    get_criteria() renvoie un dict directement consommable par
-    Catalog.search_advanced() ; get_person_id() est résolu séparément (cf.
-    docstring module)."""
+    get_criteria() returns a dict directly consumable by
+    Catalog.search_advanced(); get_person_id() is resolved separately (cf. the
+    module docstring)."""
 
     def __init__(
         self,
@@ -114,7 +114,7 @@ class AdvancedSearchDialog(QDialog):
             self._person_combo.addItem(p.name, p.id)
         form.addRow(translate("AdvancedSearchDialog", "Person:"), self._person_combo)
 
-        # --- Dossier ---
+        # --- Folder ---
         self._folder_combo = QComboBox()
         self._folder_combo.setEditable(True)
         self._folder_combo.addItem("")
@@ -125,7 +125,7 @@ class AdvancedSearchDialog(QDialog):
         self._stars = _RatingStars()
         form.addRow(translate("AdvancedSearchDialog", "Min. rating:"), self._stars)
 
-        # --- Mots-clés ---
+        # --- Keywords ---
         self._tag_input = QLineEdit()
         self._tag_input.setPlaceholderText(translate("AdvancedSearchDialog", "Add a keyword "
                                                                              "then press Enter…"))
@@ -142,7 +142,7 @@ class AdvancedSearchDialog(QDialog):
         tags_col.addWidget(self._tags_summary)
         form.addRow(translate("AdvancedSearchDialog", "Keywords:"), self._wrap(tags_col))
 
-        # --- Favoris / type média ---
+        # --- Favorites / media type ---
         self._chk_favorites = QCheckBox(translate("AdvancedSearchDialog", "Favourites only"))
         form.addRow("", self._chk_favorites)
 
@@ -179,8 +179,9 @@ class AdvancedSearchDialog(QDialog):
         self._tags_summary.setText(", ".join(self._tag_filters))
 
     def get_criteria(self) -> dict:
-        """Dict prêt pour Catalog.search_advanced() — la personne n'y figure
-        pas (résolue séparément via get_person_id(), cf. docstring module)."""
+        """A dict ready for Catalog.search_advanced() — the person is not in it
+        (resolved separately through get_person_id(), cf. the module
+        docstring)."""
         criteria: dict = {}
         if self._chk_dates.isChecked():
             criteria["date_from"] = self._date_from.date().toString("yyyy-MM-dd")

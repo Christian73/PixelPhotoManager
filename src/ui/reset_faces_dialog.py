@@ -1,6 +1,6 @@
 # Copyright 2026 Christian Guyot
 # SPDX-License-Identifier: Apache-2.0
-"""Dialogue Visages › Réinitialiser et réindexer… (extrait de main_window.py)."""
+"""The Faces › Reset and reindex… dialog (extracted from main_window.py)."""
 
 from PySide6.QtWidgets import (
     QButtonGroup, QDialog, QDialogButtonBox, QFrame, QLabel, QRadioButton,
@@ -10,7 +10,7 @@ from src.core.i18n import translate
 
 
 class _ResetFacesDialog(QDialog):
-    """Dialogue de choix entre reset clustering seul et réinitialisation complète."""
+    """Dialog to choose between resetting the clustering only and a full reset."""
 
     RESET_CLUSTERING = 1
     RESET_FULL       = 2

@@ -1,11 +1,12 @@
 # Copyright 2026 Christian Guyot
 # SPDX-License-Identifier: Apache-2.0
-"""Rendu Qt du calque d'annotations (dessin + texte).
+"""Qt rendering of the annotation layer (drawing + text).
 
-Un seul chemin de rendu (``render_annotations``) sert à la fois l'aperçu live
-dans le canvas (``src/ui/photo_viewer.py``) et l'export (``composite_annotations_pil``,
-appelé depuis ``src/ui/main_window.py``) — évite de réimplémenter les courbes
-et la résolution de polices une seconde fois côté PIL.
+A single rendering path (``render_annotations``) serves both the live preview
+in the canvas (``src/ui/photo_viewer.py``) and the export
+(``composite_annotations_pil``, called from ``src/ui/main_window.py``) — this
+avoids reimplementing the curves and the font resolution a second time on the
+PIL side.
 """
 import math
 
@@ -21,8 +22,8 @@ from src.processing.annotation_geometry import (
 )
 
 _MIN_STROKE_PX = 1.0
-_DEFAULT_STROKE_WIDTH = 0.004   # fraction de min(largeur, hauteur)
-_DEFAULT_FONT_SIZE = 0.04       # fraction de min(largeur, hauteur)
+_DEFAULT_STROKE_WIDTH = 0.004   # fraction of min(width, height)
+_DEFAULT_FONT_SIZE = 0.04       # fraction of min(width, height)
 
 
 def _scale(target_w: float, target_h: float) -> float:
@@ -31,12 +32,13 @@ def _scale(target_w: float, target_h: float) -> float:
 
 def render_annotations(painter: QPainter, annotations: list, target_w: float, target_h: float,
                         background=None) -> None:
-    """Peint ``annotations`` (coordonnées normalisées 0-1) sur ``painter``,
-    à l'échelle de ``target_w``x``target_h`` — canvas écran ou QImage plein format.
+    """Paints ``annotations`` (normalised 0-1 coordinates) onto ``painter``,
+    at the scale of ``target_w``x``target_h`` — the screen canvas or a
+    full-size QImage.
 
-    ``background`` (``QPixmap``/``QImage`` optionnel) sert de source de pixels pour le
-    flou des formes rect/ellipse (flou de la photo sous la surface, pas de l'élément
-    d'écriture) — ``None`` désactive le flou (aucune source à échantillonner)."""
+    ``background`` (an optional ``QPixmap``/``QImage``) serves as the pixel source for the
+    blur of the rect/ellipse shapes (a blur of the photo under the surface, not of the
+    drawing element) — ``None`` disables the blur (no source to sample)."""
     if not annotations:
         return
     painter.save()
@@ -83,8 +85,8 @@ def _render_stroke(painter: QPainter, ann: dict, target_w: float, target_h: floa
 
 
 def _shape_local_rect(ann: dict, target_w: float, target_h: float) -> QRectF:
-    """Rectangle englobant (coordonnées écran, non tourné) d'un rect/ellipse — ``points``
-    stocke les deux coins opposés normalisés, même convention que le type "line"."""
+    """Bounding rectangle (screen coordinates, unrotated) of a rect/ellipse — ``points``
+    stores the two opposite normalised corners, the same convention as the "line" type."""
     pts = ann.get("points") or []
     if len(pts) < 2:
         return QRectF()
@@ -94,11 +96,11 @@ def _shape_local_rect(ann: dict, target_w: float, target_h: float) -> QRectF:
 
 
 def _render_shape(painter: QPainter, ann: dict, target_w: float, target_h: float, background=None) -> None:
-    """Rect/ellipse : la surface (intérieur) est régie par ``opacity``/``blur``, le contour
-    par ``color``/``width`` — les deux sont indépendants. Ordre de peinture : (1) photo floutée
-    sous la surface si ``blur`` > 0, (2) remplissage plein (alpha = ``opacity``, jamais composé
-    avec ``painter.setOpacity`` pour qu'une opacité à 100% masque totalement la photo derrière),
-    (3) contour toujours tracé à pleine opacité, par-dessus, indépendamment de opacity/blur."""
+    """Rect/ellipse: the surface (the inside) is governed by ``opacity``/``blur``, the outline
+    by ``color``/``width`` — the two are independent. Painting order: (1) the blurred photo
+    under the surface if ``blur`` > 0, (2) a solid fill (alpha = ``opacity``, never composed
+    with ``painter.setOpacity`` so that a 100% opacity hides the photo behind it completely),
+    (3) the outline always drawn at full opacity, on top, independently of opacity/blur."""
     rect = _shape_local_rect(ann, target_w, target_h)
     if rect.isEmpty():
         return
@@ -139,10 +141,10 @@ def _render_shape(painter: QPainter, ann: dict, target_w: float, target_h: float
 
 def _draw_blurred_background(painter: QPainter, rect: QRectF, blur_px: float, is_ellipse: bool,
                               background, target_w: float, target_h: float) -> None:
-    """Peint, dans l'emprise de ``rect`` (découpée en rectangle ou ellipse), une version floutée
-    de ``background`` (photo affichée — ``QPixmap`` du canvas ou ``QImage`` d'export) — pas de
-    la forme elle-même. ``QGraphicsBlurEffect`` ne s'applique qu'à des items de scène, d'où le
-    passage par un ``QGraphicsPixmapItem`` hors-écran, comme pour l'ancien flou (repris ici)."""
+    """Paints, within the footprint of ``rect`` (clipped to a rectangle or an ellipse), a blurred
+    version of ``background`` (the displayed photo — the ``QPixmap`` of the canvas or the export
+    ``QImage``) — not of the shape itself. ``QGraphicsBlurEffect`` only applies to scene items,
+    hence going through an off-screen ``QGraphicsPixmapItem``, as for the former blur (reused here)."""
     bg_img = background.toImage() if isinstance(background, QPixmap) else background
     if bg_img is None or bg_img.isNull():
         return
@@ -221,7 +223,7 @@ def _render_text(painter: QPainter, ann: dict, target_w: float, target_h: float)
 
 
 def annotation_screen_bounds(ann: dict, target_w: float, target_h: float) -> QRectF:
-    """Rectangle englobant (coordonnées écran) d'une annotation — surbrillance de sélection."""
+    """Bounding rectangle (screen coordinates) of an annotation — selection highlight."""
     if ann.get("type") == "text":
         return _text_rect(ann, target_w, target_h)
     pts = ann.get("points") or []
@@ -257,7 +259,7 @@ def _distance_to_shape(ann: dict, x: float, y: float, target_w: float, target_h:
     dx = max(rect.left() - x, 0.0, x - rect.right())
     dy = max(rect.top() - y, 0.0, y - rect.bottom())
     if dx == 0 and dy == 0:
-        # à l'intérieur d'un rectangle non rempli : distance au bord le plus proche
+        # inside an unfilled rectangle: distance to the nearest edge
         return min(x - rect.left(), rect.right() - x, y - rect.top(), rect.bottom() - y)
     return math.hypot(dx, dy)
 
@@ -265,8 +267,9 @@ def _distance_to_shape(ann: dict, x: float, y: float, target_w: float, target_h:
 def _distance_to_annotation(ann: dict, x: float, y: float, target_w: float, target_h: float):
     angle = float(ann.get("angle", 0.0) or 0.0)
     if angle:
-        # Ramène le point testé dans le repère local (non tourné) de l'annotation,
-        # dans lequel points/pos sont stockés — même centre que render_annotations.
+        # Brings the tested point back into the local (unrotated) frame of the
+        # annotation, in which points/pos are stored — the same centre as
+        # render_annotations.
         center = annotation_screen_bounds(ann, target_w, target_h).center()
         rad = math.radians(-angle)
         cos_a, sin_a = math.cos(rad), math.sin(rad)
@@ -296,7 +299,7 @@ def _distance_to_annotation(ann: dict, x: float, y: float, target_w: float, targ
 
 def hit_test_annotations(annotations: list, x: float, y: float, target_w: float, target_h: float,
                           tol_px: float = 8.0):
-    """Retourne l'id de l'annotation la plus proche de (x,y) dans la tolérance ``tol_px``, sinon None."""
+    """Returns the id of the annotation nearest to (x,y) within the ``tol_px`` tolerance, otherwise None."""
     best_id = None
     best_dist = tol_px
     for ann in annotations:
@@ -308,17 +311,17 @@ def hit_test_annotations(annotations: list, x: float, y: float, target_w: float,
 
 
 def composite_annotations_pil(image: Image.Image, annotations: list) -> Image.Image:
-    """Grave ``annotations`` dans ``image`` (PIL) — utilisé à l'export.
+    """Engraves ``annotations`` into ``image`` (PIL) — used at export time.
 
-    Réutilise ``render_annotations`` (QPainter) plutôt qu'une seconde
-    implémentation PIL/ImageDraw, pour un rendu identique à l'aperçu et
-    éviter la résolution fragile des polices en chemins .ttf sous Pillow.
+    Reuses ``render_annotations`` (QPainter) rather than a second PIL/ImageDraw
+    implementation, for a rendering identical to the preview and to avoid the
+    fragile resolution of fonts into .ttf paths under Pillow.
     """
     if not annotations:
         return image
     original_mode = image.mode if image.mode in ("RGB", "RGBA") else "RGB"
-    # Constructeur-copie obligatoire : ImageQt(image) seul garde un pointeur
-    # brut vers le buffer PIL, qui peut être libéré avant usage par QPainter.
+    # A copy constructor is mandatory: ImageQt(image) alone keeps a raw
+    # pointer to the PIL buffer, which may be freed before QPainter uses it.
     qimg = QImage(ImageQt(image.convert("RGBA")))
     painter = QPainter(qimg)
     render_annotations(painter, annotations, qimg.width(), qimg.height(), background=qimg.copy())

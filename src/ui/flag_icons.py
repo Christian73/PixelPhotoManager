@@ -1,35 +1,35 @@
 # Copyright 2026 Christian Guyot
 # SPDX-License-Identifier: Apache-2.0
-"""Drapeaux des langues d'interface, dessinés par code.
+"""Flags of the interface languages, drawn by code.
 
-Aucune ressource image embarquée (même principe que `edit_icons.py`) et
-surtout **aucun emoji** : les paires d'indicateurs régionaux (U+1F1EB U+1F1F7…)
-ne sont portées par aucune police livrée avec Windows — Segoe UI Emoji n'a pas
-les drapeaux. Elles s'affichent donc en deux lettres encadrées (« FR », « DE »),
-ce qui est exactement ce qu'un sélecteur de langue ne doit pas être : un texte
-à lire pour un utilisateur qui, par définition, ne lit pas la langue affichée.
+No embedded image resource (the same principle as `edit_icons.py`) and above
+all **no emoji**: the regional indicator pairs (U+1F1EB U+1F1F7…) are carried
+by no font shipped with Windows — Segoe UI Emoji does not have the flags. They
+therefore show as two boxed letters ("FR", "DE"), which is exactly what a
+language selector must not be: a text to read for a user who, by definition,
+does not read the displayed language.
 
-Les trois drapeaux sont rendus au même format 3:2, y compris l'Union Jack
-(1:2 dans la réalité) : dans un menu, trois vignettes de tailles différentes
-sautent aux yeux bien plus que la proportion inexacte de l'une d'elles.
+The three flags are rendered in the same 3:2 format, the Union Jack included
+(1:2 in reality): in a menu, three thumbnails of different sizes catch the eye
+far more than the inexact proportion of one of them.
 
-Le tracé se fait en supersampling (`_SS`) puis est réduit une fois : les
-diagonales de l'Union Jack et les liserés font moins d'un pixel à la taille
-finale, l'antialiasing de Qt seul les rendrait baveuses.
+The drawing is done with supersampling (`_SS`) then downscaled once: the
+diagonals of the Union Jack and the thin outlines are less than a pixel wide
+at the final size, Qt's antialiasing alone would render them blurry.
 """
 
 from PySide6.QtCore import Qt, QRectF, QPointF
 from PySide6.QtGui import QColor, QIcon, QPainter, QPen, QPixmap
 
-#: Taille logique par défaut d'une vignette de drapeau (format 3:2).
+#: Default logical size of a flag thumbnail (3:2 format).
 FLAG_WIDTH = 36
 FLAG_HEIGHT = 24
 
-#: Facteur de suréchantillonnage du tracé.
+#: Supersampling factor of the drawing.
 _SS = 4
 
-#: Contour : un drapeau à dominante blanche (France) disparaîtrait sinon sur
-#: un fond clair, et le noir de l'Allemagne se fond dans la barre noire.
+#: Outline: a mostly white flag (France) would otherwise disappear on a
+#: light background, and the black of Germany blends into the black bar.
 _BORDER = QColor(0, 0, 0, 110)
 
 
@@ -46,12 +46,11 @@ def _draw_de(p: QPainter, w: float, h: float) -> None:
 
 
 def _draw_en(p: QPainter, w: float, h: float) -> None:
-    """Union Jack simplifié : sautoirs non contrechargés.
+    """Simplified Union Jack: saltires without counterchanging.
 
-    Le décalage des bandes rouges des diagonales (contrechargement) n'est pas
-    reproduit — invisible en dessous de ~64 px, et un sautoir centré reste
-    lisible comme Union Jack là où un contrechargement mal échantillonné
-    ressemble à une bavure.
+    The offset of the red bands of the diagonals (counterchanging) is not
+    reproduced — invisible below ~64 px, and a centred saltire still reads as
+    a Union Jack where a badly sampled counterchange looks like a smudge.
     """
     p.fillRect(QRectF(0, 0, w, h), QColor("#012169"))
 
@@ -69,15 +68,15 @@ def _draw_en(p: QPainter, w: float, h: float) -> None:
         p.drawRect(QRectF((w - band) / 2, 0, band, h))
 
 
-#: Un code de langue sans tracé retombe sur l'anglais plutôt que sur une
-#: vignette vide (cf. `i18n.normalize`, qui rabat déjà les codes inconnus).
+#: A language code with no drawing falls back to English rather than to an
+#: empty thumbnail (cf. `i18n.normalize`, which already folds the unknown codes).
 _DRAWERS = {"en": _draw_en, "fr": _draw_fr, "de": _draw_de}
 
 _cache: dict[tuple[str, int, int], QPixmap] = {}
 
 
 def flag_pixmap(code: str, width: int = FLAG_WIDTH, height: int = FLAG_HEIGHT) -> QPixmap:
-    """Vignette du drapeau de `code`, mémorisée par (code, largeur, hauteur)."""
+    """Thumbnail of the flag of `code`, memoised by (code, width, height)."""
     key = (code, width, height)
     cached = _cache.get(key)
     if cached is not None:

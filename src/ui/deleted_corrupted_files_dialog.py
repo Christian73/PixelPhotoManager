@@ -1,9 +1,9 @@
 # Copyright 2026 Christian Guyot
 # SPDX-License-Identifier: Apache-2.0
-"""Dialog affichant la liste des fichiers corrompus supprimés par l'application
-(cf. src/core/deleted_corrupted_files.py) — sert à l'utilisateur pour les
-retrouver dans la corbeille Windows, ou dans une sauvegarde externe si elle a
-depuis été vidée."""
+"""Dialog showing the list of corrupted files deleted by the application
+(cf. src/core/deleted_corrupted_files.py) — helps the user find them again in
+the Windows recycle bin, or in an external backup if it has been emptied
+since."""
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (

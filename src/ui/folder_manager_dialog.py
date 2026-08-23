@@ -1,6 +1,6 @@
 ﻿# Copyright 2026 Christian Guyot
 # SPDX-License-Identifier: Apache-2.0
-"""Dialog de gestion des dossiers surveillés par le scan."""
+"""Dialog managing the folders watched by the scan."""
 
 import os
 from pathlib import Path
@@ -19,17 +19,17 @@ from src.library.catalog import Catalog
 # ---------------------------------------------------------------------------
 # Helpers
 
-# Implémentation partagée avec le scanner et le watcher (cf. fs_utils) : les
-# règles d'exclusion affichées ici doivent rester identiques à celles du scan.
+# An implementation shared with the scanner and the watcher (cf. fs_utils):
+# the exclusion rules shown here must stay identical to those of the scan.
 from src.library.fs_utils import is_hidden_path as _is_hidden  # noqa: E402
 from src.core.i18n import translate
 
 
 def _find_subdirs(folder: str) -> list[tuple[str, bool, str]]:
     """
-    Retourne tous les sous-dossiers directs : (nom, is_excluded, raison).
-    is_excluded=True  → dossier ignoré par le scan.
-    is_excluded=False → dossier inclus dans le scan.
+    Returns every direct subfolder: (name, is_excluded, reason).
+    is_excluded=True  → folder ignored by the scan.
+    is_excluded=False → folder included in the scan.
     """
     result = []
     try:
@@ -51,7 +51,7 @@ def _find_subdirs(folder: str) -> list[tuple[str, bool, str]]:
 
 
 # ---------------------------------------------------------------------------
-# Widget par dossier
+# One widget per folder
 
 class _FolderRow(QWidget):
     rescan_clicked = Signal(str)
@@ -75,7 +75,7 @@ class _FolderRow(QWidget):
         outer.setContentsMargins(10, 8, 10, 8)
         outer.setSpacing(4)
 
-        # Ligne principale
+        # Main row
         top = QHBoxLayout()
         top.setSpacing(8)
 
@@ -133,7 +133,7 @@ class _FolderRow(QWidget):
             outer.addWidget(warn)
             return
 
-        # Sous-dossiers
+        # Subfolders
         subdirs = _find_subdirs(folder)
         if not subdirs:
             return
@@ -159,7 +159,7 @@ class _FolderRow(QWidget):
         self._toggle_btn.clicked.connect(self._toggle_subdirs)
         outer.addWidget(self._toggle_btn)
 
-        # Panneau de sous-dossiers (caché par défaut)
+        # Subfolder panel (hidden by default)
         self._subdir_panel = QWidget()
         self._subdir_panel.setStyleSheet("background: transparent; border: none;")
         panel_layout = QVBoxLayout(self._subdir_panel)
@@ -200,13 +200,13 @@ class _FolderRow(QWidget):
             return
         visible = not self._subdir_panel.isVisible()
         self._subdir_panel.setVisible(visible)
-        # Met à jour la flèche du bouton
+        # Updates the arrow of the button
         text = self._toggle_btn.text()
         if visible:
             self._toggle_btn.setText(text.replace("▶", "▼", 1))
         else:
             self._toggle_btn.setText(text.replace("▼", "▶", 1))
-        # Force le recalcul de la taille du widget parent
+        # Forces the size of the parent widget to be recomputed
         self.adjustSize()
         if self.parent():
             self.parent().adjustSize()
@@ -216,9 +216,9 @@ class _FolderRow(QWidget):
 # Dialog principal
 
 class FolderManagerDialog(QDialog):
-    rescan_requested = Signal(str)   # chemin du dossier à re-scanner (force)
-    folder_removed   = Signal(str)   # dossier retiré
-    folder_added     = Signal(str)   # dossier ajouté
+    rescan_requested = Signal(str)   # path of the folder to rescan (forced)
+    folder_removed   = Signal(str)   # folder removed
+    folder_added     = Signal(str)   # folder added
 
     def __init__(self, config: Config, catalog: Catalog, parent=None):
         super().__init__(parent)
@@ -316,8 +316,8 @@ class FolderManagerDialog(QDialog):
         )
 
     def _on_remove(self, folder: str) -> None:
-        # La confirmation (avec le nombre de photos concernées) est gérée
-        # côté MainWindow._on_folder_removed, qui effectue aussi la purge.
+        # The confirmation (with the number of photos concerned) is handled on the
+        # MainWindow._on_folder_removed side, which also performs the purge.
         self.folder_removed.emit(folder)
         self._refresh()
 

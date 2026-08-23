@@ -1,7 +1,7 @@
 # Copyright 2026 Christian Guyot
 # SPDX-License-Identifier: Apache-2.0
-"""Popup flottante des exemplaires d'un groupe de doublons (extraite de
-main_window.py — ouverte par le badge ⧉ des vignettes et de la visionneuse)."""
+"""Floating popup of the copies of a duplicate group (extracted from
+main_window.py — opened by the ⧉ badge of the thumbnails and of the viewer)."""
 
 from PySide6.QtCore import QEvent, QPoint, Qt, Signal
 from PySide6.QtWidgets import (
@@ -14,18 +14,17 @@ from src.core.i18n import translate
 
 
 class _DuplicatesPopup(QFrame):
-    """Popup flottante listant tous les exemplaires d'un groupe de doublons
-    (original inclus). Fenêtre de type Qt.Popup : se ferme automatiquement au
-    clic en dehors d'elle (comme un menu), en plus du bouton « Fermer ».
-    Cliquer sur un exemplaire navigue directement (signal navigate_requested)
-    sans fermer la popup, pour permettre de comparer plusieurs exemplaires
-    de suite.
+    """Floating popup listing every copy of a duplicate group (the original
+    included). A Qt.Popup window: it closes automatically on a click outside
+    it (like a menu), in addition to the "Close" button. Clicking a copy
+    navigates directly (the navigate_requested signal) without closing the
+    popup, so that several copies can be compared one after another.
 
-    Déplaçable par cliquer-glisser (titre ou fond de la popup) : une popup
-    sans barre de titre (Qt.Popup) reste sinon coincée là où elle s'ouvre,
-    ce qui peut masquer une partie importante de la photo comparée."""
+    Draggable by click-and-drag (the title or the background of the popup): a
+    popup without a title bar (Qt.Popup) would otherwise stay stuck where it
+    opens, which can hide an important part of the compared photo."""
 
-    navigate_requested = Signal(str)  # chemin de la photo cible
+    navigate_requested = Signal(str)  # path of the target photo
 
     def __init__(self, photo, others: list, parent=None):
         super().__init__(parent, Qt.Popup)
@@ -89,10 +88,10 @@ class _DuplicatesPopup(QFrame):
             self.navigate_requested.emit(path)
 
     def eventFilter(self, obj, event) -> bool:
-        # Le titre est un enfant (QLabel) : les événements souris qui
-        # l'atteignent ne remontent pas naturellement au QFrame parent, d'où
-        # ce filtre pour le rendre lui aussi déplaçable (cf. mousePressEvent/
-        # mouseMoveEvent ci-dessous pour le reste de la popup).
+        # The title is a child (QLabel): the mouse events reaching it do not
+        # naturally bubble up to the parent QFrame, hence this filter to make it
+        # draggable as well (cf. mousePressEvent/mouseMoveEvent below for the
+        # rest of the popup).
         if event.type() == QEvent.MouseButtonPress and event.button() == Qt.LeftButton:
             self._drag_offset = event.globalPosition().toPoint() - self.frameGeometry().topLeft()
             return True

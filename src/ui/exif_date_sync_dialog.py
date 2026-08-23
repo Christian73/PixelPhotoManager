@@ -1,11 +1,11 @@
 ﻿# Copyright 2026 Christian Guyot
 # SPDX-License-Identifier: Apache-2.0
 """
-Dialogue "Synchroniser la date de création Windows avec la date EXIF".
+The "Synchronise the Windows creation date with the EXIF date" dialog.
 
-Pour chaque photo/vidéo du catalogue dont la date EXIF existe et est cohérente,
-remplace la date de création Windows (st_ctime) par la date EXIF.
-Génère un rapport CSV dans APP_DATA_DIR.
+For every photo/video of the catalog whose EXIF date exists and is consistent,
+replaces the Windows creation date (st_ctime) with the EXIF date.
+Generates a CSV report in APP_DATA_DIR.
 """
 
 import csv
@@ -29,7 +29,7 @@ from src.core.i18n import translate
 logger = logging.getLogger(__name__)
 
 _MIN_YEAR = 1990
-_TOLERANCE_SEC = 2   # delta en secondes en deçà duquel on considère les dates identiques
+_TOLERANCE_SEC = 2   # delta in seconds below which the dates are considered identical
 
 
 def _exif_date_is_coherent(dt: datetime) -> bool:
@@ -38,8 +38,8 @@ def _exif_date_is_coherent(dt: datetime) -> bool:
 
 
 def _set_file_creation_time(path: str, dt: datetime) -> None:
-    """Applique dt comme date de création Windows (SetFileTime / FILETIME)."""
-    # Convertir datetime naïf (heure locale) en timestamp UTC → FILETIME
+    """Applies dt as the Windows creation date (SetFileTime / FILETIME)."""
+    # Convert a naive datetime (local time) into a UTC timestamp → FILETIME
     ts = dt.timestamp()
     val = int((ts + 11644473600) * 10_000_000)
 
@@ -121,7 +121,7 @@ class _SyncThread(QThread):
                     skipped += 1
                     continue
 
-                # Date de création Windows actuelle
+                # Current Windows creation date
                 try:
                     st = os.stat(path)
                     ctime_current = st.st_ctime
@@ -241,7 +241,7 @@ class ExifDateSyncDialog(QDialog):
         lbl_warn.setStyleSheet("color: #e8a030; font-size: 11px;")
         layout.addWidget(lbl_warn)
 
-        # Barre de progression (masquée au départ)
+        # Progress bar (hidden at first)
         self._progress_bar = QProgressBar()
         self._progress_bar.setRange(0, 100)
         self._progress_bar.setValue(0)
@@ -254,7 +254,7 @@ class ExifDateSyncDialog(QDialog):
         self._lbl_status.hide()
         layout.addWidget(self._lbl_status)
 
-        # Résultat (masqué au départ)
+        # Result (hidden at first)
         self._lbl_result = QLabel("")
         self._lbl_result.setWordWrap(True)
         self._lbl_result.setAlignment(Qt.AlignCenter)
@@ -262,7 +262,7 @@ class ExifDateSyncDialog(QDialog):
         self._lbl_result.hide()
         layout.addWidget(self._lbl_result)
 
-        # Boutons
+        # Buttons
         btn_layout = QHBoxLayout()
         btn_layout.setSpacing(8)
 

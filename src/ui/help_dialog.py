@@ -1,18 +1,19 @@
 # Copyright 2026 Christian Guyot
 # SPDX-License-Identifier: Apache-2.0
-"""Dialogue Aide / À propos.
+"""Help / About dialog.
 
-Le contenu des onglets vit dans src/ui/help_content/<langue>/*.html (un fichier
-par onglet + _style.html partagé) — extrait de ce module en 2026-07 pour que
-l'aide soit éditable sans toucher au code, puis réparti par langue en 2026-08.
-En mode figé (PyInstaller), le dossier est embarqué sous _internal/help_content
-(cf. pixelphotomanager.spec, entrée datas) et résolu via sys._MEIPASS.
+The content of the tabs lives in src/ui/help_content/<language>/*.html (one
+file per tab + a shared _style.html) — extracted from this module in 2026-07 so
+that the help is editable without touching the code, then split by language in
+2026-08. In frozen mode (PyInstaller), the folder is embedded under
+_internal/help_content (cf. pixelphotomanager.spec, the datas entry) and
+resolved through sys._MEIPASS.
 
-La résolution se fait **fichier par fichier** (_help_file), avec repli sur
-l'anglais (`DEFAULT_LANGUAGE`) : une langue dont un seul onglet n'est pas encore
-traduit affiche cet onglet en anglais au lieu de perdre toute son aide. C'est
-aussi pourquoi `_style.html`, qui est du CSS pur et n'a donc pas de version par
-langue, vit dans `en/` et n'existe que là."""
+The resolution happens **file by file** (_help_file), with a fallback on
+English (`DEFAULT_LANGUAGE`): a language with a single tab not translated yet
+shows that tab in English instead of losing all of its help. That is also why
+`_style.html`, which is pure CSS and therefore has no per-language version,
+lives in `en/` and exists only there."""
 
 import logging
 import sys
@@ -32,10 +33,10 @@ from src.core.i18n import DEFAULT_LANGUAGE, active_language, translate
 
 logger = logging.getLogger(__name__)
 
-# (clé d'onglet, fichier dans help_content/)
-# Le 1er élément est une CLÉ, pas un libellé : il sert d'identifiant d'onglet
-# (paramètre `tab=` de HelpDialog, comparaisons internes). Il reste en français
-# quelle que soit la langue — l'affichage passe par _TAB_LABELS.
+# (tab key, file in help_content/)
+# The 1st element is a KEY, not a label: it serves as the tab identifier (the
+# `tab=` parameter of HelpDialog, internal comparisons). It stays in French
+# whatever the language — the display goes through _TAB_LABELS.
 _TABS = [
     ("Vue d'ensemble",  "vue_densemble.html"),
     ("Navigation",      "navigation.html"),
@@ -48,7 +49,7 @@ _TABS = [
     ("À propos",        "a_propos.html"),
 ]
 
-#: Libellés affichés des onglets, indexés par leur clé (cf. _TABS).
+#: Displayed labels of the tabs, indexed by their key (cf. _TABS).
 _TAB_LABELS: dict[str, str] = {
     "Vue d'ensemble": translate("HelpDialog", "Overview"),
     "Navigation":     translate("HelpDialog", "Navigation"),
@@ -63,15 +64,15 @@ _TAB_LABELS: dict[str, str] = {
 
 
 def _content_dir() -> Path:
-    """Dossier des fichiers d'aide — bundle PyInstaller ou arborescence source."""
+    """Folder of the help files — PyInstaller bundle or source tree."""
     if getattr(sys, "frozen", False):
         return Path(getattr(sys, "_MEIPASS", "")) / "help_content"
     return Path(__file__).parent / "help_content"
 
 
 def _help_file(filename: str) -> Path:
-    """Chemin du fichier d'aide dans la langue courante, avec repli sur
-    l'anglais (page non encore traduite, ou langue inconnue)."""
+    """Path of the help file in the current language, with a fallback on
+    English (a page not translated yet, or an unknown language)."""
     base = _content_dir()
     localized = base / active_language() / filename
     if localized.is_file():
@@ -80,9 +81,9 @@ def _help_file(filename: str) -> Path:
 
 
 def _load_tab_html(filename: str) -> str:
-    """Contenu d'un onglet : <style> partagé + fichier de l'onglet, avec la
-    version de l'application substituée. Un fichier manquant produit un
-    message d'erreur affichable plutôt qu'un crash."""
+    """Content of a tab: the shared <style> + the file of the tab, with the
+    version of the application substituted. A missing file produces a
+    displayable error message rather than a crash."""
     try:
         style = _help_file("_style.html").read_text(encoding="utf-8")
         body = _help_file(filename).read_text(encoding="utf-8")
@@ -91,7 +92,7 @@ def _load_tab_html(filename: str) -> str:
         return "<p>" + translate(
             "HelpDialog", "Help content unavailable ({filename})."
         ).format(filename=filename) + "</p>"
-    # _style.html contient déjà ses balises <style>…</style>
+    # _style.html already contains its own <style>…</style> tags
     return style + body.replace("__VERSION__", get_app_version())
 
 
@@ -135,9 +136,9 @@ QTabBar::tab:hover:!selected {
 class HelpDialog(QDialog):
     def __init__(self, parent=None, tab: str | None = None):
         super().__init__(parent)
-        # Sans ça, chaque ouverture d'Aide/À propos (dlg.exec() dans main_window.py)
-        # laissait le QDialog et son QThread de vérification de version en vie
-        # indéfiniment, parentés à MainWindow — fuite qui grossit à chaque ouverture.
+        # Without this, every opening of Help/About (dlg.exec() in main_window.py)
+        # left the QDialog and its version-checking QThread alive indefinitely,
+        # parented to MainWindow — a leak growing with every opening.
         self.setAttribute(Qt.WA_DeleteOnClose)
         self.setWindowTitle(translate("HelpDialog", "Help — PixelPhotoManager"))
         self.resize(760, 560)
@@ -187,9 +188,9 @@ class HelpDialog(QDialog):
         layout.addWidget(tabs)
         self._tabs = tabs
 
-        # Pas de parent : WA_DeleteOnClose peut détruire ce dialogue avant que la
-        # vérification réseau (jusqu'à 5s) ne se termine — un QThread parenté serait
-        # alors détruit alors qu'il tourne encore. Il s'auto-nettoie via `finished`.
+        # No parent: WA_DeleteOnClose may destroy this dialog before the network
+        # check (up to 5 s) finishes — a parented QThread would then be destroyed
+        # while still running. It cleans itself up through `finished`.
         self._update_check_thread = UpdateCheckThread()
         self._update_check_thread.checked.connect(self._on_version_checked)
         self._update_check_thread.finished.connect(self._update_check_thread.deleteLater)
@@ -200,9 +201,9 @@ class HelpDialog(QDialog):
         layout.addWidget(btn_box)
 
     def closeEvent(self, event) -> None:
-        """Coupe le rappel vers ce dialogue (bientôt détruit via WA_DeleteOnClose)
-        sans attendre la fin du thread de vérification, qui continue et se
-        nettoie lui-même (cf. __init__)."""
+        """Cuts the callback towards this dialog (about to be destroyed through
+        WA_DeleteOnClose) without waiting for the end of the checking thread,
+        which carries on and cleans itself up (cf. __init__)."""
         try:
             self._update_check_thread.checked.disconnect(self._on_version_checked)
         except (RuntimeError, TypeError):
@@ -222,13 +223,12 @@ class HelpDialog(QDialog):
         return browser.find(text)
 
     def _search(self, text: str, *, continue_search: bool) -> None:
-        """Cherche `text` dans l'onglet courant puis, s'il est absent,
-        dans les onglets suivants (recherche circulaire, un seul onglet
-        actif à la fois donc pas de vue "tous onglets" possible sans
-        dupliquer le contenu). `continue_search=True` (Entrée) poursuit
-        depuis la position courante ; toute autre frappe repart du début
-        de l'onglet affiché — cohérent avec le comportement `Ctrl+F` d'un
-        navigateur."""
+        """Looks for `text` in the current tab then, if it is absent, in the
+        following tabs (a circular search — only one tab is active at a time,
+        so no "all tabs" view is possible without duplicating the content).
+        `continue_search=True` (Enter) carries on from the current position;
+        any other keystroke restarts from the beginning of the displayed tab —
+        consistent with the `Ctrl+F` behaviour of a browser."""
         self._search_edit.setStyleSheet("")
         if not text:
             return
@@ -245,10 +245,10 @@ class HelpDialog(QDialog):
             if self._search_current_tab_from(browser, text, from_top=True):
                 tabs.setCurrentIndex(index)
                 return
-        # Rien trouvé dans aucun onglet en repartant du suivant : dernière
-        # chance sur l'onglet de départ depuis son début (cas "Entrée" qui
-        # vient de dépasser la dernière occurrence de cet onglet — la boucle
-        # ci-dessus l'a sauté puisqu'elle commence à offset=1).
+        # Nothing found in any tab starting from the next one: a last chance on
+        # the starting tab from its beginning (the "Enter" case that has just
+        # gone past the last occurrence of that tab — the loop above skipped it
+        # since it starts at offset=1).
         if continue_search and self._search_current_tab_from(tabs.widget(start_index), text, from_top=True):
             return
         self._search_edit.setStyleSheet(_SEARCH_NOT_FOUND_STYLE)

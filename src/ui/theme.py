@@ -1,23 +1,23 @@
 # Copyright 2026 Christian Guyot
 # SPDX-License-Identifier: Apache-2.0
-"""Feuille de style du thème sombre global, appliquée par `main()` sur la
+"""Stylesheet of the global dark theme, applied by `main()` on the
 QApplication.
 
-Extraite de `main.py` pour être vérifiable par des tests sans importer le point
-d'entrée (dont l'import reconfigure le logging du processus). Le paramètre
-`check_icon` est le chemin de la coche dessinée à l'exécution par main() — elle
-a besoin d'une QGuiApplication vivante, elle ne peut donc pas être générée ici.
+Extracted from `main.py` so as to be checkable by tests without importing the
+entry point (whose import reconfigures the logging of the process). The
+`check_icon` parameter is the path of the tick drawn at runtime by main() — it
+needs a live QGuiApplication, so it cannot be generated here.
 
-Règle : tout contrôle dont l'indicateur est *dessiné par le style* (case à
-cocher, bouton radio…) doit avoir ses règles `::indicator` définies ici. Dès
-qu'une feuille de style applicative existe, Qt bascule sur QStyleSheetStyle et
-n'utilise plus le rendu natif de l'indicateur : un sous-contrôle laissé sans
-règle est rendu avec les couleurs par défaut, invisibles sur fond sombre. C'est
-ce qui est arrivé aux QRadioButton, absents de cette feuille jusqu'ici — d'où
-les copies locales de `_RADIO_STYLE` dans display_order_dialog.py,
-people_panel.py, export_dialogs.py et reset_faces_dialog.py, qui restent
-prioritaires sur les règles globales (feuille de style de widget) et gardent
-donc leur apparence propre."""
+Rule: every control whose indicator is *drawn by the style* (checkbox, radio
+button…) must have its `::indicator` rules defined here. As soon as an
+application stylesheet exists, Qt switches to QStyleSheetStyle and no longer
+uses the native rendering of the indicator: a sub-control left without a rule
+is rendered with the default colours, invisible on a dark background. That is
+what happened to the QRadioButtons, absent from this sheet until now — hence
+the local copies of `_RADIO_STYLE` in display_order_dialog.py,
+people_panel.py, export_dialogs.py and reset_faces_dialog.py, which stay ahead
+of the global rules (a widget stylesheet) and therefore keep their own
+appearance."""
 
 _BASE = """
     QToolTip {
@@ -212,8 +212,8 @@ _BASE = """
 
 
 def app_stylesheet(check_icon: str) -> str:
-    """Thème sombre complet. `check_icon` = chemin PNG de la coche des cases à
-    cocher (dessinée à l'exécution par main(), d'où l'interpolation tardive)."""
+    """Complete dark theme. `check_icon` = PNG path of the tick of the check
+    boxes (drawn at runtime by main(), hence the late interpolation)."""
     return _BASE + f"""
     QCheckBox::indicator:checked {{
         border: 1px solid #5577ff;

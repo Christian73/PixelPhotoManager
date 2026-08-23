@@ -1,7 +1,7 @@
 # Copyright 2026 Christian Guyot
 # SPDX-License-Identifier: Apache-2.0
 """
-Dialogue affichant les compteurs de reconnaissance faciale (menu Visages › Compteurs…).
+Dialog showing the face recognition counters (Faces › Counters… menu).
 """
 
 from PySide6.QtCore import Qt
@@ -38,7 +38,7 @@ def _section(title: str, rows: list[tuple[str, int]]) -> QFrame:
 
 
 class FaceCountersDialog(QDialog):
-    """Résumé des compteurs de reconnaissance faciale et d'import Picasa."""
+    """Summary of the face recognition and Picasa import counters."""
 
     def __init__(self, face_db, catalog, parent=None) -> None:
         super().__init__(parent)

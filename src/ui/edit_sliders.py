@@ -1,9 +1,8 @@
 # Copyright 2026 Christian Guyot
 # SPDX-License-Identifier: Apache-2.0
-"""Curseurs de retouche (extraits de edit_panel.py) : _Ruler (graduations),
-MarkedSlider (QSlider gradué + libellé) et EditSlider (ligne libellé + valeur),
-réutilisés par les dialogues de traitement, la fenêtre principale et les
-paramètres."""
+"""Editing sliders (extracted from edit_panel.py): _Ruler (graduations),
+MarkedSlider (a graduated QSlider + label) and EditSlider (a label + value
+line), reused by the treatment dialogs, the main window and the settings."""
 import copy
 import logging
 import math
@@ -26,7 +25,7 @@ logger = logging.getLogger(__name__)
 
 
 class _Ruler(QWidget):
-    """Bande de repères (min / zéro si dans la plage / max) sous un QSlider."""
+    """Strip of marks (min / zero if within the range / max) under a QSlider."""
     _H = 14
 
     def __init__(self, slider: QSlider, fmt, parent=None):
@@ -73,7 +72,7 @@ class _Ruler(QWidget):
 
 
 class MarkedSlider(QWidget):
-    """QSlider avec repères de valeur gravés en dessous (min / zéro si dans la plage / max)."""
+    """QSlider with value marks engraved underneath (min / zero if within the range / max)."""
     valueChanged = Signal(int)
     rangeChanged = Signal(int, int)
 
@@ -102,7 +101,7 @@ class MarkedSlider(QWidget):
     def setMaximum(self, v: int):        self._slider.setMaximum(v)
     def setSingleStep(self, v: int):     self._slider.setSingleStep(v)
     def setPageStep(self, v: int):       self._slider.setPageStep(v)
-    def setTickPosition(self, v):        pass   # remplacé par le ruler
+    def setTickPosition(self, v):        pass   # replaced by the ruler
     def setTickInterval(self, v: int):   pass   # idem
 
     def set_double_click_handler(self, handler) -> None:
@@ -146,7 +145,7 @@ class EditSlider(QWidget):
         self._val_lbl.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
         layout.addWidget(self._val_lbl)
 
-        # Flèches d'ajustement fin (pas = 1 unité au niveau de la dernière décimale)
+        # Fine adjustment arrows (step = 1 unit at the last decimal place)
         self._step_size = 10 ** (-self._decimals)
         arrows = QVBoxLayout()
         arrows.setContentsMargins(0, 0, 0, 0)
@@ -173,7 +172,7 @@ class EditSlider(QWidget):
         ))
 
     def set_label(self, label: str) -> None:
-        """Change le libellé (un même curseur peut servir à plusieurs réglages)."""
+        """Changes the label (one same slider can serve several settings)."""
         self._name_lbl.setText(label)
 
     def _fmt(self, v: float) -> str:
@@ -199,5 +198,5 @@ class EditSlider(QWidget):
         self.value_changed.emit(new_val)
 
 
-# ------------------------------------------------------------------ dialogue de traitement
+# ------------------------------------------------------------------ treatment dialog
 

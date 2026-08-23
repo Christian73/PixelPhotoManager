@@ -35,10 +35,10 @@ _DEFAULT_THRESHOLD_PCT = 60
 
 
 class _LanguagePage(QWidget):
-    """Choix de la langue de l'interface.
+    """Choice of the language of the interface.
 
-    Le changement ne prend effet qu'au redémarrage : les widgets construisent
-    leurs libellés une seule fois, à la construction (cf. `src/core/i18n.py`).
+    The change only takes effect on restart: widgets build their labels once,
+    at construction time (cf. `src/core/i18n.py`).
     """
 
     def __init__(self, config: Config, parent=None) -> None:
@@ -78,9 +78,9 @@ class _LanguagePage(QWidget):
         self._codes: list[str] = []
         for idx, (code, name) in enumerate(i18n.LANGUAGES.items()):
             radio = QRadioButton(name)
-            # Nom accessible pour l'automatisation pywinauto (e2e) — même
-            # convention que settings::video_player_path : le libellé, lui,
-            # est traduit et ne peut pas servir de sélecteur stable.
+            # Accessible name for the pywinauto automation (e2e) — the same
+            # convention as settings::video_player_path: the label itself is
+            # translated and cannot serve as a stable selector.
             radio.setAccessibleName(f"settings::language::{code}")
             self._grp.addButton(radio, idx)
             self._codes.append(code)
@@ -104,7 +104,7 @@ class _LanguagePage(QWidget):
         return self._codes[checked]
 
     def apply(self) -> bool:
-        """Persiste la langue. Renvoie True si elle a changé."""
+        """Persists the language. Returns True if it has changed."""
         code = self.selected_language()
         changed = code != self._initial
         i18n.set_language(self._config, code)
@@ -263,10 +263,10 @@ class _VideoPlayerPage(QWidget):
         self._edit_path = QLineEdit()
         self._edit_path.setPlaceholderText(translate("VideoPlayerPage", "Path to the "
                                                                         "executable…"))
-        # Nom accessible pour l'automatisation pywinauto (e2e) — sans lui,
-        # ce QLineEdit est indiscernable du champ de filtre de la sidebar
-        # (MainWindow reste dans l'arbre UIA derrière ce dialogue modal),
-        # même convention que ThumbnailCell/_DuplicateCard/extapp.
+        # Accessible name for the pywinauto automation (e2e) — without it, this
+        # QLineEdit is indistinguishable from the filter field of the sidebar
+        # (MainWindow stays in the UIA tree behind this modal dialog), the same
+        # convention as ThumbnailCell/_DuplicateCard/extapp.
         self._edit_path.setAccessibleName("settings::video_player_path")
         self._edit_path.textChanged.connect(lambda: self._rb_custom.setChecked(True))
         path_row.addWidget(self._edit_path, stretch=1)
@@ -287,7 +287,7 @@ class _VideoPlayerPage(QWidget):
 
         layout.addStretch()
 
-        # Restaurer la valeur sauvegardée
+        # Restore the saved value
         saved = self._config.get("video.player_path", "")
         if saved:
             self._rb_custom.setChecked(True)
@@ -320,17 +320,16 @@ class _VideoPlayerPage(QWidget):
 
 
 class _PerformancePage(QWidget):
-    """Niveau de bridage CPU des traitements de fond permanents (détection de
-    doublons, indexation des visages).
+    """CPU throttling level of the permanent background tasks (duplicate
+    detection, face indexing).
 
-    Le réglage agit sur le cycle de service de `src.core.cpu_throttle` : chaque
-    thread de fond s'endort périodiquement pour ne travailler qu'une fraction du
-    temps. Contrairement à la priorité OS (déjà abaissée à IDLE partout), c'est
-    le seul levier qui plafonne réellement la consommation — un thread IDLE
-    occupe malgré tout 100 % d'un cœur autrement inoccupé (ventilateur,
-    batterie)."""
+    The setting acts on the duty cycle of `src.core.cpu_throttle`: every
+    background thread sleeps periodically so as to work only a fraction of the
+    time. Unlike the OS priority (already lowered to IDLE everywhere), it is
+    the only lever that really caps the consumption — an IDLE thread still
+    takes 100 % of an otherwise unoccupied core (fan, battery)."""
 
-    # (clé de BACKGROUND_CPU_LEVELS, libellé, description)
+    # (BACKGROUND_CPU_LEVELS key, label, description)
     _CHOICES = [
         ("low",    translate("PerformancePage", "Frugal (recommended)"),
          translate("PerformancePage",
@@ -393,8 +392,8 @@ class _PerformancePage(QWidget):
             radio = QRadioButton(translate(
                 "PerformancePage", "{label} — about {pct} % of the computing time"
                 ).format(label=label, pct=pct))
-            # Nom accessible pour l'automatisation pywinauto (e2e) — même
-            # convention que settings::video_player_path.
+            # Accessible name for the pywinauto automation (e2e) — the same
+            # convention as settings::video_player_path.
             radio.setAccessibleName(f"settings::background_cpu::{key}")
             self._grp.addButton(radio, idx)
             layout.addWidget(radio)
@@ -425,9 +424,9 @@ class _PerformancePage(QWidget):
         return self._CHOICES[checked][0]
 
     def apply(self) -> None:
-        """Persiste le niveau **et** l'applique immédiatement : les threads de
-        fond déjà en cours relisent le ratio à chaque `throttle_tick()`, le
-        changement est donc pris en compte sans les redémarrer."""
+        """Persists the level **and** applies it immediately: the background
+        threads already running re-read the ratio at every `throttle_tick()`,
+        so the change is taken into account without restarting them."""
         level = self.selected_level()
         self._config.set("performance.background_cpu", level)
         set_background_cpu_level(level)

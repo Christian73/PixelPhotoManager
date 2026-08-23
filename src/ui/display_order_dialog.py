@@ -1,8 +1,8 @@
 # Copyright 2026 Christian Guyot
 # SPDX-License-Identifier: Apache-2.0
-"""Dialog "Affichage › Ordre d'affichage…" : choix du mode de tri
-(alphabétique/chronologique) et de la direction (croissant/décroissant),
-indépendamment pour le panneau Dossiers et pour la grille de photos."""
+"""The "Display › Display order…" dialog: choice of the sort mode
+(alphabetical/chronological) and of the direction (ascending/descending),
+independently for the Folders panel and for the photo grid."""
 
 from PySide6.QtWidgets import (
     QButtonGroup, QDialog, QDialogButtonBox, QGroupBox, QHBoxLayout,
@@ -12,9 +12,9 @@ from PySide6.QtWidgets import (
 from src.core.config import Config
 from src.core.i18n import translate
 
-# Le thème sombre global ne définit pas QRadioButton::indicator, ce qui rend
-# le bouton sélectionné indiscernable du non-sélectionné sur fond foncé
-# (même correctif que people_panel.py::_RADIO_STYLE).
+# The global dark theme does not define QRadioButton::indicator, which makes
+# the selected button indistinguishable from the unselected one on a dark
+# background (the same fix as people_panel.py::_RADIO_STYLE).
 _RADIO_STYLE = """
 QRadioButton::indicator {
     width: 13px; height: 13px;
@@ -33,11 +33,11 @@ QRadioButton::indicator:unchecked:hover {
 
 
 class _OrderSection(QGroupBox):
-    """Un groupe de deux choix indépendants : mode (alpha/chrono) et
-    direction (asc/desc). Les deux paires de boutons radio partagent le même
-    QGroupBox parent, ce qui les rendrait mutuellement exclusifs les uns aux
-    autres par défaut (Qt groupe automatiquement tous les QRadioButton d'un
-    même parent) : un QButtonGroup par paire est nécessaire pour les isoler."""
+    """One group of two independent choices: mode (alpha/chrono) and
+    direction (asc/desc). The two pairs of radio buttons share the same parent
+    QGroupBox, which would make them mutually exclusive with one another by
+    default (Qt automatically groups every QRadioButton of a same parent): one
+    QButtonGroup per pair is needed to isolate them."""
 
     def __init__(self, title: str, default_mode: str, default_dir: str, parent=None):
         super().__init__(title, parent)
@@ -75,8 +75,8 @@ class _OrderSection(QGroupBox):
 
 
 class _ChronoAlbumSection(QGroupBox):
-    """Direction seule (le mode est toujours chronologique pour cet album,
-    donc pas de paire de boutons "mode" ici, contrairement à _OrderSection)."""
+    """Direction only (the mode is always chronological for this album, so no
+    "mode" pair of buttons here, unlike _OrderSection)."""
 
     def __init__(self, default_dir: str, parent=None):
         super().__init__(translate("ChronoAlbumSection",
@@ -103,12 +103,11 @@ class _ChronoAlbumSection(QGroupBox):
 
 
 class DisplayOrderDialog(QDialog):
-    """Popup de configuration de l'ordre d'affichage des dossiers (sidebar),
-    de la grille de photos et de l'album spécial "Chronologie" (toutes les
-    photos). Ce dernier reste toujours trié chronologiquement (un tri
-    alphabétique n'a pas de sens pour un album qui s'appelle "Chronologie")
-    mais dispose de sa propre direction, indépendante de celle de la grille
-    de photos standard."""
+    """Popup configuring the display order of the folders (sidebar), of the
+    photo grid and of the special "Timeline" album (all the photos). The
+    latter always stays sorted chronologically (an alphabetical sort makes no
+    sense for an album called "Timeline") but has its own direction,
+    independent of that of the standard photo grid."""
 
     def __init__(self, config: Config, parent=None):
         super().__init__(parent)

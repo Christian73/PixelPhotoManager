@@ -1,6 +1,6 @@
 ﻿# Copyright 2026 Christian Guyot
 # SPDX-License-Identifier: Apache-2.0
-"""Dialogue de fusion de personnes de la grille de groupes (extrait de
+"""Person merge dialog of the group grid (extracted from
 face_cluster_grid.py)."""
 """
 FaceClusterGrid — grille des groupes de visages non identifiés.
@@ -38,12 +38,12 @@ _CARD_IMG     = 130
 _CARD_W       = 148
 _CARD_SPACING  = 10
 _COLS_MIN      = 2
-_SIM_GROUP     = 0.72   # seuil pour regrouper deux clusters "même personne probable"
-_BUILD_BATCH   = 10     # cartes créées par tick de l'event loop (évite de bloquer l'UI)
-_PAGE_SIZE     = 200    # nombre de cartes rendues par page (pagination)
-_UF_CHUNK      = 500    # lignes par bloc dans le produit matriciel de l'Union-Find
+_SIM_GROUP     = 0.72   # threshold to group two "probably the same person" clusters
+_BUILD_BATCH   = 10     # cards created per event loop tick (avoids blocking the UI)
+_PAGE_SIZE     = 200    # number of cards rendered per page (pagination)
+_UF_CHUNK      = 500    # rows per block in the matrix product of the Union-Find
                         # RAM pic ≈ _UF_CHUNK × n × 4 octets  (500 × 50k × 4 = 100 Mo)
-UNION_FIND_MAX = 80_000 # skip UF au-delà (temps > 2 min même en mode blocs)
+UNION_FIND_MAX = 80_000 # skip the UF beyond that (> 2 min even in block mode)
 
 
 class _MergeRow(QFrame):

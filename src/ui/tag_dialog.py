@@ -1,7 +1,7 @@
 # Copyright 2026 Christian Guyot
 # SPDX-License-Identifier: Apache-2.0
 """
-TagEditDialog — édition des mots-clés d'une sélection de photos (1 ou N).
+TagEditDialog — editing the keywords of a selection of photos (1 or N).
 """
 
 import logging
@@ -19,9 +19,9 @@ logger = logging.getLogger(__name__)
 
 
 class TagsPrepLoader(QThread):
-    """Précharge la liste des tags existants (Catalog.get_all_tags) hors du
-    thread UI avant l'ouverture du dialogue, comme _AssignPrepLoader pour la
-    popup d'assignation de personne (face_panel.py)."""
+    """Preloads the list of the existing tags (Catalog.get_all_tags) off the UI
+    thread before the dialog is opened, like _AssignPrepLoader for the person
+    assignment popup (face_panel.py)."""
 
     ready = Signal(list)   # all_tags: list[str]
 
@@ -38,13 +38,13 @@ class TagsPrepLoader(QThread):
 
 
 class _TagChip(QCheckBox):
-    """Case tristate au cycle de clic restreint à 2 états. Qt.PartiallyChecked
-    n'est utilisé que comme état *initial* d'affichage (mot-clé présent sur
-    une partie seulement de la sélection multi-photos) — sans cette
-    surcharge, le cycle par défaut de QCheckBox.nextCheckState (Unchecked →
-    PartiallyChecked → Checked → Unchecked → …) fait réapparaître l'état
-    tiers après un second clic, ce qui ressemble à un 3e état indésirable
-    même en sélection d'une seule photo."""
+    """A tristate box whose click cycle is restricted to 2 states.
+    Qt.PartiallyChecked is only used as the *initial* display state (a keyword
+    present on part only of the multi-photo selection) — without this
+    override, the default cycle of QCheckBox.nextCheckState (Unchecked →
+    PartiallyChecked → Checked → Unchecked → …) brings the third state back
+    after a second click, which looks like an unwanted 3rd state even when a
+    single photo is selected."""
 
     def nextCheckState(self) -> None:
         if self.checkState() == Qt.Checked:
@@ -54,15 +54,15 @@ class _TagChip(QCheckBox):
 
 
 class TagEditDialog(QDialog):
-    """Édite les tags d'une sélection de photos.
+    """Edits the tags of a selection of photos.
 
-    Tous les mots-clés du catalogue apparaissent en chips (cases à cocher),
-    pas seulement ceux déjà présents sur la sélection : coché si le mot-clé
-    est sur *toutes* les photos sélectionnées, décoché s'il n'est sur
-    aucune, état tiers (Qt.PartiallyChecked) s'il n'est que sur une partie —
-    cliquer sur une chip tierce la fait basculer vers un état plein (cf.
-    _TagChip.nextCheckState). Un champ avec autocomplétion permet d'ajouter
-    un nouveau tag (existant dans le catalogue ou inédit)."""
+    Every keyword of the catalog appears as a chip (a check box), not only
+    those already present on the selection: checked if the keyword is on
+    *every* selected photo, unchecked if it is on none, third state
+    (Qt.PartiallyChecked) if it is only on part of them — clicking a chip in
+    the third state switches it to a full state (cf. _TagChip.nextCheckState).
+    A field with autocompletion allows a new tag to be added (either already
+    in the catalog or brand new)."""
 
     def __init__(
         self, photos: list[PhotoInfo], all_tags: list[str], parent: QWidget | None = None
@@ -148,19 +148,19 @@ class TagEditDialog(QDialog):
         self._input.clear()
 
     def _accept(self) -> None:
-        """Le clic sur OK ne passe pas par returnPressed : sans ce commit
-        explicite, un mot-clé encore tapé dans le champ (non validé par
-        Entrée) était perdu silencieusement à la fermeture."""
+        """Clicking OK does not go through returnPressed: without this explicit
+        commit, a keyword still typed in the field (not validated by Enter)
+        was silently lost on closing."""
         self._add_tag_from_input()
         self.accept()
 
     def result_add_remove(self) -> tuple[list[str], list[str]]:
-        """Renvoie (tags_à_ajouter, tags_à_retirer) — les chips laissées à
-        l'état tiers (non touchées par l'utilisateur) n'apparaissent dans
-        aucune des deux listes. Un mot-clé du catalogue jamais présent sur la
-        sélection et laissé décoché n'est pas non plus reporté en retrait
-        (ce serait un retrait sans effet, mais ça éviterait quand même une
-        écriture DB par mot-clé du catalogue à chaque validation)."""
+        """Returns (tags_to_add, tags_to_remove) — the chips left in the third
+        state (untouched by the user) appear in neither list. A keyword of the
+        catalog never present on the selection and left unchecked is not
+        reported as a removal either (it would be a removal with no effect,
+        and it would still cost one DB write per catalog keyword on every
+        validation)."""
         union = self._union_tags()
         to_add, to_remove = [], []
         for tag, cb in self._chips.items():

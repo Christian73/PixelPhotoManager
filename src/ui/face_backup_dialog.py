@@ -1,14 +1,14 @@
 ﻿# Copyright 2026 Christian Guyot
 # SPDX-License-Identifier: Apache-2.0
 """
-FaceBackupDialog — sauvegarde et restauration de la reconnaissance faciale.
+FaceBackupDialog — backup and restoration of the face recognition.
 
-Format de sauvegarde : ZIP contenant
-  • faces.db   — copie complète de la base des visages (détections, embeddings,
-                  clusters, associations personnes)
-  • persons.json — export de catalog.db::persons (id, name, created_at)
+Backup format: a ZIP containing
+  • faces.db   — a full copy of the face database (detections, embeddings,
+                  clusters, person associations)
+  • persons.json — an export of catalog.db::persons (id, name, created_at)
 
-Stockage : APP_DATA_DIR / faces_backups / visages_YYYYMMDD_HHMMSS.zip
+Storage: APP_DATA_DIR / faces_backups / visages_YYYYMMDD_HHMMSS.zip
 """
 
 import json
@@ -49,7 +49,7 @@ def _backup_dir(app_data_dir: Path) -> Path:
 
 
 def _parse_ts(zip_path: Path) -> str:
-    """'visages_20260627_143210.zip' → '27 juin 2026 à 14:32'"""
+    """'visages_20260627_143210.zip' → 'June 27, 2026 at 14:32'"""
     try:
         ts = zip_path.stem[len("visages_"):]
         dt = datetime.strptime(ts, _TS_FMT)
@@ -66,7 +66,7 @@ def _fmt_size(n: int) -> str:
 
 
 def list_backups(app_data_dir: Path) -> list[Path]:
-    """Retourne les sauvegardes triées du plus récent au plus ancien."""
+    """Returns the backups sorted from the most recent to the oldest."""
     d = _backup_dir(app_data_dir)
     return sorted(d.glob("visages_*.zip"), reverse=True)
 
@@ -78,7 +78,7 @@ def create_backup(
     catalog_db_path: Path,
     app_data_dir: Path,
 ) -> Path:
-    """Crée une sauvegarde ZIP. Retourne le chemin du fichier créé."""
+    """Creates a ZIP backup. Returns the path of the created file."""
     bdir = _backup_dir(app_data_dir)
     ts = datetime.now().strftime(_TS_FMT)
     zip_path = bdir / f"visages_{ts}.zip"
@@ -91,7 +91,7 @@ def create_backup(
         dst.close()
         src.close()
 
-        # Export des personnes depuis catalog.db
+        # Export of the people from catalog.db
         persons_data: list[dict] = []
         try:
             cat = sqlite3.connect(str(catalog_db_path))
@@ -125,7 +125,7 @@ def restore_backup(
     catalog_db_path: Path,
     app_data_dir: Path,
 ) -> None:
-    """Restaure faces.db et les personnes à partir d'une sauvegarde ZIP."""
+    """Restores faces.db and the people from a ZIP backup."""
     bdir = _backup_dir(app_data_dir)
     tmp_dir = bdir / "_restore_tmp"
     tmp_dir.mkdir(exist_ok=True)
@@ -237,12 +237,12 @@ _BTN_CREATE = (
 
 class FaceBackupDialog(QDialog):
     """
-    Dialogue de gestion des sauvegardes de reconnaissance faciale.
+    Dialog managing the face recognition backups.
 
     Signal
     ------
     restore_completed
-        Émis après une restauration réussie pour que MainWindow rafraîchisse l'UI.
+        Emitted after a successful restoration so that MainWindow refreshes the UI.
     """
 
     restore_completed = Signal()
@@ -289,7 +289,7 @@ class FaceBackupDialog(QDialog):
         sep.setFixedHeight(1)
         root.addWidget(sep)
 
-        # Liste scrollable
+        # Scrollable list
         self._list_container = QWidget()
         self._list_container.setStyleSheet("background: transparent;")
         self._list_vbox = QVBoxLayout(self._list_container)
@@ -306,7 +306,7 @@ class FaceBackupDialog(QDialog):
         scroll.setMinimumHeight(180)
         root.addWidget(scroll, stretch=1)
 
-        # Barre du bas
+        # Bottom bar
         bot = QHBoxLayout()
         bot.setSpacing(10)
 
@@ -400,7 +400,7 @@ class FaceBackupDialog(QDialog):
         self._btn_create.setEnabled(not busy)
         self._lbl_status.setText(msg)
         self._lbl_status.setVisible(busy)
-        # Désactiver tous les boutons Restaurer/Supprimer pendant l'opération
+        # Disable every Restore/Delete button during the operation
         for i in range(self._list_vbox.count()):
             w = self._list_vbox.itemAt(i).widget()
             if w:
@@ -491,7 +491,7 @@ class FaceBackupDialog(QDialog):
             return
         self._list_vbox.removeWidget(row)
         row.deleteLater()
-        # Afficher "Aucune sauvegarde" si la liste est vide
+        # Show "No backup" if the list is empty
         if self._list_vbox.count() == 0:
             self._refresh_list()
 

@@ -1,7 +1,7 @@
 # Copyright 2026 Christian Guyot
 # SPDX-License-Identifier: Apache-2.0
-"""Dialog affichant l'historique des problèmes rencontrés (ex. fichiers
-corrompus détectés pendant une recherche de doublons)."""
+"""Dialog showing the history of the problems encountered (e.g. corrupted
+files detected during a duplicate search)."""
 
 import os
 
@@ -16,7 +16,7 @@ from src.core.i18n import translate
 
 
 # ---------------------------------------------------------------------------
-# Widget par entrée
+# One widget per entry
 
 class _ProblemRow(QWidget):
     def __init__(self, entry: dict, parent=None):

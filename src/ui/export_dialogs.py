@@ -1,8 +1,8 @@
 # Copyright 2026 Christian Guyot
 # SPDX-License-Identifier: Apache-2.0
-"""Dialogues d'export et d'enregistrement de l'image traitée (extraits de
-main_window.py). Les noms préfixés d'un underscore sont conservés pour
-l'historique — détails d'implémentation de MainWindow."""
+"""Dialogs for exporting and saving the processed image (extracted from
+main_window.py). The names prefixed with an underscore are kept for the
+history — implementation details of MainWindow."""
 
 from pathlib import Path
 
@@ -41,7 +41,7 @@ class _ExportDialog(QDialog):
         layout.setSpacing(12)
         layout.setContentsMargins(18, 18, 18, 18)
 
-        # Dossier de destination
+        # Destination folder
         grp_dir = QGroupBox(translate("ExportDialog", "Destination folder"))
         dir_layout = QHBoxLayout(grp_dir)
         self._dir_edit = QLineEdit(str(self._DEFAULT_DIR))
@@ -52,7 +52,7 @@ class _ExportDialog(QDialog):
         dir_layout.addWidget(btn_browse)
         layout.addWidget(grp_dir)
 
-        # Options de taille
+        # Size options
         grp_size = QGroupBox(translate("ExportDialog", "Export size"))
         grp_size.setStyleSheet("""
             QRadioButton::indicator {
@@ -72,7 +72,7 @@ class _ExportDialog(QDialog):
         size_layout = QVBoxLayout(grp_size)
         size_layout.setSpacing(6)
         self._size_radios: list[tuple[QRadioButton, int | None, int]] = []
-        btn_group = QButtonGroup(self)   # groupe exclusif : un seul actif à la fois
+        btn_group = QButtonGroup(self)   # an exclusive group: only one active at a time
         btn_group.setExclusive(True)
         for i, (label, max_px, quality, size_hint) in enumerate(_EXPORT_SIZES):
             row = QWidget()
@@ -97,7 +97,7 @@ class _ExportDialog(QDialog):
             self._size_radios.append((rb, max_px, quality))
         layout.addWidget(grp_size)
 
-        # Boutons
+        # Buttons
         btn_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         btn_box.button(QDialogButtonBox.Ok).setText(translate("ExportDialog", "Export"))
         btn_box.button(QDialogButtonBox.Cancel).setText(translate("ExportDialog", "Cancel"))
@@ -118,19 +118,19 @@ class _ExportDialog(QDialog):
 
     @property
     def size_preset(self) -> tuple:
-        """Retourne (max_total_pixels | None, jpeg_quality)."""
+        """Returns (max_total_pixels | None, jpeg_quality)."""
         for rb, max_px, quality in self._size_radios:
             if rb.isChecked():
                 return (max_px, quality)
-        return (None, 95)  # fallback : taille maximale
+        return (None, 95)  # fallback: maximum size
 
 
 class _SaveOptionsDialog(QDialog):
-    """Dialogue de sauvegarde de l'image traitée.
+    """Dialog for saving the processed image.
 
-    Propose trois actions :
-    - Écraser le fichier original (avec option de sauvegarde dans .tmp_originals)
-    - Enregistrer à un autre emplacement via l'explorateur
+    Offers three actions:
+    - Overwrite the original file (with the option of a backup in .tmp_originals)
+    - Save to another location through the file explorer
     """
 
     def __init__(self, photo_path: str, parent=None):
@@ -145,7 +145,7 @@ class _SaveOptionsDialog(QDialog):
         layout.setSpacing(10)
         layout.setContentsMargins(18, 18, 18, 18)
 
-        # En-tête
+        # Header
         lbl_name = QLabel(f"<b>{Path(self._photo_path).name}</b>")
         lbl_name.setStyleSheet("font-size: 11px;")
         layout.addWidget(lbl_name)
@@ -156,7 +156,7 @@ class _SaveOptionsDialog(QDialog):
         layout.addWidget(sep)
         layout.addSpacing(4)
 
-        # --- Option 1 : écraser ---
+        # --- Option 1: overwrite ---
         self._rb_overwrite = QRadioButton(translate("SaveOptionsDialog", "Overwrite the "
                                                                          "original file"))
         self._rb_overwrite.setChecked(True)
@@ -195,10 +195,10 @@ class _SaveOptionsDialog(QDialog):
 
         layout.addSpacing(8)
 
-        # Activer/désactiver le bloc d'avertissement selon la radio sélectionnée
+        # Enable/disable the warning block according to the selected radio button
         self._rb_overwrite.toggled.connect(self._overwrite_details.setEnabled)
 
-        # Boutons
+        # Buttons
         btn_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         btn_box.button(QDialogButtonBox.Ok).setText(translate("SaveOptionsDialog", "Save"))
         btn_box.button(QDialogButtonBox.Cancel).setText(translate("SaveOptionsDialog", "Cancel"))
@@ -206,7 +206,7 @@ class _SaveOptionsDialog(QDialog):
         btn_box.rejected.connect(self.reject)
         layout.addWidget(btn_box)
 
-    # --- Résultats ---
+    # --- Results ---
 
     @property
     def overwrite(self) -> bool:

@@ -1,6 +1,6 @@
 # Copyright 2026 Christian Guyot
 # SPDX-License-Identifier: Apache-2.0
-"""Petits helpers d'affichage partagés entre widgets."""
+"""Small display helpers shared between widgets."""
 
 from PySide6.QtCore import Qt, QSize
 from PySide6.QtGui import QKeySequence
@@ -8,19 +8,19 @@ from PySide6.QtWidgets import QMenu, QMenuBar, QStyle, QStyleOptionMenuItem
 
 from src.core.i18n import translate
 
-# Marque posée sur un QMenu déjà branché, pour ne pas connecter deux fois.
+# A mark set on a QMenu already wired, so as not to connect it twice.
 _FIT_PROPERTY = "ppm_menu_width_fitted"
 
-# Séparation entre la fin d'un libellé et le début de son raccourci, en largeurs
-# de « M ». Deux suffisaient à éviter le chevauchement, mais le raccourci restait
-# visuellement collé au texte : c'est LA constante à toucher pour aérer (ou
-# resserrer) la colonne des raccourcis, elle n'a aucun autre effet — un menu sans
-# raccourci n'est jamais élargi.
+# Separation between the end of a label and the beginning of its shortcut, in
+# widths of an "M". Two were enough to avoid the overlap, but the shortcut still
+# looked glued to the text: this is THE constant to touch to loosen (or tighten)
+# the shortcut column, it has no other effect — a menu without a shortcut is
+# never widened.
 _SHORTCUT_GAP_EM = 4
 
 
 def fmt_size(size_bytes: int) -> str:
-    """Formate une taille fichier pour l'UI : « 512 Ko », « 3.2 Mo », "" si inconnue."""
+    """Formats a file size for the UI: "512 kB", "3.2 MB", "" if unknown."""
     if size_bytes <= 0:
         return ""
     if size_bytes < 1024 * 1024:
@@ -29,7 +29,7 @@ def fmt_size(size_bytes: int) -> str:
 
 
 def _action_label(action) -> str:
-    """Texte réellement peint : les mnémoniques « & » ne sont pas affichés."""
+    """Text actually painted: the "&" mnemonics are not displayed."""
     text = action.text()
     if "&" in text:
         text = text.replace("&&", "\x00").replace("&", "").replace("\x00", "&")
@@ -37,7 +37,7 @@ def _action_label(action) -> str:
 
 
 def _action_shortcut(action, label: str) -> str:
-    """Raccourci affiché à droite : QAction.shortcut() ou la partie après « \\t »."""
+    """Shortcut shown on the right: QAction.shortcut() or the part after "\\t"."""
     seq = action.shortcut()
     if not seq.isEmpty():
         return seq.toString(QKeySequence.NativeText)
@@ -47,27 +47,28 @@ def _action_shortcut(action, label: str) -> str:
 
 
 def _submenus(widget) -> list:
-    """Sous-menus directs de `widget` (QMenu ou QMenuBar).
+    """Direct submenus of `widget` (a QMenu or a QMenuBar).
 
-    Passe par `findChildren` et **jamais** par `QAction.menu()` : en PySide6 6.11,
-    l'objet renvoyé par `QAction.menu()` détruit le QMenu C++ quand son wrapper
-    Python est collecté (sous-menu vidé, puis RuntimeError « already deleted »).
+    Goes through `findChildren` and **never** through `QAction.menu()`: in
+    PySide6 6.11, the object returned by `QAction.menu()` destroys the C++
+    QMenu when its Python wrapper is collected (an emptied submenu, then a
+    RuntimeError "already deleted").
     """
     return widget.findChildren(QMenu, options=Qt.FindDirectChildrenOnly)
 
 
 def _item_chrome_width(menu: QMenu) -> int:
-    """Largeur d'un item hors texte, mesurée par le style lui-même.
+    """Width of an item apart from its text, measured by the style itself.
 
-    Colonne icône/coche, marges, padding de la feuille de style… : on demande au
-    style la taille d'un item au texte connu, et on retranche la largeur de ce
-    texte. Plus fiable qu'une addition de `pixelMetric` maison, qui ignorerait le
-    padding posé par QStyleSheetStyle.
+    Icon/tick column, margins, stylesheet padding…: the style is asked for the
+    size of an item with a text of known width, and the width of that text is
+    subtracted. More reliable than a home-made sum of `pixelMetric`, which
+    would ignore the padding set by QStyleSheetStyle.
     """
     fm = menu.fontMetrics()
     style = menu.style()
     icon_px = style.pixelMetric(QStyle.PM_SmallIconSize, None, menu)
-    # Colonne icône/coche : réservée par Qt seulement si le menu en contient.
+    # Icon/tick column: reserved by Qt only if the menu contains one.
     has_icon = any(not a.icon().isNull() for a in menu.actions())
     has_checkable = any(a.isCheckable() for a in menu.actions())
     probe = "M" * 24
@@ -87,23 +88,23 @@ def _item_chrome_width(menu: QMenu) -> int:
 
 
 def menu_required_width(menu: QMenu) -> int:
-    """Largeur minimale pour qu'aucun libellé ne chevauche sa colonne de raccourci.
+    """Minimum width for no label to overlap its shortcut column.
 
-    Certains styles Qt (windows11 avec la feuille de style applicative, notamment)
-    sous-estiment la place nécessaire quand un libellé long côtoie un raccourci :
-    le raccourci, aligné à droite, vient se superposer à la fin du libellé. On
-    recalcule donc soi-même chrome de l'item + libellé + séparation + raccourci.
-    Renvoie 0 si le menu est vide (rien à imposer).
+    Some Qt styles (windows11 with the application stylesheet in particular)
+    underestimate the space needed when a long label sits next to a shortcut:
+    the shortcut, right-aligned, ends up on top of the end of the label. So the
+    item chrome + label + separation + shortcut is recomputed here.
+    Returns 0 if the menu is empty (nothing to impose).
     """
     fm = menu.fontMetrics()
     style = menu.style()
-    # Séparation entre la fin du libellé et le début du raccourci (cf.
-    # _SHORTCUT_GAP_EM) : le raccourci étant aligné à droite, toute largeur
-    # gagnée ici se retrouve intégralement dans cet espace.
+    # Separation between the end of the label and the beginning of the shortcut
+    # (cf. _SHORTCUT_GAP_EM): since the shortcut is right-aligned, any width
+    # gained here ends up entirely in that space.
     gap = max(fm.horizontalAdvance("M" * _SHORTCUT_GAP_EM),
               _SHORTCUT_GAP_EM * fm.height() // 2)
-    # Colonne de flèche des sous-menus : Qt la réserve pour tous les items dès
-    # qu'un sous-menu existe.
+    # Submenu arrow column: Qt reserves it for every item as soon as a submenu
+    # exists.
     arrow = 0
     if _submenus(menu):
         arrow = style.pixelMetric(QStyle.PM_MenuButtonIndicator, None, menu)
@@ -129,20 +130,20 @@ def menu_required_width(menu: QMenu) -> int:
 
 
 def fit_menu_width(menu: QMenu) -> None:
-    """Élargit le popup si le style n'a pas réservé la place des raccourcis.
+    """Widens the popup if the style has not reserved the room for the shortcuts.
 
-    `setMinimumWidth` n'a aucun effet visible quand le style calcule déjà une
-    largeur suffisante : le popup garde alors son `sizeHint`.
+    `setMinimumWidth` has no visible effect when the style already computes a
+    sufficient width: the popup then keeps its `sizeHint`.
     """
     menu.setMinimumWidth(menu_required_width(menu))
 
 
 def install_menu_width_fix(target) -> None:
-    """Branche `fit_menu_width` sur l'ouverture de `target` (QMenu ou QMenuBar).
+    """Wires `fit_menu_width` onto the opening of `target` (a QMenu or a QMenuBar).
 
-    Les sous-menus sont branchés à la volée à chaque ouverture du parent : les
-    menus construits dynamiquement (Noter, plugins…) sont ainsi couverts sans
-    avoir à rappeler cette fonction à chaque reconstruction.
+    The submenus are wired on the fly at every opening of the parent: the
+    dynamically built menus (Rate, plugins…) are thus covered without having to
+    call this function again at every rebuild.
     """
     if isinstance(target, QMenuBar):
         menus = _submenus(target)

@@ -1,7 +1,7 @@
 # Copyright 2026 Christian Guyot
 # SPDX-License-Identifier: Apache-2.0
-"""Dialog listant les photos en erreur d'indexation faciale (timeout/crash),
-avec une nouvelle tentative fichier par fichier (Outils > Visualisation des erreurs…)."""
+"""Dialog listing the photos in face indexing error (timeout/crash), with a
+file-by-file retry (Tools > View the errors…)."""
 
 import os
 
@@ -22,7 +22,7 @@ _ERROR_LABELS = {
 
 
 # ---------------------------------------------------------------------------
-# Widget par photo en erreur
+# One widget per photo in error
 
 class _ErrorRow(QWidget):
     retry_clicked = Signal(str)
@@ -93,7 +93,7 @@ class _ErrorRow(QWidget):
 # Dialog principal
 
 class IndexErrorsDialog(QDialog):
-    retry_requested = Signal(str)   # chemin de la photo à ré-essayer
+    retry_requested = Signal(str)   # path of the photo to retry
 
     def __init__(self, face_db: FaceDatabase, thumb_cache: ThumbnailCache, parent=None):
         super().__init__(parent)
