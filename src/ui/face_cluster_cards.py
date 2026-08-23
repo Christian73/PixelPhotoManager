@@ -1,6 +1,6 @@
 ﻿# Copyright 2026 Christian Guyot
 # SPDX-License-Identifier: Apache-2.0
-"""Cartes et sections de la grille de groupes de visages (extraites de
+"""Cards and sections of the face group grid (extracted from
 face_cluster_grid.py)."""
 """
 FaceClusterGrid — grille des groupes de visages non identifiés.
@@ -39,15 +39,15 @@ _CARD_IMG     = 130
 _CARD_W       = 148
 _CARD_SPACING  = 10
 _COLS_MIN      = 2
-_SIM_GROUP     = 0.72   # seuil pour regrouper deux clusters "même personne probable"
-_BUILD_BATCH   = 10     # cartes créées par tick de l'event loop (évite de bloquer l'UI)
-_PAGE_SIZE     = 200    # nombre de cartes rendues par page (pagination)
-_UF_CHUNK      = 500    # lignes par bloc dans le produit matriciel de l'Union-Find
+_SIM_GROUP     = 0.72   # threshold to group two "probably the same person" clusters
+_BUILD_BATCH   = 10     # cards created per event loop tick (avoids blocking the UI)
+_PAGE_SIZE     = 200    # number of cards rendered per page (pagination)
+_UF_CHUNK      = 500    # rows per block in the matrix product of the Union-Find
                         # RAM pic ≈ _UF_CHUNK × n × 4 octets  (500 × 50k × 4 = 100 Mo)
-UNION_FIND_MAX = 80_000 # skip UF au-delà (temps > 2 min même en mode blocs)
+UNION_FIND_MAX = 80_000 # skip the UF beyond that (> 2 min even in block mode)
 
 
-_BTN_OVL = 22   # diamètre des boutons ✓/✗ superposés sur la vignette (cf. PersonClusterView)
+_BTN_OVL = 22   # diameter of the ✓/✗ buttons overlaid on the thumbnail (cf. PersonClusterView)
 _BTN_ACCEPT_STYLE = (
     "QPushButton { background: rgba(30,150,50,215); color: white;"
     " border-radius: 11px; font-weight: bold; font-size: 13px; border: none; padding: 0; }"
@@ -60,28 +60,28 @@ _BTN_REJECT_STYLE = (
 )
 
 
-# ------------------------------------------------------------------ helpers (module-level, utilisés par le thread)
+# ------------------------------------------------------------------ helpers (module-level, used by the thread)
 
 
 class _ClusterCard(QFrame):
     """
-    Carte représentant un groupe de visages.
+    Card representing a group of faces.
 
-    1 clic         → sélection alternée (selection_toggled)
-    Maj+1 clic     → sélection étendue depuis l'ancre (range_select_requested)
-    2 clics        → ouvrir les photos (view_requested)
-    Clic droit     → menu contextuel (nommer / fusionner / ignorer / associer si multi-sélection)
+    1 click        → toggled selection (selection_toggled)
+    Shift+1 click  → selection extended from the anchor (range_select_requested)
+    2 clicks       → open the photos (view_requested)
+    Right click    → context menu (name / merge / ignore / associate if multi-selection)
     """
 
     selection_toggled    = Signal(int, bool)  # cluster_id, is_selected
     range_select_requested = Signal(int)      # cluster_id (Maj+clic)
     view_requested       = Signal(int)
     name_requested       = Signal(int)
-    quick_accept_requested = Signal(int, int)   # cluster_id, person_id — accepter la suggestion sans dialogue
+    quick_accept_requested = Signal(int, int)   # cluster_id, person_id — accept the suggestion without a dialog
     merge_requested      = Signal(int)
-    associate_requested  = Signal()           # fusionner tous les groupes sélectionnés ensemble
+    associate_requested  = Signal()           # merge every selected group together
     ignore_requested     = Signal(int)
-    ignore_selection_requested = Signal()     # ignorer tous les groupes/visages sélectionnés
+    ignore_selection_requested = Signal()     # ignore every selected group/face
     eject_from_section_requested = Signal(int)  # cluster_id
 
     _STYLE_NORMAL = """
@@ -120,9 +120,9 @@ class _ClusterCard(QFrame):
         self._suggested_person_id = suggested_person_id
         self._is_solo             = is_solo
         self._is_selected         = False
-        # Référence directe vers l'ensemble des cluster_id sélectionnés dans la
-        # grille parente, pour savoir au clic droit si une multi-sélection est
-        # en cours (afficher "Associer") sans devoir répliquer l'état ailleurs.
+        # A direct reference to the set of cluster_ids selected in the parent
+        # grid, to know on a right click whether a multi-selection is in progress
+        # (showing "Associate") without having to replicate the state elsewhere.
         self._selected_ids_ref    = selected_ids_ref
 
         self.setFixedWidth(_CARD_W)
@@ -165,9 +165,9 @@ class _ClusterCard(QFrame):
             )
             col.addWidget(lbl_sugg)
 
-        # Boutons ✓/✗ superposés sur la vignette, sur chaque carte (isolée, groupe
-        # ou avec suggestion) — mêmes actions que le menu contextuel (Identifier…
-        # / Ignorer), sur le même principe visuel que PersonClusterView.
+        # ✓/✗ buttons overlaid on the thumbnail, on every card (isolated, group or
+        # with a suggestion) — the same actions as the context menu (Identify… /
+        # Ignore), on the same visual principle as PersonClusterView.
         _y = _CARD_IMG - _BTN_OVL - 3
         btn_name = QPushButton("✓", self._lbl_img)
         btn_name.setGeometry(_CARD_IMG - _BTN_OVL - 3, _y, _BTN_OVL, _BTN_OVL)
@@ -216,7 +216,7 @@ class _ClusterCard(QFrame):
         label: str,
         color: str,
     ) -> None:
-        """Met à jour (ou crée) le label de suggestion sans recréer la carte."""
+        """Updates (or creates) the suggestion label without recreating the card."""
         self._suggested_person_id = sugg_id
         if not hasattr(self, "_lbl_sugg"):
             self._lbl_sugg = QLabel()
@@ -237,10 +237,11 @@ class _ClusterCard(QFrame):
         self.setStyleSheet(self._STYLE_SELECTED if selected else self._STYLE_NORMAL)
 
     def _on_accept_clicked(self) -> None:
-        # Suggestion présente : accepter directement sans passer par le dialogue.
-        # Sinon : ouvrir le dialogue d'identification classique. `_suggested_person_id`
-        # peut avoir été mis à jour après coup par set_suggestion(), d'où la lecture
-        # au moment du clic plutôt qu'à la construction de la carte.
+        # A suggestion is present: accept it directly without going through the
+        # dialog. Otherwise: open the classic identification dialog.
+        # `_suggested_person_id` may have been updated afterwards by
+        # set_suggestion(), hence the read at click time rather than at card
+        # construction time.
         if self._suggested_person_id is not None:
             self.quick_accept_requested.emit(self._cluster_id, self._suggested_person_id)
         else:
@@ -298,7 +299,7 @@ class _ClusterCard(QFrame):
 
 
 class _SectionWidget(QFrame):
-    """Un groupe de clusters visuellement similaires, avec un en-tête optionnel."""
+    """A group of visually similar clusters, with an optional header."""
 
     accept_requested = Signal(list, int)  # cluster_ids, person_id
     assign_requested = Signal(list)       # cluster_ids
@@ -385,10 +386,10 @@ class _SectionWidget(QFrame):
     def reflow(self, cols: int) -> None:
         while self._card_gl.count():
             self._card_gl.takeAt(0)
-        # Réinitialiser les stretches des colonnes précédentes
+        # Reset the stretches of the previous columns
         for c in range(self._card_gl.columnCount() + cols + 1):
             self._card_gl.setColumnStretch(c, 0)
-        # Colonne fantôme à droite : absorbe l'espace libre → cartes alignées à gauche
+        # A phantom column on the right: absorbs the free space → cards aligned left
         self._card_gl.setColumnStretch(cols, 1)
         for i, (_, card) in enumerate(self._entries):
             self._card_gl.addWidget(card, i // cols, i % cols, Qt.AlignLeft | Qt.AlignTop)

@@ -1,9 +1,9 @@
 # Copyright 2026 Christian Guyot
 # SPDX-License-Identifier: Apache-2.0
-"""Threads d'arrière-plan de MainWindow (règle CLAUDE.md : l'UI ne bloque
-jamais). Extraits de main_window.py — les noms préfixés d'un underscore sont
-conservés pour l'historique et les tests existants ; ils restent des détails
-d'implémentation de MainWindow, pas une API de plugin."""
+"""Background threads of MainWindow (the CLAUDE.md rule: the UI never
+blocks). Extracted from main_window.py — the names prefixed with an underscore
+are kept for the history and the existing tests; they stay implementation
+details of MainWindow, not a plugin API."""
 
 import logging
 import os
@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 
 class _CatalogLoadThread(QThread):
-    """Charge get_all_photos() hors du thread UI et émet les résultats par lots."""
+    """Loads get_all_photos() off the UI thread and emits the results in batches."""
 
     batch_ready = Signal(list)  # list[PhotoInfo]
 
@@ -32,10 +32,10 @@ class _CatalogLoadThread(QThread):
         self._stop = True
 
     def run(self) -> None:
-        # get_all_photos() est trié chronologique descendant (SQL) ; "reverse"
-        # inverse en ascendant pour suivre le réglage "Ordre d'affichage" —
-        # la vue "Toutes les photos" reste toujours chronologique, seule la
-        # direction est configurable (cf. MainWindow._sort_photos_for_display).
+        # get_all_photos() is sorted chronologically descending (SQL); "reverse"
+        # flips it to ascending to follow the "Display order" setting — the "All
+        # photos" view always stays chronological, only the direction is
+        # configurable (cf. MainWindow._sort_photos_for_display).
         photos = self._catalog.get_all_photos()
         if self._reverse:
             photos = list(reversed(photos))
@@ -46,11 +46,11 @@ class _CatalogLoadThread(QThread):
 
 
 class _PhotoQueryThread(QThread):
-    """Exécute une requête catalog/face_db dans un thread secondaire.
+    """Runs a catalog/face_db query in a secondary thread.
 
-    Le tri d'affichage (O(n log n) sur toute la bibliothèque pour "Toutes les
-    photos") est fait ici aussi : les paramètres de tri sont résolus par
-    l'appelant sur le thread UI (lectures de Config) et passés au thread."""
+    The display sort (O(n log n) over the whole library for "All photos") is
+    done here too: the sort parameters are resolved by the caller on the UI
+    thread (Config reads) and passed to the thread."""
 
     photos_ready = Signal(list, str)   # list[PhotoInfo], context_key
 
@@ -74,13 +74,13 @@ class _PhotoQueryThread(QThread):
 
 
 class _DeleteWorkerThread(QThread):
-    """Envoie les fichiers à la corbeille Windows puis purge catalogue/
-    vignettes/visages en lot, hors du thread UI (règle CLAUDE.md : l'UI ne
-    bloque jamais). Jamais d'unlink définitif : si la corbeille est
-    indisponible (lecteur réseau…), le fichier est laissé intact, son chemin
-    part dans errors et le catalogue n'est PAS purgé pour lui."""
+    """Sends the files to the Windows recycle bin then purges the catalog/
+    thumbnails/faces in batch, off the UI thread (the CLAUDE.md rule: the UI
+    never blocks). Never a permanent unlink: if the recycle bin is unavailable
+    (a network drive…), the file is left intact, its path goes into errors and
+    the catalog is NOT purged for it."""
 
-    progress        = Signal(int, int)     # fait, total (libellé barre d'état)
+    progress        = Signal(int, int)     # done, total (status bar label)
     finished_delete = Signal(list, list)   # deleted_paths: list[str], errors: list[str]
 
     def __init__(self, paths: list[str], catalog, thumb_cache, face_db,
@@ -100,8 +100,8 @@ class _DeleteWorkerThread(QThread):
                 move_to_trash(path)
                 deleted.append(path)
             except FileNotFoundError:
-                # Déjà absent du disque : purger quand même le catalogue
-                # (équivalent de l'ancien missing_ok=True).
+                # Already absent from the disk: purge the catalog anyway
+                # (the equivalent of the former missing_ok=True).
                 deleted.append(path)
             except Exception as e:
                 errors.append(
@@ -113,8 +113,8 @@ class _DeleteWorkerThread(QThread):
             self.progress.emit(i + 1, len(self._paths))
         if deleted:
             try:
-                # En lot : delete_photos dissout aussi les groupes de doublons
-                # devenus singletons, dans la même transaction.
+                # In batch: delete_photos also dissolves the duplicate groups
+                # that have become singletons, in the same transaction.
                 self._catalog.delete_photos(deleted)
                 self._thumb_cache.invalidate_many(deleted)
                 self._face_db.delete_for_paths(deleted)
@@ -124,37 +124,37 @@ class _DeleteWorkerThread(QThread):
 
 
 class _DupMigrationThread(QThread):
-    """Exécute la migration des groupes de doublons à dates EXIF conflictuelles
-    puis compte les groupes restants (badge sidebar), hors du thread UI : au
-    premier lancement après upgrade, la migration charge TOUS les groupes avec
-    leurs photos — exécutée avant dans MainWindow.__init__, elle retardait
-    d'autant le premier affichage de la fenêtre.
+    """Runs the migration of the duplicate groups with conflicting EXIF dates
+    then counts the remaining groups (sidebar badge), off the UI thread: on the
+    first launch after an upgrade, the migration loads ALL the groups with
+    their photos — run before that in MainWindow.__init__, it delayed the first
+    display of the window by just as much.
 
-    Migration : dissout les groupes existants qui contiennent au moins deux
-    membres dont la date EXIF est connue et différente (cf.
-    duplicate_detector.py::_dates_differ). Un tel groupe ne peut plus être
-    *créé* aujourd'hui, mais l'incrémentalité de la détection
-    (compared_tier1/compared_tier2, dedup_cache.py) ne recompare et ne dissout
-    jamais spontanément un groupe déjà formé avant l'ajout de cette règle —
-    cf. dedup_exif_date_exclusion_2026-07 en mémoire.
+    Migration: dissolves the existing groups containing at least two members
+    whose EXIF date is known and different (cf.
+    duplicate_detector.py::_dates_differ). Such a group can no longer be
+    *created* today, but the incrementality of the detection
+    (compared_tier1/compared_tier2, dedup_cache.py) never spontaneously
+    recompares nor dissolves a group already formed before this rule was added
+    — cf. dedup_exif_date_exclusion_2026-07 in memory.
 
-    En plus de dissoudre le groupe en base (duplicate_group_id=NULL, comme
-    Catalog.ignore_duplicate_group), retire aussi ses membres de
-    compared_tier1/tier2 pour qu'ils soient recomparés intégralement au
-    prochain passage plutôt que de rester des « paires ancien×ancien » jamais
-    réévaluées — sans ça, la dissolution ne durerait pas : le prochain
-    seed_groups() les retrouverait simplement fusionnés à l'identique puisque
-    plus rien ne les aurait jamais reconfrontés.
+    In addition to dissolving the group in the database
+    (duplicate_group_id=NULL, like Catalog.ignore_duplicate_group), it also
+    removes its members from compared_tier1/tier2 so that they are fully
+    recompared on the next pass rather than staying "old×old pairs" that are
+    never re-evaluated — without that, the dissolution would not last: the next
+    seed_groups() would simply find them merged exactly as before, since
+    nothing would ever have confronted them again.
 
-    Naturellement idempotente : une fois ces groupes dissous, la règle de date
-    empêche définitivement leur recréation, donc ce balayage ne trouve plus
-    rien aux démarrages suivants — pas de flag « déjà exécuté » nécessaire.
+    Naturally idempotent: once those groups are dissolved, the date rule
+    definitively prevents their recreation, so this sweep finds nothing more on
+    the following starts — no "already run" flag needed.
 
-    Séquencement : _start_duplicate_detection ne doit jamais démarrer avant la
-    fin de cette migration (cf. _on_persons_thumbnails_ready_start_duplicates),
-    sinon seed_groups serait amorcé avec les groupes non encore dissous."""
+    Sequencing: _start_duplicate_detection must never start before the end of
+    this migration (cf. _on_persons_thumbnails_ready_start_duplicates),
+    otherwise seed_groups would be seeded with the groups not yet dissolved."""
 
-    done = Signal(int)   # nombre de groupes de doublons restants (badge)
+    done = Signal(int)   # number of duplicate groups remaining (badge)
 
     def __init__(self, catalog, parent=None) -> None:
         super().__init__(parent)
@@ -199,7 +199,7 @@ class _DupMigrationThread(QThread):
 
 
 class _PersonsRefreshThread(QThread):
-    """Charge get_persons + enrich_persons + get_unnamed_clusters hors du thread UI."""
+    """Loads get_persons + enrich_persons + get_unnamed_clusters off the UI thread."""
 
     result_ready = Signal(list, int)   # persons, unnamed_cluster_count
 
@@ -219,7 +219,7 @@ class _PersonsRefreshThread(QThread):
 
 
 class _ResuggestThread(QThread):
-    """Recalcule les suggestions après le rejet d'un cluster, dans un thread secondaire."""
+    """Recomputes the suggestions after a cluster is rejected, in a secondary thread."""
 
     def __init__(self, face_db, cluster_ids: list, exclude_pid, parent=None) -> None:
         super().__init__(parent)
@@ -233,11 +233,11 @@ class _ResuggestThread(QThread):
 
 class _ResetWorkerThread(QThread):
     """
-    Attend l'arrêt des threads d'indexation/clustering en cours,
-    effectue le reset DB demandé, puis émet done(choice).
+    Waits for the indexing/clustering threads in progress to stop,
+    performs the requested DB reset, then emits done(choice).
     """
 
-    done = Signal(int)   # choice : RESET_CLUSTERING ou RESET_FULL
+    done = Signal(int)   # choice: RESET_CLUSTERING or RESET_FULL
 
     def __init__(
         self,
@@ -249,22 +249,22 @@ class _ResetWorkerThread(QThread):
         super().__init__(parent)
         self._face_db = face_db
         self._choice  = choice
-        self._threads = threads_to_wait   # refs Python fortes → gardés en vie
+        self._threads = threads_to_wait   # strong Python refs → kept alive
 
     def run(self) -> None:
         for t in self._threads:
             try:
                 if t.isRunning():
-                    t.wait(10_000)   # 10 s max par thread
+                    t.wait(10_000)   # 10 s max per thread
             except RuntimeError:
-                pass   # objet C++ déjà supprimé
+                pass   # C++ object already deleted
         if self._choice == 1:   # RESET_CLUSTERING
             self._face_db.reset_clustering()
         else:                    # RESET_FULL
             self._face_db.reset_index()
-        # Les deux resets vident cluster_id en masse sans changer le nombre
-        # de visages non identifiés si la bibliothèque n'a pas bougé entre
-        # temps : sans invalider ce cache, le clustering qui suit (déclenché
-        # par _on_reset_done) sauterait silencieusement (cf. reset_clustering_cache).
+        # Both resets clear cluster_id in bulk without changing the number of
+        # unidentified faces if the library has not moved in the meantime:
+        # without invalidating this cache, the clustering that follows (triggered
+        # by _on_reset_done) would silently be skipped (cf. reset_clustering_cache).
         reset_clustering_cache()
         self.done.emit(self._choice)

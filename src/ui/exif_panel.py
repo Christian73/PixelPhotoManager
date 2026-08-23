@@ -1,4 +1,4 @@
-"""Panneau latéral affichant les métadonnées EXIF d'une photo."""
+"""Side panel showing the EXIF metadata of a photo."""
 
 import io
 import logging
@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
-# Groupes et tags curated
+# Curated groups and tags
 
 _CURATED_GROUPS: list[tuple[str, list[tuple[str, str]]]] = [
     (translate("ExifPanel", "Camera"), [
@@ -85,7 +85,7 @@ _CURATED_GROUPS: list[tuple[str, list[tuple[str, str]]]] = [
     ]),
 ]
 
-# Tags ignorés dans la section "Autres" (binaires, redondants ou illisibles)
+# Tags ignored in the "Other" section (binary, redundant or unreadable)
 _SKIP_IN_EXTRA = {
     "GPSInfo", "MakerNote", "UserComment", "PrintImageMatching",
     "ApplicationNotes", "ExifVersion", "FlashPixVersion",
@@ -100,7 +100,7 @@ for _grp, _tags in _CURATED_GROUPS:
         _SKIP_IN_EXTRA.add(_t)
 
 # ---------------------------------------------------------------------------
-# Tables de décodage
+# Decoding tables
 
 _EXPOSURE_PROGRAMS = {
     0: translate("ExifPanel", "Not defined"), 1: translate("ExifPanel", "Manual"), 2: translate("ExifPanel", "Program "
@@ -215,7 +215,7 @@ _COMPRESSIONS = {
 
 
 # ---------------------------------------------------------------------------
-# Formateurs
+# Formatters
 
 def _fmt_exposure(val) -> str:
     try:
@@ -229,7 +229,7 @@ def _fmt_exposure(val) -> str:
 
 
 def _fmt_apex(val) -> str:
-    """Convertit une valeur APEX en f/ (pour MaxApertureValue)."""
+    """Converts an APEX value into f/ (for MaxApertureValue)."""
     try:
         import math
         return f"f/{math.sqrt(2 ** float(val)):.1f}"
@@ -238,7 +238,7 @@ def _fmt_apex(val) -> str:
 
 
 def _decode_xp_str(val) -> str:
-    """Décode les champs XP* Windows (encodés en UTF-16LE bytes)."""
+    """Decodes the Windows XP* fields (encoded as UTF-16LE bytes)."""
     try:
         if isinstance(val, bytes):
             return val.decode("utf-16-le").rstrip("\x00")
@@ -248,7 +248,7 @@ def _decode_xp_str(val) -> str:
 
 
 def _fmt_lens_spec(val) -> str:
-    """Formate LensSpecification [min_fl, max_fl, min_fn, max_fn]."""
+    """Formats LensSpecification [min_fl, max_fl, min_fn, max_fn]."""
     try:
         parts = [float(v) for v in val]
         if len(parts) == 4:
@@ -261,7 +261,7 @@ def _fmt_lens_spec(val) -> str:
 
 
 def _fmt_value(tag: str, val) -> str:
-    """Convertit une valeur EXIF brute en chaîne lisible."""
+    """Converts a raw EXIF value into a readable string."""
     if val is None:
         return ""
     try:
@@ -352,7 +352,7 @@ def _fmt_size(n: int) -> str:
 
 
 def _set_file_dates(path: str, dt: datetime) -> None:
-    """Met à jour mtime + date de création Windows (via l'API Win32 SetFileTime)."""
+    """Updates mtime + the Windows creation date (through the Win32 API SetFileTime)."""
     ts = dt.timestamp()
     os.utime(path, (ts, ts))
     try:
@@ -376,12 +376,12 @@ def _set_file_dates(path: str, dt: datetime) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Lecture EXIF robuste (JPEG + TIFF + WebP + PNG)
+# Robust EXIF reading (JPEG + TIFF + WebP + PNG)
 
 def _read_exif(img) -> dict:
     """
-    Lit tous les tags EXIF via l'API publique Pillow (getexif + sub-IFD).
-    Fonctionne pour JPEG, TIFF, WebP et PNG avec chunk EXIF.
+    Reads every EXIF tag through the public Pillow API (getexif + sub-IFD).
+    Works for JPEG, TIFF, WebP and PNG with an EXIF chunk.
     """
     from PIL import ExifTags
     exif: dict = {}
@@ -390,12 +390,12 @@ def _read_exif(img) -> dict:
         if not exif_obj:
             return exif
 
-        # IFD principal (Make, Model, Orientation, résolution…)
+        # Main IFD (Make, Model, Orientation, resolution…)
         for tag_id, val in exif_obj.items():
             tag_name = ExifTags.TAGS.get(tag_id, str(tag_id))
             exif[tag_name] = val
 
-        # ExifIFD (0x8769) : exposition, objectif, ISO, flash…
+        # ExifIFD (0x8769): exposure, lens, ISO, flash…
         try:
             exif_ifd = exif_obj.get_ifd(0x8769)
             for tag_id, val in exif_ifd.items():
@@ -412,7 +412,7 @@ def _read_exif(img) -> dict:
         except Exception:
             pass
 
-        # Interoperability IFD (0xa005) — optionnel
+        # Interoperability IFD (0xa005) — optional
         try:
             interop = exif_obj.get_ifd(0xa005)
             for tag_id, val in interop.items():
@@ -427,10 +427,10 @@ def _read_exif(img) -> dict:
 
 
 # ---------------------------------------------------------------------------
-# Dialogue d'édition EXIF
+# EXIF editing dialog
 
 class ExifEditDialog(QDialog):
-    """Dialogue permettant de modifier les métadonnées EXIF d'un fichier image."""
+    """Dialog allowing the EXIF metadata of an image file to be modified."""
 
     def __init__(self, photo_path: str, parent=None) -> None:
         super().__init__(parent)
@@ -572,10 +572,10 @@ class ExifEditDialog(QDialog):
 
 
 # ---------------------------------------------------------------------------
-# Thread de chargement des données EXIF
+# EXIF data loading thread
 
 class _ExifDataLoader(QThread):
-    """Lit les métadonnées EXIF + infos fichier dans un thread secondaire."""
+    """Reads the EXIF metadata + the file info in a secondary thread."""
 
     data_ready = Signal(str, object)   # (photo_path, data_dict | None)
 
@@ -645,9 +645,9 @@ class _ExifDataLoader(QThread):
 # Widget
 
 class ExifPanel(QWidget):
-    """Panneau scrollable affichant les métadonnées EXIF d'une photo."""
+    """Scrollable panel showing the EXIF metadata of a photo."""
 
-    photo_saved = Signal(str)  # émis après une sauvegarde EXIF réussie (path)
+    photo_saved = Signal(str)  # emitted after a successful EXIF save (path)
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
@@ -710,7 +710,7 @@ class ExifPanel(QWidget):
         self._btn_edit.clicked.connect(self._on_edit_clicked)
         root.addWidget(self._btn_edit)
 
-    # ------------------------------------------------------------------ API publique
+    # ------------------------------------------------------------------ public API
 
     def set_photo(self, photo_path: str) -> None:
         from src.library.exif_reader import VIDEO_EXT
@@ -718,7 +718,7 @@ class ExifPanel(QWidget):
         self._is_video = Path(photo_path).suffix.lower() in VIDEO_EXT
         self._btn_edit.setEnabled(not self._is_video)
         self._clear()
-        # Annuler le chargement précédent si encore en cours
+        # Cancel the previous load if it is still running
         if self._loader and self._loader.isRunning():
             self._loader.data_ready.disconnect()
         self._loader = _ExifDataLoader(photo_path, self)
@@ -728,7 +728,7 @@ class ExifPanel(QWidget):
     @Slot(str, object)
     def _on_data_ready(self, path: str, data: object) -> None:
         if path != self._current_path:
-            return  # navigation entre-temps → résultat obsolète
+            return  # navigation in the meantime → obsolete result
         if data is None:
             self._add_row("", translate(
                 "ExifPanel", "Could not read the metadata"), error=True)
@@ -739,9 +739,9 @@ class ExifPanel(QWidget):
             self._populate_from_image_data(data, path)
 
     def set_tags(self, tags: list) -> None:
-        """Affiche les mots-clés (données catalogue, pas EXIF fichier) en tête
-        du panneau — alimenté par MainWindow, indépendamment du chargement
-        asynchrone des métadonnées EXIF."""
+        """Shows the keywords (catalog data, not file EXIF) at the top of the
+        panel — fed by MainWindow, independently of the asynchronous loading
+        of the EXIF metadata."""
         if tags:
             self._tags_label.setText("🏷  " + ", ".join(tags))
             self._tags_label.setVisible(True)
@@ -763,7 +763,7 @@ class ExifPanel(QWidget):
         dlg = ExifEditDialog(self._current_path, self)
         if dlg.exec() == QDialog.Accepted:
             self._clear()
-            # Recharger via le thread après édition
+            # Reload through the thread after editing
             self._loader = _ExifDataLoader(self._current_path, self)
             self._loader.data_ready.connect(self._on_data_ready)
             self._loader.start()
@@ -850,11 +850,11 @@ class ExifPanel(QWidget):
         from PIL import ExifTags
         from src.library.exif_reader import ExifReader
 
-        # Normalise : dict {tag_id: val} → dict {tag_name: val}
+        # Normalises: dict {tag_id: val} → dict {tag_name: val}
         if gps_info and isinstance(next(iter(gps_info)), int):
             gps_tags = {ExifTags.GPSTAGS.get(k, str(k)): v for k, v in gps_info.items()}
         else:
-            gps_tags = gps_info  # déjà des noms
+            gps_tags = gps_info  # already names
 
         coords = ExifReader._parse_gps(gps_info)
         if not coords:
@@ -879,7 +879,7 @@ class ExifPanel(QWidget):
             except Exception:
                 pass
 
-        # Vitesse GPS
+        # GPS speed
         speed = gps_tags.get("GPSSpeed")
         if speed is not None:
             try:
@@ -892,7 +892,7 @@ class ExifPanel(QWidget):
             except Exception:
                 pass
 
-        # Direction de l'image
+        # Image direction
         direction = gps_tags.get("GPSImgDirection")
         if direction is not None:
             try:
@@ -904,7 +904,7 @@ class ExifPanel(QWidget):
             except Exception:
                 pass
 
-        # Date/heure GPS
+        # GPS date/time
         gps_date = gps_tags.get("GPSDateStamp")
         gps_time = gps_tags.get("GPSTimeStamp")
         if gps_date and gps_time:
@@ -915,7 +915,7 @@ class ExifPanel(QWidget):
             except Exception:
                 pass
 
-        # DOP (précision)
+        # DOP (precision)
         hdop = gps_tags.get("GPSDOP") or gps_tags.get("GPSHPositioningError")
         if hdop is not None:
             try:

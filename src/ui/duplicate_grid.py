@@ -1,15 +1,15 @@
 # Copyright 2026 Christian Guyot
 # SPDX-License-Identifier: Apache-2.0
 """
-DuplicateGrid — grille des groupes de doublons détectés.
+DuplicateGrid — grid of the detected duplicate groups.
 
-Contrairement à FaceClusterGrid, les groupes sont déjà calculés et stockés
-(`duplicate_group_id` en base, cf. duplicate_detector.py) : pas de clustering
-à recalculer ici, juste un chargement + affichage de cartes.
+Unlike FaceClusterGrid, the groups are already computed and stored
+(`duplicate_group_id` in the database, cf. duplicate_detector.py): no
+clustering to recompute here, just a load + a display of cards.
 
-1 carte par groupe : vignette du 1er exemplaire, nombre d'exemplaires, bouton
-✗ superposé pour ignorer (dissoudre) le groupe entier.
-Double-clic : comparaison rapide (ouvre la visionneuse sur les photos du groupe).
+1 card per group: thumbnail of the 1st copy, number of copies, an overlaid ✗
+button to ignore (dissolve) the whole group.
+Double-click: quick comparison (opens the viewer on the photos of the group).
 """
 
 import logging
@@ -31,7 +31,7 @@ _CARD_W       = 148
 _CARD_SPACING = 10
 _COLS_MIN     = 2
 
-_BTN_OVL = 22   # diamètre du bouton ✗ superposé sur la vignette
+_BTN_OVL = 22   # diameter of the ✗ button overlaid on the thumbnail
 _BTN_REJECT_STYLE = (
     "QPushButton { background: rgba(170,30,30,215); color: white;"
     " border-radius: 11px; font-weight: bold; font-size: 13px; border: none; padding: 0; }"
@@ -42,7 +42,7 @@ _BTN_REJECT_STYLE = (
 # ------------------------------------------------------------------ load thread
 
 class _DuplicateGroupLoadThread(QThread):
-    """Charge tous les groupes de doublons depuis le catalogue en arrière-plan."""
+    """Loads every duplicate group from the catalog in the background."""
 
     groups_ready = Signal(object)  # dict[int, list[PhotoInfo]]
 
@@ -62,10 +62,10 @@ class _DuplicateGroupLoadThread(QThread):
 # ------------------------------------------------------------------ card
 
 class _DuplicateCard(QFrame):
-    """Carte représentant un groupe de doublons.
+    """Card representing a duplicate group.
 
-    Double-clic → comparaison rapide dans la visionneuse.
-    Clic sur ✗   → ignorer (dissoudre) le groupe entier.
+    Double-click → quick comparison in the viewer.
+    Click on ✗   → ignore (dissolve) the whole group.
     """
 
     view_requested   = Signal(int)  # group_id
@@ -98,8 +98,8 @@ class _DuplicateCard(QFrame):
         self.setStyleSheet(self._STYLE)
         self.setToolTip(translate("DuplicateCard", "Double-click: compare in the viewer — ✗: "
                                                    "ignore this group"))
-        # Nom accessible pour l'automatisation pywinauto (e2e) — même convention
-        # que ThumbnailCell (thumbnail_grid.py: "thumb::<path>").
+        # Accessible name for the pywinauto automation (e2e) — the same convention
+        # as ThumbnailCell (thumbnail_grid.py: "thumb::<path>").
         self.setAccessibleName(f"dupgroup::{group_id}")
 
         col = QVBoxLayout(self)
@@ -132,8 +132,9 @@ class _DuplicateCard(QFrame):
         return self._group_id
 
     def load_thumbnail(self, cache) -> None:
-        """Charge la vignette via le pool partagé (thumbnail_grid._get_thumb_pool) —
-        ne jamais décoder le JPEG sur le thread UI (cf. règle CLAUDE.md)."""
+        """Loads the thumbnail through the shared pool
+        (thumbnail_grid._get_thumb_pool) — never decode the JPEG on the UI
+        thread (cf. the CLAUDE.md rule)."""
         self._cache = cache
         if not self._cover_path:
             self.set_thumbnail(None)
@@ -180,14 +181,14 @@ class _DuplicateCard(QFrame):
 
 class DuplicateGrid(QWidget):
     """
-    Zone principale affichant les groupes de doublons détectés.
+    Main area showing the detected duplicate groups.
 
     Signals
     -------
-    back_requested()          — retourner à la grille de photos
-    view_requested(group_id)  — comparaison rapide (ouvrir la visionneuse)
-    group_ignored(group_id)   — ignorer (dissoudre) un groupe
-    detect_requested()        — lancer une nouvelle détection de doublons
+    back_requested()          — go back to the photo grid
+    view_requested(group_id)  — quick comparison (open the viewer)
+    group_ignored(group_id)   — ignore (dissolve) a group
+    detect_requested()        — start a new duplicate detection
     """
 
     back_requested   = Signal()
@@ -246,10 +247,10 @@ class DuplicateGrid(QWidget):
         self._card_gl.setContentsMargins(0, 0, 0, 0)
         self._content_vbox.addWidget(self._card_area)
 
-        # Panneau vide/état — mutuellement exclusif avec _card_area, occupe tout
-        # l'espace restant (stretch=1) et centre son contenu via l'alignement du
-        # layout interne : centre bien à l'écran quel que soit le nombre de
-        # cartes (0 ici) et la hauteur réelle du viewport.
+        # Empty/state panel — mutually exclusive with _card_area, it takes all the
+        # remaining space (stretch=1) and centres its content through the alignment
+        # of the inner layout: it centres correctly on screen whatever the number
+        # of cards (0 here) and the real height of the viewport.
         self._empty_panel = QWidget()
         empty_vbox = QVBoxLayout(self._empty_panel)
         empty_vbox.setAlignment(Qt.AlignCenter)
@@ -277,7 +278,7 @@ class DuplicateGrid(QWidget):
         self._scan_bar.setFixedWidth(220)
         self._scan_bar.setFixedHeight(6)
         self._scan_bar.setTextVisible(False)
-        self._scan_bar.setRange(0, 0)  # animation indéterminée (marquee)
+        self._scan_bar.setRange(0, 0)  # indeterminate animation (marquee)
         self._scan_bar.setStyleSheet(
             "QProgressBar { background: #1e1e2e; border: none; border-radius: 3px; }"
             "QProgressBar::chunk { background: #4a8fd4; border-radius: 3px; }"
@@ -315,14 +316,14 @@ class DuplicateGrid(QWidget):
             )
 
     def _force_reflow(self) -> None:
-        """Recalcule les colonnes depuis la largeur réelle et replace toutes les
-        cartes. Appelé en différé après un chargement pour corriger le cas où
-        le viewport n'était pas encore dimensionné au moment du premier affichage
-        (ex: bascule depuis un QStackedWidget sans redimensionnement réel — cf.
-        même pattern dans face_cluster_grid.py::_force_reflow)."""
+        """Recomputes the columns from the real width and repositions every card.
+        Called deferred after a load to fix the case where the viewport was not
+        yet sized at the time of the first display (e.g. a switch from a
+        QStackedWidget without a real resize — cf. the same pattern in
+        face_cluster_grid.py::_force_reflow)."""
         available = self._scroll.viewport().width()
         if available <= 0:
-            QTimer.singleShot(50, self._force_reflow)  # viewport pas encore prêt
+            QTimer.singleShot(50, self._force_reflow)  # viewport not ready yet
             return
         self._current_cols = max(_COLS_MIN, available // (_CARD_W + _CARD_SPACING))
         self._reflow()
@@ -340,8 +341,8 @@ class DuplicateGrid(QWidget):
             self._btn_detect_empty.setVisible(not self._scanning)
 
     def set_scanning(self, scanning: bool) -> None:
-        """Affiche/masque l'indicateur de recherche en cours (visible uniquement
-        quand la grille est vide — cf. DuplicateDetectorThread côté main_window)."""
+        """Shows/hides the "search in progress" indicator (visible only when the
+        grid is empty — cf. DuplicateDetectorThread on the main_window side)."""
         if self._scanning == scanning:
             return
         self._scanning = scanning
@@ -350,19 +351,19 @@ class DuplicateGrid(QWidget):
     # ------------------------------------------------------------------ public
 
     def ensure_loaded(self) -> None:
-        """Affiche l'écran sans recharger si les données déjà en mémoire
-        sont à jour (ex: simple retour depuis la visionneuse) ; ne
-        recharge que lors du premier affichage ou après invalidate()."""
+        """Shows the screen without reloading if the data already in memory is
+        up to date (e.g. a simple return from the viewer); only reloads on
+        the first display or after invalidate()."""
         if not self._loaded:
             self.refresh()
 
     def invalidate(self) -> None:
-        """Marque les données courantes comme périmées : le prochain
-        ensure_loaded() déclenchera un vrai rechargement."""
+        """Marks the current data as stale: the next ensure_loaded() will
+        trigger a real reload."""
         self._loaded = False
 
     def refresh(self) -> None:
-        """Recharge tous les groupes de doublons depuis le catalogue."""
+        """Reloads every duplicate group from the catalog."""
         if self._load_thread is not None:
             if self._load_thread.isRunning():
                 return
@@ -379,17 +380,17 @@ class DuplicateGrid(QWidget):
             for group_id, photos in groups.items() if photos
         }
         if self._loaded and signature == self._last_signature:
-            # Contenu identique à ce qui est déjà affiché (snapshot périodique
-            # pendant un scan en arrière-plan, cf. _LIVE_SNAPSHOT_INTERVAL côté
-            # duplicate_detector.py) — éviter de tout détruire/reconstruire
-            # (vignettes incluses) pour ne pas provoquer de clignotement.
+            # Content identical to what is already displayed (a periodic snapshot
+            # during a background scan, cf. _LIVE_SNAPSHOT_INTERVAL on the
+            # duplicate_detector.py side) — avoid destroying/rebuilding everything
+            # (thumbnails included) so as not to cause flickering.
             return
 
         for card in self._cards.values():
-            # hide() AVANT setParent(None) : détacher un widget encore visible
-            # conserve son état « à montrer » — la carte détachée redevient une
-            # fenêtre top-level qui peut s'afficher (petite fenêtre flottante
-            # au-dessus de l'application) avant que deleteLater ne s'exécute.
+            # hide() BEFORE setParent(None): detaching a widget that is still visible
+            # keeps its "to be shown" state — the detached card becomes a top-level
+            # window again, which may show up (a small floating window above the
+            # application) before deleteLater runs.
             card.hide()
             card.setParent(None)
             card.deleteLater()
@@ -415,10 +416,10 @@ class DuplicateGrid(QWidget):
         QTimer.singleShot(0, self._force_reflow)
 
     def remove_group(self, group_id: int) -> None:
-        """Retire une carte de groupe sans recharger toute la grille."""
+        """Removes a group card without reloading the whole grid."""
         card = self._cards.pop(group_id, None)
         if card is not None:
-            card.hide()   # cf. _on_groups_ready : jamais setParent(None) sur un widget visible
+            card.hide()   # cf. _on_groups_ready: never setParent(None) on a visible widget
             card.setParent(None)
             card.deleteLater()
         if self._last_signature is not None:

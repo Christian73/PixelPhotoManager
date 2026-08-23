@@ -1,7 +1,7 @@
 ﻿# Copyright 2026 Christian Guyot
 # SPDX-License-Identifier: Apache-2.0
 """
-PeopleDialog — identification et fusion des groupes de visages.
+PeopleDialog — identification and merging of the face groups.
 """
 
 import io
@@ -24,9 +24,9 @@ logger = logging.getLogger(__name__)
 
 _AVATAR_SIZE = 60
 
-# Stylesheet appliqué aux dialogues contenant des QRadioButton.
-# Le thème sombre global ne définit pas QRadioButton::indicator,
-# ce qui rend les pastilles invisibles sur fond foncé.
+# Stylesheet applied to the dialogs containing QRadioButtons.
+# The global dark theme does not define QRadioButton::indicator,
+# which makes the dots invisible on a dark background.
 _RADIO_STYLE = """
 QRadioButton {
     spacing: 6px;
@@ -76,9 +76,9 @@ def _face_bytes(face: "FaceInfo", size: int, edit_rotation: int = 0) -> bytes:
     """
     Decode face crop as PNG bytes. Safe to call from any thread.
 
-    edit_rotation : rotation CW (degrés) appliquée à la photo pour l'affichage.
-    La rotation nette (detected_rotation − edit_rotation) est appliquée au crop
-    pour que la vignette corresponde toujours à l'orientation affichée.
+    edit_rotation : CW rotation (degrees) applied to the photo for the display.
+    The net rotation (detected_rotation − edit_rotation) is applied to the crop
+    so that the thumbnail always matches the displayed orientation.
     """
     try:
         from pathlib import Path
@@ -99,8 +99,8 @@ def _face_bytes(face: "FaceInfo", size: int, edit_rotation: int = 0) -> bytes:
         if right <= left or bottom <= top:
             return b""
         crop = img.crop((left, top, right, bottom))
-        # Ramener le crop dans l'espace d'affichage (edit_rotation).
-        # PIL.rotate est CCW ; detected_rotation/edit_rotation sont CW.
+        # Bring the crop back into the display space (edit_rotation).
+        # PIL.rotate is CCW; detected_rotation/edit_rotation are CW.
         net = (face.detected_rotation - edit_rotation) % 360
         if net:
             crop = crop.rotate(net, expand=True)
@@ -141,11 +141,11 @@ def _cosine_sim(a: list[float], b: list[float]) -> float:
         return dot / (na * nb) if na > 0 and nb > 0 else 0.0
 
 
-# Seuils pour l'affichage des suggestions (visages pas encore "en attente de
-# vérification" — sous _SIM_SUGGEST dans face_database.py — affichés ici en
-# aperçu live pendant que l'utilisateur parcourt les groupes non identifiés).
-_SIM_STRONG  = 0.50   # très probable  → libellé en bleu
-_SIM_WEAK    = 0.45   # possible        → libellé en gris
+# Thresholds for displaying the suggestions (faces not yet "awaiting
+# verification" — below _SIM_SUGGEST in face_database.py — shown here as a live
+# preview while the user browses the unidentified groups).
+_SIM_STRONG  = 0.50   # very likely → label in blue
+_SIM_WEAK    = 0.45   # possible    → label in grey
 
 
 def _placeholder_pixmap(size: int = _AVATAR_SIZE) -> QPixmap:
@@ -187,10 +187,10 @@ class _AvatarLoader(QThread):
 
 class _AssignDialog(QDialog):
     """
-    Dialogue unifié pour identifier un groupe ou un visage.
+    Unified dialog to identify a group or a face.
 
-    Affiche en tête la personne suggérée (si disponible), puis les autres
-    personnes dans une liste filtrabe, puis les options de création / d'ignorance.
+    Shows the suggested person at the top (if available), then the other
+    people in a filterable list, then the create / ignore options.
     """
 
     def __init__(
@@ -330,13 +330,13 @@ class _AssignDialog(QDialog):
             self._rb_ignore = rb_ignore
             layout.addWidget(rb_ignore)
 
-        # Pré-sélection : suggestion ou premier de liste, sinon "Créer"
+        # Pre-selection: the suggestion or the first of the list, otherwise "Create"
         if preselect_rb is not None:
             preselect_rb.setChecked(True)
         else:
             rb_new.setChecked(True)
 
-        # Boutons
+        # Buttons
         buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         buttons.accepted.connect(self._on_accept)
         buttons.rejected.connect(self.reject)
@@ -392,7 +392,7 @@ class _AssignDialog(QDialog):
 class _ClusterRow(QFrame):
     """One row: face thumbnail + cluster info + 'Nommer' button."""
 
-    named    = Signal(int, str)   # cluster_id, person_name  → créer nouvelle personne
+    named    = Signal(int, str)   # cluster_id, person_name  → create a new person
     assigned = Signal(int, int)   # cluster_id, person_id   → assigner existante
     ignored  = Signal(int)        # cluster_id              → ignorer
 
@@ -597,14 +597,14 @@ class MergePersonsDialog(QDialog):
 
 class PeopleDialog(QDialog):
     """
-    Dialogue d'identification des groupes de visages.
+    Dialog for identifying the face groups.
 
     Signals
     -------
     cluster_named(cluster_id, person_name)
-        L'utilisateur crée une nouvelle personne pour ce cluster.
+        The user creates a new person for this cluster.
     cluster_assigned(cluster_id, person_id)
-        L'utilisateur associe ce cluster à une personne existante.
+        The user associates this cluster with an existing person.
     """
 
     cluster_named    = Signal(int, str)
@@ -613,7 +613,7 @@ class PeopleDialog(QDialog):
     def __init__(
         self,
         face_db: FaceDatabase,
-        catalog,                     # Catalog — import tardif pour éviter la circularité
+        catalog,                     # Catalog — a late import to avoid the circularity
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
@@ -653,7 +653,7 @@ class PeopleDialog(QDialog):
         layout.addWidget(btn_close, alignment=Qt.AlignRight)
 
     def refresh(self) -> None:
-        # Arrêter un éventuel chargement d'avatars en cours et libérer le thread Qt enfant
+        # Stop any avatar loading in progress and release the child Qt thread
         if hasattr(self, "_avatar_loader") and self._avatar_loader is not None:
             try:
                 self._avatar_loader.avatar_ready.disconnect(self._on_avatar_ready)
@@ -683,7 +683,7 @@ class PeopleDialog(QDialog):
             self._content_layout.addWidget(lbl)
             return
 
-        # Personnes existantes et leurs centroïdes par groupe
+        # Existing people and their centroids by group
         persons = self._catalog.get_persons()
         self._face_db.enrich_persons(persons)
 
@@ -697,7 +697,7 @@ class PeopleDialog(QDialog):
         for cluster_id, face_count in clusters:
             rep = reps.get(cluster_id)
 
-            # Suggestion : meilleur score contre chaque centroïde de groupe connu
+            # Suggestion: the best score against each known group centroid
             suggestion: tuple[str, int, float] | None = None
             if persons and person_cluster_embs:
                 cluster_emb = self._face_db.get_representative_embedding(
@@ -722,7 +722,7 @@ class PeopleDialog(QDialog):
             if rep:
                 avatar_items.append((cluster_id, rep))
 
-        # Lancer le chargement des avatars en arrière-plan
+        # Start loading the avatars in the background
         if avatar_items:
             self._avatar_loader = _AvatarLoader(avatar_items, _AVATAR_SIZE, self)
             self._avatar_loader.avatar_ready.connect(self._on_avatar_ready)

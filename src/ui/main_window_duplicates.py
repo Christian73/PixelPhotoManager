@@ -1,6 +1,6 @@
 # Copyright 2026 Christian Guyot
 # SPDX-License-Identifier: Apache-2.0
-"""Contrôleur doublons & fichiers corrompus (extrait de MainWindow)."""
+"""Duplicates & corrupted files controller (extracted from MainWindow)."""
 import ctypes
 import logging
 import os
@@ -53,8 +53,8 @@ from src.ui.face_backup_dialog import FaceBackupDialog
 logger = logging.getLogger(__name__)
 
 
-# Classes extraites de ce fichier (2026-07) — importées sous leurs noms
-# historiques : elles restent des détails d'implémentation de MainWindow.
+# Classes extracted from this file (2026-07) — imported under their
+# historical names: they stay implementation details of MainWindow.
 from src.ui.ui_utils import fmt_size as _fmt_size  # noqa: E402
 from src.ui.background_workers import (  # noqa: E402
     _CatalogLoadThread, _DeleteWorkerThread, _DupMigrationThread,
@@ -71,10 +71,10 @@ from src.core.i18n import translate
 
 
 class DuplicatesController:
-    """Contrôleur doublons & fichiers corrompus (extrait de MainWindow).
+    """Duplicates & corrupted files controller (extracted from MainWindow).
 
-    Mixin de MainWindow — aucune instanciation autonome : les attributs
-    (self._catalog, self._sidebar, …) sont créés par MainWindow.__init__."""
+    A mixin of MainWindow — never instantiated on its own: the attributes
+    (self._catalog, self._sidebar, …) are created by MainWindow.__init__."""
 
     @Slot()
     def _on_persons_thumbnails_ready_start_duplicates(self) -> None:
@@ -84,10 +84,10 @@ class DuplicatesController:
             )
         except (RuntimeError, TypeError):
             pass
-        # La migration des groupes à dates conflictuelles (_DupMigrationThread)
-        # doit être terminée avant d'amorcer seed_groups : en pratique elle
-        # finit bien avant le chargement des vignettes de personnes, la garde
-        # couvre le premier lancement après upgrade (migration longue).
+        # The migration of the groups with conflicting dates (_DupMigrationThread)
+        # must be finished before seeding seed_groups: in practice it finishes well
+        # before the person thumbnails are loaded, the guard covers the first launch
+        # after an upgrade (a long migration).
         if self._dup_migration_thread is not None and self._dup_migration_thread.isRunning():
             self._dup_migration_thread.finished.connect(self._start_duplicate_detection)
             return
@@ -103,8 +103,8 @@ class DuplicatesController:
 
         seed_groups = self._catalog.get_duplicate_group_assignments()
         dates = self._catalog.get_photo_dates_for_dedup()
-        # seed_groups reflète déjà tout ✗ cliqué avant ce lancement — repartir
-        # d'un ensemble vide pour ce nouveau passage (cf. _on_duplicate_group_ignored).
+        # seed_groups already reflects every ✗ clicked before this launch — start
+        # from an empty set for this new pass (cf. _on_duplicate_group_ignored).
         self._duplicate_ignored_paths = set()
 
         detector = DuplicateDetectorThread(
@@ -145,8 +145,8 @@ class DuplicatesController:
         detector.start()
 
     def _update_corrupted_indicator(self, corrupted_paths: list[str]) -> None:
-        """Met à jour le compteur cliquable de fichiers corrompus dans la
-        barre de statut, pendant un scan de doublons en cours."""
+        """Updates the clickable counter of corrupted files in the status bar,
+        during a duplicate scan in progress."""
         self._live_corrupted_paths = list(corrupted_paths)
         n = len(self._live_corrupted_paths)
         if n:
@@ -157,9 +157,9 @@ class DuplicatesController:
             self._lbl_corrupted.hide()
 
     def _load_persisted_corrupted_paths(self) -> list[str]:
-        """Fichiers corrompus connus du dernier passage de détection de
-        doublons, persistés dans dedup_cache.db pour survivre à un
-        redémarrage de l'application (voir DedupCache.replace_corrupted_paths)."""
+        """Corrupted files known from the last duplicate detection pass,
+        persisted in dedup_cache.db so as to survive a restart of the
+        application (see DedupCache.replace_corrupted_paths)."""
         cache = DedupCache()
         cache.open()
         try:
@@ -168,10 +168,9 @@ class DuplicatesController:
             cache.close()
 
     def _remove_persisted_corrupted_paths(self, paths) -> None:
-        """Retire des chemins précis de la liste persistée (réparation ou
-        suppression manuelle réussie), sans attendre le prochain passage
-        complet de détection de doublons pour que dedup_cache.db reflète
-        l'état réel."""
+        """Removes specific paths from the persisted list (a successful repair
+        or manual deletion), without waiting for the next full duplicate
+        detection pass for dedup_cache.db to reflect the real state."""
         paths = list(paths)
         if not paths:
             return
@@ -183,14 +182,13 @@ class DuplicatesController:
             cache.close()
 
     def _show_corrupted_status_dialog(self) -> None:
-        """Point d'entrée dédié (menu Outils › Fichiers corrompus…) : résumé
-        + actions, plutôt que la liste détaillée (_show_corrupted_list_dialog,
-        accessible ici via "Lister…" et déjà utilisée par l'indicateur de la
-        barre de statut et "État des doublons…"). Pas de bouton "Supprimer…"
-        ici (ni dans _show_corrupted_list_dialog) : l'utilisateur doit
-        d'abord tenter une réparation, l'option de suppression n'étant
-        proposée que pour les fichiers toujours en échec après coup, via
-        _show_repair_result_dialog."""
+        """A dedicated entry point (the Tools › Corrupted files… menu): a summary
+        + actions, rather than the detailed list (_show_corrupted_list_dialog,
+        reachable here through "List…" and already used by the status bar
+        indicator and "Duplicate status…"). No "Delete…" button here (nor in
+        _show_corrupted_list_dialog): the user must first attempt a repair, the
+        deletion option being offered only for the files still failing
+        afterwards, through _show_repair_result_dialog."""
         corrupted_paths = list(self._live_corrupted_paths)
         n = len(corrupted_paths)
 
@@ -245,9 +243,9 @@ class DuplicatesController:
             btn_delete.setEnabled(bool(n))
 
         def _target_paths() -> list:
-            """Fichiers sélectionnés, ou tous si aucune sélection — permet de
-            garder l'action « sur toute la liste » en un clic (comportement
-            précédent) tout en offrant le ciblage d'une sélection."""
+            """The selected files, or all of them if there is no selection —
+            keeps the "on the whole list" action one click away (the previous
+            behaviour) while allowing a selection to be targeted."""
             selected = [item.text() for item in list_widget.selectedItems()]
             return selected if selected else [
                 list_widget.item(i).text() for i in range(list_widget.count())
@@ -278,21 +276,21 @@ class DuplicatesController:
 
     def _apply_duplicate_results(self, groups: dict, corrupted_paths=(),
                                   *, seed_groups: dict | None = None) -> None:
-        """Applique un instantané (partiel ou final) de la détection de
-        doublons : persiste les groupes en base, met à jour les PhotoInfo en
-        mémoire et rafraîchit grille/visionneuse/sidebar. `seed_groups` est
-        l'état {path: group_id} connu au lancement de cette passe — tout
-        chemin qui y figurait mais n'apparaît plus dans `groups` (groupe
-        dissous, réduit à un singleton, ou fichier retiré de la bibliothèque)
-        voit son `duplicate_group_id` explicitement effacé."""
+        """Applies a snapshot (partial or final) of the duplicate detection:
+        persists the groups in the database, updates the PhotoInfo in memory
+        and refreshes the grid/viewer/sidebar. `seed_groups` is the
+        {path: group_id} state known when this pass started — any path that was
+        in it but no longer appears in `groups` (a dissolved group, one reduced
+        to a singleton, or a file removed from the library) has its
+        `duplicate_group_id` explicitly cleared."""
         assignments: dict[str, int] = {}
         for gid, members in groups.items():
             for path in members:
                 assignments[path] = gid
 
-        # Exclut tout chemin dissous via le bouton ✗ pendant ce passage : le
-        # thread de détection peut encore les avoir fusionnés dans son état
-        # interne (capturé avant l'ignore) — cf. _on_duplicate_group_ignored.
+        # Excludes any path dissolved through the ✗ button during this pass: the
+        # detection thread may still have them merged in its internal state
+        # (captured before the ignore) — cf. _on_duplicate_group_ignored.
         if self._duplicate_ignored_paths:
             assignments = {p: gid for p, gid in assignments.items()
                            if p not in self._duplicate_ignored_paths}
@@ -325,13 +323,12 @@ class DuplicatesController:
             self._duplicate_grid.invalidate()
 
     def _show_duplicate_status_dialog(self) -> None:
-        """État instantané (lecture seule) de la détection de doublons — la
-        détection tourne en continu en arrière-plan, ce dialogue remplace
-        l'ancien déclenchement manuel avec rapport de fin. Si une passe est en
-        cours, une barre de progression (alimentée par self._dup_progress,
-        mis à jour par le signal `progress` du thread — cf.
-        _start_duplicate_detection) se met à jour en direct tant que le
-        dialogue reste ouvert."""
+        """Instantaneous (read-only) state of the duplicate detection — the
+        detection runs continuously in the background, this dialog replaces the
+        former manual trigger with a completion report. If a pass is in
+        progress, a progress bar (fed by self._dup_progress, updated by the
+        `progress` signal of the thread — cf. _start_duplicate_detection)
+        updates live as long as the dialog stays open."""
         thread = self._duplicate_thread
         running = bool(thread and thread.isRunning())
 
@@ -403,10 +400,10 @@ class DuplicatesController:
                 _set_progress(current, total, message)
 
             def _on_terminal(*_args) -> None:
-                # Émis par finished/error/cancelled : la passe en cours (celle
-                # que ce dialogue affichait) s'est terminée pendant qu'il
-                # restait ouvert — fige la barre à 100 % et réactive
-                # "Vérifier maintenant" plutôt que de laisser un état figé.
+                # Emitted by finished/error/cancelled: the pass in progress (the one
+                # this dialog was showing) ended while it stayed open — freezes the
+                # bar at 100 % and re-enables "Check now" rather than leaving a
+                # frozen state.
                 if progress_bar is not None:
                     progress_bar.setValue(progress_bar.maximum())
                 if lbl_progress is not None:
@@ -444,9 +441,9 @@ class DuplicatesController:
 
     def _record_corrupted_files(self, corrupted_count: int, repaired_count: int,
                                  still_failed: list) -> "str | None":
-        """Écrit la liste des fichiers toujours en échec (le cas échéant) et
-        enregistre l'entrée dans l'historique des problèmes. Retourne le
-        chemin du fichier texte créé, ou None si tout a été réparé."""
+        """Writes the list of the files still failing (if any) and records the
+        entry in the problems history. Returns the path of the text file
+        created, or None if everything was repaired."""
         from src.core.app_dirs import APP_DATA_DIR
         from src.core.problems_history import problems_history
 
@@ -517,10 +514,9 @@ class DuplicatesController:
                 [p for p in self._live_corrupted_paths if p not in set(repaired_paths)]
             )
 
-            # Le contenu du fichier a changé sur disque (nouvelle image
-            # ré-enregistrée par file_repair.py) : sans ça, la grille garde
-            # l'ancienne vignette (tronquée/corrompue) en cache jusqu'au
-            # prochain redémarrage.
+            # The content of the file has changed on disk (a new image re-saved by
+            # file_repair.py): without this, the grid keeps the old thumbnail
+            # (truncated/corrupted) in cache until the next restart.
             if repaired_paths:
                 self._thumb_cache.invalidate_many(repaired_paths)
                 for path in repaired_paths:
@@ -538,11 +534,11 @@ class DuplicatesController:
 
     def _show_repair_result_dialog(self, repaired_paths: list[str],
                                      still_failed: list[str]) -> None:
-        """Résumé d'un cycle de réparation : chemins réparés, chemins
-        toujours en échec, et — pour ces derniers — un bouton pour les
-        supprimer directement (réutilise _offer_corrupted_delete, qui
-        enregistre les chemins supprimés dans deleted_corrupted_files.py
-        pour qu'ils restent retrouvables plus tard dans une sauvegarde)."""
+        """Summary of a repair cycle: repaired paths, paths still failing, and
+        — for the latter — a button to delete them directly (reuses
+        _offer_corrupted_delete, which records the deleted paths in
+        deleted_corrupted_files.py so that they stay findable later in a
+        backup)."""
         dlg = QDialog(self)
         dlg.setWindowTitle(translate("DuplicatesController", "Repair finished"))
         v = QVBoxLayout(dlg)
@@ -597,9 +593,9 @@ class DuplicatesController:
         if reply != QMessageBox.Yes:
             return
 
-        # Même pipeline que _on_delete_requested : worker partagé (garde de
-        # réentrance commune), suppression absorbée par le watcher, épilogue UI
-        # dans _on_corrupted_delete_finished.
+        # The same pipeline as _on_delete_requested: a shared worker (a common
+        # re-entrance guard), the deletion absorbed by the watcher, the UI epilogue
+        # in _on_corrupted_delete_finished.
         if self._delete_thread is not None and self._delete_thread.isRunning():
             self.statusBar().showMessage(translate("DuplicatesController", "A deletion is "
                                                                            "already running…"), 3000)
@@ -619,7 +615,7 @@ class DuplicatesController:
         worker.start()
 
     def _on_corrupted_delete_finished(self, deleted: list, errors: list) -> None:
-        """Épilogue UI de la suppression des fichiers corrompus (worker)."""
+        """UI epilogue of the deletion of the corrupted files (worker)."""
         self._lbl_action.setText("")
         if deleted:
             deleted_set = set(deleted)
@@ -674,10 +670,11 @@ class DuplicatesController:
         dlg.show()
 
     def _on_duplicate_popup_navigate(self, path: str, group_photos: list) -> None:
-        """Clic sur un exemplaire dans la popup de doublons. Si la visionneuse
-        est déjà affichée, on y reste et on change simplement la photo montrée
-        (comparaison rapide, même principe que _on_duplicate_group_view_requested) ;
-        sinon on retombe sur la navigation classique dans la grille."""
+        """Click on a copy in the duplicates popup. If the viewer is already
+        shown, we stay in it and simply change the displayed photo (a quick
+        comparison, the same principle as
+        _on_duplicate_group_view_requested); otherwise we fall back on the
+        classic navigation in the grid."""
         if self._stack.currentIndex() == 1:
             idx = next((i for i, p in enumerate(group_photos) if p.path == path), 0)
             self._current_photos = group_photos
@@ -688,7 +685,7 @@ class DuplicatesController:
             self._navigate_to_photo_path(path)
 
     def _on_duplicate_group_view_requested(self, group_id: int) -> None:
-        """Double-clic sur une carte de DuplicateGrid : comparaison rapide dans la visionneuse."""
+        """Double-click on a DuplicateGrid card: a quick comparison in the viewer."""
         photos = self._catalog.get_duplicates_for_group(group_id)
         if not photos:
             return
@@ -699,17 +696,17 @@ class DuplicatesController:
         self.show_viewer(photos[0])
 
     def _on_duplicate_group_ignored(self, group_id: int) -> None:
-        """Bouton ✗ sur une carte de DuplicateGrid : dissout le groupe entier,
-        persistant (cf. Catalog.ignore_duplicate_group). Piège corrigé ici :
-        si un DuplicateDetectorThread tourne déjà, ce groupe peut être fusionné
-        dans son group_of *en mémoire* depuis avant ce clic — son prochain
-        instantané (partial_results, cadencé toutes les _LIVE_SNAPSHOT_INTERVAL
-        secondes, ou finished) réécrirait alors bêtement ce même groupe en
-        base via _apply_duplicate_results, le faisant réapparaître quelques
-        secondes après sa dissolution. On mémorise donc les chemins concernés
-        dans _duplicate_ignored_paths (vidé à chaque nouveau lancement dans
-        _start_duplicate_detection) pour que _apply_duplicate_results les
-        exclue de tout instantané du passage en cours."""
+        """The ✗ button on a DuplicateGrid card: dissolves the whole group,
+        persistently (cf. Catalog.ignore_duplicate_group). A trap fixed here:
+        if a DuplicateDetectorThread is already running, this group may have
+        been merged in its *in-memory* group_of since before this click — its
+        next snapshot (partial_results, paced every _LIVE_SNAPSHOT_INTERVAL
+        seconds, or finished) would then blindly rewrite that same group into
+        the database through _apply_duplicate_results, making it reappear a few
+        seconds after its dissolution. The paths concerned are therefore
+        recorded in _duplicate_ignored_paths (emptied at every new launch in
+        _start_duplicate_detection) so that _apply_duplicate_results excludes
+        them from any snapshot of the pass in progress."""
         ignored_paths = {p.path for p in self._catalog.get_duplicates_for_group(group_id)}
         self._duplicate_ignored_paths |= ignored_paths
         self._catalog.ignore_duplicate_group(group_id)

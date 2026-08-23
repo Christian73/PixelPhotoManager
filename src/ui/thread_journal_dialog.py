@@ -1,9 +1,9 @@
 ﻿# Copyright 2026 Christian Guyot
 # SPDX-License-Identifier: Apache-2.0
 """
-Dialogue d'analyse du journal d'activité des threads.
+Dialog analysing the thread activity journal.
 
-Accessible via Outils › Journal des threads…
+Reachable through Tools › Thread journal…
 """
 
 from __future__ import annotations
@@ -25,16 +25,16 @@ from src.core.thread_journal import journal
 from src.core.i18n import translate
 
 
-# ── seuils de performance ───────────────────────────────────────────────────
-_SLOW_MS = 500      # lent (orange)
-_WARN_MS = 2_000    # très lent / critique (rouge)
+# ── performance thresholds ──────────────────────────────────────────────────
+_SLOW_MS = 500      # slow (orange)
+_WARN_MS = 2_000    # very slow / critical (red)
 
-# ── seuils spécifiques FaceIndexThread (temps entre deux photos consécutives) ─
-_FACE_STEP_NORMAL_MS = 10_000   # < 10 s/photo  → progression normale
-_FACE_STEP_SLOW_MS   = 20_000   # < 20 s/photo  → lent mais progresse
-# au-delà de _FACE_STEP_SLOW_MS → potentiellement bloqué
+# ── FaceIndexThread-specific thresholds (time between two consecutive photos) ─
+_FACE_STEP_NORMAL_MS = 10_000   # < 10 s/photo  → normal progression
+_FACE_STEP_SLOW_MS   = 20_000   # < 20 s/photo  → slow but progressing
+# beyond _FACE_STEP_SLOW_MS → potentially blocked
 
-# ── couleurs par type d'événement ───────────────────────────────────────────
+# ── colours by event type ───────────────────────────────────────────────────
 _EVENT_COLORS = {
     "START": "#1a3a1a",
     "STEP":  "#1a1a2e",
@@ -50,7 +50,7 @@ _EVENT_FG = {
     "WARN":  "#cc9900",
 }
 
-# ── pistes d'amélioration par thread ────────────────────────────────────────
+# ── improvement leads by thread ─────────────────────────────────────────────
 _THREAD_HINTS: dict[str, list[str]] = {
     "FaceIndexThread": [
         "L'analyse de visages (DeepFace/RetinaFace) prend 10–30 s/photo sans accélération GPU.",
@@ -77,8 +77,8 @@ _THREAD_HINTS: dict[str, list[str]] = {
 
 def _face_index_step_stats(entries: list[dict]) -> tuple[int, float, float] | None:
     """
-    Calcule les durées inter-photos pour FaceIndexThread à partir des STEPs.
-    Retourne (nb_steps, avg_ms, max_ms) ou None si moins de 2 STEPs disponibles.
+    Computes the inter-photo durations for FaceIndexThread from the STEPs.
+    Returns (nb_steps, avg_ms, max_ms) or None if fewer than 2 STEPs are available.
     """
     steps = sorted(
         (e for e in entries
@@ -97,11 +97,11 @@ def _face_index_step_stats(entries: list[dict]) -> tuple[int, float, float] | No
 
 
 # ═══════════════════════════════════════════════════════════════════════════
-# Compte rendu visuel
+# Visual report
 # ═══════════════════════════════════════════════════════════════════════════
 
 class _CompteRenduPanel(QGroupBox):
-    """Bilan d'exécution avec badges colorés par thread."""
+    """Execution report with coloured badges by thread."""
 
     def __init__(self, parent=None) -> None:
         super().__init__(translate("ThreadJournalDialog", "Execution summary"), parent)
@@ -143,7 +143,7 @@ class _CompteRenduPanel(QGroupBox):
             self._banner.setStyleSheet("color: #888;")
             return
 
-        # ── stats par thread
+        # ── stats by thread
         durations:  dict[str, list[float]] = defaultdict(list)
         err_counts: dict[str, int]         = defaultdict(int)
         last_event: dict[str, str]         = {}
@@ -176,7 +176,7 @@ class _CompteRenduPanel(QGroupBox):
             and not (th == "FaceIndexThread" and _face_ok)
         )
 
-        # ── bannière globale
+        # ── global banner
         if n_critical:
             self._banner.setText(
                 "  ⚠  " + translate(
@@ -198,7 +198,7 @@ class _CompteRenduPanel(QGroupBox):
             )
             self._banner.setStyleSheet("color: #5dbb5d; padding: 2px 0 4px 0;")
 
-        # ── lignes par thread
+        # ── rows by thread
         for row, th in enumerate(threads):
             durs  = durations[th]
             errs  = err_counts[th]
@@ -228,7 +228,7 @@ class _CompteRenduPanel(QGroupBox):
                 badge, bstyle = "  ✓  OK",        "color:#5dbb5d;font-weight:bold;"
             else:
                 badge, bstyle = "  –",            "color:#666;"
-            # FaceIndexThread : réévaluer d'après le temps par photo, pas la durée totale
+            # FaceIndexThread: re-evaluate from the time per photo, not the total duration
             if th == "FaceIndexThread" and not errs and face_step_stats is not None:
                 _nb, _avg_s, _max_s = face_step_stats
                 if _max_s < _FACE_STEP_NORMAL_MS:
@@ -240,7 +240,7 @@ class _CompteRenduPanel(QGroupBox):
                         photos=translate("CompteRenduPanel", "%n photo(s)", None, _nb)))
                     bstyle = "color:#cc8844;font-weight:bold;"
 
-            # stats texte
+            # text stats
             if th == "FaceIndexThread" and face_step_stats is not None:
                 _nb, _avg_s, _max_s = face_step_stats
                 parts = [translate("CompteRenduPanel", "%n photo(s) processed", None, _nb),
@@ -287,7 +287,7 @@ class _CompteRenduPanel(QGroupBox):
 
 
 # ═══════════════════════════════════════════════════════════════════════════
-# Résumé tabulaire
+# Tabular summary
 # ═══════════════════════════════════════════════════════════════════════════
 
 class _SummaryTable(QTableWidget):
@@ -386,7 +386,7 @@ class _SummaryTable(QTableWidget):
 
 
 # ═══════════════════════════════════════════════════════════════════════════
-# Tableau d'événements bruts
+# Table of raw events
 # ═══════════════════════════════════════════════════════════════════════════
 
 class _EventTable(QTableWidget):
@@ -450,7 +450,7 @@ class _EventTable(QTableWidget):
 
 
 # ═══════════════════════════════════════════════════════════════════════════
-# Rapport de problèmes — génération du texte
+# Problem report — text generation
 # ═══════════════════════════════════════════════════════════════════════════
 
 def _generate_problems_report(entries: list[dict]) -> str:
@@ -496,7 +496,7 @@ def _generate_problems_report(entries: list[dict]) -> str:
         lines.append("(journal vide)")
         return "\n".join(lines)
 
-    # ── section problèmes
+    # ── problems section
     if problem_threads:
         lines.append(sep)
         lines.append("PROBLÈMES DÉTECTÉS")
@@ -549,7 +549,7 @@ def _generate_problems_report(entries: list[dict]) -> str:
                 if len(errs) > 5:
                     lines.append(f"      … et {len(errs) - 5} autre(s)")
 
-            # Pour FaceIndexThread : préciser si c'est le temps/photo ou la durée totale qui pose problème
+            # For FaceIndexThread: state whether it is the time per photo or the total duration that is the problem
             if th == "FaceIndexThread" and face_step_stats is not None:
                 _nb, _avg_s, _max_s = face_step_stats
                 lines.append(f"  • Progression par photo ({_nb} photo(s) traitée(s)) :")
@@ -571,7 +571,7 @@ def _generate_problems_report(entries: list[dict]) -> str:
 
             lines.append("")
 
-    # ── section OK
+    # ── OK section
     if ok_threads:
         lines.append(sep)
         lines.append("THREADS OK")
@@ -609,7 +609,7 @@ def _generate_problems_report(entries: list[dict]) -> str:
 
 
 # ═══════════════════════════════════════════════════════════════════════════
-# Dialogue rapport de problèmes
+# Problem report dialog
 # ═══════════════════════════════════════════════════════════════════════════
 
 class _ProblemsReportDialog(QDialog):
@@ -661,7 +661,7 @@ class _ProblemsReportDialog(QDialog):
 
 
 # ═══════════════════════════════════════════════════════════════════════════
-# Dialogue principal
+# Main dialog
 # ═══════════════════════════════════════════════════════════════════════════
 
 class ThreadJournalDialog(QDialog):
@@ -682,7 +682,7 @@ class ThreadJournalDialog(QDialog):
         root.setSpacing(8)
         root.setContentsMargins(12, 10, 12, 10)
 
-        # ── barre de contrôles
+        # ── controls bar
         ctrl = QHBoxLayout()
 
         self._lbl_count = QLabel()
@@ -719,11 +719,11 @@ class ThreadJournalDialog(QDialog):
 
         root.addLayout(ctrl)
 
-        # ── compte rendu visuel
+        # ── visual report
         self._compte_rendu = _CompteRenduPanel()
         root.addWidget(self._compte_rendu)
 
-        # ── splitter résumé / événements
+        # ── summary / events splitter
         splitter = QSplitter(Qt.Vertical)
 
         grp_summary = QGroupBox(translate("ThreadJournalDialog", "Summary by thread"))
@@ -743,7 +743,7 @@ class ThreadJournalDialog(QDialog):
         splitter.setSizes([180, 400])
         root.addWidget(splitter, stretch=1)
 
-        # ── boutons du bas
+        # ── bottom buttons
         btns = QDialogButtonBox(QDialogButtonBox.Close)
         btns.rejected.connect(self.reject)
 
@@ -792,7 +792,7 @@ class ThreadJournalDialog(QDialog):
     @Slot()
     def _apply_filter(self) -> None:
         th = self._cmb_thread.currentText()
-        if self._cmb_thread.currentIndex() == 0:   # item "(tous)", cf. _load
+        if self._cmb_thread.currentIndex() == 0:   # item "(all)", cf. _load
             th = ""
         self._event_table.populate(self._entries, th, self._txt_filter.text().strip())
 
