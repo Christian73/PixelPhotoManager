@@ -3,20 +3,20 @@
 """
 Face detection and embedding via InsightFace (buffalo_l).
 
-Model pack buffalo_l :
-  - Détection  : SCRFD-10GF    (RetinaFace-class, très rapide sur CPU)
-  - Embedding  : ArcFace R100  (Glint360K, 512-dim, état de l'art)
+Model pack buffalo_l:
+  - Detection  : SCRFD-10GF    (RetinaFace-class, very fast on CPU)
+  - Embedding  : ArcFace R100  (Glint360K, 512-dim, state of the art)
 
-Remplace l'ancienne stack DeepFace + TensorFlow :
-  - Plus de warmup TF de 20 s — ONNX Runtime démarre en ~3 s
-  - Détection + embedding en une seule passe (vs deux avec DeepFace)
-  - Pas de dépendance TensorFlow/Keras
+Replaces the former DeepFace + TensorFlow stack:
+  - No more 20 s TF warmup — ONNX Runtime starts in ~3 s
+  - Detection + embedding in a single pass (vs two with DeepFace)
+  - No TensorFlow/Keras dependency
 
-Les modèles sont téléchargés automatiquement dans ~/.insightface/models/buffalo_l/
-lors du premier warmup (~380 Mo, une seule fois).
+The models are downloaded automatically into ~/.insightface/models/buffalo_l/
+at the first warmup (~380 MB, once only).
 
-detect_and_embed() s'exécute dans le worker ProcessPoolExecutor de FaceIndexThread.
-Le singleton _insight_app est initialisé une fois par processus worker.
+detect_and_embed() runs in the ProcessPoolExecutor worker of FaceIndexThread.
+The _insight_app singleton is initialised once per worker process.
 """
 import contextlib
 import logging
@@ -25,24 +25,25 @@ import tempfile
 
 logger = logging.getLogger(__name__)
 
-# Dimension maximale avant réduction pour la détection.
-# InsightFace redimensionne en interne à det_size=(640,640) pour la détection,
-# mais l'embedding est extrait sur le crop original — on limite tout de même
-# la résolution pour éviter les crops de trop grande taille.
+# Maximum dimension before downscaling for the detection.
+# InsightFace internally resizes to det_size=(640,640) for the detection,
+# but the embedding is extracted from the original crop — the resolution is
+# still limited, to avoid oversized crops.
 _MAX_DETECT_DIM = 1920
 
-# Singleton InsightFace par processus worker (initialisé au warmup).
+# InsightFace singleton per worker process (initialised at warmup).
 _insight_app = None
 
 
 def _register_nvidia_dll_dirs() -> None:
-    """Ajoute les répertoires de DLLs nvidia (cuDNN, cuBLAS…) au PATH Windows.
+    """Adds the nvidia DLL directories (cuDNN, cuBLAS…) to the Windows PATH.
 
-    Nécessaire pour onnxruntime-gpu sur Windows quand cuDNN est installé via pip
-    (nvidia-cudnn-cu12) plutôt que via l'installeur NVIDIA.  onnxruntime charge
-    onnxruntime_providers_cuda.dll via LoadLibraryEx, qui résout ses dépendances
-    implicites (cudnn64_9.dll, etc.) via le PATH système — os.add_dll_directory()
-    ne couvre pas ce cas.  Sans cela, onnxruntime tombe silencieusement sur CPU."""
+    Necessary for onnxruntime-gpu on Windows when cuDNN is installed through pip
+    (nvidia-cudnn-cu12) rather than through the NVIDIA installer.  onnxruntime
+    loads onnxruntime_providers_cuda.dll through LoadLibraryEx, which resolves
+    its implicit dependencies (cudnn64_9.dll, etc.) through the system PATH —
+    os.add_dll_directory() does not cover that case.  Without this, onnxruntime
+    silently falls back to the CPU."""
     import sys
     if sys.platform != "win32":
         return
@@ -65,13 +66,13 @@ def _register_nvidia_dll_dirs() -> None:
 
 
 def _insightface_root() -> str:
-    """Racine à passer à FaceAnalysis(root=...) pour trouver le pack buffalo_l.
+    """Root to pass to FaceAnalysis(root=...) to find the buffalo_l pack.
 
-    En mode figé (PyInstaller), le pack est embarqué dans le bundle
-    (cf. pixelphotomanager.spec) sous sys._MEIPASS/insightface_root/models/
-    buffalo_l, pour éviter tout téléchargement au 1er lancement (impossible
-    sans accès Internet à github.com). En mode dev, on garde le cache
-    utilisateur par défaut d'insightface (~/.insightface).
+    In frozen mode (PyInstaller), the pack is embedded in the bundle
+    (cf. pixelphotomanager.spec) under sys._MEIPASS/insightface_root/models/
+    buffalo_l, to avoid any download at the first launch (impossible without
+    Internet access to github.com). In dev mode, the default insightface user
+    cache (~/.insightface) is kept.
     """
     import sys
     if getattr(sys, "frozen", False):
@@ -82,10 +83,10 @@ def _insightface_root() -> str:
 
 
 def _get_insight_app():
-    """Retourne (et initialise si besoin) le singleton FaceAnalysis.
+    """Returns (and initialises if needed) the FaceAnalysis singleton.
 
-    Utilise CUDA si disponible (onnxruntime-gpu), sinon CPU en fallback.
-    ctx_id=0 = premier GPU ; ctx_id=-1 = CPU forcé.
+    Uses CUDA if available (onnxruntime-gpu), otherwise falls back to the CPU.
+    ctx_id=0 = the first GPU; ctx_id=-1 = CPU forced.
     """
     global _insight_app
     if _insight_app is None:
@@ -105,11 +106,11 @@ def _get_insight_app():
 @contextlib.contextmanager
 def _exif_corrected(image_path: str, extra_rotation: int = 0):
     """
-    Corrige la rotation EXIF et extra_rotation en écrivant un fichier temporaire
-    si nécessaire.  OpenCV (comme DeepFace) rejette les chemins non-ASCII sur
-    Windows — un temp ASCII est aussi créé dans ce cas.
+    Corrects the EXIF rotation and extra_rotation by writing a temporary file if
+    necessary.  OpenCV (like DeepFace) rejects non-ASCII paths on Windows — an
+    ASCII temp is created in that case too.
 
-    Pour les vidéos, extrait une frame représentative via cv2.
+    For videos, extracts a representative frame through cv2.
     """
     temp_path = None
     result_path = image_path
@@ -146,10 +147,10 @@ def _exif_corrected(image_path: str, extra_rotation: int = 0):
         else:
             from PIL import ImageOps
             from src.library.image_loader import RAW_EXT, open_image, safe_temp_suffix
-            # RAW/HEIC : cv2.imread ne sait pas les décoder — une conversion
-            # JPEG est nécessaire même quand orientation/rotation/ascii sont
-            # déjà corrects, sinon detect_and_embed reçoit le fichier
-            # d'origine non lisible par cv2.
+            # RAW/HEIC: cv2.imread cannot decode them — a JPEG conversion is
+            # necessary even when orientation/rotation/ascii are already
+            # correct, failing which detect_and_embed receives the original
+            # file, which cv2 cannot read.
             ext = os.path.splitext(image_path)[1].lower()
             needs_format_conversion = ext in RAW_EXT or ext in (".heic", ".heif")
             with open_image(image_path) as img:
@@ -167,9 +168,9 @@ def _exif_corrected(image_path: str, extra_rotation: int = 0):
     except Exception:
         pass
 
-    # Fallback : si le chemin est non-ASCII mais que PIL a échoué silencieusement
-    # (JPEG corrompu, mode sans alpha, etc.), copier le fichier brut vers un temp
-    # ASCII pour que cv2.imread puisse l'ouvrir.
+    # Fallback: if the path is non-ASCII but PIL failed silently (a corrupted
+    # JPEG, a mode without alpha, etc.), copy the raw file to an ASCII temp so
+    # that cv2.imread can open it.
     if needs_ascii and result_path == image_path and not is_video:
         try:
             import shutil
@@ -199,10 +200,12 @@ def _exif_corrected(image_path: str, extra_rotation: int = 0):
 @contextlib.contextmanager
 def _resized_for_detection(image_path: str):
     """
-    Si l'image dépasse _MAX_DETECT_DIM, produit une version réduite et retourne
-    (chemin_réduit, facteur_échelle).  Sinon retourne (chemin_original, 1.0).
+    If the image exceeds _MAX_DETECT_DIM, produces a downscaled version and
+    returns (downscaled_path, scale_factor).  Otherwise returns
+    (original_path, 1.0).
 
-    Le facteur permet de ramener les bbox aux coordonnées de l'image originale.
+    The factor allows the bboxes to be brought back to the coordinates of the
+    original image.
     """
     temp_path = None
     result_path = image_path
@@ -234,7 +237,7 @@ def _resized_for_detection(image_path: str):
 # ------------------------------------------------------------------ public API
 
 def is_available() -> bool:
-    """Retourne True si insightface est installé et utilisable."""
+    """Returns True if insightface is installed and usable."""
     try:
         import insightface  # noqa: F401
         import onnxruntime  # noqa: F401
@@ -245,13 +248,13 @@ def is_available() -> bool:
 
 def warmup_worker() -> None:
     """
-    Initialise InsightFace dans le sous-processus worker de ProcessPoolExecutor.
+    Initialises InsightFace in the ProcessPoolExecutor worker subprocess.
 
-    Doit être une fonction MODULE-LEVEL (non-lambda, non-méthode) pour être
-    picklable par multiprocessing sur Windows (spawn).
+    Must be a MODULE-LEVEL function (not a lambda, not a method) to be picklable
+    by multiprocessing on Windows (spawn).
 
-    Au premier appel, télécharge les modèles buffalo_l (~380 Mo) si absents.
-    Les appels suivants sont instantanés (modèles déjà en cache local).
+    On the first call, downloads the buffalo_l models (~380 MB) if absent.
+    The following calls are instantaneous (models already in the local cache).
     """
     try:
         app = _get_insight_app()
@@ -270,9 +273,9 @@ def warmup_worker() -> None:
 
 
 def warmup_worker_cpu() -> None:
-    """Variante CPU forcé — utilisée en fallback quand CUDA bloque."""
+    """CPU-forced variant — used as a fallback when CUDA gets stuck."""
     global _insight_app
-    _insight_app = None  # reset tout singleton GPU partiel
+    _insight_app = None  # resets any partial GPU singleton
     from insightface.app import FaceAnalysis
     _insight_app = FaceAnalysis(
         name="buffalo_l", root=_insightface_root(), providers=["CPUExecutionProvider"],
@@ -282,11 +285,11 @@ def warmup_worker_cpu() -> None:
 
 
 def detect_and_embed_auto(image_path: str) -> "tuple[list[dict], int]":
-    """Essaie les rotations nécessaires et retourne celle qui détecte le plus de visages.
+    """Tries the necessary rotations and returns the one detecting the most faces.
 
-    Stratégie : on essaie 0° en premier.  Si des visages sont trouvés, on s'arrête
-    immédiatement (cas nominal : ~95 % des photos sont correctement orientées).
-    On ne tente 90°/180°/270° que si 0° ne détecte rien.
+    Strategy: 0° is tried first.  If faces are found, it stops immediately (the
+    nominal case: ~95 % of the photos are correctly oriented).  90°/180°/270°
+    are only attempted if 0° detects nothing.
     """
     result_0 = detect_and_embed(image_path, rotation=0)
     if result_0:
@@ -301,14 +304,14 @@ def detect_and_embed_auto(image_path: str) -> "tuple[list[dict], int]":
 
 def detect_and_embed(image_path: str, rotation: int = 0) -> list[dict]:
     """
-    Détecte les visages dans une image et calcule les embeddings ArcFace.
+    Detects the faces in an image and computes the ArcFace embeddings.
 
-    Retourne une liste de dicts :
-        {'bbox': (x, y, w, h), 'embedding': list[float]}   # x,y,w,h en pixels
+    Returns a list of dicts:
+        {'bbox': (x, y, w, h), 'embedding': list[float]}   # x,y,w,h in pixels
 
-    Lève RuntimeError si insightface n'est pas installé.
-    Lève FileNotFoundError si l'image n'existe pas.
-    Retourne [] si aucun visage n'est trouvé.
+    Raises RuntimeError if insightface is not installed.
+    Raises FileNotFoundError if the image does not exist.
+    Returns [] if no face is found.
     """
     if not os.path.exists(image_path):
         raise FileNotFoundError(image_path)

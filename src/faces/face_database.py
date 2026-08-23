@@ -64,11 +64,11 @@ CREATE TABLE IF NOT EXISTS face_index_errors (
 )
 """
 
-_IOU_THRESHOLD = 0.30   # recouvrement minimum pour associer un visage Picasa à un visage détecté
+_IOU_THRESHOLD = 0.30   # minimum overlap to associate a Picasa face with a detected face
 
 
 def _iou(a: tuple, b: tuple) -> float:
-    """IoU entre deux bboxes (x, y, w, h)."""
+    """IoU between two bboxes (x, y, w, h)."""
     ax2, ay2 = a[0] + a[2], a[1] + a[3]
     bx2, by2 = b[0] + b[2], b[1] + b[3]
     ix1, iy1 = max(a[0], b[0]), max(a[1], b[1])
@@ -80,21 +80,21 @@ def _iou(a: tuple, b: tuple) -> float:
     return inter / union if union > 0 else 0.0
 
 
-# Paliers de confiance pour la reconnaissance (similarité cosinus embedding vs
-# centroïde de personne), du plus bas au plus haut :
-#   [0.00, 0.55[  aucune action automatique (visage non identifié)
-#   [0.55, 0.70[  suggestion enregistrée (suggestion_person_id/score) : le
-#                 groupe apparaît en « en attente de vérification » chez la
-#                 personne concernée, à confirmer manuellement
-#   [0.70, 1.00]  allocation automatique de la personne, sans confirmation
-#                 (cf. set_cluster_suggestions ci-dessous)
-# _SIM_STRONG (0.50) et _SIM_WEAK (0.45, src/ui/people_panel.py) sont des seuils
-# d'affichage distincts (libellé bleu « Probablement X » >= _SIM_STRONG, gris
-# « Peut-être X » sur [_SIM_WEAK, _SIM_STRONG[) pour les visages qui n'ont pas
-# encore atteint _SIM_SUGGEST — ne pas confondre ces deux seuils avec ceux
-# ci-dessus.
-_SIM_SUGGEST     = 0.55  # seuil minimum pour créer une suggestion « en attente de vérification »
-_SIM_AUTO_ASSIGN = 0.70  # seuil d'allocation automatique de la personne, sans confirmation
+# Confidence tiers for the recognition (cosine similarity of an embedding vs
+# the centroid of a person), from the lowest to the highest:
+#   [0.00, 0.55[  no automatic action (unidentified face)
+#   [0.55, 0.70[  a suggestion is recorded (suggestion_person_id/score): the
+#                 group appears as "awaiting verification" under the person
+#                 concerned, to be confirmed manually
+#   [0.70, 1.00]  automatic assignment of the person, without confirmation
+#                 (cf. set_cluster_suggestions below)
+# _SIM_STRONG (0.50) and _SIM_WEAK (0.45, src/ui/people_panel.py) are separate
+# display thresholds (a blue "Probably X" label >= _SIM_STRONG, a grey
+# "Maybe X" on [_SIM_WEAK, _SIM_STRONG[) for the faces that have not reached
+# _SIM_SUGGEST yet — do not confuse those two thresholds with the ones
+# above.
+_SIM_SUGGEST     = 0.55  # minimum threshold to create an "awaiting verification" suggestion
+_SIM_AUTO_ASSIGN = 0.70  # threshold for the automatic assignment of the person, without confirmation
 
 
 def _enc(embedding: list[float]) -> bytes:
@@ -134,20 +134,20 @@ class FaceDatabase:
     def __init__(self, db_path: str | Path = _DB_PATH) -> None:
         self._db_path = str(db_path)
         self._lock = threading.Lock()
-        # Connexion SQLite par (instance, thread) — cf. _conn().
+        # One SQLite connection per (instance, thread) — cf. _conn().
         self._tls = threading.local()
         Path(self._db_path).parent.mkdir(parents=True, exist_ok=True)
         self._init_db()
 
     @contextmanager
     def _guard(self):
-        """Verrou + connexion thread-local + rollback garanti sur exception.
+        """Lock + thread-local connection + guaranteed rollback on an exception.
 
-        Remplace le motif répété « with self._lock: conn = self._conn();
-        try: … except BaseException: conn.rollback(); raise » (cf. CLAUDE.md,
-        pattern de connexion) : la connexion mise en cache ne doit JAMAIS
-        rester dans une transaction ouverte, sinon toutes les écritures
-        suivantes échouent en « database is locked »."""
+        Replaces the repeated pattern "with self._lock: conn = self._conn();
+        try: … except BaseException: conn.rollback(); raise" (cf. CLAUDE.md,
+        the connection pattern): the cached connection must NEVER stay inside
+        an open transaction, failing which every subsequent write fails with
+        "database is locked"."""
         with self._lock:
             conn = self._conn()
             try:
@@ -155,24 +155,24 @@ class FaceDatabase:
             except BaseException:
                 conn.rollback()
                 raise
-        # Cache du centroïde de chaque personne (utilisé pour les suggestions de
-        # reconnaissance, ex. face_panel._AssignPrepLoader). Invalidé dès que le
-        # fingerprint (COUNT + SUM des person_id assignés) change — beaucoup moins
-        # cher (index idx_faces_person, quelques ms) que le recalcul complet, qui
-        # doit décoder tous les embeddings (~60k sur une grosse bibliothèque, >5 s).
+        # Cache of the centroid of each person (used for the recognition suggestions,
+        # e.g. face_panel._AssignPrepLoader). Invalidated as soon as the fingerprint
+        # (COUNT + SUM of the assigned person_id) changes — much cheaper (the
+        # idx_faces_person index, a few ms) than the full recomputation, which has to
+        # decode every embedding (~60k on a large library, >5 s).
         self._person_centroid_cache: "dict[int, list[float]] | None" = None
         self._person_centroid_cache_fp = None
 
     def _conn(self) -> sqlite3.Connection:
-        """Connexion SQLite du thread courant, créée une seule fois par thread
-        (pattern ThumbnailCache/Catalog). Gagne au passage WAL + synchronous
-        NORMAL + timeout, totalement absents avant : en mode rollback-journal
-        par défaut, chaque écriture de l'indexeur de visages bloquait les
-        lectures de l'UI (et réciproquement).
+        """SQLite connection of the current thread, created once per thread
+        (the ThumbnailCache/Catalog pattern). Gains WAL + synchronous NORMAL +
+        a timeout along the way, all of them entirely absent before: in the
+        default rollback-journal mode, every write of the face indexer blocked
+        the reads of the UI (and the other way round).
 
-        Les méthodes d'écriture ne ferment plus la connexion : en cas
-        d'exception, leur garde `except BaseException: conn.rollback()`
-        remplace le rollback implicite qu'assurait l'ancienne fermeture."""
+        The write methods no longer close the connection: on an exception,
+        their `except BaseException: conn.rollback()` guard replaces the
+        implicit rollback the former close provided."""
         conn = getattr(self._tls, "conn", None)
         if conn is None:
             conn = sqlite3.connect(self._db_path, timeout=5, check_same_thread=False)
@@ -183,7 +183,7 @@ class FaceDatabase:
         return conn
 
     def close(self) -> None:
-        """Ferme la connexion du thread courant (tests, arrêt de l'application)."""
+        """Closes the connection of the current thread (tests, application shutdown)."""
         conn = getattr(self._tls, "conn", None)
         if conn is not None:
             conn.close()
@@ -211,7 +211,7 @@ class FaceDatabase:
             conn.execute(
                 "CREATE INDEX IF NOT EXISTS idx_picasa_photo   ON picasa_annotations(photo_path)"
             )
-            # Migrations : ajouter les colonnes manquantes
+            # Migrations: add the missing columns
             cols = {r[1] for r in conn.execute("PRAGMA table_info(faces)")}
             if "ignored" not in cols:
                 conn.execute(
@@ -237,9 +237,9 @@ class FaceDatabase:
                 conn.execute(
                     "ALTER TABLE faces ADD COLUMN det_score REAL DEFAULT 1.0"
                 )
-            # Après la migration (la colonne n'existe pas dans _CREATE_FACES) :
-            # sert get_suggested_clusters_for_person et get_persons_pending_count,
-            # qui scannaient sinon toute la table faces (~60k lignes).
+            # After the migration (the column does not exist in _CREATE_FACES):
+            # serves get_suggested_clusters_for_person and get_persons_pending_count,
+            # which otherwise scanned the whole faces table (~60k rows).
             conn.execute(
                 "CREATE INDEX IF NOT EXISTS idx_faces_suggestion"
                 " ON faces(suggestion_person_id)"
@@ -250,9 +250,9 @@ class FaceDatabase:
                 conn.execute(
                     "ALTER TABLE indexed_photos ADD COLUMN rotation INTEGER DEFAULT 0"
                 )
-            # Migration : supprimer les visages avec bbox corrompues (stockées en BLOB
-            # au lieu d'INTEGER par une version antérieure du code).  Les photos
-            # concernées sont supprimées de indexed_photos pour être re-analysées.
+            # Migration: delete the faces with corrupted bboxes (stored as a BLOB
+            # instead of an INTEGER by an earlier version of the code).  The photos
+            # concerned are removed from indexed_photos so as to be re-analysed.
             bad_paths = conn.execute(
                 "SELECT DISTINCT photo_path FROM faces"
                 " WHERE typeof(bbox_x)='blob' OR typeof(bbox_y)='blob'"
@@ -274,12 +274,12 @@ class FaceDatabase:
                     "et marquées pour re-indexation",
                     len(bad_paths),
                 )
-            # Migration : purger les suggestions résiduelles posées sur des visages
-            # déjà identifiés. Elles sont invisibles (get_persons_pending_count
-            # exige person_id IS NULL) mais bloquent définitivement leur cluster :
-            # tous les producteurs de suggestions filtrent sur
-            # `suggestion_person_id IS NULL`. Origine : la branche « en attente »
-            # de set_cluster_suggestions ne vérifiait pas person_id (corrigé).
+            # Migration: purge the residual suggestions laid on already identified
+            # faces. They are invisible (get_persons_pending_count requires
+            # person_id IS NULL) but block their cluster for good: every producer
+            # of suggestions filters on `suggestion_person_id IS NULL`. Origin: the
+            # "pending" branch of set_cluster_suggestions did not check person_id
+            # (fixed).
             cur = conn.execute(
                 "UPDATE faces SET suggestion_person_id=NULL, suggestion_score=NULL"
                 " WHERE suggestion_person_id IS NOT NULL AND person_id IS NOT NULL"
@@ -290,11 +290,11 @@ class FaceDatabase:
                     "sur des visages déjà identifiés",
                     cur.rowcount,
                 )
-            # Migration : rattraper les annotations Picasa restées consumed=0
-            # alors que la personne a en fait été identifiée après coup (suggestion
-            # acceptée, identification manuelle...) sur un visage qui chevauche
-            # l'annotation — chemins qui ne mettaient pas à jour consumed avant
-            # l'ajout de _consume_matching_picasa_annotations().
+            # Migration: catch up the Picasa annotations left at consumed=0 although
+            # the person was in fact identified afterwards (an accepted suggestion, a
+            # manual identification…) on a face overlapping the annotation — paths
+            # that did not update consumed before
+            # _consume_matching_picasa_annotations() was added.
             stale_paths = [r[0] for r in conn.execute(
                 "SELECT DISTINCT photo_path FROM picasa_annotations WHERE consumed=0"
             ).fetchall()]
@@ -306,10 +306,10 @@ class FaceDatabase:
 
     def get_paths_to_index(self, all_paths: list[str]) -> list[str]:
         """Returns paths from all_paths that have not been indexed yet.
-        Les fichiers vidéo sont toujours exclus (pas de détection de visages).
-        Les fichiers ayant échoué (timeout/crash, table face_index_errors) sont
-        aussi exclus : ils ne sont plus retentés automatiquement à chaque scan,
-        seulement via le menu contextuel "Retenter l'identification des visages"."""
+        The video files are always excluded (no face detection).
+        The files that failed (timeout/crash, the face_index_errors table) are
+        excluded too: they are no longer retried automatically at every scan,
+        only through the "Retry the face identification" context menu."""
         if not all_paths:
             return []
         from src.library.exif_reader import VIDEO_EXT
@@ -330,9 +330,9 @@ class FaceDatabase:
     # ------------------------------------------------------------------ erreurs d'indexation
 
     def mark_index_error(self, photo_path: str, error_type: str) -> None:
-        """Enregistre un échec de détection (timeout ou crash du subprocess) pour
-        photo_path. Tant qu'une erreur est enregistrée ici, get_paths_to_index()
-        exclut ce fichier des scans automatiques."""
+        """Records a detection failure (a timeout or a crash of the subprocess) for
+        photo_path. As long as an error is recorded here, get_paths_to_index()
+        excludes that file from the automatic scans."""
         photo_path = os.path.normpath(photo_path)
         with self._guard() as conn:
             cur = conn.execute(
@@ -370,9 +370,10 @@ class FaceDatabase:
         return {"error_type": row[0], "last_attempt": row[1], "excluded": bool(row[2])}
 
     def get_error_paths(self, include_excluded: bool = False) -> list[str]:
-        """Chemins ayant échoué à l'indexation faciale (timeout/crash).
-        Par défaut, n'inclut pas les fichiers marqués comme définitivement exclus :
-        l'utilisateur a déjà tranché pour eux, plus besoin d'attirer son attention."""
+        """Paths that failed the face indexing (timeout/crash).
+        By default, does not include the files marked as definitively excluded:
+        the user has already decided for them, no need to draw their attention
+        again."""
         with self._guard() as conn:
             if include_excluded:
                 rows = conn.execute(
@@ -385,10 +386,10 @@ class FaceDatabase:
         return [r[0] for r in rows]
 
     def set_index_excluded(self, photo_path: str, excluded: bool = True) -> None:
-        """Exclut définitivement (ou réintègre) une photo du scan et de la
-        reconnaissance faciale. Contrairement au filtre auto-ignore (faces.ignored,
-        proportionnel à la taille), c'est une décision explicite de l'utilisateur
-        suite à des échecs répétés — jamais automatique."""
+        """Definitively excludes (or reinstates) a photo from the scan and from the
+        face recognition. Unlike the auto-ignore filter (faces.ignored,
+        proportional to the size), this is an explicit decision of the user
+        following repeated failures — never automatic."""
         photo_path = os.path.normpath(photo_path)
         with self._guard() as conn:
             cur = conn.execute(
@@ -405,8 +406,8 @@ class FaceDatabase:
             conn.commit()
 
     def get_indexed_rotation(self, photo_path: str) -> int:
-        """Rotation (degrés CW) utilisée lors de la dernière indexation réussie
-        de cette photo, 0 si jamais indexée."""
+        """Rotation (CW degrees) used during the last successful indexing of this
+        photo, 0 if never indexed."""
         photo_path = os.path.normpath(photo_path)
         with self._guard() as conn:
             row = conn.execute(
@@ -415,16 +416,16 @@ class FaceDatabase:
             ).fetchone()
         return row[0] if row and row[0] is not None else 0
 
-    # Seuils d'auto-ignorance pour les faces de mauvaise qualité.
-    # En dessous de ces valeurs, la face est sauvegardée avec ignored=1 :
-    # elle reste visible dans l'interface mais ne participe pas au clustering.
-    _AUTO_IGNORE_MIN_SIDE_RATIO    = 0.03  # 3 % — seuil de base (aucun visage au premier plan)
-    _AUTO_IGNORE_MIN_SIDE_FG_RATIO = 0.20  # 20 % — seuil pour qualifier un visage de "premier plan"
-    _AUTO_IGNORE_FG_FRACTION       = 0.25  # une fois un premier plan qualifié, on ignore les
-                                            # visages < 1/4 du plus petit visage premier plan
-    _AUTO_IGNORE_MIN_SIDE_ABS      = 22    # plancher absolu (px) pour les très petites images
-    _AUTO_IGNORE_MIN_SIDE          = 121   # fallback si les dimensions sont illisibles
-    _AUTO_IGNORE_MIN_SCORE         = 0.65  # score de détection InsightFace (0–1)
+    # Auto-ignore thresholds for the poor quality faces.
+    # Below these values, the face is saved with ignored=1:
+    # it stays visible in the interface but does not take part in the clustering.
+    _AUTO_IGNORE_MIN_SIDE_RATIO    = 0.03  # 3 % — base threshold (no face in the foreground)
+    _AUTO_IGNORE_MIN_SIDE_FG_RATIO = 0.20  # 20 % — threshold qualifying a face as "foreground"
+    _AUTO_IGNORE_FG_FRACTION       = 0.25  # once a foreground face qualifies, ignore the
+                                            # faces < 1/4 of the smallest foreground face
+    _AUTO_IGNORE_MIN_SIDE_ABS      = 22    # absolute floor (px) for the very small images
+    _AUTO_IGNORE_MIN_SIDE          = 121   # fallback if the dimensions are unreadable
+    _AUTO_IGNORE_MIN_SCORE         = 0.65  # InsightFace detection score (0–1)
 
     def save_faces(
         self,
@@ -446,33 +447,32 @@ class FaceDatabase:
         Otherwise (all faces small — old scanned photo, distant group) base is used.
         Fallback to _AUTO_IGNORE_MIN_SIDE if image dimensions cannot be read.
 
-        "Les visages identifiés le restent" est un invariant appliqué à *tout* appel
-        (pas seulement force_no_limit) : les visages ajoutés manuellement (embedding
-        NULL, pinned=1, cf. add_manual_face) ne sont jamais supprimés — ils n'ont
-        jamais été vus par InsightFace, une nouvelle détection ne peut donc pas les
-        retrouver — et les visages auto-détectés déjà identifiés (person_id non NULL)
-        sont effacés puis réinsérés comme les autres détections, leur identification
-        étant reportée sur la nouvelle face dont la bboxe recouvre le mieux l'ancienne
-        (IoU > _IOU_THRESHOLD). Sans quoi une simple ré-analyse (ex. SingleFaceReindexThread
-        après chaque rotation 90° en aperçu, avant même tout enregistrement) effacerait
-        silencieusement toute identification sur la photo.
+        "An identified face stays identified" is an invariant applied to *every* call
+        (not only force_no_limit): the manually added faces (embedding NULL, pinned=1,
+        cf. add_manual_face) are never deleted — they have never been seen by
+        InsightFace, so a new detection cannot find them again — and the auto-detected
+        faces already identified (person_id not NULL) are erased then reinserted like
+        the other detections, their identification being carried over to the new face
+        whose bbox overlaps the old one best (IoU > _IOU_THRESHOLD). Failing which a
+        mere re-analysis (e.g. SingleFaceReindexThread after every 90° rotation in the
+        preview, even before anything is saved) would silently erase every
+        identification on the photo.
 
-        force_no_limit=True ("Forcer une nouvelle détection sans limite de taille") ne
-        change que le seuil d'auto-ignorance (ci-dessus), entièrement court-circuité
-        dans ce mode, aucune face ne ressort alors avec ignored=1 (le filtre dur de
-        detector.py::detect_and_embed reste, lui, inchangé — CLAUDE.md interdit d'y
-        toucher).
+        force_no_limit=True ("Force a new detection with no size limit") only changes
+        the auto-ignore threshold (above), entirely short-circuited in that mode, so no
+        face comes out with ignored=1 (the hard filter of
+        detector.py::detect_and_embed stays unchanged — CLAUDE.md forbids touching it).
         """
         photo_path = os.path.normpath(photo_path)
         with self._guard() as conn:
-            # embedding IS NOT NULL exclut à la fois les visages ajoutés manuellement
-            # (pinned=1, jamais retrouvables par une nouvelle détection) et les
-            # placeholders Picasa (bbox large englobant tête/buste, pas une vraie
-            # détection ArcFace) — ces derniers ont leur propre mécanisme de
-            # préservation, plus adapté (centre-dans-région), via
-            # _apply_picasa_annotations()/"still_pending" ci-dessous ; les mélanger
-            # à cette réassociation par IoU stricte risquerait un score IoU trop
-            # bas (formes très différentes) et une correspondance manquée.
+            # embedding IS NOT NULL excludes both the manually added faces
+            # (pinned=1, never findable again by a new detection) and the Picasa
+            # placeholders (a wide bbox enclosing head/bust, not a real ArcFace
+            # detection) — the latter have their own preservation mechanism, better
+            # suited (centre-inside-region), through
+            # _apply_picasa_annotations()/"still_pending" below; mixing them into
+            # this strict IoU re-association would risk too low an IoU score (very
+            # different shapes) and a missed match.
             preserved_ids = conn.execute(
                 "SELECT bbox_x, bbox_y, bbox_w, bbox_h, person_id, pinned"
                 " FROM faces"
@@ -484,26 +484,26 @@ class FaceDatabase:
                 " AND NOT (embedding IS NULL AND pinned=1)"
             )
             conn.execute(delete_sql, (photo_path,))
-            # Un succès efface toute erreur précédente (timeout/crash) : la photo
-            # a été réellement analysée, elle n'a plus besoin d'attention.
+            # A success erases any previous error (timeout/crash): the photo has
+            # really been analysed, it no longer needs attention.
             conn.execute(
                 "DELETE FROM face_index_errors WHERE photo_path=?", (photo_path,)
             )
-            # Remettre les annotations Picasa à consumed=0 pour qu'elles soient
-            # ré-appliquées aux nouvelles détections ci-dessous.
-            # Sans ça, une re-analyse efface les faces mais laisse consumed=1 :
-            # les annotations ne seraient jamais ré-appliquées.
+            # Put the Picasa annotations back to consumed=0 so that they are
+            # re-applied to the new detections below.
+            # Without this, a re-analysis erases the faces but leaves consumed=1:
+            # the annotations would never be re-applied.
             conn.execute(
                 "UPDATE picasa_annotations SET consumed=0 WHERE photo_path=?",
                 (photo_path,)
             )
-            # Seuils proportionnels à la résolution de l'image.
-            # Un visage qualifie la photo de "premier plan" s'il atteint _fg_qualify
-            # (20 % du plus petit côté). Si c'est le cas, on ignore tout visage plus
-            # petit que 1/4 du plus petit visage premier plan (les autres visages,
-            # même premier plan, ne sont jamais eux-mêmes ignorés par ce critère).
-            # Sinon (vieille photo scannée, groupe distant…), on utilise le
-            # seuil de base (3 %) pour ne pas perdre de visages légitimes.
+            # Thresholds proportional to the resolution of the image.
+            # A face qualifies the photo as "foreground" if it reaches _fg_qualify
+            # (20 % of the short side). If that is the case, every face smaller than
+            # 1/4 of the smallest foreground face is ignored (the other faces, even
+            # foreground ones, are never themselves ignored by this criterion).
+            # Otherwise (an old scanned photo, a distant group…), the base threshold
+            # (3 %) is used so as not to lose legitimate faces.
             try:
                 from PIL import Image as _PILImage
                 with _PILImage.open(photo_path) as _img:
@@ -529,7 +529,7 @@ class FaceDatabase:
                 min(_foreground_sides) * self._AUTO_IGNORE_FG_FRACTION
                 if _foreground_sides else _base_threshold
             )
-            new_faces = []  # (face_id, x, y, w, h) — pour ré-association person_id ci-dessous
+            new_faces = []  # (face_id, x, y, w, h) — for the person_id re-association below
             for det in detections:
                 x, y, w, h = (int(v) for v in det["bbox"])
                 emb = det.get("embedding")
@@ -569,12 +569,12 @@ class FaceDatabase:
                 " (photo_path, indexed_at, face_count, rotation) VALUES (?,?,?,?)",
                 (photo_path, time.time(), len(detections), rotation),
             )
-            # Appliquer les annotations Picasa en attente (si présentes)
+            # Apply the pending Picasa annotations (if any)
             self._apply_picasa_annotations(conn, photo_path)
-            # Consommer les annotations dont la personne est déjà portée par une face
-            # InsightFace (avec embedding) sur cette photo — évite les placeholders doublons
-            # si l'annotation n'a pas pu être appariée par bbox (tailles trop différentes)
-            # mais que la personne est quand même identifiée sur la photo.
+            # Consume the annotations whose person is already carried by an InsightFace
+            # face (with an embedding) on this photo — avoids duplicate placeholders if
+            # the annotation could not be matched by bbox (sizes too different) but the
+            # person is identified on the photo anyway.
             conn.execute(
                 "UPDATE picasa_annotations SET consumed=1"
                 " WHERE photo_path=? AND consumed=0"
@@ -584,10 +584,10 @@ class FaceDatabase:
                 "   )",
                 (photo_path, photo_path),
             )
-            # Créer des placeholders pour les annotations non appariées à aucun visage
-            # InsightFace (face non détectée : pose, qualité, score trop bas…).
-            # Sans ça, le placeholder créé au moment de l'import Picasa est supprimé
-            # par le DELETE ci-dessus et n'est jamais recréé — la personne disparaît.
+            # Create placeholders for the annotations matched to no InsightFace face
+            # (a face not detected: pose, quality, too low a score…).
+            # Without this, the placeholder created at Picasa import time is deleted
+            # by the DELETE above and never recreated — the person disappears.
             still_pending = conn.execute(
                 "SELECT bbox_x, bbox_y, bbox_w, bbox_h, person_id"
                 " FROM picasa_annotations"
@@ -606,7 +606,7 @@ class FaceDatabase:
     # ------------------------------------------------------------------ clustering
 
     def count_embeddings(self) -> int:
-        """Nombre total de faces avec embedding (non épinglées)."""
+        """Total number of faces with an embedding (not pinned)."""
         with self._guard() as conn:
             return conn.execute(
                 "SELECT COUNT(*) FROM faces"
@@ -615,7 +615,7 @@ class FaceDatabase:
             ).fetchone()[0]
 
     def count_identified_faces(self) -> int:
-        """Nombre de faces avec embedding ET person_id assigné (non épinglées)."""
+        """Number of faces with an embedding AND an assigned person_id (not pinned)."""
         with self._guard() as conn:
             return conn.execute(
                 "SELECT COUNT(*) FROM faces"
@@ -630,8 +630,8 @@ class FaceDatabase:
     ) -> tuple["np.ndarray", list[int]]:
         """Returns (embeddings, face_ids) for non-pinned faces with stored embeddings.
 
-        only_unidentified=True : n'inclut que les faces sans person_id, pour que
-        HDBSCAN ne tourne que sur les visages non encore identifiés (~20 % de moins).
+        only_unidentified=True: only includes the faces without a person_id, so that
+        HDBSCAN only runs on the faces not identified yet (~20 % fewer).
 
         embeddings is a float32 ndarray of shape (N, D) built directly from the
         binary blobs — avoids creating N×D Python float objects as an intermediate.
@@ -666,10 +666,10 @@ class FaceDatabase:
         ]
         total = len(pairs)
         with self._guard() as conn:
-            # Réinitialise uniquement les faces non identifiées.
-            # Les faces avec person_id gardent leur cluster synthétique (10M+)
-            # et restent visibles dans PersonClusterView pendant le clustering.
-            # Les suggestions en attente sont également invalidées car les cluster_ids changent.
+            # Resets only the unidentified faces.
+            # The faces with a person_id keep their synthetic cluster (10M+)
+            # and stay visible in PersonClusterView during the clustering.
+            # The pending suggestions are invalidated too, since the cluster_ids change.
             conn.execute(
                 "UPDATE faces SET cluster_id=NULL, suggestion_person_id=NULL, suggestion_score=NULL"
                 " WHERE (pinned IS NULL OR pinned = 0)"
@@ -684,9 +684,9 @@ class FaceDatabase:
                         "FaceDatabase", "Clustering: saving {done}/{total} faces…"
                     ).format(done=f"{done:,}".replace(",", " "),
                              total=f"{total:,}".replace(",", " ")))
-            # Nettoyer les faces ArcFace qui sont devenues bruit (cluster_id=NULL)
-            # mais conservent un person_id résiduel d'un clustering précédent.
-            # Les faces sans embedding (placeholders Picasa) sont préservées.
+            # Clean up the ArcFace faces that have become noise (cluster_id=NULL)
+            # but keep a residual person_id from a previous clustering.
+            # The faces without an embedding (Picasa placeholders) are preserved.
             orphaned = conn.execute(
                 "SELECT DISTINCT photo_path, person_id FROM faces"
                 " WHERE (pinned IS NULL OR pinned=0)"
@@ -703,9 +703,9 @@ class FaceDatabase:
             )
             for photo_path, person_id in orphaned:
                 self._release_picasa_annotation(conn, photo_path, person_id)
-            # Propager le person_id aux faces sans person_id dans un cluster déjà nommé.
-            # Couvre le cas d'une nouvelle face ajoutée par reclustering à un cluster
-            # dont d'autres faces ont déjà un person_id (assignation antérieure).
+            # Propagate the person_id to the faces without a person_id in an already named
+            # cluster. Covers the case of a new face added by reclustering to a cluster
+            # other faces of which already have a person_id (an earlier assignment).
             conn.execute("""
                 UPDATE faces
                 SET person_id = (
@@ -722,7 +722,7 @@ class FaceDatabase:
                         AND f3.person_id IS NOT NULL
                   )
             """)
-            # Après propagation, dédupliquer sur toutes les photos concernées.
+            # After the propagation, deduplicate on every photo concerned.
             self._dedup_in_transaction(conn)
             conn.commit()
 
@@ -775,14 +775,14 @@ class FaceDatabase:
         """Batch-set suggestion_person_id/score for multiple clusters.
 
         suggestions: {cluster_id: (person_id, score)}
-        Point d'entrée unique de tous les producteurs de suggestions
-        (resuggest_clusters, find_similar_to_persons, isolate_and_suggest,
-        auto-promotion de la grille de groupes) : un score >= _SIM_AUTO_ASSIGN
-        alloue directement la personne, sans passer par l'étape de vérification
-        manuelle (mêmes effets de bord que accept_cluster_suggestion : dédup,
-        consommation des annotations Picasa en attente). En dessous, seule la
-        suggestion est enregistrée (« en attente de vérification »), idempotent :
-        ne touche pas les clusters ayant déjà une suggestion ou déjà assignés.
+        The single entry point of every producer of suggestions
+        (resuggest_clusters, find_similar_to_persons, isolate_and_suggest, the
+        auto-promotion of the group grid): a score >= _SIM_AUTO_ASSIGN assigns
+        the person directly, without going through the manual verification step
+        (the same side effects as accept_cluster_suggestion: dedup, consumption
+        of the pending Picasa annotations). Below it, only the suggestion is
+        recorded ("awaiting verification"), idempotent: does not touch the
+        clusters already carrying a suggestion or already assigned.
         """
         if not suggestions:
             return
@@ -790,11 +790,11 @@ class FaceDatabase:
         pending = {cid: v for cid, v in suggestions.items() if cid not in auto}
         with self._guard() as conn:
             for cluster_id, (person_id, score) in pending.items():
-                # `person_id IS NULL` est indispensable : sans lui, un cluster
-                # partiellement (ou entièrement) identifié se retrouvait avec une
-                # suggestion posée sur des visages déjà nommés — invisible dans
-                # l'UI, mais bloquant pour toujours toute suggestion ultérieure
-                # sur ce cluster (garde `suggestion_person_id IS NULL` ci-dessous).
+                # `person_id IS NULL` is essential: without it, a partially (or
+                # entirely) identified cluster ended up with a suggestion laid on
+                # already named faces — invisible in the UI, but blocking any later
+                # suggestion on that cluster for ever (the `suggestion_person_id IS
+                # NULL` guard below).
                 conn.execute(
                     "UPDATE faces SET suggestion_person_id=?, suggestion_score=?"
                     " WHERE cluster_id=? AND person_id IS NULL"
@@ -808,9 +808,9 @@ class FaceDatabase:
                         "SELECT DISTINCT photo_path FROM faces WHERE cluster_id=?",
                         (cluster_id,),
                     ).fetchall()]
-                    # Même garde d'idempotence que la branche "pending" : un cluster
-                    # déjà assigné ou déjà suggéré (par un appel précédent) n'est pas
-                    # réécrit — "premier appel gagne", quel que soit le palier.
+                    # The same idempotence guard as the "pending" branch: a cluster
+                    # already assigned or already suggested (by a previous call) is not
+                    # rewritten — "the first call wins", whatever the tier.
                     cur = conn.execute(
                         "UPDATE faces SET person_id=?, suggestion_person_id=NULL,"
                         " suggestion_score=NULL"
@@ -837,15 +837,15 @@ class FaceDatabase:
     def resuggest_clusters(
         self, cluster_ids: "list[int]", exclude_person_id: "int | None" = None
     ) -> None:
-        """Vide les suggestions des clusters donnés et recalcule la meilleure personne pour chacun.
+        """Clears the suggestions of the given clusters and recomputes the best person for each.
 
-        Appelé après un rejet pour que les faces isolées puissent être proposées
-        à une autre personne (hors exclude_person_id).
+        Called after a rejection so that the isolated faces can be offered to
+        another person (exclude_person_id apart).
         """
         if not cluster_ids:
             return
 
-        # 1. Vider les suggestions et récupérer les embeddings par cluster
+        # 1. Clear the suggestions and fetch the embeddings by cluster
         cid_to_embs: "dict[int, list]" = {}
         with self._guard() as conn:
             placeholders = ",".join("?" * len(cluster_ids))
@@ -867,7 +867,7 @@ class FaceDatabase:
         if not cid_to_embs:
             return
 
-        # 2. Charger les embeddings de toutes les personnes (hors exclu)
+        # 2. Load the embeddings of every person (the excluded one apart)
         by_person: "dict[int, list]" = {}
         with self._guard() as conn:
             if exclude_person_id is not None:
@@ -890,7 +890,7 @@ class FaceDatabase:
         if not person_centroids:
             return
 
-        # 3. Pour chaque cluster, calculer le centroid et trouver la meilleure personne
+        # 3. For each cluster, compute the centroid and find the best person
         suggestions: "dict[int, tuple[int, float]]" = {}
         for cid, face_embs in cid_to_embs.items():
             cluster_centroid = _centroid(face_embs)
@@ -997,7 +997,7 @@ class FaceDatabase:
         return None
 
     def set_cover_face(self, face_id: int) -> None:
-        """Définit ce visage comme vignette du groupe (is_cover). Efface l'ancien cover."""
+        """Sets this face as the thumbnail of the group (is_cover). Clears the old cover."""
         with self._guard() as conn:
             row = conn.execute(
                 "SELECT cluster_id FROM faces WHERE id=?", (face_id,)
@@ -1066,8 +1066,8 @@ class FaceDatabase:
     def get_all_cluster_centroids(
         self, cluster_ids: list[int]
     ) -> dict[int, list[float]]:
-        """Retourne {cluster_id: centroïde} pour tous les clusters demandés.
-        Requête par lots de 500 pour respecter la limite SQLite des variables (999)."""
+        """Returns {cluster_id: centroid} for every requested cluster.
+        Queried in batches of 500 to respect the SQLite variable limit (999)."""
         if not cluster_ids:
             return {}
         _CHUNK = 500
@@ -1088,20 +1088,20 @@ class FaceDatabase:
     def get_all_person_centroids(
         self, person_ids: list[int]
     ) -> dict[int, list[float]]:
-        """Retourne {person_id: centroïde} pour toutes les personnes demandées.
+        """Returns {person_id: centroid} for every requested person.
 
-        Le résultat complet (toutes personnes confondues) est mis en cache en
-        mémoire et réutilisé tant que le fingerprint (COUNT + SUM des person_id
-        assignés, lecture indexée en quelques ms) n'a pas changé — évite de
-        redécoder ~60k embeddings (plusieurs secondes) à chaque appel, ce qui
-        rendait la popup d'identification de visage très lente à s'ouvrir."""
+        The full result (all the people together) is cached in memory and reused
+        as long as the fingerprint (COUNT + SUM of the assigned person_id, an
+        indexed read taking a few ms) has not changed — avoids re-decoding ~60k
+        embeddings (several seconds) on every call, which made the face
+        identification popup very slow to open."""
         if not person_ids:
             return {}
-        # Le verrou n'est tenu que pendant les lectures SQL : le décodage des
-        # ~60k embeddings (plusieurs secondes lors d'une reconstruction du
-        # cache) se fait hors verrou pour ne pas bloquer les autres threads
-        # (ex. requêtes visages du thread UI). Si deux threads reconstruisent
-        # en même temps, le résultat est identique — le dernier écrit gagne.
+        # The lock is only held during the SQL reads: the decoding of the ~60k
+        # embeddings (several seconds when the cache is rebuilt) happens outside
+        # the lock so as not to block the other threads (e.g. the face queries of
+        # the UI thread). If two threads rebuild at the same time, the result is
+        # identical — the last write wins.
         rows = None
         with self._guard() as conn:
             fp = conn.execute(
@@ -1139,12 +1139,12 @@ class FaceDatabase:
         self, person_ids: list[int]
     ) -> dict[int, dict[int, list[float]]]:
         """
-        Retourne {person_id: {cluster_id: centroïde}} pour toutes les personnes.
+        Returns {person_id: {cluster_id: centroid}} for every person.
 
-        Un nom pouvant être associé à plusieurs groupes distincts, chaque groupe
-        conserve son propre centroïde plutôt que d'être fondu dans une moyenne
-        globale.  Cela préserve la diversité visuelle de la personne et améliore
-        la précision des suggestions de reconnaissance.
+        Since one name can be associated with several distinct groups, each group
+        keeps its own centroid rather than being melted into a global average.
+        That preserves the visual diversity of the person and improves the
+        accuracy of the recognition suggestions.
         """
         if not person_ids:
             return {}
@@ -1160,7 +1160,7 @@ class FaceDatabase:
                     f"   AND embedding IS NOT NULL AND cluster_id IS NOT NULL",
                     chunk,
                 ).fetchall())
-        # Décodage des embeddings hors verrou (cf. get_all_person_centroids).
+        # Decoding of the embeddings outside the lock (cf. get_all_person_centroids).
         by_pc: dict[tuple, list] = {}
         for pid, cid, blob in all_rows:
             by_pc.setdefault((pid, cid), []).append(_dec(blob))
@@ -1170,7 +1170,7 @@ class FaceDatabase:
         return result
 
     def get_cluster_person(self, cluster_id: int) -> int | None:
-        """Retourne le person_id déjà associé à ce groupe, ou None s'il n'est pas nommé."""
+        """Returns the person_id already associated with this group, or None if it is not named."""
         with self._guard() as conn:
             row = conn.execute(
                 "SELECT DISTINCT person_id FROM faces"
@@ -1180,8 +1180,8 @@ class FaceDatabase:
         return row[0] if row else None
 
     def get_cluster_persons(self, cluster_ids: list[int]) -> dict[int, int]:
-        """Retourne {cluster_id: person_id} pour les clusters ayant au moins une face nommée.
-        Utile pour afficher le nom d'une personne sur des faces ré-indexées après assignation."""
+        """Returns {cluster_id: person_id} for the clusters having at least one named face.
+        Of use to display the name of a person on faces re-indexed after an assignment."""
         if not cluster_ids:
             return {}
         _CHUNK = 500
@@ -1203,8 +1203,8 @@ class FaceDatabase:
     def get_all_representative_faces(
         self, cluster_ids: list[int]
     ) -> "dict[int, FaceInfo]":
-        """Retourne {cluster_id: FaceInfo} pour tous les clusters en une seule requête.
-        Priorité : is_cover=1, sinon le visage avec la plus grande bbox."""
+        """Returns {cluster_id: FaceInfo} for every cluster in a single query.
+        Priority: is_cover=1, otherwise the face with the largest bbox."""
         if not cluster_ids:
             return {}
         _CHUNK = 500
@@ -1228,7 +1228,7 @@ class FaceDatabase:
         result: dict[int, FaceInfo] = {}
         for row in all_rows:
             cid = row[6]
-            if cid not in result:  # première ligne = meilleure (cover ou plus grande bbox)
+            if cid not in result:  # the first row = the best one (cover or largest bbox)
                 result[cid] = FaceInfo(
                     id=row[0], photo_path=row[1],
                     bbox_x=row[2], bbox_y=row[3], bbox_w=row[4], bbox_h=row[5],
@@ -1372,13 +1372,13 @@ class FaceDatabase:
 
     @staticmethod
     def _dedup_in_transaction(conn, photo_paths: "list[str] | None" = None) -> None:
-        """Ignore les visages redondants (même personne, même photo) dans la transaction active.
+        """Ignores the redundant faces (same person, same photo) in the active transaction.
 
-        Pour chaque (photo_path, person_id) avec plusieurs faces non-ignorées, garde celle
-        dont l'aire bbox est la plus grande (= visage le plus prominent, le plus fiable)
-        et marque les autres ignored=1.
+        For each (photo_path, person_id) with several non-ignored faces, keeps the one
+        whose bbox area is the largest (= the most prominent, most reliable face) and
+        marks the others ignored=1.
 
-        photo_paths : si fourni, limite la dédupplication à ces photos seulement.
+        photo_paths: if given, limits the deduplication to those photos only.
         """
         if photo_paths is not None:
             if not photo_paths:
@@ -1451,7 +1451,7 @@ class FaceDatabase:
 
     def unassign_face(self, face_id: int) -> None:
         """Remove person and cluster from a single face (returns it to unknowns).
-        Clears pinned so the face re-entre dans le clustering automatique."""
+        Clears pinned so the face re-enters the automatic clustering."""
         with self._guard() as conn:
             row = conn.execute(
                 "SELECT photo_path, person_id FROM faces WHERE id=?", (face_id,)
@@ -1466,8 +1466,8 @@ class FaceDatabase:
             conn.commit()
 
     def isolate_face(self, face_id: int) -> None:
-        """Sépare une face de son groupe et la protège du re-clustering.
-        Lui assigne un cluster_id négatif unique (isolé, invisible dans la grille)."""
+        """Separates a face from its group and protects it from the reclustering.
+        Assigns it a unique negative cluster_id (isolated, invisible in the grid)."""
         with self._guard() as conn:
             row = conn.execute(
                 "SELECT MIN(cluster_id) FROM faces WHERE pinned=1"
@@ -1487,8 +1487,8 @@ class FaceDatabase:
             conn.commit()
 
     def isolate_and_assign_face(self, face_id: int, person_id: int) -> None:
-        """Sépare un visage de son groupe et l'assigne à une personne en une transaction.
-        Résultat : pinned=1, cluster_id négatif unique, person_id=person_id."""
+        """Separates a face from its group and assigns it to a person in one transaction.
+        Result: pinned=1, a unique negative cluster_id, person_id=person_id."""
         with self._guard() as conn:
             row = conn.execute(
                 "SELECT MIN(cluster_id) FROM faces WHERE pinned=1"
@@ -1509,16 +1509,16 @@ class FaceDatabase:
             conn.commit()
 
     def add_manual_face(self, photo_path: str, bbox: tuple, person_id: int) -> int:
-        """Insère un visage positionné manuellement (bboxe dessinée par l'utilisateur,
-        jamais passée par InsightFace) et l'assigne aussitôt à person_id.
+        """Inserts a manually positioned face (a bbox drawn by the user, never passed
+        through InsightFace) and assigns it to person_id straight away.
 
-        embedding=NULL par construction : garantit que detected_rotation résoudra
-        toujours à 0 à la relecture (cf. get_faces_for_photo), donc que la bbox
-        est réinterprétée exactement dans l'espace EXIF-corrigé où elle a été
-        positionnée (cf. _Canvas._bbox_from_screen_rect côté UI). pinned=1 et un
-        cluster_id négatif unique l'isolent définitivement du (re)clustering,
-        comme pour isolate_and_assign_face().
-        Retourne l'id du visage créé.
+        embedding=NULL by construction: guarantees that detected_rotation will
+        always resolve to 0 when read back (cf. get_faces_for_photo), hence that
+        the bbox is reinterpreted exactly in the EXIF-corrected space where it
+        was positioned (cf. _Canvas._bbox_from_screen_rect on the UI side).
+        pinned=1 and a unique negative cluster_id isolate it definitively from
+        the (re)clustering, as for isolate_and_assign_face().
+        Returns the id of the created face.
         """
         photo_path = os.path.normpath(photo_path)
         bx, by, bw, bh = (int(v) for v in bbox)
@@ -1541,12 +1541,11 @@ class FaceDatabase:
             return face_id
 
     def delete_face(self, face_id: int) -> None:
-        """Supprime définitivement un visage (hard delete).
+        """Permanently deletes a face (a hard delete).
 
-        Réservé à l'annulation d'un ajout manuel récent (add_manual_face) : un
-        visage détecté par InsightFace ne doit jamais être supprimé de la sorte,
-        utiliser unassign_face()/isolate_face() pour le conserver et le rendre
-        récupérable.
+        Reserved for undoing a recent manual addition (add_manual_face): a face
+        detected by InsightFace must never be deleted this way, use
+        unassign_face()/isolate_face() to keep it and leave it recoverable.
         """
         with self._guard() as conn:
             conn.execute("DELETE FROM faces WHERE id=?", (face_id,))
@@ -1628,7 +1627,7 @@ class FaceDatabase:
                             unignored += 1
                     conn.commit()
                 except Exception as exc:
-                    conn.rollback()   # cf. _conn() : jamais de transaction ouverte
+                    conn.rollback()   # cf. _conn(): never an open transaction
                     logger.warning(
                         "recalculate_size_ignored: erreur %s : %s", photo_path, exc
                     )
@@ -1640,23 +1639,24 @@ class FaceDatabase:
     def find_similar_to_persons(
         self, progress_cb: "Callable[[int, int], None] | None" = None
     ) -> tuple[int, int]:
-        """Compare chaque cluster non identifié aux centroïdes des personnes nommées.
+        """Compares every unidentified cluster with the centroids of the named people.
 
-        Pour chaque cluster sans person_id ni suggestion existante, calcule son centroïde
-        et le compare à tous les centroïdes de personnes nommées. Si la similarité cosinus
-        atteint _SIM_SUGGEST (0.55), une suggestion est créée et apparaîtra dans la section
-        « En attente » de la vue de la personne concernée (ou la personne est allouée
-        directement si le score atteint _SIM_AUTO_ASSIGN — cf. set_cluster_suggestions).
+        For each cluster without a person_id or an existing suggestion, computes its
+        centroid and compares it with every centroid of the named people. If the cosine
+        similarity reaches _SIM_SUGGEST (0.55), a suggestion is created and will appear
+        in the "Pending" section of the view of the person concerned (or the person is
+        assigned directly if the score reaches _SIM_AUTO_ASSIGN — cf.
+        set_cluster_suggestions).
 
-        Retourne (suggestions_créées, clusters_vérifiés).
+        Returns (suggestions_created, clusters_checked).
 
-        Comparaison vectorisée (un seul produit matriciel clusters × personnes).
-        La version boucle-sur-boucle appelait `_cosine_sim` une fois par couple —
-        sur une bibliothèque réelle (22 000 groupes × 490 personnes, soit ~11 M
-        d'appels allouant chacun deux tableaux numpy) le passage durait plusieurs
-        minutes, ce qui interdisait de la déclencher automatiquement.
+        A vectorised comparison (a single matrix product clusters × people).
+        The loop-over-loop version called `_cosine_sim` once per pair — on a real
+        library (22 000 groups × 490 people, i.e. ~11 M calls each allocating two
+        numpy arrays) the pass took several minutes, which made triggering it
+        automatically out of the question.
         """
-        # 1. Tous les embeddings de clusters non identifiés sans suggestion existante
+        # 1. Every embedding of unidentified clusters without an existing suggestion
         with self._guard() as conn:
             rows = conn.execute(
                 "SELECT cluster_id, embedding FROM faces"
@@ -1676,7 +1676,7 @@ class FaceDatabase:
 
         total = len(cid_to_embs)
 
-        # 2. Centroïdes de toutes les personnes nommées
+        # 2. Centroids of every named person
         with self._guard() as conn:
             pers_rows = conn.execute(
                 "SELECT person_id, embedding FROM faces"
@@ -1690,7 +1690,7 @@ class FaceDatabase:
         if not person_centroids:
             return 0, total
 
-        # 3. Pour chaque cluster, trouver la meilleure personne
+        # 3. For each cluster, find the best person
         suggestions = self._best_person_per_cluster(
             cid_to_embs, person_centroids, progress_cb
         )
@@ -1706,21 +1706,21 @@ class FaceDatabase:
         person_centroids: "dict[int, list]",
         progress_cb: "Callable[[int, int], None] | None" = None,
     ) -> "dict[int, tuple[int, float]]":
-        """{cluster_id: (person_id, score)} pour les clusters atteignant _SIM_SUGGEST.
+        """{cluster_id: (person_id, score)} for the clusters reaching _SIM_SUGGEST.
 
-        Extrait de find_similar_to_persons pour être testable sans base."""
+        Extracted from find_similar_to_persons so as to be testable without a database."""
         total = len(cid_to_embs)
         cids = list(cid_to_embs)
         pids = list(person_centroids)
-        # Aucune personne nommée : rien à proposer. Garde indispensable avant la
-        # branche numpy — `np.array([])` est 1-D et `_unit()` y demande `axis=1`
-        # (AxisError). L'appelant filtre déjà ce cas, mais l'helper est appelé
-        # directement ailleurs (tests, futurs appelants).
+        # No named person: nothing to offer. An essential guard before the numpy
+        # branch — `np.array([])` is 1-D and `_unit()` asks for `axis=1` on it
+        # (AxisError). The caller already filters that case, but the helper is
+        # called directly elsewhere (tests, future callers).
         if not cids or not pids:
             return {}
         try:
             import numpy as np
-        except ImportError:                       # repli scalaire (cf. _cosine_sim)
+        except ImportError:                       # scalar fallback (cf. _cosine_sim)
             suggestions: "dict[int, tuple[int, float]]" = {}
             for i, cid in enumerate(cids):
                 if progress_cb:
@@ -1742,9 +1742,9 @@ class FaceDatabase:
         persons = _unit(np.array([person_centroids[p] for p in pids], dtype=np.float32))
 
         suggestions = {}
-        # Par tranches : borne la mémoire du produit matriciel (une bibliothèque
-        # réelle dépasse les 20 000 clusters) et donne de quoi rendre compte de
-        # l'avancement, la progression étant sinon invisible jusqu'à la fin.
+        # By slices: bounds the memory of the matrix product (a real library
+        # exceeds 20 000 clusters) and gives something to report progress with,
+        # the progress being otherwise invisible until the very end.
         chunk = 512
         for start in range(0, total, chunk):
             block = cids[start:start + chunk]
@@ -1792,14 +1792,14 @@ class FaceDatabase:
     def isolate_and_suggest(
         self, face_ids: list[int], exclude_person_id: "int | None" = None
     ) -> None:
-        """Isole chaque visage dans un cluster négatif unique (pinned=1, person_id=NULL)
-        et calcule une suggestion par similarité cosinus contre toutes les personnes connues,
-        en excluant optionnellement exclude_person_id (la personne qu'on vient de quitter).
-        Si le meilleur match atteint _SIM_SUGGEST, suggestion_person_id est enregistré."""
+        """Isolates each face in a unique negative cluster (pinned=1, person_id=NULL)
+        and computes a suggestion by cosine similarity against every known person,
+        optionally excluding exclude_person_id (the person just left).
+        If the best match reaches _SIM_SUGGEST, suggestion_person_id is recorded."""
         if not face_ids:
             return
 
-        # 1. Isoler chaque visage et récupérer son embedding
+        # 1. Isolate each face and fetch its embedding
         face_embs: dict[int, list[float]] = {}  # new_cluster_id → embedding
         with self._guard() as conn:
             row = conn.execute(
@@ -1830,7 +1830,7 @@ class FaceDatabase:
         if not face_embs:
             return
 
-        # 2. Récupérer les embeddings de toutes les personnes (hors exclude_person_id)
+        # 2. Fetch the embeddings of every person (exclude_person_id apart)
         by_person: dict[int, list] = {}
         with self._guard() as conn:
             if exclude_person_id is not None:
@@ -1853,7 +1853,7 @@ class FaceDatabase:
         if not person_centroids:
             return
 
-        # 3. Pour chaque visage isolé, chercher la personne la plus similaire
+        # 3. For each isolated face, look for the most similar person
         suggestions: dict[int, tuple[int, float]] = {}
         for cid, face_emb in face_embs.items():
             best_sim, best_pid = 0.0, None
@@ -1933,13 +1933,12 @@ class FaceDatabase:
         Reassign all faces of remove_id to keep_id.
         The caller is responsible for deleting remove_id from catalog.persons.
 
-        Réassigne aussi picasa_annotations.person_id : sans ça, remove_id est
-        supprimé de catalog.persons juste après cet appel, et toute annotation
-        Picasa encore liée à remove_id (consommée ou non) devient orpheline
-        pour toujours — plus aucune trace ne permet de savoir qu'elle
-        correspondait en fait à keep_id (bug découvert le 2026-07-04 : person_id
-        154 fusionné dans 512 avait laissé des annotations orphelines détruites
-        ensuite par cleanup_orphan_person_ids).
+        Also reassigns picasa_annotations.person_id: without it, remove_id is
+        deleted from catalog.persons right after this call, and any Picasa
+        annotation still linked to remove_id (consumed or not) becomes an orphan
+        for ever — nothing is left to tell that it in fact corresponded to
+        keep_id (bug found on 2026-07-04: person_id 154 merged into 512 had left
+        orphan annotations, destroyed afterwards by cleanup_orphan_person_ids).
         """
         with self._guard() as conn:
             rows = conn.execute(
@@ -1955,9 +1954,9 @@ class FaceDatabase:
                 "UPDATE picasa_annotations SET person_id=? WHERE person_id=?",
                 (keep_id, remove_id),
             )
-            # keep_id et remove_id peuvent avoir chacun un visage non-ignoré sur
-            # une même photo partagée : sans dédup ici, la fusion laisserait deux
-            # visages non-ignorés pour la même personne sur cette photo.
+            # keep_id and remove_id can each have a non-ignored face on one same
+            # shared photo: without a dedup here, the merge would leave two
+            # non-ignored faces for the same person on that photo.
             self._dedup_in_transaction(conn, affected_paths)
             conn.commit()
 
@@ -1974,14 +1973,14 @@ class FaceDatabase:
     # ------------------------------------------------------------------ enrichment
 
     def enrich_persons_photo_count(self, persons: list[PersonInfo]) -> None:
-        """Fill uniquement photo_count in-place (pas cover_path/cover_bbox/pending_count).
+        """Fills photo_count in-place ONLY (not cover_path/cover_bbox/pending_count).
 
-        Variante allégée de enrich_persons() pour les cas qui n'affichent que le
-        nombre de photos (ex. popup d'assignation de nom) : évite la CTE avec
-        fenêtrage sur toute la table faces (calcul de la photo de couverture) et
-        la requête get_persons_pending_count(), qui à elles deux dominaient le
-        temps d'ouverture de la popup (~0.7s sur une base de ~370 personnes)
-        alors que ce résultat n'y est jamais affiché."""
+        A lighter variant of enrich_persons() for the cases that only display the
+        number of photos (e.g. the name assignment popup): avoids the CTE with a
+        window function over the whole faces table (computing the cover photo)
+        and the get_persons_pending_count() query, which together dominated the
+        opening time of the popup (~0.7 s on a base of ~370 people) although that
+        result is never displayed there."""
         if not persons:
             return
         with self._guard() as conn:
@@ -2001,18 +2000,18 @@ class FaceDatabase:
         if not persons:
             return
         with self._guard() as conn:
-            # Compter les photos où cette personne a un visage détecté dans un cluster.
-            # Cohérent avec get_clusters_for_person qui compte les photos par person_id,
-            # pas toutes les photos du cluster (évite les fausses associations dues
-            # aux clusters mixtes — deux personnes dans le même groupe HDBSCAN).
+            # Count the photos where this person has a face detected in a cluster.
+            # Consistent with get_clusters_for_person, which counts the photos by
+            # person_id, not every photo of the cluster (avoids the false associations
+            # due to mixed clusters — two people in the same HDBSCAN group).
             count_rows = conn.execute(
                 "SELECT person_id, COUNT(DISTINCT photo_path)"
                 " FROM faces"
                 " WHERE person_id IS NOT NULL AND cluster_id IS NOT NULL"
                 " GROUP BY person_id"
             ).fetchall()
-            # Une seule requête CTE pour toutes les faces représentatives
-            # (remplace N appels get_representative_face → N connexions séparées)
+            # A single CTE query for every representative face
+            # (replaces N get_representative_face calls → N separate connections)
             rep_rows = conn.execute(
                 "WITH ranked AS ("
                 "  SELECT f.person_id, f.photo_path, f.bbox_x, f.bbox_y, f.bbox_w, f.bbox_h,"
@@ -2054,10 +2053,10 @@ class FaceDatabase:
         Persist Picasa face annotations for a photo.
         annotations: [{'bbox': (x,y,w,h), 'person_id': int}, ...]
 
-        Les annotations remplacent les précédentes pour ce chemin.
-        Si des visages détectés existent déjà, elles leur sont immédiatement
-        associées par IoU ; sinon elles seront appliquées lors de la prochaine
-        détection via save_faces().
+        The annotations replace the previous ones for this path.
+        If detected faces already exist, they are associated with them straight
+        away by IoU; otherwise they will be applied during the next detection
+        through save_faces().
         """
         photo_path = os.path.normpath(photo_path)
         with self._guard() as conn:
@@ -2074,8 +2073,8 @@ class FaceDatabase:
                 )
             conn.commit()
             self._apply_picasa_annotations(conn, photo_path)
-            # Consommer les annotations dont la personne est déjà portée par une face
-            # InsightFace (avec embedding) sur cette photo — évite les placeholders doublons.
+            # Consume the annotations whose person is already carried by an InsightFace
+            # face (with an embedding) on this photo — avoids duplicate placeholders.
             conn.execute(
                 "UPDATE picasa_annotations SET consumed=1"
                 " WHERE photo_path=? AND consumed=0"
@@ -2085,9 +2084,9 @@ class FaceDatabase:
                 "   )",
                 (photo_path, photo_path),
             )
-            # Consommer les annotations qui chevauchent spatialement une face ArcFace
-            # — couvre le cas où Picasa et InsightFace identifient le même visage
-            # physique sous des person_id différents (contacts Picasa ≠ cluster ArcFace).
+            # Consume the annotations spatially overlapping an ArcFace face
+            # — covers the case where Picasa and InsightFace identify the same physical
+            # face under different person_ids (Picasa contacts ≠ ArcFace cluster).
             _arcface = conn.execute(
                 "SELECT bbox_x, bbox_y, bbox_w, bbox_h FROM faces"
                 " WHERE photo_path=? AND embedding IS NOT NULL",
@@ -2118,19 +2117,19 @@ class FaceDatabase:
                                 (_aid,),
                             )
                             break
-            # Supprimer les anciens placeholders Picasa (embedding IS NULL, non épinglés)
-            # avant d'en créer de nouveaux — évite les doublons lors d'un re-import.
+            # Delete the old Picasa placeholders (embedding IS NULL, not pinned)
+            # before creating new ones — avoids duplicates on a re-import.
             conn.execute(
                 "DELETE FROM faces"
                 " WHERE photo_path=? AND embedding IS NULL AND (pinned IS NULL OR pinned=0)",
                 (photo_path,),
             )
-            # Insérer des placeholders (sans embedding) pour les annotations non
-            # consommées, que la photo ait été détectée ou non par InsightFace.
-            # Couvre deux cas : (a) photo pas encore analysée — aucun visage ;
-            # (b) InsightFace a détecté d'autres visages mais raté cette personne.
-            # Les annotations restent non-consommées pour être ré-appariées lors
-            # de la future analyse ArcFace (save_faces).
+            # Insert placeholders (without an embedding) for the annotations not
+            # consumed, whether the photo has been detected by InsightFace or not.
+            # Covers two cases: (a) a photo not analysed yet — no face at all;
+            # (b) InsightFace detected other faces but missed this person.
+            # The annotations stay unconsumed so as to be re-matched during the
+            # future ArcFace analysis (save_faces).
             still_pending = conn.execute(
                 "SELECT bbox_x, bbox_y, bbox_w, bbox_h, person_id"
                 " FROM picasa_annotations"
@@ -2148,12 +2147,12 @@ class FaceDatabase:
             conn.commit()
 
     def _release_picasa_annotation(self, conn, photo_path: str, person_id: "int | None") -> None:
-        """Quand une identification est retirée d'un visage, remet consumed=0 sur
-        l'annotation Picasa correspondante (même photo, même personne) si elle est
-        marquée consumed=1. Sans ça, l'annotation reste bloquée indéfiniment : elle
-        n'est plus jamais retentée par _apply_picasa_annotations(), même si un visage
-        libre et compatible existe ensuite sur la photo — l'identification Picasa
-        d'origine est alors perdue silencieusement et pour toujours."""
+        """When an identification is removed from a face, puts consumed=0 back on the
+        matching Picasa annotation (same photo, same person) if it is marked
+        consumed=1. Without this, the annotation stays blocked indefinitely: it is
+        never retried by _apply_picasa_annotations() again, even if a free and
+        compatible face exists on the photo afterwards — the original Picasa
+        identification is then lost silently and for ever."""
         if person_id is None:
             return
         conn.execute(
@@ -2164,13 +2163,13 @@ class FaceDatabase:
 
     def _apply_picasa_annotations(self, conn, photo_path: str) -> None:
         """
-        Associe les annotations Picasa non consommées aux visages détectés
-        du même chemin. Critère principal : le centre du visage ArcFace est
-        à l'intérieur de la région Picasa (robuste car Picasa stocke une zone
-        large englobant la tête/buste, alors qu'ArcFace donne une bbox serrée).
-        Fallback : IoU > seuil si aucun centre ne tombe dans la région.
-        Doit être appelée dans un contexte conn+lock déjà ouvert.
-        Seuls les visages sans person_id existant sont candidats.
+        Associates the unconsumed Picasa annotations with the detected faces of
+        the same path. Main criterion: the centre of the ArcFace face is inside
+        the Picasa region (robust, because Picasa stores a wide area enclosing
+        the head/bust, whereas ArcFace gives a tight bbox).
+        Fallback: IoU > threshold if no centre falls inside the region.
+        Must be called in an already open conn+lock context.
+        Only the faces without an existing person_id are candidates.
         """
         ann_rows = conn.execute(
             "SELECT id, bbox_x, bbox_y, bbox_w, bbox_h, person_id"
@@ -2201,17 +2200,17 @@ class FaceDatabase:
                     fx, fy, fw, fh = int(fx), int(fy), int(fw), int(fh)
                 except (TypeError, ValueError):
                     continue
-                # Critère 1a : centre InsightFace dans la région Picasa
+                # Criterion 1a: the InsightFace centre inside the Picasa region
                 cx_f, cy_f = fx + fw // 2, fy + fh // 2
                 in_picasa = ax <= cx_f <= ax + aw and ay <= cy_f <= ay + ah
-                # Critère 1b : centre Picasa dans la bbox InsightFace (symétrique)
+                # Criterion 1b: the Picasa centre inside the InsightFace bbox (symmetrical)
                 cx_p, cy_p = ax + aw // 2, ay + ah // 2
                 in_face = fx <= cx_p <= fx + fw and fy <= cy_p <= fy + fh
                 if in_picasa or in_face:
                     iou_score = _iou((ax, ay, aw, ah), (fx, fy, fw, fh))
-                    score = 1.0 + iou_score  # > 1 pour toujours primer sur le fallback IoU
+                    score = 1.0 + iou_score  # > 1 so as to always take precedence over the IoU fallback
                 else:
-                    # Critère 2 (fallback) : IoU classique
+                    # Criterion 2 (fallback): the classic IoU
                     score = _iou((ax, ay, aw, ah), (fx, fy, fw, fh))
                     if score < _IOU_THRESHOLD:
                         continue
@@ -2232,15 +2231,14 @@ class FaceDatabase:
                 )
 
     def _consume_matching_picasa_annotations(self, conn, photo_paths: "list[str]") -> None:
-        """Marque consumed=1 les annotations Picasa dont la personne vient d'être
-        identifiée a posteriori (suggestion acceptée, identification manuelle,
-        assignation de cluster) sur un visage qui chevauche spatialement
-        l'annotation. Sans ça, le compteur "en attente de reconnaissance" reste
-        indéfiniment faux pour ces cas : la reconnaissance a bien eu lieu, seul
-        le flag de suivi Picasa n'a jamais été mis à jour — ces chemins
-        d'identification ne passent pas par _apply_picasa_annotations() (qui ne
-        matche que les visages sans person_id), donc rien ne les synchronise
-        sinon."""
+        """Marks consumed=1 the Picasa annotations whose person has just been
+        identified after the fact (an accepted suggestion, a manual
+        identification, a cluster assignment) on a face spatially overlapping the
+        annotation. Without this, the "awaiting recognition" counter stays wrong
+        indefinitely for those cases: the recognition did take place, only the
+        Picasa tracking flag was never updated — those identification paths do
+        not go through _apply_picasa_annotations() (which only matches the faces
+        without a person_id), so nothing else synchronises them."""
         for photo_path in set(photo_paths):
             pending = conn.execute(
                 "SELECT id, bbox_x, bbox_y, bbox_w, bbox_h, person_id"
@@ -2276,10 +2274,10 @@ class FaceDatabase:
                         break
 
     def reset_clustering(self) -> None:
-        """Efface les cluster_id HDBSCAN des faces non identifiées.
-        Les faces avec person_id conservent leur cluster synthétique (10M+) :
-        les personnes restent visibles dans PersonClusterView pendant/après le reset.
-        Les embeddings et l'index des photos sont toujours conservés."""
+        """Clears the HDBSCAN cluster_ids of the unidentified faces.
+        The faces with a person_id keep their synthetic cluster (10M+):
+        the people stay visible in PersonClusterView during/after the reset.
+        The embeddings and the index of the photos are always preserved."""
         with self._guard() as conn:
             conn.execute(
                 "UPDATE faces SET cluster_id=NULL"
@@ -2289,19 +2287,19 @@ class FaceDatabase:
             conn.commit()
 
     def cleanup_overlapping_placeholders(self) -> int:
-        """Supprime les faces placeholder (embedding IS NULL, non épinglées) qui chevauchent
-        spatialement une face ArcFace (embedding IS NOT NULL) sur la même photo.
+        """Deletes the placeholder faces (embedding IS NULL, not pinned) spatially
+        overlapping an ArcFace face (embedding IS NOT NULL) on the same photo.
 
-        Utile après un ré-import Picasa pour éliminer les doublons existants avant
-        que le critère person_id ne les ait couverts (ex. : contacts Picasa ≠ cluster ArcFace).
+        Of use after a Picasa re-import, to eliminate the existing duplicates before
+        the person_id criterion has covered them (e.g. Picasa contacts ≠ ArcFace cluster).
 
-        Avant de supprimer, transfère le person_id du placeholder vers le vrai visage
-        si celui-ci n'est pas encore identifié — sinon l'identification Picasa portée par
-        le placeholder est perdue silencieusement (bug découvert le 2026-07-04 : ~1067
-        identifications auraient été détruites par un appel naïf). Si les deux visages
-        portent des person_id différents (vrai désaccord), ne supprime rien et journalise
-        le conflit pour revue manuelle.
-        Retourne le nombre de faces supprimées."""
+        Before deleting, transfers the person_id of the placeholder to the real face if
+        the latter is not identified yet — failing which the Picasa identification
+        carried by the placeholder is lost silently (bug found on 2026-07-04: ~1067
+        identifications would have been destroyed by a naive call). If the two faces
+        carry different person_ids (a genuine disagreement), deletes nothing and logs
+        the conflict for manual review.
+        Returns the number of faces deleted."""
         deleted = 0
         conflicts = 0
         with self._guard() as conn:
@@ -2368,15 +2366,17 @@ class FaceDatabase:
         return deleted
 
     def restore_orphaned_ignored_faces(self) -> int:
-        """Réactive (ignored=0) le visage de plus grande aire de chaque groupe
-        (photo_path, person_id) qui n'a plus aucun visage visible (tous ignored=1).
+        """Reactivates (ignored=0) the face with the largest area of each
+        (photo_path, person_id) group that no longer has a single visible face (all
+        of them ignored=1).
 
-        Se produit quand _dedup_in_transaction() avait préféré un doublon plus grand
-        (typiquement un placeholder Picasa) et mis ce visage en ignored=1, puis que ce
-        doublon a ensuite été supprimé (ex. par cleanup_overlapping_placeholders) sans
-        réévaluer l'invariant — laissant l'identification orpheline et invisible dans
-        l'UI alors que person_id reste correct (bug découvert le 2026-07-04, cas Jean
-        Cirre : 10 364 groupes affectés en base). Retourne le nombre de visages réactivés."""
+        Happens when _dedup_in_transaction() had preferred a larger duplicate
+        (typically a Picasa placeholder) and put that face at ignored=1, and that
+        duplicate was then deleted (e.g. by cleanup_overlapping_placeholders) without
+        re-evaluating the invariant — leaving the identification orphaned and invisible
+        in the UI although person_id stays correct (bug found on 2026-07-04, the Jean
+        Cirre case: 10 364 groups affected in the database). Returns the number of
+        faces reactivated."""
         with self._guard() as conn:
             n = conn.execute(
                 """
@@ -2398,13 +2398,13 @@ class FaceDatabase:
                   )
                 """
             ).rowcount
-            # commit() inconditionnel : un UPDATE/DELETE ouvre une transaction
-            # même à 0 ligne affectée ; ne committer que si n>0 laissait la
-            # connexion de ce thread dans une transaction ouverte, bloquant
-            # ensuite toute écriture d'un autre thread en "database is locked"
-            # (cf. CLAUDE.md, pattern de connexion) — bug réel observé via e2e
-            # (test_folder_management), second FaceIndexThread requeue vs
-            # ClusterThread.assign_person_synthetic_clusters.
+            # Unconditional commit(): an UPDATE/DELETE opens a transaction
+            # even with 0 rows affected; committing only if n>0 left the
+            # connection of this thread inside an open transaction, which then
+            # blocked every write of another thread with "database is locked"
+            # (cf. CLAUDE.md, the connection pattern) — a real bug observed
+            # through e2e (test_folder_management), a second FaceIndexThread
+            # requeue vs ClusterThread.assign_person_synthetic_clusters.
             conn.commit()
         if n:
             logger.info(
@@ -2413,12 +2413,12 @@ class FaceDatabase:
         return n
 
     def cleanup_stale_placeholder_faces(self) -> int:
-        """Supprime les faces placeholder (embedding IS NULL, non épinglées) dont le
-        person_id ne correspond à aucune annotation Picasa actuelle pour la même photo.
+        """Deletes the placeholder faces (embedding IS NULL, not pinned) whose
+        person_id matches no current Picasa annotation for the same photo.
 
-        Ces résidus apparaissent quand un ré-import Picasa a changé les person_id
-        (ex. : après reset du catalogue), laissant d'anciens placeholders à des
-        positions invalides. Retourne le nombre de faces supprimées."""
+        Such residue appears when a Picasa re-import has changed the person_ids
+        (e.g. after a reset of the catalog), leaving old placeholders at invalid
+        positions. Returns the number of faces deleted."""
         with self._guard() as conn:
             n = conn.execute(
                 "DELETE FROM faces"
@@ -2434,7 +2434,7 @@ class FaceDatabase:
                 "     WHERE pa2.photo_path = faces.photo_path"
                 "   )"
             ).rowcount
-            # commit() inconditionnel — cf. restore_orphaned_ignored_faces ci-dessus.
+            # Unconditional commit() — cf. restore_orphaned_ignored_faces above.
             conn.commit()
         if n:
             logger.info(
@@ -2442,25 +2442,25 @@ class FaceDatabase:
             )
         return n
 
-    # Préfixe des cluster_id synthétiques pour les faces déjà identifiées.
-    # Valeur choisie bien au-dessus du max réaliste d'HDBSCAN (~175 K faces max).
+    # Prefix of the synthetic cluster_ids for the already identified faces.
+    # A value chosen well above the realistic HDBSCAN max (~175 K faces max).
     _SYNTHETIC_CLUSTER_BASE = 10_000_000
 
     def assign_person_synthetic_clusters(self) -> int:
-        """Migre TOUTES les faces identifiées vers un cluster_id synthétique (10⁷ + person_id).
+        """Migrates EVERY identified face to a synthetic cluster_id (10⁷ + person_id).
 
-        Ceci inclut les faces qui ont déjà un cluster_id non-synthétique issu d'un
-        précédent run HDBSCAN. Sans cette migration, HDBSCAN peut réutiliser le même
-        entier pour un groupe de faces totalement différentes dans un run ultérieur,
-        provoquant une fusion incorrecte avec des faces d'une personne déjà identifiée.
-        Retourne le nombre de faces mises à jour."""
+        This includes the faces that already have a non-synthetic cluster_id from a
+        previous HDBSCAN run. Without this migration, HDBSCAN can reuse the same
+        integer for a group of completely different faces in a later run, causing an
+        incorrect merge with the faces of an already identified person.
+        Returns the number of faces updated."""
         with self._guard() as conn:
             n = conn.execute(
                 f"UPDATE faces SET cluster_id = {self._SYNTHETIC_CLUSTER_BASE} + person_id"
                 " WHERE person_id IS NOT NULL"
                 f"   AND (cluster_id IS NULL OR cluster_id < {self._SYNTHETIC_CLUSTER_BASE})"
             ).rowcount
-            # commit() inconditionnel — cf. restore_orphaned_ignored_faces ci-dessus.
+            # Unconditional commit() — cf. restore_orphaned_ignored_faces above.
             conn.commit()
         if n:
             logger.info(
@@ -2469,12 +2469,12 @@ class FaceDatabase:
         return n
 
     def cleanup_orphan_person_ids(self, valid_person_ids: set[int]) -> tuple[int, int]:
-        """Remet person_id=NULL sur les faces et supprime les annotations Picasa dont
-        le person_id n'est plus présent dans catalog.db (orphelins après réinitialisation).
+        """Puts person_id=NULL back on the faces and deletes the Picasa annotations whose
+        person_id is no longer present in catalog.db (orphans after a reset).
 
-        Retourne (n_faces_reset, n_annotations_deleted).
-        Doit être appelé avant un ré-import Picasa pour que _apply_picasa_annotations
-        puisse ré-associer correctement les nouvelles annotations aux bonnes personnes.
+        Returns (n_faces_reset, n_annotations_deleted).
+        Must be called before a Picasa re-import so that _apply_picasa_annotations
+        can correctly re-associate the new annotations with the right people.
         """
         if not valid_person_ids:
             return 0, 0
@@ -2490,7 +2490,7 @@ class FaceDatabase:
                 f"DELETE FROM picasa_annotations WHERE person_id NOT IN ({ph})",
                 vals,
             ).rowcount
-            # commit() inconditionnel — cf. restore_orphaned_ignored_faces ci-dessus.
+            # Unconditional commit() — cf. restore_orphaned_ignored_faces above.
             conn.commit()
         if n_faces or n_ann:
             logger.info(
@@ -2501,10 +2501,10 @@ class FaceDatabase:
         return n_faces, n_ann
 
     def reset_index(self) -> None:
-        """Efface toutes les détections et l'index des photos analysées.
-        Les personnes nommées et les annotations Picasa sont conservées ;
-        les annotations sont réinitialisées pour être ré-appliquées après
-        la prochaine détection."""
+        """Clears every detection and the index of the analysed photos.
+        The named people and the Picasa annotations are preserved;
+        the annotations are reset so as to be re-applied after the next
+        detection."""
         with self._guard() as conn:
             conn.execute("DELETE FROM faces")
             conn.execute("DELETE FROM indexed_photos")
@@ -2529,8 +2529,8 @@ class FaceDatabase:
             conn.commit()
 
     def delete_for_paths(self, photo_paths: list[str]) -> None:
-        """Supprime en une seule transaction les données visages de plusieurs
-        photos (variante lot de delete_for_path)."""
+        """Deletes the face data of several photos in a single transaction
+        (the batch variant of delete_for_path)."""
         if not photo_paths:
             return
         params = [(os.path.normpath(p),) for p in photo_paths]
@@ -2550,14 +2550,14 @@ class FaceDatabase:
     def remap_bboxes_after_save(
         self, photo_path: str, updates: dict, deletions: list,
     ) -> None:
-        """Après enregistrement d'une photo retouchée qui écrase le fichier
-        d'origine (crop/rotation/redressement désormais bakés dans les pixels) :
-        recale les bboxes des visages existants dans le nouveau repère pixel
-        (`updates` = {face_id: (x, y, w, h)}) et purge ceux tombés hors cadre
-        (`deletions` = [face_id, ...]). Remet aussi indexed_photos.rotation à 0 :
-        le fichier est maintenant dans son orientation finale, plus de rotation
-        de détection à compenser pour reconstruire une vignette (cf.
-        detected_rotation, src/ui/face_panel.py)."""
+        """After saving an edited photo that overwrites the original file
+        (crop/rotation/straightening now baked into the pixels): realigns the
+        bboxes of the existing faces in the new pixel frame of reference
+        (`updates` = {face_id: (x, y, w, h)}) and purges those that fell out of
+        frame (`deletions` = [face_id, ...]). Also puts indexed_photos.rotation
+        back to 0: the file is now in its final orientation, there is no
+        detection rotation left to compensate for when rebuilding a thumbnail
+        (cf. detected_rotation, src/ui/face_panel.py)."""
         photo_path = os.path.normpath(photo_path)
         with self._guard() as conn:
             for face_id, (x, y, w, h) in updates.items():
@@ -2639,14 +2639,14 @@ class FaceDatabase:
         }
 
     def get_recognition_counters(self) -> dict:
-        """Compteurs détaillés pour le menu Visages › Compteurs…
+        """Detailed counters for the Faces › Counters… menu
 
-        - identified_faces  : visages avec person_id assigné (Picasa ou ArcFace), non ignorés
-        - recognized_faces  : sous-ensemble de identified_faces effectivement reconnus par
-                              l'analyse faciale (embedding non NULL)
-        - pending_faces     : visages avec une suggestion de personne non confirmée
-        - unknown_faces     : visages détectés, non ignorés, sans personne ni suggestion
-        - picasa_*          : suivi des annotations importées depuis Picasa
+        - identified_faces  : faces with an assigned person_id (Picasa or ArcFace), not ignored
+        - recognized_faces  : the subset of identified_faces actually recognised by the
+                              face analysis (embedding not NULL)
+        - pending_faces     : faces carrying an unconfirmed person suggestion
+        - unknown_faces     : detected faces, not ignored, without a person or a suggestion
+        - picasa_*          : tracking of the annotations imported from Picasa
         """
         with self._guard() as conn:
             def scalar(query: str) -> int:

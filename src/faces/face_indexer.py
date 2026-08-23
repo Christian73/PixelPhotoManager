@@ -22,18 +22,18 @@ from src.library.catalog import Catalog
 logger = logging.getLogger(__name__)
 
 
-_WORKERS              = throttled_worker_count()  # subprocesses en pipeline GPU/CPU, ~30 % des cœurs
-_CLUSTER_EVERY        = 1000  # relancer le clustering tous les N visages trouvés
-_DETECT_TIMEOUT       = 60    # secondes max par photo avant de tuer le subprocess
-_WARMUP_TIMEOUT       = 120   # secondes max pour le warmup initial (GPU peut être lent)
-_MAX_CONSECUTIVE_FAIL = 5     # échecs consécutifs avant abandon définitif
-_GPU_RETRY_AFTER      = 50    # succès consécutifs en secours CPU avant de retenter le GPU
-                               # (un seul timeout/crash isolé ne doit pas condamner tout le
-                               # reste du scan à tourner en CPU 1 worker)
+_WORKERS              = throttled_worker_count()  # subprocesses in a GPU/CPU pipeline, ~30 % of the cores
+_CLUSTER_EVERY        = 1000  # restart the clustering every N faces found
+_DETECT_TIMEOUT       = 60    # seconds max per photo before killing the subprocess
+_WARMUP_TIMEOUT       = 120   # seconds max for the initial warmup (the GPU can be slow)
+_MAX_CONSECUTIVE_FAIL = 5     # consecutive failures before giving up for good
+_GPU_RETRY_AFTER      = 50    # consecutive successes on the CPU fallback before retrying the GPU
+                               # (a single isolated timeout/crash must not condemn all the rest
+                               # of the scan to run on 1 CPU worker)
 
 def _kill_executor(executor: concurrent.futures.ProcessPoolExecutor) -> None:
-    """Tue de force tous les subprocesses de l'executor (nécessaire sur Windows :
-    shutdown(wait=False) ne tue PAS les processus en cours d'exécution)."""
+    """Forcibly kills every subprocess of the executor (necessary on Windows:
+    shutdown(wait=False) does NOT kill the processes that are running)."""
     try:
         for process in list(executor._processes.values()):
             try:
@@ -46,7 +46,7 @@ def _kill_executor(executor: concurrent.futures.ProcessPoolExecutor) -> None:
 
 
 def _fresh_executor_cpu() -> concurrent.futures.ProcessPoolExecutor:
-    """Crée un executor propre pré-initialisé en mode CPU forcé (1 worker, conservateur)."""
+    """Creates a clean executor pre-initialised in forced CPU mode (1 worker, conservative)."""
     ex = concurrent.futures.ProcessPoolExecutor(
         max_workers=1, initializer=init_background_process
     )
@@ -63,9 +63,9 @@ def _fresh_executor_cpu() -> concurrent.futures.ProcessPoolExecutor:
 
 
 def _fresh_executor_gpu() -> "concurrent.futures.ProcessPoolExecutor | None":
-    """Tente de recréer un executor GPU plein (_WORKERS workers) après un secours CPU.
-    Retourne None si le warmup échoue, pour laisser l'appelant rester sur CPU sans
-    interrompre le scan en cours."""
+    """Tries to recreate a full GPU executor (_WORKERS workers) after a CPU fallback.
+    Returns None if the warmup fails, to let the caller stay on the CPU without
+    interrupting the scan in progress."""
     ex = concurrent.futures.ProcessPoolExecutor(
         max_workers=_WORKERS, initializer=init_background_process
     )
@@ -82,10 +82,10 @@ def _fresh_executor_gpu() -> "concurrent.futures.ProcessPoolExecutor | None":
 
 
 class TFWarmUpThread(QThread):
-    """Conservé pour compatibilité — se termine immédiatement.
+    """Kept for compatibility — terminates immediately.
 
-    InsightFace/ONNX n'a pas de warmup UI-bloquant : le chargement des modèles
-    se fait dans le ProcessPoolExecutor worker via warmup_worker().
+    InsightFace/ONNX has no UI-blocking warmup: the models are loaded in the
+    ProcessPoolExecutor worker through warmup_worker().
     """
 
     def run(self) -> None:
@@ -134,13 +134,13 @@ class FaceIndexThread(QThread):
     def run(self) -> None:
         from src.core.thread_journal import journal, rss_mb
         self.setPriority(QThread.LowestPriority)
-        # setPriority() ne descend qu'à THREAD_PRIORITY_LOWEST (-2) ; IDLE (-15)
-        # place ce thread sous quasiment tout le reste du système.
+        # setPriority() only goes down to THREAD_PRIORITY_LOWEST (-2); IDLE (-15)
+        # puts this thread below nearly everything else on the system.
         lower_current_thread_priority()
-        # Ce thread-ci ne fait pas de gros calcul OpenCV (tout part en
-        # sous-processus, où init_background_process s'en charge), mais il
-        # décode et sauvegarde des vignettes de visages via cv2/PIL — et le
-        # réglage est de toute façon global au process.
+        # This thread does no heavy OpenCV computation itself (everything goes
+        # to subprocesses, where init_background_process takes care of it), but
+        # it decodes and saves face thumbnails through cv2/PIL — and the
+        # setting is global to the process anyway.
         limit_cv2_threads(1)
 
         from src.library.exif_reader import VIDEO_EXT
@@ -162,8 +162,8 @@ class FaceIndexThread(QThread):
         indexed = 0
         faces_found = 0
 
-        # Les DLLs nvidia sont ajoutées au PATH ici (processus parent) ;
-        # les subprocesses les héritent automatiquement.
+        # The nvidia DLLs are added to the PATH here (the parent process);
+        # the subprocesses inherit them automatically.
         from src.faces.detector import _register_nvidia_dll_dirs
         _register_nvidia_dll_dirs()
         executor = concurrent.futures.ProcessPoolExecutor(
@@ -171,7 +171,7 @@ class FaceIndexThread(QThread):
         )
         self._executor = executor
         try:
-            # ── Phase 1 : warmup des _WORKERS subprocesses ─────────────────
+            # ── Phase 1: warmup of the _WORKERS subprocesses ───────────────
             self.progress.emit(0, total)
             try:
                 warmup_futs = [executor.submit(warmup_worker) for _ in range(_WORKERS)]
@@ -189,11 +189,11 @@ class FaceIndexThread(QThread):
             except Exception as exc:
                 logger.warning("FaceIndexThread: warmup avertissement: %s", exc)
 
-            # ── Phase 2 : boucle de détection FIFO (_WORKERS en vol) ───────
-            # File d'attente ordonnée : (future, path, heure_soumission)
-            # On maintient exactement _WORKERS futures en cours simultanément.
-            # Pendant que le GPU traite l'image N (worker 1), le worker 2
-            # charge et préprocesse l'image N+1 sur CPU → pipeline GPU plein.
+            # ── Phase 2: FIFO detection loop (_WORKERS in flight) ──────────
+            # An ordered queue: (future, path, submission time)
+            # Exactly _WORKERS futures are kept running simultaneously.
+            # While the GPU processes image N (worker 1), worker 2 loads and
+            # preprocesses image N+1 on the CPU → the GPU pipeline stays full.
             in_flight: deque = deque()
             path_iter = iter(to_index)
             processed = 0
@@ -202,7 +202,7 @@ class FaceIndexThread(QThread):
             cpu_recovery_successes = 0
 
             def _enqueue() -> None:
-                """Remplit la file jusqu'à _WORKERS futures simultanées."""
+                """Fills the queue up to _WORKERS simultaneous futures."""
                 while len(in_flight) < _WORKERS:
                     path = next(path_iter, None)
                     if path is None:
@@ -220,7 +220,7 @@ class FaceIndexThread(QThread):
             while in_flight and not self._stop_flag:
                 fut, path, t_submit = in_flight[0]
 
-                # Temps restant avant timeout pour cette photo
+                # Time left before this photo times out
                 remaining = max(0.5, _DETECT_TIMEOUT - (time.monotonic() - t_submit))
 
                 processed += 1
@@ -240,15 +240,15 @@ class FaceIndexThread(QThread):
                     logger.error("FaceIndexThread: timeout %ds sur %s",
                                  _DETECT_TIMEOUT, os.path.basename(path))
                     journal.step("FaceIndexThread", f"TIMEOUT {os.path.basename(path)}", t0)
-                    # Ne PAS appeler save_faces() ici : la photo resterait marquée
-                    # "traitée" (indexed_photos, 0 visage) alors qu'elle n'a jamais
-                    # été réellement analysée. À la place, on l'enregistre dans
-                    # face_index_errors : elle ne sera plus retentée automatiquement
-                    # (évite de repayer 60s à chaque scan), seulement via le menu
-                    # contextuel "Retenter l'identification des visages".
+                    # Do NOT call save_faces() here: the photo would stay marked as
+                    # "processed" (indexed_photos, 0 faces) although it has never
+                    # really been analysed. Instead it is recorded in
+                    # face_index_errors: it will no longer be retried automatically
+                    # (avoids paying 60 s again at every scan), only through the
+                    # "Retry the face identification" context menu.
                     self._face_db.mark_index_error(path, "timeout")
                     in_flight.popleft()
-                    # Les autres futures en vol sont aussi invalides après kill
+                    # The other futures in flight are invalid too after a kill
                     for f, p, _ in in_flight:
                         processed += 1
                         self.progress.emit(processed, total)
@@ -269,16 +269,16 @@ class FaceIndexThread(QThread):
 
                 except concurrent.futures.BrokenExecutor as exc:
                     if self._stop_flag:
-                        # Executor tué par stop() (arrêt demandé pendant que
-                        # fut.result() bloquait, jusqu'à _DETECT_TIMEOUT=60s
-                        # sans ça) : pas un vrai crash, ne pas le compter
-                        # comme échec ni relancer un executor de secours.
+                        # Executor killed by stop() (a shutdown requested while
+                        # fut.result() was blocking, for up to _DETECT_TIMEOUT=60 s
+                        # without this): not a real crash, do not count it as a
+                        # failure nor start a fallback executor.
                         break
                     logger.error("FaceIndexThread: subprocess crashé sur %s",
                                  os.path.basename(path))
                     journal.step("FaceIndexThread", f"CRASH {os.path.basename(path)}", t0)
-                    # Ne PAS appeler save_faces() ici, pour la même raison qu'au timeout
-                    # ci-dessus : éviter de marquer une photo jamais analysée comme faite.
+                    # Do NOT call save_faces() here, for the same reason as at the timeout
+                    # above: avoid marking a photo that was never analysed as done.
                     self._face_db.mark_index_error(path, "crash")
                     in_flight.popleft()
                     for f, p, _ in in_flight:
@@ -311,7 +311,7 @@ class FaceIndexThread(QThread):
                     _enqueue()
                     continue
 
-                # Succès
+                # Success
                 in_flight.popleft()
                 consecutive_fails = 0
 
@@ -326,11 +326,11 @@ class FaceIndexThread(QThread):
                 if on_cpu_fallback:
                     cpu_recovery_successes += 1
                     if cpu_recovery_successes >= _GPU_RETRY_AFTER:
-                        # Un seul timeout/crash isolé ne doit pas condamner tout le reste
-                        # du scan à tourner en CPU 1 worker : après un nombre de succès
-                        # consécutifs, retenter le GPU. Purge d'abord les futures encore
-                        # en vol sur l'executor CPU (1 worker, donc peu coûteux) avant de
-                        # le tuer, pour ne pas perdre de travail déjà soumis.
+                        # A single isolated timeout/crash must not condemn all the rest of
+                        # the scan to run on 1 CPU worker: after a number of consecutive
+                        # successes, retry the GPU. Purge first the futures still in flight
+                        # on the CPU executor (1 worker, so cheap) before killing it, so as
+                        # not to lose work already submitted.
                         while in_flight and not self._stop_flag:
                             f2, p2, _ = in_flight.popleft()
                             processed += 1
@@ -358,14 +358,13 @@ class FaceIndexThread(QThread):
                         self._executor = executor
                         cpu_recovery_successes = 0
 
-                # Cycle de service du pipeline : la pause est prise *avant* de
-                # réalimenter la file, donc les _WORKERS sous-processus se
-                # vident et restent inoccupés pendant tout le sommeil — c'est
-                # ce qui bride réellement la charge, le travail lui-même ayant
-                # lieu hors de ce thread. Le régulateur mesure ici du temps
-                # d'horloge (l'attente sur fut.result() incluse) et non du temps
-                # CPU : sur un pipeline saturé, qui est le cas visé, les deux se
-                # confondent.
+                # Duty cycle of the pipeline: the pause is taken *before* the queue
+                # is refilled, so the _WORKERS subprocesses drain and stay idle for
+                # the whole sleep — that is what really throttles the load, the work
+                # itself taking place outside this thread. The regulator measures
+                # wall-clock time here (the wait on fut.result() included) and not
+                # CPU time: on a saturated pipeline, which is the case aimed at, the
+                # two are the same.
                 throttle_tick(lambda: self._stop_flag)
 
                 _enqueue()
@@ -392,12 +391,12 @@ class FaceIndexThread(QThread):
 
     def stop(self) -> None:
         self._stop_flag = True
-        # Sans ça, run() peut rester bloqué jusqu'à _DETECT_TIMEOUT (60s) ou
-        # _WARMUP_TIMEOUT (120s) dans un fut.result() en cours avant de
-        # seulement remarquer le flag — tuer l'executor fait échouer cet
-        # appel immédiatement (BrokenExecutor), ce qui débloque la boucle
-        # sans attendre. Contribue directement à un arrêt rapide de
-        # l'application (cf. MainWindow.closeEvent).
+        # Without this, run() can stay blocked for up to _DETECT_TIMEOUT (60 s) or
+        # _WARMUP_TIMEOUT (120 s) inside a fut.result() in progress before even
+        # noticing the flag — killing the executor makes that call fail
+        # immediately (BrokenExecutor), which unblocks the loop without waiting.
+        # Contributes directly to a fast shutdown of the application (cf.
+        # MainWindow.closeEvent).
         executor = self._executor
         if executor is not None:
             _kill_executor(executor)
@@ -405,7 +404,7 @@ class FaceIndexThread(QThread):
 
 class SingleFaceReindexThread(QThread):
     """
-    Re-détecte les visages d'une seule photo (typiquement après une rotation 90°).
+    Re-detects the faces of a single photo (typically after a 90° rotation).
 
     Signals
     -------
@@ -437,7 +436,7 @@ class SingleFaceReindexThread(QThread):
         try:
             detections = detect_and_embed(self._photo_path, rotation=self._rotation)
         except RuntimeError:
-            return   # insightface non installé
+            return   # insightface not installed
         except Exception as exc:
             logger.error("SingleFaceReindexThread erreur %s: %s", self._photo_path, exc)
             self.error.emit(self._photo_path, str(exc))
@@ -453,29 +452,29 @@ class SingleFaceReindexThread(QThread):
 
 class ForceRedetectThread(QThread):
     """
-    Menu contextuel "Forcer une nouvelle détection sans limite de taille" de la
-    visionneuse : re-détecte les visages d'une seule photo en court-circuitant le
-    seuil d'auto-ignorance par taille (FaceDatabase.save_faces(force_no_limit=True))
-    — plus aucun visage n'est marqué ignored=1 sur cette photo. Les visages
-    précédemment identifiés (person_id) sont réassociés à la nouvelle détection la
-    plus proche (IoU) par save_faces() lui-même ; les visages ajoutés manuellement
-    (jamais vus par InsightFace) ne sont pas touchés.
+    The "Force a new detection with no size limit" context menu of the viewer:
+    re-detects the faces of a single photo, short-circuiting the automatic
+    size-based ignore threshold (FaceDatabase.save_faces(force_no_limit=True))
+    — no face is marked ignored=1 on that photo any more. The previously
+    identified faces (person_id) are re-associated with the closest new
+    detection (IoU) by save_faces() itself; the manually added faces (never seen
+    by InsightFace) are left untouched.
 
-    Essaie deux orientations et garde la plus fructueuse :
-      1. la rotation d'édition courante (edits.db) — celle que l'utilisateur voit ;
-      2. la rotation de la dernière indexation (indexed_photos.rotation).
+    Tries two orientations and keeps the more fruitful one:
+      1. the current edit rotation (edits.db) — the one the user sees;
+      2. the rotation of the last indexing (indexed_photos.rotation).
 
-    Se contenter de la rotation indexée (comportement d'origine) re-détectait
-    éternellement dans une orientation périmée quand les deux ont divergé
-    (rotation annulée par Ctrl+Z, ou deux rotations enchaînées trop vite pour
-    être toutes indexées) — symptôme : 2 visages retrouvés sur 8, même en
-    détection forcée, sans qu'aucune action de l'UI puisse en sortir. Mais s'en
-    tenir à la seule rotation d'édition casserait le cas inverse, légitime et
-    fréquent : `detect_and_embed_auto` bascule volontairement sur 90/180/270
-    quand 0° ne trouve rien (photo prise de travers), et la rotation indexée est
-    alors la bonne alors que la photo s'affiche à 0°. D'où l'essai des deux, à
-    égalité de nombre de visages c'est la rotation d'édition qui gagne (repère
-    cohérent avec ce qui est affiché, cf. detected_rotation).
+    Sticking to the indexed rotation (the original behaviour) re-detected
+    forever in a stale orientation when the two had diverged (a rotation undone
+    by Ctrl+Z, or two rotations chained too fast to both be indexed) — symptom:
+    2 faces found out of 8, even in forced detection, with no action of the UI
+    able to get out of it. But sticking to the edit rotation alone would break
+    the opposite case, which is legitimate and frequent: `detect_and_embed_auto`
+    deliberately switches to 90/180/270 when 0° finds nothing (a photo taken
+    sideways), and the indexed rotation is then the right one although the photo
+    is displayed at 0°. Hence trying both; on an equal number of faces the edit
+    rotation wins (a frame of reference consistent with what is displayed, cf.
+    detected_rotation).
 
     Signals
     -------
@@ -497,7 +496,7 @@ class ForceRedetectThread(QThread):
         self._edit_db    = edit_db
 
     def _edit_rotation(self) -> "int | None":
-        """Rotation d'édition courante, ou None si edits.db est illisible."""
+        """Current edit rotation, or None if edits.db is unreadable."""
         try:
             db = self._edit_db
             if db is None:
@@ -512,7 +511,7 @@ class ForceRedetectThread(QThread):
             return None
 
     def _rotation_candidates(self) -> list[int]:
-        """Orientations à essayer, par ordre de préférence (cf. docstring)."""
+        """Orientations to try, in order of preference (cf. the docstring)."""
         indexed = self._face_db.get_indexed_rotation(self._photo_path) % 360
         edited = self._edit_rotation()
         if edited is None:
@@ -529,12 +528,12 @@ class ForceRedetectThread(QThread):
         try:
             for candidate in candidates:
                 found = detect_and_embed(self._photo_path, rotation=candidate)
-                # `>` strict : à égalité, la première candidate (rotation
-                # d'édition) est conservée.
+                # A strict `>`: on a tie, the first candidate (the edit
+                # rotation) is kept.
                 if len(found) > len(detections):
                     detections, rotation = found, candidate
         except RuntimeError:
-            return   # insightface non installé
+            return   # insightface not installed
         except Exception as exc:
             logger.error("ForceRedetectThread erreur %s: %s", self._photo_path, exc)
             self.error.emit(self._photo_path, str(exc))
@@ -553,15 +552,15 @@ class ForceRedetectThread(QThread):
 
 class RetryFaceIndexThread(QThread):
     """
-    Retente l'identification des visages d'une seule photo précédemment en erreur
-    (timeout ou nouveau crash du subprocess) — protection anti-blocage identique à
-    FaceIndexThread (subprocess + timeout), contrairement à SingleFaceReindexThread
-    qui appelle detect_and_embed() directement et pourrait bloquer indéfiniment sur
-    un fichier ayant déjà causé un timeout.
+    Retries the face identification of a single photo previously in error (a
+    timeout or a fresh crash of the subprocess) — the same anti-blocking
+    protection as FaceIndexThread (subprocess + timeout), unlike
+    SingleFaceReindexThread, which calls detect_and_embed() directly and could
+    block indefinitely on a file that has already caused a timeout.
 
-    En cas de nouvel échec, la photo reste enregistrée dans face_index_errors
-    (mark_index_error) pour proposer à l'utilisateur de la supprimer ou de
-    l'exclure définitivement (voir MainWindow._on_retry_face_index_finished).
+    On a fresh failure, the photo stays recorded in face_index_errors
+    (mark_index_error) so as to offer the user to delete it or to exclude it for
+    good (see MainWindow._on_retry_face_index_finished).
 
     Signals
     -------
@@ -609,7 +608,7 @@ class RetryFaceIndexThread(QThread):
                                  os.path.basename(path), exc)
                     self._face_db.mark_index_error(path, "crash")
                 except RuntimeError:
-                    unavailable = True  # insightface non installé
+                    unavailable = True  # insightface not installed
                 except Exception as exc:
                     logger.error("RetryFaceIndexThread erreur %s: %s", path, exc)
                     self._face_db.mark_index_error(path, "crash")
@@ -633,11 +632,11 @@ class RetryFaceIndexThread(QThread):
 
 
 class RevaluateSizeIgnoredThread(QThread):
-    """Réévalue les visages auto-ignorés par taille avec le seuil proportionnel actuel.
+    """Re-evaluates the faces auto-ignored by size with the current proportional threshold.
 
-    Ne relance pas InsightFace : met simplement à jour le flag ignored=0 pour les
-    faces dont la taille passe maintenant le seuil (recalculé à partir des dimensions
-    réelles de chaque photo).
+    Does not restart InsightFace: simply updates the ignored=0 flag for the faces
+    whose size now passes the threshold (recomputed from the real dimensions of
+    each photo).
     """
 
     progress = Signal(int, int)   # (current, total_photos)
@@ -659,14 +658,14 @@ class RevaluateSizeIgnoredThread(QThread):
 
 
 class SimilaritySearchThread(QThread):
-    """Compare les clusters non identifiés aux centroïdes des personnes nommées.
+    """Compares the unidentified clusters with the centroids of the named people.
 
-    Ne relance pas InsightFace : compare uniquement les embeddings existants.
+    Does not restart InsightFace: only compares the existing embeddings.
 
     Signals
     -------
-    progress(current, total)    — avancement (par cluster vérifié)
-    finished(suggestions, total) — nombre de suggestions créées / clusters vérifiés
+    progress(current, total)    — progress (per cluster checked)
+    finished(suggestions, total) — number of suggestions created / clusters checked
     """
 
     progress = Signal(int, int)

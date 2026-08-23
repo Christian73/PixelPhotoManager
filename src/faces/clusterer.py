@@ -13,47 +13,47 @@ from src.faces.face_database import FaceDatabase
 logger = logging.getLogger(__name__)
 
 _PCA_DIMS        = 32    # ball_tree efficace sous ~30 dims ; 32 conserve >90 % variance ArcFace
-_CLUSTER_TIMEOUT = 1800  # secondes max (30 min) avant abandon
+_CLUSTER_TIMEOUT = 1800  # seconds max (30 min) before giving up
 
-# Sentinelle : N de visages non-identifiés au dernier clustering réussi.
-# Permet de sauter le reclustering si rien n'a changé.
+# Sentinel: N of unidentified faces at the last successful clustering.
+# Lets the reclustering be skipped if nothing has changed.
 _last_clustered_n: int = -1
 
 
 def reset_clustering_cache() -> None:
-    """Invalide le cache de "dernier N regroupé" utilisé par `_run_clustering`
-    pour sauter le reclustering si rien n'a changé.
+    """Invalidates the "last N clustered" cache used by `_run_clustering` to skip
+    the reclustering if nothing has changed.
 
-    À appeler après tout `FaceDatabase.reset_clustering()`/`reset_index()` :
-    ces méthodes vident `cluster_id` en masse sans changer le nombre de
-    visages non identifiés (ré-indexation à l'identique) — sans cet appel,
-    `_run_clustering` voit `n == _last_clustered_n`, croit qu'aucun changement
-    n'est survenu et saute le regroupement, laissant tous les visages bloqués
-    avec `cluster_id=NULL` indéfiniment (bug constaté 2026-07 via
+    To be called after any `FaceDatabase.reset_clustering()`/`reset_index()`:
+    those methods wipe `cluster_id` en masse without changing the number of
+    unidentified faces (an identical re-indexing) — without this call,
+    `_run_clustering` sees `n == _last_clustered_n`, believes nothing has
+    changed and skips the grouping, leaving every face stuck with
+    `cluster_id=NULL` indefinitely (bug seen in 2026-07 through
     `test_faces_reset_full`)."""
     global _last_clustered_n
     _last_clustered_n = -1
 
-# Cohésion minimale (cosine) exigée entre TOUTE paire de visages d'un même groupe HDBSCAN,
-# alignée sur _SIM_STRONG (people_panel.py, "très probable"). min_samples=1 rend HDBSCAN
-# quasi équivalent à un single-linkage : deux visages peuvent se retrouver dans le même
-# cluster via une chaîne de voisins proches sans jamais se ressembler eux-mêmes.
+# Minimum cohesion (cosine) required between EVERY pair of faces of one same HDBSCAN
+# group, aligned on _SIM_STRONG (people_panel.py, "very likely"). min_samples=1 makes
+# HDBSCAN nearly equivalent to a single-linkage: two faces can end up in the same
+# cluster through a chain of close neighbours without ever resembling each other.
 _PURITY_MIN_SIM        = 0.60
-# Au-delà, la scission "complete linkage" (matrice de distances complète, O(k²)) coûterait
-# trop cher pour un seul groupe — cas pathologique, on le laisse tel quel plutôt que ralentir
-# tout le clustering.
+# Beyond that, the "complete linkage" split (a full distance matrix, O(k²)) would cost
+# too much for a single group — a pathological case, left as-is rather than slowing the
+# whole clustering down.
 _PURITY_MAX_CLUSTER_N  = 2000
 
 
 def _purify_clusters(X_full, labels):
-    """Scinde les clusters HDBSCAN dont certaines paires de visages sont trop dissemblables.
+    """Splits the HDBSCAN clusters some pairs of faces of which are too dissimilar.
 
-    Revérifie chaque cluster (hors bruit) avec un clustering hiérarchique "complete linkage"
-    sur les embeddings pleine dimension (normalisés, non réduits par PCA) : ce linkage borne
-    la dissemblance MAXIMALE entre deux membres — contrairement au chaînage de HDBSCAN — donc
-    un cluster n'en ressort intact que si toutes les paires qu'il contient dépassent
-    _PURITY_MIN_SIM. Les sous-groupes obtenus reçoivent de nouveaux labels (jamais fusionnés
-    entre eux au-delà de ce qu'HDBSCAN avait déjà proposé)."""
+    Rechecks each cluster (noise excluded) with a "complete linkage" hierarchical
+    clustering on the full-dimension embeddings (normalised, not reduced by PCA): that
+    linkage bounds the MAXIMUM dissimilarity between two members — unlike the chaining of
+    HDBSCAN — so a cluster only comes out of it intact if every pair it contains exceeds
+    _PURITY_MIN_SIM. The resulting sub-groups receive new labels (never merged with one
+    another beyond what HDBSCAN had already proposed)."""
     import numpy as np
     from sklearn.cluster import AgglomerativeClustering
 
@@ -74,30 +74,30 @@ def _purify_clusters(X_full, labels):
             distance_threshold=max_dist,
         ).fit_predict(X_full[idx])
         if sub_labels.max() == 0:
-            continue  # groupe déjà cohérent : rien à scinder
+            continue  # group already cohesive: nothing to split
         for sub_id in np.unique(sub_labels):
             if sub_id == 0:
-                continue  # garde le label HDBSCAN d'origine pour le premier sous-groupe
+                continue  # keeps the original HDBSCAN label for the first sub-group
             labels[idx[sub_labels == sub_id]] = next_label
             next_label += 1
 
     return labels
 
 
-_NB_SP = " "  # espace fine insécable utilisée comme séparateur de milliers
+_NB_SP = " "  # narrow no-break space used as a thousands separator
 
 
 def _clustering_worker_proc(X_bytes: bytes, n: int, d: int, conn) -> None:
     """
-    PCA + HDBSCAN dans un sous-processus isolé.
+    PCA + HDBSCAN in an isolated subprocess.
 
-    Envoie des messages de progression via le pipe :
-      ("pca",)                       — normalisation terminée, PCA démarre
-      ("hdbscan",)                   — PCA terminée, HDBSCAN démarre
-      ("result", n_clusters, n_singletons, labels)  — terminé avec succès
-      ("error", message)             — exception inattendue
+    Sends progress messages through the pipe:
+      ("pca",)                       — normalisation finished, PCA starting
+      ("hdbscan",)                   — PCA finished, HDBSCAN starting
+      ("result", n_clusters, n_singletons, labels)  — finished successfully
+      ("error", message)             — unexpected exception
 
-    Doit être MODULE-LEVEL pour être picklable sur Windows (spawn).
+    Must be MODULE-LEVEL to be picklable on Windows (spawn).
     """
     import numpy as np
     from hdbscan import HDBSCAN
@@ -106,13 +106,13 @@ def _clustering_worker_proc(X_bytes: bytes, n: int, d: int, conn) -> None:
     try:
         X = np.frombuffer(X_bytes, dtype=np.float32).reshape(n, d).copy()
 
-        # Normalisation L2 → sphère unité
+        # L2 normalisation → unit sphere
         norms = np.linalg.norm(X, axis=1, keepdims=True)
         norms[norms == 0] = 1.0
         X /= norms
-        X_full = X  # embeddings pleine dimension normalisés — conservés pour _purify_clusters
+        X_full = X  # full-dimension normalised embeddings — kept for _purify_clusters
 
-        # Réduction PCA
+        # PCA reduction
         if X.shape[1] > _PCA_DIMS and n > _PCA_DIMS:
             conn.send(("pca",))
             X = PCA(n_components=_PCA_DIMS, random_state=42).fit_transform(X).astype(np.float32)
@@ -122,9 +122,9 @@ def _clustering_worker_proc(X_bytes: bytes, n: int, d: int, conn) -> None:
 
         conn.send(("hdbscan",))
 
-        # hdbscan package (C++/Cython) — beaucoup plus rapide que sklearn pour grands n.
-        # boruvka_balltree : MST Borůvka O(n log²n) vs Prim O(n²) avec sklearn.
-        # core_dist_n_jobs=1 : 1 thread → évite duplication des buffers mémoire.
+        # hdbscan package (C++/Cython) — much faster than sklearn for large n.
+        # boruvka_balltree: Borůvka MST O(n log²n) vs Prim O(n²) with sklearn.
+        # core_dist_n_jobs=1: 1 thread → avoids duplicating the memory buffers.
         labels = HDBSCAN(
             min_cluster_size=2,
             min_samples=1,
@@ -135,8 +135,8 @@ def _clustering_worker_proc(X_bytes: bytes, n: int, d: int, conn) -> None:
             core_dist_n_jobs=1,
         ).fit_predict(X)
 
-        # min_samples=1 chaîne facilement des visages peu similaires entre eux (single-linkage) :
-        # revérifier chaque cluster en pleine dimension avant de l'accepter tel quel.
+        # min_samples=1 easily chains faces that are not very similar to one another
+        # (single-linkage): recheck each cluster in full dimension before accepting it as-is.
         labels = _purify_clusters(X_full, labels)
 
         labels = labels.tolist()
@@ -160,7 +160,7 @@ def _clustering_worker_proc(X_bytes: bytes, n: int, d: int, conn) -> None:
 
 
 def _fmt_n(n: int) -> str:
-    """Formate un entier avec espace fine insécable comme séparateur de milliers."""
+    """Formats an integer with a narrow no-break space as a thousands separator."""
     return f"{n:,}".replace(",", _NB_SP)
 
 
@@ -169,19 +169,19 @@ def _run_clustering(
     progress_cb: Callable[[str], None] | None = None,
 ) -> int:
     """
-    HDBSCAN clustering sur les embeddings ArcFace normalisés.
+    HDBSCAN clustering on the normalised ArcFace embeddings.
 
-    Pipeline :
-    1. Assignation synthétique des cluster_ids pour les visages déjà identifiés.
-    2. Normalisation L2 → sphère unité sur les visages non identifiés.
+    Pipeline:
+    1. Synthetic assignment of the cluster_ids for the already identified faces.
+    2. L2 normalisation → unit sphere on the unidentified faces.
     3. PCA 512 → _PCA_DIMS dims + re-normalisation.
-    4. HDBSCAN euclidien ball_tree.
+    4. Euclidean ball_tree HDBSCAN.
 
-    Le calcul s'exécute dans un subprocess isolé via multiprocessing.Process + Pipe.
-    Les étapes sont remontées au thread appelant via progress_cb(message).
+    The computation runs in an isolated subprocess through multiprocessing.Process + Pipe.
+    The stages are reported back to the calling thread through progress_cb(message).
 
     Safe to call from any thread.
-    Returns number of distinct clusters (singletons exclus).
+    Returns number of distinct clusters (singletons excluded).
     Raises RuntimeError if deps missing.
     """
     global _last_clustered_n
@@ -203,8 +203,8 @@ def _run_clustering(
         logger.debug("Clustering: aucun visage (tous déjà identifiés)")
         return 0
 
-    # Skip si aucun changement depuis le dernier clustering réussi :
-    # même N de visages non-identifiés ET aucune assignation synthétique nouvelle.
+    # Skip if nothing has changed since the last successful clustering:
+    # the same N of unidentified faces AND no new synthetic assignment.
     if n == _last_clustered_n and n_synthetic == 0:
         logger.debug("Clustering: %d visages inchangés — skip", n)
         return 0
@@ -231,7 +231,7 @@ def _run_clustering(
         daemon=True,
     )
     proc.start()
-    child_conn.close()   # ferme le bout enfant dans le processus parent
+    child_conn.close()   # closes the child end in the parent process
 
     deadline = time.monotonic() + _CLUSTER_TIMEOUT
     result_labels = None
@@ -287,7 +287,7 @@ def _run_clustering(
                     return 0
 
             else:
-                # poll timeout (1 s) — mise à jour du chronomètre pendant HDBSCAN
+                # poll timeout (1 s) — updates the stopwatch during HDBSCAN
                 if hdbscan_start is not None and progress_cb:
                     elapsed = int(time.monotonic() - hdbscan_start)
                     m, s = divmod(elapsed, 60)
@@ -298,8 +298,8 @@ def _run_clustering(
                     )
                 if not proc.is_alive():
                     exitcode = proc.exitcode
-                    # exitcode < 0 → tué par signal (OOM=-9 sur Linux, ~-1073741819 sur Windows)
-                    # exitcode > 0 → exception non rattrapée dans le worker
+                    # exitcode < 0 → killed by a signal (OOM=-9 on Linux, ~-1073741819 on Windows)
+                    # exitcode > 0 → uncaught exception in the worker
                     logger.error(
                         "Clustering subprocess mort prématurément"
                         " (exitcode=%s, %d visages, hdbscan_elapsed=%ss)",
@@ -339,9 +339,9 @@ class ClusterThread(QThread):
 
     Signals
     -------
-    progress(message)      — étape en cours (pour la barre de status)
-    finished(n_clusters)   — clustering terminé, n groupes distincts trouvés
-    error(message)         — dépendance manquante ou autre échec
+    progress(message)      — current stage (for the status bar)
+    finished(n_clusters)   — clustering finished, n distinct groups found
+    error(message)         — a missing dependency or another failure
     """
 
     progress = Signal(str)

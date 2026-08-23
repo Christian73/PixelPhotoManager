@@ -78,11 +78,11 @@ def _bbox_raw_to_exif(rx: int, ry: int, rw: int, rh: int,
                       raw_W: int, raw_H: int,
                       orientation: int) -> tuple[int, int, int, int]:
     """
-    Transforme une bbox du repère image brute (stockée) vers le repère
-    EXIF-corrigé (affiché), selon l'orientation EXIF (tag 274).
+    Transforms a bbox from the raw image frame of reference (as stored) into the
+    EXIF-corrected one (as displayed), according to the EXIF orientation (tag 274).
 
-    Picasa stocke les rect64 en coordonnées de l'image brute sur disque.
-    Tout le reste du système travaille en coordonnées EXIF-corrigées.
+    Picasa stores the rect64 in the coordinates of the raw image on disk.
+    All the rest of the system works in EXIF-corrected coordinates.
     """
     if orientation in (None, 1):
         return rx, ry, rw, rh
@@ -137,7 +137,7 @@ def _parse_section_edits(cp: configparser.RawConfigParser, section: str) -> dict
         except ValueError:
             pass
 
-    # Crop: crop=rect64(hex) ou crop64=hex (Picasa >= 3)
+    # Crop: crop=rect64(hex) or crop64=hex (Picasa >= 3)
     for key in ("crop", "crop64"):
         if cp.has_option(section, key):
             val = cp.get(section, key).strip()
@@ -160,16 +160,16 @@ def _picasa_to_edit_steps(
     raw: dict, corrected_size: tuple[int, int] | None = None,
 ) -> list[tuple[str, EditInfo]]:
     """
-    Convertit un dict de retouches Picasa en une liste de (label, EditInfo cumulé),
-    une entrée par filtre Picasa dans l'ordre du pipeline.
-    Chaque EditInfo est l'état *accumulé* après application du filtre courant.
-    Enregistrer chaque étape dans edit_history permet un undo filtre par filtre.
-    Retourne [] si aucune retouche n'est trouvée.
+    Converts a dict of Picasa edits into a list of (label, cumulated EditInfo),
+    one entry per Picasa filter in the order of the pipeline.
+    Each EditInfo is the *accumulated* state after the current filter is applied.
+    Recording each step in edit_history allows a filter-by-filter undo.
+    Returns [] if no edit is found.
 
-    `corrected_size` (largeur, hauteur EXIF-corrigées) n'est nécessaire que pour
-    le format de crop alternatif stocké dans la chaîne `filters=` (coordonnées
-    pixel absolues, contrairement au `crop`/`crop64` top-level qui encode des
-    fractions 0-1 via rect64) ; sans lui ce format alternatif est ignoré.
+    `corrected_size` (EXIF-corrected width, height) is only necessary for the
+    alternative crop format stored in the `filters=` string (absolute pixel
+    coordinates, unlike the top-level `crop`/`crop64`, which encodes 0-1
+    fractions through rect64); without it that alternative format is ignored.
     """
     steps: list[tuple[str, EditInfo]] = []
     edit = EditInfo()
@@ -192,11 +192,10 @@ def _picasa_to_edit_steps(
             edit.crop = (left, top, right - left, bottom - top)
             steps.append(("picasa_crop", copy.copy(edit)))
     elif "crop" in filters and corrected_size:
-        # crop=enabled,left,top,right,bottom en pixels absolus, déjà dans le
-        # repère EXIF-corrigé (confirmé empiriquement : contrairement au rect64,
-        # ces coordonnées dépassent les dimensions brutes sur les photos avec
-        # orientation EXIF non triviale mais tiennent dans les dimensions
-        # corrigées).
+        # crop=enabled,left,top,right,bottom in absolute pixels, already in the
+        # EXIF-corrected frame of reference (confirmed empirically: unlike rect64,
+        # these coordinates exceed the raw dimensions on photos with a non-trivial
+        # EXIF orientation but fit within the corrected ones).
         p = filters["crop"]
         cw, ch = corrected_size
         if p and p[0] >= 1 and len(p) >= 5 and cw > 0 and ch > 0:
@@ -214,8 +213,8 @@ def _picasa_to_edit_steps(
         steps.append(("picasa_bw", copy.copy(edit)))
 
     # Tilt / straighten: tilt=enabled,value[,0]
-    # Picasa stocke la valeur dans [-π/4, π/4] correspondant à [-2.5°, +2.5°] (empirique).
-    # Signe inversé par rapport à notre convention de redressement.
+    # Picasa stores the value in [-π/4, π/4], corresponding to [-2.5°, +2.5°] (empirical).
+    # The sign is inverted with respect to our straightening convention.
     if "tilt" in filters:
         p = filters["tilt"]
         if p and p[0] >= 1 and len(p) >= 2 and p[1] != 0.0:
@@ -248,7 +247,7 @@ def _picasa_to_edit_steps(
             if changed:
                 steps.append(("picasa_finetune2", copy.copy(edit)))
 
-    # Fill light: fill=enabled,amount (0..1) → brightness (filtre dédié Picasa)
+    # Fill light: fill=enabled,amount (0..1) → brightness (a dedicated Picasa filter)
     if "fill" in filters:
         p = filters["fill"]
         if p and p[0] >= 1 and len(p) >= 2 and p[1] != 0.0:
@@ -274,7 +273,7 @@ def _picasa_to_edit_steps(
             edit.brightness = max(-1.0, min(1.0, edit.brightness + p[1]))
             steps.append(("picasa_lumi", copy.copy(edit)))
 
-    # Auto-éclairage: autolight=enabled,amount (0..1)
+    # Auto-lighting: autolight=enabled,amount (0..1)
     if "autolight" in filters:
         p = filters["autolight"]
         if p and p[0] >= 1 and len(p) >= 2 and p[1] != 0.0:
@@ -284,7 +283,7 @@ def _picasa_to_edit_steps(
             edit.contrast   = max(-1.0, min(1.0, edit.contrast   + amount * 0.20))
             steps.append(("picasa_autolight", copy.copy(edit)))
 
-    # Saturation dédiée (Picasa < 3)
+    # Dedicated saturation (Picasa < 3)
     if "sat" in filters:
         p = filters["sat"]
         if p and p[0] >= 1 and len(p) >= 2 and p[1] != 0.0:
@@ -315,7 +314,7 @@ def _picasa_to_edit_steps(
 
 
 def _picasa_to_edit_info(raw: dict) -> EditInfo | None:
-    """Retourne l'état final fusionné (dernier step). Wrapper de _picasa_to_edit_steps."""
+    """Returns the final merged state (the last step). A wrapper around _picasa_to_edit_steps."""
     steps = _picasa_to_edit_steps(raw)
     return steps[-1][1] if steps else None
 
@@ -389,9 +388,9 @@ def scan(folders: list[str]) -> tuple[int, int, int]:
     -------
     (n_contacts, n_photos_with_faces, n_photos_with_edits)
     """
-    # Doit refléter exactement le comptage de _run_import() (contacts globaux
-    # + contacts locaux par picasa.ini, dédupliqués par nom puisque
-    # _run_import() crée une personne par nom distinct, pas par hash).
+    # Must reflect exactly the counting of _run_import() (global contacts
+    # + local contacts per picasa.ini, deduplicated by name since
+    # _run_import() creates one person per distinct name, not per hash).
     all_contacts: dict[str, str] = {}
     cx = find_contacts_xml()
     if cx:
@@ -428,7 +427,7 @@ def _run_import(
     catalog,
     face_db,
     folders: list[str],
-    edit_db=None,           # EditDatabase optionnel pour importer les retouches
+    edit_db=None,           # an optional EditDatabase, to import the edits
     progress_cb=None,       # callable(current: int, total: int) → None
 ) -> PicasaImportResult:
     result = PicasaImportResult()
@@ -464,10 +463,10 @@ def _run_import(
             result.persons_created += 1
         hash_to_person_id[h] = existing_persons[name].id
 
-    # Nettoyage des person_ids orphelins : faces et annotations qui référencent
-    # d'anciens IDs devenus invalides (après réinitialisation de catalog.db).
-    # Sans ce nettoyage, les faces portant l'ancien ID restent « invisibles »
-    # même si la personne existe à nouveau avec un nouvel ID.
+    # Cleanup of the orphan person_ids: faces and annotations referencing old
+    # IDs that have become invalid (after a reset of catalog.db). Without this
+    # cleanup, the faces carrying the old ID stay "invisible" even if the person
+    # exists again with a new ID.
     all_valid_ids = {p.id for p in existing_persons.values()}
     face_db.cleanup_orphan_person_ids(all_valid_ids)
 
@@ -487,7 +486,7 @@ def _run_import(
                 with Image.open(str(photo_path)) as img:
                     raw_w, raw_h = img.size
                     exif_ori = img.getexif().get(274, 1)
-                    # Dimensions après correction EXIF (repère de travail du système)
+                    # Dimensions after EXIF correction (the working frame of reference of the system)
                     corr = ImageOps.exif_transpose(img)
                     img_w, img_h = corr.size
             except Exception:
@@ -497,12 +496,12 @@ def _run_import(
             for rect_hex, person_hash in entries:
                 try:
                     lf, tf, rf, bf = _decode_rect64(rect_hex)
-                    # Picasa stocke les rect64 en coordonnées de l'image brute
+                    # Picasa stores the rect64 in the coordinates of the raw image
                     rx = int(lf * raw_w)
                     ry = int(tf * raw_h)
                     rw = int((rf - lf) * raw_w)
                     rh = int((bf - tf) * raw_h)
-                    # Transformer vers l'espace EXIF-corrigé
+                    # Transform into the EXIF-corrected space
                     x, y, w, h = _bbox_raw_to_exif(rx, ry, rw, rh, raw_w, raw_h, exif_ori)
                     if w < 10 or h < 10:
                         continue
@@ -515,13 +514,13 @@ def _run_import(
             if not annotations:
                 continue
 
-            # Stocker en table dédiée ; sera appliqué lors de la détection ArcFace
-            # (ou immédiatement si la photo est déjà détectée)
+            # Store in a dedicated table; will be applied during the ArcFace detection
+            # (or immediately if the photo is already detected)
             face_db.save_picasa_annotations(str(photo_path), annotations)
             result.faces_imported  += len(annotations)
             result.photos_processed += 1
 
-        # Import des retouches Picasa (seulement si demandé et photo non encore retouchée)
+        # Import of the Picasa edits (only if requested and if the photo is not edited yet)
         if edit_db is not None:
             for filename, raw in edits_map.items():
                 photo_path = folder / filename
@@ -529,7 +528,7 @@ def _run_import(
                     continue
                 path_str = os.path.normpath(str(photo_path))
                 if edit_db.has_edits(path_str):
-                    continue  # ne pas écraser les retouches existantes
+                    continue  # do not overwrite the existing edits
 
                 corrected_size = None
                 if "crop" not in raw and "crop" in raw.get("filters", {}):
@@ -542,20 +541,20 @@ def _run_import(
 
                 steps = _picasa_to_edit_steps(raw, corrected_size)
                 if steps:
-                    # État vierge = point de départ pour undo complet
+                    # A blank state = the starting point for a full undo
                     edit_db.save(path_str, EditInfo(), operation="picasa_before")
                     for op_name, step_edit in steps:
                         edit_db.save(path_str, step_edit, operation=op_name)
                     result.edits_imported += 1
                     result.edited_map[path_str] = steps[-1][1]
 
-    # Nettoyage 1 : placeholders qui chevauchent une face ArcFace (même région,
-    # person_id différents — contacts Picasa ≠ cluster ArcFace).
+    # Cleanup 1: placeholders overlapping an ArcFace face (the same region,
+    # different person_ids — Picasa contacts ≠ ArcFace cluster).
     n_dupes = face_db.cleanup_overlapping_placeholders()
     if n_dupes:
         result.faces_imported = max(0, result.faces_imported - n_dupes)
-    # Nettoyage 2 : placeholders orphelins dont le person_id n'apparaît plus dans
-    # aucune annotation Picasa courante (résidus d'anciens imports avec IDs différents).
+    # Cleanup 2: orphan placeholders whose person_id no longer appears in any
+    # current Picasa annotation (residue of older imports with different IDs).
     face_db.cleanup_stale_placeholder_faces()
 
     logger.info(

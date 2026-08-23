@@ -1,15 +1,15 @@
 ﻿# Copyright 2026 Christian Guyot
 # SPDX-License-Identifier: Apache-2.0
 """
-Détection et configuration GPU pour TensorFlow / DeepFace.
+GPU detection and configuration for TensorFlow / DeepFace.
 
-Sur Windows natif, TensorFlow >= 2.11 ne supporte pas CUDA.
-L'accélération GPU sur Windows passe par le plugin DirectML :
+On native Windows, TensorFlow >= 2.11 does not support CUDA.
+GPU acceleration on Windows goes through the DirectML plugin:
     pip install tensorflow-directml-plugin
 
-Ce module détecte :
-  1. GPU disponible via TF (DirectML ou CUDA selon la plateforme)
-  2. Matériel GPU présent via nvidia-smi (pour information même sans support TF)
+This module detects:
+  1. the GPU available through TF (DirectML or CUDA depending on the platform)
+  2. the GPU hardware present through nvidia-smi (for information, even without TF support)
 """
 
 import logging
@@ -26,13 +26,13 @@ _device_label: str = ""
 
 def configure() -> str:
     """
-    Configure TensorFlow pour GPU si disponible et retourne un label lisible.
+    Configures TensorFlow for the GPU if available and returns a readable label.
 
-    Exemples de retour :
-        "GPU : NVIDIA GeForce RTX 3070 (8 Go)  [DirectML]"
-        "GPU : NVIDIA GeForce RTX 3070 (8 Go)  [CUDA]"
-        "CPU  (GPU détecté : RTX 3070 — installez tensorflow-directml-plugin)"
-        "CPU  (aucun GPU détecté)"
+    Examples of return values:
+        "GPU: NVIDIA GeForce RTX 3070 (8 GB)  [DirectML]"
+        "GPU: NVIDIA GeForce RTX 3070 (8 GB)  [CUDA]"
+        "CPU  (GPU found: RTX 3070 — install tensorflow-directml-plugin)"
+        "CPU  (no GPU found)"
     """
     global _configured, _device_label
     if _configured:
@@ -54,7 +54,7 @@ def configure() -> str:
         return _device_label
 
     if gpus:
-        # GPU disponible pour TF (DirectML ou CUDA)
+        # a GPU available to TF (DirectML or CUDA)
         for gpu in gpus:
             try:
                 tf.config.experimental.set_memory_growth(gpu, True)
@@ -68,7 +68,7 @@ def configure() -> str:
         logger.info("gpu_utils : %s", _device_label)
         return _device_label
 
-    # Pas de GPU utilisable par TF — chercher quand même le matériel présent
+    # No GPU usable by TF — look for the hardware present anyway
     hw = _hardware_gpu_name()
     if hw and sys.platform == "win32":
         _device_label = translate(
@@ -91,7 +91,7 @@ def configure() -> str:
 
 
 def _detect_backend() -> str:
-    """Détermine si TF utilise DirectML ou CUDA."""
+    """Determines whether TF uses DirectML or CUDA."""
     try:
         import tensorflow as tf
         plugins = tf.config.list_logical_devices()
@@ -104,7 +104,7 @@ def _detect_backend() -> str:
 
 
 def _hardware_gpu_name() -> str:
-    """Retourne le nom du premier GPU NVIDIA via nvidia-smi (ou chaîne vide)."""
+    """Returns the name of the first NVIDIA GPU through nvidia-smi (or an empty string)."""
     try:
         import subprocess
         r = subprocess.run(
@@ -123,7 +123,7 @@ def _hardware_gpu_name() -> str:
 
 
 def _gpu_detail(tf_name: str) -> str:
-    """Enrichit le nom TF avec la VRAM via nvidia-smi si possible."""
+    """Enriches the TF name with the VRAM through nvidia-smi if possible."""
     import re
     m = re.search(r":(\d+)$", tf_name)
     idx = int(m.group(1)) if m else 0
@@ -146,5 +146,5 @@ def _gpu_detail(tf_name: str) -> str:
 
 
 def device_label() -> str:
-    """Retourne le label du device (configure() si nécessaire)."""
+    """Returns the label of the device (calls configure() if necessary)."""
     return _device_label if _configured else configure()
