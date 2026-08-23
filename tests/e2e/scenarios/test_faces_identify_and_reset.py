@@ -1,41 +1,41 @@
 # Copyright 2026 Christian Guyot
 # SPDX-License-Identifier: Apache-2.0
-"""Scénario bout-en-bout : identification de visages, fusion de personnes,
-ignorer/restaurer un visage, et réinitialisation du regroupement. Utilise
-`isolated_app_with_faces` (7 photos : 3 "Personne A", 3 "Personne B", 1 photo
-des deux ensemble — voir `tests/e2e/fixtures/faces/`).
+"""End-to-end scenario: face identification, person merge, ignoring/restoring
+a face, and reset of the grouping. Uses `isolated_app_with_faces` (7 photos:
+3 "Personne A", 3 "Personne B", 1 photo of both together -- see
+`tests/e2e/fixtures/faces/`).
 
-`test_faces_identify_and_reset` : un seul lancement, étapes séquentielles :
-1. Attente de la fin du scan + de l'indexation ArcFace + du premier
-   regroupement HDBSCAN automatique.
-2. Identification d'un visage isolé (nouvelle personne) depuis la
-   visionneuse — `FacePanel` / `_AssignDialog` (people_panel.py:187) →
+`test_faces_identify_and_reset`: a single launch, sequential steps:
+1. Wait for the end of the scan + of the ArcFace indexing + of the first
+   automatic HDBSCAN grouping.
+2. Identification of an isolated face (new person) from the viewer --
+   `FacePanel` / `_AssignDialog` (people_panel.py:187) ->
    `FaceDatabase.isolate_and_assign_face`.
-3. Identification d'un groupe entier (nouvelle personne) depuis
-   `FaceClusterGrid` (bouton ✓ superposé de `_ClusterCard`, nom accessible
-   `facecluster::<id>` ajouté pour ce test — même principe que
-   `_DuplicateCard`/`dupgroup::<id>`) → `FaceDatabase.assign_person_to_cluster`.
-4. Fusion des deux personnes créées ci-dessus via le menu contextuel de la
-   sidebar (« Fusionner avec… ») → `people_panel.py::MergePersonsDialog` →
+3. Identification of a whole group (new person) from `FaceClusterGrid`
+   (the overlaid check button of `_ClusterCard`, accessible name
+   `facecluster::<id>` added for this test -- same principle as
+   `_DuplicateCard`/`dupgroup::<id>`) -> `FaceDatabase.assign_person_to_cluster`.
+4. Merge of the two people created above through the context menu of the
+   sidebar ("Merge with…") -> `people_panel.py::MergePersonsDialog` ->
    `FaceDatabase.merge_persons` + `Catalog.delete_person`.
-5. Ignorer un visage (menu contextuel « Ignorer ce visage ») puis restaurer
-   via `_IgnoredFacesDialog` (bouton « Restaurer » PUIS fermeture du
-   dialogue — seul déclencheur réel de `unignore_face`, cf.
+5. Ignore a face ("Ignore this face" context menu) then restore it through
+   `_IgnoredFacesDialog` (the "Restore" button THEN closing the dialog --
+   the only real trigger of `unignore_face`, cf.
    `FacePanel._on_show_ignored`).
-6. Réinitialisation « Réinitialiser les groupes uniquement » (rapide, non
-   destructrice, RESET_CLUSTERING) — vérifie que `FaceDatabase.reset_clustering()`
-   ne touche que les visages non identifiés/non épinglés : les personnes
-   créées aux étapes 2-4 doivent survivre intactes.
+6. Reset "groups only" (fast, non-destructive, RESET_CLUSTERING) -- checks
+   that `FaceDatabase.reset_clustering()` only touches the
+   unidentified/unpinned faces: the people created at steps 2-4 must survive
+   intact.
 
-Aucune hypothèse n'est faite sur la topologie exacte du regroupement HDBSCAN
-(pas garanti reproductible sur des visages générés par IA) : chaque étape
-interroge `faces.db` directement pour trouver un visage/cluster candidat
-plutôt que de deviner un id ou un nombre de groupes.
+No assumption is made about the exact topology of the HDBSCAN grouping (not
+guaranteed to be reproducible on AI-generated faces): every step queries
+`faces.db` directly to find a candidate face/cluster rather than guessing an
+id or a number of groups.
 
-`test_faces_reset_full` : lancement isolé séparé (le mode RESET_FULL est
-destructeur — efface entièrement `faces`/`indexed_photos` puis relance une
-indexation complète — il corromprait l'état nécessaire aux étapes 2-5
-ci-dessus s'il partageait le même lancement)."""
+`test_faces_reset_full`: a separate isolated launch (the RESET_FULL mode is
+destructive -- it completely erases `faces`/`indexed_photos` then restarts a
+full indexing -- and it would corrupt the state needed by steps 2-5 above if
+it shared the same launch)."""
 from __future__ import annotations
 
 import sqlite3
@@ -69,10 +69,10 @@ def _query_all(db_path: Path, sql: str, params: tuple = ()) -> list[tuple]:
 
 
 def _wait_faces_ready(faces_db: Path, photo_paths: list[str], *, timeout: float = 300.0) -> None:
-    """Attend la fin du scan + de l'indexation ArcFace + du premier
-    regroupement HDBSCAN automatique (déclenché sans interaction dès que
-    l'indexation détecte au moins un visage, cf. main_window_faces.py
-    ::_on_face_indexing_finished) pour les 7 photos de la fixture."""
+    """Waits for the end of the scan + of the ArcFace indexing + of the first
+    automatic HDBSCAN grouping (triggered with no interaction as soon as the
+    indexing detects at least one face, cf. main_window_faces.py
+    ::_on_face_indexing_finished) for the 7 photos of the fixture."""
     placeholders = ",".join("?" * len(photo_paths))
     wait_for_condition(
         lambda: query_one(
@@ -100,13 +100,13 @@ def _wait_faces_ready(faces_db: Path, photo_paths: list[str], *, timeout: float 
 
 
 def _find_name_input(window):
-    """Repère le `QLineEdit` "Nom de la personne…" de `_AssignDialog` par
-    proximité verticale avec le radio "Créer une nouvelle personne" — même
-    principe que `_find_edit_near_text` dans test_folder_management.py
-    (adapté à un `QRadioButton` plutôt qu'un `QLabel`) : un `QLineEdit` vide
-    n'expose pas de façon fiable son texte de substitution via UIA, et
-    d'autres `Edit` (filtre de la sidebar, recherche de personnes) coexistent
-    dans l'arbre pendant que le dialogue est ouvert."""
+    """Locates the "Nom de la personne…" `QLineEdit` of `_AssignDialog` by
+    vertical proximity with the "Créer une nouvelle personne" radio button --
+    same principle as `_find_edit_near_text` in test_folder_management.py
+    (adapted to a `QRadioButton` rather than a `QLabel`): an empty `QLineEdit`
+    does not reliably expose its placeholder text through UIA, and other
+    `Edit` controls (sidebar filter, people search) coexist in the tree while
+    the dialog is open."""
     anchor = find_radio_button(window, "Créer une nouvelle personne")
     a_rect = anchor.rectangle()
     a_mid = (a_rect.top + a_rect.bottom) / 2
@@ -118,9 +118,9 @@ def _find_name_input(window):
 
 
 def _find_person_list_item(window, name_substring: str, *, timeout: float = 15.0):
-    """Repère un élément de `Sidebar._persons_list` par sous-chaîne de nom
-    (libellé "Nom  (n)", cf. sidebar.py::refresh_persons) — même principe que
-    `_find_tree_item` dans test_folder_management.py, adapté à
+    """Locates an item of `Sidebar._persons_list` by name substring (label
+    "Name  (n)", cf. sidebar.py::refresh_persons) -- same principle as
+    `_find_tree_item` in test_folder_management.py, adapted to
     `control_type="ListItem"`."""
     deadline = time.monotonic() + timeout
     last_exc: Exception | None = None
@@ -147,16 +147,16 @@ def test_faces_identify_and_reset(isolated_app_with_faces):
 
     _wait_faces_ready(faces_db, face_photo_paths)
 
-    # ---- 2. Identifier un visage isolé (nouvelle personne) ----
+    # ---- 2. Identify an isolated face (new person) ----
     solo_face_id, solo_photo_path = _query_all(
         faces_db,
         "SELECT id, photo_path FROM faces WHERE ignored=0 ORDER BY id LIMIT 1",
     )[0]
 
     open_photo_in_viewer(window, solo_photo_path)
-    # `_act_faces_toggle` (main_window.py) est un QPushButton *checkable* : Qt
-    # l'expose à UIA sous control_type="CheckBox", pas "Button" — find_dialog_button
-    # (filtré sur Button) ne le trouve jamais, d'où find_checkbox ici.
+    # `_act_faces_toggle` (main_window.py) is a *checkable* QPushButton: Qt
+    # exposes it to UIA as control_type="CheckBox", not "Button" -- find_dialog_button
+    # (filtered on Button) never finds it, hence find_checkbox here.
     find_checkbox(window, "Faces").click_input()
     right_click_and_click_context_menu_item(
         lambda: find_by_accessible_name(window, f"faceitem::{solo_face_id}"),
@@ -179,13 +179,13 @@ def test_faces_identify_and_reset(isolated_app_with_faces):
         faces_db, "SELECT person_id FROM faces WHERE id=?", (solo_face_id,)
     ) == solo_person_id
 
-    # ---- Revenir à la grille (nécessaire : la sidebar bascule sur EditPanel
-    #      pendant la visionneuse, masquant le bouton "Identifier…") ----
-    # Bouton "✕" de la visionneuse (PhotoViewer → closed → show_grid), même
-    # pattern que test_edit_nondestructive.py — pas de "Chronologie" cliquable
-    # en mode visionneuse. Retente le clic si sans effet : juste après la
-    # fermeture de l'_AssignDialog, le premier clic peut arriver avant que le
-    # focus/la boucle d'évènements Qt ne se soit stabilisé sur la visionneuse.
+    # ---- Go back to the grid (necessary: the sidebar switches to EditPanel
+    #      during the viewer, hiding the "Identify…" button) ----
+    # The "X" button of the viewer (PhotoViewer -> closed -> show_grid), same
+    # pattern as test_edit_nondestructive.py -- no clickable "Chronologie"
+    # in viewer mode. Retries the click if it had no effect: just after the
+    # _AssignDialog is closed, the first click can arrive before the Qt focus /
+    # event loop has settled on the viewer.
     texts: list[str] = []
     for _attempt in range(5):
         find_dialog_button(window, ["✕"], exact=True, timeout=10.0).click_input()
@@ -196,7 +196,7 @@ def test_faces_identify_and_reset(isolated_app_with_faces):
     else:
         raise LookupError(f"le bouton '✕' est resté sans effet après 5 tentatives (boutons={texts!r})")
 
-    # ---- 3. Identifier un groupe entier (nouvelle personne) ----
+    # ---- 3. Identify a whole group (new person) ----
     group_cluster_id = query_one(
         faces_db,
         "SELECT cluster_id FROM faces WHERE cluster_id IS NOT NULL"
@@ -235,7 +235,7 @@ def test_faces_identify_and_reset(isolated_app_with_faces):
         message="tous les visages du cluster n'ont pas reçu le person_id du groupe",
     )
 
-    # ---- 4. Fusionner les deux personnes créées ci-dessus ----
+    # ---- 4. Merge the two people created above ----
     solo_faces_before = query_one(
         faces_db, "SELECT COUNT(*) FROM faces WHERE person_id=?", (solo_person_id,)
     )
@@ -262,27 +262,27 @@ def test_faces_identify_and_reset(isolated_app_with_faces):
         faces_db, "SELECT COUNT(*) FROM faces WHERE person_id=?", (group_person_id,)
     ) == solo_faces_before + group_faces_before
 
-    # ---- Revenir à la grille de photos ----
-    # Le clic "Identifier" de l'étape 3 a basculé le contenu principal sur
-    # FaceClusterGrid (main_window.py::show_face_clusters, via
-    # Sidebar.identify_requested) — ce n'est pas la grille de vignettes, donc
-    # aucun `thumb::<path>` n'existe dans l'arbre UIA tant qu'on n'est pas
-    # revenu via son bouton "← Photos" (back_requested -> show_grid).
+    # ---- Go back to the photo grid ----
+    # The "Identify" click of step 3 switched the main content to
+    # FaceClusterGrid (main_window.py::show_face_clusters, through
+    # Sidebar.identify_requested) -- that is not the thumbnail grid, so no
+    # `thumb::<path>` exists in the UIA tree until we have gone back through its
+    # "< Photos" button (back_requested -> show_grid).
     find_dialog_button(window, ["← Photos"], exact=True).click_input()
 
-    # ---- 5. Ignorer un visage puis le restaurer ----
-    # Exclut solo_face_id : même requête que l'étape 2 sinon (identifier une
-    # personne ne touche pas `ignored`), ce qui rouvrirait la même photo au
-    # lieu d'exercer un visage frais.
+    # ---- 5. Ignore a face then restore it ----
+    # Excludes solo_face_id: the same query as step 2 otherwise (identifying a
+    # person does not touch `ignored`), which would reopen the same photo instead
+    # of exercising a fresh face.
     ignore_face_id, ignore_photo_path = _query_all(
         faces_db,
         "SELECT id, photo_path FROM faces WHERE ignored=0 AND id!=? ORDER BY id LIMIT 1",
         (solo_face_id,),
     )[0]
 
-    # La position de scroll de la grille peut avoir dérivé depuis le dernier
-    # passage (retour depuis FaceClusterGrid à l'étape 3-4) : la vignette
-    # visée peut être hors de la plage virtualisée (cf. scroll_grid_into_view).
+    # The scroll position of the grid may have drifted since the last visit
+    # (return from FaceClusterGrid at steps 3-4): the targeted thumbnail may be
+    # outside the virtualised range (cf. scroll_grid_into_view).
     scroll_grid_into_view(window, ignore_photo_path)
     open_photo_in_viewer(window, ignore_photo_path)
     right_click_and_click_context_menu_item(
@@ -308,15 +308,15 @@ def test_faces_identify_and_reset(isolated_app_with_faces):
         message="le visage n'a pas été restauré (unignore_face) après fermeture du dialogue",
     )
 
-    # ---- 6. Réinitialiser les groupes uniquement (rapide, non destructeur) ----
-    # (le menu "Faces" reste accessible qu'on soit dans la grille ou la
-    # visionneuse — pas besoin de revenir explicitement à la grille ici.)
+    # ---- 6. Reset the groups only (fast, non-destructive) ----
+    # (the "Faces" menu stays reachable whether we are in the grid or in the
+    # viewer -- no need to come back to the grid explicitly here.)
     click_menu_item(window, "Faces", "Reset and reindex…")
     find_dialog_button(window, ["Confirm"], exact=True).click_input()
     find_dialog_button(window, ["OK"], exact=True).click_input()
 
-    # Les personnes identifiées survivent au reset de regroupement (seuls les
-    # visages non identifiés/non épinglés perdent leur cluster_id).
+    # The identified people survive the grouping reset (only the
+    # unidentified/unpinned faces lose their cluster_id).
     wait_for_condition(
         lambda: query_one(
             faces_db, "SELECT COUNT(*) FROM faces WHERE person_id=?", (group_person_id,)
@@ -347,11 +347,11 @@ def test_faces_reset_full(isolated_app_with_faces):
     find_radio_button(window, "Full reset").click_input()
     find_dialog_button(window, ["Confirm"], exact=True).click_input()
 
-    # QMessageBox.information() est modale : elle bloque le thread UI avant
-    # que _start_face_indexing() (déclenché juste après sa fermeture) ne
-    # reparte — reset_index() a donc déjà vidé faces/indexed_photos mais la
-    # ré-indexation n'a pas encore recommencé, fenêtre sûre pour vérifier
-    # l'effet destructif exact avant de cliquer OK.
+    # QMessageBox.information() is modal: it blocks the UI thread before
+    # _start_face_indexing() (triggered right after it closes) starts again --
+    # reset_index() has therefore already emptied faces/indexed_photos but the
+    # re-indexing has not restarted yet, a safe window to check the exact
+    # destructive effect before clicking OK.
     find_dialog_button(window, ["OK"], exact=True, timeout=60.0)
     assert query_one(faces_db, "SELECT COUNT(*) FROM faces") == 0
     assert query_one(faces_db, "SELECT COUNT(*) FROM indexed_photos") == 0

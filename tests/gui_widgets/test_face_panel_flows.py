@@ -1,9 +1,9 @@
 # Copyright 2026 Christian Guyot
 # SPDX-License-Identifier: Apache-2.0
-"""Tests (Layer 2) pour FacePanel — loaders synchrones, dialogue des visages
-ignorés, pile d'annulation, ignore/désallocation, flux d'assignation complets
-avec _AssignDialog monkeypatché (jamais de vraie popup). Complète
-test_face_panel_suggestions.py (affichage des suggestions)."""
+"""Tests (Layer 2) for FacePanel -- synchronous loaders, ignored faces
+dialog, undo stack, ignore/unassign, complete assignment flows with a
+monkeypatched _AssignDialog (never a real popup). Complements
+test_face_panel_suggestions.py (display of the suggestions)."""
 import sqlite3
 
 import pytest
@@ -67,13 +67,13 @@ def _make_panel(qtbot, env):
 
 
 def _wait_refresh(qtbot, panel):
-    """Attend le rechargement complet du panneau (données + vignettes) — sans
-    quoi un _FacePanelLoader encore vivant au teardown déclenche le fail-fast
-    Qt 0xC0000409 (cf. piège QThread de CLAUDE.md).
+    """Waits for the full reload of the panel (data + thumbnails) -- without
+    which a _FacePanelLoader still alive at teardown triggers the Qt fail-fast
+    0xC0000409 (cf. the QThread trap in CLAUDE.md).
 
-    Sondage (cf. wait_thread_done) et non waitSignal : les deux threads sont
-    déjà lancés quand on arrive ici, une émission perdue ferait expirer le
-    blocker."""
+    Polling (cf. wait_thread_done) rather than waitSignal: both threads are
+    already started by the time we get here, and a lost emission would make the
+    blocker time out."""
     wait_thread_done(qtbot, panel._data_loader)
     wait_thread_done(qtbot, panel._loader)
 
@@ -84,7 +84,7 @@ def _load(qtbot, panel, photo_path):
 
 
 def _ignored_flag(face_db, fid) -> bool:
-    # get_face_by_id ne remonte pas la colonne ignored — lecture SQL directe
+    # get_face_by_id does not return the ignored column -- direct SQL read
     conn = sqlite3.connect(face_db._db_path)
     try:
         return bool(conn.execute(
@@ -95,7 +95,7 @@ def _ignored_flag(face_db, fid) -> bool:
 
 
 # ---------------------------------------------------------------------------
-# loaders synchrones
+# synchronous loaders
 
 class TestFacePanelLoader:
     def _face(self, photo, fid=1):
@@ -121,7 +121,7 @@ class TestFacePanelLoader:
 
         def _first(fid, data):
             results.append(fid)
-            loader.stop()   # connexion directe : la boucle s'arrête après le 1er
+            loader.stop()   # direct connection: the loop stops after the first one
 
         loader.ready.connect(_first)
         loader.run()
@@ -144,7 +144,7 @@ class TestFacesDataLoader:
         photo = _make_photo(tmp_path)
         alice = catalog.create_person("Alice")
         fid = _raw_insert_face(face_db, photo, cluster_id=1, person_id=alice.id)
-        _raw_insert_face(face_db, photo, ignored=1)   # visage ignoré
+        _raw_insert_face(face_db, photo, ignored=1)   # ignored face
         loader = _FacesDataLoader(face_db, catalog, photo)
         results = []
         loader.data_ready.connect(lambda *a: results.append(a))
@@ -168,9 +168,9 @@ class TestFacesDataLoader:
 
 
 class TestThumbnailCacheReuse:
-    """Un rafraîchissement du panneau sur la même photo (après identification,
-    ignorer, etc.) ne doit redécoder que les vignettes dont la géométrie a
-    réellement changé — pas l'ensemble des visages de la photo."""
+    """A refresh of the panel on the same photo (after an identification, an
+    ignore, etc.) must only re-decode the thumbnails whose geometry really
+    changed -- not every face of the photo."""
 
     def test_second_load_same_photo_reuses_cached_thumbnails(self, qtbot, env, tmp_path):
         face_db, catalog = env
@@ -182,16 +182,17 @@ class TestThumbnailCacheReuse:
         _load(qtbot, panel, photo)
         assert set(panel._thumb_cache) == {fid1, fid2}
 
-        # Simule le rafraîchissement déclenché après une identification : même
-        # photo, aucune bbox n'a changé -> rien à redécoder, pas de loader créé.
+        # Simulates the refresh triggered after an identification: same photo, no
+        # bbox has changed -> nothing to re-decode, no loader created.
         panel.set_photo(photo)
         _wait_refresh(qtbot, panel)
 
         assert panel._loader is None
 
     def test_changed_bbox_forces_redecode_of_that_face_only(self, qtbot, env, tmp_path):
-        """Simule une ré-indexation (rotation) qui recale la bbox d'un seul
-        visage sous le même face_id : seule sa vignette repasse par le loader."""
+        """Simulates a re-indexing (rotation) that shifts the bbox of a single
+        face under the same face_id: only its thumbnail goes through the loader
+        again."""
         face_db, catalog = env
         photo = _make_photo(tmp_path)
         fid1 = _raw_insert_face(face_db, photo, bbox=(10, 10, 60, 60))
@@ -210,9 +211,9 @@ class TestThumbnailCacheReuse:
         assert panel._loader is not None
         assert [fid for fid, _ in panel._loader._items] == [fid1]
 
-        # Laisser le loader réel se terminer avant la fin du test (cf. piège
-        # QThread jetable dans CLAUDE.md — un thread encore vivant à la
-        # destruction du widget déclenche un fail-fast Qt).
+        # Let the real loader finish before the end of the test (cf. the
+        # disposable-QThread trap in CLAUDE.md -- a thread still alive when the
+        # widget is destroyed triggers a Qt fail-fast).
         wait_thread_done(qtbot, panel._loader)
 
 
@@ -248,14 +249,14 @@ class TestAssignPrepLoader:
 
 
 # ---------------------------------------------------------------------------
-# dialogue des visages ignorés
+# ignored faces dialog
 
 class TestIgnoredFacesDialog:
     def test_rows_and_restore(self, qtbot, env, tmp_path, monkeypatch):
         face_db, _ = env
         photo = _make_photo(tmp_path)
         fid = _raw_insert_face(face_db, photo, ignored=1)
-        # Chargement des vignettes en synchrone : pas de thread vivant au teardown
+        # Thumbnails loaded synchronously: no live thread at teardown
         monkeypatch.setattr(_FacePanelLoader, "start", _FacePanelLoader.run)
         faces = face_db.get_ignored_faces_for_photo(photo)
         dlg = _IgnoredFacesDialog(faces, photo)
@@ -276,7 +277,7 @@ class TestIgnoredFacesDialog:
 
 
 # ---------------------------------------------------------------------------
-# FacePanel — interactions
+# FacePanel -- interactions
 
 class TestFacePanelInteractions:
     def test_undo_stack_push_and_undo(self, qtbot, env):
@@ -336,12 +337,12 @@ class TestFacePanelInteractions:
             panel._on_item_clicked(f1)
         assert blocker.args[0].id == f1
 
-        # re-clic sur le même : désélection (None)
+        # clicking the same one again: deselection (None)
         with qtbot.waitSignal(panel.face_highlighted, timeout=1000) as blocker:
             panel._on_item_clicked(f1)
         assert blocker.args == [None]
 
-        # sélection d'un autre visage
+        # selection of another face
         panel._on_item_clicked(f1)
         with qtbot.waitSignal(panel.face_highlighted, timeout=1000) as blocker:
             panel._on_item_clicked(f2)
@@ -400,7 +401,7 @@ class TestFacePanelInteractions:
 
         face = face_db.get_face_by_id(fid)
         assert face.person_id == boris.id
-        assert face.cluster_id < 0        # isolé de son groupe
+        assert face.cluster_id < 0        # isolated from its group
         assert panel.can_undo()
 
     def test_continue_assign_requested_assigns_whole_cluster(
@@ -449,7 +450,7 @@ class TestFacePanelInteractions:
         _load(qtbot, panel, photo)
         assert panel._btn_ignored.isEnabled()
 
-        # Vignettes du dialogue en synchrone (pas de thread vivant au teardown)
+        # Dialog thumbnails loaded synchronously (no live thread at teardown)
         monkeypatch.setattr(_FacePanelLoader, "start", _FacePanelLoader.run)
 
         def _fake_exec(dlg_self):

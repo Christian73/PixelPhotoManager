@@ -1,10 +1,10 @@
 # Copyright 2026 Christian Guyot
 # SPDX-License-Identifier: Apache-2.0
-"""Teste `src/faces/clusterer.py` avec des embeddings synthétiques (aucun modèle
-IA) : _purify_clusters (scission des clusters incohérents), _fmt_n, le worker
-_clustering_worker_proc appelé en direct avec un faux pipe, _run_clustering de
-bout en bout (vrai sous-processus multiprocessing + vraie FaceDatabase), et le
-wrapper ClusterThread (signaux progress/finished/error)."""
+"""Tests `src/faces/clusterer.py` with synthetic embeddings (no AI model at
+all): _purify_clusters (splitting the inconsistent clusters), _fmt_n, the
+_clustering_worker_proc worker called directly with a fake pipe, _run_clustering
+end to end (a real multiprocessing subprocess + a real FaceDatabase), and the
+ClusterThread wrapper (progress/finished/error signals)."""
 import sqlite3
 
 import numpy as np
@@ -39,7 +39,7 @@ def _insert_emb_face(db, photo, emb, person_id=None, cluster_id=None) -> int:
 
 @pytest.fixture(autouse=True)
 def _reset_sentinel(monkeypatch):
-    """_last_clustered_n est un global de module : le remettre à -1 pour chaque test."""
+    """_last_clustered_n is a module global: reset it to -1 for every test."""
     monkeypatch.setattr(clusterer, "_last_clustered_n", -1)
 
 
@@ -69,7 +69,7 @@ class TestPurifyClusters:
         assert set(labels) == {0}
 
     def test_mixed_cluster_split(self):
-        """Deux paquets orthogonaux chaînés dans le même label HDBSCAN → scindés."""
+        """Two orthogonal packs chained inside the same HDBSCAN label -> split."""
         X = _norm_rows(
             [_vec(0, seed=1), _vec(0, seed=2), _vec(1, seed=3), _vec(1, seed=4)]
         )
@@ -90,7 +90,7 @@ class TestPurifyClusters:
 
     def test_oversized_cluster_skipped(self, monkeypatch):
         monkeypatch.setattr(clusterer, "_PURITY_MAX_CLUSTER_N", 3)
-        # 4 visages incohérents mais > _PURITY_MAX_CLUSTER_N → laissés tels quels
+        # 4 inconsistent faces but > _PURITY_MAX_CLUSTER_N -> left as they are
         X = _norm_rows(
             [_vec(0, seed=1), _vec(0, seed=2), _vec(1, seed=3), _vec(1, seed=4)]
         )
@@ -104,7 +104,7 @@ class TestPurifyClusters:
         assert len(labels) == 0
 
 
-# ------------------------------------------------------------------ worker in-process
+# ------------------------------------------------------------------ in-process worker
 
 
 class _FakeConn:
@@ -121,7 +121,7 @@ class _FakeConn:
 
 class TestClusteringWorker:
     def test_two_groups_and_singleton(self):
-        """2 paquets de 3 + 1 isolé → 2 clusters, 1 singleton relabellisé."""
+        """2 packs of 3 + 1 isolated -> 2 clusters, 1 relabelled singleton."""
         vecs = (
             [_vec(0, seed=i) for i in range(3)]
             + [_vec(1, seed=i + 10) for i in range(3)]
@@ -133,7 +133,7 @@ class TestClusteringWorker:
 
         assert conn.closed
         tags = [m[0] for m in conn.messages]
-        assert tags == ["hdbscan", "result"]   # dim 8 < 32 → pas de PCA
+        assert tags == ["hdbscan", "result"]   # dim 8 < 32 -> no PCA
         _, n_clusters, n_singletons, labels = conn.messages[-1]
         assert n_clusters == 2
         assert n_singletons == 1
@@ -143,7 +143,7 @@ class TestClusteringWorker:
         assert labels[6] not in (labels[0], labels[3])
 
     def test_pca_message_for_high_dim(self):
-        """dim 64 > _PCA_DIMS et n > _PCA_DIMS → étape PCA émise."""
+        """dim 64 > _PCA_DIMS and n > _PCA_DIMS -> PCA step emitted."""
         rng = np.random.RandomState(0)
         n = 40
         X = rng.rand(n, 64).astype(np.float32)
@@ -155,7 +155,7 @@ class TestClusteringWorker:
 
     def test_error_reported(self):
         conn = _FakeConn()
-        # n*d incohérent avec la taille du buffer → exception → message error
+        # n*d inconsistent with the buffer size -> exception -> error message
         clusterer._clustering_worker_proc(b"\x00" * 8, 5, 8, conn)
         assert conn.messages[-1][0] == "error"
         assert conn.closed
@@ -182,7 +182,7 @@ class TestRunClustering:
             conn.close()
 
     def test_full_run_with_subprocess(self, tmp_path):
-        """Vrai sous-processus : 2 groupes de 3 visages → 2 clusters en base."""
+        """Real subprocess: 2 groups of 3 faces -> 2 clusters in the database."""
         db = FaceDatabase(db_path=tmp_path / "faces.db")
         g1 = [_insert_emb_face(db, f"a{i}.jpg", _vec(0, seed=i)) for i in range(3)]
         g2 = [_insert_emb_face(db, f"b{i}.jpg", _vec(1, seed=i + 10)) for i in range(3)]
@@ -213,7 +213,7 @@ class TestRunClustering:
             _insert_emb_face(db, f"b{i}.jpg", _vec(1, seed=i + 10))
         first = clusterer._run_clustering(db)
         assert first >= 1
-        # même N de visages non identifiés, aucune assignation synthétique
+        # same N of unidentified faces, no synthetic assignment
         assert clusterer._run_clustering(db) == 0
 
     def test_timeout_kills_subprocess(self, tmp_path, monkeypatch):
@@ -234,11 +234,11 @@ class TestResetClusteringCache:
         assert clusterer._last_clustered_n == -1
 
     def test_reclusters_after_db_reset_with_same_face_count(self, tmp_path):
-        """Bug 2026-07 (test_faces_reset_full) : FaceDatabase.reset_clustering()/
-        reset_index() vident cluster_id en masse sans changer N (même bibliothèque
-        réindexée à l'identique) — sans invalider le cache, _run_clustering croit
-        qu'aucun changement n'est survenu et saute le regroupement, laissant tous
-        les visages bloqués avec cluster_id=NULL indéfiniment."""
+        """Bug 2026-07 (test_faces_reset_full): FaceDatabase.reset_clustering()/
+        reset_index() empty cluster_id in bulk without changing N (the same
+        library reindexed identically) -- without invalidating the cache,
+        _run_clustering believes nothing has changed and skips the grouping,
+        leaving every face stuck with cluster_id=NULL indefinitely."""
         db = FaceDatabase(db_path=tmp_path / "faces.db")
         ids = [
             _insert_emb_face(db, f"a{i}.jpg", _vec(0, seed=i)) for i in range(3)
@@ -273,7 +273,7 @@ class TestClusterThread:
         thread = clusterer.ClusterThread(db)
         results: list[int] = []
         thread.finished.connect(results.append)
-        thread.run()  # synchrone : signaux directs + code tracé par coverage
+        thread.run()  # synchronous: direct signals + code traced by coverage
         assert results == [2]
 
     def test_error_signal(self, qtbot, tmp_path, monkeypatch):
@@ -285,5 +285,5 @@ class TestClusterThread:
         thread = clusterer.ClusterThread(db)
         errors: list[str] = []
         thread.error.connect(errors.append)
-        thread.run()  # synchrone : signaux directs + code tracé par coverage
+        thread.run()  # synchronous: direct signals + code traced by coverage
         assert errors == ["dépendance manquante"]

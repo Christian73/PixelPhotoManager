@@ -1,10 +1,10 @@
 # Copyright 2026 Christian Guyot
 # SPDX-License-Identifier: Apache-2.0
-"""Tests de fumée pytest-qt des dialogues jusqu'ici à 0 % de couverture :
-instanciation avec des bases temporaires, vérification du contenu affiché et
-des signaux émis par les boutons principaux. Les popups modales bloquantes
-(QMessageBox, QFileDialog) sont neutralisées par monkeypatch — aucune fenêtre
-n'a besoin d'être réellement affichée."""
+"""pytest-qt smoke tests of the dialogs that were at 0 % coverage so far:
+instantiation with temporary databases, checking of the displayed content and
+of the signals emitted by the main buttons. The blocking modal popups
+(QMessageBox, QFileDialog) are neutralised by monkeypatch -- no window needs to
+be actually shown."""
 import os
 from datetime import datetime, timedelta
 
@@ -27,8 +27,8 @@ def _make_jpg(path, size=(64, 48)):
 
 @pytest.fixture
 def config():
-    """Config est un singleton sur APP_DATA_DIR (redirigé en temp par conftest) :
-    on sauvegarde/restaure scan_folders pour isoler chaque test."""
+    """Config is a singleton on APP_DATA_DIR (redirected to temp by conftest):
+    scan_folders is saved/restored to isolate each test."""
     cfg = Config()
     saved = list(cfg._data.get("scan_folders", []))
     saved_picasa = cfg.get("picasa.import_done", False)
@@ -49,9 +49,10 @@ class _InertSignal:
 
 
 class _InertUpdateThread:
-    """Pas un QThread : un vrai QThread sans parent auto-détruit par deleteLater
-    pendant que son thread OS se termine encore déclenche un fail-fast Qt
-    (0xC0000409) dès que l'event loop de pytest-qt traite la destruction."""
+    """Not a QThread: a real parentless QThread self-destructing through
+    deleteLater while its OS thread is still terminating triggers a Qt
+    fail-fast (0xC0000409) as soon as the pytest-qt event loop processes the
+    destruction."""
 
     def __init__(self, *a, **k):
         self.checked = _InertSignal()
@@ -103,25 +104,25 @@ class TestHelpDialog:
         from src.ui.help_dialog import HelpDialog
         dlg = HelpDialog()
         qtbot.addWidget(dlg)
-        dlg.close()   # closeEvent : déconnexion sans exception
+        dlg.close()   # closeEvent: disconnection without an exception
 
     def test_search_finds_text_in_current_tab(self, qtbot):
-        """"RANSAC" n'apparaît que dans doublons.html (cf. help_content/<langue>/),
-        même en comparaison insensible à la casse (find() par défaut) — chercher
-        ce terme en étant déjà sur cet onglet ne doit pas en changer."""
+        """"RANSAC" only appears in doublons.html (cf. help_content/<language>/),
+        even in a case-insensitive comparison (find() by default) -- searching
+        for that term while already on that tab must not change it."""
         from src.ui.help_dialog import HelpDialog, _TAB_LABELS
         dlg = HelpDialog(tab="Doublons")
         qtbot.addWidget(dlg)
         dlg._search_edit.setText("RANSAC")
         tabs = dlg._tabs
-        # Le libellé de l'onglet est traduit : comparer via _TAB_LABELS, jamais
-        # à un littéral français (cf. CLAUDE.md, « chaîne qui sert aussi de clé »).
+        # The tab label is translated: compare through _TAB_LABELS, never against
+        # a French literal (cf. CLAUDE.md, "a string that also serves as a key").
         assert tabs.tabText(tabs.currentIndex()) == _TAB_LABELS["Doublons"]
         assert tabs.currentWidget().textCursor().selectedText() == "RANSAC"
 
     def test_search_switches_to_tab_containing_match(self, qtbot):
         from src.ui.help_dialog import HelpDialog, _TAB_LABELS
-        dlg = HelpDialog()  # démarre sur "Vue d'ensemble"
+        dlg = HelpDialog()  # starts on "Vue d'ensemble"
         qtbot.addWidget(dlg)
         tabs = dlg._tabs
         assert tabs.tabText(tabs.currentIndex()) == _TAB_LABELS["Vue d'ensemble"]
@@ -178,7 +179,7 @@ class TestProblemsHistoryDialog:
         qtbot.addWidget(dlg)
         rows = dlg.findChildren(_ProblemRow)
         assert len(rows) >= 2
-        # le bouton "Open the list…" n'est actif que si le fichier existe
+        # the "Open the list…" button is only enabled if the file exists
         states = sorted(
             b.isEnabled() for r in rows for b in r.findChildren(QPushButton)
         )
@@ -270,8 +271,8 @@ class TestFolderManagerDialog:
         assert "3 sous-dossiers" in row_good._toggle_btn.text()
         assert "2 exclus" in row_good._toggle_btn.text()
         row_good._toggle_subdirs()
-        # fenêtre non affichée : on vérifie l'état logique (non-caché + flèche),
-        # pas isVisible() qui exige un parent visible
+        # window not shown: we check the logical state (not hidden + arrow),
+        # not isVisible(), which requires a visible parent
         assert not row_good._subdir_panel.isHidden()
         assert "▼" in row_good._toggle_btn.text()
 
@@ -361,8 +362,8 @@ class TestPicasaImportDialog:
         dlg = PicasaImportDialog(config, catalog, face_db)
         qtbot.addWidget(dlg)
         dlg._on_import()
-        # pas de waitSignal sur dlg._thread.finished : le thread peut émettre
-        # avant l'abonnement (course classique) — attendre l'état final de l'UI
+        # no waitSignal on dlg._thread.finished: the thread may emit before the
+        # subscription (the classic race) -- wait for the final state of the UI
         qtbot.waitUntil(lambda: dlg._btn_skip.text() == "Close", timeout=15000)
 
         assert config.get("picasa.import_done") is True
@@ -415,7 +416,7 @@ class TestExifDateSync:
         from src.ui.exif_date_sync_dialog import _SyncThread
         catalog = Catalog(db_path=tmp_path / "catalog.db")
 
-        # 1. fichier absent  2. pas de date EXIF  3. à mettre à jour
+        # 1. file absent  2. no EXIF date  3. to be updated
         p_missing = os.path.normpath(str(tmp_path / "absent.jpg"))
         catalog.add_or_update_photo(
             PhotoInfo(path=p_missing, file_size=1, file_mtime=1.0,
@@ -441,7 +442,7 @@ class TestExifDateSync:
         assert updated == 1
         assert skipped == 2
         assert os.path.exists(csv_path)
-        # la date de création Windows a bien été remplacée par la date EXIF
+        # the Windows creation date has indeed been replaced by the EXIF date
         assert abs(os.stat(p_update).st_ctime - old_date.timestamp()) < 3
 
     def test_dialog_flow(self, qtbot, tmp_path):
@@ -452,8 +453,9 @@ class TestExifDateSync:
         assert dlg._btn_start.isEnabled()
 
         dlg._start()
-        # cf. test_full_import_flow : attendre l'état final de l'UI, pas le
-        # signal du thread (course si le thread finit avant l'abonnement)
+        # cf. test_full_import_flow: wait for the final state of the UI, not for
+        # the signal of the thread (a race if the thread finishes before the
+        # subscription)
         qtbot.waitUntil(lambda: dlg._lbl_result.isVisibleTo(dlg), timeout=15000)
         assert "0 file(s) updated" in dlg._lbl_result.text()
 

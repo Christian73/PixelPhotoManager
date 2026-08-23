@@ -1,10 +1,10 @@
 # Copyright 2026 Christian Guyot
 # SPDX-License-Identifier: Apache-2.0
-"""Teste `src/ui/slideshow.py` sans affichage réel : showFullScreen est
-neutralisé par monkeypatch (aucune fenêtre plein écran pendant les tests).
-Couvre le widget Ken Burns (rectangles source/destination, animation), le
-thread de chargement exécuté en synchrone, et la logique de SlideshowWindow
-(navigation, intervalle, pause, overlay, clavier, fermeture)."""
+"""Tests `src/ui/slideshow.py` without a real display: showFullScreen is
+neutralised by monkeypatch (no full-screen window during the tests). Covers the
+Ken Burns widget (source/destination rectangles, animation), the loading thread
+run synchronously, and the logic of SlideshowWindow (navigation, interval,
+pause, overlay, keyboard, closing)."""
 import os
 
 import pytest
@@ -79,7 +79,7 @@ class TestKenBurnsWidget:
         w.resize(200, 200)
         w.set_pixmap(QPixmap(100, 50), duration_ms=1000)
         r = w._dst_rect()
-        # pixmap 2:1 dans un widget carré → pleine largeur, hauteur 100, centré
+        # 2:1 pixmap in a square widget -> full width, height 100, centred
         assert r.width() == pytest.approx(200)
         assert r.height() == pytest.approx(100)
         assert r.top() == pytest.approx(50)
@@ -95,7 +95,7 @@ class TestKenBurnsWidget:
         qtbot.addWidget(w)
         w.resize(100, 100)
         w.set_pixmap(QPixmap(50, 50), duration_ms=500)
-        img = w.grab()   # déclenche paintEvent
+        img = w.grab()   # triggers paintEvent
         assert not img.isNull()
 
 
@@ -108,7 +108,7 @@ class TestLoadThread:
         thread = _LoadThread(3, photo, QSize(32, 32))
         ready: list = []
         thread.ready.connect(lambda i, pix: ready.append((i, pix)))
-        thread.run()   # synchrone
+        thread.run()   # synchronous
         assert len(ready) == 1
         idx, pix = ready[0]
         assert idx == 3
@@ -128,7 +128,7 @@ class TestLoadThread:
 
 
 class TestSlideshowWindowLogic:
-    """Logique pure avec une liste vide (aucun thread de chargement lancé)."""
+    """Pure logic with an empty list (no loading thread started)."""
 
     def _win(self, qtbot):
         win = SlideshowWindow([])
@@ -140,10 +140,10 @@ class TestSlideshowWindowLogic:
         assert win._fmt_interval() == f"{_INTERVAL_MS // 1000}s"
         win._interval = _INTERVAL_MIN_MS
         win._decrease_interval()
-        assert win._interval == _INTERVAL_MIN_MS   # plancher
+        assert win._interval == _INTERVAL_MIN_MS   # floor
         win._interval = _INTERVAL_MAX_MS
         win._increase_interval()
-        assert win._interval == _INTERVAL_MAX_MS   # plafond
+        assert win._interval == _INTERVAL_MAX_MS   # ceiling
         win._decrease_interval()
         assert win._interval == _INTERVAL_MAX_MS - 1000
 
@@ -203,7 +203,7 @@ class TestSlideshowWindowLogic:
         from PySide6.QtGui import QResizeEvent
         win = self._win(qtbot)
         win.resize(800, 600)
-        # fenêtre cachée : Qt diffère resizeEvent jusqu'à l'affichage — l'invoquer
+        # hidden window: Qt defers resizeEvent until it is shown -- invoke it
         win.resizeEvent(QResizeEvent(QSize(800, 600), QSize(0, 0)))
         assert win._kb_widget.geometry().size().width() == 800
         assert win._overlay.geometry().top() == 600 - win._OVERLAY_H
@@ -217,8 +217,8 @@ class TestSlideshowWindowWithPhotos:
 
         qtbot.waitUntil(lambda: win._kb_widget._pixmap is not None, timeout=10000)
         assert win._lbl_count.text() == "2 / 3"
-        assert win._btn_prev.isEnabled()   # il existe une photo plus ancienne
-        assert win._btn_next.isEnabled()   # et une plus récente
+        assert win._btn_prev.isEnabled()   # there is an older photo
+        assert win._btn_next.isEnabled()   # and a more recent one
 
         win._go_newer()
         assert win._index == 0
@@ -229,7 +229,7 @@ class TestSlideshowWindowWithPhotos:
         assert win._index == 2
         assert not win._btn_prev.isEnabled()
 
-        win.close()   # closeEvent : arrêt des timers et threads sans exception
+        win.close()   # closeEvent: timers and threads stopped without an exception
 
     def test_start_index_clamped(self, qtbot, tmp_path):
         photos = [_photo(tmp_path, "seule.jpg")]
@@ -239,7 +239,7 @@ class TestSlideshowWindowWithPhotos:
         win.close()
 
     def test_screensaver_inhibited_until_close(self, qtbot, tmp_path, monkeypatch):
-        """Le diaporama inhibe l'économiseur d'écran tant qu'il est ouvert."""
+        """The slideshow inhibits the screensaver as long as it is open."""
         from src.core import screensaver_guard as sg
         calls: list[int] = []
         monkeypatch.setattr(sg, "_set_execution_state",
@@ -267,13 +267,13 @@ class TestSlideshowWindowWithPhotos:
         msg = ctypes.wintypes.MSG()
         msg.message = sg.WM_SYSCOMMAND
         msg.wParam = sg.SC_SCREENSAVE
-        # QWidget.nativeEvent (appelé par super() sur le chemin « non traité »)
-        # refuse une adresse entière brute : passer un VoidPtr, comme Qt.
+        # QWidget.nativeEvent (called by super() on the "not handled" path)
+        # refuses a raw integer address: pass a VoidPtr, like Qt.
         ptr = shiboken6.VoidPtr(ctypes.addressof(msg))
         handled, _ = win.nativeEvent(b"windows_generic_MSG", ptr)
         assert handled is True
 
-        msg.wParam = 0xF010   # SC_MOVE : laissé au traitement normal
+        msg.wParam = 0xF010   # SC_MOVE: left to the normal handling
         handled, _ = win.nativeEvent(b"windows_generic_MSG", ptr)
         assert handled is False
         win.close()
@@ -282,8 +282,8 @@ class TestSlideshowWindowWithPhotos:
         photos = [_photo(tmp_path, f"p{i}.jpg") for i in range(2)]
         win = SlideshowWindow(photos, start_index=1)
         qtbot.addWidget(win)
-        # attendre le préchargement de la photo suivante (index 0)
+        # wait for the preloading of the next photo (index 0)
         qtbot.waitUntil(lambda: 0 in win._preload_cache, timeout=10000)
-        win._go_newer()   # consomme le cache
+        win._go_newer()   # consumes the cache
         assert 0 not in win._preload_cache
         win.close()
