@@ -1,10 +1,11 @@
 # Copyright 2026 Christian Guyot
 # SPDX-License-Identifier: Apache-2.0
-"""Tests des méthodes non-Qt de src/library/thumbnail_cache.py (ThumbnailCache) :
-generate(), get_bytes(), move_photo(), invalidate(), invalidate_many(), _key().
+"""Tests of the non-Qt methods of src/library/thumbnail_cache.py
+(ThumbnailCache): generate(), get_bytes(), move_photo(), invalidate(),
+invalidate_many(), _key().
 
-Volontairement hors scope : get()/get_ram()/store_pixmap()/_store_ram()/
-_get_from_db(), qui créent des QPixmap et nécessitent un contexte Qt/QApplication
+Deliberately out of scope: get()/get_ram()/store_pixmap()/_store_ram()/
+_get_from_db(), which create QPixmaps and need a Qt/QApplication context
 (cf. plan round 3, Phase E4)."""
 import os
 import sqlite3
@@ -48,7 +49,7 @@ class TestGenerate:
         data = cache.generate(photo)
 
         assert data is not None
-        assert data[:2] == b"\xff\xd8"  # marqueur JPEG
+        assert data[:2] == b"\xff\xd8"  # JPEG marker
         with Image.open(__import__("io").BytesIO(data)) as thumb:
             assert thumb.size[0] <= cache.THUMB_SIZE[0]
             assert thumb.size[1] <= cache.THUMB_SIZE[1]
@@ -75,8 +76,9 @@ class TestGenerate:
         assert data is not None
 
     def test_generate_video_extension_dispatches_to_video_thumb_and_fails_gracefully(self, tmp_path):
-        """Un .mp4 illisible (pas une vraie vidéo) doit échouer proprement (None),
-        sans lever — confirme juste le dispatch d'extension, pas le happy path cv2."""
+        """An unreadable .mp4 (not a real video) must fail cleanly (None),
+        without raising -- this only confirms the extension dispatch, not the
+        cv2 happy path."""
         cache = _make_cache(tmp_path)
         fake_video = tmp_path / "clip.mp4"
         fake_video.write_bytes(b"not a real video")
@@ -113,9 +115,9 @@ class TestGetBytes:
 
 
 class TestEditSignature:
-    """Une retouche ne touche pas au fichier : file_mtime ne peut donc pas
-    signaler qu'une vignette en cache est périmée après une rotation ou un
-    recadrage. C'est le rôle de cette empreinte."""
+    """An edit does not touch the file: file_mtime therefore cannot signal
+    that a cached thumbnail is stale after a rotation or a crop. That is the
+    role of this fingerprint."""
 
     def test_no_edit_and_unmodified_edit_share_the_empty_signature(self):
         assert edit_signature(None) == ""
@@ -136,18 +138,18 @@ class TestEditSignature:
 
 class TestEditedThumbnailCaching:
     def test_unedited_thumbnail_is_a_miss_for_a_rotated_photo(self, tmp_path):
-        """Le bug : la vignette d'origine restait servie après une rotation,
-        indéfiniment (le fichier, lui, n'a pas changé)."""
+        """The bug: the original thumbnail kept being served after a rotation,
+        indefinitely (the file itself has not changed)."""
         cache = _make_cache(tmp_path)
         photo = _make_photo(tmp_path)
         cache.generate(photo)
 
         assert cache.get_bytes(photo, edit_signature(EditInfo(rotation=90))) is None
-        assert cache.get_bytes(photo) is not None   # toujours valide sans retouche
+        assert cache.get_bytes(photo) is not None   # still valid without an edit
 
     def test_thumbnail_generated_with_an_edit_is_reused_for_that_edit(self, tmp_path):
-        """…et n'est pas régénérée à chaque affichage : sans ça, toute photo
-        retouchée repasserait par un décodage PIL complet à chaque défilement."""
+        """...and is not regenerated on every display: without that, every edited
+        photo would go through a full PIL decode on every scroll."""
         cache = _make_cache(tmp_path)
         photo = _make_photo(tmp_path)
         edit = EditInfo(rotation=90)
@@ -155,12 +157,12 @@ class TestEditedThumbnailCaching:
         data = cache.generate(photo, edit)
 
         assert cache.get_bytes(photo, edit_signature(edit)) == data
-        assert cache.get_bytes(photo) is None       # ≠ état sans retouche
+        assert cache.get_bytes(photo) is None       # != the state without an edit
 
     def test_rotated_thumbnail_really_is_rotated(self, tmp_path):
-        """Garde-fou : l'empreinte ne servirait à rien si generate() ne tenait
-        pas compte de la retouche. Une photo 64×48 tournée de 90° donne une
-        vignette plus haute que large."""
+        """Safety net: the fingerprint would be useless if generate() did not take
+        the edit into account. A 64x48 photo rotated by 90 degrees gives a
+        thumbnail taller than it is wide."""
         cache = _make_cache(tmp_path)
         photo = _make_photo(tmp_path, size=(64, 48))
 
@@ -171,8 +173,8 @@ class TestEditedThumbnailCaching:
         assert rotated[1] > rotated[0]
 
     def test_edit_removed_returns_to_the_unedited_thumbnail(self, tmp_path):
-        """Annulation/reset : la vignette doit revenir à l'image d'origine,
-        et l'ancienne entrée retouchée ne doit plus être servie."""
+        """Cancel/reset: the thumbnail must come back to the original image, and
+        the old edited entry must no longer be served."""
         cache = _make_cache(tmp_path)
         photo = _make_photo(tmp_path, size=(64, 48))
         rotated_sig = edit_signature(EditInfo(rotation=90))
@@ -211,7 +213,7 @@ class TestInvalidate:
 
     def test_invalidate_unknown_path_is_noop(self, tmp_path):
         cache = _make_cache(tmp_path)
-        cache.invalidate(str(tmp_path / "never.jpg"))  # ne doit pas lever
+        cache.invalidate(str(tmp_path / "never.jpg"))  # must not raise
 
 
 class TestInvalidateMany:
@@ -229,4 +231,4 @@ class TestInvalidateMany:
 
     def test_invalidate_many_with_empty_list_is_noop(self, tmp_path):
         cache = _make_cache(tmp_path)
-        cache.invalidate_many([])  # ne doit pas lever
+        cache.invalidate_many([])  # must not raise

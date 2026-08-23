@@ -1,19 +1,19 @@
 # Copyright 2026 Christian Guyot
 # SPDX-License-Identifier: Apache-2.0
-"""Régression : ce qui relance la recherche de visages similaires
+"""Regression: what restarts the search for similar faces
 (main_window_faces.py::FacesController).
 
-Signalement utilisateur — « plus aucun visage en attente de confirmation » :
-_start_similarity_search() n'avait qu'un seul appelant, _on_clustering_finished()
-sous la garde `n_clusters > 0`, elle-même atteignable seulement depuis
-_on_face_indexing_finished quand `faces > 0`. Sur une bibliothèque entièrement
-indexée, plus rien ne réalimentait donc la file de vérification, alors que
-nommer une personne déplace son centroïde et rend proposables des groupes
-jusque-là sous le seuil.
+User report -- "no more faces awaiting confirmation":
+_start_similarity_search() had a single caller, _on_clustering_finished()
+under the `n_clusters > 0` guard, itself only reachable from
+_on_face_indexing_finished when `faces > 0`. On a fully indexed library,
+nothing refilled the verification queue any more, even though naming a person
+moves their centroid and makes groups that were below the threshold
+suggestible.
 
-Comme test_face_indexing_requeue.py, les méthodes réelles de MainWindow sont
-appelées en non lié contre un objet minimal ne portant que ce que lit le chemin
-testé — pas de QMainWindow, pas de thread réel."""
+As in test_face_indexing_requeue.py, the real methods of MainWindow are called
+unbound against a minimal object carrying only what the tested path reads --
+no QMainWindow, no real thread."""
 import pytest
 
 from src.ui.main_window import MainWindow
@@ -28,7 +28,7 @@ class _FakeThread:
 
 
 class _FakeTimer:
-    """QTimer à un coup : compte les (re)démarrages, sans event loop."""
+    """One-shot QTimer: counts the (re)starts, without an event loop."""
 
     def __init__(self):
         self.starts = 0
@@ -67,7 +67,7 @@ class _FakeController:
         self.similarity_starts = 0
         self.info_boxes: list = []
 
-    # --- collaborateurs remplacés -------------------------------------
+    # --- collaborators replaced ---------------------------------------
     def _run_clustering(self):
         self.clustering_calls += 1
 
@@ -78,11 +78,12 @@ class _FakeController:
         pass
 
     def _schedule_similarity_search(self):
-        """Appelée par le code testé (`_on_face_indexing_finished`) : on délègue
-        à la vraie implémentation, c'est elle qui doit armer le timer."""
+        """Called by the code under test (`_on_face_indexing_finished`): we
+        delegate to the real implementation, which is the one that must arm the
+        timer."""
         MainWindow._schedule_similarity_search(self)
 
-    # --- dépendances de _on_clustering_finished ------------------------
+    # --- dependencies of _on_clustering_finished -----------------------
     def _refresh_persons(self):
         pass
 
@@ -99,28 +100,28 @@ class TestScheduling:
         assert ctrl._similarity_debounce.starts == 1
 
     def test_a_burst_of_identifications_coalesces(self, ctrl):
-        """Le timer est à un coup et relancé à chaque appel : nommer dix
-        groupes d'affilée ne doit pas lancer dix recherches (chacune parcourt
-        toute la bibliothèque)."""
+        """The timer is one-shot and restarted on every call: naming ten groups
+        in a row must not launch ten searches (each of them walks the whole
+        library)."""
         for _ in range(10):
             MainWindow._schedule_similarity_search(ctrl)
 
         assert ctrl.similarity_starts == 0, "rien ne part avant l'échéance du timer"
-        assert ctrl._similarity_debounce.starts == 10  # QTimer.start() redémarre le délai
+        assert ctrl._similarity_debounce.starts == 10  # QTimer.start() restarts the delay
 
 
 class TestIndexingFinished:
     def test_nothing_new_still_looks_for_similar_faces(self, ctrl):
-        """Cœur du bug : sans nouveau visage, le regroupement n'est pas lancé —
-        c'était jusqu'ici la fin du chemin, donc plus jamais de suggestion."""
+        """The heart of the bug: without a new face, the grouping is not started --
+        that was, until now, the end of the path, hence never a suggestion again."""
         MainWindow._on_face_indexing_finished(ctrl, indexed=0, faces=0)
 
         assert ctrl.clustering_calls == 0
         assert ctrl._similarity_debounce.starts == 1
 
     def test_new_faces_delegate_to_clustering(self, ctrl):
-        """Avec de nouveaux visages, c'est _on_clustering_finished qui enchaîne :
-        pas de double déclenchement."""
+        """With new faces, _on_clustering_finished is the one that carries on:
+        no double trigger."""
         MainWindow._on_face_indexing_finished(ctrl, indexed=12, faces=30)
 
         assert ctrl.clustering_calls == 1
@@ -136,10 +137,10 @@ class TestClusteringFinished:
 
     @pytest.mark.parametrize("n_clusters", [0, 7])
     def test_search_runs_whatever_the_cluster_count(self, ctrl, n_clusters):
-        """`n_clusters == 0` ne veut pas dire « rien à comparer » : le
-        regroupement rend la main sans rien faire dès que le nombre de visages
-        non identifiés n'a pas bougé, alors que les groupes déjà formés restent
-        à confronter aux personnes nommées entre-temps."""
+        """`n_clusters == 0` does not mean "nothing to compare": the grouping
+        returns without doing anything as soon as the number of unidentified
+        faces has not moved, while the groups already formed still have to be
+        confronted with the people named in the meantime."""
         self._prepare(ctrl)
 
         MainWindow._on_clustering_finished(ctrl, n_clusters)
@@ -148,8 +149,8 @@ class TestClusteringFinished:
 
 
 class TestManualEntry:
-    """Visages › Rechercher des visages similaires… — même traitement, mais
-    l'appelant est l'utilisateur : il doit avoir un retour."""
+    """Faces > Search for similar faces… -- same processing, but the caller
+    is the user: they must get some feedback."""
 
     def test_runs_immediately_and_cancels_the_pending_debounce(self, ctrl):
         ctrl._similarity_thread = _FakeThread(running=False)
@@ -161,8 +162,8 @@ class TestManualEntry:
         assert ctrl.similarity_starts == 1
 
     def test_no_thread_yet_still_runs(self, ctrl):
-        """Aucune recherche n'a encore tourné : _similarity_thread n'existe pas
-        (attribut créé par _start_similarity_search)."""
+        """No search has run yet: _similarity_thread does not exist (an attribute
+        created by _start_similarity_search)."""
         assert not hasattr(ctrl, "_similarity_thread")
 
         MainWindow._start_similarity_search_manually(ctrl)

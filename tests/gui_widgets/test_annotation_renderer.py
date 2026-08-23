@@ -1,8 +1,8 @@
 # Copyright 2026 Christian Guyot
 # SPDX-License-Identifier: Apache-2.0
-"""Teste `src/ui/annotation_renderer.py` par rendu réel sur QImage : traits
-(stylo/ligne/courbe), formes (rect/ellipse, remplissage/contour/flou), texte,
-rotation, bornes d'annotation, hit-testing et composition PIL à l'export."""
+"""Tests `src/ui/annotation_renderer.py` by real rendering onto a QImage:
+strokes (pen/line/curve), shapes (rect/ellipse, fill/outline/blur), text,
+rotation, annotation bounds, hit-testing and PIL composition on export."""
 import pytest
 from PIL import Image
 from PySide6.QtGui import QImage, QPainter, QPixmap
@@ -35,7 +35,7 @@ def _pen(points, **kw):
             "color": "#ffff0000", **kw}
 
 
-# ------------------------------------------------------------------ rendu
+# ------------------------------------------------------------------ rendering
 
 
 class TestRenderAnnotations:
@@ -45,8 +45,8 @@ class TestRenderAnnotations:
 
     def test_pen_stroke_drawn(self, qtbot):
         img = _render([_pen([(0.1, 0.5), (0.9, 0.5)], width=0.05)])
-        assert _has_color_near(img, 50, 50)          # milieu du trait
-        assert not _has_color_near(img, 50, 10)      # loin du trait
+        assert _has_color_near(img, 50, 50)          # middle of the stroke
+        assert not _has_color_near(img, 50, 10)      # far from the stroke
 
     def test_single_point_stroke_ignored(self, qtbot):
         img = _render([_pen([(0.5, 0.5)])])
@@ -56,7 +56,7 @@ class TestRenderAnnotations:
         ann = {"id": 1, "type": "line", "points": [(0.0, 0.0), (1.0, 1.0)],
                "color": "#ffff0000", "width": 0.05}
         img = _render([ann])
-        assert _has_color_near(img, 50, 50)   # diagonale
+        assert _has_color_near(img, 50, 50)   # diagonal
 
     def test_curve_drawn(self, qtbot):
         ann = {"id": 1, "type": "curve",
@@ -76,15 +76,15 @@ class TestRenderAnnotations:
         ann = {"id": 1, "type": "rect", "points": [(0.2, 0.2), (0.8, 0.8)],
                "color": "#ffff0000", "opacity": 0.0, "width": 0.04}
         img = _render([ann])
-        assert _has_color_near(img, 20, 50)        # bord gauche
-        assert not _has_color_near(img, 50, 50)    # intérieur vide
+        assert _has_color_near(img, 20, 50)        # left edge
+        assert not _has_color_near(img, 50, 50)    # empty interior
 
     def test_ellipse_filled(self, qtbot):
         ann = {"id": 1, "type": "ellipse", "points": [(0.1, 0.1), (0.9, 0.9)],
                "fill_color": "#ffff0000", "opacity": 1.0, "width": 0.0}
         img = _render([ann])
         assert _has_color_near(img, 50, 50)      # centre
-        assert not _has_color_near(img, 12, 12)  # coin hors ellipse
+        assert not _has_color_near(img, 12, 12)  # corner outside the ellipse
 
     def test_shape_blur_with_background(self, qtbot):
         bg = QPixmap(100, 100)
@@ -92,7 +92,7 @@ class TestRenderAnnotations:
         ann = {"id": 1, "type": "rect", "points": [(0.3, 0.3), (0.7, 0.7)],
                "opacity": 0.0, "blur": 0.1, "width": 0.0}
         img = _render([ann], background=bg)
-        # la photo blanche floutée doit apparaître dans la zone de la forme
+        # the blurred white photo must appear inside the area of the shape
         assert img.pixelColor(50, 50).red() > 100
 
     def test_text_drawn(self, qtbot):
@@ -111,14 +111,14 @@ class TestRenderAnnotations:
         assert img.pixelColor(50, 50).red() == 0
 
     def test_rotated_annotation(self, qtbot):
-        # trait horizontal tourné à 90° → devient vertical
+        # horizontal stroke rotated by 90 degrees -> becomes vertical
         ann = _pen([(0.1, 0.5), (0.9, 0.5)], width=0.05, angle=90.0)
         img = _render([ann])
-        assert _has_color_near(img, 50, 15)   # extrémité désormais verticale
+        assert _has_color_near(img, 50, 15)   # end point now vertical
         assert not _has_color_near(img, 10, 50)
 
 
-# ------------------------------------------------------------------ bornes
+# ------------------------------------------------------------------ bounds
 
 
 class TestAnnotationScreenBounds:
@@ -165,9 +165,9 @@ class TestHitTest:
     def test_unfilled_rect_interior_far_from_border_misses(self, qtbot):
         anns = [{"id": 3, "type": "rect", "points": [(0.1, 0.1), (0.9, 0.9)],
                  "opacity": 0.0, "blur": 0.0}]
-        # centre à 40 px du bord le plus proche > tolérance 8 px
+        # centre 40 px from the nearest edge > tolerance of 8 px
         assert ar.hit_test_annotations(anns, 50, 50, 100, 100) is None
-        # près du bord → touché
+        # near the edge -> hit
         assert ar.hit_test_annotations(anns, 12, 50, 100, 100) == 3
 
     def test_hit_ellipse(self, qtbot):
@@ -184,11 +184,11 @@ class TestHitTest:
         assert ar.hit_test_annotations(anns, cx, cy, 200, 200) == 5
 
     def test_hit_rotated_rect(self, qtbot):
-        # rect étroit horizontal tourné à 90° : le point au-dessus du centre touche
+        # narrow horizontal rect rotated by 90 degrees: the point above the centre hits
         anns = [{"id": 6, "type": "rect", "points": [(0.2, 0.45), (0.8, 0.55)],
                  "opacity": 1.0, "angle": 90.0}]
         assert ar.hit_test_annotations(anns, 50, 25, 100, 100) == 6
-        # le point qui touchait la version non tournée ne touche plus
+        # the point that hit the unrotated version no longer hits
         assert ar.hit_test_annotations(anns, 25, 50, 100, 100) is None
 
     def test_single_point_distance(self, qtbot):
@@ -196,7 +196,7 @@ class TestHitTest:
         assert ar.hit_test_annotations(anns, 51, 51, 100, 100) == 8
 
 
-# ------------------------------------------------------------------ export PIL
+# ------------------------------------------------------------------ PIL export
 
 
 class TestCompositePil:

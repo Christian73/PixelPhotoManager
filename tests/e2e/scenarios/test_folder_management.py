@@ -1,41 +1,40 @@
 # Copyright 2026 Christian Guyot
 # SPDX-License-Identifier: Apache-2.0
-"""Scénario bout-en-bout : cycle de vie complet d'un dossier surveillé — arbre
-de la sidebar (créer/renommer/supprimer un sous-dossier) et
-`FolderManagerDialog` (re-scanner, retirer). Un seul lancement d'application,
-étapes séquentielles :
+"""End-to-end scenario: the full life cycle of a watched folder -- sidebar
+tree (create/rename/delete a subfolder) and `FolderManagerDialog` (rescan,
+remove). A single application launch, sequential steps:
 
-1. `Outils › Dossiers…` : bouton « ⟳ Re-scanner » sur le dossier racine. Pour
-   donner un effet observable réel à ce re-scan forcé (pas seulement « l'appli
-   ne plante pas ») plutôt qu'une simple absence de crash, un fichier image
-   est copié à la main (pas de glissé-déposer simulé — simple `shutil.copy`,
-   ce n'est pas un geste UI) dans un sous-dossier fraîchement créé AVANT ce
-   re-scan : le re-scan forcé du dossier racine (récursif) est ce qui le fait
-   apparaître au catalogue.
+1. `Tools > Folders…`: the "Rescan" button on the root folder. To give this
+   forced rescan a real observable effect (not just "the application does not
+   crash"), an image file is copied by hand (no simulated drag and drop --
+   a plain `shutil.copy`, this is not a UI gesture) into a freshly created
+   subfolder BEFORE that rescan: the forced (recursive) rescan of the root
+   folder is what makes it appear in the catalog.
 
-2. Arbre de la sidebar, menu contextuel d'un dossier (`sidebar.py:705-727`) :
-   - « Créer un sous-dossier… » (`QInputDialog`) -> dossier créé sur disque.
-   - « Renommer… » (`QInputDialog` pré-rempli) -> `MainWindow._on_folder_moved`
-     (main_window.py:1487) appelle `Catalog.update_paths_prefix` ET
-     `FaceDatabase.update_paths_prefix` : vérifié ici sur les deux tables
-     (`photos.path`/`photos.directory` ET `indexed_photos.photo_path`), pas
-     seulement côté catalogue — c'est le cas à plus forte valeur du dossier
-     de dossiers, cf. le plan.
-   - « Effacer le dossier… » : SEULE confirmation de suppression de
-     l'application dont le bouton « Oui » est retexturé en « Supprimer »
-     (`sidebar.py:799`, `box.button(QMessageBox.Yes).setText("Remove")`) —
-     `click_yes()` ne le trouverait pas, d'où `find_dialog_button(...,
-     ["Remove"], exact=True)` utilisé directement ici.
-   - « Déplacer vers… » n'est PAS automatisé : `QFileDialog.getExistingDirectory`
-     natif (sélecteur Shell Windows, pas une `QDialog` de l'appli), même écart
-     déjà documenté pour « Ajouter un dossier… »/« Enregistrer à un autre
-     emplacement… » dans les autres scénarios de ce dossier.
+2. Sidebar tree, context menu of a folder (`sidebar.py:705-727`):
+   - "Create a subfolder…" (`QInputDialog`) -> folder created on disk.
+   - "Rename…" (a pre-filled `QInputDialog`) -> `MainWindow._on_folder_moved`
+     (main_window.py:1487) calls `Catalog.update_paths_prefix` AND
+     `FaceDatabase.update_paths_prefix`: checked here on both tables
+     (`photos.path`/`photos.directory` AND `indexed_photos.photo_path`), not
+     only on the catalog side -- that is the highest-value case of the folder
+     manager, cf. the plan.
+   - "Delete the folder…": the ONLY deletion confirmation of the application
+     whose "Yes" button is relabelled "Remove"
+     (`sidebar.py:799`, `box.button(QMessageBox.Yes).setText("Remove")`) --
+     `click_yes()` would not find it, hence `find_dialog_button(...,
+     ["Remove"], exact=True)` used directly here.
+   - "Move to…" is NOT automated: a native
+     `QFileDialog.getExistingDirectory` (the Windows Shell picker, not a
+     `QDialog` of the application), the same gap already documented for
+     "Add a folder…"/"Save to another location…" in the other scenarios of
+     this folder.
 
-3. `FolderManagerDialog` › « Retirer » sur le dossier racine (dernier, car
-   destructeur pour le reste du catalogue) : vérifie le contrat inverse de
-   « Effacer le dossier… » — les fichiers restent intacts sur le disque, seules
-   les lignes du catalogue disparaissent (`MainWindow._on_folder_removed`,
-   main_window.py:1406, via `_purge_catalog_for_folder`)."""
+3. `FolderManagerDialog` > "Remove" on the root folder (last, because it is
+   destructive for the rest of the catalog): checks the contract opposite to
+   "Delete the folder…" -- the files stay intact on disk, only the catalog
+   rows disappear (`MainWindow._on_folder_removed`, main_window.py:1406,
+   through `_purge_catalog_for_folder`)."""
 from __future__ import annotations
 
 import shutil
@@ -62,15 +61,15 @@ _EXTRA_PHOTO_NAME = "extra_photo_e2e.jpg"
 
 
 def _find_tree_item(window, text: str, *, exact: bool = False, timeout: float = 15.0):
-    """Repère un `QTreeWidgetItem` de l'arbre de dossiers de la sidebar par
-    son texte — aucun helper existant ne cible `control_type="TreeItem"`
-    (`click_list_item` ne gère que les `QListWidget`).
+    """Locates a `QTreeWidgetItem` of the sidebar folder tree by its text --
+    no existing helper targets `control_type="TreeItem"` (`click_list_item`
+    only handles `QListWidget`).
 
-    `exact=False` par défaut : `Sidebar.refresh_folders`/`_populate_subfolders`
-    (sidebar.py) suffixent systématiquement le libellé d'un dossier avec son
-    nombre de photos dès que `get_recursive_photo_counts` a tourné une fois
-    (0 inclus, jamais `None` — catalog.py::get_recursive_photo_counts), donc
-    le libellé n'est jamais le nom de dossier nu mais toujours "nom (N)"."""
+    `exact=False` by default: `Sidebar.refresh_folders`/`_populate_subfolders`
+    (sidebar.py) systematically suffix the label of a folder with its number
+    of photos as soon as `get_recursive_photo_counts` has run once (0 included,
+    never `None` -- catalog.py::get_recursive_photo_counts), so the label is
+    never the bare folder name but always "name (N)"."""
     deadline = time.monotonic() + timeout
     last_exc: Exception | None = None
     while time.monotonic() < deadline:
@@ -86,14 +85,14 @@ def _find_tree_item(window, text: str, *, exact: bool = False, timeout: float = 
 
 
 def _find_edit_near_text(window, text_substring: str, *, timeout: float = 10.0):
-    """Repère le `QLineEdit` d'un `QInputDialog` par proximité verticale avec
-    son libellé (`control_type="Text"`) — même principe que
-    `_find_edit_near_radio` dans test_save_options_and_settings.py, adapté ici
-    à un `QLabel` plutôt qu'un `QRadioButton` : les `QMessageBox`/`QInputDialog`
-    natifs ne sont pas des fenêtres UIA top-level distinctes (ce sont des
-    descendants de la fenêtre principale, cf. conftest.py::find_dialog_button),
-    donc plusieurs `Edit` (champ de filtre de la sidebar + champ du dialogue)
-    coexistent dans l'arbre pendant que le dialogue est ouvert."""
+    """Locates the `QLineEdit` of a `QInputDialog` by vertical proximity with
+    its label (`control_type="Text"`) -- same principle as
+    `_find_edit_near_radio` in test_save_options_and_settings.py, adapted here
+    to a `QLabel` rather than a `QRadioButton`: the native
+    `QMessageBox`/`QInputDialog` are not distinct top-level UIA windows (they
+    are descendants of the main window, cf. conftest.py::find_dialog_button),
+    so several `Edit` controls (the sidebar filter field + the dialog field)
+    coexist in the tree while the dialog is open."""
     deadline = time.monotonic() + timeout
     last_exc: Exception | None = None
     while time.monotonic() < deadline:
@@ -130,12 +129,12 @@ def test_folder_management(isolated_app):
         timeout=60.0, message="le scan initial n'a pas terminé",
     )
 
-    # ---- Déplier la racine (nécessaire pour que le nouveau sous-dossier soit
-    #      peuplé après le prochain refresh_folders, cf. docstring du module) ----
+    # ---- Expand the root (necessary so that the new subfolder is populated
+    #      after the next refresh_folders, cf. the module docstring) ----
     root_item = _find_tree_item(window, root_name, timeout=15.0)
     double_click_element(root_item)
 
-    # ---- 2a. Créer un sous-dossier ----
+    # ---- 2a. Create a subfolder ----
     right_click_and_click_context_menu_item(
         lambda: _find_tree_item(window, root_name, timeout=15.0),
         window, "Create a subfolder…", exact=True,
@@ -150,17 +149,17 @@ def test_folder_management(isolated_app):
         message="le sous-dossier n'a pas été créé sur le disque",
     )
 
-    # ---- Placer un fichier réel dans le nouveau sous-dossier (simple copie
-    #      disque, pas un geste UI) pour donner un effet observable au re-scan ----
+    # ---- Put a real file into the new subfolder (a plain disk copy, not a UI
+    #      gesture) to give the rescan an observable effect ----
     extra_photo = subfolder / _EXTRA_PHOTO_NAME
     shutil.copy(manifest.control_photos[0], extra_photo)
 
-    # ---- 1. Outils › Dossiers… : re-scan forcé de la racine ----
-    # `invoke_button` (pas `find_dialog_button(...).click_input()`) pour tous
-    # les boutons de FolderManagerDialog — cf. sa docstring dans conftest.py.
+    # ---- 1. Tools > Folders…: forced rescan of the root ----
+    # `invoke_button` (not `find_dialog_button(...).click_input()`) for every
+    # button of FolderManagerDialog -- cf. its docstring in conftest.py.
     click_menu_item(window, "Tools", "Folders…")
-    # wait_gone=False : « Re-scanner » ne ferme rien lui-même (le dialogue
-    # reste ouvert, seule la QMessageBox "Rescan started" apparaît par-dessus).
+    # wait_gone=False: "Rescan" closes nothing by itself (the dialog stays
+    # open, only the "Rescan started" QMessageBox appears on top of it).
     invoke_button(window, ["Rescan"], exact=False, timeout=10.0, wait_gone=False)
     invoke_button(window, ["OK"], exact=True, timeout=10.0)
     invoke_button(window, ["Close"], exact=True, timeout=10.0)
@@ -180,7 +179,7 @@ def test_folder_management(isolated_app):
         message="le fichier du nouveau sous-dossier n'a pas été indexé (visages)",
     )
 
-    # ---- 2b. Renommer le sous-dossier : vérifie catalog ET faces ----
+    # ---- 2b. Rename the subfolder: checks the catalog AND the faces ----
     right_click_and_click_context_menu_item(
         lambda: _find_tree_item(window, _SUBFOLDER_NAME, timeout=15.0),
         window, "Rename…", exact=True,
@@ -216,7 +215,7 @@ def test_folder_management(isolated_app):
         faces_db, "SELECT COUNT(*) FROM indexed_photos WHERE photo_path=?", (str(extra_photo),)
     ) == 0, "l'ancien chemin est toujours présent dans indexed_photos après renommage"
 
-    # ---- 2c. Effacer le dossier (destructeur, bouton "Remove") ----
+    # ---- 2c. Delete the folder (destructive, "Remove" button) ----
     right_click_and_click_context_menu_item(
         lambda: _find_tree_item(window, _RENAMED_NAME, timeout=15.0),
         window, "Delete the folder…", exact=True,
@@ -235,10 +234,10 @@ def test_folder_management(isolated_app):
         message="la photo du dossier supprimé est toujours présente au catalogue",
     )
 
-    # ---- 3. FolderManagerDialog › Retirer sur la racine (dernier : purge tout) ----
+    # ---- 3. FolderManagerDialog > Remove on the root (last: purges everything) ----
     click_menu_item(window, "Tools", "Folders…")
-    # wait_gone=False : « Retirer » ouvre une confirmation par-dessus sans se
-    # fermer lui-même (même raison que « Re-scanner » ci-dessus).
+    # wait_gone=False: "Remove" opens a confirmation on top of itself without
+    # closing (same reason as "Rescan" above).
     invoke_button(window, ["Remove"], exact=True, timeout=10.0, wait_gone=False)
     invoke_button(window, ["Oui", "Yes", "&Oui", "&Yes"], timeout=10.0)
 

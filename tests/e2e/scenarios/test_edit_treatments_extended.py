@@ -1,21 +1,21 @@
 # Copyright 2026 Christian Guyot
 # SPDX-License-Identifier: Apache-2.0
-"""Scénario bout-en-bout : traitements de retouche non couverts par
-test_edit_nondestructive.py (qui ne teste que Luminosité/brightness + undo),
-enchaînés dans une seule visionneuse sur une photo témoin.
+"""End-to-end scenario: editing treatments not covered by
+test_edit_nondestructive.py (which only tests Brightness + undo), chained
+inside a single viewer on one witness photo.
 
-Chemin exercé pour chaque traitement à curseur simple (Contraste, Couleurs,
-Redresser, Vignette) : bouton de l'EditPanel réel -> dialogue non modal réel ->
-glissé du QSlider réel -> "Apply" -> persistance vérifiée directement sur
-edits.db (jamais l'UI). Rotation/Miroir H/Miroir V : boutons directs, pas de
-dialogue, persistance immédiate. Réinitialiser : suppression immédiate de la
-ligne photo_edits (sans confirmation — action réversible via « Remettre
-toutes les retouches », cf. EditPanel.restore_all). Pour finir, régression prioritaire du
-NameError historique (commit 34d8c5e) : GammaCurveWidget plantait à chaque
-rendu après un découpage de fichier ayant omis un import — reproduit ici en
-cochant réellement les deux cases « Fonctions avancées… » puis « Fonctions
-très avancées… » du dialogue Luminosité (PAS en glissant un point de courbe,
-le bug se produit au paintEvent, avant toute interaction avec la courbe)."""
+Path exercised for each single-slider treatment (Contrast, Colours,
+Straighten, Vignette): a real EditPanel button -> a real non-modal dialog ->
+a real QSlider drag -> "Apply" -> persistence checked directly on edits.db
+(never on the UI). Rotation/Mirror H/Mirror V: direct buttons, no dialog,
+immediate persistence. Reset: immediate deletion of the photo_edits row
+(without confirmation -- a reversible action through "Restore every edit",
+cf. EditPanel.restore_all). Finally, the priority regression of the historical
+NameError (commit 34d8c5e): GammaCurveWidget crashed on every render after a
+file split that omitted an import -- reproduced here by really ticking the
+two "Advanced options…" then "Expert options" check boxes of the Brightness
+dialog (NOT by dragging a curve point: the bug happens in paintEvent, before
+any interaction with the curve)."""
 import pytest
 
 from tests.e2e.conftest import (
@@ -41,10 +41,10 @@ def _column(edits_db, photo_path, column: str):
 
 
 def _set_slider(slider, value: float) -> None:
-    """EditSlider expose un QSlider interne mis à l'échelle x100 quel que soit
-    le nombre de décimales affichées (cf. EditSlider._scale, edit_sliders.py) —
-    la valeur brute UIA est donc toujours value*100, y compris pour Redresser
-    (-10..10°) dont l'affichage n'a qu'une décimale."""
+    """EditSlider exposes an internal QSlider scaled by x100 whatever the
+    number of decimals displayed (cf. EditSlider._scale, edit_sliders.py) --
+    the raw UIA value is therefore always value*100, including for Straighten
+    (-10..10 degrees), whose display has only one decimal."""
     slider.set_value(int(round(value * 100)))
 
 
@@ -65,11 +65,12 @@ def _wait_for_n_sliders(window, n: int, timeout: float = 10.0):
 
 
 def _slider_labeled(window, label_text: str, timeout: float = 10.0):
-    """Identifie un QSlider par le QLabel voisin (même ligne, aligné
-    verticalement) plutôt que par position dans window.descendants() —
-    l'ordre de traversée UIA de ce dernier ne correspond pas forcément à
-    l'ordre d'ajout au layout (constaté empiriquement : un slider Rouge/Vert
-    indexé positionnellement pouvait recevoir la valeur destinée à l'autre)."""
+    """Identifies a QSlider through its neighbouring QLabel (same row,
+    vertically aligned) rather than by position in window.descendants() --
+    the UIA traversal order of the latter does not necessarily match the order
+    in which the widgets were added to the layout (observed empirically: a
+    Red/Green slider indexed positionally could receive the value meant for
+    the other one)."""
     import time
     deadline = time.monotonic() + timeout
     last_exc: Exception | None = None
@@ -106,18 +107,17 @@ def test_edit_treatments_extended(isolated_app):
 
     open_photo_in_viewer(window, photo)
 
-    # ---- Contraste : dialogue générique à un seul slider ----
-    # invoke_button (pattern UIA Invoke), pas click_input() : ce premier clic
-    # suit immédiatement open_photo_in_viewer(), qui vient de faire passer
-    # _left_stack sur l'EditPanel de façon synchrone (show_viewer()) — la
-    # fenêtre n'a pas forcément eu le temps de devenir réellement le
-    # premier-plan OS avant qu'un clic souris simulé n'atteigne l'écran (même
-    # cause que le piège documenté sur FolderManagerDialog, cf. docstring
-    # d'invoke_button) : confirmé empiriquement (instrumentation temporaire)
-    # que click_input() ici n'ouvre jamais le dialogue (ni exception, ni log),
-    # alors que le bouton retrouvé a un rectangle et un état valides. Le
-    # bouton reste visible après invocation (pas de fermeture de dialogue à
-    # cet endroit) → wait_gone=False.
+    # ---- Contrast: generic dialog with a single slider ----
+    # invoke_button (UIA Invoke pattern), not click_input(): this first click
+    # immediately follows open_photo_in_viewer(), which has just moved
+    # _left_stack onto the EditPanel synchronously (show_viewer()) -- the window
+    # has not necessarily had the time to really become the OS foreground before
+    # a simulated mouse click reaches the screen (same cause as the trap
+    # documented on FolderManagerDialog, cf. the docstring of invoke_button):
+    # confirmed empirically (temporary instrumentation) that click_input() here
+    # never opens the dialog (no exception, no log), even though the button that
+    # was found has a valid rectangle and state. The button stays visible after
+    # the invocation (no dialog closing at this point) -> wait_gone=False.
     invoke_button(window, ["Contrast"], exact=True, timeout=15.0, wait_gone=False)
     sliders = _wait_for_n_sliders(window, 1)
     _set_slider(sliders[0], 0.6)
@@ -128,21 +128,21 @@ def test_edit_treatments_extended(isolated_app):
         timeout=20.0, message="le contraste n'a pas été persisté",
     )
 
-    # ---- Couleurs : saturation + RVB (révélés par « Fonctions avancées… ») ----
-    # invoke_button, même raison que pour Contraste : ce clic suit immédiatement
-    # la fermeture du dialogue Contraste (Valider), qui rend le focus OS à la
-    # fenêtre principale — même fenêtre de fragilité que la toute première
-    # ouverture après open_photo_in_viewer (confirmé empiriquement : cette même
-    # classe de clic a échoué de façon flottante sur Vignette lors d'une
-    # exécution ultérieure de ce test, cf. commentaire sur Vignette plus bas).
+    # ---- Colours: saturation + RGB (revealed by "Advanced options…") ----
+    # invoke_button, same reason as for Contrast: this click immediately follows
+    # the closing of the Contrast dialog (Apply), which gives the OS focus back to
+    # the main window -- the same window of fragility as the very first opening
+    # after open_photo_in_viewer (confirmed empirically: that same class of click
+    # failed intermittently on Vignette during a later run of this test, cf. the
+    # comment on Vignette further down).
     invoke_button(window, ["Colours"], exact=True, timeout=15.0, wait_gone=False)
     sliders = _wait_for_n_sliders(window, 1)
-    _set_slider(sliders[0], -0.3)   # saturation, toujours le 1er slider du dialogue
+    _set_slider(sliders[0], -0.3)   # saturation, always the first slider of the dialog
     find_checkbox(window, "Advanced options…", timeout=10.0).click_input()
-    # Révèle les sliders Rouge/Vert/Bleu (CouleursTreatmentDialog,
-    # treatment_dialogs.py:469-478) — identifiés par leur libellé voisin, pas
-    # par position (l'ordre de window.descendants() ne suit pas fiablement
-    # l'ordre d'ajout au layout, cf. _slider_labeled).
+    # Reveals the Red/Green/Blue sliders (CouleursTreatmentDialog,
+    # treatment_dialogs.py:469-478) -- identified by their neighbouring label, not
+    # by position (the order of window.descendants() does not reliably follow the
+    # order in which they were added to the layout, cf. _slider_labeled).
     _wait_for_n_sliders(window, 4)
     sl_r = _slider_labeled(window, "Red")
     _set_slider(sl_r, 0.4)
@@ -154,9 +154,9 @@ def test_edit_treatments_extended(isolated_app):
         timeout=20.0, message="saturation/color_red n'ont pas été persistés",
     )
 
-    # ---- Redresser : dialogue générique, slider « Angle (°) » ----
-    # invoke_button : suit la fermeture du dialogue Couleurs (Valider), même
-    # fragilité que ci-dessus.
+    # ---- Straighten: generic dialog, "Angle (deg)" slider ----
+    # invoke_button: follows the closing of the Colours dialog (Apply), same
+    # fragility as above.
     invoke_button(window, ["Straighten"], exact=True, timeout=15.0, wait_gone=False)
     sliders = _wait_for_n_sliders(window, 1)
     _set_slider(sliders[0], 5.0)
@@ -167,11 +167,11 @@ def test_edit_treatments_extended(isolated_app):
         timeout=20.0, message="le redressement n'a pas été persisté",
     )
 
-    # ---- Vignette : dialogue dédié, slider « Intensité » uniquement (jamais
-    # les poignées de géométrie sur le canevas, hors périmètre) ----
-    # invoke_button : suit la fermeture du dialogue Redresser (Valider), même
-    # fragilité que ci-dessus — c'est précisément ce clic qui a échoué (par
-    # intermittence, timing OS) lors du diagnostic initial de ce fichier.
+    # ---- Vignette: dedicated dialog, "Intensity" slider only (never the
+    # geometry handles on the canvas, out of scope) ----
+    # invoke_button: follows the closing of the Straighten dialog (Apply), same
+    # fragility as above -- this is precisely the click that failed
+    # (intermittently, OS timing) during the initial diagnosis of this file.
     invoke_button(window, ["Vignette"], exact=True, timeout=15.0, wait_gone=False)
     sliders = _wait_for_n_sliders(window, 1)
     _set_slider(sliders[0], 0.5)
@@ -182,21 +182,21 @@ def test_edit_treatments_extended(isolated_app):
         timeout=20.0, message="l'intensité de vignette n'a pas été persistée",
     )
 
-    # ---- Rotation / Miroir : boutons directs, persistance immédiate ----
-    # invoke_button pour la rotation seulement : suit la fermeture du dialogue
-    # Vignette (Valider), même fragilité. Miroir H/V/Réinitialiser qui suivent
-    # n'ouvrent ni ne ferment de fenêtre entre eux (la fenêtre principale garde
-    # le premier-plan OS en continu) : click_input reste fiable pour eux.
+    # ---- Rotation / Mirror: direct buttons, immediate persistence ----
+    # invoke_button for the rotation only: follows the closing of the Vignette
+    # dialog (Apply), same fragility. The Mirror H/V/Reset buttons that follow
+    # neither open nor close a window between them (the main window keeps the OS
+    # foreground continuously): click_input stays reliable for them.
     invoke_button(window, ["↻", "+90°"], timeout=10.0, wait_gone=False)
     wait_for_condition(
         lambda: _column(edits_db, photo, "rotation") == 90,
         timeout=20.0, message="la rotation +90° n'a pas été persistée",
     )
-    # invoke_button pour Miroir H/V/Réinitialiser : click_input s'est avéré
-    # flottant sur des enchaînements rapides de boutons directs du même genre
-    # (constaté empiriquement sur Miroir V lors du diagnostic de ce fichier,
-    # sans transition de fenêtre identifiable comme cause — flakiness générale
-    # de SendInput sur cet environnement plutôt qu'un piège structurel isolé).
+    # invoke_button for Mirror H/V/Reset: click_input turned out to be flaky on
+    # fast sequences of direct buttons of the same kind (observed empirically on
+    # Mirror V during the diagnosis of this file, with no window transition
+    # identifiable as the cause -- general flakiness of SendInput on this
+    # environment rather than an isolated structural trap).
     invoke_button(window, ["Mirror H"], exact=True, timeout=10.0, wait_gone=False)
     wait_for_condition(
         lambda: _column(edits_db, photo, "flip_h") == 1,
@@ -208,17 +208,17 @@ def test_edit_treatments_extended(isolated_app):
         timeout=20.0, message="le miroir vertical n'a pas été persisté",
     )
 
-    # ---- Réinitialiser toutes les retouches : sans confirmation (réversible), ligne supprimée ----
-    # Libellé sur 2 lignes (edit_panel.py) : UIA renvoie le \n littéral dans window_text().
+    # ---- Reset every edit: without confirmation (reversible), row deleted ----
+    # Label on 2 lines (edit_panel.py): UIA returns the literal \n in window_text().
     invoke_button(window, ["Réinitialiser\ntoutes les retouches"], exact=True, timeout=10.0, wait_gone=False)
     wait_for_condition(
         lambda: not _row_exists(edits_db, photo),
         timeout=20.0, message="la réinitialisation n'a pas supprimé la ligne photo_edits",
     )
 
-    # ---- Régression GammaCurveWidget (commit 34d8c5e) : le simple RENDU du
-    # widget plantait avec un NameError avant correctif — reproduire la
-    # séquence réelle des deux cases à cocher, pas un glissé de point. ----
+    # ---- GammaCurveWidget regression (commit 34d8c5e): merely RENDERING the
+    # widget crashed with a NameError before the fix -- reproduce the real
+    # sequence of the two check boxes, not a drag of a point. ----
     invoke_button(window, ["Brightness"], exact=True, timeout=15.0, wait_gone=False)
     find_checkbox(window, "Advanced options…", timeout=10.0).click_input()
     find_checkbox(window, "Expert options", timeout=10.0).click_input()
