@@ -17,7 +17,7 @@ from src.core.i18n import translate
 class DeletedCorruptedFilesDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setWindowTitle(translate("DeletedCorruptedFilesDialog", "Fichiers corrompus supprimés"))
+        self.setWindowTitle(translate("DeletedCorruptedFilesDialog", "Deleted corrupted files"))
         self.setAttribute(Qt.WA_DeleteOnClose)
         self._setup_ui()
 
@@ -28,10 +28,9 @@ class DeletedCorruptedFilesDialog(QDialog):
         n = len(entries)
         lbl = QLabel(
             translate("DeletedCorruptedFilesDialog",
-                      "%n fichier(s) corrompu(s) supprimé(s) depuis l'installation, "
-                      "en passant par la corbeille Windows. Cette liste est conservée "
-                      "pour vous permettre de les y retrouver — ou dans une sauvegarde "
-                      "externe si la corbeille a depuis été vidée.", None, n)
+                      "%n corrupted file(s) deleted since the installation, by way of the "
+                      "Windows recycle bin. This list is kept so that you can find them there "
+                      "— or in an external backup if the recycle bin has since been emptied.", None, n)
         )
         lbl.setWordWrap(True)
         root.addWidget(lbl)
@@ -43,7 +42,7 @@ class DeletedCorruptedFilesDialog(QDialog):
 
         btn_row = QHBoxLayout()
         btn_row.addStretch()
-        btn_close = QPushButton(translate("DeletedCorruptedFilesDialog", "Fermer"))
+        btn_close = QPushButton(translate("DeletedCorruptedFilesDialog", "Close"))
         btn_close.clicked.connect(self.accept)
         btn_row.addWidget(btn_close)
         root.addLayout(btn_row)

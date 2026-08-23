@@ -304,7 +304,7 @@ class TestClusterRow:
 
         labels = [lbl.text() for lbl in row.findChildren(QLabel)]
         assert any("Peut-être Boris (46 %)" in t for t in labels)
-        assert any("Isolé" in t for t in labels)   # face_count == 1
+        assert any("Isolated" in t for t in labels)   # face_count == 1
 
     def test_set_avatar(self, qtbot, tmp_path):
         photo = _make_photo(tmp_path / "p.jpg")

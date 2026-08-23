@@ -105,7 +105,7 @@ class TestProgressPopup:
         received = []
         popup.cancel_requested.connect(lambda: received.append(True))
 
-        btn = next(b for b in popup.findChildren(QPushButton) if b.text() == "Annuler")
+        btn = next(b for b in popup.findChildren(QPushButton) if b.text() == "Cancel")
         btn.click()
 
         assert received == [True]
@@ -171,7 +171,7 @@ class TestProgressCancel:
         assert fake_thread.interrupted
         assert grid._progress_popup is None
         assert not grid._progress_widget.isVisible()
-        assert grid._lbl_title.text() == "Analyse annulée"
+        assert grid._lbl_title.text() == "Analysis cancelled"
 
 
 # ---------------------------------------------------------------------------
@@ -180,11 +180,11 @@ class TestProgressCancel:
 class TestBuildFromData:
     def test_data_ready_none_shows_error(self, qtbot, grid):
         grid._on_data_ready(None)
-        assert grid._lbl_title.text() == "Erreur lors du chargement"
+        assert grid._lbl_title.text() == "Error while loading"
 
     def test_empty_data_shows_done_message(self, qtbot, grid):
         _build(qtbot, grid, _data({}, []))
-        assert grid._lbl_title.text() == "Aucun groupe à identifier"
+        assert grid._lbl_title.text() == "No group to identify"
 
     def test_flat_groups_and_solos(self, qtbot, grid):
         data = _data(
@@ -194,7 +194,7 @@ class TestBuildFromData:
         _build(qtbot, grid, data)
 
         assert sorted(grid._cards.keys()) == [1, 2, 9]
-        assert grid._lbl_title.text() == "2 groupes, 1 visage isolé"
+        assert grid._lbl_title.text() == "2 group(s), 1 isolated face(s)"
         assert grid._cards[9]._is_solo
         assert grid._flat_section in grid._sections
         assert grid._solo_section in grid._sections
@@ -264,11 +264,11 @@ class TestSelection:
         g._on_card_selection_toggled(1, True)
 
         assert g._action_bar.isVisibleTo(g)
-        assert g._lbl_selected.text() == "1 groupe sélectionné"
+        assert g._lbl_selected.text() == "1 group(s) selected"
         assert g._anchor_id == 1
 
         g._on_card_selection_toggled(2, True)
-        assert g._lbl_selected.text() == "2 groupes sélectionnés"
+        assert g._lbl_selected.text() == "2 group(s) selected"
 
     def test_solo_only_selection_label(self, qtbot, grid):
         g = self._grid_with_cards(qtbot, grid)
@@ -277,14 +277,14 @@ class TestSelection:
 
         g._on_card_selection_toggled(9, True)
 
-        assert "visage isolé" in g._lbl_selected.text()
+        assert "isolated face(s) selected" in g._lbl_selected.text()
 
     def test_mixed_selection_label(self, qtbot, grid):
         g = self._grid_with_cards(qtbot, grid)
         g._on_card_selection_toggled(1, True)
         g._on_card_selection_toggled(9, True)
 
-        assert "éléments sélectionnés" in g._lbl_selected.text()
+        assert "item(s) selected" in g._lbl_selected.text()
 
     def test_clear_selection_hides_bar(self, qtbot, grid):
         g = self._grid_with_cards(qtbot, grid)
@@ -359,7 +359,7 @@ class TestCardActions:
 
         with qtbot.waitSignal(grid.photos_requested, timeout=1000) as blocker:
             grid._on_card_view_requested(9)
-        assert blocker.args == [9, "Visage isolé"]
+        assert blocker.args == [9, "Isolated face"]
 
         with qtbot.waitSignal(grid.photos_requested, timeout=1000) as blocker:
             grid._on_card_view_requested(2)

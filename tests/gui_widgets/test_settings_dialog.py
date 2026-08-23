@@ -41,7 +41,7 @@ class TestFaceRecognitionPage:
 
         assert page._slider.value() == 60
         assert page._lbl_value.text().startswith("0.60")
-        assert "très larges" in page._lbl_value.text()
+        assert "very broad" in page._lbl_value.text()
 
     def test_saved_threshold_restored_and_clamped(self, qtbot, config):
         config.set("faces.cluster_threshold", 0.9)   # hors plage → clampé à 70
@@ -51,10 +51,10 @@ class TestFaceRecognitionPage:
         assert page._slider.value() == 70
 
     @pytest.mark.parametrize("value, hint", [
-        (28, "très stricts"),
-        (38, "équilibrés"),
-        (50, "plus larges"),
-        (65, "très larges"),
+        (28, "very strict"),
+        (38, "balanced"),
+        (50, "broader"),
+        (65, "very broad"),
     ])
     def test_value_label_hints(self, qtbot, config, value, hint):
         page = _FaceRecognitionPage(config)

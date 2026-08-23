@@ -331,7 +331,7 @@ class _FaceItem(QFrame):
         )
         self._btn_ignore.setStyleSheet(self._BTN_STYLE)
         self._btn_ignore.setCursor(Qt.PointingHandCursor)
-        self._btn_ignore.setToolTip(translate("FaceItem", "Ignorer ce visage"))
+        self._btn_ignore.setToolTip(translate("FaceItem", "Ignore this face"))
         self._btn_ignore.clicked.connect(lambda: self.ignore_requested.emit(self._face_id))
         self._btn_ignore.raise_()
 
@@ -340,7 +340,8 @@ class _FaceItem(QFrame):
             self._btn_accept.setGeometry(2, 2, _BTN_IGNORE_SZ, _BTN_IGNORE_SZ)
             self._btn_accept.setStyleSheet(self._BTN_ACCEPT_STYLE)
             self._btn_accept.setCursor(Qt.PointingHandCursor)
-            self._btn_accept.setToolTip(translate("FaceItem", "Confirmer cette personne (tout le groupe)"))
+            self._btn_accept.setToolTip(translate("FaceItem", "Confirm this person (the whole "
+                                                              "group)"))
             self._btn_accept.clicked.connect(
                 lambda: self.suggestion_accept_requested.emit(self._face_id)
             )
@@ -352,7 +353,7 @@ class _FaceItem(QFrame):
             )
             self._btn_reject.setStyleSheet(self._BTN_REJECT_STYLE)
             self._btn_reject.setCursor(Qt.PointingHandCursor)
-            self._btn_reject.setToolTip(translate("FaceItem", "Rejeter cette suggestion"))
+            self._btn_reject.setToolTip(translate("FaceItem", "Reject this suggestion"))
             self._btn_reject.clicked.connect(
                 lambda: self.suggestion_reject_requested.emit(self._face_id)
             )
@@ -408,7 +409,7 @@ class _IgnoredFacesDialog(QDialog):
 
     def __init__(self, faces: list[FaceInfo], photo_path: str, parent=None) -> None:
         super().__init__(parent)
-        self.setWindowTitle(translate("IgnoredFacesDialog", "Visages ignorés"))
+        self.setWindowTitle(translate("IgnoredFacesDialog", "Ignored faces"))
         self.setMinimumWidth(300)
         self._restored: list[int] = []   # face_ids restaurés
         self._photo_path = photo_path
@@ -418,7 +419,7 @@ class _IgnoredFacesDialog(QDialog):
 
         n_faces = len(faces)
         lbl = QLabel(translate("FacePanel",
-                               "%n visage(s) ignoré(s) sur cette photo :",
+                               "%n ignored face(s) on this photo:",
                                None, n_faces))
         lbl.setStyleSheet("color: #aaa; font-size: 11px; margin-bottom: 4px;")
         layout.addWidget(lbl)
@@ -451,7 +452,7 @@ class _IgnoredFacesDialog(QDialog):
             info.setStyleSheet("font-size: 10px; color: #aaa;")
             row_layout.addWidget(info, stretch=1)
 
-            btn = QPushButton(translate("IgnoredFacesDialog", "Restaurer"))
+            btn = QPushButton(translate("IgnoredFacesDialog", "Restore"))
             btn.setFixedWidth(75)
             btn.setStyleSheet(
                 "QPushButton { background:#2a5a3a; color:#9d9; border:none;"
@@ -494,7 +495,7 @@ class _IgnoredFacesDialog(QDialog):
     def _restore(self, face_id: int, btn: QPushButton, row: QWidget) -> None:
         self._restored.append(face_id)
         btn.setEnabled(False)
-        btn.setText(translate("IgnoredFacesDialog", "Restauré"))
+        btn.setText(translate("IgnoredFacesDialog", "Restored"))
         row.setStyleSheet("background: #1a2a1a; border-radius: 3px;")
 
     def restored_ids(self) -> list[int]:
@@ -580,16 +581,16 @@ class FacePanel(QWidget):
         header_bar.setStyleSheet("background: #2a2a2a; border-bottom: 1px solid #444;")
         hbox = QHBoxLayout(header_bar)
         hbox.setContentsMargins(6, 4, 6, 4)
-        lbl_title = QLabel(translate("FacePanel", "Visages"))
+        lbl_title = QLabel(translate("FacePanel", "Faces"))
         lbl_title.setStyleSheet("color: #ccc; font-weight: bold; background: transparent;")
         hbox.addWidget(lbl_title)
         root.addWidget(header_bar)
 
-        self._btn_tous = QPushButton(translate("FacePanel", "Tous"))
+        self._btn_tous = QPushButton(translate("FacePanel", "All"))
         self._btn_tous.setCheckable(True)
         self._btn_tous.setFixedHeight(34)
         self._btn_tous.setStyleSheet(_TOUS_BTN_STYLE)
-        self._btn_tous.setToolTip(translate("FacePanel", "Afficher tous les visages dans l'image"))
+        self._btn_tous.setToolTip(translate("FacePanel", "Show every face in the picture"))
         self._btn_tous.toggled.connect(self._on_tous_toggled)
         root.addWidget(self._btn_tous)
 
@@ -606,23 +607,24 @@ class FacePanel(QWidget):
         scroll.setStyleSheet("border: none;")
         root.addWidget(scroll)
 
-        self._btn_add_face = QPushButton(translate("FacePanel", "➕  Ajouter une personne"))
+        self._btn_add_face = QPushButton(translate("FacePanel", "➕  Add a person"))
         self._btn_add_face.setCheckable(True)
         self._btn_add_face.setFixedHeight(28)
         self._btn_add_face.setStyleSheet(
             _BOTTOM_BTN_STYLE + "QPushButton:checked { background: #2a6a2a; color: white; }"
         )
         self._btn_add_face.setToolTip(
-            translate("FacePanel", "Dessiner une bboxe pour une personne non détectée automatiquement")
+            translate("FacePanel", "Draw a box for a person that was not detected automatically")
         )
         self._btn_add_face.toggled.connect(self._on_add_face_toggled)
         self._btn_add_face.setEnabled(False)
         root.addWidget(self._btn_add_face)
 
-        self._btn_ignored = QPushButton(translate("FacePanel", "Visages ignorés…"))
+        self._btn_ignored = QPushButton(translate("FacePanel", "Ignored faces…"))
         self._btn_ignored.setFixedHeight(28)
         self._btn_ignored.setStyleSheet(_BOTTOM_BTN_STYLE)
-        self._btn_ignored.setToolTip(translate("FacePanel", "Restaurer un visage ignoré sur cette photo"))
+        self._btn_ignored.setToolTip(translate("FacePanel", "Restore an ignored face on this "
+                                                            "photo"))
         self._btn_ignored.clicked.connect(self._on_show_ignored)
         self._btn_ignored.setEnabled(False)
         root.addWidget(self._btn_ignored)
@@ -721,12 +723,12 @@ class FacePanel(QWidget):
         # thread de chargement — pas de requête DB sur le thread UI ici)
         self._btn_ignored.setEnabled(ignored_count > 0)
         self._btn_ignored.setText(
-            translate("FacePanel", "Visages ignorés… ({n})").format(n=ignored_count)
-            if ignored_count else translate("FacePanel", "Visages ignorés…")
+            translate("FacePanel", "Ignored faces… ({n})").format(n=ignored_count)
+            if ignored_count else translate("FacePanel", "Ignored faces…")
         )
 
         if not faces:
-            lbl = QLabel(translate("FacePanel", "Aucun visage\ndétecté"))
+            lbl = QLabel(translate("FacePanel", "No face\ndetected"))
             lbl.setAlignment(Qt.AlignCenter)
             lbl.setStyleSheet("color: #555; font-size: 11px; border: none;")
             self._vbox.addWidget(lbl)
@@ -756,9 +758,9 @@ class FacePanel(QWidget):
                 pid = cluster_persons[face.cluster_id]
                 name = person_names.get(
                     pid,
-                    translate("FacePanel", "Groupe {id}").format(id=face.cluster_id))
+                    translate("FacePanel", "Group {id}").format(id=face.cluster_id))
             elif face.pinned:
-                name = translate("FacePanel", "Séparé")
+                name = translate("FacePanel", "Separated")
             elif (
                 face.suggestion_person_id is not None
                 and face.suggestion_person_id in person_names
@@ -779,14 +781,14 @@ class FacePanel(QWidget):
                 prob_pid, prob_sim = probable[face.id]
                 prob_name = person_names[prob_pid]
                 pct = round(prob_sim * 100)
-                qualifier = (translate("FacePanel", "Probablement")
+                qualifier = (translate("FacePanel", "Probably")
                              if prob_sim >= _SIM_STRONG
-                             else translate("FacePanel", "Peut-être"))
+                             else translate("FacePanel", "Maybe"))
                 name = translate("FacePanel", "≈ {qualifier} {name} ({pct} %)").format(
                     qualifier=qualifier, name=prob_name, pct=pct)
                 name_color = "#7aabdb" if prob_sim >= _SIM_STRONG else "#888"
             elif face.cluster_id is not None:
-                name = translate("FacePanel", "Groupe {id}").format(id=face.cluster_id)
+                name = translate("FacePanel", "Group {id}").format(id=face.cluster_id)
             else:
                 name = "Inconnu"
 
@@ -836,19 +838,20 @@ class FacePanel(QWidget):
         Appelé depuis le panneau (via _on_item_context_menu) et depuis la visionneuse."""
         menu = QMenu(self)
         install_menu_width_fix(menu)
-        act_identify = menu.addAction(translate("FacePanel", "Identifier cette personne…"))
+        act_identify = menu.addAction(translate("FacePanel", "Identify this person…"))
         act_identify.setToolTip(
-            translate("FacePanel", "Sépare ce visage de son groupe et l'attache à une personne nommée")
+            translate("FacePanel", "Detaches this face from its group and attaches it to a "
+                                   "named person")
         )
-        act_assign = menu.addAction(translate("FacePanel", "Identifier ce groupe…"))
-        act_assign.setToolTip(translate("FacePanel", "Attribue l'ensemble du groupe à une personne nommée"))
+        act_assign = menu.addAction(translate("FacePanel", "Identify this group…"))
+        act_assign.setToolTip(translate("FacePanel", "Assigns the whole group to a named person"))
         menu.addSeparator()
-        act_unassign = menu.addAction(translate("FacePanel", "Désallouer le groupe"))
+        act_unassign = menu.addAction(translate("FacePanel", "Unassign the group"))
         act_unassign.setEnabled(
             face.person_id is not None or face.cluster_id is not None
         )
         menu.addSeparator()
-        act_ignore = menu.addAction(translate("FacePanel", "Ignorer ce visage"))
+        act_ignore = menu.addAction(translate("FacePanel", "Ignore this face"))
 
         chosen = menu.exec(gpos)
         if chosen == act_identify:
@@ -939,7 +942,7 @@ class FacePanel(QWidget):
     def _continue_bbox_ready(self, bbox: tuple, persons: list) -> None:
         QApplication.restoreOverrideCursor()
         dlg = _AssignDialog(0, persons, suggested_person_id=None, show_ignore=False, parent=self)
-        dlg.setWindowTitle(translate("FacePanel", "Nommer ce visage"))
+        dlg.setWindowTitle(translate("FacePanel", "Name this face"))
         if dlg.exec() != QDialog.Accepted:
             return
 
@@ -1027,7 +1030,7 @@ class FacePanel(QWidget):
             show_ignore=False,
             parent=self,
         )
-        dlg.setWindowTitle(translate("FacePanel", "Identifier cette personne"))
+        dlg.setWindowTitle(translate("FacePanel", "Identify this person"))
         if dlg.exec() != QDialog.Accepted:
             return
 

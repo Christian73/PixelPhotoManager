@@ -157,10 +157,10 @@ def test_faces_identify_and_reset(isolated_app_with_faces):
     # `_act_faces_toggle` (main_window.py) est un QPushButton *checkable* : Qt
     # l'expose à UIA sous control_type="CheckBox", pas "Button" — find_dialog_button
     # (filtré sur Button) ne le trouve jamais, d'où find_checkbox ici.
-    find_checkbox(window, "Visages").click_input()
+    find_checkbox(window, "Faces").click_input()
     right_click_and_click_context_menu_item(
         lambda: find_by_accessible_name(window, f"faceitem::{solo_face_id}"),
-        window, "Identifier cette personne…", exact=True,
+        window, "Identify this person…", exact=True,
     )
     _find_name_input(window).set_edit_text("TestPersonSolo")
     find_dialog_button(window, ["OK"], exact=True).click_input()
@@ -207,10 +207,10 @@ def test_faces_identify_and_reset(isolated_app_with_faces):
         "topologie de regroupement inattendue"
     )
 
-    find_dialog_button(window, ["Identifier"], exact=False).click_input()
+    find_dialog_button(window, ["Identify"], exact=False).click_input()
     right_click_and_click_context_menu_item(
         lambda: find_by_accessible_name(window, f"facecluster::{group_cluster_id}"),
-        window, "Identifier ce", exact=False,
+        window, "Identify this", exact=False,
     )
     _find_name_input(window).set_edit_text("TestPersonGroup")
     find_dialog_button(window, ["OK"], exact=True).click_input()
@@ -245,7 +245,7 @@ def test_faces_identify_and_reset(isolated_app_with_faces):
 
     right_click_and_click_context_menu_item(
         lambda: _find_person_list_item(window, "TestPersonSolo"),
-        window, "Fusionner avec…", exact=True,
+        window, "Merge with…", exact=True,
     )
     find_dialog_button(window, ["OK"], exact=True).click_input()
 
@@ -287,7 +287,7 @@ def test_faces_identify_and_reset(isolated_app_with_faces):
     open_photo_in_viewer(window, ignore_photo_path)
     right_click_and_click_context_menu_item(
         lambda: find_by_accessible_name(window, f"faceitem::{ignore_face_id}"),
-        window, "Ignorer ce visage", exact=True,
+        window, "Ignore this face", exact=True,
     )
     wait_for_condition(
         lambda: query_one(
@@ -296,9 +296,9 @@ def test_faces_identify_and_reset(isolated_app_with_faces):
         timeout=15.0, message="le visage n'a pas été marqué ignoré",
     )
 
-    find_dialog_button(window, ["Visages ignorés"], exact=False).click_input()
-    find_dialog_button(window, ["Restaurer"], exact=True).click_input()
-    find_dialog_button(window, ["Fermer", "Close"], exact=True).click_input()
+    find_dialog_button(window, ["Ignored faces"], exact=False).click_input()
+    find_dialog_button(window, ["Restore"], exact=True).click_input()
+    find_dialog_button(window, ["Close", "Close"], exact=True).click_input()
 
     wait_for_condition(
         lambda: query_one(
@@ -309,10 +309,10 @@ def test_faces_identify_and_reset(isolated_app_with_faces):
     )
 
     # ---- 6. Réinitialiser les groupes uniquement (rapide, non destructeur) ----
-    # (le menu "Visages" reste accessible qu'on soit dans la grille ou la
+    # (le menu "Faces" reste accessible qu'on soit dans la grille ou la
     # visionneuse — pas besoin de revenir explicitement à la grille ici.)
-    click_menu_item(window, "Visages", "Réinitialiser et réindexer…")
-    find_dialog_button(window, ["Confirmer"], exact=True).click_input()
+    click_menu_item(window, "Faces", "Reset and reindex…")
+    find_dialog_button(window, ["Confirm"], exact=True).click_input()
     find_dialog_button(window, ["OK"], exact=True).click_input()
 
     # Les personnes identifiées survivent au reset de regroupement (seuls les
@@ -343,9 +343,9 @@ def test_faces_reset_full(isolated_app_with_faces):
 
     _wait_faces_ready(faces_db, face_photo_paths)
 
-    click_menu_item(window, "Visages", "Réinitialiser et réindexer…")
-    find_radio_button(window, "Réinitialisation complète").click_input()
-    find_dialog_button(window, ["Confirmer"], exact=True).click_input()
+    click_menu_item(window, "Faces", "Reset and reindex…")
+    find_radio_button(window, "Full reset").click_input()
+    find_dialog_button(window, ["Confirm"], exact=True).click_input()
 
     # QMessageBox.information() est modale : elle bloque le thread UI avant
     # que _start_face_indexing() (déclenché juste après sa fermeture) ne

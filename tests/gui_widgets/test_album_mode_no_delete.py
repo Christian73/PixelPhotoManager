@@ -90,7 +90,7 @@ class TestGridContextMenu:
         grid._on_right_click(p, None)
 
         texts = _action_texts(captured_menus[0])
-        assert "Retirer de l'album\tSuppr" in texts
+        assert "Remove from the album\tDel" in texts
         assert not any("Effacer" in t for t in texts)
 
     def test_album_mode_multiselection_offers_remove_never_delete(
@@ -105,7 +105,7 @@ class TestGridContextMenu:
         grid._on_right_click(p1, None)
 
         texts = _action_texts(captured_menus[0])
-        assert "Retirer les photos de l'album\tSuppr" in texts
+        assert "Remove the photos from the album\tDel" in texts
         assert not any("Effacer" in t for t in texts)
 
     def test_no_album_offers_delete_never_remove(self, grid, captured_menus):
@@ -116,8 +116,8 @@ class TestGridContextMenu:
         grid._on_right_click(p, None)
 
         texts = _action_texts(captured_menus[0])
-        assert "Effacer le fichier…\tSuppr" in texts
-        assert not any("album" in t and "Retirer" in t for t in texts)
+        assert "Delete the file…\tDel" in texts
+        assert not any("album" in t and "Remove" in t for t in texts)
 
     def test_album_remove_action_emits_remove_signal(self, grid, captured_menus):
         p = _photo("C:/lib/a.jpg")
@@ -126,7 +126,7 @@ class TestGridContextMenu:
         spy = _SignalSpy(grid)
 
         grid._on_right_click(p, None)
-        _trigger(captured_menus[0], "Retirer de l'album\tSuppr")
+        _trigger(captured_menus[0], "Remove from the album\tDel")
 
         assert spy.removed == [[p]]
         assert spy.deleted == []
@@ -137,7 +137,7 @@ class TestGridContextMenu:
         spy = _SignalSpy(grid)
 
         grid._on_right_click(p, None)
-        _trigger(captured_menus[0], "Effacer le fichier…\tSuppr")
+        _trigger(captured_menus[0], "Delete the file…\tDel")
 
         assert spy.deleted == [[p]]
         assert spy.removed == []
@@ -232,28 +232,28 @@ class TestViewerContextMenu:
         viewer.set_album_context(42)
         viewer._show_context_menu(None)
         texts = _action_texts(captured_menus[0])
-        assert "Retirer de l'album\tSuppr" in texts
+        assert "Remove from the album\tDel" in texts
         assert not any("Effacer" in t for t in texts)
 
     def test_no_album_offers_delete_never_remove(self, viewer, captured_menus):
         viewer.set_album_context(None)
         viewer._show_context_menu(None)
         texts = _action_texts(captured_menus[0])
-        assert "Effacer le fichier…\tSuppr" in texts
-        assert "Retirer de l'album\tSuppr" not in texts
+        assert "Delete the file…\tDel" in texts
+        assert "Remove from the album\tDel" not in texts
 
     def test_album_remove_action_emits_remove_signal(self, viewer, captured_menus):
         viewer.set_album_context(42)
         spy = _SignalSpy(viewer)
         viewer._show_context_menu(None)
-        _trigger(captured_menus[0], "Retirer de l'album\tSuppr")
+        _trigger(captured_menus[0], "Remove from the album\tDel")
         assert spy.removed == [[viewer._photo]]
         assert spy.deleted == []
 
     def test_no_album_delete_action_emits_delete_signal(self, viewer, captured_menus):
         spy = _SignalSpy(viewer)
         viewer._show_context_menu(None)
-        _trigger(captured_menus[0], "Effacer le fichier…\tSuppr")
+        _trigger(captured_menus[0], "Delete the file…\tDel")
         assert spy.deleted == [[viewer._photo]]
         assert spy.removed == []
 

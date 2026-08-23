@@ -12,10 +12,11 @@ Etape 2 (pluriels) : cf. `restore_numerus` ci-dessous.
 Etape 3 (lrelease) : compile chaque .ts en .qm binaire, seul format lu a
 l'execution (cf. src/core/i18n.py).
 
-Le francais a lui aussi un catalogue, mais pour les seuls pluriels : les
-chaines %n sont ecrites au neutre dans le code (« %n visage(s) ») et c'est
-ppm_fr.ts qui porte « %n visage » / « %n visages ». Le reste y est vide et
-retombe sur la source.
+La langue SOURCE est l'anglais : les chaines sont ecrites en anglais dans le
+code et toute chaine non traduite y retombe. L'anglais a lui aussi un
+catalogue, mais pour les seuls pluriels : les chaines %n sont ecrites au neutre
+dans le code (« %n face(s) ») et c'est ppm_en.ts qui porte « %n face » /
+« %n faces ». Le reste y est vide et retombe sur la source.
 """
 
 import re
@@ -30,7 +31,7 @@ TS_DIR = ROOT / "translations"
 # Codes ISO -> locale complete ecrite dans l'en-tete du .ts (Qt Linguist
 # l'utilise pour les regles de pluriel, qui different d'une locale a l'autre).
 TARGETS = {"fr": "fr_FR", "en": "en_US", "de": "de_DE"}
-SOURCE_LOCALE = "fr_FR"
+SOURCE_LOCALE = "en_US"
 
 #: Nombre de formes plurielles par langue cible. fr/en/de en ont deux
 #: (le decoupage differe : le francais met 0 au singulier, pas l'anglais).
@@ -128,7 +129,11 @@ def restore_numerus(ts: Path, saved: dict, n_forms: int) -> int:
             tr.text = None
             if kept:
                 tr.set("type", kept)
-            elif all(f == "" for f in forms):
+            elif not all(f.strip() for f in forms):
+                # UNE seule forme vide suffit a marquer le message inacheve :
+                # lrelease compte « finished » des qu'il y a une <translation>,
+                # et une forme vide rend une chaine VIDE a l'execution, pour le
+                # seul `n` concerne. Quatre messages sont passes par ce trou.
                 tr.set("type", "unfinished")
             for f in forms:
                 node = ET.SubElement(tr, "numerusform")

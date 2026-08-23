@@ -122,7 +122,7 @@ class TestCompteRenduPanel:
         panel = tjd._CompteRenduPanel()
         qtbot.addWidget(panel)
         panel.populate([])
-        assert "Aucune donnée" in panel._banner.text()
+        assert "No data" in panel._banner.text()
 
     def test_all_ok_banner(self, qtbot):
         panel = tjd._CompteRenduPanel()
@@ -141,7 +141,7 @@ class TestCompteRenduPanel:
         panel = tjd._CompteRenduPanel()
         qtbot.addWidget(panel)
         panel.populate(_SLOW_ENTRIES)
-        assert "légèrement lent" in panel._banner.text()
+        assert "slightly slow" in panel._banner.text()
 
     def test_face_index_progress_badge(self, qtbot):
         panel = tjd._CompteRenduPanel()
@@ -162,7 +162,7 @@ class TestSummaryTable:
             for r in range(table.rowCount())
         }
         assert statuses["ScanThread"] == "✓"
-        assert "erreur" in statuses["ThumbnailThread"]
+        assert "error" in statuses["ThumbnailThread"]
 
     def test_face_index_progress_status(self, qtbot):
         table = tjd._SummaryTable()
@@ -229,8 +229,8 @@ class TestThreadJournalDialog:
         dlg = tjd.ThreadJournalDialog()
         qtbot.addWidget(dlg)
         assert len(dlg._entries) >= 2
-        assert dlg._cmb_thread.count() >= 2   # "(tous)" + ScanThread
-        assert "entrée(s)" in dlg._lbl_count.text()
+        assert dlg._cmb_thread.count() >= 2   # "(all)" + ScanThread
+        assert "entry(ies)" in dlg._lbl_count.text()
 
     def test_filter_by_thread(self, qtbot):
         t0 = journal.start("ScanThread", "a")
@@ -257,7 +257,7 @@ class TestThreadJournalDialog:
         qtbot.addWidget(dlg)
         dlg._btn_live.setChecked(True)
         assert dlg._refresh_timer.isActive()
-        assert "Arrêter" in dlg._btn_live.text()
+        assert "Stop" in dlg._btn_live.text()
         dlg._btn_live.setChecked(False)
         assert not dlg._refresh_timer.isActive()
 
@@ -322,4 +322,4 @@ class TestThreadJournalDialog:
         dlg = tjd.ThreadJournalDialog()
         qtbot.addWidget(dlg)
         size = dlg._journal_size()
-        assert size == "?" or "Ko" in size or "Mo" in size
+        assert size == "?" or "kB" in size or "MB" in size

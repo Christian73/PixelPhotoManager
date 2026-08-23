@@ -1,10 +1,9 @@
+# Plugin system architecture – Photo manager
 
-# Architecture du système de plugins – Gestionnaire de photos
+**Version:** 1.0
+**Status:** Architecture proposal
 
-**Version :** 1.0
-**Statut :** Proposition d’architecture
-
-Technologies cibles :
+Target technologies:
 
 * Python 3.11+
 * PySide6
@@ -13,68 +12,68 @@ Technologies cibles :
 
 ---
 
-# 1. Objectif
+# 1. Purpose
 
-Le système de plugins permet d’ajouter dynamiquement des fonctionnalités au gestionnaire de photos sans modifier le cœur de l’application.
+The plugin system makes it possible to add features to the photo manager dynamically, without modifying the core of the application.
 
-Exemples :
+Examples:
 
-* détection de photos papier ;
-* extraction automatique ;
-* reconnaissance faciale ;
-* export Web ;
-* renommage ;
-* traitement couleur ;
-* génération de miniatures ;
-* publication.
+* paper-photo detection;
+* automatic extraction;
+* face recognition;
+* web export;
+* renaming;
+* colour processing;
+* thumbnail generation;
+* publishing.
 
-Objectifs :
+Goals:
 
-* architecture simple ;
-* extensibilité ;
-* stabilité API ;
-* faible couplage ;
-* possibilité future d’exécution isolée.
-
----
-
-# 2. Principes
-
-## Le plugin PEUT
-
-* ajouter des actions ;
-* ajouter des boutons dans la barre d’outils ;
-* proposer des réglages ;
-* traiter des images ;
-* produire des fichiers ;
-* enrichir les métadonnées.
-
-## Le plugin NE DOIT PAS
-
-* modifier directement la fenêtre principale ;
-* accéder aux objets internes ;
-* écrire dans des chemins arbitraires ;
-* bloquer l’interface graphique.
+* simple architecture;
+* extensibility;
+* API stability;
+* loose coupling;
+* the future option of isolated execution.
 
 ---
 
-# 3. Architecture globale
+# 2. Principles
+
+## A plugin MAY
+
+* add actions;
+* add buttons to the toolbar;
+* offer settings;
+* process images;
+* produce files;
+* enrich metadata.
+
+## A plugin MUST NOT
+
+* modify the main window directly;
+* access internal objects;
+* write to arbitrary paths;
+* block the graphical interface.
+
+---
+
+# 3. Overall architecture
 
 ```text
 Application
     ↓
 PluginManager
     ↓
-Plugins chargés
+Loaded plugins
     ↓
-Actions UI
+UI actions
     ↓
-Traitement
+Processing
     ↓
-Résultat
+Result
 ```
 
-Structure :
+Structure:
 
 ```text
 plugins/
@@ -87,20 +86,20 @@ plugins/
 
 ---
 
-# 4. Manifest du plugin
+# 4. Plugin manifest
 
-Chaque plugin doit exposer :
+Every plugin must expose:
 
 `manifest.json`
 
-Exemple :
+Example:
 
 ```json
 {
   "id": "photo_export",
   "name": "Export Web",
   "version": "1.0.0",
-  "author": "Auteur",
+  "author": "Author",
   "entrypoint": "plugin.py",
   "class": "ExportPlugin",
   "icon": "icon.png",
@@ -108,21 +107,21 @@ Exemple :
 }
 ```
 
-## Champs
+## Fields
 
-| Champ      | Description        |
-| ---------- | ------------------ |
-| id         | identifiant unique |
-| name       | nom affiché        |
-| version    | version            |
-| entrypoint | module principal   |
-| class      | classe plugin      |
-| icon       | icône              |
-| toolbar    | ajout toolbar      |
+| Field      | Description       |
+| ---------- | ----------------- |
+| id         | unique identifier |
+| name       | displayed name    |
+| version    | version           |
+| entrypoint | main module       |
+| class      | plugin class      |
+| icon       | icon              |
+| toolbar    | toolbar entry     |
 
 ---
 
-# 5. Interface Python obligatoire
+# 5. Mandatory Python interface
 
 ```python
 class BasePlugin:
@@ -146,16 +145,16 @@ class BasePlugin:
 
 ---
 
-# 6. Méthode `describe()`
+# 6. The `describe()` method
 
-Exemple :
+Example:
 
 ```python
 {
  "name": "Export Web",
 
  "description":
- "Exporte des images",
+ "Exports images",
 
  "toolbar_actions": [
 
@@ -164,10 +163,10 @@ Exemple :
        "export_web",
 
      "label":
-       "Exporter",
+       "Export",
 
      "tooltip":
-       "Exporter image",
+       "Export image",
 
      "icon":
        "icon.png"
@@ -192,35 +191,35 @@ Exemple :
 
 ---
 
-# 7. Barre d’outils
+# 7. Toolbar
 
-Au démarrage :
+At startup:
 
 ```text
 PluginManager
 ↓
-lecture manifest
+read the manifest
 ↓
-création QAction
+create a QAction
 ↓
-insertion toolbar
+insert into the toolbar
 ```
 
-Cycle :
+Cycle:
 
 ```text
 Toolbar
 ↓
 on_action()
 ↓
-dialog paramètres
+settings dialog
 ↓
 process()
 ```
 
 ---
 
-# 8. Contexte transmis
+# 8. Context passed in
 
 ```python
 {
@@ -241,13 +240,13 @@ process()
 }
 ```
 
-Le plugin ne doit jamais accéder directement au cœur.
+A plugin must never reach into the core directly.
 
 ---
 
-# 9. Paramètres utilisateur
+# 9. User parameters
 
-Déclaration :
+Declaration:
 
 ```json
 {
@@ -255,7 +254,7 @@ Déclaration :
 
     "type": "int",
 
-    "label": "Qualité",
+    "label": "Quality",
 
     "default": 85,
 
@@ -264,7 +263,7 @@ Déclaration :
 }
 ```
 
-Widgets générés automatiquement :
+Widgets generated automatically:
 
 | Type   | Widget    |
 | ------ | --------- |
@@ -273,13 +272,13 @@ Widgets générés automatiquement :
 | bool   | Checkbox  |
 | string | Textbox   |
 | enum   | Combobox  |
-| path   | Sélecteur |
+| path   | Picker    |
 
 ---
 
-# 10. Interface avancée (optionnelle)
+# 10. Advanced interface (optional)
 
-Plugin :
+Plugin:
 
 ```python
 def create_settings_widget(
@@ -290,19 +289,19 @@ def create_settings_widget(
     return QWidget()
 ```
 
-Permet :
+Allows:
 
-* aperçu ;
-* validation ;
-* interaction avancée.
+* preview;
+* validation;
+* advanced interaction.
 
-Réservé aux plugins complexes.
+Reserved for complex plugins.
 
 ---
 
-# 11. Traitement
+# 11. Processing
 
-Entrée :
+Input:
 
 ```python
 {
@@ -317,7 +316,7 @@ Entrée :
 }
 ```
 
-Sortie :
+Output:
 
 ```python
 {
@@ -344,19 +343,19 @@ Sortie :
 
 ---
 
-# 12. Résultats supportés
+# 12. Supported results
 
-Types :
+Types:
 
 * Image
-* Fichier
+* File
 * Tag
-* Personne
+* Person
 * Export
 * Album
 * Log
 
-Exemple :
+Example:
 
 ```json
 {
@@ -377,67 +376,67 @@ Exemple :
 # 13. Pipeline
 
 ```text
-Utilisateur
+User
 ↓
 Toolbar
 ↓
 Plugin
 ↓
-Paramètres
+Parameters
 ↓
-Traitement
+Processing
 ↓
-Résultat
+Result
 ↓
 Refresh UI
 ```
 
 ---
 
-# 14. Gestion des erreurs
+# 14. Error handling
 
-Retour :
+Return value:
 
 ```json
 {
  "status":"error",
 
  "message":
-   "Impossible"
+   "Not possible"
 }
 ```
 
-Règles :
+Rules:
 
-* timeout 60 s ;
-* exceptions capturées ;
-* journal obligatoire.
+* 60 s timeout;
+* exceptions caught;
+* logging mandatory.
 
 ---
 
-# 15. Sécurité
+# 15. Security
 
-Évolution prévue :
+Planned evolution:
 
 ```text
 V1
-→ plugin chargé directement
+→ plugin loaded directly
 
 V2
-→ processus séparé
+→ separate process
 
 V3
 → sandbox
 ```
 
-Permissions :
+Permissions:
 
-* lecture image ;
-* écriture contrôlée.
+* image reading;
+* controlled writing.
 
 ---
 
-# 16. Exemples de plugins
+# 16. Example plugins
 
 * PhotoPaperExtractor
 * FaceDetector
@@ -449,9 +448,9 @@ Permissions :
 
 ---
 
-# 17. Compatibilité future
+# 17. Future compatibility
 
-Prévoir :
+Plan for:
 
 ```json
 {
@@ -460,7 +459,7 @@ Prévoir :
 }
 ```
 
-Règle :
+Rule:
 
 ```text
 1.x compatible
@@ -469,16 +468,16 @@ Règle :
 
 ---
 
-# 18. Recommandation finale
+# 18. Final recommendation
 
-Conserver :
+Keep:
 
-* plugins simples ;
-* paramètres déclaratifs ;
-* UI générée automatiquement ;
-* API stable.
+* plugins simple;
+* parameters declarative;
+* the UI generated automatically;
+* the API stable.
 
-Principe :
+Principle:
 
-> Le plugin décrit ce qu’il veut faire.
-> L’application décide comment l’exécuter.
+> The plugin describes what it wants to do.
+> The application decides how to run it.

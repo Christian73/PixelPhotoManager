@@ -28,7 +28,7 @@ class _ResetFacesDialog(QDialog):
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
-        self.setWindowTitle(translate("ResetFacesDialog", "Réinitialiser l'index des visages"))
+        self.setWindowTitle(translate("ResetFacesDialog", "Reset the face index"))
         self.setMinimumWidth(480)
         self.setStyleSheet(
             "QDialog { background: #1e1e1e; color: #ddd; }"
@@ -57,10 +57,10 @@ class _ResetFacesDialog(QDialog):
         self._btn_group = QButtonGroup(self)
 
         self._rb_cluster = QRadioButton(
-            translate("ResetFacesDialog", "Réinitialiser les groupes uniquement  —  rapide")
+            translate("ResetFacesDialog", "Reset the groups only  —  fast")
         )
         self._rb_full = QRadioButton(
-            translate("ResetFacesDialog", "Réinitialisation complète + réindexation  —  lente")
+            translate("ResetFacesDialog", "Full reset + reindexing  —  slow")
         )
         self._btn_group.addButton(self._rb_cluster)
         self._btn_group.addButton(self._rb_full)
@@ -69,37 +69,37 @@ class _ResetFacesDialog(QDialog):
             self._rb_cluster,
             [
                 translate("ResetFacesDialog",
-                          "Les embeddings ArcFace (analyse des visages) sont conservés."),
+                          "The ArcFace embeddings (face analysis) are kept."),
                 translate("ResetFacesDialog",
-                          "Seuls les regroupements HDBSCAN sont effacés et recalculés."),
+                          "Only the HDBSCAN groupings are erased and recomputed."),
                 translate("ResetFacesDialog",
-                          "Les associations visage → personne (Picasa, identification manuelle)"),
+                          "The face → person assignments (Picasa, manual identification)"),
                 translate("ResetFacesDialog",
-                          "sont préservées et redistribuées dans les nouveaux groupes."),
-                translate("ResetFacesDialog", "⏱  Durée : quelques secondes."),
+                          "are preserved and spread over the new groups."),
+                translate("ResetFacesDialog", "⏱  Time: a few seconds."),
             ],
         )
         self._frame_full = self._make_frame(
             self._rb_full,
             [
                 translate("ResetFacesDialog",
-                          "Tout est effacé : embeddings, groupes, associations visage → personne."),
+                          "Everything is erased: embeddings, groups, face → person assignments."),
                 translate("ResetFacesDialog",
-                          "La détection ArcFace est relancée sur l'ensemble de la bibliothèque."),
+                          "ArcFace detection is rerun over the whole library."),
                 translate("ResetFacesDialog",
-                          "Les personnes nommées sont conservées ; les annotations Picasa"),
+                          "The named people are kept; the Picasa annotations"),
                 translate("ResetFacesDialog",
-                          "sont ré-appliquées automatiquement après re-détection."),
+                          "are applied again automatically after re-detection."),
                 translate("ResetFacesDialog",
-                          "⏱  Durée : plusieurs heures selon la taille de la bibliothèque."),
+                          "⏱  Time: several hours depending on the size of the library."),
             ],
         )
         root.addWidget(self._frame_cluster)
         root.addWidget(self._frame_full)
 
         btn_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
-        btn_box.button(QDialogButtonBox.Ok).setText(translate("ResetFacesDialog", "Confirmer"))
-        btn_box.button(QDialogButtonBox.Cancel).setText(translate("ResetFacesDialog", "Annuler"))
+        btn_box.button(QDialogButtonBox.Ok).setText(translate("ResetFacesDialog", "Confirm"))
+        btn_box.button(QDialogButtonBox.Cancel).setText(translate("ResetFacesDialog", "Cancel"))
         btn_box.accepted.connect(self.accept)
         btn_box.rejected.connect(self.reject)
         root.addWidget(btn_box)

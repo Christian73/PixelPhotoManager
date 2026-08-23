@@ -112,7 +112,7 @@ class DuplicatesController:
         )
         self._duplicate_thread = detector
         self._dup_progress = (0, max(len(paths), 1) * 2,
-                              translate("DuplicatesController", "Démarrage…"))
+                              translate("DuplicatesController", "Starting…"))
 
         def _on_partial(groups: dict, corrupted: list):
             self._update_corrupted_indicator(corrupted)
@@ -151,7 +151,7 @@ class DuplicatesController:
         n = len(self._live_corrupted_paths)
         if n:
             self._lbl_corrupted.setText("⚠ " + translate(
-                "DuplicatesController", "%n fichier(s) corrompu(s)", None, n))
+                "DuplicatesController", "%n corrupted file(s)", None, n))
             self._lbl_corrupted.show()
         else:
             self._lbl_corrupted.hide()
@@ -195,28 +195,27 @@ class DuplicatesController:
         n = len(corrupted_paths)
 
         dlg = QDialog(self)
-        dlg.setWindowTitle(translate("DuplicatesController", "Fichiers corrompus"))
+        dlg.setWindowTitle(translate("DuplicatesController", "Corrupted files"))
         v = QVBoxLayout(dlg)
 
         if n:
             v.addWidget(QLabel("⚠ " + translate(
                 "DuplicatesController",
-                "%n fichier(s) corrompu(s) détecté(s) par l'analyse des doublons "
-                "(probablement illisible(s)).", None, n)))
+                "%n corrupted file(s) found by the duplicate analysis (probably unreadable).", None, n)))
         else:
-            v.addWidget(QLabel(translate("DuplicatesController", "Aucun fichier corrompu détecté.")))
+            v.addWidget(QLabel(translate("DuplicatesController", "No corrupted file found.")))
 
         buttons = QDialogButtonBox(QDialogButtonBox.Close)
         btn_list = buttons.addButton(
-            translate("DuplicatesController", "Lister…"), QDialogButtonBox.ActionRole)
+            translate("DuplicatesController", "List…"), QDialogButtonBox.ActionRole)
         btn_list.setEnabled(bool(n))
         btn_list.clicked.connect(lambda: (dlg.accept(), self._show_corrupted_list_dialog()))
         btn_repair = buttons.addButton(
-            translate("DuplicatesController", "Réparer…"), QDialogButtonBox.ActionRole)
+            translate("DuplicatesController", "Repair…"), QDialogButtonBox.ActionRole)
         btn_repair.setEnabled(bool(n))
         btn_repair.clicked.connect(lambda: (dlg.accept(), self._offer_corrupted_repair(corrupted_paths)))
         buttons.rejected.connect(dlg.reject)
-        buttons.button(QDialogButtonBox.Close).setText(translate("DuplicatesController", "Fermer"))
+        buttons.button(QDialogButtonBox.Close).setText(translate("DuplicatesController", "Close"))
         buttons.button(QDialogButtonBox.Close).clicked.connect(dlg.accept)
         v.addWidget(buttons)
 
@@ -227,7 +226,7 @@ class DuplicatesController:
         if not corrupted_paths:
             return
         dlg = QDialog(self)
-        dlg.setWindowTitle(translate("DuplicatesController", "Fichiers corrompus"))
+        dlg.setWindowTitle(translate("DuplicatesController", "Corrupted files"))
         v = QVBoxLayout(dlg)
         lbl_count = QLabel()
         v.addWidget(lbl_count)
@@ -241,8 +240,7 @@ class DuplicatesController:
             n = len(paths)
             lbl_count.setText(translate(
                 "DuplicatesController",
-                "%n fichier(s) n'ont pas pu être lus pendant l'analyse en cours "
-                "(probablement corrompu(s)) :", None, n))
+                "%n file(s) could not be read during the current analysis (probably corrupted):", None, n))
             btn_repair.setEnabled(bool(n))
             btn_delete.setEnabled(bool(n))
 
@@ -257,21 +255,21 @@ class DuplicatesController:
 
         buttons = QDialogButtonBox(QDialogButtonBox.Close)
         btn_repair = buttons.addButton(
-            translate("DuplicatesController", "Réparer…"), QDialogButtonBox.ActionRole)
+            translate("DuplicatesController", "Repair…"), QDialogButtonBox.ActionRole)
         btn_repair.clicked.connect(
             lambda: self._offer_corrupted_repair(
                 _target_paths(), on_done=lambda: _refresh(list(self._live_corrupted_paths))
             )
         )
         btn_delete = buttons.addButton(
-            translate("DuplicatesController", "Effacer…"), QDialogButtonBox.ActionRole)
+            translate("DuplicatesController", "Delete…"), QDialogButtonBox.ActionRole)
         btn_delete.clicked.connect(
             lambda: (self._offer_corrupted_delete(_target_paths()),
                      _refresh(list(self._live_corrupted_paths)))
         )
         buttons.rejected.connect(dlg.reject)
         buttons.accepted.connect(dlg.accept)
-        buttons.button(QDialogButtonBox.Close).setText(translate("DuplicatesController", "Fermer"))
+        buttons.button(QDialogButtonBox.Close).setText(translate("DuplicatesController", "Close"))
         buttons.button(QDialogButtonBox.Close).clicked.connect(dlg.accept)
         v.addWidget(buttons)
         dlg.resize(600, 400)
@@ -341,24 +339,25 @@ class DuplicatesController:
         n_photos = len(self._catalog.get_duplicate_group_assignments())
 
         dlg = QDialog(self)
-        dlg.setWindowTitle(translate("DuplicatesController", "État des doublons"))
+        dlg.setWindowTitle(translate("DuplicatesController", "Duplicate status"))
         v = QVBoxLayout(dlg)
 
         v.addWidget(QLabel(
-            translate("DuplicatesController", "%n groupe(s) de doublons", None, n_groups)
+            translate("DuplicatesController", "%n duplicate group(s)", None, n_groups)
             + " ("
-            + translate("DuplicatesController", "%n photo(s) concernée(s)", None, n_photos)
+            + translate("DuplicatesController", "%n photo(s) affected", None, n_photos)
             + ")."))
 
         if running:
-            status_text = translate("DuplicatesController", "Analyse en cours…")
+            status_text = translate("DuplicatesController", "Analysis running…")
         elif self._last_duplicate_check is not None:
             status_text = translate(
-                "DuplicatesController", "Dernière vérification : {when}"
-            ).format(when=f"{self._last_duplicate_check:%d/%m/%Y %H:%M}")
+                "DuplicatesController", "Last check: {when}"
+            ).format(when=self._last_duplicate_check.strftime(
+                translate("DuplicatesController", "%m/%d/%Y %H:%M")))
         else:
             status_text = translate(
-                "DuplicatesController", "Dernière vérification : jamais")
+                "DuplicatesController", "Last check: never")
         lbl_status = QLabel(status_text)
         v.addWidget(lbl_status)
 
@@ -379,19 +378,19 @@ class DuplicatesController:
                 prefix = f"{message} — " if message else ""
                 lbl_progress.setText(
                     f"{prefix}{current}/{total} ("
-                    + translate("DuplicatesController", "%n restant(s)", None, remaining)
+                    + translate("DuplicatesController", "%n left", None, remaining)
                     + ")"
                 )
 
             _set_progress(*(self._dup_progress
-                            or (0, 1, translate("DuplicatesController", "Démarrage…"))))
+                            or (0, 1, translate("DuplicatesController", "Starting…"))))
 
         buttons = QDialogButtonBox(QDialogButtonBox.Close)
         btn_groups = buttons.addButton(
-            translate("DuplicatesController", "Voir les groupes"), QDialogButtonBox.ActionRole)
+            translate("DuplicatesController", "View the groups"), QDialogButtonBox.ActionRole)
         btn_groups.clicked.connect(lambda: (dlg.accept(), self.show_duplicate_grid()))
         btn_check_now = buttons.addButton(
-            translate("DuplicatesController", "Vérifier maintenant"),
+            translate("DuplicatesController", "Check now"),
             QDialogButtonBox.ActionRole)
         btn_check_now.setEnabled(not running)
         btn_check_now.clicked.connect(lambda: (dlg.accept(), self._start_duplicate_detection()))
@@ -411,12 +410,14 @@ class DuplicatesController:
                 if progress_bar is not None:
                     progress_bar.setValue(progress_bar.maximum())
                 if lbl_progress is not None:
-                    lbl_progress.setText(translate("DuplicatesController", "Analyse terminée."))
+                    lbl_progress.setText(translate("DuplicatesController", "Analysis finished."))
                 lbl_status.setText(
-                    translate("DuplicatesController", "Dernière vérification : {when}"
-                              ).format(when=f"{self._last_duplicate_check:%d/%m/%Y %H:%M}")
+                    translate("DuplicatesController", "Last check: {when}"
+                              ).format(
+                        when=self._last_duplicate_check.strftime(
+                            translate("DuplicatesController", "%m/%d/%Y %H:%M")))
                     if self._last_duplicate_check
-                    else translate("DuplicatesController", "Dernière vérification : jamais")
+                    else translate("DuplicatesController", "Last check: never")
                 )
                 btn_check_now.setEnabled(True)
 
@@ -465,36 +466,34 @@ class DuplicatesController:
         n = len(corrupted_paths)
         reply = QMessageBox.question(
             self,
-            translate("DuplicatesController", "Réparer les fichiers corrompus"),
+            translate("DuplicatesController", "Repair the corrupted files"),
             translate("DuplicatesController",
-                      "%n fichier(s) semble(nt) corrompu(s).", None, n)
+                      "%n file(s) appear to be corrupted.", None, n)
             + "\n\n"
             + translate(
                 "DuplicatesController",
-                "Tenter une réparation automatique ? PixelPhotoManager va essayer de "
-                "ré-enregistrer une copie propre de chaque fichier via un décodeur plus "
-                "tolérant, en conservant les dates de création et de modification "
-                "Windows. L'original est sauvegardé avant toute modification "
-                "(dossier caché .tmp_originals à côté du fichier)."),
+                "Attempt an automatic repair? PixelPhotoManager will try to re-save a clean "
+                "copy of each file through a more forgiving decoder, keeping the Windows "
+                "creation and modification dates. The original is backed up before anything is "
+                "changed (hidden .tmp_originals folder next to the file)."),
             QMessageBox.Yes | QMessageBox.No,
             QMessageBox.No,
         )
         if reply != QMessageBox.Yes:
             list_path = self._record_corrupted_files(n, 0, corrupted_paths)
-            msg = translate("DuplicatesController", "La réparation n'a pas été lancée.")
+            msg = translate("DuplicatesController", "The repair was not started.")
             if list_path:
                 msg += "\n\n" + translate(
                     "DuplicatesController",
-                    "La liste des %n fichier(s) est disponible via "
-                    "Outils › Historique des problèmes.", None, n)
-            QMessageBox.information(self, translate("DuplicatesController", "Réparation annulée"), msg)
+                    "The list of the %n file(s) is available under Tools › Problem history.", None, n)
+            QMessageBox.information(self, translate("DuplicatesController", "Repair cancelled"), msg)
             return
 
         from PySide6.QtWidgets import QProgressDialog
         from src.library.file_repair import FileRepairThread
 
-        progress = QProgressDialog(translate("DuplicatesController", "Réparation en cours…"), translate("DuplicatesController", "Annuler"), 0, n, self)
-        progress.setWindowTitle(translate("DuplicatesController", "Réparation des fichiers corrompus"))
+        progress = QProgressDialog(translate("DuplicatesController", "Repairing…"), translate("DuplicatesController", "Cancel"), 0, n, self)
+        progress.setWindowTitle(translate("DuplicatesController", "Repairing corrupted files"))
         progress.setWindowModality(Qt.WindowModal)
         progress.setMinimumDuration(0)
 
@@ -503,7 +502,7 @@ class DuplicatesController:
         def _on_progress(cur, total, path):
             progress.setValue(cur)
             progress.setLabelText(translate(
-                "DuplicatesController", "Réparation {cur}/{total} :\n{name}"
+                "DuplicatesController", "Repair {cur}/{total}:\n{name}"
             ).format(cur=cur + 1, total=total, name=os.path.basename(path)))
 
         def _on_finished(repaired_count, still_failed):
@@ -545,12 +544,12 @@ class DuplicatesController:
         enregistre les chemins supprimés dans deleted_corrupted_files.py
         pour qu'ils restent retrouvables plus tard dans une sauvegarde)."""
         dlg = QDialog(self)
-        dlg.setWindowTitle(translate("DuplicatesController", "Réparation terminée"))
+        dlg.setWindowTitle(translate("DuplicatesController", "Repair finished"))
         v = QVBoxLayout(dlg)
 
         n_repaired = len(repaired_paths)
         v.addWidget(QLabel(translate(
-            "DuplicatesController", "%n fichier(s) réparé(s) :", None, n_repaired)))
+            "DuplicatesController", "%n file(s) repaired:", None, n_repaired)))
         if repaired_paths:
             list_repaired = QListWidget()
             list_repaired.addItems(repaired_paths)
@@ -559,7 +558,7 @@ class DuplicatesController:
         n_failed = len(still_failed)
         if still_failed:
             v.addWidget(QLabel(translate(
-                "DuplicatesController", "%n fichier(s) n'ont pas pu être réparé(s) :",
+                "DuplicatesController", "%n file(s) could not be repaired:",
                 None, n_failed)))
             list_failed = QListWidget()
             list_failed.addItems(still_failed)
@@ -568,7 +567,7 @@ class DuplicatesController:
         buttons = QDialogButtonBox(QDialogButtonBox.Close)
         if still_failed:
             btn_delete = buttons.addButton(
-                translate("DuplicatesController", "Supprimer ces fichiers…"),
+                translate("DuplicatesController", "Delete these files…"),
                 QDialogButtonBox.ActionRole)
             btn_delete.clicked.connect(
                 lambda: (dlg.accept(), self._offer_corrupted_delete(list(still_failed)))
@@ -584,14 +583,14 @@ class DuplicatesController:
         n = len(corrupted_paths)
         reply = QMessageBox.question(
             self,
-            translate("DuplicatesController", "Supprimer les fichiers corrompus"),
+            translate("DuplicatesController", "Delete the corrupted files"),
             translate("DuplicatesController",
-                      "%n fichier(s) semble(nt) corrompu(s).", None, n)
+                      "%n file(s) appear to be corrupted.", None, n)
             + "\n\n"
             + translate(
                 "DuplicatesController",
-                "Envoyer %n fichier(s) à la corbeille Windows ?\n\n"
-                "Ils resteront récupérables depuis la corbeille.", None, n),
+                "Send %n file(s) to the Windows recycle bin?\n\nThey will still be recoverable "
+                "from the recycle bin.", None, n),
             QMessageBox.Yes | QMessageBox.Cancel,
             QMessageBox.Cancel,
         )
@@ -602,7 +601,8 @@ class DuplicatesController:
         # réentrance commune), suppression absorbée par le watcher, épilogue UI
         # dans _on_corrupted_delete_finished.
         if self._delete_thread is not None and self._delete_thread.isRunning():
-            self.statusBar().showMessage(translate("DuplicatesController", "Une suppression est déjà en cours…"), 3000)
+            self.statusBar().showMessage(translate("DuplicatesController", "A deletion is "
+                                                                           "already running…"), 3000)
             return
         self._folder_watcher.notify_self_deletions(list(corrupted_paths))
         worker = _DeleteWorkerThread(
@@ -611,7 +611,9 @@ class DuplicatesController:
         )
         self._delete_thread = worker
         worker.progress.connect(
-            lambda done, total: self._lbl_action.setText(f"Suppression… {done}/{total}")
+            lambda done, total: self._lbl_action.setText(
+                translate("MainWindow", "Deleting… {done}/{total}"
+                          ).format(done=done, total=total))
         )
         worker.finished_delete.connect(self._on_corrupted_delete_finished)
         worker.start()
@@ -637,15 +639,15 @@ class DuplicatesController:
             deleted_corrupted_files.add_deleted(deleted)
 
         if errors:
-            QMessageBox.warning(self, translate("DuplicatesController", "Erreurs de suppression"),
+            QMessageBox.warning(self, translate("DuplicatesController", "Deletion errors"),
                                 translate("DuplicatesController",
-                                          "Impossible de supprimer :")
+                                          "Could not delete:")
                                 + "\n" + "\n".join(errors))
         elif deleted:
             n_deleted = len(deleted)
             QMessageBox.information(
-                self, translate("DuplicatesController", "Suppression terminée"),
-                translate("DuplicatesController", "%n fichier(s) supprimé(s).",
+                self, translate("DuplicatesController", "Deletion finished"),
+                translate("DuplicatesController", "%n file(s) deleted.",
                           None, n_deleted),
             )
 

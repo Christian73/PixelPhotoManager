@@ -45,8 +45,8 @@ class _OrderSection(QGroupBox):
         v = QVBoxLayout(self)
 
         mode_row = QHBoxLayout()
-        self._rb_alpha = QRadioButton(translate("OrderSection", "Alphabétique"))
-        self._rb_chrono = QRadioButton(translate("OrderSection", "Chronologique"))
+        self._rb_alpha = QRadioButton(translate("OrderSection", "Alphabetical"))
+        self._rb_chrono = QRadioButton(translate("OrderSection", "Chronological"))
         self._mode_group = QButtonGroup(self)
         self._mode_group.addButton(self._rb_alpha)
         self._mode_group.addButton(self._rb_chrono)
@@ -55,8 +55,8 @@ class _OrderSection(QGroupBox):
         v.addLayout(mode_row)
 
         dir_row = QHBoxLayout()
-        self._rb_asc = QRadioButton(translate("OrderSection", "Croissant"))
-        self._rb_desc = QRadioButton(translate("OrderSection", "Décroissant"))
+        self._rb_asc = QRadioButton(translate("OrderSection", "Ascending"))
+        self._rb_desc = QRadioButton(translate("OrderSection", "Descending"))
         self._dir_group = QButtonGroup(self)
         self._dir_group.addButton(self._rb_asc)
         self._dir_group.addButton(self._rb_desc)
@@ -80,13 +80,15 @@ class _ChronoAlbumSection(QGroupBox):
 
     def __init__(self, default_dir: str, parent=None):
         super().__init__(translate("ChronoAlbumSection",
-                                   "Album « Chronologie » (toutes les photos)"), parent)
+                                   "“Timeline” album (all the photos)"), parent)
         self.setStyleSheet(_RADIO_STYLE)
         v = QVBoxLayout(self)
 
         dir_row = QHBoxLayout()
-        self._rb_asc = QRadioButton(translate("ChronoAlbumSection", "Anti-chronologique (plus anciennes d'abord)"))
-        self._rb_desc = QRadioButton(translate("ChronoAlbumSection", "Chronologique (plus récentes d'abord)"))
+        self._rb_asc = QRadioButton(translate("ChronoAlbumSection", "Reverse chronological "
+                                                                    "(oldest first)"))
+        self._rb_desc = QRadioButton(translate("ChronoAlbumSection", "Chronological (newest "
+                                                                     "first)"))
         self._dir_group = QButtonGroup(self)
         self._dir_group.addButton(self._rb_asc)
         self._dir_group.addButton(self._rb_desc)
@@ -111,16 +113,16 @@ class DisplayOrderDialog(QDialog):
     def __init__(self, config: Config, parent=None):
         super().__init__(parent)
         self._config = config
-        self.setWindowTitle(translate("DisplayOrderDialog", "Ordre d'affichage"))
+        self.setWindowTitle(translate("DisplayOrderDialog", "Display order"))
 
         layout = QVBoxLayout(self)
         self._folders = _OrderSection(
-            translate("DisplayOrderDialog", "Dossiers"),
+            translate("DisplayOrderDialog", "Folders"),
             config.get("display_order.folder_mode", "alpha"),
             config.get("display_order.folder_dir", "asc"),
         )
         self._grid = _OrderSection(
-            translate("DisplayOrderDialog", "Grille de photos"),
+            translate("DisplayOrderDialog", "Photo grid"),
             config.get("display_order.grid_mode", "chrono"),
             config.get("display_order.grid_dir", "desc"),
         )

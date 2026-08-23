@@ -448,5 +448,5 @@ class TestPersonClusterView:
 
         view.set_person(PersonInfo(name="Alice Renommée", id=alice.id))
 
-        assert view._lbl_title.text() == "Visages de Alice Renommée"
+        assert view._lbl_title.text() == "Faces of Alice Renommée"
         assert view._flat_cards == cards_before   # pas de rebuild

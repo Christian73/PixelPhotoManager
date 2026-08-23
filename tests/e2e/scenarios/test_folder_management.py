@@ -23,9 +23,9 @@ de la sidebar (créer/renommer/supprimer un sous-dossier) et
      de dossiers, cf. le plan.
    - « Effacer le dossier… » : SEULE confirmation de suppression de
      l'application dont le bouton « Oui » est retexturé en « Supprimer »
-     (`sidebar.py:799`, `box.button(QMessageBox.Yes).setText("Supprimer")`) —
+     (`sidebar.py:799`, `box.button(QMessageBox.Yes).setText("Remove")`) —
      `click_yes()` ne le trouverait pas, d'où `find_dialog_button(...,
-     ["Supprimer"], exact=True)` utilisé directement ici.
+     ["Remove"], exact=True)` utilisé directement ici.
    - « Déplacer vers… » n'est PAS automatisé : `QFileDialog.getExistingDirectory`
      natif (sélecteur Shell Windows, pas une `QDialog` de l'appli), même écart
      déjà documenté pour « Ajouter un dossier… »/« Enregistrer à un autre
@@ -138,7 +138,7 @@ def test_folder_management(isolated_app):
     # ---- 2a. Créer un sous-dossier ----
     right_click_and_click_context_menu_item(
         lambda: _find_tree_item(window, root_name, timeout=15.0),
-        window, "Créer un sous-dossier…", exact=True,
+        window, "Create a subfolder…", exact=True,
     )
     edit_new = _find_edit_near_text(window, "Nom du sous-dossier", timeout=10.0)
     edit_new.set_edit_text(_SUBFOLDER_NAME)
@@ -158,12 +158,12 @@ def test_folder_management(isolated_app):
     # ---- 1. Outils › Dossiers… : re-scan forcé de la racine ----
     # `invoke_button` (pas `find_dialog_button(...).click_input()`) pour tous
     # les boutons de FolderManagerDialog — cf. sa docstring dans conftest.py.
-    click_menu_item(window, "Outils", "Dossiers…")
+    click_menu_item(window, "Tools", "Folders…")
     # wait_gone=False : « Re-scanner » ne ferme rien lui-même (le dialogue
-    # reste ouvert, seule la QMessageBox "Re-scan lancé" apparaît par-dessus).
-    invoke_button(window, ["Re-scanner"], exact=False, timeout=10.0, wait_gone=False)
+    # reste ouvert, seule la QMessageBox "Rescan started" apparaît par-dessus).
+    invoke_button(window, ["Rescan"], exact=False, timeout=10.0, wait_gone=False)
     invoke_button(window, ["OK"], exact=True, timeout=10.0)
-    invoke_button(window, ["Fermer"], exact=True, timeout=10.0)
+    invoke_button(window, ["Close"], exact=True, timeout=10.0)
 
     wait_for_condition(
         lambda: query_one(
@@ -183,7 +183,7 @@ def test_folder_management(isolated_app):
     # ---- 2b. Renommer le sous-dossier : vérifie catalog ET faces ----
     right_click_and_click_context_menu_item(
         lambda: _find_tree_item(window, _SUBFOLDER_NAME, timeout=15.0),
-        window, "Renommer…", exact=True,
+        window, "Rename…", exact=True,
     )
     edit_rename = _find_edit_near_text(window, "Nouveau nom", timeout=10.0)
     edit_rename.set_edit_text(_RENAMED_NAME)
@@ -216,12 +216,12 @@ def test_folder_management(isolated_app):
         faces_db, "SELECT COUNT(*) FROM indexed_photos WHERE photo_path=?", (str(extra_photo),)
     ) == 0, "l'ancien chemin est toujours présent dans indexed_photos après renommage"
 
-    # ---- 2c. Effacer le dossier (destructeur, bouton "Supprimer") ----
+    # ---- 2c. Effacer le dossier (destructeur, bouton "Remove") ----
     right_click_and_click_context_menu_item(
         lambda: _find_tree_item(window, _RENAMED_NAME, timeout=15.0),
-        window, "Effacer le dossier…", exact=True,
+        window, "Delete the folder…", exact=True,
     )
-    find_dialog_button(window, ["Supprimer"], exact=True, timeout=10.0).click_input()
+    find_dialog_button(window, ["Remove"], exact=True, timeout=10.0).click_input()
 
     wait_for_condition(
         lambda: not renamed_folder.exists(), timeout=15.0,
@@ -236,10 +236,10 @@ def test_folder_management(isolated_app):
     )
 
     # ---- 3. FolderManagerDialog › Retirer sur la racine (dernier : purge tout) ----
-    click_menu_item(window, "Outils", "Dossiers…")
+    click_menu_item(window, "Tools", "Folders…")
     # wait_gone=False : « Retirer » ouvre une confirmation par-dessus sans se
     # fermer lui-même (même raison que « Re-scanner » ci-dessus).
-    invoke_button(window, ["Retirer"], exact=True, timeout=10.0, wait_gone=False)
+    invoke_button(window, ["Remove"], exact=True, timeout=10.0, wait_gone=False)
     invoke_button(window, ["Oui", "Yes", "&Oui", "&Yes"], timeout=10.0)
 
     wait_for_condition(
@@ -254,5 +254,5 @@ def test_folder_management(isolated_app):
         "le fichier a été supprimé du disque alors que « Retirer » doit "
         "seulement le retirer de la surveillance"
     )
-    invoke_button(window, ["Fermer"], exact=True, timeout=10.0)
+    invoke_button(window, ["Close"], exact=True, timeout=10.0)
     assert window.exists()

@@ -98,33 +98,33 @@ class TestFormatters:
         ("FocalLengthIn35mmFilm", 52, "52 mm"),
         ("ISOSpeedRatings", (200, 0), "200"),
         ("ISOSpeedRatings", 400, "400"),
-        ("DateTimeOriginal", "2024:06:15 10:30:00", "15/06/2024  10:30:00"),
+        ("DateTimeOriginal", "2024:06:15 10:30:00", "06/15/2024  10:30:00"),
         ("ExposureBiasValue", -0.7, "-0.7 EV"),
-        ("DigitalZoomRatio", 0, "Pas de zoom"),
+        ("DigitalZoomRatio", 0, "No zoom"),
         ("DigitalZoomRatio", 2.5, "×2.50"),
         ("SubjectDistance", 3.2, "3.20 m"),
-        ("SubjectDistance", 100000, "Infini"),
-        ("ExposureProgram", 2, "Programme auto"),
-        ("MeteringMode", 5, "Évaluative"),
+        ("SubjectDistance", 100000, "Infinity"),
+        ("ExposureProgram", 2, "Program AE"),
+        ("MeteringMode", 5, "Pattern"),
         ("WhiteBalance", 0, "Auto"),
-        ("ExposureMode", 1, "Manuel"),
+        ("ExposureMode", 1, "Manual"),
         ("ColorSpace", 1, "sRGB"),
-        ("Orientation", 6, "90° horaire"),
-        ("Flash", 0x10, "Off, non déclenché"),
+        ("Orientation", 6, "90° clockwise"),
+        ("Flash", 0x10, "Off, did not fire"),
         ("Flash", 0x63, "0x63"),
         ("ResolutionUnit", 2, "dpi"),
         ("XResolution", 300.0, "300"),
-        ("SceneCaptureType", 1, "Paysage"),
-        ("LightSource", 1, "Lumière du jour"),
-        ("GainControl", 2, "Fort gain +"),
-        ("Contrast", 1, "Doux"),
-        ("SubjectDistanceRange", 2, "Vue proche"),
+        ("SceneCaptureType", 1, "Landscape"),
+        ("LightSource", 1, "Daylight"),
+        ("GainControl", 2, "High gain up"),
+        ("Contrast", 1, "Soft"),
+        ("SubjectDistanceRange", 2, "Close view"),
         ("SensitivityType", 2, "REI"),
-        ("CustomRendered", 0, "Processus normal"),
+        ("CustomRendered", 0, "Normal process"),
         ("Compression", 7, "JPEG"),
         ("XPTitle", "T".encode("utf-16-le"), "T"),
         ("Autre", None, ""),
-        ("Autre", b"\x00\x01", "(données binaires)"),
+        ("Autre", b"\x00\x01", "(binary data)"),
         ("Autre", [1, 2], "1, 2"),
         ("Autre", "  brut  ", "brut"),
     ])
@@ -132,10 +132,10 @@ class TestFormatters:
         assert _fmt_value(tag, val) == expected
 
     def test_fmt_size_units(self):
-        assert _fmt_size(512) == "512 o"
-        assert _fmt_size(2048) == "2.0 Ko"
-        assert _fmt_size(3 * 1024 ** 2) == "3.0 Mo"
-        assert _fmt_size(5 * 1024 ** 3) == "5.0 Go"
+        assert _fmt_size(512) == "512 B"
+        assert _fmt_size(2048) == "2.0 kB"
+        assert _fmt_size(3 * 1024 ** 2) == "3.0 MB"
+        assert _fmt_size(5 * 1024 ** 3) == "5.0 GB"
 
 
 class TestSetFileDates:
@@ -252,7 +252,7 @@ class TestExifPanelPopulation:
         assert "APPAREIL PHOTO" in texts
         assert "PixelCam" in texts
         assert "PRISE DE VUE" in texts
-        assert "15/06/2024  10:30:00" in texts
+        assert "06/15/2024  10:30:00" in texts
         assert "f/2.8" in texts
         assert "80 × 60 px" in texts
 
@@ -290,7 +290,7 @@ class TestExifPanelPopulation:
 
         panel._on_data_ready("C:/x.jpg", None)
 
-        assert "Impossible de lire les métadonnées" in _panel_texts(panel)
+        assert "Could not read the metadata" in _panel_texts(panel)
 
     def test_stale_result_is_ignored(self, qtbot, tmp_path):
         path = _make_jpeg_with_exif(tmp_path / "e.jpg")

@@ -66,20 +66,20 @@ logger = logging.getLogger(__name__)
 
 # (identifiant, libellé affiché)
 FRAME_TYPES: list[tuple[str, str]] = [
-    ("none",    translate("Frames", "Aucun")),
-    ("plain",   translate("Frames", "Entourage uni")),
+    ("none",    translate("Frames", "None")),
+    ("plain",   translate("Frames", "Flat surround")),
     ("simple",  translate("Frames", "Simple")),
     ("double",  translate("Frames", "Double")),
-    ("baroque", translate("Frames", "Baroque doré")),
-    ("pearl",   translate("Frames", "Oves et perles")),
-    ("greek",   translate("Frames", "Grecque")),
-    ("artdeco", translate("Frames", "Art déco")),
-    ("wood",    translate("Frames", "Sculpture bois")),
-    ("vine",    translate("Frames", "Feuilles de vigne")),
+    ("baroque", translate("Frames", "Gilt baroque")),
+    ("pearl",   translate("Frames", "Egg-and-dart")),
+    ("greek",   translate("Frames", "Greek key")),
+    ("artdeco", translate("Frames", "Art deco")),
+    ("wood",    translate("Frames", "Carved wood")),
+    ("vine",    translate("Frames", "Vine leaves")),
     ("roses",   translate("Frames", "Roses")),
-    ("flowers", translate("Frames", "Fleurs")),
-    ("metal",   translate("Frames", "Métallique")),
-    ("gloss",   translate("Frames", "Reflets")),
+    ("flowers", translate("Frames", "Flowers")),
+    ("metal",   translate("Frames", "Metallic")),
+    ("gloss",   translate("Frames", "Highlights")),
 ]
 
 # Un cadre sculpté n'a de sens qu'à partir d'une certaine épaisseur : sous ~8 %
@@ -106,18 +106,18 @@ SPILL_FRAMES = {"vine", "roses", "flowers"}
 
 # Couleurs prêtes à l'emploi proposées à côté du sélecteur (identifiant hexa, libellé).
 QUICK_COLORS: list[tuple[str, str]] = [
-    ("#000000", translate("Frames", "Noir")),
-    ("#ffffff", translate("Frames", "Blanc")),
+    ("#000000", translate("Frames", "Black")),
+    ("#ffffff", translate("Frames", "White")),
 ]
 
 # Ferronnerie du second cadre de « plain » (identifiant, libellé). « line » est
 # le motif historique — un simple trait — et reste le défaut.
 INNER_MOTIFS: list[tuple[str, str]] = [
-    ("line",    translate("Frames", "Ligne simple")),
-    ("corners", translate("Frames", "Volutes d'angle")),
-    ("scrolls", translate("Frames", "Rinceaux courants")),
-    ("twist",   translate("Frames", "Barreau torsadé")),
-    ("studs",   translate("Frames", "Clous forgés")),
+    ("line",    translate("Frames", "Plain line")),
+    ("corners", translate("Frames", "Corner scrolls")),
+    ("scrolls", translate("Frames", "Running scrollwork")),
+    ("twist",   translate("Frames", "Twisted bar")),
+    ("studs",   translate("Frames", "Forged studs")),
 ]
 
 INNER_MOTIF_LABELS: dict[str, str] = dict(INNER_MOTIFS)
@@ -131,15 +131,15 @@ INNER_ORNAMENT_MAX = 2.5
 
 # Rendu de la ferronnerie : relief léger (biseau clair/sombre) ou aplat strict.
 INNER_RELIEFS: list[tuple[bool, str]] = [
-    (True,  translate("Frames", "Relief léger")),
-    (False, translate("Frames", "Aplat strict")),
+    (True,  translate("Frames", "Light relief")),
+    (False, translate("Frames", "Flat colour")),
 ]
 
 # Styles de remplissage des cadres paramétriques
 COLOR_STYLES: list[tuple[str, str]] = [
-    ("solid",    translate("Frames", "Uni")),
-    ("gradient", translate("Frames", "Dégradé")),
-    ("glitter",  translate("Frames", "Pailleté")),
+    ("solid",    translate("Frames", "Solid")),
+    ("gradient", translate("Frames", "Gradient")),
+    ("glitter",  translate("Frames", "Glitter")),
 ]
 
 # Résolution maximale de rendu du bandeau (cf. docstring du module).

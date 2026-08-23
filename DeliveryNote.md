@@ -1,192 +1,195 @@
-# Notes de livraison — PixelPhotoManager
+# Delivery notes — PixelPhotoManager
 
-Historique cumulatif depuis la création du projet, version la plus récente en tête.
+Cumulative history since the project was created, most recent version first.
 
-| Version | Date | Commits | Installateur |
-|---------|------|---------|--------------|
-| 1.1.0 | 6 août 2026 | 109 | `PixelPhotoManager-1.1.0-x64.msi` |
-| 1.0.0 | 6 juillet 2026 | 113 (création → 1.0.0) | `PixelPhotoManager-1.0.0-x64.msi` |
+| Version | Date | Commits | Installer |
+|---------|------|---------|-----------|
+| 1.1.0 | 6 August 2026 | 109 | `PixelPhotoManager-1.1.0-x64.msi` |
+| 1.0.0 | 6 July 2026 | 113 (creation → 1.0.0) | `PixelPhotoManager-1.0.0-x64.msi` |
 
-Les numéros 1.0.1 et 1.0.2 n'ont pas été livrés (bumps internes) ; leur contenu est
-inclus dans la 1.1.0.
+Versions 1.0.1 and 1.0.2 were never shipped (internal bumps); their contents are
+included in 1.1.0.
 
 ---
 
-## Version 1.1.0 — 6 août 2026
+## Version 1.1.0 — 6 August 2026
 
-Version précédente : **1.0.0** (6 juillet 2026). 109 commits.
+Previous version: **1.0.0** (6 July 2026). 109 commits.
 
-### Nouveautés
+### What's new
 
-**Organisation et recherche**
-- Notation par étoiles ★ 1 à 5, avec album « Par notes » pliable par niveau.
-- Mots-clés éditables sur les photos : dialogue, filtre, liste déroulante dans la
-  visionneuse, sous-menu et section repliable dans le panneau latéral.
-- Dialogue de recherche avancée multi-critères.
-- Barre de recherche dans la fenêtre Aide / À propos.
-- Vérification automatique des mises à jour via les publications GitHub.
+**Organisation and search**
+- ★ 1-to-5 star ratings, with a "By rating" album collapsible by level.
+- Editable keywords on photos: dialog, filter, drop-down list in the viewer,
+  submenu and collapsible section in the sidebar.
+- Multi-criteria advanced search dialog.
+- Search bar in the Help / About window.
+- Automatic update check through GitHub releases.
 
 **Formats**
-- Prise en charge des photos **RAW** (CR2, NEF, ARW, DNG, ORF, RW2) et **HEIC/HEIF**
+- Support for **RAW** photos (CR2, NEF, ARW, DNG, ORF, RW2) and **HEIC/HEIF**
   (iPhone).
-- Copies de DVD : dossiers `VIDEO_TS` détectés, fichiers `.VOB` catalogués comme
-  vidéos, ouverture par un lecteur externe.
-- Les icônes d'applications externes de la visionneuse sont filtrées selon le type de
-  média (une application vidéo n'apparaît plus sur une photo fixe).
+- DVD copies: `VIDEO_TS` folders detected, `.VOB` files catalogued as videos,
+  opening through an external player.
+- The external-application icons in the viewer are filtered by media type (a
+  video application no longer shows up on a still photo).
 
-**Retouche**
-- **Cadres décoratifs** : 13 motifs calculés (entourage uni, simple, double, baroque
-  doré, oves et perles, grecque, art déco, sculpture bois, feuilles de vigne, roses,
-  fleurs, métallique, reflets), galerie d'aperçus sur la photo en cours, largeur
-  réglable. L'entourage uni accepte un second cadre avec ferronnerie (volutes, rinceaux,
-  barreau torsadé, clous). Les motifs végétaux débordent par endroits sur la photo,
-  ombre portée comprise.
-- Calque d'annotations et harmonisation des outils d'édition.
-- Raccourci `Ctrl+S` pour enregistrer l'image traitée.
-- « Réinitialiser » est réversible par « Restaurer », pile d'annulation comprise.
+**Editing**
+- **Decorative frames**: 13 computed patterns (plain surround, simple, double,
+  gilded baroque, egg-and-dart, Greek key, art deco, carved wood, vine leaves,
+  roses, flowers, metallic, reflections), a gallery of previews on the current
+  photo, adjustable width. The plain surround accepts a second frame with
+  ironwork (scrolls, running scrolls, twisted bar, studs). The foliage patterns
+  spill over the photo in places, drop shadow included.
+- Annotation layer and harmonisation of the editing tools.
+- `Ctrl+S` shortcut to save the edited image.
+- "Reset" can be reversed with "Restore", undo stack included.
 
-**Doublons**
-- Détection **continue et incrémentale**, lancée après chaque scan, sans bouton ni
-  rapport de fin ; menu **Outils › État des doublons…** pour un instantané.
-- Grille dédiée « Dupliquées », popup déplaçable dans la visionneuse, état vide
-  explicite.
-- Gestion complète des fichiers corrompus : détection, réparation, suppression,
-  historique persistant.
-- Comparaisons Tier 1 et Tier 2 parallélisées.
+**Duplicates**
+- **Continuous, incremental** detection, started after every scan, with no
+  button and no completion report; **Tools › Duplicate status…** gives a
+  snapshot.
+- Dedicated "Duplicates" grid, movable popup in the viewer, explicit empty
+  state.
+- Full handling of corrupted files: detection, repair, deletion, persistent
+  history.
+- Tier 1 and Tier 2 comparisons parallelised.
 
-**Visages**
-- Boutons ✓ / ✗ superposés aux vignettes pour accepter ou rejeter une suggestion.
-- Entrée **Visages › Rechercher des visages similaires…**, relancée automatiquement
-  après chaque identification.
-- Bouton Annuler et popup déplaçable pendant l'analyse des groupes ; le regroupement
-  partiel est conservé.
-- Paliers de confiance revus : attribution automatique ≥ 70 %, mise en attente de
-  vérification ≥ 55 %, libellés « Probablement » / « Peut-être » en dessous.
-- Nombre de personnes identifiées affiché dans le panneau latéral.
-- `Ctrl+A` sélectionne tous les visages confirmés d'une personne.
+**Faces**
+- ✓ / ✗ buttons overlaid on thumbnails to accept or reject a suggestion.
+- **Faces › Search for similar faces…** entry, restarted automatically after
+  each identification.
+- Cancel button and movable popup while the groups are being analysed; partial
+  clustering is kept.
+- Revised confidence tiers: automatic assignment ≥ 70%, held for verification
+  ≥ 55%, "Probably" / "Maybe" labels below that.
+- Number of identified people shown in the sidebar.
+- `Ctrl+A` selects every confirmed face of a person.
 
-**Diaporama et visionneuse**
-- Plus d'économiseur d'écran ni d'extinction de l'écran pendant la lecture, pause
-  comprise.
-- Compteur « photo n sur N » dans la barre de navigation.
-- Le retour vers la grille remet la dernière photo affichée en surbrillance et à
-  l'écran.
-- Dossier de la photo affiché dans la grille.
+**Slideshow and viewer**
+- No more screen saver or screen blanking during playback, pause included.
+- "Photo n of N" counter in the navigation bar.
+- Going back to the grid re-highlights the last photo shown and scrolls it into
+  view.
+- Folder of the photo shown in the grid.
 
-**Suppression et sécurité des données**
-- Toute suppression de fichier passe désormais par la **corbeille Windows** ; en cas
-  d'échec, l'utilisateur est prévenu, jamais d'effacement définitif silencieux.
+**Deletion and data safety**
+- Every file deletion now goes through the **Windows recycle bin**; on failure
+  the user is told, never a silent permanent deletion.
 
-**Performances**
-- Réglage du bridage CPU des traitements de fond : **Paramètres › Performances**, trois
-  niveaux, défaut « Économe », relâché quand la fenêtre n'est pas au premier plan.
-- Priorité système IDLE pour les threads et processus de fond.
-- Retour visuel immédiat sur la grille, la visionneuse et l'assignation de visage.
-- Recherche de visages similaires par produit matriciel (11 M de comparaisons couple par
-  couple auparavant, plusieurs minutes).
-- Panneau Visages : seules les vignettes dont le cadrage a changé sont redécodées.
-- Rendu des vignettes de cadres 2,5× plus rapide.
+**Performance**
+- CPU throttle setting for background processing: **Settings › Performance**,
+  three levels, "Frugal" by default, relaxed when the window is not in the
+  foreground.
+- IDLE system priority for background threads and processes.
+- Immediate visual feedback in the grid, the viewer and face assignment.
+- Similar-face search through a matrix product (11 M pairwise comparisons
+  before, taking several minutes).
+- Faces panel: only the thumbnails whose framing changed are decoded again.
+- Frame thumbnails render 2.5× faster.
 
-### Corrections
+### Fixes
 
-- Boutons radio invisibles en thème sombre (pastille de la même teinte que le fond).
-- Libellé de menu long passant sous son raccourci.
-- Vignettes ne reflétant pas les retouches d'une photo hors du champ visible.
-- Rotation perdue quand une re-détection de visages était déjà en cours.
-- Suggestions de visages définitivement bloquées sur un groupe partiellement identifié.
-- Détection de doublons repartant de zéro à chaque redémarrage ; groupes réduits à un
-  seul exemplaire non dissous ; fichier supprimé pendant le scan classé « corrompu ».
-- Navigation manuelle relançant le défilement d'un diaporama en pause.
-- Panneau de retouche compressible au point de rendre sa deuxième colonne inatteignable.
-- Plantage du panneau latéral sur un dossier à plusieurs centaines de sous-dossiers.
-- Fenêtres fantômes après avoir ignoré plusieurs groupes de doublons.
-- Entrées `album_photos` orphelines purgées ; compteur photos / vidéos par dossier.
-- La grille ne propose plus « Effacer le fichier » en vue album.
-- Icônes de notation et de favori de la visionneuse invisibles ou incohérentes.
+- Radio buttons invisible in the dark theme (dot the same shade as the
+  background).
+- Long menu label running underneath its shortcut.
+- Thumbnails not reflecting the edits of a photo outside the visible area.
+- Rotation lost when a face re-detection was already running.
+- Face suggestions permanently stuck on a partially identified group.
+- Duplicate detection starting over at every restart; groups reduced to a single
+  copy not dissolved; a file deleted during the scan classified as "corrupted".
+- Manual navigation restarting the advance of a paused slideshow.
+- Edit panel compressible to the point of making its second column
+  unreachable.
+- Sidebar crash on a folder with several hundred subfolders.
+- Ghost windows after dismissing several duplicate groups.
+- Orphan `album_photos` entries purged; photo/video counts per folder.
+- The grid no longer offers "Delete the file" in album view.
+- Rating and favourite icons in the viewer invisible or inconsistent.
 
-### Installateur et packaging
+### Installer and packaging
 
-- MSI renommé **`PixelPhotoManager-X.Y.Z-x64.msi`** (auparavant
+- MSI renamed **`PixelPhotoManager-X.Y.Z-x64.msi`** (previously
   `PixelPhotoManager-Setup-<version>.msi`).
-- Script compagnon `Installer-avec-log.cmd` (journal `msiexec /L*v`) généré à côté du
-  MSI.
+- Companion script `Installer-avec-log.cmd` (`msiexec /L*v` log) generated next
+  to the MSI.
 
-### Migrations automatiques au premier démarrage
+### Automatic migrations on first start
 
-`edits.db` : 13 colonnes de cadre. `thumbnails.db` : empreinte des retouches
-(`edit_sig`) pour régénérer les vignettes périmées. `faces.db` : purge des suggestions
-résiduelles. Ces migrations ne sont pas réversibles vers la 1.0.0 — sauvegarder
-`%LOCALAPPDATA%\PixelPhotoManager\` avant la mise à jour pour garder un retour arrière
-possible.
+`edits.db`: 13 frame columns. `thumbnails.db`: edit fingerprint (`edit_sig`) to
+regenerate stale thumbnails. `faces.db`: purge of leftover suggestions. These
+migrations cannot be rolled back to 1.0.0 — back up
+`%LOCALAPPDATA%\PixelPhotoManager\` before upgrading to keep a way back.
 
-### Qualité
+### Quality
 
-1646 tests unitaires et d'interface, 14 scénarios de bout en bout (pywinauto),
-couverture combinée 80,4 % (seuil de blocage relevé de 79 à 80 %). Modularisation des
-gros modules (`main_window`, `photo_viewer`, `edit_panel`) en modules dédiés.
+1,646 unit and interface tests, 14 end-to-end scenarios (pywinauto), 80.4%
+combined coverage (gating threshold raised from 79 to 80%). The large modules
+(`main_window`, `photo_viewer`, `edit_panel`) were split into dedicated modules.
 
 ---
 
-## Version 1.0.0 — 6 juillet 2026
+## Version 1.0.0 — 6 July 2026
 
-Première version livrée. 113 commits depuis la création du projet (3 juin 2026).
+First shipped version. 113 commits since the project was created (3 June 2026).
 
-### Socle
+### Foundations
 
-- Application desktop Windows en Python 3.11 / PySide6, bus d'événements central,
-  système de plugins (traitement image et vues).
-- Catalogue SQLite, cache de vignettes à trois niveaux (RAM, SQLite, génération en
-  arrière-plan), données dans `%LOCALAPPDATA%\PixelPhotoManager\`.
-- Scan de dossiers surveillés, nettoyage automatique des entrées périmées, gestionnaire
-  de dossiers (**Outils › Dossiers…**).
-- Licence MIT, README, guides utilisateur et développeur, aide intégrée.
+- Windows desktop application in Python 3.11 / PySide6, central event bus,
+  plugin system (image processing and views).
+- SQLite catalog, three-level thumbnail cache (RAM, SQLite, background
+  generation), data in `%LOCALAPPDATA%\PixelPhotoManager\`.
+- Scanning of watched folders, automatic cleanup of stale entries, folder
+  manager (**Tools › Folders…**).
+- MIT licence, README, user and developer guides, built-in help.
 
-### Bibliothèque et navigation
+### Library and browsing
 
-- Grille virtualisée : démarrage fluide avec 67 000 photos et plus de 1 000 dossiers.
-- Panneau latéral : arborescence des dossiers, albums, favoris, chronologie.
-- Albums : création depuis une sélection, suppression, retrait de photos.
-- Visionneuse : panneau EXIF détaillé, GPS et carte, badge de doublon, menus
-  contextuels alignés entre grille et visionneuse.
-- Diaporama avec effet Ken Burns.
-- Vidéo : 13 extensions prises en charge, vignettes extraites par OpenCV, album
-  « Vidéos », lecteur externe configurable.
+- Virtualised grid: smooth startup with 67,000 photos and more than 1,000
+  folders.
+- Sidebar: folder tree, albums, favourites, timeline.
+- Albums: creation from a selection, deletion, removal of photos.
+- Viewer: detailed EXIF panel, GPS and map, duplicate badge, context menus
+  aligned between grid and viewer.
+- Slideshow with a Ken Burns effect.
+- Video: 13 supported extensions, thumbnails extracted with OpenCV, "Videos"
+  album, configurable external player.
 
-### Retouche et export
+### Editing and export
 
-- Retouches **non destructives** stockées en SQLite, appliquées à l'affichage et à
-  l'export, historique d'annulation persistant entre sessions.
-- Recadrage, redressement avec grille d'alignement, miroirs, rotation, correction des
-  yeux rouges.
-- Enregistrement de l'image traitée, renommage depuis la grille, export avec préréglages
-  de taille et de qualité, ouverture du dossier d'export à la fin.
+- **Non-destructive** edits stored in SQLite, applied on display and on export,
+  undo history persistent across sessions.
+- Cropping, straightening with an alignment grid, mirrors, rotation, red-eye
+  correction.
+- Saving the edited image, renaming from the grid, export with size and quality
+  presets, opening the export folder when finished.
 
-### Reconnaissance faciale
+### Face recognition
 
-- Détection et embedding par **InsightFace / buffalo_l** (après une première
-  implémentation DeepFace), clustering HDBSCAN.
-- Panneau Visages : identification, rotation, navigation, pile d'annulation, visages
-  ignorés, filtre du panneau latéral, détection multi-rotation.
-- Vue par personne, cartes de groupes, multi-sélection, association de plusieurs groupes
-  en un clic droit, fusion et renommage de personnes.
-- Import des annotations **Picasa** et coexistence avec les identifications ArcFace.
-- Seuil de taille adaptatif, proportionnel à la résolution de la photo.
+- Detection and embedding with **InsightFace / buffalo_l** (after an initial
+  DeepFace implementation), HDBSCAN clustering.
+- Faces panel: identification, rotation, navigation, undo stack, ignored faces,
+  sidebar filter, multi-rotation detection.
+- Per-person view, group cards, multi-selection, association of several groups
+  with one right-click, merging and renaming of people.
+- Import of **Picasa** annotations and coexistence with ArcFace
+  identifications.
+- Adaptive size threshold, proportional to the resolution of the photo.
 
 ### Packaging
 
-- Exécutable autonome PyInstaller, icône, écran de démarrage, barre unifiée menu +
-  barre d'outils.
-- Installateur MSI WiX (WixUI_InstallDir, bannière personnalisée), infrastructure de
-  release.
-- Correctifs d'empaquetage : `sklearn` / `hdbscan` absents de l'exécutable, pack de
-  modèles `buffalo_l` embarqué (détection faciale inopérante sans accès Internet),
+- Standalone PyInstaller executable, icon, splash screen, unified menu +
+  toolbar.
+- WiX MSI installer (WixUI_InstallDir, custom banner), release infrastructure.
+- Packaging fixes: `sklearn` / `hdbscan` missing from the executable, `buffalo_l`
+  model pack embedded (face detection inoperative without Internet access),
   `multiprocessing.freeze_support()`.
 
-### Stabilité et performances
+### Stability and performance
 
-- Correction de saturations mémoire et de fuites (threads zombies, cache d'avatars,
-  allocations d'embeddings), de blocages de l'interface (fusion de personnes, calcul des
-  groupes, aperçus de retouche) et de gels sur les albums vidéo.
-- Détection faciale sur les chemins non-ASCII, bridage CPU du scan et de l'indexation.
-- Mise en place de la suite de tests (unitaires, interface, bout en bout) et de la
-  mesure de couverture.
+- Fixes for memory saturation and leaks (zombie threads, avatar cache, embedding
+  allocations), for UI freezes (merging people, computing groups, edit previews)
+  and for hangs on video albums.
+- Face detection on non-ASCII paths, CPU throttling of the scan and of indexing.
+- Test suite (unit, interface, end-to-end) and coverage measurement put in
+  place.

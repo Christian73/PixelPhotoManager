@@ -21,20 +21,20 @@ départ) :
    (photo_viewer.py:200) -> le pont d'accessibilité Qt l'expose comme
    `control_type="CheckBox"`, pas `"Button"` — invisible à
    `find_dialog_button`, il faut `find_checkbox(window, "♡", ...)`.
-2. Sidebar "♡ Favoris" (_SPECIAL_FAV) -> la vignette de control_1.jpg doit
+2. Sidebar "♡ Favourites" (_SPECIAL_FAV) -> la vignette de control_1.jpg doit
    apparaître dans la grille filtrée.
-3. Retour à "★ Chronologie de toutes les photos" (_SPECIAL_ALL) pour que
+3. Retour à "★ Timeline of every photo" (_SPECIAL_ALL) pour que
    control_2.jpg (jamais favori) soit de nouveau visible, puis bascule favori
    via le menu contextuel clic-droit de la grille sur control_2.jpg (chemin de
    code distinct de l'étape 1) -> vérification DB -> nouveau clic-droit,
-   "Retirer des favoris" cette fois -> vérification que le favori repasse à 0
+   "Remove from favourites" cette fois -> vérification que le favori repasse à 0
    (les deux libellés dynamiques du menu, cf. thumbnail_grid.py:1223, sont
    ainsi exercés).
-4. "▶ Vidéos" (_SPECIAL_VIDEOS) : `manifest.video` peut être absent (encodeur
+4. "▶ Videos" (_SPECIAL_VIDEOS) : `manifest.video` peut être absent (encodeur
    manquant sur la machine de génération, cf. generate_library.py) -> skip
    documenté si c'est le cas, sinon vérifie que la vidéo apparaît et que
    `photos.media_type='video'`.
-5. "🔍 Par nom de fichier" (_SPECIAL_FILENAME) : le texte tapé dans le même
+5. "🔍 By file name" (_SPECIAL_FILENAME) : le texte tapé dans le même
    champ de filtre que celui utilisé pour dossiers/personnes (`Sidebar.
    filter_text`, PAS un champ de recherche séparé, cf. sidebar.py:459-461) est
    lu au moment du clic sur l'item spécial (`itemClicked`, pas de la frappe
@@ -47,7 +47,7 @@ départ) :
    piège de clipping/virtualisation que `_reveal_sidebar_albums_tail` dans
    test_albums.py, ici sur les 4 entrées spéciales elles-mêmes plutôt que sur
    un album ajouté. Il faut donner le focus à la liste (clic sur un item déjà
-   visible) puis {END} pour amener "🔍 Par nom de fichier" dans le viewport
+   visible) puis {END} pour amener "🔍 By file name" dans le viewport
    avant de pouvoir cliquer dessus."""
 import pytest
 
@@ -95,17 +95,17 @@ def test_sidebar_special_views(isolated_app):
     )
     find_dialog_button(window, ["✕"], exact=True, timeout=10.0).click_input()
 
-    # ---- 2. Vue "♡ Favoris" : la vignette favorite doit apparaître ----
-    click_list_item(window, "♡ Favoris", exact=True, timeout=10.0)
+    # ---- 2. Vue "♡ Favourites" : la vignette favorite doit apparaître ----
+    click_list_item(window, "♡ Favourites", exact=True, timeout=10.0)
     find_thumbnail(window, photo_fav, timeout=15.0)
 
     # ---- 3. Bascule favori depuis le menu contextuel de la grille (bugfix
     # menu stub mort) : retour à la vue complète pour que control_2.jpg soit
     # visible, puis marquer/retirer via clic droit. ----
-    click_list_item(window, "★ Chronologie de toutes les photos", exact=True, timeout=10.0)
+    click_list_item(window, "★ Timeline of every photo", exact=True, timeout=10.0)
     thumb_other = find_thumbnail(window, photo_other, timeout=15.0)
     right_click_element(thumb_other)
-    click_context_menu_item(window, "Marquer comme favori", exact=True, timeout=10.0)
+    click_context_menu_item(window, "Mark as favourite", exact=True, timeout=10.0)
     wait_for_condition(
         lambda: _is_favorite(catalog_db, photo_other) == 1,
         timeout=20.0, message="le favori (menu contextuel grille) n'a pas été persisté",
@@ -113,34 +113,34 @@ def test_sidebar_special_views(isolated_app):
 
     thumb_other = find_thumbnail(window, photo_other, timeout=15.0)
     right_click_element(thumb_other)
-    click_context_menu_item(window, "Retirer des favoris", exact=True, timeout=10.0)
+    click_context_menu_item(window, "Remove from favourites", exact=True, timeout=10.0)
     wait_for_condition(
         lambda: _is_favorite(catalog_db, photo_other) == 0,
         timeout=20.0, message="le retrait de favori (menu contextuel grille) n'a pas été persisté",
     )
 
-    # ---- 4. Vue "▶ Vidéos" : peut être absente sur cette machine ----
+    # ---- 4. Vue "▶ Videos" : peut être absente sur cette machine ----
     if manifest.video is None:
         pytest.skip("Aucune vidéo synthétique générée sur cette machine (encodeur manquant)")
-    click_list_item(window, "▶ Vidéos", exact=True, timeout=10.0)
+    click_list_item(window, "▶ Videos", exact=True, timeout=10.0)
     find_thumbnail(window, manifest.video, timeout=15.0)
     assert query_one(
         catalog_db, "SELECT media_type FROM photos WHERE path=?", (str(manifest.video),)
     ) == "video"
 
-    # ---- 5. Vue "🔍 Par nom de fichier" : même champ de filtre que
+    # ---- 5. Vue "🔍 By file name" : même champ de filtre que
     # dossiers/personnes, lu au clic sur l'item spécial. ----
     type_into_sidebar_filter(window, "control_2")
     # La liste Albums de la sidebar (QListWidget) ne montre qu'un nombre limité
-    # d'items sans scroll ; "🔍 Par nom de fichier" (4e entrée spéciale) peut
+    # d'items sans scroll ; "🔍 By file name" (4e entrée spéciale) peut
     # être partiellement hors du viewport visible (même piège de
     # virtualisation/clipping que _reveal_sidebar_albums_tail dans
     # test_albums.py) -> on la révèle en scrollant la liste en fin via {END}
     # après lui avoir donné le focus par un clic sur un item déjà visible.
     import pywinauto.keyboard as kb
-    click_list_item(window, "▶ Vidéos", exact=True, timeout=10.0)
+    click_list_item(window, "▶ Videos", exact=True, timeout=10.0)
     kb.send_keys("{END}")
-    click_list_item(window, "🔍 Par nom de fichier", exact=True, timeout=10.0)
+    click_list_item(window, "🔍 By file name", exact=True, timeout=10.0)
     find_thumbnail(window, photo_other, timeout=15.0)
     assert query_one(
         catalog_db, "SELECT COUNT(*) FROM photos WHERE filename LIKE '%control_2%'"

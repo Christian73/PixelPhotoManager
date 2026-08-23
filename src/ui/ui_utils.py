@@ -6,6 +6,8 @@ from PySide6.QtCore import Qt, QSize
 from PySide6.QtGui import QKeySequence
 from PySide6.QtWidgets import QMenu, QMenuBar, QStyle, QStyleOptionMenuItem
 
+from src.core.i18n import translate
+
 # Marque posée sur un QMenu déjà branché, pour ne pas connecter deux fois.
 _FIT_PROPERTY = "ppm_menu_width_fitted"
 
@@ -22,8 +24,8 @@ def fmt_size(size_bytes: int) -> str:
     if size_bytes <= 0:
         return ""
     if size_bytes < 1024 * 1024:
-        return f"{size_bytes / 1024:.0f} Ko"
-    return f"{size_bytes / (1024 * 1024):.1f} Mo"
+        return translate("Units", "{n} kB").format(n=f"{size_bytes / 1024:.0f}")
+    return translate("Units", "{n} MB").format(n=f"{size_bytes / (1024 * 1024):.1f}")
 
 
 def _action_label(action) -> str:

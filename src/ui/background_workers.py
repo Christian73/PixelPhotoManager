@@ -106,8 +106,8 @@ class _DeleteWorkerThread(QThread):
             except Exception as e:
                 errors.append(
                     translate("DeleteWorker",
-                              "{name} : mise à la corbeille impossible ({err}) — "
-                              "le fichier n'a PAS été supprimé."
+                              "{name}: could not move to the recycle bin ({err}) — the file "
+                              "was NOT deleted."
                               ).format(name=os.path.basename(path), err=e)
                 )
             self.progress.emit(i + 1, len(self._paths))

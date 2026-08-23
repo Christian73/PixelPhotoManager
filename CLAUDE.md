@@ -4,64 +4,64 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ---
 
-## Projet
+## Project
 
-**PixelPhotoManager** — Gestionnaire de photos desktop Windows. Python 3.11, PySide6. Voir `DocumentDeConception.md` pour la spécification complète.
+**PixelPhotoManager** — a Windows desktop photo manager. Python 3.11, PySide6. See `DocumentDeConception.md` for the full specification.
 
 ---
 
-## Environnement
+## Environment
 
 ```powershell
-# Activer le VENV (toujours utiliser l'interpréteur du venv)
+# Activate the VENV (always use the venv interpreter)
 .venv\Scripts\Activate.ps1
 
-# Lancer l'application
+# Run the application
 .venv\Scripts\python.exe main.py
 
-# Installer les dépendances
+# Install the dependencies
 .venv\Scripts\pip.exe install -r requirements.txt
 
-# Lancer les tests
+# Run the tests
 .venv\Scripts\python.exe -m pytest tests/
 
-# Lancer un test précis
+# Run one specific test
 .venv\Scripts\python.exe -m pytest tests/test_thumbnail_cache.py::TestThumbnailCache::test_lru_eviction -v
 
-# Couverture (cliquet fail_under dans .coveragerc — relever, jamais baisser)
-# COVERAGE_FILE dédié pour pouvoir combiner ensuite avec la couverture e2e (cf. plus bas).
-# Piège vécu : un nom du style ".coverage.base" reste invisible en apparence, mais
-# "coverage combine" sans argument (appelé juste après pour fusionner les fichiers par
-# processus de l'étape e2e) fusionne PAR DÉFAUT tout fichier correspondant au motif
-# "<COVERAGE_FILE>.*" — soit ".coverage.*" puisque COVERAGE_FILE vaut ".coverage" par défaut à
-# ce moment-là. ".coverage.base" correspond à ce motif et se fait donc absorber une étape trop
-# tôt (silencieusement — pas d'erreur avant l'étape finale, qui échoue avec "Couldn't combine
-# from non-existent path"). D'où un nom qui NE COMMENCE PAS par ".coverage." pour les fichiers
-# intermédiaires à préserver.
+# Coverage (fail_under ratchet in .coveragerc — raise it, never lower it)
+# A dedicated COVERAGE_FILE, so that it can later be combined with the e2e coverage (see below).
+# A trap learned the hard way: a name such as ".coverage.base" looks harmless, but
+# "coverage combine" with no argument (called right afterwards to merge the per-process files
+# of the e2e step) merges BY DEFAULT every file matching the pattern "<COVERAGE_FILE>.*" —
+# that is ".coverage.*", since COVERAGE_FILE is ".coverage" by default at that point.
+# ".coverage.base" matches that pattern and is therefore swallowed one step too early
+# (silently — no error until the final step, which fails with "Couldn't combine from
+# non-existent path"). Hence a name that does NOT start with ".coverage." for the
+# intermediate files that must be preserved.
 $env:COVERAGE_FILE='coverage_base.dat'; .venv\Scripts\python.exe -m pytest tests/ --cov=src
 Remove-Item Env:\COVERAGE_FILE
 
-# Scénarios e2e avec couverture du code UI (l'appli tourne sous coverage,
-# fichiers .coverage.* écrits à la racine — fusionner avec coverage combine)
+# e2e scenarios with coverage of the UI code (the application runs under coverage,
+# .coverage.* files written at the root — merge them with coverage combine)
 $env:PPM_E2E_COVERAGE='1'; .venv\Scripts\python.exe -m pytest tests/e2e -m e2e
 .venv\Scripts\python.exe -m coverage combine; .venv\Scripts\python.exe -m coverage report
-Copy-Item .coverage coverage_e2e.dat -Force  # préserve le résultat e2e-only sous un nom dédié
+Copy-Item .coverage coverage_e2e.dat -Force  # preserves the e2e-only result under a dedicated name
 
-# Analyse combinée (base + e2e) : fusionne les deux séries préservées ci-dessus en un seul total
+# Combined analysis (base + e2e): merges the two preserved series above into a single total
 $env:COVERAGE_FILE='coverage_combined.dat'; .venv\Scripts\python.exe -m coverage combine --keep coverage_base.dat coverage_e2e.dat
 .venv\Scripts\python.exe -m coverage report --data-file=coverage_combined.dat
 Remove-Item Env:\COVERAGE_FILE
 
-# Packaging Windows (exécutable autonome)
+# Windows packaging (standalone executable)
 .venv\Scripts\pyinstaller.exe pixelphotomanager.spec
 ```
 
-### Règles de test
+### Testing rules
 
-- **Tout bugfix s'accompagne de son test de non-régression** (cf. `test_signal_object_cross_thread.py`, `test_duplicate_detector.py::test_tiff_never_reaches_cv2_imread` pour le style attendu).
-- **Piège coverage/QThread** : coverage.py ne trace pas le code exécuté dans un `QThread.start()` réel (thread natif Qt, hors `sys.settrace` en Python 3.11). Dans les tests, appeler `thread.run()` en synchrone (les signaux sont émis en connexion directe et le code est tracé) ; garder un ou deux vrais `.start()` + `qtbot.waitSignal` par module pour la plomberie cross-thread.
-- **Piège QThread jetable dans un test** : un vrai `QThread` sans parent auto-détruit via `deleteLater` pendant que son thread OS se termine déclenche un fail-fast Qt (0xC0000409) dès que l'event loop de pytest-qt traite la destruction — utiliser un stub non-QThread (cf. `_InertUpdateThread` dans `test_dialogs_smoke.py`).
-- Le cliquet `fail_under` (`.coveragerc`) s'applique à tout run `--cov` : le relever après chaque campagne qui augmente durablement la couverture.
+- **Every bugfix comes with its regression test** (see `test_signal_object_cross_thread.py`, `test_duplicate_detector.py::test_tiff_never_reaches_cv2_imread` for the expected style).
+- **coverage/QThread trap**: coverage.py does not trace code executed inside a real `QThread.start()` (a native Qt thread, outside `sys.settrace` in Python 3.11). In tests, call `thread.run()` synchronously (signals are emitted through direct connections and the code is traced); keep one or two real `.start()` + `qtbot.waitSignal` per module for the cross-thread plumbing.
+- **Disposable-QThread trap**: a real `QThread` with no parent self-destructing through `deleteLater` while its OS thread is terminating triggers a Qt fail-fast (0xC0000409) as soon as pytest-qt's event loop processes the destruction — use a non-QThread stub (see `_InertUpdateThread` in `test_dialogs_smoke.py`).
+- The `fail_under` ratchet (`.coveragerc`) applies to every `--cov` run: raise it after each campaign that durably increases coverage.
 
 ---
 
@@ -69,51 +69,53 @@ Remove-Item Env:\COVERAGE_FILE
 
 ```
 src/
-├── core/          Bus d'événements, config, gestionnaire de plugins
-├── library/       Scanner de dossiers, catalogue SQLite, cache vignettes, EXIF
+├── core/          Event bus, config, plugin manager
+├── library/       Folder scanner, SQLite catalog, thumbnail cache, EXIF
 │                  exif_reader.py : ExifReader + VideoMetadataReader + VIDEO_EXT
-├── ui/            Fenêtre principale, grille, visionneuse, sidebar, panneaux
-│                  folder_manager_dialog.py : dialogue Outils › Dossiers…
-│                  exif_panel.py            : panneau EXIF dans la visionneuse
-│                  theme.py                 : feuille de style sombre globale
-│                    (`app_stylesheet(check_icon)`, posée par main() sur la
-│                    QApplication). Tout contrôle dont l'indicateur est dessiné
-│                    par le style — case à cocher, bouton radio… — doit y avoir
-│                    ses règles `::indicator` : dès qu'une feuille de style
-│                    applicative existe, Qt bascule sur QStyleSheetStyle et un
-│                    sous-contrôle sans règle est rendu avec des couleurs par
-│                    défaut invisibles sur fond #1e1e1e (cas vécu : pastille de
-│                    QRadioButton cochée strictement identique au fond). Les
-│                    copies locales de `_RADIO_STYLE` (display_order_dialog,
-│                    people_panel, export_dialogs, reset_faces_dialog) datent
-│                    d'avant et restent prioritaires — ne pas en créer de
-│                    nouvelle. Test : tests/gui_widgets/test_theme.py mesure le
-│                    contraste réel du rendu (grab()), pas la présence d'une
-│                    chaîne.
-│                  Découpage 2026-07 (les gros fichiers délèguent à des modules
-│                  dédiés, noms historiques ré-exportés depuis le module d'origine) :
+├── ui/            Main window, grid, viewer, sidebar, panels
+│                  folder_manager_dialog.py : the Tools › Folders… dialog
+│                  exif_panel.py            : EXIF panel in the viewer
+│                  theme.py                 : global dark stylesheet
+│                    (`app_stylesheet(check_icon)`, applied by main() to the
+│                    QApplication). Every control whose indicator is drawn by
+│                    the style — checkbox, radio button… — must have its
+│                    `::indicator` rules there: as soon as an application
+│                    stylesheet exists, Qt switches to QStyleSheetStyle and a
+│                    sub-control with no rule is rendered with default colours
+│                    invisible against the #1e1e1e background (real case: the
+│                    dot of a checked QRadioButton strictly identical to the
+│                    background). The local copies of `_RADIO_STYLE`
+│                    (display_order_dialog, people_panel, export_dialogs,
+│                    reset_faces_dialog) predate this and still take
+│                    precedence — do not create a new one. Test:
+│                    tests/gui_widgets/test_theme.py measures the real
+│                    contrast of the rendering (grab()), not the presence of
+│                    a string.
+│                  2026-07 split (the large files delegate to dedicated
+│                  modules; the historical names are re-exported from the
+│                  original module):
 │                  - main_window.py  → background_workers.py (7 QThreads),
 │                    export_dialogs.py, reset_faces_dialog.py, duplicates_popup.py,
-│                    ui_utils.py (fmt_size, largeur des menus — cf. plus bas)
+│                    ui_utils.py (fmt_size, menu widths — see below)
 │                  - photo_viewer.py → viewer_canvas.py (_Canvas + _InlineTextEdit),
-│                    viewer_pixmaps.py (_build_pixmap & co., utilisé par slideshow)
+│                    viewer_pixmaps.py (_build_pixmap & co., used by slideshow)
 │                  - edit_panel.py   → edit_sliders.py (MarkedSlider/EditSlider),
-│                    treatment_dialogs.py (_TREATMENTS + dialogues), edit_icons.py
-│                  Importer les classes depuis le module d'origine reste valide
-│                  (ré-exports) ; le nouveau code doit importer le module dédié.
-├── processing/    Retouches image (non destructives)
-├── faces/         Détection, reconnaissance, clustering (+ import Picasa)
-└── plugins/       Plugins intégrés (carte, restauration IA, etc.)
-plugins/           Plugins utilisateur (externe à src/)
+│                    treatment_dialogs.py (_TREATMENTS + dialogs), edit_icons.py
+│                  Importing the classes from the original module stays valid
+│                  (re-exports); new code must import the dedicated module.
+├── processing/    Image editing (non-destructive)
+├── faces/         Detection, recognition, clustering (+ Picasa import)
+└── plugins/       Built-in plugins (map, AI restoration, etc.)
+plugins/           User plugins (outside src/)
 ```
 
-`src/library/fs_utils.py::is_hidden_path()` est l'unique implémentation du test
-« chemin caché » (attribut Windows ou préfixe point) — scanner, folder_watcher
-et folder_manager_dialog l'aliasent en `_is_hidden` ; ne pas recréer de copie.
+`src/library/fs_utils.py::is_hidden_path()` is the single implementation of the
+"hidden path" test (Windows attribute or dot prefix) — the scanner, folder_watcher
+and folder_manager_dialog alias it as `_is_hidden`; do not create another copy.
 
-### Bus d'événements — pièce centrale
+### Event bus — the central piece
 
-`src/core/event_bus.py` expose une instance globale `bus`. Tous les composants communiquent exclusivement via ce bus. Ne jamais appeler directement une méthode d'un autre composant si un événement peut faire l'affaire.
+`src/core/event_bus.py` exposes a global `bus` instance. Every component communicates exclusively through this bus. Never call a method of another component directly if an event can do the job.
 
 ```python
 from src.core.event_bus import bus
@@ -121,601 +123,648 @@ bus.on('library.photo_selected', self.handler)
 bus.emit('library.photo_selected', photo=photo_info)
 ```
 
-Événements définis dans le docstring de `EventBus`. Tout nouvel événement doit y être documenté.
+Events are defined in the docstring of `EventBus`. Every new event must be documented there.
 
-### Support vidéo
+### Video support
 
-`src/library/exif_reader.py` expose :
-- `VIDEO_EXT` — ensemble des 14 extensions vidéo supportées : `.mp4 .mov .avi .mkv .wmv .webm .m4v .3gp .flv .ts .mts .mpg .mpeg .vob`
-  (`.vob` = flux d'une copie de DVD, dossier `VIDEO_TS` — copie littérale dans
-  `src/library/duplicate_detector.py::_VIDEO_EXT`, à maintenir en parallèle)
-- `VideoMetadataReader.read(path)` — lit résolution/fps/durée via `cv2.VideoCapture`, date = `os.stat(path).st_mtime`
+`src/library/exif_reader.py` exposes:
+- `VIDEO_EXT` — the set of the 14 supported video extensions: `.mp4 .mov .avi .mkv .wmv .webm .m4v .3gp .flv .ts .mts .mpg .mpeg .vob`
+  (`.vob` = the stream of a DVD copy, `VIDEO_TS` folder — literally copied into
+  `src/library/duplicate_detector.py::_VIDEO_EXT`, to be kept in sync)
+- `VideoMetadataReader.read(path)` — reads resolution/fps/duration through `cv2.VideoCapture`, date = `os.stat(path).st_mtime`
 
-`src/core/models.py` — `PhotoInfo` dispose de deux champs supplémentaires :
-- `media_type: str = "image"` — `"image"` ou `"video"`
-- `duration: float = 0.0` — durée en secondes (vidéos uniquement)
+`src/core/models.py` — `PhotoInfo` has two extra fields:
+- `media_type: str = "image"` — `"image"` or `"video"`
+- `duration: float = 0.0` — duration in seconds (videos only)
 
-`catalog.db` comporte les colonnes `media_type` et `duration` (migration automatique au démarrage via `_migrate_video_fields()`).
+`catalog.db` has the `media_type` and `duration` columns (migrated automatically at startup by `_migrate_video_fields()`).
 
-Le panneau de retouche est **ignoré pour les vidéos** : `main_window.show_viewer()` et `_navigate_photo()` vérifient `photo.media_type == "video"` et gardent `_left_stack` à l'index 0 (sidebar) au lieu de 1 (panneau retouche).
+The edit panel is **skipped for videos**: `main_window.show_viewer()` and `_navigate_photo()` check `photo.media_type == "video"` and keep `_left_stack` at index 0 (sidebar) instead of 1 (edit panel).
 
-### Décodage image — RAW et HEIC/HEIF
+### Image decoding — RAW and HEIC/HEIF
 
-`src/library/image_loader.py::open_image(path)` est le **point de décodage image
-unique** du projet — tous les sites qui ouvraient auparavant un fichier via
-`PIL.Image.open(path)` directement (thumbnail_cache, viewer_pixmaps, exif_reader,
-faces/detector) doivent passer par lui à la place. Ne pas recréer un appel direct
-`Image.open()` sur un chemin de fichier utilisateur (un `Image.open(io.BytesIO(...))`
-sur des octets déjà décodés reste légitime, ex. `viewer_pixmaps._apply_edit_to_base`).
+`src/library/image_loader.py::open_image(path)` is the project's **single image
+decoding point** — every site that used to open a file directly through
+`PIL.Image.open(path)` (thumbnail_cache, viewer_pixmaps, exif_reader,
+faces/detector) must go through it instead. Do not reintroduce a direct
+`Image.open()` call on a user file path (an `Image.open(io.BytesIO(...))` on
+already-decoded bytes remains legitimate, e.g. `viewer_pixmaps._apply_edit_to_base`).
 
-- `RAW_EXT = {.cr2 .nef .arw .dng .orf .rw2}`, `is_raw_available()` (import
-  `rawpy` caché, coûteux). RAW décodé via l'aperçu JPEG embarqué par l'appareil
-  (`rawpy.imread(path).extract_thumb()`, rapide, conserve l'EXIF d'origine) avec
-  repli sur `raw.postprocess(half_size=True)` (dématriçage réduit, plus lent) si
-  aucun aperçu exploitable — export d'un RAW = résolution de cet aperçu, limite
-  documentée du produit.
-- HEIC/HEIF : `register_heif_opener()` de `pillow-heif` enregistré au **niveau
-  module** (pas dans une fonction) — les workers `ProcessPoolExecutor` (spawn,
-  `faces/detector.py`) ré-importent les modules sans jamais passer par `main()`,
-  un enregistrement paresseux ne s'exécuterait donc jamais pour eux. Une fois
-  enregistré, `Image.open()` lit le HEIC de façon transparente partout (y
-  compris hors de `image_loader`, ex. les fallbacks PIL de
-  `duplicate_detector.py`) — aucune exclusion dédiée n'est nécessaire pour HEIC,
-  contrairement au RAW ci-dessous.
-- `safe_temp_suffix(path)` — à utiliser partout où un fichier temporaire est
-  écrit via `PIL.Image.save()` à partir d'une image décodée depuis un chemin
-  RAW ou HEIC : force `.jpg` (RAW n'est jamais ré-savable par PIL, HEIC pas
-  forcément selon la version de `pillow-heif`).
-- Détection de doublons (`duplicate_detector.py`) exclut `RAW_EXT` (import direct
-  depuis `image_loader`, à ne pas dupliquer localement — contrairement à
-  `_VIDEO_EXT`, historiquement dupliqué) du prélèvement Tier 1 : sans ça, ni
-  `cv2.imread` ni le simple `PIL.Image.open` des fallbacks ne savent décoder un
-  RAW, qui serait alors classé « corrompu » et proposé à la suppression.
-- `faces/detector.py::_exif_corrected()` force la conversion en JPEG temporaire
-  (`needs_format_conversion`) pour toute extension RAW/HEIC, **même si**
-  l'orientation EXIF est déjà normale et le chemin ASCII — sans ce déclencheur
-  inconditionnel, un RAW/HEIC correctement orienté (le cas le plus courant)
-  passait tel quel à `cv2.imread()`, qui ne sait pas le décoder : 0 visage
-  détecté en silence sur la quasi-totalité des photos RAW.
-- `scanner.py::SUPPORTED_EXT` n'inclut `RAW_EXT` que si `is_raw_available()` ;
-  `ExifReader.SUPPORTED` inclut `.heic`/`.heif` inconditionnellement (pillow-heif
-  fait partie du cœur, pas une dépendance optionnelle isolée dans un plugin).
+- `RAW_EXT = {.cr2 .nef .arw .dng .orf .rw2}`, `is_raw_available()` (a hidden,
+  expensive `rawpy` import). RAW is decoded through the JPEG preview embedded by
+  the camera (`rawpy.imread(path).extract_thumb()`, fast, keeps the original
+  EXIF) with a fallback on `raw.postprocess(half_size=True)` (reduced
+  demosaicing, slower) when no usable preview exists — exporting a RAW therefore
+  yields the resolution of that preview, a documented product limitation.
+- HEIC/HEIF: `register_heif_opener()` from `pillow-heif` is registered at
+  **module level** (not inside a function) — the `ProcessPoolExecutor` workers
+  (spawn, `faces/detector.py`) re-import the modules without ever going through
+  `main()`, so a lazy registration would never run for them. Once registered,
+  `Image.open()` reads HEIC transparently everywhere (including outside
+  `image_loader`, e.g. the PIL fallbacks of `duplicate_detector.py`) — no
+  dedicated exclusion is needed for HEIC, unlike RAW below.
+- `safe_temp_suffix(path)` — to be used everywhere a temporary file is written
+  through `PIL.Image.save()` from an image decoded from a RAW or HEIC path: it
+  forces `.jpg` (RAW can never be saved back by PIL, HEIC not necessarily
+  depending on the `pillow-heif` version).
+- Duplicate detection (`duplicate_detector.py`) excludes `RAW_EXT` (imported
+  directly from `image_loader`, not to be duplicated locally — unlike
+  `_VIDEO_EXT`, historically duplicated) from the Tier 1 sampling: without that,
+  neither `cv2.imread` nor the plain `PIL.Image.open` of the fallbacks can decode
+  a RAW, which would then be classified as "corrupted" and offered for deletion.
+- `faces/detector.py::_exif_corrected()` forces conversion to a temporary JPEG
+  (`needs_format_conversion`) for every RAW/HEIC extension, **even when** the
+  EXIF orientation is already normal and the path is ASCII — without that
+  unconditional trigger, a correctly oriented RAW/HEIC (by far the most common
+  case) was passed as-is to `cv2.imread()`, which cannot decode it: 0 faces
+  detected, silently, on nearly every RAW photo.
+- `scanner.py::SUPPORTED_EXT` includes `RAW_EXT` only if `is_raw_available()`;
+  `ExifReader.SUPPORTED` includes `.heic`/`.heif` unconditionally (pillow-heif is
+  part of the core, not an optional dependency isolated in a plugin).
 
-### Copies de DVD (dossiers VIDEO_TS/AUDIO_TS)
+### DVD copies (VIDEO_TS/AUDIO_TS folders)
 
-Un dossier « copie de DVD » (arborescence `VIDEO_TS`/`AUDIO_TS` standard) est parcouru
-par le scanner comme n'importe quel autre dossier — pas d'exclusion dédiée. Les `.VOB`
-(flux vidéo réels) sont cataloguées normalement via `VIDEO_EXT` ; les `.IFO`/`.BUP`
-(métadonnées de navigation, pas du média) restent ignorés faute d'extension supportée.
+A "DVD copy" folder (standard `VIDEO_TS`/`AUDIO_TS` tree) is walked by the scanner
+like any other folder — no dedicated exclusion. The `.VOB` files (the real video
+streams) are catalogued normally through `VIDEO_EXT`; the `.IFO`/`.BUP` files
+(navigation metadata, not media) stay ignored for lack of a supported extension.
 
-`src/library/fs_utils.py::find_dvd_video_ts(folder)` détecte, purement côté filesystem
-(un `os.scandir` des enfants directs, aucune persistance), si `folder` est une copie de
-DVD (`VIDEO_TS` en enfant direct, insensible à la casse). Deux usages :
-- `src/ui/sidebar.py::_mark_if_dvd_copy()` pose une icône disque sur le nœud de l'arbre —
-  restreint aux dossiers **sans photo cataloguée** (`count` vide/nul) pour éviter un
-  `os.scandir` de plus par dossier affiché ; devenu rare en pratique depuis que les
-  `.VOB` sont cataloguées (le dossier n'a alors plus l'air vide), mais reste utile avant
-  le premier scan d'un dossier nouvellement ajouté.
-- `main_window.py::_on_photo_query_ready()` affiche un message dans la grille
-  (`ThumbnailGrid.show_empty_message()`) avec un bouton « Ouvrir avec un lecteur
-  externe » quand un dossier sélectionné ne contient aucune photo cataloguée mais est
-  une copie de DVD — cas résiduel (DVD non encore scanné, ou copie incomplète sans
-  `.VOB` exploitable). Réutilise `tools.external_apps` (même config que
-  `PhotoViewer._open_with`) via `subprocess.Popen([app_path, folder_path])` ; ne
-  propose que les applications de portée `"video"`/`"both"` (cf. ci-dessous),
-  jamais celles limitées à `"image"`.
+`src/library/fs_utils.py::find_dvd_video_ts(folder)` detects, purely at the filesystem
+level (one `os.scandir` of the direct children, no persistence), whether `folder` is a
+DVD copy (`VIDEO_TS` as a direct child, case-insensitive). Two uses:
+- `src/ui/sidebar.py::_mark_if_dvd_copy()` puts a disc icon on the tree node —
+  restricted to folders **with no catalogued photo** (`count` empty/zero) to avoid one
+  more `os.scandir` per displayed folder; rare in practice now that `.VOB` files are
+  catalogued (the folder no longer looks empty), but still useful before the first scan
+  of a newly added folder.
+- `main_window.py::_on_photo_query_ready()` shows a message in the grid
+  (`ThumbnailGrid.show_empty_message()`) with an "Open with an external player" button
+  when a selected folder contains no catalogued photo but is a DVD copy — the residual
+  case (DVD not yet scanned, or an incomplete copy with no usable `.VOB`). It reuses
+  `tools.external_apps` (the same config as `PhotoViewer._open_with`) through
+  `subprocess.Popen([app_path, folder_path])`; it only offers applications whose scope
+  is `"video"`/`"both"` (see below), never those limited to `"image"`.
 
-Chaque entrée de `tools.external_apps` (menu Outils › Applications externes…,
-`main_window.py::_open_external_apps_dialog`) porte une portée média optionnelle
-`"media"` : `"image"`, `"video"` ou `"both"` (absente = `"both"`, rétrocompatible avec
-les configs antérieures à cette fonctionnalité). `PhotoViewer.refresh_external_apps()`
-compare cette portée au `media_type` de la photo affichée pour ne montrer l'icône de
-l'application dans la barre de la visionneuse que si elle est pertinente (ex. VLC en
-`"video"` n'apparaît plus quand on visionne une photo fixe) ; le conteneur
-`_ext_apps_container` est masqué entièrement si aucune application ne correspond.
-`refresh_external_apps()` est appelé à chaque `set_photo()` (navigation) en plus du
-changement de config, pour recalculer ce filtrage à chaque photo affichée.
+Each entry of `tools.external_apps` (Tools › External applications… menu,
+`main_window.py::_open_external_apps_dialog`) carries an optional media scope
+`"media"`: `"image"`, `"video"` or `"both"` (absent = `"both"`, backward-compatible with
+configs predating this feature). `PhotoViewer.refresh_external_apps()` compares that
+scope with the `media_type` of the displayed photo so that the application's icon shows
+in the viewer bar only when relevant (e.g. VLC as `"video"` no longer appears when
+viewing a still photo); the `_ext_apps_container` container is hidden entirely if no
+application matches. `refresh_external_apps()` is called on every `set_photo()`
+(navigation) in addition to config changes, to recompute that filtering for each
+displayed photo.
 
-### Retouches non destructives
+### Non-destructive editing
 
-Les retouches ne modifient jamais les fichiers originaux. Les ajustements sont stockés dans `%LOCALAPPDATA%\PixelPhotoManager\edits.db` (SQLite) et appliqués à la volée (affichage, export). L'original est toujours récupérable.
+Edits never modify the original files. Adjustments are stored in `%LOCALAPPDATA%\PixelPhotoManager\edits.db` (SQLite) and applied on the fly (display, export). The original is always recoverable.
 
-- `src/processing/edit_database.py` — `EditDatabase` : table `photo_edits` (état courant) + table `edit_history` (historique persistant, 50 entrées max par photo)
-- L'historique est rechargé depuis la DB à l'ouverture d'une photo → undo/redo persistant entre sessions
-- Le bouton **Appliquer** dans `EditPanel` déclenche `EditDatabase.save()`
+- `src/processing/edit_database.py` — `EditDatabase`: the `photo_edits` table (current state) + the `edit_history` table (persistent history, 50 entries max per photo)
+- The history is reloaded from the DB when a photo is opened → undo/redo persists across sessions
+- The **Apply** button in `EditPanel` triggers `EditDatabase.save()`
 
-**Piège largeur minimale** : la grille de boutons de traitement (2 colonnes —
-Contraste, Vignette… en colonne 2) est hébergée dans une `QScrollArea`, qui ne
-propage jamais le `minimumSizeHint()` de son widget interne vers le sien
-(comportement Qt voulu, pour permettre un contenu plus grand que la vue). Sans
-plancher explicite (`scroll.setMinimumWidth(...)` posé dans `_setup_ui`,
-doublé par `EditPanel.content_min_width()` recalculé à la demande — le style
-Qt applicatif n'est pleinement résolu qu'après le premier affichage, une
-valeur figée à la construction sous-estime la largeur réelle des boutons une
-fois stylés), rien n'empêche le splitter de comprimer le panneau sous cette
-largeur : la colonne 2 devient invisible et inatteignable au clic,
-silencieusement, pour un utilisateur réel (pas seulement un artefact
-d'automation e2e). `main_window.py::_ensure_left_pane_min_width()` interroge
-`content_min_width()` pour dimensionner le splitter — appelé aussi au
-changement de page du `QStackedWidget` gauche, qui ne déclenche pas de
-relayout de lui-même. Test de régression dédié (géométrie directe, sans
-automation OS) : `tests/gui_widgets/test_edit_panel.py::TestEditPanelContentMinWidth`.
-`content_min_width()` compte aussi la largeur de l'ascenseur vertical
-(`_vertical_scrollbar_width()`) : le contenu du panneau dépasse toujours la
-hauteur disponible, la barre est donc présente en pratique et mange d'autant le
-viewport — ajouter un traitement à `_TREATMENTS` (donc une ligne de grille) a
-suffi à faire ressortir la colonne 2 sans elle.
+**Minimum-width trap**: the grid of treatment buttons (2 columns — Contrast,
+Vignette… in column 2) lives inside a `QScrollArea`, which never propagates the
+`minimumSizeHint()` of its inner widget to its own (intended Qt behaviour, so
+that content can be larger than the view). Without an explicit floor
+(`scroll.setMinimumWidth(...)` set in `_setup_ui`, backed by
+`EditPanel.content_min_width()` recomputed on demand — the application Qt style
+is only fully resolved after the first display, so a value frozen at
+construction time underestimates the real width of the buttons once styled),
+nothing prevents the splitter from squeezing the panel below that width: column
+2 becomes invisible and unreachable by click, silently, for a real user (not
+just as an e2e automation artefact). `main_window.py::_ensure_left_pane_min_width()`
+queries `content_min_width()` to size the splitter — it is also called when the
+left `QStackedWidget` changes page, which does not trigger a relayout on its
+own. Dedicated regression test (direct geometry, no OS automation):
+`tests/gui_widgets/test_edit_panel.py::TestEditPanelContentMinWidth`.
+`content_min_width()` also counts the width of the vertical scrollbar
+(`_vertical_scrollbar_width()`): the panel's content always exceeds the
+available height, so the bar is present in practice and eats into the viewport
+by that much — adding a treatment to `_TREATMENTS` (hence a grid row) was enough
+to push column 2 out without it.
 
-### Cadres décoratifs
+### Decorative frames
 
-`src/processing/frames.py` — 13 motifs (`FRAME_TYPES` : entourage uni, simple, double,
-baroque doré, oves et perles, grecque, art déco, sculpture bois, feuilles de vigne,
-roses, fleurs, métallique, reflets), rendus procéduralement en PIL/numpy, sans aucun
-fichier d'image externe. Réglages (`PARAMETRIC_FRAMES` = plain/simple/double) : style de
-couleur (`COLOR_STYLES` : uni, dégradé, pailleté), largeur extérieure, intervalle,
-largeur intérieure — toutes les largeurs sont des **fractions du petit côté** de la
-photo (exposées en pourcentage dans l'UI, `EditSlider` ayant une échelle interne figée
-à 100).
+`src/processing/frames.py` — 13 patterns (`FRAME_TYPES`: plain surround, simple, double,
+gilded baroque, egg-and-dart, Greek key, art deco, carved wood, vine leaves, roses,
+flowers, metallic, reflections), rendered procedurally in PIL/numpy, with no external
+image file whatsoever. Settings (`PARAMETRIC_FRAMES` = plain/simple/double): colour style
+(`COLOR_STYLES`: solid, gradient, glitter), outer width, gap, inner width — every width is
+a **fraction of the short side** of the photo (exposed as a percentage in the UI, since
+`EditSlider` has an internal scale hard-wired to 100).
 
-**Moteur de relief** (les 10 motifs hors `PARAMETRIC_FRAMES`) — ce qui fait qu'un cadre
-paraît sculpté n'est pas le dessin mais la lumière : un ornement plaqué en couleur reste
-plat quel que soit son tracé. Le rendu se fait donc en trois temps, sur une carte de
-hauteur (`float32`), jamais en peignant des polygones colorés :
-1. **Profil de moulure** — `_PROFILE_SEGMENTS`/`_PROFILE_LUTS` (`ogee`, `cove`, `flat`,
-   `bevel`, `round`, `steps`, `scoop`, `field`) : une coupe transversale échantillonnée en
-   LUT 1-D, interpolée par `np.interp` sur `t = dist_au_bord / border`. Les LUT doivent
-   rester **croissantes en `t` sur [0, 1]** — `np.interp` l'exige. `field` est un champ
-   plat entre deux baguettes : à utiliser quand la sculpture doit porter seule le relief
-   (les trois cadres végétaux), une moulure creusée entrant sinon en concurrence avec les
-   ornements qui la couvrent.
-2. **Ornements gravés** — `_Carver` (`dome`/`flat`/`disc`/`ridge`/`groove`) écrit dans la
-   carte de hauteur, plus un calque RGBA optionnel pour les motifs réellement peints
-   (porcelaine, roses). Le paramètre `edge` grave le sillon de contour du sculpteur :
-   sans lui, deux motifs voisins fusionnent en une bouillie molle (cas vécu sur les
-   acanthes du baroque).
-3. **Éclairage** — `_shade_relief()` : normales par `np.gradient`, diffus lambertien +
-   spéculaire Blinn-Phong (`_LIGHT`/`_HALF`, lumière **en haut à gauche** — l'inverser
-   retournerait la perception de tous les cadres d'un coup), occlusion de cavité
-   approchée par différence de hauteur floutée, patine dans les creux, usure de la
-   dorure. Matières dans `_MATERIALS` (gold/silver/bronze/walnut/lacquer/carmine/
-   porcelain/paint) ; `_DECOR[kind] = (profil, matière, amplitude)` — un motif ajouté à
-   `FRAME_TYPES` sans entrée `_DECOR` retomberait silencieusement sur un aplat gris.
+**Relief engine** (the 10 patterns outside `PARAMETRIC_FRAMES`) — what makes a frame look
+carved is not the drawing but the light: an ornament laid down in flat colour stays flat
+whatever its outline. Rendering therefore happens in three stages, on a height map
+(`float32`), never by painting coloured polygons:
+1. **Moulding profile** — `_PROFILE_SEGMENTS`/`_PROFILE_LUTS` (`ogee`, `cove`, `flat`,
+   `bevel`, `round`, `steps`, `scoop`, `field`): a cross-section sampled into a 1-D LUT,
+   interpolated by `np.interp` over `t = distance_to_edge / border`. The LUTs must stay
+   **increasing in `t` over [0, 1]** — `np.interp` requires it. `field` is a flat field
+   between two beads: use it when the carving must carry the relief on its own (the three
+   foliage frames), since a hollowed moulding otherwise competes with the ornaments that
+   cover it.
+2. **Carved ornaments** — `_Carver` (`dome`/`flat`/`disc`/`ridge`/`groove`) writes into the
+   height map, plus an optional RGBA layer for the patterns that are genuinely painted
+   (porcelain, roses). The `edge` parameter carves the carver's outline groove: without it,
+   two neighbouring motifs merge into soft mush (a real case on the baroque acanthus).
+3. **Lighting** — `_shade_relief()`: normals through `np.gradient`, Lambertian diffuse +
+   Blinn-Phong specular (`_LIGHT`/`_HALF`, light **from the top left** — reversing it would
+   flip the perception of every frame at once), approximate cavity occlusion through a
+   blurred height difference, patina in the hollows, wear on the gilding. Materials in
+   `_MATERIALS` (gold/silver/bronze/walnut/lacquer/carmine/porcelain/paint);
+   `_DECOR[kind] = (profile, material, amplitude)` — a pattern added to `FRAME_TYPES`
+   without a `_DECOR` entry would silently fall back to a flat grey.
 
-**Cadres végétaux couvrants** (`vine`, `roses`, `flowers`) — motifs qui remplissent le
-bandeau d'une arête à l'autre au lieu d'une frise ponctuelle. Recette, dans cet ordre :
-profil `field` ; motifs à l'échelle du bandeau (feuille ou corolle ≈ la moitié de sa
-largeur) ; un **tapis de feuillage** (`_carve_foliage`) en sous-couche ; des rangs de
-fleurs en quinconce avec gigue aléatoire par-dessus (deux rangs alignés donnent un motif
-« 88 ») ; enfin, teinte propre à chaque motif. Deux règles issues d'itérations ratées :
-- **La valeur survit à la réduction, le relief non.** Un ornement d'une seule couleur
-  redevient une pastille en vignette, si bien sculpté soit-il — d'où les teintes par
-  anneau de pétales (`_carve_rose`), par feuille d'une même touffe, et la patine bronze en
-  trois valeurs de `_carve_vine` (le bandeau reste uni, seuls les motifs sont teintés).
-- **Un éventail de feuilles couvre un secteur, pas un disque.** Les touffes doivent viser
-  **en travers** du bandeau (± la normale, avec gigue) ; orientées au hasard, elles
-  ouvrent un quadrillage de vides en diagonale.
+**Covering foliage frames** (`vine`, `roses`, `flowers`) — patterns that fill the band from
+edge to edge instead of forming a spaced frieze. The recipe, in this order: the `field`
+profile; motifs at the scale of the band (a leaf or corolla ≈ half its width); a **carpet
+of foliage** (`_carve_foliage`) underneath; rows of flowers in a staggered layout with
+random jitter on top (two aligned rows produce an "88" pattern); and finally a tint
+specific to each pattern. Two rules learned from failed iterations:
+- **Value survives downscaling, relief does not.** An ornament in a single colour becomes a
+  blob again in a thumbnail, however well carved — hence the per-petal-ring tints
+  (`_carve_rose`), the per-leaf tints within a tuft, and the three-value bronze patina of
+  `_carve_vine` (the band stays uniform, only the motifs are tinted).
+- **A fan of leaves covers a sector, not a disc.** Tufts must aim **across** the band
+  (± the normal, with jitter); oriented at random they open a diagonal grid of gaps.
 
-`_detail_steps(span, full, minimum)` plafonne le nombre de sommets d'un contour à un tous
-les ~2,5 px (`_petal_polygon`, `_cup_polygon`, `_vine_leaf_polygon`, `_circle_polygon`,
-`_ellipse_polygon`) ; `_Carver.dome` retombe à 2 contours emboîtés sous 12 px d'emprise.
-Sans ces deux plafonds, une vignette de 240 px paye exactement le même calcul de sommets
-qu'un export 6000 × 4000 — le nombre de motifs ne dépend pas de la résolution (leur
-espacement est une fraction de la largeur du bandeau). Ils divisent par ~2,5 le coût d'une
-vignette de `roses`/`flowers` (0,21 s → 0,08 s), ce qui compte : le curseur de largeur
-salit les treize vignettes de la galerie d'un coup.
+`_detail_steps(span, full, minimum)` caps the number of vertices of an outline at one per
+~2.5 px (`_petal_polygon`, `_cup_polygon`, `_vine_leaf_polygon`, `_circle_polygon`,
+`_ellipse_polygon`); `_Carver.dome` falls back to 2 nested outlines below a 12 px
+footprint. Without these two caps, a 240 px thumbnail pays exactly the same vertex cost as
+a 6000 × 4000 export — the number of motifs does not depend on resolution (their spacing is
+a fraction of the band width). They divide the cost of a `roses`/`flowers` thumbnail by
+~2.5 (0.21 s → 0.08 s), which matters: the width slider dirties all thirteen gallery
+thumbnails at once.
 
-`DECOR_MIN_WIDTH` (0,08) + `suggested_width(kind, current)` : un cadre sculpté n'existe
-pas sous une certaine épaisseur (à 5 %, largeur par défaut, les ornements sont
-illisibles). Choisir un motif décoratif **remonte visiblement le curseur de largeur**
-(`FrameDialog._select_kind`) plutôt que d'appliquer un plancher caché au rendu — sinon le
-curseur mentirait sur ce qui est affiché. Le curseur de largeur est donc exposé pour
-**tous** les motifs, et `_TileLoader` applique `suggested_width` à chaque vignette : la
-vignette montre exactement ce qu'on obtient en cliquant dessus.
+`DECOR_MIN_WIDTH` (0.08) + `suggested_width(kind, current)`: a carved frame does not exist
+below a certain thickness (at 5%, the default width, the ornaments are illegible). Choosing
+a decorative pattern therefore **visibly raises the width slider**
+(`FrameDialog._select_kind`) rather than applying a hidden floor at render time —
+otherwise the slider would lie about what is displayed. The width slider is thus exposed
+for **every** pattern, and `_TileLoader` applies `suggested_width` to each thumbnail: the
+thumbnail shows exactly what clicking it produces.
 
-`plain` (« Entourage uni ») est le seul motif **sans relief** : aplat strict de
-`frame_color` (raccourcis noir/blanc via `QUICK_COLORS` dans le dialogue), sans biseau
-ni liseré — c'est ce qui le distingue de `simple`. Il est donc dans `PARAMETRIC_FRAMES`
-(largeur + couleur réglables) mais **pas** dans `STYLED_FRAMES` = simple/double (les
-seuls à exposer `COLOR_STYLES` et `frame_color2`). Ne jamais le faire passer par le
-moteur de relief : le noir demandé ne serait plus un vrai noir (test dédié
-`TestPlainFrame::test_band_is_exactly_the_requested_color`).
+`plain` ("Plain surround") is the only pattern **without relief**: a strict flat fill of
+`frame_color` (black/white shortcuts through `QUICK_COLORS` in the dialog), with no bevel
+and no fillet — that is what distinguishes it from `simple`. It is therefore in
+`PARAMETRIC_FRAMES` (adjustable width + colour) but **not** in `STYLED_FRAMES` =
+simple/double (the only ones exposing `COLOR_STYLES` and `frame_color2`). Never route it
+through the relief engine: the requested black would no longer be a true black (dedicated
+test `TestPlainFrame::test_band_is_exactly_the_requested_color`).
 
-`plain` accepte en plus un **second cadre facultatif** (`frame_inner_enabled`, colonne
-`edits.db` ajoutée par `_MIGRATE_FRAME`, désactivé par défaut) réutilisant `frame_gap` et
-`frame_inner_width`. C'est la **première** des deux dérogations à l'invariant ci-dessous
-(l'autre étant les débordements de `SPILL_FRAMES`, plus bas) : il est peint
-PAR-DESSUS la photo (`_draw_inner_overlay`, après le `paste`), à `frame_gap` du bord, la
-bande d'image laissée visible entre les deux cadres étant l'effet recherché. Il n'entre
-donc **pas** dans `border_px()`/`content_box()` (le canevas ne grandit que du cadre
-extérieur) et la géométrie des outils interactifs reste celle de la photo entière —
-`inner_overlay_px()` est un calcul d'affichage, jamais une donnée de géométrie.
+`plain` additionally accepts an **optional second frame** (`frame_inner_enabled`, an
+`edits.db` column added by `_MIGRATE_FRAME`, off by default) reusing `frame_gap` and
+`frame_inner_width`. This is the **first** of the two exceptions to the invariant below
+(the other being the spills of `SPILL_FRAMES`, further down): it is painted ON TOP of the
+photo (`_draw_inner_overlay`, after the `paste`), at `frame_gap` from the edge, the strip
+of image left visible between the two frames being the intended effect. It therefore does
+**not** enter `border_px()`/`content_box()` (the canvas only grows by the outer frame) and
+the geometry of the interactive tools stays that of the whole photo —
+`inner_overlay_px()` is a display computation, never a geometry input.
 
-Ce second cadre porte une **ferronnerie** (`INNER_MOTIFS` : `line` ligne simple,
-`corners` volutes d'angle, `scrolls` rinceaux courants, `twist` barreau torsadé,
-`studs` clous forgés — colonnes `frame_inner_motif`/`frame_inner_relief`/
-`frame_inner_ornament`), rendue en relief léger ou en aplat strict et dimensionnée par
-le curseur « Ornements » (facteur borné à `[INNER_ORNAMENT_MIN, INNER_ORNAMENT_MAX]`,
-exposé en pourcentage). Trois règles à respecter :
-- `line` est le **défaut** et reste un aplat strict : il ignore `frame_inner_relief` et
-  est dessiné directement sur le canevas à pleine résolution (aucun flou de
-  redimensionnement) — une base migrée doit rendre exactement le cadre d'avant la
-  fonctionnalité. Relief et curseur ne concernent donc que `ORNAMENTED_MOTIFS`, et le
-  dialogue masque les deux réglages pour `line`.
-- Les ornements se développent **vers l'intérieur** depuis la ligne : ils restent dans
-  la photo, laissent propre la bande de `frame_gap` et n'entrent jamais dans
-  `border_px()`/`content_box()`. Leur calque (`_inner_motif_layer`) fait exactement la
-  taille de la photo et est collé en `(border, border)` — c'est ce qui rend le
-  débordement impossible par construction.
-- Le calque est rendu à résolution de travail bornée (`_WORK_MAX`) × suréchantillonnage
-  (`_SS`) puis réduit une seule fois, comme le bandeau : ~0,8 s sur un export
-  6000 × 4000, contre 0,43 s pour `line`. Un échec de rendu est rattrapé par un simple
-  anneau (`_draw_inner_overlay`), jamais par la perte du cadre.
+That second frame carries **ironwork** (`INNER_MOTIFS`: `line` a plain line, `corners`
+corner scrolls, `scrolls` running scrolls, `twist` a twisted bar, `studs` forged studs —
+columns `frame_inner_motif`/`frame_inner_relief`/`frame_inner_ornament`), rendered in light
+relief or as a strict flat fill and sized by the "Ornaments" slider (a factor clamped to
+`[INNER_ORNAMENT_MIN, INNER_ORNAMENT_MAX]`, exposed as a percentage). Three rules to
+respect:
+- `line` is the **default** and stays a strict flat fill: it ignores `frame_inner_relief`
+  and is drawn directly on the canvas at full resolution (no resampling blur) — a migrated
+  database must render exactly the frame from before the feature. Relief and slider
+  therefore only concern `ORNAMENTED_MOTIFS`, and the dialog hides both settings for
+  `line`.
+- The ornaments grow **inwards** from the line: they stay inside the photo, leave the
+  `frame_gap` strip clean and never enter `border_px()`/`content_box()`. Their layer
+  (`_inner_motif_layer`) is exactly the size of the photo and is pasted at
+  `(border, border)` — that is what makes overflow impossible by construction.
+- The layer is rendered at a bounded working resolution (`_WORK_MAX`) × supersampling
+  (`_SS`) then downscaled once, like the band: ~0.8 s on a 6000 × 4000 export, against
+  0.43 s for `line`. A rendering failure is caught and replaced by a plain ring
+  (`_draw_inner_overlay`), never by losing the frame.
 
-**Débordements** (`SPILL_FRAMES` = vine/roses/flowers) — quelques motifs passent
-PAR-DESSUS la photo, pour que le cadre se lise comme une sculpture qui surplombe l'image
-plutôt que comme une frise collée au bord. Seconde et dernière dérogation à l'invariant
-ci-dessous, purement d'affichage elle aussi : le calque (`_spill_array`/`_render_spill`,
-`_SPILLERS[kind]`) est collé **après** la photo dans `apply_frame()`, et n'entre ni dans
-`border_px()` ni dans `content_box()`. Quatre points :
-- Ce qui distingue une sculpture d'un autocollant, ce n'est pas le motif : c'est
-  l'**ombre portée** sur l'image (`_SPILL_SHADOW`, décalée dans l'axe de `_LIGHT`) et le
-  fait que chaque motif reste **accroché** au bandeau. `_spill_stem` trace cette attache
-  en trois points depuis SOUS l'arête — une tige droite et longue traverse les ornements
-  du bandeau et se lit comme une épingle plantée dans le cadre.
-- « Parfois » est une exigence, pas une approximation : un débordement à intervalle
-  régulier redevient une frise. D'où le tirage par site (`_SPILL_SKIP`) et l'espacement
-  de plusieurs largeurs de bandeau (`_SPILL_SPACING`) dans `_spill_sites`/`_spill_corners`,
-  qui posent les points d'accroche à cheval sur l'arête intérieure.
-- La silhouette qui porte l'ombre vient d'un **troisième canal** du `_Carver` (masque
-  `mdraw`), alimenté uniquement par les passes qui AJOUTENT de la matière
-  (`dome`/`flat`/`ridge`) : y inscrire `groove` laisserait traîner les sillons en
-  griffures noires sur la photo.
-- Isolé sur l'image, un ornement ne pardonne rien : une feuille de vigne bombée se lit
-  comme une étoile de mer en pâte à modeler (d'où un relief franchement plat, le contour
-  et les nervures portant seuls le dessin), et une vrille brillante répétée le long de
-  l'arête se lit comme un anneau de porte-clés (d'où sa restriction aux angles). Le motif
-  isolé doit être une touffe — feuillage + fleur/grappe —, jamais un ornement unique.
-- Coût : ~1,2 s de plus sur un export 6000 × 4000, 0,06–0,12 s par vignette de galerie.
-  Tests : `tests/test_frames.py::TestSpill` (débordement réel, centre de la photo intact,
-  géométrie inchangée, rendu déterministe, échec sans perte du cadre).
+**Spills** (`SPILL_FRAMES` = vine/roses/flowers) — a few patterns go OVER the photo, so that
+the frame reads as a sculpture overhanging the image rather than a frieze glued to the
+edge. This is the second and last exception to the invariant below, purely a display
+matter as well: the layer (`_spill_array`/`_render_spill`, `_SPILLERS[kind]`) is pasted
+**after** the photo in `apply_frame()`, and enters neither `border_px()` nor
+`content_box()`. Four points:
+- What tells a sculpture from a sticker is not the motif: it is the **drop shadow** on the
+  image (`_SPILL_SHADOW`, offset along the axis of `_LIGHT`) and the fact that every motif
+  stays **attached** to the band. `_spill_stem` draws that attachment in three points from
+  UNDER the edge — a straight, long stem crosses the ornaments of the band and reads as a
+  pin stuck into the frame.
+- "Sometimes" is a requirement, not an approximation: a spill at regular intervals is a
+  frieze again. Hence the per-site draw (`_SPILL_SKIP`) and the spacing of several band
+  widths (`_SPILL_SPACING`) in `_spill_sites`/`_spill_corners`, which place the anchor
+  points astride the inner edge.
+- The silhouette that carries the shadow comes from a **third channel** of the `_Carver`
+  (the `mdraw` mask), fed only by the passes that ADD material (`dome`/`flat`/`ridge`):
+  writing `groove` into it would leave the furrows trailing as black scratches on the
+  photo.
+- Isolated on the image, an ornament forgives nothing: a domed vine leaf reads as a
+  starfish made of modelling clay (hence a distinctly flat relief, with the outline and
+  veins carrying the drawing on their own), and a shiny tendril repeated along the edge
+  reads as a keyring loop (hence its restriction to the corners). An isolated motif must be
+  a tuft — foliage + flower/cluster — never a single ornament.
+- Cost: ~1.2 s more on a 6000 × 4000 export, 0.06–0.12 s per gallery thumbnail. Tests:
+  `tests/test_frames.py::TestSpill` (real spill, centre of the photo untouched, geometry
+  unchanged, deterministic rendering, failure without losing the frame).
 
-**Invariant** : `apply_frame()` colle la photo **en dernier** sur un canevas agrandi —
-le cadre ne recouvre jamais un pixel de l'image, il s'ajoute autour (hors les deux
-dérogations d'affichage ci-dessus, sans effet sur la géométrie). Corollaire : le
-pixmap affiché est plus grand que la photo, et toute coordonnée relative (recadrage,
-yeux rouges, vignette, annotations, bbox de visage) se rapporte au **contenu**, pas au
-pixmap. `viewer_canvas._img_rect()` retire donc la bordure (`_frame_border_px()` →
-`frames.content_box()`, inverse exact de `border_px()` — un pixel d'écart décalerait
-tous les outils). Ne jamais recalculer une position à partir de `self._pixmap.width()`
-dans le canvas : passer par `_img_rect()`.
+**Invariant**: `apply_frame()` pastes the photo **last** onto an enlarged canvas — the
+frame never covers a single pixel of the image, it is added around it (apart from the two
+display exceptions above, which have no effect on geometry). Corollary: the displayed
+pixmap is larger than the photo, and every relative coordinate (crop, red-eye, vignette,
+annotations, face bbox) refers to the **content**, not to the pixmap.
+`viewer_canvas._img_rect()` therefore removes the border (`_frame_border_px()` →
+`frames.content_box()`, the exact inverse of `border_px()` — one pixel off would shift
+every tool). Never recompute a position from `self._pixmap.width()` in the canvas: go
+through `_img_rect()`.
 
-`ImageAdjuster.apply_all(image, edit, with_frame=True)` pose le cadre en dernier.
-L'export (`main_window.py`) passe `with_frame=False` puis appelle `apply_frame()`
-lui-même **après** `composite_annotations_pil()` — les annotations sont en coordonnées
-de contenu, elles doivent être composées avant l'agrandissement.
+`ImageAdjuster.apply_all(image, edit, with_frame=True)` applies the frame last.
+The export (`main_window.py`) passes `with_frame=False` then calls `apply_frame()`
+itself **after** `composite_annotations_pil()` — annotations are in content
+coordinates, so they must be composited before the enlargement.
 
-UI : `src/ui/frame_dialog.py::FrameDialog` — galerie d'aperçus de la photo courante
-(un par motif, rendus dans un `_TileLoader(QThread)` réutilisant une image de base
-décodée une seule fois), largeur réglable pour **tous** les motifs, autres réglages
-réservés aux motifs paramétriques (style de remplissage et seconde couleur à
-`STYLED_FRAMES`, dans `_style_row_host` ; ferronnerie réservée au second cadre de
-`plain`, relief et « Ornements » aux `ORNAMENTED_MOTIFS`), aperçu temps réel via
-`preview` → `EditPanel._on_preview`. Le panneau ne modifie `self._edit` qu'à la
-validation, pour que `_push_undo` empile bien l'état d'avant. Le re-rendu des vignettes
-est différé et **ciblé** (`_mark_dirty(kinds)` → `_dirty_kinds` → `_refresh_timer`) :
-seul le curseur de largeur salit les 13 vignettes, les autres réglages n'en salissent
-que trois.
+UI: `src/ui/frame_dialog.py::FrameDialog` — a gallery of previews of the current photo
+(one per pattern, rendered in a `_TileLoader(QThread)` reusing a base image decoded only
+once), width adjustable for **every** pattern, the other settings reserved for the
+parametric ones (fill style and second colour for `STYLED_FRAMES`, in `_style_row_host`;
+ironwork reserved for the second frame of `plain`, relief and "Ornaments" for
+`ORNAMENTED_MOTIFS`), live preview through `preview` → `EditPanel._on_preview`. The panel
+only modifies `self._edit` on validation, so that `_push_undo` really stacks the previous
+state. Re-rendering the thumbnails is deferred and **targeted** (`_mark_dirty(kinds)` →
+`_dirty_kinds` → `_refresh_timer`): only the width slider dirties all 13 thumbnails, the
+other settings dirty just three.
 
-### Menus — largeur des popups et énumération des sous-menus
+### Menus — popup width and enumerating submenus
 
-`src/ui/ui_utils.py` expose `install_menu_width_fix(menu_ou_barre)` : à l'ouverture
-du popup (`aboutToShow`), la largeur nécessaire est recalculée
-(`menu_required_width()`) et posée en `minimumWidth`. Sans ça, le style natif
-Windows réserve la colonne du raccourci au plus juste et un libellé long passe
-**sous** son raccourci (cas vécu : « Exporter la sélection vers un dossier… » +
-`Ctrl+Shift+E`). Le calcul additionne le chrome de l'item — mesuré en interrogeant
-le style lui-même (`sizeFromContents(CT_MenuItem)` sur un texte de largeur connue,
-ce qui capte aussi le padding d'une feuille de style) — puis libellé + séparation +
-raccourci. Il reste donc calé sur le `sizeHint` de Qt pour les menus sans
-raccourci, qui ne sont pas élargis.
+`src/ui/ui_utils.py` exposes `install_menu_width_fix(menu_or_bar)`: when the popup
+opens (`aboutToShow`), the required width is recomputed (`menu_required_width()`)
+and set as `minimumWidth`. Without it, the native Windows style reserves the
+shortcut column as tightly as possible and a long label ends up **underneath** its
+shortcut (a real case: "Export the selection to a folder…" + `Ctrl+Shift+E`). The
+computation adds up the item chrome — measured by asking the style itself
+(`sizeFromContents(CT_MenuItem)` on a text of known width, which also captures the
+padding of a stylesheet) — then label + separation + shortcut. It therefore stays
+aligned with Qt's `sizeHint` for menus without shortcuts, which are not widened.
 
-La séparation libellé ↔ raccourci est fixée par `_SHORTCUT_GAP_EM` (4 largeurs de
-« M ») : c'est le seul réglage à toucher pour aérer ou resserrer la colonne des
-raccourcis. Le raccourci étant aligné à droite du popup, toute largeur ajoutée là
-se retrouve intégralement dans cet espace ; les menus sans raccourci n'en voient
-rien. Test : `test_menu_width.py::TestMenuRequiredWidth::test_shortcut_column_is_aired`.
+The label ↔ shortcut separation is set by `_SHORTCUT_GAP_EM` (4 widths of an "M"):
+that is the only knob to touch to loosen or tighten the shortcut column. Since the
+shortcut is right-aligned in the popup, any width added there ends up entirely in
+that gap; menus without shortcuts see none of it. Test:
+`test_menu_width.py::TestMenuRequiredWidth::test_shortcut_column_is_aired`.
 
-À brancher sur **chaque** menu susceptible d'afficher un raccourci — via
-`QAction.setShortcut()` comme via la convention « Libellé\tTouche » des menus
-contextuels : la barre de menus (`main_window.py`, un seul appel couvre ses menus
-et leurs sous-menus) et chaque `QMenu(self)` contextuel. Les sous-menus sont
-branchés à la volée à l'ouverture de leur parent, donc les menus reconstruits
-dynamiquement (Noter, applications externes…) sont couverts sans appel dédié.
-Ne pas remplacer `QMenu(self)` par une fabrique maison : plusieurs tests
-substituent `QMenu` dans l'espace de noms du module pour intercepter `exec()`
-(`tests/gui_widgets/test_album_mode_no_delete.py`).
+To be wired on **every** menu that may display a shortcut — through
+`QAction.setShortcut()` as well as through the "Label\tKey" convention of context
+menus: the menu bar (`main_window.py`, a single call covers its menus and their
+submenus) and each contextual `QMenu(self)`. Submenus are wired on the fly when
+their parent opens, so dynamically rebuilt menus (Rate, external applications…)
+are covered without a dedicated call. Do not replace `QMenu(self)` with a
+home-made factory: several tests substitute `QMenu` in the module namespace to
+intercept `exec()` (`tests/gui_widgets/test_album_mode_no_delete.py`).
 
-**Piège PySide6 6.11** : `QAction.menu()` renvoie un wrapper dont la collecte
-**détruit le QMenu C++** (sous-menu vidé, puis `RuntimeError: Internal C++ object
-already deleted` au prochain accès). Énumérer les sous-menus d'un QMenu/QMenuBar
-uniquement via `findChildren(QMenu, Qt.FindDirectChildrenOnly)`
-(`ui_utils._submenus()`), jamais via `QAction.menu()`. Test :
+**PySide6 6.11 trap**: `QAction.menu()` returns a wrapper whose collection
+**destroys the C++ QMenu** (empty submenu, then `RuntimeError: Internal C++ object
+already deleted` on the next access). Enumerate the submenus of a QMenu/QMenuBar
+only through `findChildren(QMenu, Qt.FindDirectChildrenOnly)`
+(`ui_utils._submenus()`), never through `QAction.menu()`. Test:
 `tests/gui_widgets/test_menu_width.py`.
 
-### Cache vignettes à trois niveaux
+### Three-level thumbnail cache
 
-`src/library/thumbnail_cache.py` — RAM LRU (500 entrées, ~50 Mo) → SQLite → génération à la demande dans un thread. Ne jamais générer de vignettes dans le thread UI.
+`src/library/thumbnail_cache.py` — RAM LRU (500 entries, ~50 MB) → SQLite → on-demand generation in a thread. Never generate thumbnails in the UI thread.
 
-Pour les vidéos, `generate()` délègue à `_generate_video_thumb()` : `cv2.VideoCapture` → seek à 10 % de la durée → frame BGR→RGB → PIL → JPEG.
+For videos, `generate()` delegates to `_generate_video_thumb()`: `cv2.VideoCapture` → seek to 10% of the duration → BGR→RGB frame → PIL → JPEG.
 
-### Gestionnaire de dossiers
+### Folder manager
 
-`src/ui/folder_manager_dialog.py` — `FolderManagerDialog(QDialog)` — accessible via **Outils › Dossiers…**.
+`src/ui/folder_manager_dialog.py` — `FolderManagerDialog(QDialog)` — reachable through **Tools › Folders…**.
 
-- Affiche tous les dossiers surveillés avec statut (✓/✗), nombre de fichiers, sous-dossiers ignorés (cachés, Originals).
-- Signaux : `rescan_requested(str)`, `folder_removed(str)`, `folder_added(str)`.
-- Le re-scan forcé passe par `LibraryScanner.scan(folders, force=True)` → `ScanThread(force=True)` → `known = {}` (bypass du cache mtime).
-- `folder_removed` est traité par `MainWindow._on_folder_removed()` : confirmation (nombre de photos affecté) puis `_purge_catalog_for_folder()` supprime les photos du catalogue, les vignettes (`ThumbnailCache.invalidate`) et les visages/`indexed_photos` (`FaceDatabase.delete_for_path`) pour ce dossier. Les fichiers restent intacts sur le disque.
+- Shows every watched folder with its status (✓/✗), file count, and skipped subfolders (hidden, Originals).
+- Signals: `rescan_requested(str)`, `folder_removed(str)`, `folder_added(str)`.
+- A forced rescan goes through `LibraryScanner.scan(folders, force=True)` → `ScanThread(force=True)` → `known = {}` (bypassing the mtime cache).
+- `folder_removed` is handled by `MainWindow._on_folder_removed()`: a confirmation (with the number of photos affected), then `_purge_catalog_for_folder()` removes the photos from the catalog, the thumbnails (`ThumbnailCache.invalidate`) and the faces/`indexed_photos` (`FaceDatabase.delete_for_path`) for that folder. The files themselves are left untouched on disk.
 
-### Suppression — toujours via la corbeille Windows
+### Deletion — always through the Windows recycle bin
 
-`src/library/trash.py` est le **point unique** de suppression d'un fichier
-utilisateur : `move_to_trash(path)` (wrapper `send2trash`, `os.path.normpath`,
-lève `FileNotFoundError` si absent) et `is_trash_available()`. Règle absolue :
-l'application n'efface **jamais** définitivement un fichier utilisateur — en cas
-d'échec (lecteur réseau, volume sans corbeille → `TrashPermissionError`/`OSError`),
-l'exception remonte à l'appelant, qui doit informer l'utilisateur que le fichier
-n'a **pas** été supprimé (jamais de repli `unlink`/`rmtree` silencieux). Sites
-concernés : `background_workers.py::_DeleteWorkerThread` (grille, visionneuse,
-fichiers corrompus), `sidebar.py::_delete_folder` (suppression de dossier, dans
-un QThread — un `rmtree` direct bloquerait le thread UI), `face_backup_dialog.py`
-(suppression d'une archive de sauvegarde). Les fichiers **temporaires internes**
-de l'application (tempfile, dossiers `_restore_tmp…`) restent en `unlink` direct —
-non concernés par cette règle, ce ne sont pas des fichiers utilisateur.
+`src/library/trash.py` is the **single point** of deletion for a user file:
+`move_to_trash(path)` (a `send2trash` wrapper, `os.path.normpath`, raises
+`FileNotFoundError` if absent) and `is_trash_available()`. Absolute rule: the
+application **never** permanently erases a user file — on failure (network drive,
+volume with no recycle bin → `TrashPermissionError`/`OSError`), the exception
+propagates to the caller, which must tell the user that the file has **not** been
+deleted (never a silent `unlink`/`rmtree` fallback). Sites concerned:
+`background_workers.py::_DeleteWorkerThread` (grid, viewer, corrupted files),
+`sidebar.py::_delete_folder` (folder deletion, inside a QThread — a direct
+`rmtree` would block the UI thread), `face_backup_dialog.py` (deleting a backup
+archive). The application's **internal temporary files** (tempfile,
+`_restore_tmp…` folders) stay on a direct `unlink` — they are not covered by this
+rule, they are not user files.
 
-### Détection de doublons — continue et incrémentale
+### Duplicate detection — continuous and incremental
 
-`src/library/duplicate_detector.py` (`DuplicateDetectorThread`) se déclenche automatiquement après chaque scan (`MainWindow._on_scan_finished()` → `_start_duplicate_detection()`), sur le même principe que l'indexation des visages : pas de bouton manuel, pas de rapport de fin. Le menu **Outils › État des doublons…** (`MainWindow._show_duplicate_status_dialog()`) affiche un instantané en lecture seule (nombre de groupes/photos, dernière vérification, fichiers corrompus) avec un bouton **Vérifier maintenant** pour forcer une passe.
+`src/library/duplicate_detector.py` (`DuplicateDetectorThread`) starts automatically after every scan (`MainWindow._on_scan_finished()` → `_start_duplicate_detection()`), on the same principle as face indexing: no manual button, no completion report. The **Tools › Duplicate status…** menu (`MainWindow._show_duplicate_status_dialog()`) shows a read-only snapshot (number of groups/photos, last check, corrupted files) with a **Check now** button to force a pass.
 
-Deux niveaux (Tier 1 pHash, Tier 2 ORB+RANSAC pour les recadrages) — voir le docstring du module. La comparaison **par paires** (pas seulement le calcul pHash/ORB par fichier, déjà caché par mtime) est vraiment incrémentale grâce à deux tables `compared_tier1`/`compared_tier2` (`src/library/dedup_cache.py`) qui tracent quels chemins ont déjà été intégralement comparés au reste de la bibliothèque connue — seules les paires nouveau×ancien et nouveau×nouveau sont réévaluées, jamais ancien×ancien.
+Two tiers (Tier 1 pHash, Tier 2 ORB+RANSAC for crops) — see the module docstring. The **pairwise** comparison (not just the per-file pHash/ORB computation, already cached by mtime) is genuinely incremental thanks to two tables `compared_tier1`/`compared_tier2` (`src/library/dedup_cache.py`) that track which paths have already been fully compared with the rest of the known library — only new×old and new×new pairs are re-evaluated, never old×old.
 
-`DuplicateDetectorThread` prend un paramètre `seed_groups: dict[path, group_id]` (typiquement `Catalog.get_duplicate_group_assignments()`) pour amorcer `group_of` sans tout recomparer. **Piège** : relancer le thread sur un `cache_db_path` déjà peuplé **sans repasser `seed_groups`** fait que toutes les paires apparaissent comme « déjà comparées » et qu'aucun groupe n'est reformé — retour silencieux de `{}` au lieu d'une erreur. En usage réel (`main_window.py`), `seed_groups` est toujours récupéré frais avant chaque création de thread ; seul un nouveau test/script qui relance `_detect()` plusieurs fois sur le même cache doit y penser explicitement.
+`DuplicateDetectorThread` takes a `seed_groups: dict[path, group_id]` parameter (typically `Catalog.get_duplicate_group_assignments()`) to seed `group_of` without recomparing everything. **Trap**: restarting the thread on an already-populated `cache_db_path` **without passing `seed_groups` again** makes every pair look "already compared" and no group is reformed — a silent return of `{}` instead of an error. In real use (`main_window.py`), `seed_groups` is always fetched fresh before each thread is created; only a new test/script that re-runs `_detect()` several times on the same cache needs to think about it explicitly.
 
-Conséquence de l'incrémentalité : `Catalog.ignore_duplicate_group()` (dissoudre un groupe, bouton ✕ de la grille des doublons) est maintenant **persistant** — un groupe ignoré n'est plus jamais recréé tant qu'aucun de ses membres ne change (ils sont déjà dans `compared_tier1`/`_tier2`, donc jamais recomparés entre eux). Un nouveau fichier correspondant à l'un d'eux reste détecté normalement (comparaison new×old).
+A consequence of the incrementality: `Catalog.ignore_duplicate_group()` (dissolving a group, the ✕ button of the duplicates grid) is now **persistent** — an ignored group is never recreated as long as none of its members changes (they are already in `compared_tier1`/`_tier2`, so never compared with each other again). A new file matching one of them is still detected normally (new×old comparison).
 
-### Visages — deux étages de filtrage par taille
+### Faces — two stages of size filtering
 
-`src/faces/detector.py::detect_and_embed()` exclut définitivement (visage jamais écrit en base) : `det_score < 0.5`, `embedding is None`, ou `w < 20 / h < 20` px. Ne pas y ajouter de seuil d'aire relatif à l'image — ça a déjà causé un bug (visages valides supprimés silencieusement, sans trace ni rattrapage possible).
+`src/faces/detector.py::detect_and_embed()` excludes definitively (the face is never written to the database): `det_score < 0.5`, `embedding is None`, or `w < 20 / h < 20` px. Do not add an area threshold relative to the image there — that has already caused a bug (valid faces silently removed, with no trace and no way to recover them).
 
-`src/faces/face_database.py::save_faces()` marque ensuite `ignored=1` (visage conservé en base, masqué de l'UI/clustering, **récupérable**) selon un seuil proportionnel à la résolution de la photo et `_AUTO_IGNORE_MIN_SCORE` (0.65). Seuil de taille : un visage qualifie la photo de "premier plan" s'il atteint `_AUTO_IGNORE_MIN_SIDE_FG_RATIO` (20 % du plus petit côté de la photo, ou 2× le seuil de base si plus grand). Si au moins un visage premier plan est présent, tout visage plus petit que `_AUTO_IGNORE_FG_FRACTION` (1/4) du plus petit visage premier plan est ignoré. Sinon (aucun premier plan), seuil de base `_AUTO_IGNORE_MIN_SIDE_RATIO` = 3 % du plus petit côté. C'est le seul étage qui doit décider si un petit visage est bruit ou non — `FaceDatabase.recalculate_size_ignored()` implémente la même règle mais n'est actuellement rattachée à aucune entrée de menu (code orphelin, cf. `RevaluateSizeIgnoredThread` dans `face_indexer.py`).
+`src/faces/face_database.py::save_faces()` then marks `ignored=1` (the face is kept in the database, hidden from the UI/clustering, and **recoverable**) according to a threshold proportional to the resolution of the photo and `_AUTO_IGNORE_MIN_SCORE` (0.65). Size threshold: a face qualifies the photo as "foreground" if it reaches `_AUTO_IGNORE_MIN_SIDE_FG_RATIO` (20% of the short side of the photo, or 2× the base threshold if larger). If at least one foreground face is present, every face smaller than `_AUTO_IGNORE_FG_FRACTION` (1/4) of the smallest foreground face is ignored. Otherwise (no foreground at all), the base threshold `_AUTO_IGNORE_MIN_SIDE_RATIO` = 3% of the short side applies. This is the only stage that should decide whether a small face is noise — `FaceDatabase.recalculate_size_ignored()` implements the same rule but is currently not wired to any menu entry (orphan code, cf. `RevaluateSizeIgnoredThread` in `face_indexer.py`).
 
-### Visages — paliers de confiance de la reconnaissance (visage vs personne connue)
+### Faces — recognition confidence tiers (face vs known person)
 
-`src/faces/face_database.py` compare la similarité cosinus d'un visage (ou du centroïde
-d'un groupe) aux centroïdes des personnes déjà nommées, à trois paliers croissants :
-- `< 0.55` : aucune action automatique (visage non identifié).
-- `_SIM_SUGGEST = 0.55` : suggestion enregistrée (`suggestion_person_id`/`suggestion_score`)
-  → le groupe apparaît « en attente de vérification » chez la personne concernée, à
-  confirmer manuellement.
-- `_SIM_AUTO_ASSIGN = 0.70` : allocation automatique de la personne, **sans confirmation**
-  (mêmes effets de bord que `accept_cluster_suggestion` : dédup, consommation des
-  annotations Picasa en attente).
+`src/faces/face_database.py` compares the cosine similarity of a face (or of a group's
+centroid) with the centroids of the already named people, at three increasing tiers:
+- `< 0.55`: no automatic action (unidentified face).
+- `_SIM_SUGGEST = 0.55`: a suggestion is recorded (`suggestion_person_id`/`suggestion_score`)
+  → the group appears as "awaiting verification" under the person concerned, to be
+  confirmed manually.
+- `_SIM_AUTO_ASSIGN = 0.70`: the person is assigned automatically, **without confirmation**
+  (with the same side effects as `accept_cluster_suggestion`: deduplication, consumption of
+  the pending Picasa annotations).
 
-`set_cluster_suggestions()` est le point d'entrée unique qui applique cette bascule pour
-les 4 producteurs de suggestions (`resuggest_clusters`, `find_similar_to_persons`,
-`isolate_and_suggest`, l'auto-promotion de `face_cluster_workers.py`) — idempotent dans
-les deux branches (`WHERE person_id IS NULL AND suggestion_person_id IS NULL`), un cluster
-déjà assigné ou déjà suggéré n'est jamais réécrit par un appel ultérieur, quel que soit
-le palier atteint.
+`set_cluster_suggestions()` is the single entry point applying that switch for the 4
+producers of suggestions (`resuggest_clusters`, `find_similar_to_persons`,
+`isolate_and_suggest`, and the auto-promotion of `face_cluster_workers.py`) — idempotent in
+both branches (`WHERE person_id IS NULL AND suggestion_person_id IS NULL`), so a cluster
+already assigned or already suggested is never rewritten by a later call, whatever tier is
+reached.
 
-`_SIM_STRONG = 0.50` (`src/ui/people_panel.py`) est un seuil **distinct**, purement
-d'affichage (libellé bleu « Probablement X » vs gris « Peut-être X » à `_SIM_WEAK = 0.45`)
-pour les visages qui n'ont pas encore atteint `_SIM_SUGGEST` — ne pas le confondre avec les
-seuils ci-dessus ni avec `_SIM_GROUP` (0.72, seuil d'auto-groupement de clusters
-*non identifiés* entre eux, sans rapport avec la correspondance à une personne connue).
+`_SIM_STRONG = 0.50` (`src/ui/people_panel.py`) is a **separate**, purely cosmetic
+threshold (blue "Probably X" label vs grey "Maybe X" at `_SIM_WEAK = 0.45`) for the faces
+that have not reached `_SIM_SUGGEST` yet — do not confuse it with the thresholds above, nor
+with `_SIM_GROUP` (0.72, the auto-grouping threshold between *unidentified* clusters,
+unrelated to matching a known person).
 
-### Visages — cache des centroïdes personne (popup d'assignation de nom)
+### Faces — person centroid cache (name assignment popup)
 
-`src/faces/face_database.py::get_all_person_centroids()` décode les embeddings (512D float32) de tous les visages identifiés pour calculer le centroïde de chaque personne — jusqu'à ~60k visages sur une grosse bibliothèque, plusieurs secondes en pur Python. Le résultat complet est mis en cache en mémoire (`self._person_centroid_cache`) et réutilisé tant qu'un fingerprint bon marché (`SELECT COUNT(*), SUM(person_id) FROM faces WHERE person_id IS NOT NULL`, quelques ms via `idx_faces_person`) n'a pas changé — le `SUM` est nécessaire en plus du `COUNT` pour détecter les réassignations (`merge_persons`) qui ne changent pas le nombre de lignes. Le décodage lui-même est vectorisé via `numpy.frombuffer` plutôt que `struct.unpack` (facteur ~10). `enrich_persons()` (photo_count + cover_path/cover_bbox + pending_count) est également coûteux (~1 s, dominé par une CTE avec fenêtrage pour la photo de couverture) ; `enrich_persons_photo_count()` en est une variante allégée (photo_count seul) à utiliser partout où la couverture n'est pas affichée, ex. la popup d'assignation.
+`src/faces/face_database.py::get_all_person_centroids()` decodes the embeddings (512D float32) of every identified face to compute each person's centroid — up to ~60k faces on a large library, several seconds in pure Python. The full result is cached in memory (`self._person_centroid_cache`) and reused as long as a cheap fingerprint (`SELECT COUNT(*), SUM(person_id) FROM faces WHERE person_id IS NOT NULL`, a few ms through `idx_faces_person`) has not changed — the `SUM` is needed on top of the `COUNT` to catch the reassignments (`merge_persons`) that do not change the number of rows. The decoding itself is vectorised through `numpy.frombuffer` rather than `struct.unpack` (a factor of ~10). `enrich_persons()` (photo_count + cover_path/cover_bbox + pending_count) is expensive too (~1 s, dominated by a CTE with a window function for the cover photo); `enrich_persons_photo_count()` is a lighter variant (photo_count only) to be used everywhere the cover is not displayed, e.g. the assignment popup.
 
-Dans `src/ui/face_panel.py`, la popup d'assignation de nom (`_AssignDialog`) est préparée par `_AssignPrepLoader(QThread)` (get_persons + enrich_persons_photo_count + suggestion de personne par similarité cosinus) avant d'être ouverte, pour respecter la règle "l'UI ne bloque jamais" ci-dessous — `face_cluster_grid.py::_PersonsLoader` suit le même principe pour la vue en grille de groupes.
+In `src/ui/face_panel.py`, the name assignment popup (`_AssignDialog`) is prepared by `_AssignPrepLoader(QThread)` (get_persons + enrich_persons_photo_count + person suggestion by cosine similarity) before being opened, to honour the "the UI never blocks" rule below — `face_cluster_grid.py::_PersonsLoader` follows the same principle for the group grid view.
 
 ### Albums
 
-`src/library/catalog.py::delete_album(album_id)` supprime un album (table `albums` + `album_photos`) sans toucher aux photos. Accessible via menu contextuel sur `Sidebar._albums_list` (`sidebar.py::_album_context_menu()`), qui exclut les 4 albums spéciaux (Chronologie/Favoris/Vidéos/Par nom de fichier) via `isinstance(item.data(Qt.UserRole), AlbumInfo)`.
+`src/library/catalog.py::delete_album(album_id)` deletes an album (the `albums` + `album_photos` tables) without touching the photos. Reachable through a context menu on `Sidebar._albums_list` (`sidebar.py::_album_context_menu()`), which excludes the 4 special albums (Timeline/Favorites/Videos/By filename) through `isinstance(item.data(Qt.UserRole), AlbumInfo)`.
 
-### Règle de performance : l'UI ne bloque jamais
+### Performance rule: the UI never blocks
 
-Toute opération > 50 ms passe dans un `QThread`. Les signaux PySide6 (`pyqtSignal`) sont le seul moyen de communiquer du thread secondaire vers l'UI.
+Every operation over 50 ms goes into a `QThread`. PySide6 signals (`pyqtSignal`) are the only way to communicate from a secondary thread to the UI.
 
-Corollaire : **chaque action utilisateur a un retour visuel immédiat**, même quand le résultat réel arrive en asynchrone. Mécanismes en place (2026-07) :
-- **Visionneuse** — `PhotoViewer._base_lru` : LRU (8 entrées) des images de base 1024 px, clé = chemin. `prefetch()` (appelé par `MainWindow._prefetch_viewer_neighbors()` après chaque navigation) précharge les voisines ±1/±2 → prev/next instantané. Sur cache froid, la vignette de la grille (`thumb_cache.get_ram`) sert de placeholder immédiat (flou bref, jamais d'écran noir). `_apply_edit_to_base` a un fast path sans retouche (décodage JPEG direct par Qt, sans aller-retour PIL). Le cache est invalidé quand le fichier change sur disque (`invalidate_base_cache` : export écrasant, réécriture EXIF).
-- **Grille** — `ThumbnailGrid.set_loading(True)` au départ d'une requête photo (`_start_photo_query`) : indicateur « Chargement… » différé de 150 ms (pas de clignotement si la requête répond vite), masqué par `set_photos()`/`clear()`.
-- **Panneau Visages** — curseur occupé pendant `_AssignPrepLoader` (préparation du dialogue d'assignation) ; après validation du dialogue, le libellé du/des visage(s) est mis à jour **optimistiquement** et l'écriture DB (assignation + dédup + consommation Picasa, potentiellement longue sur un gros groupe) part dans un `_DbWriteWorker` — le rafraîchissement complet (`person_assigned` + `set_photo`) n'a lieu qu'à la fin du worker. Le compte de « Visages ignorés » est calculé dans `_FacesDataLoader` (plus de requête DB sur le thread UI à chaque navigation).
+Corollary: **every user action gets immediate visual feedback**, even when the real result arrives asynchronously. Mechanisms in place (2026-07):
+- **Viewer** — `PhotoViewer._base_lru`: an LRU (8 entries) of the 1024 px base images, keyed by path. `prefetch()` (called by `MainWindow._prefetch_viewer_neighbors()` after every navigation) preloads the ±1/±2 neighbours → instant prev/next. On a cold cache, the grid thumbnail (`thumb_cache.get_ram`) serves as an immediate placeholder (briefly blurry, never a black screen). `_apply_edit_to_base` has a fast path with no edit (direct JPEG decoding by Qt, without a PIL round-trip). The cache is invalidated when the file changes on disk (`invalidate_base_cache`: overwriting export, EXIF rewrite).
+- **Grid** — `ThumbnailGrid.set_loading(True)` when a photo query starts (`_start_photo_query`): a "Loading…" indicator deferred by 150 ms (no flicker if the query answers quickly), hidden by `set_photos()`/`clear()`.
+- **Faces panel** — busy cursor during `_AssignPrepLoader` (preparing the assignment dialog); after the dialog is validated, the label of the face(s) is updated **optimistically** and the DB write (assignment + deduplication + Picasa consumption, potentially long on a large group) goes into a `_DbWriteWorker` — the full refresh (`person_assigned` + `set_photo`) only happens when the worker finishes. The "Ignored faces" count is computed inside `_FacesDataLoader` (no more DB query on the UI thread at every navigation).
 
 ---
 
-## Internationalisation (français, anglais, allemand)
+## Internationalisation (English, French, German)
 
-`src/core/i18n.py` — le français est la **langue source** : les chaînes sont écrites
-en français dans le code et toute chaîne non traduite y retombe automatiquement.
-La langue est un réglage de config (`ui.language`) appliqué **au redémarrage** : les
-widgets construisent leurs libellés une fois, il n'y a pas de `retranslate_ui()`.
-`install()` pose deux traducteurs, `ppm_<code>.qm` (l'application) et
-`qtbase_<code>.qm` (les dialogues standard Qt — sans lui, une interface allemande
-garde des boutons « OK/Cancel » en anglais).
+`src/core/i18n.py` — English is the **source language** (`DEFAULT_LANGUAGE = "en"`):
+strings are written in English in the code and any untranslated string falls back to
+it automatically. It was French until 2026-08; the switch was made so that the
+fallback of a forgotten message stays readable for any user, not just for French
+speakers.
+The language is a config setting (`ui.language`) applied **on restart**: widgets build
+their labels once, there is no `retranslate_ui()`. Its default in
+`config._DEFAULTS` is `"en"` too — a fresh install therefore starts in the source
+language, the only one where no message can be missing. It stayed `"fr"` for a while
+after the source-language switch, which left the e2e suite asserting English labels
+against a French interface.
 
-Catalogues dans `translations/` : `.ts` versionnés, `.qm` compilés, régénérés par
-`tools/update_translations.py` (lupdate → post-traitement pluriels → lrelease). Le
-`.spec` PyInstaller embarque `translations/ppm_*.qm` par glob — un nouveau code de
-langue n'y demande aucune modification.
+**Two entry points write that key**, deliberately: Settings › Language, and the flag
+button at the far right of the top bar (`src/ui/language_button.py`, flags drawn by
+`src/ui/flag_icons.py`). The duplication is the point — the language is the one
+setting a user must be able to reach *without being able to read the interface*, so
+it cannot live only behind a menu entry named "Settings". `MainWindow._open_settings()`
+calls `LanguageButton.refresh()` on return so the flag never lags behind the config.
+No emoji: no font shipped with Windows carries the regional-indicator flags, which
+would render as a boxed "FR" — the exact failure mode the button exists to avoid.
 
-**Une seule forme de marquage dans tout le projet** :
+`install()` installs two translators, `ppm_<code>.qm` (the application) and
+`qtbase_<code>.qm` (the standard Qt dialogs — without it, a German interface keeps
+"OK/Cancel" buttons in English).
+
+Catalogs live in `translations/`: `.ts` versioned, `.qm` compiled, regenerated by
+`tools/update_translations.py` (lupdate → plural post-processing → lrelease). The
+PyInstaller `.spec` embeds `translations/ppm_*.qm` through a glob — a new language
+code needs no change there.
+
+**A single marking form in the whole project**:
 
 ```python
 from src.core.i18n import translate
-translate("MainWindow", "Texte affiché")
+translate("MainWindow", "Displayed text")
 ```
 
-Trois interdits, tous vérifiés par `tests/test_i18n.py` — leur point commun est de
-ne **rien** casser de visible : le programme tourne, la chaîne est juste absente du
-catalogue, donc jamais traduite.
+Three prohibitions, all checked by `tests/test_i18n.py` — what they have in common
+is that they break **nothing** visible: the program runs, the string is simply
+absent from the catalog and therefore never translated.
 
-- **Jamais `self.tr()`.** PySide6 résout son contexte sur la classe de *l'instance*,
-  lupdate l'extrait sous la classe qui *écrit* l'appel. Les deux divergent dès qu'il
-  y a héritage — les mixins de `MainWindow` (`main_window_faces.py`,
-  `main_window_duplicates.py`) sont dans ce cas. Le contexte littéral supprime la
-  question : y écrire le nom de la classe **d'exécution** (« MainWindow » pour un
-  mixin de MainWindow).
-- **Jamais d'alias.** `_t = lambda s: translate("Ctx", s)` compile et tourne, et ne
-  produit zéro chaîne extractible : lupdate lit le code, il ne l'exécute pas.
-  Contexte et source doivent être des littéraux sur place.
-- **Le 4e argument (le compte) doit être un simple nom de variable.** Si c'est une
-  expression (`len(faces)`, `result.persons_created`, `n + 1`), lupdate **retire le
-  message du catalogue**, sans erreur ni trace. Hisser le compte dans une locale
-  d'abord (`n_faces = len(faces)`).
+- **Never `self.tr()`.** PySide6 resolves its context on the class of the
+  *instance*; lupdate extracts it under the class that *writes* the call. The two
+  diverge as soon as inheritance is involved — the `MainWindow` mixins
+  (`main_window_faces.py`, `main_window_duplicates.py`) are in that case. A literal
+  context removes the question: write the name of the **runtime** class there
+  ("MainWindow" for a MainWindow mixin).
+- **Never an alias.** `_t = lambda s: translate("Ctx", s)` compiles and runs, and
+  produces zero extractable string: lupdate reads the code, it does not execute it.
+  Context and source must be literals on the spot.
+- **The 4th argument (the count) must be a plain variable name.** If it is an
+  expression (`len(faces)`, `result.persons_created`, `n + 1`), lupdate **removes
+  the message from the catalog**, with no error and no trace. Hoist the count into a
+  local first (`n_faces = len(faces)`).
 
-**Pluriels** — une chaîne `%n` est écrite au neutre dans le code (« %n visage(s) »)
-puisqu'un même littéral sert au singulier et au pluriel. C'est le seul contenu de
-`ppm_fr.ts` : le français a son propre catalogue **uniquement** pour porter les deux
-formes réelles (« %n visage » / « %n visages »), le reste y est vide. Sans lui,
-`QCoreApplication.translate` substitue `%n` dans la source et l'utilisateur lit
-« 3 visage(s) » — une régression par rapport au code d'avant l'i18n.
+**A French literal in `src/` is now a defect, by construction.** As long as French
+was the source language, a forgotten string was indistinguishable from a correctly
+marked one: both displayed in French. The switch itself surfaced four holes that had
+stayed invisible throughout the whole i18n campaign (the sidebar "Identify…" button,
+the folder deletion confirmation button, the `<title>` of the duplicates report, and
+the "Del" key concatenated into the context-menu labels of `thumbnail_grid`). An AST
+audit of `src/` looking for French literals outside
+`translate()`/`logger`/`journal`/`raise`/SQL has therefore become a check that means
+something — it meant nothing before.
 
-`update_translations.py::restore_numerus()` est le seul endroit qui sait qu'un `%n`
-vaut pluriel, et il tourne après **chaque** lupdate : celui-ci ne marque
-`numerus="yes"` que sur un littéral entier (jamais le cas en vrai code) et, pire,
-ré-aplatit à chaque passe les pluriels déjà traduits en n'en gardant que la première
-forme. Les formes sont donc relevées avant (`harvest_numerus`) puis réécrites après.
-Deux comptes dans une même phrase : `%n` n'en accorde qu'un, le second passe par sa
-propre chaîne plurielle imbriquée (cf. `main_window_faces.py`,
-« %n annotation(s) de visage dans {photos} »).
+**Plurals** — a `%n` string is written neutrally in the code ("%n face(s)") since the
+same literal serves both singular and plural. That is the only content of
+`ppm_en.ts`: the source language has its own catalog **only** to carry the two real
+forms ("%n face" / "%n faces"), the rest of it is empty (~1200 messages reported as
+"untranslated" by `lrelease` on `ppm_en.ts`: that is normal and expected, unlike
+`ppm_fr.ts`/`ppm_de.ts`, which must come out at 0 unfinished). Without it,
+`QCoreApplication.translate` substitutes `%n` into the source and the user reads
+"3 face(s)".
 
-**Chaîne qui sert aussi de clé** — plusieurs endroits utilisaient un libellé français
-à la fois comme texte affiché et comme identifiant interne (clé de dict, discriminant
-d'aiguillage, nom d'opération persisté en base, paramètre `tab=`). Règle : **garder
-le français comme clé, traduire au seul site d'affichage** via une table de
-correspondance et un accesseur. Traduire la clé casserait le code en silence dès le
-changement de langue. Instances en place : `MainWindow._context_label`,
-`_MEDIA_SCOPE_VALUES`/`_media_scope_label`, `edit_panel._TOOL_LABELS`/`_tool_label`,
-`help_dialog._TABS`/`_TAB_LABELS`. Corollaire vécu : comparer un texte de widget à
-un littéral français (`if combo.currentText() == "(tous)"`) ne matche plus dès que
-l'interface change de langue — comparer l'index ou une clé, jamais le libellé.
+`update_translations.py::restore_numerus()` is the only place that knows a `%n` means
+plural, and it runs after **every** lupdate: lupdate only marks `numerus="yes"` on a
+whole literal (never the case in real code) and, worse, re-flattens the already
+translated plurals at every pass, keeping only the first form. The forms are therefore
+harvested before (`harvest_numerus`) and rewritten after. Two counts in the same
+sentence: `%n` only agrees with one, the second goes through its own nested plural
+string (cf. `main_window_faces.py`, "%n face annotation(s) in {photos}").
 
-**Corps de message : `translate(...).format(...)`, jamais une f-string.** Une f-string
-est évaluée avant d'atteindre `translate` — lupdate n'y voit qu'une expression, la chaîne
-n'entre pas au catalogue, et l'utilisateur lit un message français dans une interface
-allemande. C'est le trou qui a laissé passer une trentaine de corps de `QMessageBox`
-(titre traduit, corps non). Écrire les substitutions en `{nom}` nommés dans la source
-traduisible, jamais en positionnel : l'ordre des mots change d'une langue à l'autre.
+**A string that also serves as a key — the keys have stayed FRENCH.** Several places
+used a label both as displayed text and as an internal identifier (dict key,
+dispatch discriminant, operation name persisted in a database, `tab=` parameter).
+Rule: **the key never changes, translate only at the display site** through a lookup
+table and an accessor. These keys were frozen in French before the source-language
+switch and have stayed that way — translating a key breaks the code silently, and
+some of them are written into databases (`edits.db`) on users' machines. Instances in
+place: `MainWindow._context_label` ("Toutes les photos", "Par notes", "Fichiers : "…),
+`_MEDIA_SCOPE_VALUES`/`_media_scope_label`, `edit_panel._TOOL_LABELS`/`_tool_label`
+and `_OP_LABELS`, `help_dialog._TABS`/`_TAB_LABELS` (and the file names under
+`help_content/`, which stayed French in all three languages). A test that manipulates
+one of these keys must therefore stay in French: that is intended, not a missed
+migration. A corollary learned the hard way: comparing a widget's text with a literal
+(`if combo.currentText() == "(all)"`) stops matching as soon as the interface changes
+language — compare the index or a key, never the label.
 
-**`install()` avant tout import de `src.ui`.** Beaucoup de libellés sont des
-**constantes de module** — `frames.FRAME_TYPES`, `edit_panel._TREATMENTS`,
-`help_dialog._TAB_LABELS`, les tables de `exif_panel`, les mois de `thumbnail_grid`… :
-312 `translate()` s'évaluent à l'import, une seule fois. Un module importé avant
-`i18n.install()` fige donc sa source française pour toute la durée du processus, et
-l'interface sort à moitié traduite sans la moindre erreur. D'où l'ordre de `main()` :
-QApplication → `i18n.install()` → *ensuite* seulement les imports de `src.ui` (tous
-différés dans le corps de `main()`, aucun en tête de `main.py`). Verrouillé par
-`tests/test_i18n.py::TestInstallHappensBeforeUiImports`, dont le détecteur est
-**transitif** : `main_window` n'a aucune constante traduite en propre mais importe
-`help_dialog` et `edit_panel`, qui en ont.
+**Message bodies: `translate(...).format(...)`, never an f-string.** An f-string is
+evaluated before it reaches `translate` — lupdate only sees an expression, the string
+does not enter the catalog, and the user reads an English message in a German
+interface. That is the hole that let about thirty `QMessageBox` bodies through
+(translated title, untranslated body). Write the substitutions as named `{name}`
+placeholders in the translatable source, never positionally: word order changes from
+one language to another.
 
-**Aide intégrée** — `src/ui/help_content/<langue>/*.html`, un sous-dossier par langue
-(`fr/` `en/` `de/`, 9 pages chacun). `help_dialog._help_file()` résout **fichier par
-fichier** depuis `active_language()`, avec repli sur `fr/` : une page pas encore
-traduite s'affiche en français au lieu de faire perdre toute l'aide de la langue.
-Résoudre depuis `active_language()` et non depuis `ui.language` en config — cette
-dernière peut déjà porter la langue du *prochain* démarrage alors que l'interface
-affichée est encore dans l'ancienne. `_style.html` est du CSS pur : il n'existe qu'en
-`fr/` et vit du repli. Le `.spec` PyInstaller embarque `help_content` par dossier, un
-nouveau sous-dossier de langue n'y demande rien.
+A corollary of the same trap, for text **built at runtime**: progress messages
+(`progress.emit`), status bar labels, thread journal badges. None of them appears in
+a dialog, so none of them is spotted by re-reading the `QMessageBox` calls; all of
+them were still f-strings after the first i18n pass. An AST audit of the
+`ast.JoinedStr` nodes of `src/` (excluding `logger`/`journal`/`raise`/SQL) flushes
+them all out at once — that is the only reliable way to check none are left.
 
-**Volontairement non traduits** : les messages de `logger`/`journal`, les textes
-d'exception, le DDL SQL, et le corps du rapport de diagnostic de
-`thread_journal_dialog.py` (`build_problems_report`/`_HINTS`) — destiné à être collé
-tel quel dans un signalement de bug, il reste en français quelle que soit
-l'interface. Seul le chrome de ce dialogue est traduit.
+**Units and date formats are translatable strings**, not constants: the source says
+`B/kB/MB/GB`, French says "o/Ko/Mo/Go"; the source dates in `%m/%d/%Y`, which is
+neither the French nor the German format. `fmt_size` (`ui_utils`, shared `"Units"`
+context, reused by `face_backup_dialog` and `duplicate_detector`) and the display
+`strftime` patterns (`exif_panel`, `main_window_duplicates`, `DuplicateReport`)
+therefore go through `translate()`. The timestamps used in **file names**
+(`%Y%m%d_%H%M%S`) and in logs stay fixed.
 
----
+**Tests run without a catalog installed**: a `%n` message there falls back to its
+neutral source ("Export 1 photo(s)"), never to what the user sees. A test asserting a
+plural label must therefore install `ppm_en.qm` itself — see the `en_catalogue`
+fixture in `tests/gui_widgets/test_small_dialogs.py`. Do not "fix" the assertion
+towards the `(s)` form: that would freeze the test artefact as the expected
+behaviour. Corollary: every label expected by the tests (unit **and** e2e) is in
+English, apart from the internal keys above.
 
-## Système de plugins
+**`install()` before any `src.ui` import.** Many labels are **module constants** —
+`frames.FRAME_TYPES`, `edit_panel._TREATMENTS`, `help_dialog._TAB_LABELS`, the tables
+of `exif_panel`, the months of `thumbnail_grid`…: 312 `translate()` calls are
+evaluated at import time, once. A module imported before `i18n.install()` therefore
+freezes its English source for the whole life of the process, and the interface comes
+out half translated without the slightest error. Hence the order in `main()`:
+QApplication → `i18n.install()` → *only then* the `src.ui` imports (all deferred into
+the body of `main()`, none at the top of `main.py`). Locked down by
+`tests/test_i18n.py::TestInstallHappensBeforeUiImports`, whose detector is
+**transitive**: `main_window` has no translated constant of its own but imports
+`help_dialog` and `edit_panel`, which do.
 
-Un plugin = un dossier dans `plugins/` avec `plugin.json` + `plugin.py`.
+**Built-in help** — `src/ui/help_content/<language>/*.html`, one subfolder per
+language (`en/` `fr/` `de/`, 9 pages each; the file names stayed French in all three,
+they are keys — cf. `_TABS`). `help_dialog._help_file()` resolves **file by file**
+from `active_language()`, falling back to `en/`: a page not translated yet is shown
+in English instead of losing the whole help for that language. Resolve from
+`active_language()` and not from `ui.language` in the config — the latter may already
+carry the language of the *next* start while the displayed interface is still in the
+previous one. `_style.html` is pure CSS: it exists only in `en/` and lives off the
+fallback. The PyInstaller `.spec` embeds `help_content` by folder, so a new language
+subfolder needs nothing there.
 
-Trois classes de base dans `src/core/` :
-- `BasePlugin` — tout plugin
-- `ProcessorPlugin(BasePlugin)` — traitement image (implémente `process(image, params) -> Image`)
-- `ViewPlugin(BasePlugin)` — nouvelle vue dans la sidebar (implémente `create_widget(parent) -> QWidget`)
-
-Le `PluginManager` charge les plugins dynamiquement via `importlib`. Les plugins s'intègrent sans modifier le code existant — uniquement via le bus d'événements et les hooks de menu/sidebar.
-
----
-
-## Base de données
-
-SQLite embarqué, zéro configuration. Le catalogue est dans `%LOCALAPPDATA%\PixelPhotoManager\catalog.db`. Les vignettes ont leur propre base `thumbnails.db`. La configuration est dans `config.json` dans le même dossier. Le chemin de base est défini dans `src/core/app_dirs.py` (`APP_DATA_DIR`). Utiliser `sqlite3` standard, pas d'ORM.
-
-**Pattern de connexion** (commun à `Catalog`, `FaceDatabase`, `ThumbnailCache`, `EditDatabase`) : connexion SQLite **par (instance, thread)**, mise en cache dans un `threading.local` porté par l'instance, PRAGMAs (`journal_mode=WAL`, `synchronous=NORMAL`, `cache_size`) posés une seule fois à la création. Ne jamais revenir au schéma « connexion neuve par appel ». Corollaire : les méthodes d'écriture ne ferment pas la connexion — en cas d'exception elles font `conn.rollback()` (garde `except BaseException: conn.rollback(); raise`) pour ne **jamais** laisser la connexion cachée dans une transaction ouverte, sinon toutes les écritures suivantes échouent en `database is locked`. Toute nouvelle méthode d'écriture doit reprendre cette garde.
-
-**Migrations automatiques au démarrage** (pattern `try: ALTER TABLE ... except: pass`) :
-- `_migrate_normalize_paths()` — normalise les séparateurs Windows
-- `_migrate_video_fields()` — ajoute `media_type` et `duration` si absents
-- `_migrate_face_tables()` — ajoute les tables de visages et annotations Picasa
-
-Piège : l'index `idx_faces_suggestion` (faces.db) doit être créé **après** les migrations dans `_init_db` — la colonne `suggestion_person_id` n'existe pas dans `_CREATE_FACES`, seulement via `ALTER TABLE`.
-
-**Ordre des colonnes de `photos`** (`catalog.py::_CREATE_PHOTOS`) : `_photo_from_row()`
-unpacke la ligne **positionnellement** (`*rest` pour les colonnes ajoutées après
-`media_type`/`duration`) — toute nouvelle colonne s'ajoute **en fin** de
-`_CREATE_PHOTOS` (et de la migration `ALTER TABLE` correspondante), jamais au
-milieu, sous peine de décaler silencieusement tous les champs suivants sur une
-base migrée depuis une version antérieure.
-
-**Pas de nouvelle colonne éditable par l'utilisateur dans le `DO UPDATE`** de
-`add_or_update_photo()` (`ON CONFLICT(path) DO UPDATE SET ...`) : `tags` et
-`rating` sont volontairement **absents** de cette clause (comme `is_favorite`
-avant eux) — un re-scan forcé (`FolderManagerDialog` → `scan(force=True)`) doit
-reconstruire les champs EXIF/fichier mais ne jamais écraser une donnée saisie par
-l'utilisateur. Toute future colonne du même genre (éditable en dehors du scan)
-suit ce même pattern : présente dans l'`INSERT`, absente du `DO UPDATE`.
+**Deliberately untranslated**: the `logger`/`journal` messages, the exception texts,
+the SQL DDL, and the body of the diagnostic report of `thread_journal_dialog.py`
+(`_generate_problems_report`/`_THREAD_HINTS`) — meant to be pasted as-is into a bug
+report, it stays in French whatever the interface. Only the chrome of that dialog is
+translated.
 
 ---
 
-## Dépendances notables
+## Plugin system
 
-| Package | Usage |
-|---------|-------|
-| PySide6 | UI — utiliser `QThread` + signaux pour le threading |
-| Pillow | Traitement image principal |
-| opencv-python | Traitements avancés (détection, filtres, vignettes vidéo) |
-| DeepFace + RetinaFace | Reconnaissance faciale (optionnel, lourd) |
-| scikit-learn | Clustering DBSCAN pour les visages |
-| imagehash | Détection de doublons perceptuels |
-| folium | Carte OpenStreetMap |
-| reportlab | Export PDF |
-| send2trash | Suppression via la corbeille Windows (`src/library/trash.py`) |
-| pillow-heif | Décodage HEIC/HEIF (`src/library/image_loader.py`) |
-| rawpy | Décodage RAW — CR2/NEF/ARW/DNG/ORF/RW2 (`src/library/image_loader.py`) |
+A plugin = a folder in `plugins/` with `plugin.json` + `plugin.py`.
 
-Les dépendances IA (PyTorch, DeepFace, Real-ESRGAN…) sont **optionnelles** et commentées dans `requirements.txt`. Ne pas les imposer au cœur de l'application — les isoler dans des plugins.
+Three base classes in `src/core/`:
+- `BasePlugin` — every plugin
+- `ProcessorPlugin(BasePlugin)` — image processing (implements `process(image, params) -> Image`)
+- `ViewPlugin(BasePlugin)` — a new view in the sidebar (implements `create_widget(parent) -> QWidget`)
 
-`scikit-learn` et `hdbscan` (clustering des visages, `src/faces/clusterer.py`) sont en revanche des dépendances **non optionnelles** du cœur de l'application : ne jamais les ajouter à `excludes` dans `pixelphotomanager.spec`, sous peine de `ModuleNotFoundError: sklearn` uniquement dans l'exécutable packagé (le mode Python dev n'est pas affecté).
+The `PluginManager` loads plugins dynamically through `importlib`. Plugins integrate without modifying existing code — only through the event bus and the menu/sidebar hooks.
 
-`insightface` doit figurer dans `_with_data` (liste `collect_all`) de `pixelphotomanager.spec` **ET** son dossier `data/objects/` doit en plus être copié explicitement à la racine du bundle sous le nom `objects` (`datas += [(str(Path(insightface.__file__).parent / "data" / "objects"), "objects")]`). Raison : `insightface/data/pickle_object.py::get_object()` résout le chemin différemment selon le mode :
-- mode dev : `Path(__file__).parent / "objects"` → `insightface/data/objects/` (arborescence normale du package, ce que `collect_all()` seul reproduit dans l'exe figé sous `_internal/insightface/data/objects/`) ;
-- mode figé (`sys.frozen`) : `sys._MEIPASS / "objects"` → un dossier **`objects` à la racine du bundle** (`_internal/objects/`), complètement différent de l'arborescence du package.
+---
 
-`collect_all("insightface")` seul ne suffit donc PAS : il place bien `meanshape_68.pkl` dans l'exe figé, mais au mauvais endroit (`_internal/insightface/data/objects/`), jamais consulté par le code en mode figé. Sans la copie supplémentaire vers `_internal/objects/`, `get_object('meanshape_68.pkl')` renvoie `None` en silence (juste un `print()`, invisible en mode `console=False`), et **chaque** visage détecté fait planter `InsightFace.get()` avec `AttributeError: 'NoneType' object has no attribute 'shape'` (dans `insightface/utils/transform.py::estimate_affine_matrix_3d23d`, appelé depuis `landmark.py::get()` pour le modèle `landmark_3d_68`, estimation de pose). Piège perfide : la détection réussit (bbox trouvée), seul ce post-traitement landmark/pose échoue, donc ça ressemble à un bug de détection alors que c'est un problème d'empaquetage de données — et une correction partielle (juste `collect_all`) ne change rien à l'erreur observée, ce qui peut faire croire à tort que le vrai problème est ailleurs.
+## Database
 
-Le pack de modèles `buffalo_l` (détection SCRFD + embedding ArcFace, ~340 Mo) est lui aussi embarqué dans le bundle, sous `insightface_root/models/buffalo_l` (`pixelphotomanager.spec`, source = `~/.insightface/models/buffalo_l` de la machine de build — il faut donc avoir lancé l'appli au moins une fois en mode dev pour l'avoir en cache localement avant de builder). `src/faces/detector.py::_insightface_root()` pointe `FaceAnalysis(root=...)` dessus en mode figé. Sans ça, `insightface` tente de télécharger le pack depuis GitHub au 1er lancement sur chaque poste — silencieux et invisible tant qu'il y a un accès Internet, mais **totalement bloquant sans accès à github.com** (pare-feu, poste isolé) : reconnaissance faciale inopérante à 100 % (0 visage détecté, quel que soit le nombre de photos), avec un nouveau essai de téléchargement complet à *chaque photo* puisque le modèle n'est jamais mis en cache.
+Embedded SQLite, zero configuration. The catalog lives in `%LOCALAPPDATA%\PixelPhotoManager\catalog.db`. Thumbnails have their own database, `thumbnails.db`. The configuration is in `config.json` in the same folder. The base path is defined in `src/core/app_dirs.py` (`APP_DATA_DIR`). Use the standard `sqlite3`, no ORM.
 
-`main.py` redirige `sys.stdout`/`sys.stderr` vers `os.devnull` au tout début s'ils valent `None` (cas d'un exe `console=False` : toute bibliothèque qui y écrit, comme `tqdm` utilisé par `insightface` pendant un téléchargement, plante avec `AttributeError: 'NoneType' object has no attribute 'write'`). Ce crash était particulièrement pernicieux avec le téléchargement du pack `buffalo_l` : la requête HTTP aboutissait bien (200 OK), mais `tqdm` plantait pendant l'écriture de la barre de progression, interrompant le flux **avant** l'écriture du fichier sur le disque — le modèle n'était donc jamais mis en cache, et le run suivant retentait un téléchargement complet, en boucle.
+**Connection pattern** (shared by `Catalog`, `FaceDatabase`, `ThumbnailCache`, `EditDatabase`): one SQLite connection **per (instance, thread)**, cached in a `threading.local` carried by the instance, with the PRAGMAs (`journal_mode=WAL`, `synchronous=NORMAL`, `cache_size`) set once at creation. Never go back to the "fresh connection per call" scheme. Corollary: the write methods do not close the connection — on an exception they call `conn.rollback()` (a `except BaseException: conn.rollback(); raise` guard) so as to **never** leave the cached connection inside an open transaction, which would make every subsequent write fail with `database is locked`. Every new write method must reuse that guard.
 
-`pillow-heif` et `rawpy` (décodage HEIC/RAW, cf. `src/library/image_loader.py`)
-figurent eux aussi dans `_with_data` (`collect_all`) de `pixelphotomanager.spec` —
-jamais dans `excludes` — pour embarquer leurs bibliothèques natives (libheif,
-libraw). Contrairement au pack `buffalo_l` d'insightface, aucune copie manuelle
-supplémentaire n'est nécessaire : `collect_all()` seul suffit pour ces deux
-packages (vérifié par un `collect_all()` à blanc : datas/binaries non vides pour
-les deux).
+**Automatic migrations at startup** (the `try: ALTER TABLE ... except: pass` pattern):
+- `_migrate_normalize_paths()` — normalises the Windows separators
+- `_migrate_video_fields()` — adds `media_type` and `duration` if absent
+- `_migrate_face_tables()` — adds the face and Picasa annotation tables
+
+Trap: the `idx_faces_suggestion` index (faces.db) must be created **after** the migrations in `_init_db` — the `suggestion_person_id` column does not exist in `_CREATE_FACES`, only through `ALTER TABLE`.
+
+**Column order of `photos`** (`catalog.py::_CREATE_PHOTOS`): `_photo_from_row()`
+unpacks the row **positionally** (`*rest` for the columns added after
+`media_type`/`duration`) — every new column must be added **at the end** of
+`_CREATE_PHOTOS` (and of the matching `ALTER TABLE` migration), never in the
+middle, on pain of silently shifting every following field on a database migrated
+from an earlier version.
+
+**No new user-editable column in the `DO UPDATE`** of `add_or_update_photo()`
+(`ON CONFLICT(path) DO UPDATE SET ...`): `tags` and `rating` are deliberately
+**absent** from that clause (like `is_favorite` before them) — a forced rescan
+(`FolderManagerDialog` → `scan(force=True)`) must rebuild the EXIF/file fields but
+never overwrite data entered by the user. Any future column of the same kind
+(editable outside the scan) follows the same pattern: present in the `INSERT`,
+absent from the `DO UPDATE`.
+
+---
+
+## Notable dependencies
+
+| Package | Use |
+|---------|-----|
+| PySide6 | UI — use `QThread` + signals for threading |
+| Pillow | Main image processing |
+| opencv-python | Advanced processing (detection, filters, video thumbnails) |
+| DeepFace + RetinaFace | Face recognition (optional, heavy) |
+| scikit-learn | DBSCAN clustering for faces |
+| imagehash | Perceptual duplicate detection |
+| folium | OpenStreetMap map |
+| reportlab | PDF export |
+| send2trash | Deletion through the Windows recycle bin (`src/library/trash.py`) |
+| pillow-heif | HEIC/HEIF decoding (`src/library/image_loader.py`) |
+| rawpy | RAW decoding — CR2/NEF/ARW/DNG/ORF/RW2 (`src/library/image_loader.py`) |
+
+The AI dependencies (PyTorch, DeepFace, Real-ESRGAN…) are **optional** and commented out in `requirements.txt`. Do not force them onto the core of the application — isolate them in plugins.
+
+`scikit-learn` and `hdbscan` (face clustering, `src/faces/clusterer.py`) are, by contrast, **non-optional** dependencies of the application core: never add them to `excludes` in `pixelphotomanager.spec`, on pain of a `ModuleNotFoundError: sklearn` in the packaged executable only (dev Python mode is unaffected).
+
+`insightface` must appear in `_with_data` (the `collect_all` list) of `pixelphotomanager.spec` **AND** its `data/objects/` folder must additionally be copied explicitly to the root of the bundle under the name `objects` (`datas += [(str(Path(insightface.__file__).parent / "data" / "objects"), "objects")]`). Reason: `insightface/data/pickle_object.py::get_object()` resolves the path differently depending on the mode:
+- dev mode: `Path(__file__).parent / "objects"` → `insightface/data/objects/` (the normal package tree, which `collect_all()` alone reproduces in the frozen exe under `_internal/insightface/data/objects/`);
+- frozen mode (`sys.frozen`): `sys._MEIPASS / "objects"` → an **`objects` folder at the root of the bundle** (`_internal/objects/`), completely different from the package tree.
+
+`collect_all("insightface")` alone is therefore NOT enough: it does place `meanshape_68.pkl` in the frozen exe, but in the wrong location (`_internal/insightface/data/objects/`), never consulted by the code in frozen mode. Without the extra copy to `_internal/objects/`, `get_object('meanshape_68.pkl')` returns `None` silently (just a `print()`, invisible in `console=False` mode), and **every** detected face crashes `InsightFace.get()` with `AttributeError: 'NoneType' object has no attribute 'shape'` (inside `insightface/utils/transform.py::estimate_affine_matrix_3d23d`, called from `landmark.py::get()` for the `landmark_3d_68` model, pose estimation). A treacherous trap: detection succeeds (the bbox is found), only that landmark/pose post-processing fails, so it looks like a detection bug when it is really a data packaging problem — and a partial fix (just `collect_all`) changes nothing about the observed error, which can wrongly suggest the real problem lies elsewhere.
+
+The `buffalo_l` model pack (SCRFD detection + ArcFace embedding, ~340 MB) is embedded in the bundle too, under `insightface_root/models/buffalo_l` (`pixelphotomanager.spec`, source = `~/.insightface/models/buffalo_l` on the build machine — so the application must have been run at least once in dev mode to have it cached locally before building). `src/faces/detector.py::_insightface_root()` points `FaceAnalysis(root=...)` at it in frozen mode. Without that, `insightface` tries to download the pack from GitHub on the first launch on every machine — silent and invisible as long as there is Internet access, but **completely blocking without access to github.com** (firewall, isolated machine): face recognition 100% inoperative (0 faces detected, whatever the number of photos), with a fresh full download attempt for *every photo* since the model is never cached.
+
+`main.py` redirects `sys.stdout`/`sys.stderr` to `os.devnull` at the very beginning if they are `None` (the case of a `console=False` exe: any library writing to them, such as `tqdm` used by `insightface` during a download, crashes with `AttributeError: 'NoneType' object has no attribute 'write'`). That crash was particularly insidious with the `buffalo_l` download: the HTTP request did succeed (200 OK), but `tqdm` crashed while writing the progress bar, interrupting the stream **before** the file was written to disk — so the model was never cached, and the next run attempted a full download again, in a loop.
+
+`pillow-heif` and `rawpy` (HEIC/RAW decoding, cf. `src/library/image_loader.py`)
+also appear in `_with_data` (`collect_all`) of `pixelphotomanager.spec` — never in
+`excludes` — so that their native libraries (libheif, libraw) are embedded. Unlike
+the `buffalo_l` pack of insightface, no extra manual copy is needed: `collect_all()`
+alone is enough for these two packages (verified with a dry-run `collect_all()`:
+non-empty datas/binaries for both).

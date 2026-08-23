@@ -270,7 +270,7 @@ class _ClusterRefreshThread(QThread):
         try:
             # ── Récupération initiale (rapide) — N encore inconnu ──────────
             self.progress.emit(0, 0, translate(
-                "FaceClusterWorkers", "Récupération des groupes de visages…"))
+                "FaceClusterWorkers", "Fetching the face groups…"))
             clusters = self._face_db.get_unnamed_clusters()
 
             _empty = {
@@ -280,7 +280,7 @@ class _ClusterRefreshThread(QThread):
             }
             if not clusters:
                 self.progress.emit(1, 1, translate(
-                    "FaceClusterWorkers", "Aucun groupe à analyser"))
+                    "FaceClusterWorkers", "No group to analyse"))
                 self.initial_ready.emit(_empty)
                 self.data_ready.emit(_empty)
                 return
@@ -299,7 +299,7 @@ class _ClusterRefreshThread(QThread):
             step += 1
             self.progress.emit(step, N, translate(
                 "FaceClusterWorkers",
-                "Chargement des visages représentatifs (%n groupe(s))…", None, n))
+                "Loading representative faces (%n group(s))…", None, n))
             representative_faces = self._face_db.get_all_representative_faces(cluster_ids)
             flat_groups = [[cid] for cid in cluster_ids]   # déjà trié DESC par face_count
 
@@ -327,7 +327,7 @@ class _ClusterRefreshThread(QThread):
             step += 1
             self.progress.emit(step, N, translate(
                 "FaceClusterWorkers",
-                "Calcul des représentations vectorielles (%n groupe(s) non-isolé(s))…",
+                "Computing vector representations (%n non-isolated group(s))…",
                 None, n_ns))
             cluster_embeddings = self._face_db.get_all_cluster_centroids(cluster_ids)
 
@@ -345,20 +345,20 @@ class _ClusterRefreshThread(QThread):
             # ── Phase 2 : personnes connues ───────────────────────────────
             step += 1
             self.progress.emit(step, N, translate(
-                "FaceClusterWorkers", "Récupération des personnes connues…"))
+                "FaceClusterWorkers", "Fetching the known people…"))
             persons    = self._catalog.get_persons()
             np_        = len(persons)
 
             step += 1
             self.progress.emit(step, N, translate(
-                "FaceClusterWorkers", "Analyse des personnes connues (%n personne(s))…",
+                "FaceClusterWorkers", "Analysing the known people (%n person(s))…",
                 None, np_))
             self._face_db.enrich_persons(persons)
             person_ids = [p.id for p in persons]
 
             step += 1
             self.progress.emit(step, N, translate(
-                "FaceClusterWorkers", "Représentations vectorielles des personnes…"))
+                "FaceClusterWorkers", "Vector representations of the people…"))
             person_cluster_embeddings = self._face_db.get_all_person_cluster_centroids(person_ids)
 
             # ── Phase 2 : Union-Find par blocs, progression au % près ─────
@@ -376,10 +376,10 @@ class _ClusterRefreshThread(QThread):
                     self.progress.emit(
                         step, N,
                         translate("FaceClusterWorkers",
-                                  "Regroupement des visages similaires… {pct} %"
+                                  "Grouping similar faces… {pct} %"
                                   ).format(pct=pct)
                         + (translate("FaceClusterWorkers",
-                                     "  ({groups} groupes, blocs de {chunk})"
+                                     "  ({groups} groups, blocks of {chunk})"
                                      ).format(groups=m_emb, chunk=_UF_CHUNK)
                            if pct == 0 else ""),
                     )
@@ -388,7 +388,7 @@ class _ClusterRefreshThread(QThread):
                 # Trop grand même en mode blocs : skip UF
                 self.progress.emit(step + 1, step + 1, translate(
                     "FaceClusterWorkers",
-                    "{groups} groupes — regroupement désactivé (limite : {limit})"
+                    "{groups} groups — grouping disabled (limit: {limit})"
                     ).format(groups=n_ns, limit=UNION_FIND_MAX))
                 raw_groups: dict[int, list[int]] = {cid: [cid] for cid in cluster_ids}
             else:
@@ -418,7 +418,7 @@ class _ClusterRefreshThread(QThread):
             step += 1
             n_multi = sum(1 for g in groups_sorted if len(g) > 1)
             self.progress.emit(step, N, translate(
-                "FaceClusterWorkers", "Calcul des étiquettes de groupes (%n groupe(s))…",
+                "FaceClusterWorkers", "Computing the group labels (%n group(s))…",
                 None, n_multi))
             N += 1   # on ajoute une étape au total pour cette phase
 
@@ -456,12 +456,12 @@ class _ClusterRefreshThread(QThread):
                     n_groups = len(group)
                     label   = (
                         translate("FaceClusterWorkers",
-                                  "≈ Probablement la même personne")
+                                  "≈ Probably the same person")
                         + "  —  "
-                        + translate("FaceClusterWorkers", "%n groupes",
+                        + translate("FaceClusterWorkers", "%n group(s)",
                                     None, n_groups)
                         + ", "
-                        + translate("FaceClusterWorkers", "%n visage(s)",
+                        + translate("FaceClusterWorkers", "%n face(s)",
                                     None, n_faces)
                         + "  "
                         + translate("FaceClusterWorkers", "(sim. {pct} %)"
@@ -476,9 +476,9 @@ class _ClusterRefreshThread(QThread):
             step += 1
             self.progress.emit(
                 step, N,
-                translate("FaceClusterWorkers", "Calcul des suggestions d'identification…")
+                translate("FaceClusterWorkers", "Computing the identification suggestions…")
                 + (("  —  " + translate("FaceClusterWorkers",
-                                        "%n personne(s) connue(s)", None, np_))
+                                        "%n known person(s)", None, np_))
                    if np_ else ""),
             )
             suggestions = _compute_all_suggestions_bg(

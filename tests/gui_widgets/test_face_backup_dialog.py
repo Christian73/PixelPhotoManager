@@ -42,8 +42,8 @@ class TestHelpers:
         assert _parse_ts(Path("visages_nimporte.zip")) == "visages_nimporte"
 
     def test_fmt_size(self):
-        assert _fmt_size(500_000) == "500 Ko"
-        assert _fmt_size(2_500_000) == "2.5 Mo"
+        assert _fmt_size(500_000) == "500 kB"
+        assert _fmt_size(2_500_000) == "2.5 MB"
 
     def test_list_backups_sorted_desc(self, tmp_path):
         d = _backup_dir(tmp_path)
@@ -211,7 +211,7 @@ class TestFaceBackupDialog:
         (d / "visages_20260101_000000.zip").write_bytes(b"x")
         dlg, *_ = self._make_dialog(qtbot, tmp_path)
 
-        dlg._set_busy(True, "En cours…")
+        dlg._set_busy(True, "Running…")
         assert not dlg._btn_create.isEnabled()
         assert all(
             not b.isEnabled()
@@ -228,7 +228,7 @@ class TestFaceBackupDialog:
         with qtbot.waitSignal(dlg._thread.succeeded, timeout=5000):
             pass
         qtbot.waitUntil(
-            lambda: dlg._lbl_status.text().startswith("Sauvegarde créée"),
+            lambda: dlg._lbl_status.text().startswith("Backup created"),
             timeout=3000,
         )
 

@@ -43,12 +43,12 @@ class _DuplicatesPopup(QFrame):
 
         n_total = len(others) + 1
         title = QLabel(translate("DuplicatesPopup",
-                                 "%n exemplaire(s) dans ce groupe de doublons :",
+                                 "%n copy(ies) in this duplicate group:",
                                  None, n_total))
         title.setStyleSheet("font-weight: bold; font-size: 13px;")
         title.setWordWrap(True)
         title.setCursor(Qt.SizeAllCursor)
-        title.setToolTip(translate("DuplicatesPopup", "Cliquer-glisser pour déplacer la fenêtre"))
+        title.setToolTip(translate("DuplicatesPopup", "Click and drag to move the window"))
         title.installEventFilter(self)
         layout.addWidget(title)
 
@@ -66,7 +66,7 @@ class _DuplicatesPopup(QFrame):
 
         btn_row = QHBoxLayout()
         btn_row.addStretch()
-        btn_close = QPushButton(translate("DuplicatesPopup", "Fermer"))
+        btn_close = QPushButton(translate("DuplicatesPopup", "Close"))
         btn_close.clicked.connect(self.close)
         btn_row.addWidget(btn_close)
         layout.addLayout(btn_row)

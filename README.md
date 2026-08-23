@@ -13,7 +13,7 @@ A non-destructive desktop photo manager for Windows, built with Python and PySid
 
 - **Non-destructive editing** — original files are never modified; all adjustments are stored in a separate SQLite database and applied on the fly
 - **Video support** — scan, index, and browse video files (MP4, MOV, AVI, MKV, WMV, WebM, M4V and more); thumbnails extracted from first frames, playback in the system player
-- **Folder management** — watch multiple folders, create/rename/move subfolders from within the app, drag photos between folders; **Outils › Dossiers** shows scan status and lets you force-rescan any folder
+- **Folder management** — watch multiple folders, create/rename/move subfolders from within the app, drag photos between folders; **Tools › Folders…** shows scan status and lets you force-rescan any folder
 - **Fast thumbnail grid** — three-level cache (RAM LRU → SQLite → on-demand generation in background threads), four zoom levels
 - **Full-screen viewer** — smooth zoom, pan, previous/next navigation (stops at first/last, no wrap-around)
 - **Photo editing**
@@ -23,8 +23,8 @@ A non-destructive desktop photo manager for Windows, built with Python and PySid
   - Crop with free-form or locked aspect ratios (10×15, 13×18 landscape/portrait)
 - **Persistent undo/redo** — up to 50 edit states per photo, restored across sessions
 - **EXIF panel** — toggle with `I` in the viewer; shows camera, lens, exposure, GPS coordinates
-- **Map localization** — right-click a photo in the viewer → "Localiser sur la carte" opens OpenStreetMap at the photo's GPS position
-- **Slideshow** — **Affichage › Diaporama** or `F5`; configurable interval
+- **Map localization** — right-click a photo in the viewer → "Locate on the map" opens OpenStreetMap at the photo's GPS position
+- **Slideshow** — **View › Slideshow** or `F5`; configurable interval
 - **Face recognition** — detect, cluster and name people; import face annotations from Picasa
 - **Albums & favorites** — organize photos across folders
 - **Full-text search** — filter by filename or camera model
@@ -131,8 +131,10 @@ Application data is stored in `%LOCALAPPDATA%\PixelPhotoManager\`:
 
 ## Documentation
 
-- [Guide utilisateur](Guide_Utilisateur.md) — full user guide (French)
-- [Guide développeur](Guide_Developpeur.md) — architecture, database schemas, threading model, packaging (French)
+- [User guide](Guide_Utilisateur.md) — full user guide
+- [Developer guide](Guide_Developpeur.md) — architecture, database schemas, threading model, packaging
+- [Design document](DocumentDeConception.md) — functional and technical specification
+- [Plugin interface](InterfacePlugin.md) — plugin API reference
 
 ---
 

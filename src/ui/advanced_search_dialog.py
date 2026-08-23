@@ -28,9 +28,9 @@ logger = logging.getLogger(__name__)
 # (libellé affiché, valeur de media_type) — le libellé est purement d'affichage,
 # c'est le 2e élément qui est la donnée.
 _MEDIA_TYPES = [
-    (translate("AdvancedSearchDialog", "Tous"),   None),
+    (translate("AdvancedSearchDialog", "All"),   None),
     (translate("AdvancedSearchDialog", "Photos"), "image"),
-    (translate("AdvancedSearchDialog", "Vidéos"), "video"),
+    (translate("AdvancedSearchDialog", "Videos"), "video"),
 ]
 
 
@@ -71,7 +71,7 @@ class AdvancedSearchDialog(QDialog):
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
-        self.setWindowTitle(translate("AdvancedSearchDialog", "Recherche avancée"))
+        self.setWindowTitle(translate("AdvancedSearchDialog", "Advanced search"))
         self.setMinimumWidth(380)
         self._persons = persons
         self._all_tags = all_tags
@@ -85,7 +85,7 @@ class AdvancedSearchDialog(QDialog):
         form.setSpacing(8)
 
         # --- Dates ---
-        self._chk_dates = QCheckBox(translate("AdvancedSearchDialog", "Filtrer par date"))
+        self._chk_dates = QCheckBox(translate("AdvancedSearchDialog", "Filter by date"))
         self._chk_dates.toggled.connect(self._on_dates_toggled)
         date_row = QHBoxLayout()
         date_row.setContentsMargins(0, 0, 0, 0)
@@ -105,29 +105,30 @@ class AdvancedSearchDialog(QDialog):
         self._camera_combo.setEditable(True)
         self._camera_combo.addItem("")
         self._camera_combo.addItems(cameras)
-        form.addRow(translate("AdvancedSearchDialog", "Appareil :"), self._camera_combo)
+        form.addRow(translate("AdvancedSearchDialog", "Camera:"), self._camera_combo)
 
         # --- Personne ---
         self._person_combo = QComboBox()
-        self._person_combo.addItem(translate("AdvancedSearchDialog", "(toute personne)"), None)
+        self._person_combo.addItem(translate("AdvancedSearchDialog", "(anyone)"), None)
         for p in self._persons:
             self._person_combo.addItem(p.name, p.id)
-        form.addRow(translate("AdvancedSearchDialog", "Personne :"), self._person_combo)
+        form.addRow(translate("AdvancedSearchDialog", "Person:"), self._person_combo)
 
         # --- Dossier ---
         self._folder_combo = QComboBox()
         self._folder_combo.setEditable(True)
         self._folder_combo.addItem("")
         self._folder_combo.addItems(folders)
-        form.addRow(translate("AdvancedSearchDialog", "Dossier :"), self._folder_combo)
+        form.addRow(translate("AdvancedSearchDialog", "Folder:"), self._folder_combo)
 
         # --- Note min ---
         self._stars = _RatingStars()
-        form.addRow(translate("AdvancedSearchDialog", "Note min. :"), self._stars)
+        form.addRow(translate("AdvancedSearchDialog", "Min. rating:"), self._stars)
 
         # --- Mots-clés ---
         self._tag_input = QLineEdit()
-        self._tag_input.setPlaceholderText(translate("AdvancedSearchDialog", "Ajouter un mot-clé puis Entrée…"))
+        self._tag_input.setPlaceholderText(translate("AdvancedSearchDialog", "Add a keyword "
+                                                                             "then press Enter…"))
         completer = QCompleter(self._all_tags, self)
         completer.setCaseSensitivity(Qt.CaseInsensitive)
         self._tag_input.setCompleter(completer)
@@ -139,23 +140,23 @@ class AdvancedSearchDialog(QDialog):
         self._tags_summary.setWordWrap(True)
         self._tags_summary.setStyleSheet("color: #9cc4e4;")
         tags_col.addWidget(self._tags_summary)
-        form.addRow(translate("AdvancedSearchDialog", "Mots-clés :"), self._wrap(tags_col))
+        form.addRow(translate("AdvancedSearchDialog", "Keywords:"), self._wrap(tags_col))
 
         # --- Favoris / type média ---
-        self._chk_favorites = QCheckBox(translate("AdvancedSearchDialog", "Favoris uniquement"))
+        self._chk_favorites = QCheckBox(translate("AdvancedSearchDialog", "Favourites only"))
         form.addRow("", self._chk_favorites)
 
         self._media_combo = QComboBox()
         for label, _value in _MEDIA_TYPES:
             self._media_combo.addItem(label)
-        form.addRow(translate("AdvancedSearchDialog", "Type :"), self._media_combo)
+        form.addRow(translate("AdvancedSearchDialog", "Type:"), self._media_combo)
 
         root.addLayout(form)
 
         buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
-        buttons.button(QDialogButtonBox.Ok).setText(translate("AdvancedSearchDialog", "Rechercher"))
+        buttons.button(QDialogButtonBox.Ok).setText(translate("AdvancedSearchDialog", "Search"))
         root.addWidget(buttons)
 
     @staticmethod

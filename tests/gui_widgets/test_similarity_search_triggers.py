@@ -179,5 +179,5 @@ class TestManualEntry:
 
         MainWindow._start_similarity_search_manually(ctrl)
 
-        assert shown == ["Recherche en cours"]
+        assert shown == ["Search running"]
         assert ctrl.similarity_starts == 0

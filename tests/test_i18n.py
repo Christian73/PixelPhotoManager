@@ -150,7 +150,7 @@ class TestInstallHappensBeforeUiImports:
     """Beaucoup de libellés sont des **constantes de module** (`_TREATMENTS`,
     `FRAME_TYPES`, `_TAB_LABELS`, tables EXIF…) : leur `translate()` s'évalue à
     l'import, une seule fois. Un module importé avant `i18n.install()` fige donc
-    la source française pour toute la durée du processus — l'interface se
+    la source anglaise pour toute la durée du processus — l'interface se
     retrouve à moitié traduite, sans la moindre erreur. D'où l'ordre imposé dans
     `main()`, que ces deux tests verrouillent."""
 
@@ -290,14 +290,51 @@ class TestCatalogues:
                 bad.append(f"{ctx} | {msg.findtext('source')}")
         assert not bad, "formes plurielles incomplètes : " + " ; ".join(bad)
 
+    def test_no_plural_form_is_empty(self, code):
+        """Une forme plurielle **vide** est le pire des cas : `lrelease` compte
+        le message « finished » (il a bien une `<translation>` à deux formes) et
+        rien ne signale quoi que ce soit — mais à l'exécution, le seul `n`
+        concerné rend une chaîne vide. Quatre messages étaient passés par ce
+        trou, dans les trois langues à la fois."""
+        bad = []
+        for ctx, msg in _messages(code):
+            if msg.get("numerus") != "yes":
+                continue
+            tr = msg.find("translation")
+            if tr.get("type") in ("vanished", "obsolete"):
+                continue
+            forms = [f.text or "" for f in tr.findall("numerusform")]
+            if not all(f.strip() for f in forms):
+                bad.append(f"{ctx} | {msg.findtext('source')} -> {forms}")
+        assert not bad, ("forme plurielle vide — compléter le .ts puis relancer "
+                         "tools/update_translations.py : " + " ; ".join(bad))
+
+    def test_every_message_is_translated(self, code):
+        """Aucun message inachevé, sauf dans le catalogue de la langue SOURCE :
+        celui-ci n'existe que pour porter les pluriels, tout le reste y est
+        volontairement vide et retombe sur la source écrite dans le code."""
+        if code == DEFAULT_LANGUAGE:
+            pytest.skip(f"{code} est la langue source (catalogue de pluriels)")
+        bad = []
+        for ctx, msg in _messages(code):
+            tr = msg.find("translation")
+            if tr is None or tr.get("type") in ("vanished", "obsolete"):
+                continue
+            if msg.get("numerus") == "yes":
+                continue          # couvert par test_no_plural_form_is_empty
+            if tr.get("type") == "unfinished" or not (tr.text or "").strip():
+                bad.append(f"{ctx} | {msg.findtext('source')}")
+        assert not bad, (f"{len(bad)} message(s) non traduit(s) en « {code} » — "
+                         "ils s'afficheraient en anglais : " + " ; ".join(bad[:20]))
+
 
 class TestSourcesAreInTheCatalogue:
     def test_every_plural_string_of_the_code_is_extracted(self):
         """Filet contre les deux façons de perdre un pluriel : l'oubli de
         régénérer les catalogues, et la disparition silencieuse due au 4e
         argument. Restreint aux chaînes `%n`, les seules dont la perte ne se
-        voit pas (une chaîne simple non extraite retombe sur un français
-        correct, un pluriel non extrait affiche « 3 visage(s) »)."""
+        voit pas (une chaîne simple non extraite retombe sur un anglais
+        correct, un pluriel non extrait affiche « 3 face(s) »)."""
         catalogue = {(ctx, msg.findtext("source") or "")
                      for ctx, msg in _messages(DEFAULT_LANGUAGE)}
         bad = []
@@ -323,7 +360,7 @@ class TestSourcesAreInTheCatalogue:
 
 class TestNormalize:
     @pytest.mark.parametrize("value", [None, "", "es", "zz", "klingon", 42])
-    def test_unsupported_falls_back_to_french(self, value):
+    def test_unsupported_falls_back_to_the_source_language(self, value):
         assert normalize(value) == DEFAULT_LANGUAGE
 
     @pytest.mark.parametrize("value,expected", [
@@ -346,7 +383,7 @@ class _FakeConfig:
 
 
 class TestLanguagePreference:
-    def test_default_is_french_when_unset(self):
+    def test_default_is_the_source_language_when_unset(self):
         assert current_language(_FakeConfig()) == DEFAULT_LANGUAGE
 
     def test_roundtrip(self):
@@ -365,20 +402,32 @@ class TestLanguagePreference:
 class TestRuntimePlurals:
     """Vérifie la chaîne complète : .qm chargé → forme correcte affichée.
 
-    C'est le seul test qui prouve que le français a bien un catalogue : sans
-    `ppm_fr.qm`, `QCoreApplication.translate` retombe sur la source et
-    substitue quand même `%n` — l'utilisateur lit « 3 visage(s) », soit une
-    régression par rapport au code d'avant l'i18n.
+    C'est le seul test qui prouve que l'**anglais** a bien un catalogue, alors
+    qu'il est la langue source : sans `ppm_en.qm`, `QCoreApplication.translate`
+    retombe sur la source et substitue quand même `%n` — l'utilisateur lit
+    « 3 photo(s) », soit une régression par rapport au code d'avant l'i18n.
     """
+
+    SOURCE = "%n photo(s)"
+
+    def test_english_plurals_come_from_the_catalogue(self, qapp):
+        from src.core import i18n
+        i18n.install(qapp, "en")
+        try:
+            assert i18n.translate("MainWindow", self.SOURCE, None, 1) == "1 photo"
+            assert i18n.translate("MainWindow", self.SOURCE, None, 3) == "3 photos"
+            # 0 se dit au pluriel en anglais (pas en français).
+            assert i18n.translate("MainWindow", self.SOURCE, None, 0) == "0 photos"
+        finally:
+            i18n.install(qapp, DEFAULT_LANGUAGE)
 
     def test_french_plurals_come_from_the_catalogue(self, qapp):
         from src.core import i18n
         i18n.install(qapp, "fr")
         try:
-            source = "%n photo(s)"
-            assert i18n.translate("MainWindow", source, None, 1) == "1 photo"
-            assert i18n.translate("MainWindow", source, None, 3) == "3 photos"
+            assert i18n.translate("MainWindow", self.SOURCE, None, 1) == "1 photo"
+            assert i18n.translate("MainWindow", self.SOURCE, None, 3) == "3 photos"
             # 0 se dit au singulier en français (pas en anglais).
-            assert i18n.translate("MainWindow", source, None, 0) == "0 photo"
+            assert i18n.translate("MainWindow", self.SOURCE, None, 0) == "0 photo"
         finally:
             i18n.install(qapp, DEFAULT_LANGUAGE)

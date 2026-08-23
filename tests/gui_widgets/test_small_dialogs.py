@@ -5,8 +5,10 @@ face_cluster_grid : export, enregistrement, reset visages, popup de doublons,
 fusion de groupes — plus le helper fmt_size. Aucun exec() : widgets pilotés
 directement."""
 import sqlite3
+from pathlib import Path
 
-from PySide6.QtCore import Qt
+import pytest
+from PySide6.QtCore import Qt, QTranslator
 from PySide6.QtWidgets import QFileDialog, QLabel
 
 from src.core.models import PhotoInfo
@@ -18,25 +20,42 @@ from src.ui.reset_faces_dialog import _ResetFacesDialog
 from src.ui.ui_utils import fmt_size
 
 
+@pytest.fixture
+def en_catalogue(qapp):
+    """Installe ppm_en.qm le temps d'un test.
+
+    Sans catalogue installé, un message `%n` retombe sur sa source neutre
+    (« Export 1 photo(s) ») : c'est un artefact de test, jamais ce que voit
+    l'utilisateur — `main()` installe toujours un catalogue au démarrage, et
+    ppm_en.qm n'existe que pour porter les deux formes plurielles réelles
+    (cf. src/core/i18n.py et tools/update_translations.py)."""
+    qm = Path(__file__).resolve().parents[2] / "translations" / "ppm_en.qm"
+    tr = QTranslator()
+    assert tr.load(str(qm)), f"{qm} absent — lancer tools/update_translations.py"
+    qapp.installTranslator(tr)
+    yield
+    qapp.removeTranslator(tr)
+
+
 class TestFmtSize:
     def test_zero_and_negative_empty(self):
         assert fmt_size(0) == ""
         assert fmt_size(-5) == ""
 
     def test_kilobytes_and_megabytes(self):
-        assert fmt_size(512 * 1024) == "512 Ko"
-        assert fmt_size(int(3.2 * 1024 * 1024)) == "3.2 Mo"
+        assert fmt_size(512 * 1024) == "512 kB"
+        assert fmt_size(int(3.2 * 1024 * 1024)) == "3.2 MB"
 
 
 class TestExportDialog:
-    def test_title_singular_plural(self, qtbot):
+    def test_title_singular_plural(self, qtbot, en_catalogue):
         dlg1 = _ExportDialog(1)
         qtbot.addWidget(dlg1)
-        assert dlg1.windowTitle() == "Exporter 1 photo"
+        assert dlg1.windowTitle() == "Export 1 photo"
 
         dlg2 = _ExportDialog(4)
         qtbot.addWidget(dlg2)
-        assert dlg2.windowTitle() == "Exporter 4 photos"
+        assert dlg2.windowTitle() == "Export 4 photos"
 
     def test_default_preset_is_original_size(self, qtbot):
         dlg = _ExportDialog(2)
@@ -143,7 +162,7 @@ class TestDuplicatesPopup:
         assert popup._list.count() == 3
         first = popup._list.item(0)
         assert first.text().startswith("★ Original — orig.jpg")
-        assert "2.0 Mo" in first.text()
+        assert "2.0 MB" in first.text()
         assert first.font().bold()
 
     def test_unknown_size_shows_dash(self, qtbot):
@@ -165,14 +184,14 @@ class TestDuplicatesPopup:
 
 
 class TestMergeRow:
-    def test_labels_isolated_vs_group(self, qtbot):
+    def test_labels_isolated_vs_group(self, qtbot, en_catalogue):
         solo = _MergeRow(9, 1)
         qtbot.addWidget(solo)
         grp = _MergeRow(4, 3)
         qtbot.addWidget(grp)
 
-        assert any("Isolé" in lbl.text() for lbl in solo.findChildren(QLabel))
-        assert any("Groupe 4  —  3 visages" in lbl.text()
+        assert any("Isolated" in lbl.text() for lbl in solo.findChildren(QLabel))
+        assert any("Group 4  —  3 faces" in lbl.text()
                    for lbl in grp.findChildren(QLabel))
 
     def test_click_emits_selected(self, qtbot):

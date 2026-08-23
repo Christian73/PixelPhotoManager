@@ -184,7 +184,7 @@ class TestProbableMatchInformativeLabel:
         _load_and_settle(qtbot, panel, photo)
 
         item = panel._items[face_id]
-        assert "Probablement" in item._name_label.text()
+        assert "Probably" in item._name_label.text()
         assert person.name in item._name_label.text()
         assert not hasattr(item, "_btn_accept")
         assert not hasattr(item, "_btn_reject")
@@ -203,7 +203,7 @@ class TestProbableMatchInformativeLabel:
         _load_and_settle(qtbot, panel, photo)
 
         item = panel._items[face_id]
-        assert "Peut-être" in item._name_label.text()
+        assert "Maybe" in item._name_label.text()
         assert person.name in item._name_label.text()
         assert not hasattr(item, "_btn_accept")
         assert not hasattr(item, "_btn_reject")

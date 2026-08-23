@@ -104,7 +104,7 @@ class _CompteRenduPanel(QGroupBox):
     """Bilan d'exécution avec badges colorés par thread."""
 
     def __init__(self, parent=None) -> None:
-        super().__init__(translate("ThreadJournalDialog", "Bilan d'exécution"), parent)
+        super().__init__(translate("ThreadJournalDialog", "Execution summary"), parent)
         outer = QVBoxLayout(self)
         outer.setSpacing(4)
         outer.setContentsMargins(10, 6, 10, 8)
@@ -139,7 +139,7 @@ class _CompteRenduPanel(QGroupBox):
         self._clear_grid()
 
         if not entries:
-            self._banner.setText(translate("CompteRenduPanel", "  Aucune donnée dans le journal."))
+            self._banner.setText(translate("CompteRenduPanel", "  No data in the journal."))
             self._banner.setStyleSheet("color: #888;")
             return
 
@@ -179,17 +179,22 @@ class _CompteRenduPanel(QGroupBox):
         # ── bannière globale
         if n_critical:
             self._banner.setText(
-                f"  ⚠  {n_critical} thread(s) en erreur ou trop lent(s)"
+                "  ⚠  " + translate(
+                    "CompteRenduPanel",
+                    "%n thread(s) in error or too slow", None, n_critical)
             )
             self._banner.setStyleSheet("color: #dd6666; padding: 2px 0 4px 0;")
         elif n_slow:
             self._banner.setText(
-                f"  ⚠  {n_slow} thread(s) légèrement lent(s)"
+                "  ⚠  " + translate(
+                    "CompteRenduPanel",
+                    "%n slightly slow thread(s)", None, n_slow)
             )
             self._banner.setStyleSheet("color: #cc8844; padding: 2px 0 4px 0;")
         else:
             self._banner.setText(
-                translate("CompteRenduPanel", "  ✓  Tout fonctionne normalement — aucune anomalie détectée")
+                translate("CompteRenduPanel", "  ✓  Everything is running normally — no "
+                                              "anomaly found")
             )
             self._banner.setStyleSheet("color: #5dbb5d; padding: 2px 0 4px 0;")
 
@@ -204,15 +209,21 @@ class _CompteRenduPanel(QGroupBox):
 
             # badge
             if errs and mx is not None and mx >= _WARN_MS:
-                badge, bstyle = "  ✗  ERREUR + TROP LONG", "color:#dd6666;font-weight:bold;"
+                badge = "  ✗  " + translate("CompteRenduPanel", "ERROR + TOO LONG")
+                bstyle = "color:#dd6666;font-weight:bold;"
             elif errs:
-                badge, bstyle = f"  ✗  ERREUR ({errs})", "color:#dd6666;font-weight:bold;"
+                badge = "  ✗  " + translate(
+                    "CompteRenduPanel", "ERROR ({n})").format(n=errs)
+                bstyle = "color:#dd6666;font-weight:bold;"
             elif mx is not None and mx >= _WARN_MS:
-                badge, bstyle = "  ●  TROP LONG", "color:#dd6666;font-weight:bold;"
+                badge = "  ●  " + translate("CompteRenduPanel", "TOO LONG")
+                bstyle = "color:#dd6666;font-weight:bold;"
             elif mx is not None and mx >= _SLOW_MS:
-                badge, bstyle = "  ●  LENT",      "color:#cc8844;font-weight:bold;"
+                badge = "  ●  " + translate("CompteRenduPanel", "SLOW")
+                bstyle = "color:#cc8844;font-weight:bold;"
             elif last == "START":
-                badge, bstyle = "  ●  EN COURS",  "color:#8888cc;font-weight:bold;"
+                badge = "  ●  " + translate("CompteRenduPanel", "RUNNING")
+                bstyle = "color:#8888cc;font-weight:bold;"
             elif runs:
                 badge, bstyle = "  ✓  OK",        "color:#5dbb5d;font-weight:bold;"
             else:
@@ -221,33 +232,43 @@ class _CompteRenduPanel(QGroupBox):
             if th == "FaceIndexThread" and not errs and face_step_stats is not None:
                 _nb, _avg_s, _max_s = face_step_stats
                 if _max_s < _FACE_STEP_NORMAL_MS:
-                    badge  = f"  ✓  PROGRESSE  ({_nb} photos)"
+                    badge  = ("  ✓  " + translate("CompteRenduPanel", "PROGRESSING  ({photos})").format(
+                        photos=translate("CompteRenduPanel", "%n photo(s)", None, _nb)))
                     bstyle = "color:#5dbb5d;font-weight:bold;"
                 elif _max_s < _FACE_STEP_SLOW_MS:
-                    badge  = f"  ●  LENT/PHOTO  ({_nb} photos)"
+                    badge  = ("  ●  " + translate("CompteRenduPanel", "SLOW/PHOTO  ({photos})").format(
+                        photos=translate("CompteRenduPanel", "%n photo(s)", None, _nb)))
                     bstyle = "color:#cc8844;font-weight:bold;"
 
             # stats texte
             if th == "FaceIndexThread" and face_step_stats is not None:
                 _nb, _avg_s, _max_s = face_step_stats
-                parts = [f"{_nb} photo(s) traitée(s)", f"moy {_avg_s / 1000:.0f} s/photo"]
+                parts = [translate("CompteRenduPanel", "%n photo(s) processed", None, _nb),
+                         translate("CompteRenduPanel", "avg {v} s/photo").format(
+                             v=f"{_avg_s / 1000:.0f}")]
                 _c = (
                     "#dd6666" if _max_s >= _FACE_STEP_SLOW_MS * 2 else
                     "#cc8844" if _max_s >= _FACE_STEP_SLOW_MS else "#777"
                 )
-                max_label = f"<span style='color:{_c};'>max {_max_s / 1000:.0f} s/photo</span>"
+                max_label = (f"<span style='color:{_c};'>"
+                             + translate("CompteRenduPanel", "max {v} s/photo").format(
+                                 v=f"{_max_s / 1000:.0f}")
+                             + "</span>")
             else:
                 parts = []
                 if runs:
-                    parts.append(f"{runs} run{'s' if runs > 1 else ''}")
+                    parts.append(translate("CompteRenduPanel", "%n run(s)", None, runs))
                 if avg is not None:
-                    parts.append(f"moy {avg:,.0f} ms")
+                    parts.append(translate("CompteRenduPanel", "avg {v} ms").format(v=f"{avg:,.0f}"))
                 if mx is not None:
                     color_mx = (
                         "#dd6666" if mx >= _WARN_MS else
                         "#cc8844" if mx >= _SLOW_MS else "#777"
                     )
-                    max_label = f"<span style='color:{color_mx};'>max {mx:,.0f} ms</span>"
+                    max_label = (f"<span style='color:{color_mx};'>"
+                                 + translate("CompteRenduPanel", "max {v} ms").format(
+                                     v=f"{mx:,.0f}")
+                                 + "</span>")
                 else:
                     max_label = ""
 
@@ -273,10 +294,10 @@ class _SummaryTable(QTableWidget):
     _HEADERS = [
         translate("ThreadJournalDialog", "Thread"),
         translate("ThreadJournalDialog", "Runs"),
-        translate("ThreadJournalDialog", "Durée moy."),
-        translate("ThreadJournalDialog", "Durée max."),
-        translate("ThreadJournalDialog", "Erreurs"),
-        translate("ThreadJournalDialog", "Statut"),
+        translate("ThreadJournalDialog", "Avg. time"),
+        translate("ThreadJournalDialog", "Max time"),
+        translate("ThreadJournalDialog", "Errors"),
+        translate("ThreadJournalDialog", "Status"),
     ]
 
     def __init__(self, parent=None) -> None:
@@ -318,19 +339,26 @@ class _SummaryTable(QTableWidget):
             mx    = max(durs)             if durs else None
             last  = last_event.get(th, "")
 
-            status = "✓" if last == "END" else ("⚠ En cours" if last == "START" else "–")
+            if last == "END":
+                status = "✓"
+            elif last == "START":
+                status = "⚠ " + translate("ThreadJournalDialog", "Running")
+            else:
+                status = "–"
             if errs:
-                status = f"✗ {errs} erreur(s)"
+                status = "✗ " + translate("ThreadJournalDialog", "%n error(s)", None, errs)
 
             if th == "FaceIndexThread" and face_step_stats is not None:
                 _nb, _avg_s, _max_s = face_step_stats
                 if not errs and _max_s < _FACE_STEP_SLOW_MS:
-                    status = f"✓ Progresse ({_nb} photos)"
+                    status = "✓ " + translate(
+                        "ThreadJournalDialog", "Progressing ({photos})").format(
+                        photos=translate("ThreadJournalDialog", "%n photo(s)", None, _nb))
                 cells = [
                     th,
-                    f"{_nb} photos",
-                    f"{_avg_s / 1000:.0f} s/photo",
-                    f"{_max_s / 1000:.0f} s/photo",
+                    translate("ThreadJournalDialog", "%n photo(s)", None, _nb),
+                    translate("ThreadJournalDialog", "{v} s/photo").format(v=f"{_avg_s / 1000:.0f}"),
+                    translate("ThreadJournalDialog", "{v} s/photo").format(v=f"{_max_s / 1000:.0f}"),
                     str(errs) if errs else "0",
                     status,
                 ]
@@ -363,11 +391,11 @@ class _SummaryTable(QTableWidget):
 
 class _EventTable(QTableWidget):
     _HEADERS = [
-        translate("ThreadJournalDialog", "Heure"),
+        translate("ThreadJournalDialog", "Time"),
         translate("ThreadJournalDialog", "Thread"),
-        translate("ThreadJournalDialog", "Événement"),
+        translate("ThreadJournalDialog", "Event"),
         translate("ThreadJournalDialog", "Message"),
-        translate("ThreadJournalDialog", "Durée (ms)"),
+        translate("ThreadJournalDialog", "Duration (ms)"),
     ]
 
     def __init__(self, parent=None) -> None:
@@ -587,7 +615,7 @@ def _generate_problems_report(entries: list[dict]) -> str:
 class _ProblemsReportDialog(QDialog):
     def __init__(self, entries: list[dict], parent=None) -> None:
         super().__init__(parent)
-        self.setWindowTitle(translate("ProblemsReportDialog", "Rapport détaillé de performance"))
+        self.setWindowTitle(translate("ProblemsReportDialog", "Detailed performance report"))
         self.setMinimumSize(840, 580)
         self._report_text = _generate_problems_report(entries)
         self._setup_ui()
@@ -598,8 +626,9 @@ class _ProblemsReportDialog(QDialog):
         root.setContentsMargins(12, 10, 12, 10)
 
         lbl = QLabel(
-            translate("ProblemsReportDialog", "Ce rapport décrit en détail les problèmes de performance détectés. "
-            "Copiez-le et transmettez-le pour obtenir des améliorations ciblées.")
+            translate("ProblemsReportDialog", "This report describes the performance problems "
+                                              "found in detail. Copy it and pass it on to get "
+                                              "targeted improvements.")
         )
         lbl.setWordWrap(True)
         lbl.setStyleSheet("color: #aaa; font-size: 11px;")
@@ -617,14 +646,18 @@ class _ProblemsReportDialog(QDialog):
         btns = QDialogButtonBox(QDialogButtonBox.Close)
         btns.rejected.connect(self.reject)
         btn_copy = btns.addButton(
-            translate("ProblemsReportDialog", "Copier tout"), QDialogButtonBox.ActionRole)
+            translate("ProblemsReportDialog", "Copy everything"), QDialogButtonBox.ActionRole)
         btn_copy.clicked.connect(self._copy)
         root.addWidget(btns)
 
     @Slot()
     def _copy(self) -> None:
         QApplication.clipboard().setText(self._report_text)
-        QMessageBox.information(self, translate("ProblemsReportDialog", "Copié"), translate("ProblemsReportDialog", "Rapport copié dans le presse-papiers."))
+        QMessageBox.information(self, translate("ProblemsReportDialog", "Copied"), translate("ProblemsReportDialog", "Report "
+                                                                                                                    "copied "
+                                                                                                                    "to "
+                                                                                                                    "the "
+                                                                                                                    "clipboard."))
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -634,7 +667,7 @@ class _ProblemsReportDialog(QDialog):
 class ThreadJournalDialog(QDialog):
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
-        self.setWindowTitle(translate("ThreadJournalDialog", "Journal d'activité des threads"))
+        self.setWindowTitle(translate("ThreadJournalDialog", "Thread activity journal"))
         self.setMinimumSize(1000, 720)
         self._entries: list[dict] = []
         self._refresh_timer = QTimer(self)
@@ -657,29 +690,30 @@ class ThreadJournalDialog(QDialog):
         ctrl.addWidget(self._lbl_count)
         ctrl.addStretch()
 
-        ctrl.addWidget(QLabel(translate("ThreadJournalDialog", "Thread :")))
+        ctrl.addWidget(QLabel(translate("ThreadJournalDialog", "Thread:")))
         self._cmb_thread = QComboBox()
         self._cmb_thread.setMinimumWidth(180)
         self._cmb_thread.currentIndexChanged.connect(self._apply_filter)
         ctrl.addWidget(self._cmb_thread)
 
-        ctrl.addWidget(QLabel(translate("ThreadJournalDialog", "Filtre :")))
+        ctrl.addWidget(QLabel(translate("ThreadJournalDialog", "Filter:")))
         self._txt_filter = QLineEdit()
-        self._txt_filter.setPlaceholderText(translate("ThreadJournalDialog", "Texte dans le message…"))
+        self._txt_filter.setPlaceholderText(translate("ThreadJournalDialog", "Text in the "
+                                                                             "message…"))
         self._txt_filter.setMinimumWidth(160)
         self._txt_filter.textChanged.connect(self._apply_filter)
         ctrl.addWidget(self._txt_filter)
 
-        self._btn_refresh = QPushButton(translate("ThreadJournalDialog", "↻ Rafraîchir"))
+        self._btn_refresh = QPushButton(translate("ThreadJournalDialog", "↻ Refresh"))
         self._btn_refresh.clicked.connect(self._load)
         ctrl.addWidget(self._btn_refresh)
 
-        self._btn_live = QPushButton(translate("ThreadJournalDialog", "▶ Temps réel"))
+        self._btn_live = QPushButton(translate("ThreadJournalDialog", "▶ Live"))
         self._btn_live.setCheckable(True)
         self._btn_live.toggled.connect(self._on_live_toggled)
         ctrl.addWidget(self._btn_live)
 
-        self._btn_clear = QPushButton(translate("ThreadJournalDialog", "🗑 Vider"))
+        self._btn_clear = QPushButton(translate("ThreadJournalDialog", "🗑 Clear"))
         self._btn_clear.clicked.connect(self._clear)
         ctrl.addWidget(self._btn_clear)
 
@@ -692,14 +726,14 @@ class ThreadJournalDialog(QDialog):
         # ── splitter résumé / événements
         splitter = QSplitter(Qt.Vertical)
 
-        grp_summary = QGroupBox(translate("ThreadJournalDialog", "Résumé par thread"))
+        grp_summary = QGroupBox(translate("ThreadJournalDialog", "Summary by thread"))
         vbox_s = QVBoxLayout(grp_summary)
         vbox_s.setContentsMargins(4, 4, 4, 4)
         self._summary_table = _SummaryTable()
         vbox_s.addWidget(self._summary_table)
         splitter.addWidget(grp_summary)
 
-        grp_events = QGroupBox(translate("ThreadJournalDialog", "Événements bruts"))
+        grp_events = QGroupBox(translate("ThreadJournalDialog", "Raw events"))
         vbox_e = QVBoxLayout(grp_events)
         vbox_e.setContentsMargins(4, 4, 4, 4)
         self._event_table = _EventTable()
@@ -714,12 +748,13 @@ class ThreadJournalDialog(QDialog):
         btns.rejected.connect(self.reject)
 
         btn_report = btns.addButton(
-            translate("ThreadJournalDialog", "Rapport de problèmes…"),
+            translate("ThreadJournalDialog", "Problem report…"),
             QDialogButtonBox.ActionRole)
         btn_report.clicked.connect(self._open_problems_report)
         btn_report.setToolTip(
-            translate("ThreadJournalDialog", "Ouvre un rapport détaillé des problèmes de performance, "
-            "prêt à copier pour demander des améliorations.")
+            translate("ThreadJournalDialog", "Opens a detailed report of the performance "
+                                             "problems, ready to copy when asking for "
+                                             "improvements.")
         )
 
         btn_export = btns.addButton("Exporter CSV…", QDialogButtonBox.ActionRole)
@@ -737,7 +772,7 @@ class ThreadJournalDialog(QDialog):
         current = self._cmb_thread.currentText()
         self._cmb_thread.blockSignals(True)
         self._cmb_thread.clear()
-        self._cmb_thread.addItem(translate("ThreadJournalDialog", "(tous)"))
+        self._cmb_thread.addItem(translate("ThreadJournalDialog", "(all)"))
         for t in threads:
             self._cmb_thread.addItem(t)
         idx = self._cmb_thread.findText(current)
@@ -746,8 +781,8 @@ class ThreadJournalDialog(QDialog):
 
         n_entries = len(self._entries)
         self._lbl_count.setText(
-            translate("ThreadJournalDialog", "%n entrée(s)", None, n_entries)
-            + translate("ThreadJournalDialog", " — journal : {size}").format(
+            translate("ThreadJournalDialog", "%n entry(ies)", None, n_entries)
+            + translate("ThreadJournalDialog", " — journal: {size}").format(
                 size=self._journal_size())
         )
         self._compte_rendu.populate(self._entries)
@@ -764,17 +799,17 @@ class ThreadJournalDialog(QDialog):
     @Slot(bool)
     def _on_live_toggled(self, checked: bool) -> None:
         if checked:
-            self._btn_live.setText(translate("ThreadJournalDialog", "⏹ Arrêter"))
+            self._btn_live.setText(translate("ThreadJournalDialog", "⏹ Stop"))
             self._refresh_timer.start(1500)
         else:
-            self._btn_live.setText(translate("ThreadJournalDialog", "▶ Temps réel"))
+            self._btn_live.setText(translate("ThreadJournalDialog", "▶ Live"))
             self._refresh_timer.stop()
 
     @Slot()
     def _clear(self) -> None:
         if QMessageBox.question(
-            self, translate("ThreadJournalDialog", "Vider le journal"),
-            translate("ThreadJournalDialog", "Supprimer toutes les entrées du journal ?"),
+            self, translate("ThreadJournalDialog", "Clear the journal"),
+            translate("ThreadJournalDialog", "Delete every entry in the journal?"),
             QMessageBox.Yes | QMessageBox.No,
         ) == QMessageBox.Yes:
             journal.clear()
@@ -789,7 +824,7 @@ class ThreadJournalDialog(QDialog):
     def _export_csv(self) -> None:
         from PySide6.QtWidgets import QFileDialog
         path, _ = QFileDialog.getSaveFileName(
-            self, translate("ThreadJournalDialog", "Exporter le journal"), "thread_journal.csv", "CSV (*.csv)"
+            self, translate("ThreadJournalDialog", "Export the journal"), "thread_journal.csv", "CSV (*.csv)"
         )
         if not path:
             return
@@ -803,7 +838,7 @@ class ThreadJournalDialog(QDialog):
                 writer.writerow({k: e.get(k, "") for k in writer.fieldnames})
         QMessageBox.information(
             self, translate("ThreadJournalDialog", "Export"),
-            translate("ThreadJournalDialog", "Exporté : {path}").format(path=path))
+            translate("ThreadJournalDialog", "Exported: {path}").format(path=path))
 
     # ── helpers ──────────────────────────────────────────────────────────────
 

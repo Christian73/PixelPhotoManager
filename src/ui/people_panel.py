@@ -202,7 +202,7 @@ class _AssignDialog(QDialog):
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
-        self.setWindowTitle(translate("AssignDialog", "Identifier cette personne"))
+        self.setWindowTitle(translate("AssignDialog", "Identify this person"))
         self.setMinimumWidth(360)
         self.setStyleSheet(_RADIO_STYLE)
         self._selected_person_id: int | None = None
@@ -232,7 +232,7 @@ class _AssignDialog(QDialog):
         )
 
         if suggested_person:
-            lbl_sugg = QLabel(translate("AssignDialog", "Personne probable :"))
+            lbl_sugg = QLabel(translate("AssignDialog", "Likely person:"))
             lbl_sugg.setStyleSheet("color: #7aabdb; font-size: 11px; font-weight: bold;")
             layout.addWidget(lbl_sugg)
 
@@ -256,14 +256,15 @@ class _AssignDialog(QDialog):
 
         if other_persons:
             lbl_others = QLabel(
-                translate("AssignDialog", "Autres personnes :") if suggested_person
-                else translate("AssignDialog", "Personnes existantes :")
+                translate("AssignDialog", "Other people:") if suggested_person
+                else translate("AssignDialog", "Existing people:")
             )
             lbl_others.setStyleSheet("color: #aaa; font-size: 11px;")
             layout.addWidget(lbl_others)
 
             self._search_input = QLineEdit()
-            self._search_input.setPlaceholderText(translate("AssignDialog", "🔍  Rechercher un nom…"))
+            self._search_input.setPlaceholderText(translate("AssignDialog", "🔍  Search for a "
+                                                                            "name…"))
             self._search_input.setClearButtonEnabled(True)
             self._search_input.textChanged.connect(self._filter_persons)
             layout.addWidget(self._search_input)
@@ -305,13 +306,13 @@ class _AssignDialog(QDialog):
         sep_new.setStyleSheet("color: #444;")
         layout.addWidget(sep_new)
 
-        rb_new = QRadioButton(translate("AssignDialog", "Créer une nouvelle personne :"))
+        rb_new = QRadioButton(translate("AssignDialog", "Create a new person:"))
         self._btn_group.addButton(rb_new)
         self._rb_new = rb_new
         layout.addWidget(rb_new)
 
         self._name_input = QLineEdit()
-        self._name_input.setPlaceholderText(translate("AssignDialog", "Nom de la personne…"))
+        self._name_input.setPlaceholderText(translate("AssignDialog", "Name of the person…"))
         self._name_input.textChanged.connect(lambda: rb_new.setChecked(True))
         _orig_focus = self._name_input.focusInEvent
         self._name_input.focusInEvent = lambda e: (rb_new.setChecked(True), _orig_focus(e))
@@ -324,7 +325,7 @@ class _AssignDialog(QDialog):
             sep_ign.setStyleSheet("color: #444;")
             layout.addWidget(sep_ign)
 
-            rb_ignore = QRadioButton(translate("AssignDialog", "Ignorer ce groupe"))
+            rb_ignore = QRadioButton(translate("AssignDialog", "Ignore this group"))
             self._btn_group.addButton(rb_ignore)
             self._rb_ignore = rb_ignore
             layout.addWidget(rb_ignore)
@@ -422,9 +423,9 @@ class _ClusterRow(QFrame):
         self._lbl_avatar.start_loading()
         row.addWidget(self._lbl_avatar)
 
-        group_label = (translate("PeoplePanel", "Isolé") if face_count == 1
-                       else translate("PeoplePanel", "Groupe {id}").format(id=cluster_id))
-        n_faces = translate("PeoplePanel", "%n visage(s)", None, face_count)
+        group_label = (translate("PeoplePanel", "Isolated") if face_count == 1
+                       else translate("PeoplePanel", "Group {id}").format(id=cluster_id))
+        n_faces = translate("PeoplePanel", "%n face(s)", None, face_count)
         lbl_info = QLabel(group_label + "\n" + n_faces)
         lbl_info.setStyleSheet("border: none;")
         lbl_info.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
@@ -434,11 +435,11 @@ class _ClusterRow(QFrame):
             pct = int(sim * 100)
             if sim >= _SIM_STRONG:
                 color = "#7aabdb"
-                label = translate("PeoplePanel", "→ Probablement {name} ({pct} %)"
+                label = translate("PeoplePanel", "→ Probably {name} ({pct} %)"
                                   ).format(name=name, pct=pct)
             else:
                 color = "#888"
-                label = translate("PeoplePanel", "→ Peut-être {name} ({pct} %)"
+                label = translate("PeoplePanel", "→ Maybe {name} ({pct} %)"
                                   ).format(name=name, pct=pct)
             lbl_info.setText(
                 f"{group_label} — {n_faces}\n"
@@ -448,7 +449,7 @@ class _ClusterRow(QFrame):
 
         row.addWidget(lbl_info)
 
-        btn = QPushButton(translate("ClusterRow", "Nommer…"))
+        btn = QPushButton(translate("ClusterRow", "Name…"))
         btn.setFixedWidth(90)
         btn.setStyleSheet("border: 1px solid #555;")
         btn.clicked.connect(self._ask_name)
@@ -492,7 +493,7 @@ class MergePersonsDialog(QDialog):
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
-        self.setWindowTitle(translate("MergePersonsDialog", "Fusionner avec…"))
+        self.setWindowTitle(translate("MergePersonsDialog", "Merge with…"))
         self.setMinimumWidth(340)
         self.setStyleSheet(_RADIO_STYLE)
         self._target_id: int | None = None
@@ -504,11 +505,12 @@ class MergePersonsDialog(QDialog):
         layout.setSpacing(10)
 
         layout.addWidget(QLabel(
-            translate("MergePersonsDialog", "Fusionner <b>{name}</b> avec :"
+            translate("MergePersonsDialog", "Merge <b>{name}</b> with:"
                       ).format(name=source.name)))
 
         if not others:
-            layout.addWidget(QLabel(translate("MergePersonsDialog", "Aucune autre personne à fusionner.")))
+            layout.addWidget(QLabel(translate("MergePersonsDialog", "No other person to merge "
+                                                                    "with.")))
             btn = QDialogButtonBox(QDialogButtonBox.Cancel)
             btn.rejected.connect(self.reject)
             layout.addWidget(btn)
@@ -518,7 +520,8 @@ class MergePersonsDialog(QDialog):
         self._person_rbs: list[tuple[QRadioButton, str]] = []
 
         self._search_input = QLineEdit()
-        self._search_input.setPlaceholderText(translate("MergePersonsDialog", "🔍  Rechercher un nom…"))
+        self._search_input.setPlaceholderText(translate("MergePersonsDialog", "🔍  Search for a "
+                                                                              "name…"))
         self._search_input.setClearButtonEnabled(True)
         self._search_input.textChanged.connect(self._filter_persons)
         layout.addWidget(self._search_input)
@@ -555,8 +558,8 @@ class MergePersonsDialog(QDialog):
 
         note = QLabel(
             translate("MergePersonsDialog",
-                      "Les visages de <i>{name}</i> seront rattachés à la personne choisie."
-                      "\n{name} sera ensuite supprimé.").format(name=source.name)
+                      "The faces of <i>{name}</i> will be attached to the person you "
+                      "pick.\n{name} will then be deleted.").format(name=source.name)
         )
         note.setWordWrap(True)
         note.setStyleSheet("color: #888; font-size: 11px;")
@@ -616,7 +619,7 @@ class PeopleDialog(QDialog):
         super().__init__(parent)
         self._face_db = face_db
         self._catalog = catalog
-        self.setWindowTitle(translate("PeopleDialog", "Identifier les personnes"))
+        self.setWindowTitle(translate("PeopleDialog", "Identify the people"))
         self.setMinimumSize(460, 540)
         self._setup_ui()
         self.refresh()
@@ -627,8 +630,9 @@ class PeopleDialog(QDialog):
         layout.setSpacing(10)
 
         intro = QLabel(
-            translate("PeopleDialog", "PixelPhotoManager a regroupé automatiquement les visages similaires.\n"
-            "Nommez chaque groupe pour créer un album par personne.")
+            translate("PeopleDialog", "PixelPhotoManager has automatically gathered the "
+                                      "similar faces.\nName each group to create one album per "
+                                      "person.")
         )
         intro.setWordWrap(True)
         intro.setStyleSheet("color: #aaa;")
@@ -644,7 +648,7 @@ class PeopleDialog(QDialog):
         scroll.setWidget(self._content)
         layout.addWidget(scroll)
 
-        btn_close = QPushButton(translate("PeopleDialog", "Fermer"))
+        btn_close = QPushButton(translate("PeopleDialog", "Close"))
         btn_close.clicked.connect(self.accept)
         layout.addWidget(btn_close, alignment=Qt.AlignRight)
 
@@ -671,9 +675,8 @@ class PeopleDialog(QDialog):
         clusters = self._face_db.get_unnamed_clusters()
         if not clusters:
             lbl = QLabel(
-                translate("PeopleDialog", "Tous les groupes ont été nommés.\n\n"
-                "Ajoutez de nouvelles photos et relancez\n"
-                "l'analyse pour détecter de nouveaux visages.")
+                translate("PeopleDialog", "Every group has been named.\n\nAdd new photos and "
+                                          "run the analysis\nagain to find new faces.")
             )
             lbl.setAlignment(Qt.AlignCenter)
             lbl.setStyleSheet("color: #777;")

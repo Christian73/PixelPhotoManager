@@ -1,2657 +1,2802 @@
 <?xml version='1.0' encoding='utf-8'?>
 <!DOCTYPE TS>
-<TS version="2.1" language="en_US" sourcelanguage="fr_FR">
+<TS version="2.1" language="en_US" sourcelanguage="en_US">
 <context>
     <name>AdvancedSearchDialog</name>
     <message>
         <location filename="../src/ui/advanced_search_dialog.py" line="31" />
-        <source>Tous</source>
-        <translation>All</translation>
+        <source>All</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/advanced_search_dialog.py" line="32" />
         <source>Photos</source>
-        <translation>Photos</translation>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/advanced_search_dialog.py" line="33" />
-        <source>Vidéos</source>
-        <translation>Videos</translation>
+        <source>Videos</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/advanced_search_dialog.py" line="74" />
-        <source>Recherche avancée</source>
-        <translation>Advanced search</translation>
+        <source>Advanced search</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/advanced_search_dialog.py" line="88" />
-        <source>Filtrer par date</source>
-        <translation>Filter by date</translation>
+        <source>Filter by date</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/advanced_search_dialog.py" line="108" />
-        <source>Appareil :</source>
-        <translation>Camera:</translation>
+        <source>Camera:</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/advanced_search_dialog.py" line="112" />
-        <source>(toute personne)</source>
-        <translation>(anyone)</translation>
+        <source>(anyone)</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/advanced_search_dialog.py" line="115" />
-        <source>Personne :</source>
-        <translation>Person:</translation>
+        <source>Person:</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/advanced_search_dialog.py" line="122" />
-        <source>Dossier :</source>
-        <translation>Folder:</translation>
+        <source>Folder:</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/advanced_search_dialog.py" line="126" />
-        <source>Note min. :</source>
-        <translation>Min. rating:</translation>
+        <source>Min. rating:</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/advanced_search_dialog.py" line="130" />
-        <source>Ajouter un mot-clé puis Entrée…</source>
-        <translation>Add a keyword then press Enter…</translation>
+        <source>Add a keyword then press Enter…</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/advanced_search_dialog.py" line="142" />
-        <source>Mots-clés :</source>
-        <translation>Keywords:</translation>
+        <location filename="../src/ui/advanced_search_dialog.py" line="143" />
+        <source>Keywords:</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/advanced_search_dialog.py" line="145" />
-        <source>Favoris uniquement</source>
-        <translation>Favourites only</translation>
+        <location filename="../src/ui/advanced_search_dialog.py" line="146" />
+        <source>Favourites only</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/advanced_search_dialog.py" line="151" />
-        <source>Type :</source>
-        <translation>Type:</translation>
+        <location filename="../src/ui/advanced_search_dialog.py" line="152" />
+        <source>Type:</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/advanced_search_dialog.py" line="158" />
-        <source>Rechercher</source>
-        <translation>Search</translation>
+        <location filename="../src/ui/advanced_search_dialog.py" line="159" />
+        <source>Search</source>
+        <translation type="unfinished" />
     </message>
 </context>
 <context>
     <name>AssignDialog</name>
     <message>
         <location filename="../src/ui/people_panel.py" line="205" />
-        <source>Identifier cette personne</source>
-        <translation>Identify this person</translation>
+        <source>Identify this person</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/people_panel.py" line="235" />
-        <source>Personne probable :</source>
-        <translation>Likely person:</translation>
+        <source>Likely person:</source>
+        <translation type="unfinished" />
     </message>
     <message numerus="yes">
         <location filename="../src/ui/people_panel.py" line="242" />
-        <location filename="../src/ui/people_panel.py" line="281" />
+        <location filename="../src/ui/people_panel.py" line="282" />
         <source>%n photo(s)</source>
         <translation><numerusform>%n photo</numerusform><numerusform>%n photos</numerusform></translation></message>
     <message>
         <location filename="../src/ui/people_panel.py" line="259" />
-        <source>Autres personnes :</source>
-        <translation>Other people:</translation>
+        <source>Other people:</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/people_panel.py" line="260" />
-        <source>Personnes existantes :</source>
-        <translation>Existing people:</translation>
+        <source>Existing people:</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/people_panel.py" line="266" />
-        <source>🔍  Rechercher un nom…</source>
-        <translation>🔍  Search for a name…</translation>
+        <source>🔍  Search for a name…</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/people_panel.py" line="308" />
-        <source>Créer une nouvelle personne :</source>
-        <translation>Create a new person:</translation>
+        <location filename="../src/ui/people_panel.py" line="309" />
+        <source>Create a new person:</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/people_panel.py" line="314" />
-        <source>Nom de la personne…</source>
-        <translation>Name of the person…</translation>
+        <location filename="../src/ui/people_panel.py" line="315" />
+        <source>Name of the person…</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/people_panel.py" line="327" />
-        <source>Ignorer ce groupe</source>
-        <translation>Ignore this group</translation>
+        <location filename="../src/ui/people_panel.py" line="328" />
+        <source>Ignore this group</source>
+        <translation type="unfinished" />
     </message>
 </context>
 <context>
     <name>Canvas</name>
     <message>
         <location filename="../src/ui/viewer_canvas.py" line="2244" />
-        <source>Effacer	Suppr</source>
-        <translation>Delete	Del</translation>
+        <source>Delete	Del</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/viewer_canvas.py" line="2246" />
-        <source>Grouper</source>
-        <translation>Group</translation>
+        <source>Group</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/viewer_canvas.py" line="2251" />
-        <source>Dégrouper</source>
-        <translation>Ungroup</translation>
+        <source>Ungroup</source>
+        <translation type="unfinished" />
     </message>
 </context>
 <context>
     <name>ChronoAlbumSection</name>
     <message>
         <location filename="../src/ui/display_order_dialog.py" line="82" />
-        <source>Album « Chronologie » (toutes les photos)</source>
-        <translation>“Timeline” album (all the photos)</translation>
+        <source>“Timeline” album (all the photos)</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/display_order_dialog.py" line="88" />
-        <source>Anti-chronologique (plus anciennes d'abord)</source>
-        <translation>Reverse chronological (oldest first)</translation>
+        <source>Reverse chronological (oldest first)</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/display_order_dialog.py" line="89" />
-        <source>Chronologique (plus récentes d'abord)</source>
-        <translation>Chronological (newest first)</translation>
+        <location filename="../src/ui/display_order_dialog.py" line="90" />
+        <source>Chronological (newest first)</source>
+        <translation type="unfinished" />
     </message>
 </context>
 <context>
     <name>ClusterCard</name>
     <message>
         <location filename="../src/ui/face_cluster_cards.py" line="134" />
-        <source>Clic : sélectionner  —  Double-clic : voir la photo  —  Clic droit : identifier / ignorer</source>
-        <translation>Click: select  —  Double-click: view the photo  —  Right click: identify / ignore</translation>
+        <source>Click: select  —  Double-click: view the photo  —  Right click: identify / ignore</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/face_cluster_cards.py" line="136" />
-        <source>Clic : sélectionner  —  Double-clic : voir les photos  —  Clic droit : identifier / fusionner / ignorer</source>
-        <translation>Click: select  —  Double-click: view the photos  —  Right click: identify / merge / ignore</translation>
+        <location filename="../src/ui/face_cluster_cards.py" line="137" />
+        <source>Click: select  —  Double-click: view the photos  —  Right click: identify / merge / ignore</source>
+        <translation type="unfinished" />
     </message>
     <message numerus="yes">
-        <location filename="../src/ui/face_cluster_cards.py" line="151" />
-        <source>%n visage(s)</source>
+        <location filename="../src/ui/face_cluster_cards.py" line="154" />
+        <source>%n face(s)</source>
         <translation><numerusform>%n face</numerusform><numerusform>%n faces</numerusform></translation></message>
     <message>
-        <location filename="../src/ui/face_cluster_cards.py" line="181" />
-        <location filename="../src/ui/face_cluster_cards.py" line="267" />
-        <source>Ignorer ce visage</source>
-        <translation>Ignore this face</translation>
+        <location filename="../src/ui/face_cluster_cards.py" line="184" />
+        <location filename="../src/ui/face_cluster_cards.py" line="271" />
+        <source>Ignore this face</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/face_cluster_cards.py" line="182" />
-        <location filename="../src/ui/face_cluster_cards.py" line="274" />
-        <source>Ignorer ce groupe</source>
-        <translation>Ignore this group</translation>
+        <location filename="../src/ui/face_cluster_cards.py" line="185" />
+        <location filename="../src/ui/face_cluster_cards.py" line="278" />
+        <source>Ignore this group</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/face_cluster_cards.py" line="186" />
-        <source>✕ Retirer du groupe</source>
-        <translation>✕ Remove from the group</translation>
+        <location filename="../src/ui/face_cluster_cards.py" line="189" />
+        <source>✕ Remove from the group</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/face_cluster_cards.py" line="193" />
-        <source>Retirer ce groupe de la suggestion de personne</source>
-        <translation>Remove this group from the person suggestion</translation>
+        <location filename="../src/ui/face_cluster_cards.py" line="196" />
+        <source>Remove this group from the person suggestion</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/face_cluster_cards.py" line="260" />
-        <source>Associer ({n} sélectionnés)</source>
-        <translation>Assign ({n} selected)</translation>
-    </message>
-    <message>
-        <location filename="../src/ui/face_cluster_cards.py" line="266" />
-        <source>Ignorer ces visages</source>
-        <translation>Ignore these faces</translation>
-    </message>
-    <message>
-        <location filename="../src/ui/face_cluster_cards.py" line="273" />
-        <source>Ignorer ces groupes</source>
-        <translation>Ignore these groups</translation>
-    </message>
-    <message>
-        <location filename="../src/ui/face_cluster_cards.py" line="173" />
         <location filename="../src/ui/face_cluster_cards.py" line="264" />
-        <source>Identifier ce visage…</source>
-        <translation>Identify this face…</translation>
+        <source>Assign ({n} selected)</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/face_cluster_cards.py" line="174" />
         <location filename="../src/ui/face_cluster_cards.py" line="270" />
-        <source>Identifier cette personne…</source>
-        <translation>Identify this person…</translation>
+        <source>Ignore these faces</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/ui/face_cluster_cards.py" line="277" />
+        <source>Ignore these groups</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/ui/face_cluster_cards.py" line="176" />
+        <location filename="../src/ui/face_cluster_cards.py" line="268" />
+        <source>Identify this face…</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/ui/face_cluster_cards.py" line="177" />
+        <location filename="../src/ui/face_cluster_cards.py" line="274" />
+        <source>Identify this person…</source>
+        <translation type="unfinished" />
     </message>
 </context>
 <context>
     <name>ClusterRow</name>
     <message>
-        <location filename="../src/ui/people_panel.py" line="451" />
-        <source>Nommer…</source>
-        <translation>Name…</translation>
+        <location filename="../src/ui/people_panel.py" line="452" />
+        <source>Name…</source>
+        <translation type="unfinished" />
     </message>
 </context>
 <context>
     <name>Clusterer</name>
     <message>
         <location filename="../src/faces/clusterer.py" line="196" />
-        <source>Clustering : {n} visages identifiés pré-assignés…</source>
-        <translation>Clustering: {n} identified faces pre-assigned…</translation>
+        <source>Clustering: {n} identified faces pre-assigned…</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/faces/clusterer.py" line="214" />
-        <source>Clustering : normalisation ({n} visages)…</source>
-        <translation>Clustering: normalisation ({n} faces)…</translation>
+        <source>Clustering: normalisation ({n} faces)…</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/faces/clusterer.py" line="276" />
-        <location filename="../src/faces/clusterer.py" line="293" />
-        <source>Clustering : HDBSCAN ({n} visages) — {time}…</source>
-        <translation>Clustering: HDBSCAN ({n} faces) — {time}…</translation>
+        <location filename="../src/faces/clusterer.py" line="270" />
+        <source>Clustering: PCA {src}→{dst} dims…</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/faces/clusterer.py" line="278" />
+        <location filename="../src/faces/clusterer.py" line="295" />
+        <source>Clustering: HDBSCAN ({n} faces) — {time}…</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/faces/clusterer.py" line="325" />
+        <source>Clustering: {n} groups → saving…</source>
+        <translation type="unfinished" />
     </message>
 </context>
 <context>
     <name>ClusteringPage</name>
     <message>
-        <location filename="../src/ui/settings_dialog.py" line="190" />
-        <source>— groupes très stricts</source>
-        <translation>— very strict groups</translation>
+        <location filename="../src/ui/settings_dialog.py" line="191" />
+        <source>— very strict groups</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/settings_dialog.py" line="192" />
-        <source>— groupes équilibrés</source>
-        <translation>— balanced groups</translation>
+        <location filename="../src/ui/settings_dialog.py" line="193" />
+        <source>— balanced groups</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/settings_dialog.py" line="194" />
-        <source>— groupes plus larges</source>
-        <translation>— broader groups</translation>
+        <location filename="../src/ui/settings_dialog.py" line="195" />
+        <source>— broader groups</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/settings_dialog.py" line="196" />
-        <source>— groupes très larges (peut mélanger des personnes différentes)</source>
-        <translation>— very broad groups (may mix different people)</translation>
+        <location filename="../src/ui/settings_dialog.py" line="197" />
+        <source>— very broad groups (may mix different people)</source>
+        <translation type="unfinished" />
     </message>
 </context>
 <context>
     <name>CompteRenduPanel</name>
     <message>
         <location filename="../src/ui/thread_journal_dialog.py" line="142" />
-        <source>  Aucune donnée dans le journal.</source>
-        <translation>  No data in the journal.</translation>
+        <source>  No data in the journal.</source>
+        <translation type="unfinished" />
+    </message>
+    <message numerus="yes">
+        <location filename="../src/ui/thread_journal_dialog.py" line="182" />
+        <source>%n thread(s) in error or too slow</source>
+        <translation><numerusform>%n thread in error or too slow</numerusform><numerusform>%n threads in error or too slow</numerusform></translation></message>
+    <message numerus="yes">
+        <location filename="../src/ui/thread_journal_dialog.py" line="189" />
+        <source>%n slightly slow thread(s)</source>
+        <translation><numerusform>%n slightly slow thread</numerusform><numerusform>%n slightly slow threads</numerusform></translation></message>
+    <message>
+        <location filename="../src/ui/thread_journal_dialog.py" line="196" />
+        <source>  ✓  Everything is running normally — no anomaly found</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/thread_journal_dialog.py" line="192" />
-        <source>  ✓  Tout fonctionne normalement — aucune anomalie détectée</source>
-        <translation>  ✓  Everything is running normally — no anomaly found</translation>
+        <location filename="../src/ui/thread_journal_dialog.py" line="212" />
+        <source>ERROR + TOO LONG</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/ui/thread_journal_dialog.py" line="215" />
+        <source>ERROR ({n})</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/ui/thread_journal_dialog.py" line="219" />
+        <source>TOO LONG</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/ui/thread_journal_dialog.py" line="222" />
+        <source>SLOW</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/ui/thread_journal_dialog.py" line="225" />
+        <source>RUNNING</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/ui/thread_journal_dialog.py" line="235" />
+        <source>PROGRESSING  ({photos})</source>
+        <translation type="unfinished" />
+    </message>
+    <message numerus="yes">
+        <location filename="../src/ui/thread_journal_dialog.py" line="236" />
+        <location filename="../src/ui/thread_journal_dialog.py" line="240" />
+        <source>%n photo(s)</source>
+        <translation><numerusform>%n photo</numerusform><numerusform>%n photos</numerusform></translation></message>
+    <message>
+        <location filename="../src/ui/thread_journal_dialog.py" line="239" />
+        <source>SLOW/PHOTO  ({photos})</source>
+        <translation type="unfinished" />
+    </message>
+    <message numerus="yes">
+        <location filename="../src/ui/thread_journal_dialog.py" line="246" />
+        <source>%n photo(s) processed</source>
+        <translation><numerusform>%n photo processed</numerusform><numerusform>%n photos processed</numerusform></translation></message>
+    <message>
+        <location filename="../src/ui/thread_journal_dialog.py" line="247" />
+        <source>avg {v} s/photo</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/ui/thread_journal_dialog.py" line="254" />
+        <source>max {v} s/photo</source>
+        <translation type="unfinished" />
+    </message>
+    <message numerus="yes">
+        <location filename="../src/ui/thread_journal_dialog.py" line="260" />
+        <source>%n run(s)</source>
+        <translation><numerusform>%n run</numerusform><numerusform>%n runs</numerusform></translation></message>
+    <message>
+        <location filename="../src/ui/thread_journal_dialog.py" line="262" />
+        <source>avg {v} ms</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/ui/thread_journal_dialog.py" line="269" />
+        <source>max {v} ms</source>
+        <translation type="unfinished" />
     </message>
 </context>
 <context>
     <name>CouleursTreatmentDialog</name>
     <message>
         <location filename="../src/ui/treatment_dialogs.py" line="408" />
-        <source>Couleurs</source>
-        <translation>Colours</translation>
+        <source>Colours</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/treatment_dialogs.py" line="418" />
         <source>Saturation</source>
-        <translation>Saturation</translation>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/treatment_dialogs.py" line="424" />
-        <source>Fonctions avancées…</source>
-        <translation>Advanced options…</translation>
+        <source>Advanced options…</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/treatment_dialogs.py" line="435" />
-        <source>Réglage des couleurs indépendantes</source>
-        <translation>Per-channel colour adjustment</translation>
+        <source>Per-channel colour adjustment</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/treatment_dialogs.py" line="442" />
-        <source>⌖  Pipette balance des blancs</source>
-        <translation>⌖  White balance eyedropper</translation>
+        <source>⌖  White balance eyedropper</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/treatment_dialogs.py" line="445" />
-        <source>Cliquez sur une zone neutre (blanc ou gris) dans l'image
-pour équilibrer automatiquement les canaux R, V, B.</source>
-        <translation>Click a neutral area (white or grey) in the image
-to balance the R, G, B channels automatically.</translation>
+        <location filename="../src/ui/treatment_dialogs.py" line="446" />
+        <source>Click a neutral area (white or grey) in the image
+to balance the R, G, B channels automatically.</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/treatment_dialogs.py" line="449" />
-        <source>→ Cliquez sur un point neutre dans l'image principale</source>
-        <translation>→ Click a neutral point in the main image</translation>
+        <location filename="../src/ui/treatment_dialogs.py" line="451" />
+        <source>→ Click a neutral point in the main image</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/treatment_dialogs.py" line="457" />
-        <source>Couleur prélevée :</source>
-        <translation>Sampled colour:</translation>
-    </message>
-    <message>
-        <location filename="../src/ui/treatment_dialogs.py" line="472" />
-        <source>Rouge</source>
-        <translation>Red</translation>
-    </message>
-    <message>
-        <location filename="../src/ui/treatment_dialogs.py" line="474" />
-        <source>Vert</source>
-        <translation>Green</translation>
+        <location filename="../src/ui/treatment_dialogs.py" line="461" />
+        <source>Sampled colour:</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/treatment_dialogs.py" line="476" />
-        <source>Bleu</source>
-        <translation>Blue</translation>
+        <source>Red</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/treatment_dialogs.py" line="492" />
-        <source>Valider</source>
-        <translation>Apply</translation>
+        <location filename="../src/ui/treatment_dialogs.py" line="478" />
+        <source>Green</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/treatment_dialogs.py" line="493" />
-        <source>Annuler</source>
-        <translation>Cancel</translation>
+        <location filename="../src/ui/treatment_dialogs.py" line="480" />
+        <source>Blue</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/treatment_dialogs.py" line="525" />
-        <source>Pixel prélevé — R : {r}  V : {g}  B : {b}</source>
-        <translation>Sampled pixel — R: {r}  G: {g}  B: {b}</translation>
+        <location filename="../src/ui/treatment_dialogs.py" line="496" />
+        <source>Apply</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/ui/treatment_dialogs.py" line="497" />
+        <source>Cancel</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/ui/treatment_dialogs.py" line="529" />
+        <source>Sampled pixel — R: {r}  G: {g}  B: {b}</source>
+        <translation type="unfinished" />
     </message>
 </context>
 <context>
     <name>DeleteWorker</name>
     <message>
         <location filename="../src/ui/background_workers.py" line="108" />
-        <source>{name} : mise à la corbeille impossible ({err}) — le fichier n'a PAS été supprimé.</source>
-        <translation>{name}: could not move to the recycle bin ({err}) — the file was NOT deleted.</translation>
+        <source>{name}: could not move to the recycle bin ({err}) — the file was NOT deleted.</source>
+        <translation type="unfinished" />
     </message>
 </context>
 <context>
     <name>DeletedCorruptedFilesDialog</name>
     <message>
         <location filename="../src/ui/deleted_corrupted_files_dialog.py" line="20" />
-        <source>Fichiers corrompus supprimés</source>
-        <translation>Deleted corrupted files</translation>
+        <source>Deleted corrupted files</source>
+        <translation type="unfinished" />
     </message>
     <message numerus="yes">
         <location filename="../src/ui/deleted_corrupted_files_dialog.py" line="30" />
-        <source>%n fichier(s) corrompu(s) supprimé(s) depuis l'installation, en passant par la corbeille Windows. Cette liste est conservée pour vous permettre de les y retrouver — ou dans une sauvegarde externe si la corbeille a depuis été vidée.</source>
+        <source>%n corrupted file(s) deleted since the installation, by way of the Windows recycle bin. This list is kept so that you can find them there — or in an external backup if the recycle bin has since been emptied.</source>
         <translation><numerusform>%n corrupted file deleted since the installation, by way of the Windows recycle bin. This list is kept so that you can find it there — or in an external backup if the recycle bin has since been emptied.</numerusform><numerusform>%n corrupted files deleted since the installation, by way of the Windows recycle bin. This list is kept so that you can find them there — or in an external backup if the recycle bin has since been emptied.</numerusform></translation></message>
     <message>
-        <location filename="../src/ui/deleted_corrupted_files_dialog.py" line="46" />
-        <source>Fermer</source>
-        <translation>Close</translation>
+        <location filename="../src/ui/deleted_corrupted_files_dialog.py" line="45" />
+        <source>Close</source>
+        <translation type="unfinished" />
     </message>
 </context>
 <context>
     <name>DisplayOrderDialog</name>
     <message>
-        <location filename="../src/ui/display_order_dialog.py" line="114" />
-        <source>Ordre d'affichage</source>
-        <translation>Display order</translation>
+        <location filename="../src/ui/display_order_dialog.py" line="116" />
+        <source>Display order</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/display_order_dialog.py" line="118" />
-        <source>Dossiers</source>
-        <translation>Folders</translation>
+        <location filename="../src/ui/display_order_dialog.py" line="120" />
+        <source>Folders</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/display_order_dialog.py" line="123" />
-        <source>Grille de photos</source>
-        <translation>Photo grid</translation>
+        <location filename="../src/ui/display_order_dialog.py" line="125" />
+        <source>Photo grid</source>
+        <translation type="unfinished" />
     </message>
 </context>
 <context>
     <name>DuplicateCard</name>
     <message>
         <location filename="../src/ui/duplicate_grid.py" line="99" />
-        <source>Double-clic : comparer dans la visionneuse — ✗ : ignorer ce groupe</source>
-        <translation>Double-click: compare in the viewer — ✗: ignore this group</translation>
+        <source>Double-click: compare in the viewer — ✗: ignore this group</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/duplicate_grid.py" line="126" />
-        <source>Ignorer ce groupe de doublons</source>
-        <translation>Ignore this duplicate group</translation>
+        <source>Ignore this duplicate group</source>
+        <translation type="unfinished" />
     </message>
 </context>
 <context>
+    <name>DuplicateDetector</name>
+    <message>
+        <location filename="../src/library/duplicate_detector.py" line="411" />
+        <source>Tier 1 — fingerprints {done}/{total} (cache)…</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/library/duplicate_detector.py" line="476" />
+        <source>Tier 1 — fingerprints {done}/{total}…</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/library/duplicate_detector.py" line="538" />
+        <source>Tier 1 — comparing fingerprints (0/{n})…</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/library/duplicate_detector.py" line="616" />
+        <source>Tier 1 — comparing fingerprints ({done}/{total}, {groups})…</source>
+        <translation type="unfinished" />
+    </message>
+    <message numerus="yes">
+        <location filename="../src/library/duplicate_detector.py" line="621" />
+        <source>%n group(s)</source>
+        <translation><numerusform>%n group</numerusform><numerusform>%n groups</numerusform></translation></message>
+    <message>
+        <location filename="../src/library/duplicate_detector.py" line="684" />
+        <source>Tier 2 — ORB extraction ({photos})…</source>
+        <translation type="unfinished" />
+    </message>
+    <message numerus="yes">
+        <location filename="../src/library/duplicate_detector.py" line="686" />
+        <location filename="../src/library/duplicate_detector.py" line="865" />
+        <source>%n photo(s)</source>
+        <translation><numerusform>%n photo</numerusform><numerusform>%n photos</numerusform></translation></message>
+    <message>
+        <location filename="../src/library/duplicate_detector.py" line="802" />
+        <source>Tier 2 — ORB descriptors {done}/{total}…</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/library/duplicate_detector.py" line="864" />
+        <source>Tier 2 — ORB comparison ({photos})…</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/library/duplicate_detector.py" line="1038" />
+        <source>Tier 2 — ORB comparison ({done}/{total}, {pairs})…</source>
+        <translation type="unfinished" />
+    </message>
+    <message numerus="yes">
+        <location filename="../src/library/duplicate_detector.py" line="1043" />
+        <source>%n pair(s) checked</source>
+        <translation><numerusform>%n pair checked</numerusform><numerusform>%n pairs checked</numerusform></translation></message>
+</context>
+<context>
     <name>DuplicateGrid</name>
+    <message numerus="yes">
+        <location filename="../src/ui/duplicate_grid.py" line="117" />
+        <source>%n copy(ies)</source>
+        <translation><numerusform>%n copy</numerusform><numerusform>%n copies</numerusform></translation></message>
     <message>
         <location filename="../src/ui/duplicate_grid.py" line="218" />
         <source>← Photos</source>
-        <translation>← Photos</translation>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/duplicate_grid.py" line="219" />
-        <source>Retourner à la grille de photos</source>
-        <translation>Back to the photo grid</translation>
+        <source>Back to the photo grid</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/duplicate_grid.py" line="227" />
         <location filename="../src/ui/duplicate_grid.py" line="263" />
-        <source>Vérifier maintenant</source>
-        <translation>Check now</translation>
+        <source>Check now</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/duplicate_grid.py" line="229" />
         <location filename="../src/ui/duplicate_grid.py" line="265" />
-        <source>Force une vérification immédiate — l'analyse tourne aussi automatiquement en arrière-plan</source>
-        <translation>Forces an immediate check — the analysis also runs automatically in the background</translation>
+        <source>Forces an immediate check — the analysis also runs automatically in the background</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/duplicate_grid.py" line="258" />
-        <source>Aucun groupe de doublons.</source>
-        <translation>No duplicate group.</translation>
+        <source>No duplicate group.</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/duplicate_grid.py" line="271" />
-        <source>Recherche de doublons en cours…</source>
-        <translation>Looking for duplicates…</translation>
+        <source>Looking for duplicates…</source>
+        <translation type="unfinished" />
     </message>
     <message numerus="yes">
         <location filename="../src/ui/duplicate_grid.py" line="400" />
         <location filename="../src/ui/duplicate_grid.py" line="428" />
-        <source>%n groupe(s) de doublons</source>
+        <source>%n duplicate group(s)</source>
         <translation><numerusform>%n duplicate group</numerusform><numerusform>%n duplicate groups</numerusform></translation></message>
 </context>
 <context>
     <name>DuplicateReport</name>
     <message>
-        <location filename="../src/library/duplicate_detector.py" line="1110" />
-        <source>%d/%m/%Y à %H:%M</source>
-        <translation>%m/%d/%Y at %H:%M</translation>
+        <location filename="../src/library/duplicate_detector.py" line="1131" />
+        <source>%m/%d/%Y at %H:%M</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/library/duplicate_detector.py" line="1136" />
-        <source>Rapport de doublons — PixelPhotoManager</source>
-        <translation>Duplicate report — PixelPhotoManager</translation>
+        <location filename="../src/library/duplicate_detector.py" line="1140" />
+        <source>Duplicates — PixelPhotoManager</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/library/duplicate_detector.py" line="1139" />
-        <source>Généré le {date}</source>
-        <translation>Generated on {date}</translation>
+        <location filename="../src/library/duplicate_detector.py" line="1160" />
+        <source>Duplicate report — PixelPhotoManager</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/library/duplicate_detector.py" line="1163" />
+        <source>Generated on {date}</source>
+        <translation type="unfinished" />
     </message>
     <message numerus="yes">
-        <location filename="../src/library/duplicate_detector.py" line="1141" />
-        <source>&lt;b&gt;%n&lt;/b&gt; groupe(s) de doublons</source>
+        <location filename="../src/library/duplicate_detector.py" line="1165" />
+        <source>&lt;b&gt;%n&lt;/b&gt; duplicate group(s)</source>
         <translation><numerusform>&lt;b&gt;%n&lt;/b&gt; duplicate group</numerusform><numerusform>&lt;b&gt;%n&lt;/b&gt; duplicate groups</numerusform></translation></message>
     <message numerus="yes">
-        <location filename="../src/library/duplicate_detector.py" line="1144" />
-        <source>&lt;b&gt;%n&lt;/b&gt; fichier(s) concerné(s)</source>
+        <location filename="../src/library/duplicate_detector.py" line="1168" />
+        <source>&lt;b&gt;%n&lt;/b&gt; file(s) affected</source>
         <translation><numerusform>&lt;b&gt;%n&lt;/b&gt; file affected</numerusform><numerusform>&lt;b&gt;%n&lt;/b&gt; files affected</numerusform></translation></message>
     <message>
-        <location filename="../src/library/duplicate_detector.py" line="1154" />
-        <source>Groupe&amp;nbsp;#{id}</source>
-        <translation>Group&amp;nbsp;#{id}</translation>
+        <location filename="../src/library/duplicate_detector.py" line="1178" />
+        <source>Group&amp;nbsp;#{id}</source>
+        <translation type="unfinished" />
     </message>
     <message numerus="yes">
-        <location filename="../src/library/duplicate_detector.py" line="1156" />
-        <source>%n fichier(s)</source>
+        <location filename="../src/library/duplicate_detector.py" line="1180" />
+        <source>%n file(s)</source>
         <translation><numerusform>%n file</numerusform><numerusform>%n files</numerusform></translation></message>
 </context>
 <context>
     <name>DuplicatesController</name>
     <message>
         <location filename="../src/ui/main_window_duplicates.py" line="115" />
-        <location filename="../src/ui/main_window_duplicates.py" line="387" />
-        <source>Démarrage…</source>
-        <translation>Starting…</translation>
+        <location filename="../src/ui/main_window_duplicates.py" line="386" />
+        <source>Starting…</source>
+        <translation type="unfinished" />
     </message>
     <message numerus="yes">
         <location filename="../src/ui/main_window_duplicates.py" line="153" />
-        <source>%n fichier(s) corrompu(s)</source>
+        <source>%n corrupted file(s)</source>
         <translation><numerusform>%n corrupted file</numerusform><numerusform>%n corrupted files</numerusform></translation></message>
     <message>
         <location filename="../src/ui/main_window_duplicates.py" line="198" />
-        <location filename="../src/ui/main_window_duplicates.py" line="230" />
-        <source>Fichiers corrompus</source>
-        <translation>Corrupted files</translation>
+        <location filename="../src/ui/main_window_duplicates.py" line="229" />
+        <source>Corrupted files</source>
+        <translation type="unfinished" />
     </message>
     <message numerus="yes">
         <location filename="../src/ui/main_window_duplicates.py" line="202" />
-        <source>%n fichier(s) corrompu(s) détecté(s) par l'analyse des doublons (probablement illisible(s)).</source>
+        <source>%n corrupted file(s) found by the duplicate analysis (probably unreadable).</source>
         <translation><numerusform>%n corrupted file found by the duplicate analysis (probably unreadable).</numerusform><numerusform>%n corrupted files found by the duplicate analysis (probably unreadable).</numerusform></translation></message>
     <message>
-        <location filename="../src/ui/main_window_duplicates.py" line="207" />
-        <source>Aucun fichier corrompu détecté.</source>
-        <translation>No corrupted file found.</translation>
+        <location filename="../src/ui/main_window_duplicates.py" line="206" />
+        <source>No corrupted file found.</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/main_window_duplicates.py" line="211" />
-        <source>Lister…</source>
-        <translation>List…</translation>
+        <location filename="../src/ui/main_window_duplicates.py" line="210" />
+        <source>List…</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/main_window_duplicates.py" line="215" />
-        <location filename="../src/ui/main_window_duplicates.py" line="260" />
-        <source>Réparer…</source>
-        <translation>Repair…</translation>
+        <location filename="../src/ui/main_window_duplicates.py" line="214" />
+        <location filename="../src/ui/main_window_duplicates.py" line="258" />
+        <source>Repair…</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/main_window_duplicates.py" line="219" />
-        <location filename="../src/ui/main_window_duplicates.py" line="274" />
-        <source>Fermer</source>
-        <translation>Close</translation>
+        <location filename="../src/ui/main_window_duplicates.py" line="218" />
+        <location filename="../src/ui/main_window_duplicates.py" line="272" />
+        <source>Close</source>
+        <translation type="unfinished" />
     </message>
     <message numerus="yes">
-        <location filename="../src/ui/main_window_duplicates.py" line="242" />
-        <source>%n fichier(s) n'ont pas pu être lus pendant l'analyse en cours (probablement corrompu(s)) :</source>
+        <location filename="../src/ui/main_window_duplicates.py" line="241" />
+        <source>%n file(s) could not be read during the current analysis (probably corrupted):</source>
         <translation><numerusform>%n file could not be read during the current analysis (probably corrupted):</numerusform><numerusform>%n files could not be read during the current analysis (probably corrupted):</numerusform></translation></message>
     <message>
-        <location filename="../src/ui/main_window_duplicates.py" line="267" />
-        <source>Effacer…</source>
-        <translation>Delete…</translation>
+        <location filename="../src/ui/main_window_duplicates.py" line="265" />
+        <source>Delete…</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/main_window_duplicates.py" line="344" />
-        <source>État des doublons</source>
-        <translation>Duplicate status</translation>
+        <location filename="../src/ui/main_window_duplicates.py" line="342" />
+        <source>Duplicate status</source>
+        <translation type="unfinished" />
     </message>
     <message numerus="yes">
-        <location filename="../src/ui/main_window_duplicates.py" line="348" />
-        <source>%n groupe(s) de doublons</source>
+        <location filename="../src/ui/main_window_duplicates.py" line="346" />
+        <source>%n duplicate group(s)</source>
         <translation><numerusform>%n duplicate group</numerusform><numerusform>%n duplicate groups</numerusform></translation></message>
     <message numerus="yes">
-        <location filename="../src/ui/main_window_duplicates.py" line="350" />
-        <source>%n photo(s) concernée(s)</source>
+        <location filename="../src/ui/main_window_duplicates.py" line="348" />
+        <source>%n photo(s) affected</source>
         <translation><numerusform>%n photo affected</numerusform><numerusform>%n photos affected</numerusform></translation></message>
     <message>
+        <location filename="../src/ui/main_window_duplicates.py" line="352" />
+        <source>Analysis running…</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
         <location filename="../src/ui/main_window_duplicates.py" line="354" />
-        <source>Analyse en cours…</source>
-        <translation>Analysis running…</translation>
+        <location filename="../src/ui/main_window_duplicates.py" line="415" />
+        <source>Last check: {when}</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/main_window_duplicates.py" line="356" />
-        <location filename="../src/ui/main_window_duplicates.py" line="416" />
-        <source>Dernière vérification : {when}</source>
-        <translation>Last check: {when}</translation>
+        <location filename="../src/ui/main_window_duplicates.py" line="357" />
+        <location filename="../src/ui/main_window_duplicates.py" line="418" />
+        <source>%m/%d/%Y %H:%M</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/main_window_duplicates.py" line="360" />
-        <location filename="../src/ui/main_window_duplicates.py" line="419" />
-        <source>Dernière vérification : jamais</source>
-        <translation>Last check: never</translation>
+        <location filename="../src/ui/main_window_duplicates.py" line="359" />
+        <location filename="../src/ui/main_window_duplicates.py" line="420" />
+        <source>Last check: never</source>
+        <translation type="unfinished" />
     </message>
     <message numerus="yes">
-        <location filename="../src/ui/main_window_duplicates.py" line="382" />
-        <source>%n restant(s)</source>
+        <location filename="../src/ui/main_window_duplicates.py" line="381" />
+        <source>%n left</source>
         <translation><numerusform>%n left</numerusform><numerusform>%n left</numerusform></translation></message>
     <message>
-        <location filename="../src/ui/main_window_duplicates.py" line="391" />
-        <source>Voir les groupes</source>
-        <translation>View the groups</translation>
+        <location filename="../src/ui/main_window_duplicates.py" line="390" />
+        <source>View the groups</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/main_window_duplicates.py" line="394" />
-        <source>Vérifier maintenant</source>
-        <translation>Check now</translation>
+        <location filename="../src/ui/main_window_duplicates.py" line="393" />
+        <source>Check now</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/main_window_duplicates.py" line="414" />
-        <source>Analyse terminée.</source>
-        <translation>Analysis finished.</translation>
+        <location filename="../src/ui/main_window_duplicates.py" line="413" />
+        <source>Analysis finished.</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/main_window_duplicates.py" line="468" />
-        <source>Réparer les fichiers corrompus</source>
-        <translation>Repair the corrupted files</translation>
+        <location filename="../src/ui/main_window_duplicates.py" line="469" />
+        <source>Repair the corrupted files</source>
+        <translation type="unfinished" />
     </message>
     <message numerus="yes">
-        <location filename="../src/ui/main_window_duplicates.py" line="469" />
-        <location filename="../src/ui/main_window_duplicates.py" line="588" />
-        <source>%n fichier(s) semble(nt) corrompu(s).</source>
+        <location filename="../src/ui/main_window_duplicates.py" line="470" />
+        <location filename="../src/ui/main_window_duplicates.py" line="587" />
+        <source>%n file(s) appear to be corrupted.</source>
         <translation><numerusform>%n file appears to be corrupted.</numerusform><numerusform>%n files appear to be corrupted.</numerusform></translation></message>
     <message>
-        <location filename="../src/ui/main_window_duplicates.py" line="472" />
-        <source>Tenter une réparation automatique ? PixelPhotoManager va essayer de ré-enregistrer une copie propre de chaque fichier via un décodeur plus tolérant, en conservant les dates de création et de modification Windows. L'original est sauvegardé avant toute modification (dossier caché .tmp_originals à côté du fichier).</source>
-        <translation>Attempt an automatic repair? PixelPhotoManager will try to re-save a clean copy of each file through a more forgiving decoder, keeping the Windows creation and modification dates. The original is backed up before anything is changed (hidden .tmp_originals folder next to the file).</translation>
+        <location filename="../src/ui/main_window_duplicates.py" line="473" />
+        <source>Attempt an automatic repair? PixelPhotoManager will try to re-save a clean copy of each file through a more forgiving decoder, keeping the Windows creation and modification dates. The original is backed up before anything is changed (hidden .tmp_originals folder next to the file).</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/main_window_duplicates.py" line="484" />
-        <source>La réparation n'a pas été lancée.</source>
-        <translation>The repair was not started.</translation>
+        <source>The repair was not started.</source>
+        <translation type="unfinished" />
     </message>
     <message numerus="yes">
         <location filename="../src/ui/main_window_duplicates.py" line="486" />
-        <source>La liste des %n fichier(s) est disponible via Outils › Historique des problèmes.</source>
+        <source>The list of the %n file(s) is available under Tools › Problem history.</source>
         <translation><numerusform>The %n file is listed under Tools › Problem history.</numerusform><numerusform>The list of the %n files is available under Tools › Problem history.</numerusform></translation></message>
     <message>
-        <location filename="../src/ui/main_window_duplicates.py" line="490" />
-        <source>Réparation annulée</source>
-        <translation>Repair cancelled</translation>
+        <location filename="../src/ui/main_window_duplicates.py" line="489" />
+        <source>Repair cancelled</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/ui/main_window_duplicates.py" line="495" />
+        <source>Repairing…</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/ui/main_window_duplicates.py" line="495" />
+        <source>Cancel</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/main_window_duplicates.py" line="496" />
-        <source>Réparation en cours…</source>
-        <translation>Repairing…</translation>
+        <source>Repairing corrupted files</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/main_window_duplicates.py" line="496" />
-        <source>Annuler</source>
-        <translation>Cancel</translation>
-    </message>
-    <message>
-        <location filename="../src/ui/main_window_duplicates.py" line="497" />
-        <source>Réparation des fichiers corrompus</source>
-        <translation>Repairing corrupted files</translation>
-    </message>
-    <message>
-        <location filename="../src/ui/main_window_duplicates.py" line="505" />
-        <source>Réparation {cur}/{total} :
+        <location filename="../src/ui/main_window_duplicates.py" line="504" />
+        <source>Repair {cur}/{total}:
 {name}</source>
-        <translation>Repair {cur}/{total}:
-{name}</translation>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/main_window_duplicates.py" line="548" />
-        <source>Réparation terminée</source>
-        <translation>Repair finished</translation>
+        <location filename="../src/ui/main_window_duplicates.py" line="547" />
+        <source>Repair finished</source>
+        <translation type="unfinished" />
     </message>
     <message numerus="yes">
-        <location filename="../src/ui/main_window_duplicates.py" line="552" />
-        <source>%n fichier(s) réparé(s) :</source>
+        <location filename="../src/ui/main_window_duplicates.py" line="551" />
+        <source>%n file(s) repaired:</source>
         <translation><numerusform>%n file repaired:</numerusform><numerusform>%n files repaired:</numerusform></translation></message>
     <message numerus="yes">
-        <location filename="../src/ui/main_window_duplicates.py" line="561" />
-        <source>%n fichier(s) n'ont pas pu être réparé(s) :</source>
+        <location filename="../src/ui/main_window_duplicates.py" line="560" />
+        <source>%n file(s) could not be repaired:</source>
         <translation><numerusform>%n file could not be repaired:</numerusform><numerusform>%n files could not be repaired:</numerusform></translation></message>
     <message>
-        <location filename="../src/ui/main_window_duplicates.py" line="571" />
-        <source>Supprimer ces fichiers…</source>
-        <translation>Delete these files…</translation>
+        <location filename="../src/ui/main_window_duplicates.py" line="570" />
+        <source>Delete these files…</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/main_window_duplicates.py" line="587" />
-        <source>Supprimer les fichiers corrompus</source>
-        <translation>Delete the corrupted files</translation>
+        <location filename="../src/ui/main_window_duplicates.py" line="586" />
+        <source>Delete the corrupted files</source>
+        <translation type="unfinished" />
     </message>
     <message numerus="yes">
-        <location filename="../src/ui/main_window_duplicates.py" line="591" />
-        <source>Envoyer %n fichier(s) à la corbeille Windows ?
+        <location filename="../src/ui/main_window_duplicates.py" line="590" />
+        <source>Send %n file(s) to the Windows recycle bin?
 
-Ils resteront récupérables depuis la corbeille.</source>
+They will still be recoverable from the recycle bin.</source>
         <translation><numerusform>Send %n file to the Windows recycle bin?
 
 It will still be recoverable from the recycle bin.</numerusform><numerusform>Send %n files to the Windows recycle bin?
 
 They will still be recoverable from the recycle bin.</numerusform></translation></message>
     <message>
-        <location filename="../src/ui/main_window_duplicates.py" line="605" />
-        <source>Une suppression est déjà en cours…</source>
-        <translation>A deletion is already running…</translation>
+        <location filename="../src/ui/main_window_duplicates.py" line="604" />
+        <source>A deletion is already running…</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/main_window_duplicates.py" line="640" />
-        <source>Erreurs de suppression</source>
-        <translation>Deletion errors</translation>
+        <location filename="../src/ui/main_window_duplicates.py" line="642" />
+        <source>Deletion errors</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/main_window_duplicates.py" line="641" />
-        <source>Impossible de supprimer :</source>
-        <translation>Could not delete:</translation>
+        <location filename="../src/ui/main_window_duplicates.py" line="643" />
+        <source>Could not delete:</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/main_window_duplicates.py" line="647" />
-        <source>Suppression terminée</source>
-        <translation>Deletion finished</translation>
+        <location filename="../src/ui/main_window_duplicates.py" line="649" />
+        <source>Deletion finished</source>
+        <translation type="unfinished" />
     </message>
     <message numerus="yes">
-        <location filename="../src/ui/main_window_duplicates.py" line="648" />
-        <source>%n fichier(s) supprimé(s).</source>
+        <location filename="../src/ui/main_window_duplicates.py" line="650" />
+        <source>%n file(s) deleted.</source>
         <translation><numerusform>%n file deleted.</numerusform><numerusform>%n files deleted.</numerusform></translation></message>
 </context>
 <context>
     <name>DuplicatesPopup</name>
     <message numerus="yes">
         <location filename="../src/ui/duplicates_popup.py" line="45" />
-        <source>%n exemplaire(s) dans ce groupe de doublons :</source>
+        <source>%n copy(ies) in this duplicate group:</source>
         <translation><numerusform>%n copy in this duplicate group:</numerusform><numerusform>%n copies in this duplicate group:</numerusform></translation></message>
     <message>
         <location filename="../src/ui/duplicates_popup.py" line="51" />
-        <source>Cliquer-glisser pour déplacer la fenêtre</source>
-        <translation>Click and drag to move the window</translation>
+        <source>Click and drag to move the window</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/duplicates_popup.py" line="69" />
-        <source>Fermer</source>
-        <translation>Close</translation>
+        <source>Close</source>
+        <translation type="unfinished" />
     </message>
 </context>
 <context>
     <name>EditPanel</name>
     <message>
         <location filename="../src/ui/edit_panel.py" line="220" />
-        <source>Corriger les yeux rouges — cliquez sur chaque œil</source>
-        <translation>Fix red eyes — click each eye</translation>
+        <source>Fix red eyes — click each eye</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/edit_panel.py" line="233" />
-        <source>Dessiner / écrire par-dessus la photo (calque séparé)</source>
-        <translation>Draw / write over the photo (separate layer)</translation>
+        <source>Draw / write over the photo (separate layer)</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/edit_panel.py" line="245" />
-        <source>Cliquez sur chaque œil rouge dans la photo</source>
-        <translation>Click each red eye in the photo</translation>
+        <location filename="../src/ui/edit_panel.py" line="246" />
+        <source>Click each red eye in the photo</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/edit_panel.py" line="252" />
-        <source>Taille :</source>
-        <translation>Size:</translation>
+        <location filename="../src/ui/edit_panel.py" line="253" />
+        <source>Size:</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/edit_panel.py" line="256" />
-        <source>Rayon de correction (% de l'image)</source>
-        <translation>Correction radius (% of the image)</translation>
+        <location filename="../src/ui/edit_panel.py" line="257" />
+        <source>Correction radius (% of the image)</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/edit_panel.py" line="264" />
-        <source>Supprimer toutes les corrections yeux rouges</source>
-        <translation>Remove every red-eye correction</translation>
+        <location filename="../src/ui/edit_panel.py" line="266" />
+        <source>Remove every red-eye correction</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/edit_panel.py" line="267" />
-        <location filename="../src/ui/edit_panel.py" line="440" />
-        <source>Terminé</source>
-        <translation>Done</translation>
+        <location filename="../src/ui/edit_panel.py" line="269" />
+        <location filename="../src/ui/edit_panel.py" line="448" />
+        <source>Done</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/edit_panel.py" line="268" />
-        <source>Quitter le mode yeux rouges  (Echap)</source>
-        <translation>Leave red-eye mode  (Esc)</translation>
+        <location filename="../src/ui/edit_panel.py" line="270" />
+        <source>Leave red-eye mode  (Esc)</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/edit_panel.py" line="320" />
-        <source>Épaisseur</source>
-        <translation>Thickness</translation>
+        <location filename="../src/ui/edit_panel.py" line="322" />
+        <source>Thickness</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/edit_panel.py" line="327" />
-        <source>Épaisseur du trait (% de l'image)</source>
-        <translation>Stroke thickness (% of the image)</translation>
+        <location filename="../src/ui/edit_panel.py" line="329" />
+        <source>Stroke thickness (% of the image)</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/edit_panel.py" line="338" />
-        <location filename="../src/ui/edit_panel.py" line="1288" />
-        <source>Couleur de la surface</source>
-        <translation>Fill colour</translation>
+        <location filename="../src/ui/edit_panel.py" line="341" />
+        <location filename="../src/ui/edit_panel.py" line="1297" />
+        <source>Fill colour</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/edit_panel.py" line="344" />
-        <source>Opacité</source>
-        <translation>Opacity</translation>
+        <location filename="../src/ui/edit_panel.py" line="347" />
+        <source>Opacity</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/edit_panel.py" line="352" />
-        <source>Opacité de la surface — à 100 %, la photo derrière n'est plus visible</source>
-        <translation>Fill opacity — at 100 % the photo behind is hidden</translation>
+        <location filename="../src/ui/edit_panel.py" line="355" />
+        <source>Fill opacity — at 100 % the photo behind is hidden</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/edit_panel.py" line="366" />
-        <source>Flou de la photo sous la surface (% de l'image)</source>
-        <translation>Blur of the photo under the shape (% of the image)</translation>
+        <location filename="../src/ui/edit_panel.py" line="369" />
+        <source>Blur of the photo under the shape (% of the image)</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/edit_panel.py" line="386" />
-        <source>Taille du texte (% de l'image)</source>
-        <translation>Text size (% of the image)</translation>
+        <location filename="../src/ui/edit_panel.py" line="391" />
+        <source>Text size (% of the image)</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/edit_panel.py" line="419" />
-        <source>Couleur du texte</source>
-        <translation>Text colour</translation>
+        <location filename="../src/ui/edit_panel.py" line="425" />
+        <source>Text colour</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/edit_panel.py" line="428" />
-        <source>Supprimer la sélection</source>
-        <translation>Delete the selection</translation>
-    </message>
-    <message>
-        <location filename="../src/ui/edit_panel.py" line="430" />
-        <source>Supprimer l'élément d'annotation sélectionné</source>
-        <translation>Delete the selected annotation item</translation>
+        <location filename="../src/ui/edit_panel.py" line="434" />
+        <source>Delete the selection</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/edit_panel.py" line="437" />
-        <source>Supprimer toutes les annotations</source>
-        <translation>Delete every annotation</translation>
+        <source>Delete the selected annotation item</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/edit_panel.py" line="441" />
-        <source>Quitter le mode annotation  (Echap)</source>
-        <translation>Leave annotation mode  (Esc)</translation>
+        <location filename="../src/ui/edit_panel.py" line="445" />
+        <source>Delete every annotation</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/ui/edit_panel.py" line="449" />
+        <source>Leave annotation mode  (Esc)</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/edit_panel.py" line="48" />
-        <location filename="../src/ui/edit_panel.py" line="454" />
-        <location filename="../src/ui/edit_panel.py" line="1067" />
-        <source>Annuler</source>
-        <translation>Cancel</translation>
+        <location filename="../src/ui/edit_panel.py" line="462" />
+        <location filename="../src/ui/edit_panel.py" line="1076" />
+        <source>Undo</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/edit_panel.py" line="32" />
         <location filename="../src/ui/edit_panel.py" line="52" />
         <source>Rotation</source>
-        <translation>Rotation</translation>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/edit_panel.py" line="33" />
-        <source>Miroir H</source>
-        <translation>Mirror H</translation>
+        <source>Mirror H</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/edit_panel.py" line="34" />
-        <source>Miroir V</source>
-        <translation>Mirror V</translation>
+        <source>Mirror V</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/edit_panel.py" line="35" />
         <location filename="../src/ui/edit_panel.py" line="53" />
-        <source>Recadrage</source>
-        <translation>Crop</translation>
+        <source>Cropping</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/edit_panel.py" line="36" />
         <location filename="../src/ui/edit_panel.py" line="214" />
-        <source>Yeux rouges</source>
-        <translation>Red eyes</translation>
+        <source>Red eyes</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/edit_panel.py" line="37" />
-        <source>Effacer yeux rouges</source>
-        <translation>Clear red eyes</translation>
+        <source>Clear red eyes</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/edit_panel.py" line="38" />
         <source>Annotation</source>
-        <translation>Annotation</translation>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/edit_panel.py" line="39" />
-        <source>Supprimer annotation</source>
-        <translation>Delete annotation</translation>
+        <source>Delete annotation</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/edit_panel.py" line="40" />
-        <source>Effacer annotations</source>
-        <translation>Clear annotations</translation>
+        <source>Clear annotations</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/edit_panel.py" line="41" />
-        <source>Déplacer annotation</source>
-        <translation>Move annotation</translation>
+        <source>Move annotation</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/edit_panel.py" line="42" />
-        <source>Déplacer annotations</source>
-        <translation>Move annotations</translation>
+        <source>Move annotations</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/edit_panel.py" line="43" />
-        <source>Supprimer annotations</source>
-        <translation>Delete annotations</translation>
+        <source>Delete annotations</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/edit_panel.py" line="44" />
-        <source>Redimensionner annotation</source>
-        <translation>Resize annotation</translation>
+        <source>Resize annotation</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/edit_panel.py" line="45" />
-        <source>Modifier le style</source>
-        <translation>Change the style</translation>
+        <source>Change the style</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/edit_panel.py" line="46" />
-        <source>Grouper les annotations</source>
-        <translation>Group the annotations</translation>
+        <source>Group the annotations</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/edit_panel.py" line="47" />
-        <source>Dégrouper les annotations</source>
-        <translation>Ungroup the annotations</translation>
+        <source>Ungroup the annotations</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/edit_panel.py" line="49" />
-        <location filename="../src/ui/edit_panel.py" line="459" />
-        <location filename="../src/ui/edit_panel.py" line="1075" />
-        <source>Rétablir</source>
-        <translation>Redo</translation>
+        <location filename="../src/ui/edit_panel.py" line="467" />
+        <location filename="../src/ui/edit_panel.py" line="1084" />
+        <source>Redo</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/edit_panel.py" line="50" />
-        <source>Remise en place des retouches</source>
-        <translation>Edits restored</translation>
+        <source>Edits restored</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/edit_panel.py" line="51" />
-        <source>Avant import</source>
-        <translation>Before import</translation>
+        <source>Before import</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/edit_panel.py" line="54" />
-        <source>Noir et blanc</source>
-        <translation>Black and white</translation>
+        <source>Black and white</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/edit_panel.py" line="55" />
-        <source>Redressement</source>
-        <translation>Straightening</translation>
+        <source>Straightening</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/edit_panel.py" line="56" />
-        <source>Réglages fins</source>
-        <translation>Fine adjustments</translation>
+        <source>Fine adjustments</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/edit_panel.py" line="57" />
-        <source>Lumière</source>
-        <translation>Light</translation>
+        <source>Light</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/edit_panel.py" line="58" />
-        <source>Chaleur</source>
-        <translation>Warmth</translation>
+        <source>Warmth</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/edit_panel.py" line="59" />
         <location filename="../src/ui/edit_panel.py" line="75" />
-        <location filename="../src/ui/treatment_dialogs.py" line="656" />
-        <source>Luminosité</source>
-        <translation>Brightness</translation>
+        <location filename="../src/ui/treatment_dialogs.py" line="660" />
+        <source>Brightness</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/edit_panel.py" line="60" />
-        <source>Auto-éclairage</source>
-        <translation>Auto light</translation>
+        <source>Auto light</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/edit_panel.py" line="61" />
-        <location filename="../src/ui/treatment_dialogs.py" line="660" />
+        <location filename="../src/ui/treatment_dialogs.py" line="664" />
         <source>Saturation</source>
-        <translation>Saturation</translation>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/edit_panel.py" line="62" />
         <location filename="../src/ui/edit_panel.py" line="63" />
-        <source>Netteté</source>
-        <translation>Sharpness</translation>
+        <source>Sharpness</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/edit_panel.py" line="64" />
-        <source>Adoucissement</source>
-        <translation>Softening</translation>
+        <source>Softening</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/edit_panel.py" line="76" />
-        <location filename="../src/ui/treatment_dialogs.py" line="658" />
-        <source>Contraste</source>
-        <translation>Contrast</translation>
+        <location filename="../src/ui/treatment_dialogs.py" line="662" />
+        <source>Contrast</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/edit_panel.py" line="77" />
-        <source>Couleurs</source>
-        <translation>Colours</translation>
+        <source>Colours</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/edit_panel.py" line="78" />
         <source>Vignette</source>
-        <translation>Vignette</translation>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/edit_panel.py" line="79" />
-        <source>Cadre</source>
-        <translation>Frame</translation>
+        <source>Frame</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/edit_panel.py" line="80" />
-        <location filename="../src/ui/edit_panel.py" line="517" />
-        <source>Redresser</source>
-        <translation>Straighten</translation>
+        <location filename="../src/ui/edit_panel.py" line="525" />
+        <source>Straighten</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/edit_panel.py" line="184" />
-        <source>Retouche</source>
-        <translation>Editing</translation>
+        <source>Editing</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/edit_panel.py" line="197" />
         <source>Corrections</source>
-        <translation>Corrections</translation>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/edit_panel.py" line="227" />
-        <location filename="../src/ui/edit_panel.py" line="277" />
+        <location filename="../src/ui/edit_panel.py" line="279" />
         <source>Annotations</source>
-        <translation>Annotations</translation>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/edit_panel.py" line="240" />
-        <source>Correction yeux rouges</source>
-        <translation>Red-eye correction</translation>
+        <location filename="../src/ui/edit_panel.py" line="241" />
+        <source>Red-eye correction</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/edit_panel.py" line="263" />
-        <location filename="../src/ui/edit_panel.py" line="436" />
-        <source>Effacer tout</source>
-        <translation>Clear all</translation>
-    </message>
-    <message>
-        <location filename="../src/ui/edit_panel.py" line="288" />
-        <source>Stylo — trait libre</source>
-        <translation>Pen — freehand</translation>
-    </message>
-    <message>
-        <location filename="../src/ui/edit_panel.py" line="289" />
-        <source>Ligne droite</source>
-        <translation>Straight line</translation>
+        <location filename="../src/ui/edit_panel.py" line="265" />
+        <location filename="../src/ui/edit_panel.py" line="444" />
+        <source>Clear all</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/edit_panel.py" line="290" />
-        <source>Courbe — cliquez les points de passage, double-clic pour valider</source>
-        <translation>Curve — click the waypoints, double-click to confirm</translation>
+        <source>Pen — freehand</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/edit_panel.py" line="293" />
-        <source>Rectangle</source>
-        <translation>Rectangle</translation>
+        <location filename="../src/ui/edit_panel.py" line="291" />
+        <source>Straight line</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/edit_panel.py" line="294" />
-        <source>Ellipse</source>
-        <translation>Ellipse</translation>
+        <location filename="../src/ui/edit_panel.py" line="292" />
+        <source>Curve — click the waypoints, double-click to confirm</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/edit_panel.py" line="295" />
-        <source>Texte</source>
-        <translation>Text</translation>
+        <source>Rectangle</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/edit_panel.py" line="296" />
-        <source>Sélection — cliquez un élément pour le sélectionner</source>
-        <translation>Selection — click an item to select it</translation>
+        <source>Ellipse</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/edit_panel.py" line="317" />
-        <location filename="../src/ui/edit_panel.py" line="416" />
-        <source>Couleur</source>
-        <translation>Colour</translation>
+        <location filename="../src/ui/edit_panel.py" line="297" />
+        <source>Text</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/edit_panel.py" line="359" />
-        <source>Flou</source>
-        <translation>Blur</translation>
+        <location filename="../src/ui/edit_panel.py" line="298" />
+        <source>Selection — click an item to select it</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/edit_panel.py" line="399" />
-        <source>Gras</source>
-        <translation>Bold</translation>
+        <location filename="../src/ui/edit_panel.py" line="319" />
+        <location filename="../src/ui/edit_panel.py" line="422" />
+        <source>Colour</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/edit_panel.py" line="409" />
-        <source>Italique</source>
-        <translation>Italic</translation>
+        <location filename="../src/ui/edit_panel.py" line="362" />
+        <source>Blur</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/edit_panel.py" line="470" />
-        <source>Réinitialiser
-toutes les retouches</source>
-        <translation>Reset
-every edit</translation>
+        <location filename="../src/ui/edit_panel.py" line="405" />
+        <source>Bold</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/edit_panel.py" line="473" />
-        <source>Supprime toutes les retouches et l'historique pour cette photo.
-Le fichier original sur disque n'est pas modifié.
-Réversible via « Remettre toutes les retouches ».</source>
-        <translation>Removes every edit and the history for this photo.
+        <location filename="../src/ui/edit_panel.py" line="415" />
+        <source>Italic</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/ui/edit_panel.py" line="478" />
+        <source>Reset
+every edit</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/ui/edit_panel.py" line="481" />
+        <source>Removes every edit and the history for this photo.
 The original file on disk is left untouched.
-Reversible with “Restore every edit”.</translation>
+Reversible with “Restore every edit”.</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/edit_panel.py" line="484" />
-        <source>Remettre
-toutes les retouches</source>
-        <translation>Restore
-every edit</translation>
+        <location filename="../src/ui/edit_panel.py" line="492" />
+        <source>Restore
+every edit</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/edit_panel.py" line="487" />
-        <source>Remet en place les retouches supprimées par le dernier
-« Réinitialiser toutes les retouches » sur cette photo.</source>
-        <translation>Puts back the edits removed by the last
-“Reset every edit” on this photo.</translation>
+        <location filename="../src/ui/edit_panel.py" line="495" />
+        <source>Puts back the edits removed by the last
+“Reset every edit” on this photo.</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/edit_panel.py" line="496" />
-        <source>Géométrie</source>
-        <translation>Geometry</translation>
+        <location filename="../src/ui/edit_panel.py" line="504" />
+        <source>Geometry</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/edit_panel.py" line="523" />
-        <source>Corriger l'inclinaison de l'horizon (-10° à +10°)</source>
-        <translation>Correct the tilt of the horizon (-10° to +10°)</translation>
+        <location filename="../src/ui/edit_panel.py" line="531" />
+        <source>Correct the tilt of the horizon (-10° to +10°)</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/edit_panel.py" line="527" />
+        <location filename="../src/ui/edit_panel.py" line="536" />
         <source>Angle (°)</source>
-        <translation>Angle (°)</translation>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/edit_panel.py" line="533" />
-        <source>Recadrer</source>
-        <translation>Crop</translation>
+        <location filename="../src/ui/edit_panel.py" line="542" />
+        <source>Crop</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/edit_panel.py" line="539" />
-        <source>Définir interactivement la zone de recadrage</source>
-        <translation>Set the crop area interactively</translation>
+        <location filename="../src/ui/edit_panel.py" line="548" />
+        <source>Set the crop area interactively</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/edit_panel.py" line="982" />
-        <source>Retouche — {name}</source>
-        <translation>Editing — {name}</translation>
+        <location filename="../src/ui/edit_panel.py" line="991" />
+        <source>Editing — {name}</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/edit_panel.py" line="1064" />
-        <source>Annuler  {op}</source>
-        <translation>Undo  {op}</translation>
+        <location filename="../src/ui/edit_panel.py" line="1073" />
+        <source>Undo  {op}</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/edit_panel.py" line="1072" />
-        <source>Rétablir  {op}</source>
-        <translation>Redo  {op}</translation>
+        <location filename="../src/ui/edit_panel.py" line="1081" />
+        <source>Redo  {op}</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/edit_panel.py" line="1267" />
-        <source>Couleur d'annotation</source>
-        <translation>Annotation colour</translation>
+        <location filename="../src/ui/edit_panel.py" line="1276" />
+        <source>Annotation colour</source>
+        <translation type="unfinished" />
     </message>
 </context>
 <context>
     <name>EditSlider</name>
     <message>
         <location filename="../src/ui/edit_sliders.py" line="160" />
-        <source>Augmenter d'un pas</source>
-        <translation>Increase by one step</translation>
+        <source>Increase by one step</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/edit_sliders.py" line="165" />
-        <source>Diminuer d'un pas</source>
-        <translation>Decrease by one step</translation>
+        <source>Decrease by one step</source>
+        <translation type="unfinished" />
     </message>
 </context>
 <context>
     <name>ErrorRow</name>
     <message>
         <location filename="../src/ui/index_errors_dialog.py" line="80" />
-        <source>⟳  Réessayer</source>
-        <translation>⟳  Retry</translation>
+        <source>⟳  Retry</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/index_errors_dialog.py" line="81" />
-        <source>Relancer l'identification des visages pour ce seul fichier</source>
-        <translation>Rerun face identification for this file only</translation>
+        <source>Rerun face identification for this file only</source>
+        <translation type="unfinished" />
     </message>
 </context>
 <context>
     <name>ExifDateSyncDialog</name>
     <message>
         <location filename="../src/ui/exif_date_sync_dialog.py" line="93" />
-        <source>Chemin</source>
-        <translation>Path</translation>
+        <source>Path</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/exif_date_sync_dialog.py" line="94" />
-        <source>Date création fichier</source>
-        <translation>File creation date</translation>
+        <source>File creation date</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/exif_date_sync_dialog.py" line="95" />
-        <source>Date EXIF</source>
-        <translation>EXIF date</translation>
+        <source>EXIF date</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/exif_date_sync_dialog.py" line="96" />
         <source>Action</source>
-        <translation>Action</translation>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/exif_date_sync_dialog.py" line="97" />
-        <source>Commentaire</source>
-        <translation>Comment</translation>
+        <source>Comment</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/exif_date_sync_dialog.py" line="109" />
         <location filename="../src/ui/exif_date_sync_dialog.py" line="118" />
         <location filename="../src/ui/exif_date_sync_dialog.py" line="142" />
-        <source>ignoré</source>
-        <translation>skipped</translation>
+        <source>skipped</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/exif_date_sync_dialog.py" line="110" />
-        <source>fichier introuvable</source>
-        <translation>file not found</translation>
+        <source>file not found</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/exif_date_sync_dialog.py" line="119" />
-        <source>pas de date EXIF cohérente</source>
-        <translation>no consistent EXIF date</translation>
+        <source>no consistent EXIF date</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/exif_date_sync_dialog.py" line="130" />
         <location filename="../src/ui/exif_date_sync_dialog.py" line="162" />
-        <source>erreur</source>
-        <translation>error</translation>
+        <source>error</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/exif_date_sync_dialog.py" line="143" />
-        <source>dates déjà identiques</source>
-        <translation>dates already identical</translation>
+        <source>dates already identical</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/exif_date_sync_dialog.py" line="154" />
-        <source>mis à jour</source>
-        <translation>updated</translation>
+        <source>updated</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/exif_date_sync_dialog.py" line="179" />
-        <source>Synchroniser les dates de création avec l'EXIF</source>
-        <translation>Synchronise the creation dates with the EXIF data</translation>
+        <source>Synchronise the creation dates with the EXIF data</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/exif_date_sync_dialog.py" line="191" />
-        <source>Synchroniser la date de création Windows avec la date EXIF</source>
-        <translation>Synchronise the Windows creation date with the EXIF date</translation>
+        <location filename="../src/ui/exif_date_sync_dialog.py" line="192" />
+        <source>Synchronise the Windows creation date with the EXIF date</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/exif_date_sync_dialog.py" line="210" />
-        <source>Lors d'un transfert depuis un appareil photo ou d'une copie de fichiers, Windows peut attribuer la date du jour comme date de création, écrasant la date réelle de prise de vue.
-
-Cette opération parcourt toutes les photos et vidéos du catalogue et, lorsqu'une date EXIF valide est présente et différente de la date de création Windows, elle remplace la date de création par la date EXIF.
-
-Un rapport CSV détaillant chaque fichier traité sera enregistré dans :</source>
-        <translation>When files are transferred from a camera or copied around, Windows may set today's date as the creation date, wiping out the date the picture was actually taken.
+        <location filename="../src/ui/exif_date_sync_dialog.py" line="212" />
+        <source>When files are transferred from a camera or copied around, Windows may set today's date as the creation date, wiping out the date the picture was actually taken.
 
 This operation goes through every photo and video in the catalogue and, whenever a valid EXIF date is present and differs from the Windows creation date, replaces the creation date with the EXIF date.
 
-A CSV report listing every processed file will be saved in:</translation>
+A CSV report listing every processed file will be saved in:</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/exif_date_sync_dialog.py" line="231" />
-        <source>⚠  Cette opération modifie les métadonnées système des fichiers originaux. Elle ne modifie pas le contenu des photos.</source>
-        <translation>⚠  This operation changes the system metadata of the original files. It does not change the content of the photos.</translation>
+        <location filename="../src/ui/exif_date_sync_dialog.py" line="236" />
+        <source>⚠  This operation changes the system metadata of the original files. It does not change the content of the photos.</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/exif_date_sync_dialog.py" line="263" />
-        <source>Ouvrir le rapport CSV</source>
-        <translation>Open the CSV report</translation>
+        <location filename="../src/ui/exif_date_sync_dialog.py" line="269" />
+        <source>Open the CSV report</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/exif_date_sync_dialog.py" line="275" />
-        <source>Démarrer</source>
-        <translation>Start</translation>
+        <location filename="../src/ui/exif_date_sync_dialog.py" line="281" />
+        <source>Start</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/exif_date_sync_dialog.py" line="284" />
-        <source>Fermer</source>
-        <translation>Close</translation>
+        <location filename="../src/ui/exif_date_sync_dialog.py" line="290" />
+        <source>Close</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/exif_date_sync_dialog.py" line="294" />
-        <source>En cours…</source>
-        <translation>Running…</translation>
+        <location filename="../src/ui/exif_date_sync_dialog.py" line="300" />
+        <source>Running…</source>
+        <translation type="unfinished" />
     </message>
     <message numerus="yes">
-        <location filename="../src/ui/exif_date_sync_dialog.py" line="314" />
-        <source>%n fichier(s) mis à jour</source>
+        <location filename="../src/ui/exif_date_sync_dialog.py" line="320" />
+        <source>%n file(s) updated</source>
         <translation><numerusform>%n file updated</numerusform><numerusform>%n files updated</numerusform></translation></message>
     <message numerus="yes">
-        <location filename="../src/ui/exif_date_sync_dialog.py" line="316" />
-        <source>%n ignoré(s) ou en erreur</source>
+        <location filename="../src/ui/exif_date_sync_dialog.py" line="322" />
+        <source>%n skipped or in error</source>
         <translation><numerusform>%n skipped or in error</numerusform><numerusform>%n skipped or in error</numerusform></translation></message>
 </context>
 <context>
     <name>ExifEditDialog</name>
     <message>
-        <location filename="../src/ui/exif_panel.py" line="409" />
-        <source>Modifier les métadonnées EXIF</source>
-        <translation>Edit the EXIF metadata</translation>
-    </message>
-    <message>
-        <location filename="../src/ui/exif_panel.py" line="414" />
-        <source>⚠  Ces modifications écrivent directement dans le fichier image.</source>
-        <translation>⚠  These changes are written straight into the image file.</translation>
-    </message>
-    <message>
-        <location filename="../src/ui/exif_panel.py" line="425" />
-        <source>Date de prise de vue :</source>
-        <translation>Date taken:</translation>
-    </message>
-    <message>
-        <location filename="../src/ui/exif_panel.py" line="428" />
-        <source>Description de l'image</source>
-        <translation>Description of the picture</translation>
-    </message>
-    <message>
-        <location filename="../src/ui/exif_panel.py" line="429" />
-        <source>Description :</source>
-        <translation>Description:</translation>
-    </message>
-    <message>
-        <location filename="../src/ui/exif_panel.py" line="432" />
-        <source>Photographe / auteur</source>
-        <translation>Photographer / author</translation>
-    </message>
-    <message>
-        <location filename="../src/ui/exif_panel.py" line="433" />
-        <source>Artiste :</source>
-        <translation>Artist:</translation>
-    </message>
-    <message>
-        <location filename="../src/ui/exif_panel.py" line="436" />
-        <source>© Auteur 2024</source>
-        <translation>© Author 2024</translation>
-    </message>
-    <message>
-        <location filename="../src/ui/exif_panel.py" line="437" />
-        <source>Copyright :</source>
-        <translation>Copyright:</translation>
-    </message>
-    <message>
         <location filename="../src/ui/exif_panel.py" line="442" />
-        <source>Mettre à jour aussi la date du fichier (mtime + date de création)</source>
-        <translation>Also update the file date (mtime + creation date)</translation>
+        <source>Edit the EXIF metadata</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/exif_panel.py" line="448" />
-        <source>Enregistrer</source>
-        <translation>Save</translation>
+        <location filename="../src/ui/exif_panel.py" line="447" />
+        <source>⚠  These changes are written straight into the image file.</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/exif_panel.py" line="449" />
-        <source>Annuler</source>
-        <translation>Cancel</translation>
+        <location filename="../src/ui/exif_panel.py" line="459" />
+        <source>Date taken:</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/ui/exif_panel.py" line="462" />
+        <source>Description of the picture</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/ui/exif_panel.py" line="464" />
+        <source>Description:</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/ui/exif_panel.py" line="467" />
+        <source>Photographer / author</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/ui/exif_panel.py" line="468" />
+        <source>Artist:</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/ui/exif_panel.py" line="471" />
+        <source>© Author 2024</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/ui/exif_panel.py" line="472" />
+        <source>Copyright:</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/ui/exif_panel.py" line="477" />
+        <source>Also update the file date (mtime + creation date)</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/ui/exif_panel.py" line="483" />
+        <source>Save</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/exif_panel.py" line="484" />
-        <source>Erreur</source>
-        <translation>Error</translation>
+        <source>Cancel</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/exif_panel.py" line="485" />
-        <source>Impossible d'écrire les métadonnées :
+        <location filename="../src/ui/exif_panel.py" line="519" />
+        <source>Error</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/ui/exif_panel.py" line="520" />
+        <source>Cannot write the metadata:
 {error}</source>
-        <translation>Cannot write the metadata:
-{error}</translation>
+        <translation type="unfinished" />
     </message>
 </context>
 <context>
     <name>ExifPanel</name>
     <message>
         <location filename="../src/ui/exif_panel.py" line="25" />
-        <source>Appareil photo</source>
-        <translation>Camera</translation>
+        <source>Camera</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/exif_panel.py" line="26" />
-        <source>Fabricant</source>
-        <translation>Make</translation>
+        <source>Make</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/exif_panel.py" line="27" />
-        <source>Modèle</source>
-        <translation>Model</translation>
+        <source>Model</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/exif_panel.py" line="28" />
-        <source>N° de série</source>
-        <translation>Serial number</translation>
+        <source>Serial number</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/exif_panel.py" line="29" />
-        <source>Fabricant objectif</source>
-        <translation>Lens make</translation>
+        <source>Lens make</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/exif_panel.py" line="30" />
-        <source>Objectif</source>
-        <translation>Lens</translation>
+        <source>Lens</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/exif_panel.py" line="31" />
-        <source>Spéc. objectif</source>
-        <translation>Lens spec.</translation>
+        <source>Lens spec.</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/exif_panel.py" line="32" />
-        <source>N° série objectif</source>
-        <translation>Lens serial no.</translation>
+        <source>Lens serial no.</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/exif_panel.py" line="33" />
-        <source>Logiciel</source>
-        <translation>Software</translation>
+        <source>Software</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/exif_panel.py" line="35" />
-        <source>Prise de vue</source>
-        <translation>Capture</translation>
+        <source>Capture</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/exif_panel.py" line="36" />
         <source>Date</source>
-        <translation>Date</translation>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/exif_panel.py" line="37" />
-        <source>Exposition</source>
-        <translation>Exposure</translation>
+        <source>Exposure</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/exif_panel.py" line="38" />
-        <source>Ouverture</source>
-        <translation>Aperture</translation>
+        <source>Aperture</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/exif_panel.py" line="39" />
-        <source>Ouverture max</source>
-        <translation>Max aperture</translation>
+        <source>Max aperture</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/exif_panel.py" line="40" />
         <source>ISO</source>
-        <translation>ISO</translation>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/exif_panel.py" line="41" />
-        <source>Type ISO</source>
-        <translation>ISO type</translation>
+        <source>ISO type</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/exif_panel.py" line="42" />
-        <source>Indice expo. recommandé</source>
-        <translation>Recommended exposure index</translation>
+        <source>Recommended exposure index</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/exif_panel.py" line="43" />
-        <source>Focale</source>
-        <translation>Focal length</translation>
+        <source>Focal length</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/exif_panel.py" line="44" />
-        <source>Focale éq. 35 mm</source>
-        <translation>Focal length (35 mm eq.)</translation>
+        <source>Focal length (35 mm eq.)</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/exif_panel.py" line="45" />
-        <source>Zoom numérique</source>
-        <translation>Digital zoom</translation>
+        <source>Digital zoom</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/exif_panel.py" line="46" />
-        <source>Programme</source>
-        <translation>Program</translation>
+        <source>Program</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/exif_panel.py" line="47" />
-        <source>Mesure</source>
-        <translation>Metering</translation>
+        <source>Metering</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/exif_panel.py" line="48" />
-        <source>Mode expo.</source>
-        <translation>Exposure mode</translation>
+        <source>Exposure mode</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/exif_panel.py" line="49" />
-        <source>Correction expo.</source>
-        <translation>Exposure compensation</translation>
+        <source>Exposure compensation</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/exif_panel.py" line="50" />
-        <source>Valeur de luminosité</source>
-        <translation>Brightness value</translation>
+        <source>Brightness value</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/exif_panel.py" line="51" />
-        <source>Balance des blancs</source>
-        <translation>White balance</translation>
+        <source>White balance</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/exif_panel.py" line="52" />
-        <source>Source lumière</source>
-        <translation>Light source</translation>
+        <source>Light source</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/exif_panel.py" line="53" />
-        <location filename="../src/ui/exif_panel.py" line="126" />
+        <location filename="../src/ui/exif_panel.py" line="133" />
         <source>Flash</source>
-        <translation>Flash</translation>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/exif_panel.py" line="54" />
-        <source>Type de scène</source>
-        <translation>Scene type</translation>
+        <source>Scene type</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/exif_panel.py" line="55" />
-        <source>Type scène brut</source>
-        <translation>Scene capture type</translation>
+        <source>Scene capture type</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/exif_panel.py" line="56" />
-        <source>Distance sujet (m)</source>
-        <translation>Subject distance (m)</translation>
+        <source>Subject distance (m)</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/exif_panel.py" line="57" />
-        <source>Gamme distance sujet</source>
-        <translation>Subject distance range</translation>
+        <source>Subject distance range</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/exif_panel.py" line="58" />
-        <source>Contrôle gain</source>
-        <translation>Gain control</translation>
+        <source>Gain control</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/exif_panel.py" line="59" />
-        <source>Contraste</source>
-        <translation>Contrast</translation>
+        <source>Contrast</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/exif_panel.py" line="60" />
         <source>Saturation</source>
-        <translation>Saturation</translation>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/exif_panel.py" line="61" />
-        <source>Netteté</source>
-        <translation>Sharpness</translation>
+        <source>Sharpness</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/exif_panel.py" line="62" />
-        <source>Rendu personnalisé</source>
-        <translation>Custom rendered</translation>
+        <source>Custom rendered</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/exif_panel.py" line="64" />
         <source>Image</source>
-        <translation>Image</translation>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/exif_panel.py" line="65" />
-        <source>Largeur (px)</source>
-        <translation>Width (px)</translation>
+        <source>Width (px)</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/exif_panel.py" line="66" />
-        <source>Hauteur (px)</source>
-        <translation>Height (px)</translation>
+        <source>Height (px)</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/exif_panel.py" line="67" />
-        <source>Espace colorimétrique</source>
-        <translation>Colour space</translation>
+        <source>Colour space</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/exif_panel.py" line="68" />
         <source>Orientation</source>
-        <translation>Orientation</translation>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/exif_panel.py" line="69" />
-        <source>Unité résolution</source>
-        <translation>Resolution unit</translation>
+        <source>Resolution unit</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/exif_panel.py" line="70" />
-        <source>Résolution X</source>
-        <translation>X resolution</translation>
+        <source>X resolution</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/exif_panel.py" line="71" />
-        <source>Résolution Y</source>
-        <translation>Y resolution</translation>
+        <source>Y resolution</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/exif_panel.py" line="72" />
         <source>Compression</source>
-        <translation>Compression</translation>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/exif_panel.py" line="73" />
-        <source>Bits par canal</source>
-        <translation>Bits per channel</translation>
+        <source>Bits per channel</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/exif_panel.py" line="74" />
-        <source>Canaux</source>
-        <translation>Channels</translation>
+        <source>Channels</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/exif_panel.py" line="76" />
-        <source>Auteur / Droits</source>
-        <translation>Author / rights</translation>
+        <source>Author / rights</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/exif_panel.py" line="77" />
-        <source>Artiste</source>
-        <translation>Artist</translation>
+        <source>Artist</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/exif_panel.py" line="78" />
         <source>Copyright</source>
-        <translation>Copyright</translation>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/exif_panel.py" line="79" />
         <source>Description</source>
-        <translation>Description</translation>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/exif_panel.py" line="80" />
-        <source>Titre (Windows)</source>
-        <translation>Title (Windows)</translation>
+        <source>Title (Windows)</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/exif_panel.py" line="81" />
-        <source>Commentaire (Windows)</source>
-        <translation>Comment (Windows)</translation>
+        <source>Comment (Windows)</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/exif_panel.py" line="82" />
-        <source>Auteur (Windows)</source>
-        <translation>Author (Windows)</translation>
+        <source>Author (Windows)</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/exif_panel.py" line="83" />
-        <source>Mots-clés (Windows)</source>
-        <translation>Keywords (Windows)</translation>
+        <source>Keywords (Windows)</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/exif_panel.py" line="84" />
-        <source>Sujet (Windows)</source>
-        <translation>Subject (Windows)</translation>
+        <source>Subject (Windows)</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/exif_panel.py" line="106" />
-        <source>Non défini</source>
-        <translation>Not defined</translation>
+        <source>Not defined</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/exif_panel.py" line="106" />
-        <location filename="../src/ui/exif_panel.py" line="114" />
-        <location filename="../src/ui/exif_panel.py" line="115" />
-        <source>Manuel</source>
-        <translation>Manual</translation>
+        <location filename="../src/ui/exif_panel.py" line="118" />
+        <location filename="../src/ui/exif_panel.py" line="119" />
+        <source>Manual</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/exif_panel.py" line="106" />
-        <source>Programme auto</source>
-        <translation>Program AE</translation>
-    </message>
-    <message>
-        <location filename="../src/ui/exif_panel.py" line="107" />
-        <source>Priorité ouverture</source>
-        <translation>Aperture priority</translation>
-    </message>
-    <message>
-        <location filename="../src/ui/exif_panel.py" line="107" />
-        <source>Priorité vitesse</source>
-        <translation>Shutter priority</translation>
+        <source>Program AE</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/exif_panel.py" line="108" />
-        <source>Créatif (profondeur)</source>
-        <translation>Creative (depth of field)</translation>
+        <source>Aperture priority</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/exif_panel.py" line="108" />
-        <source>Action (vitesse)</source>
-        <translation>Action (fast shutter)</translation>
+        <source>Shutter priority</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/exif_panel.py" line="108" />
-        <location filename="../src/ui/exif_panel.py" line="123" />
+        <location filename="../src/ui/exif_panel.py" line="110" />
+        <source>Creative (depth of field)</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/ui/exif_panel.py" line="110" />
+        <source>Action (fast shutter)</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/ui/exif_panel.py" line="111" />
+        <location filename="../src/ui/exif_panel.py" line="129" />
         <source>Portrait</source>
-        <translation>Portrait</translation>
-    </message>
-    <message>
-        <location filename="../src/ui/exif_panel.py" line="108" />
-        <location filename="../src/ui/exif_panel.py" line="123" />
-        <source>Paysage</source>
-        <translation>Landscape</translation>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/exif_panel.py" line="111" />
-        <location filename="../src/ui/exif_panel.py" line="125" />
-        <location filename="../src/ui/exif_panel.py" line="139" />
-        <location filename="../src/ui/exif_panel.py" line="142" />
-        <source>Inconnu</source>
-        <translation>Unknown</translation>
-    </message>
-    <message>
-        <location filename="../src/ui/exif_panel.py" line="111" />
-        <source>Moyenne</source>
-        <translation>Average</translation>
-    </message>
-    <message>
-        <location filename="../src/ui/exif_panel.py" line="111" />
-        <source>Centrale pondérée</source>
-        <translation>Centre-weighted average</translation>
-    </message>
-    <message>
-        <location filename="../src/ui/exif_panel.py" line="112" />
-        <source>Point</source>
-        <translation>Spot</translation>
-    </message>
-    <message>
-        <location filename="../src/ui/exif_panel.py" line="112" />
-        <source>Multi-point</source>
-        <translation>Multi-spot</translation>
-    </message>
-    <message>
-        <location filename="../src/ui/exif_panel.py" line="112" />
-        <source>Évaluative</source>
-        <translation>Pattern</translation>
-    </message>
-    <message>
-        <location filename="../src/ui/exif_panel.py" line="112" />
-        <source>Partielle</source>
-        <translation>Partial</translation>
+        <location filename="../src/ui/exif_panel.py" line="129" />
+        <source>Landscape</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/exif_panel.py" line="114" />
-        <location filename="../src/ui/exif_panel.py" line="115" />
+        <location filename="../src/ui/exif_panel.py" line="132" />
+        <location filename="../src/ui/exif_panel.py" line="156" />
+        <location filename="../src/ui/exif_panel.py" line="161" />
+        <source>Unknown</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/ui/exif_panel.py" line="114" />
+        <source>Average</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/ui/exif_panel.py" line="114" />
+        <source>Centre-weighted average</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/ui/exif_panel.py" line="116" />
+        <source>Spot</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/ui/exif_panel.py" line="116" />
+        <source>Multi-spot</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/ui/exif_panel.py" line="116" />
+        <source>Pattern</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/ui/exif_panel.py" line="116" />
+        <source>Partial</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/ui/exif_panel.py" line="118" />
+        <location filename="../src/ui/exif_panel.py" line="119" />
         <source>Auto</source>
-        <translation>Auto</translation>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/exif_panel.py" line="115" />
-        <source>Bracketing</source>
-        <translation>Auto bracket</translation>
+        <location filename="../src/ui/exif_panel.py" line="119" />
+        <source>Auto bracket</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/exif_panel.py" line="116" />
+        <location filename="../src/ui/exif_panel.py" line="121" />
         <source>sRGB</source>
-        <translation>sRGB</translation>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/exif_panel.py" line="116" />
+        <location filename="../src/ui/exif_panel.py" line="121" />
         <source>Adobe RGB</source>
-        <translation>Adobe RGB</translation>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/exif_panel.py" line="116" />
-        <source>Non calibré</source>
-        <translation>Uncalibrated</translation>
+        <location filename="../src/ui/exif_panel.py" line="121" />
+        <source>Uncalibrated</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/exif_panel.py" line="118" />
-        <location filename="../src/ui/exif_panel.py" line="137" />
+        <location filename="../src/ui/exif_panel.py" line="123" />
+        <location filename="../src/ui/exif_panel.py" line="154" />
         <source>Normal</source>
-        <translation>Normal</translation>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/exif_panel.py" line="118" />
-        <source>Miroir H</source>
-        <translation>Mirror H</translation>
+        <location filename="../src/ui/exif_panel.py" line="123" />
+        <source>Mirror H</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/exif_panel.py" line="118" />
+        <location filename="../src/ui/exif_panel.py" line="123" />
         <source>180°</source>
-        <translation>180°</translation>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/exif_panel.py" line="118" />
-        <source>Miroir V</source>
-        <translation>Mirror V</translation>
+        <location filename="../src/ui/exif_panel.py" line="123" />
+        <source>Mirror V</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/exif_panel.py" line="119" />
-        <source>Miroir H + 270°</source>
-        <translation>Mirror H + 270°</translation>
+        <location filename="../src/ui/exif_panel.py" line="125" />
+        <source>Mirror H + 270°</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/exif_panel.py" line="119" />
-        <source>90° horaire</source>
-        <translation>90° clockwise</translation>
+        <location filename="../src/ui/exif_panel.py" line="125" />
+        <source>90° clockwise</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/exif_panel.py" line="120" />
-        <source>Miroir H + 90°</source>
-        <translation>Mirror H + 90°</translation>
+        <location filename="../src/ui/exif_panel.py" line="126" />
+        <source>Mirror H + 90°</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/exif_panel.py" line="120" />
-        <source>270° horaire</source>
-        <translation>270° clockwise</translation>
+        <location filename="../src/ui/exif_panel.py" line="126" />
+        <source>270° clockwise</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/exif_panel.py" line="122" />
-        <source>Sans unité</source>
-        <translation>No unit</translation>
+        <location filename="../src/ui/exif_panel.py" line="128" />
+        <source>No unit</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/exif_panel.py" line="122" />
+        <location filename="../src/ui/exif_panel.py" line="128" />
         <source>dpi</source>
-        <translation>dpi</translation>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/exif_panel.py" line="122" />
-        <source>dpc</source>
-        <translation>dpcm</translation>
+        <location filename="../src/ui/exif_panel.py" line="128" />
+        <source>dpcm</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/exif_panel.py" line="123" />
+        <location filename="../src/ui/exif_panel.py" line="129" />
         <source>Standard</source>
-        <translation>Standard</translation>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/exif_panel.py" line="123" />
-        <source>Nuit</source>
-        <translation>Night scene</translation>
+        <location filename="../src/ui/exif_panel.py" line="129" />
+        <source>Night scene</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/exif_panel.py" line="125" />
-        <source>Lumière du jour</source>
-        <translation>Daylight</translation>
+        <location filename="../src/ui/exif_panel.py" line="132" />
+        <source>Daylight</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/exif_panel.py" line="125" />
+        <location filename="../src/ui/exif_panel.py" line="132" />
         <source>Fluorescent</source>
-        <translation>Fluorescent</translation>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/exif_panel.py" line="126" />
-        <source>Tungstène (ampoule)</source>
-        <translation>Tungsten (incandescent)</translation>
+        <location filename="../src/ui/exif_panel.py" line="133" />
+        <source>Tungsten (incandescent)</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/exif_panel.py" line="126" />
-        <source>Beau temps</source>
-        <translation>Fine weather</translation>
+        <location filename="../src/ui/exif_panel.py" line="133" />
+        <source>Fine weather</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/exif_panel.py" line="127" />
-        <source>Nuageux</source>
-        <translation>Cloudy</translation>
+        <location filename="../src/ui/exif_panel.py" line="135" />
+        <source>Cloudy</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/exif_panel.py" line="127" />
-        <source>Ombre</source>
-        <translation>Shade</translation>
+        <location filename="../src/ui/exif_panel.py" line="135" />
+        <source>Shade</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/exif_panel.py" line="127" />
-        <source>Fluorescent lumière du jour (D)</source>
-        <translation>Daylight fluorescent (D)</translation>
+        <location filename="../src/ui/exif_panel.py" line="135" />
+        <source>Daylight fluorescent (D)</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/exif_panel.py" line="128" />
-        <source>Fluorescent blanc (N)</source>
-        <translation>Day white fluorescent (N)</translation>
+        <location filename="../src/ui/exif_panel.py" line="138" />
+        <source>Day white fluorescent (N)</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/exif_panel.py" line="128" />
-        <source>Fluorescent blanc chaud (W)</source>
-        <translation>Warm white fluorescent (W)</translation>
+        <location filename="../src/ui/exif_panel.py" line="138" />
+        <source>Warm white fluorescent (W)</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/exif_panel.py" line="129" />
-        <source>Fluorescent blanc froid</source>
-        <translation>Cool white fluorescent</translation>
+        <location filename="../src/ui/exif_panel.py" line="142" />
+        <source>Cool white fluorescent</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/exif_panel.py" line="129" />
-        <source>Lampe standard A</source>
-        <translation>Standard light A</translation>
+        <location filename="../src/ui/exif_panel.py" line="142" />
+        <source>Standard light A</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/exif_panel.py" line="130" />
-        <source>Lampe standard B</source>
-        <translation>Standard light B</translation>
+        <location filename="../src/ui/exif_panel.py" line="144" />
+        <source>Standard light B</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/exif_panel.py" line="130" />
-        <source>Lampe standard C</source>
-        <translation>Standard light C</translation>
+        <location filename="../src/ui/exif_panel.py" line="144" />
+        <source>Standard light C</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/exif_panel.py" line="131" />
+        <location filename="../src/ui/exif_panel.py" line="146" />
         <source>D55</source>
-        <translation>D55</translation>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/exif_panel.py" line="131" />
+        <location filename="../src/ui/exif_panel.py" line="146" />
         <source>D65</source>
-        <translation>D65</translation>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/exif_panel.py" line="131" />
+        <location filename="../src/ui/exif_panel.py" line="146" />
         <source>D75</source>
-        <translation>D75</translation>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/exif_panel.py" line="131" />
-        <source>Autre</source>
-        <translation>Other</translation>
-    </message>
-    <message>
-        <location filename="../src/ui/exif_panel.py" line="134" />
-        <source>Aucun</source>
-        <translation>None</translation>
-    </message>
-    <message>
-        <location filename="../src/ui/exif_panel.py" line="134" />
-        <source>Faible gain +</source>
-        <translation>Low gain up</translation>
-    </message>
-    <message>
-        <location filename="../src/ui/exif_panel.py" line="134" />
-        <source>Fort gain +</source>
-        <translation>High gain up</translation>
-    </message>
-    <message>
-        <location filename="../src/ui/exif_panel.py" line="135" />
-        <source>Faible gain -</source>
-        <translation>Low gain down</translation>
-    </message>
-    <message>
-        <location filename="../src/ui/exif_panel.py" line="135" />
-        <source>Fort gain -</source>
-        <translation>High gain down</translation>
-    </message>
-    <message>
-        <location filename="../src/ui/exif_panel.py" line="137" />
-        <source>Doux</source>
-        <translation>Soft</translation>
-    </message>
-    <message>
-        <location filename="../src/ui/exif_panel.py" line="137" />
-        <source>Fort</source>
-        <translation>Hard</translation>
-    </message>
-    <message>
-        <location filename="../src/ui/exif_panel.py" line="139" />
-        <source>Macro</source>
-        <translation>Macro</translation>
-    </message>
-    <message>
-        <location filename="../src/ui/exif_panel.py" line="139" />
-        <source>Vue proche</source>
-        <translation>Close view</translation>
-    </message>
-    <message>
-        <location filename="../src/ui/exif_panel.py" line="139" />
-        <source>Vue distante</source>
-        <translation>Distant view</translation>
-    </message>
-    <message>
-        <location filename="../src/ui/exif_panel.py" line="142" />
-        <source>SOS</source>
-        <translation>SOS</translation>
-    </message>
-    <message>
-        <location filename="../src/ui/exif_panel.py" line="142" />
-        <source>REI</source>
-        <translation>REI</translation>
-    </message>
-    <message>
-        <location filename="../src/ui/exif_panel.py" line="142" />
-        <source>Sensibilité ISO standard</source>
-        <translation>Standard output sensitivity</translation>
-    </message>
-    <message>
-        <location filename="../src/ui/exif_panel.py" line="143" />
-        <source>SOS + REI</source>
-        <translation>SOS + REI</translation>
-    </message>
-    <message>
-        <location filename="../src/ui/exif_panel.py" line="143" />
-        <source>SOS + ISO</source>
-        <translation>SOS + ISO</translation>
-    </message>
-    <message>
-        <location filename="../src/ui/exif_panel.py" line="143" />
-        <source>REI + ISO</source>
-        <translation>REI + ISO</translation>
-    </message>
-    <message>
-        <location filename="../src/ui/exif_panel.py" line="143" />
-        <source>SOS + REI + ISO</source>
-        <translation>SOS + REI + ISO</translation>
-    </message>
-    <message>
-        <location filename="../src/ui/exif_panel.py" line="145" />
-        <source>Processus normal</source>
-        <translation>Normal process</translation>
-    </message>
-    <message>
-        <location filename="../src/ui/exif_panel.py" line="145" />
-        <source>Processus personnalisé</source>
-        <translation>Custom process</translation>
-    </message>
-    <message>
-        <location filename="../src/ui/exif_panel.py" line="147" />
-        <source>Non déclenché</source>
-        <translation>Did not fire</translation>
-    </message>
-    <message>
-        <location filename="../src/ui/exif_panel.py" line="148" />
-        <source>Déclenché</source>
-        <translation>Fired</translation>
+        <location filename="../src/ui/exif_panel.py" line="146" />
+        <source>Other</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/exif_panel.py" line="149" />
-        <source>Déclenché, retour non détecté</source>
-        <translation>Fired, return not detected</translation>
+        <source>None</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/exif_panel.py" line="150" />
-        <source>Déclenché, retour détecté</source>
-        <translation>Fired, return detected</translation>
+        <location filename="../src/ui/exif_panel.py" line="149" />
+        <source>Low gain up</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/exif_panel.py" line="151" />
-        <source>On, non déclenché</source>
-        <translation>On, did not fire</translation>
+        <location filename="../src/ui/exif_panel.py" line="149" />
+        <source>High gain up</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/exif_panel.py" line="152" />
-        <source>On, déclenché</source>
-        <translation>On, fired</translation>
+        <source>Low gain down</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/exif_panel.py" line="153" />
-        <source>On, retour non détecté</source>
-        <translation>On, return not detected</translation>
+        <location filename="../src/ui/exif_panel.py" line="152" />
+        <source>High gain down</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/exif_panel.py" line="154" />
-        <source>On, retour détecté</source>
-        <translation>On, return detected</translation>
+        <source>Soft</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/exif_panel.py" line="155" />
-        <source>Off, non déclenché</source>
-        <translation>Off, did not fire</translation>
+        <location filename="../src/ui/exif_panel.py" line="154" />
+        <source>Hard</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/exif_panel.py" line="156" />
-        <location filename="../src/ui/exif_panel.py" line="158" />
-        <source>Off, retour non détecté</source>
-        <translation>Off, return not detected</translation>
+        <source>Macro</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/ui/exif_panel.py" line="156" />
+        <source>Close view</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/exif_panel.py" line="157" />
-        <source>Off, déclenché</source>
-        <translation>Off, fired</translation>
-    </message>
-    <message>
-        <location filename="../src/ui/exif_panel.py" line="159" />
-        <source>Off, retour détecté</source>
-        <translation>Off, return detected</translation>
-    </message>
-    <message>
-        <location filename="../src/ui/exif_panel.py" line="160" />
-        <source>Auto, non déclenché</source>
-        <translation>Auto, did not fire</translation>
+        <source>Distant view</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/exif_panel.py" line="161" />
-        <source>Auto, non déclenché, réduction yeux rouges</source>
-        <translation>Auto, did not fire, red-eye reduction</translation>
+        <source>SOS</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/exif_panel.py" line="162" />
-        <source>Auto, déclenché</source>
-        <translation>Auto, fired</translation>
+        <location filename="../src/ui/exif_panel.py" line="161" />
+        <source>REI</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/exif_panel.py" line="163" />
-        <source>Auto, retour détecté</source>
-        <translation>Auto, return detected</translation>
+        <location filename="../src/ui/exif_panel.py" line="161" />
+        <source>Standard output sensitivity</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/exif_panel.py" line="164" />
-        <location filename="../src/ui/exif_panel.py" line="173" />
-        <source>Auto, déclenché, yeux rouges</source>
-        <translation>Auto, fired, red-eye reduction</translation>
+        <source>SOS + REI</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/exif_panel.py" line="165" />
-        <location filename="../src/ui/exif_panel.py" line="175" />
-        <source>Auto, retour détecté, yeux rouges</source>
-        <translation>Auto, return detected, red-eye reduction</translation>
+        <location filename="../src/ui/exif_panel.py" line="164" />
+        <source>SOS + ISO</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/ui/exif_panel.py" line="164" />
+        <source>REI + ISO</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/exif_panel.py" line="166" />
-        <source>Flash absent</source>
-        <translation>No flash function</translation>
-    </message>
-    <message>
-        <location filename="../src/ui/exif_panel.py" line="167" />
-        <source>Déclenché, yeux rouges</source>
-        <translation>Fired, red-eye reduction</translation>
-    </message>
-    <message>
-        <location filename="../src/ui/exif_panel.py" line="168" />
-        <source>Déclenché, retour non détecté, yeux rouges</source>
-        <translation>Fired, return not detected, red-eye reduction</translation>
-    </message>
-    <message>
-        <location filename="../src/ui/exif_panel.py" line="169" />
-        <source>Déclenché, retour détecté, yeux rouges</source>
-        <translation>Fired, return detected, red-eye reduction</translation>
-    </message>
-    <message>
-        <location filename="../src/ui/exif_panel.py" line="170" />
-        <source>On, déclenché, yeux rouges</source>
-        <translation>On, fired, red-eye reduction</translation>
-    </message>
-    <message>
-        <location filename="../src/ui/exif_panel.py" line="171" />
-        <source>On, retour non détecté, yeux rouges</source>
-        <translation>On, return not detected, red-eye reduction</translation>
+        <source>SOS + REI + ISO</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/exif_panel.py" line="172" />
-        <source>On, retour détecté, yeux rouges</source>
-        <translation>On, return detected, red-eye reduction</translation>
+        <source>Normal process</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/exif_panel.py" line="174" />
-        <source>Auto, retour non détecté, yeux rouges</source>
-        <translation>Auto, return not detected, red-eye reduction</translation>
+        <location filename="../src/ui/exif_panel.py" line="172" />
+        <source>Custom process</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/ui/exif_panel.py" line="175" />
+        <source>Did not fire</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/ui/exif_panel.py" line="176" />
+        <source>Fired</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/ui/exif_panel.py" line="177" />
+        <source>Fired, return not detected</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/exif_panel.py" line="178" />
-        <source>Non compressé</source>
-        <translation>Uncompressed</translation>
+        <source>Fired, return detected</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/exif_panel.py" line="178" />
+        <location filename="../src/ui/exif_panel.py" line="179" />
+        <source>On, did not fire</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/ui/exif_panel.py" line="180" />
+        <source>On, fired</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/ui/exif_panel.py" line="181" />
+        <source>On, return not detected</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/ui/exif_panel.py" line="182" />
+        <source>On, return detected</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/ui/exif_panel.py" line="183" />
+        <source>Off, did not fire</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/ui/exif_panel.py" line="184" />
+        <location filename="../src/ui/exif_panel.py" line="186" />
+        <source>Off, return not detected</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/ui/exif_panel.py" line="185" />
+        <source>Off, fired</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/ui/exif_panel.py" line="187" />
+        <source>Off, return detected</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/ui/exif_panel.py" line="188" />
+        <source>Auto, did not fire</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/ui/exif_panel.py" line="189" />
+        <source>Auto, did not fire, red-eye reduction</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/ui/exif_panel.py" line="190" />
+        <source>Auto, fired</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/ui/exif_panel.py" line="191" />
+        <source>Auto, return detected</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/ui/exif_panel.py" line="192" />
+        <location filename="../src/ui/exif_panel.py" line="201" />
+        <source>Auto, fired, red-eye reduction</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/ui/exif_panel.py" line="193" />
+        <location filename="../src/ui/exif_panel.py" line="203" />
+        <source>Auto, return detected, red-eye reduction</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/ui/exif_panel.py" line="194" />
+        <source>No flash function</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/ui/exif_panel.py" line="195" />
+        <source>Fired, red-eye reduction</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/ui/exif_panel.py" line="196" />
+        <source>Fired, return not detected, red-eye reduction</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/ui/exif_panel.py" line="197" />
+        <source>Fired, return detected, red-eye reduction</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/ui/exif_panel.py" line="198" />
+        <source>On, fired, red-eye reduction</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/ui/exif_panel.py" line="199" />
+        <source>On, return not detected, red-eye reduction</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/ui/exif_panel.py" line="200" />
+        <source>On, return detected, red-eye reduction</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/ui/exif_panel.py" line="202" />
+        <source>Auto, return not detected, red-eye reduction</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/ui/exif_panel.py" line="206" />
+        <source>Uncompressed</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/ui/exif_panel.py" line="206" />
         <source>CCITT 1D</source>
-        <translation>CCITT 1D</translation>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/exif_panel.py" line="178" />
-        <source>CCITT Groupe 3</source>
-        <translation>CCITT Group 3</translation>
+        <location filename="../src/ui/exif_panel.py" line="206" />
+        <source>CCITT Group 3</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/exif_panel.py" line="178" />
-        <source>CCITT Groupe 4</source>
-        <translation>CCITT Group 4</translation>
+        <location filename="../src/ui/exif_panel.py" line="208" />
+        <source>CCITT Group 4</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/exif_panel.py" line="179" />
+        <location filename="../src/ui/exif_panel.py" line="211" />
         <source>LZW</source>
-        <translation>LZW</translation>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/exif_panel.py" line="179" />
+        <location filename="../src/ui/exif_panel.py" line="211" />
         <source>JPEG (old)</source>
-        <translation>JPEG (old)</translation>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/exif_panel.py" line="179" />
+        <location filename="../src/ui/exif_panel.py" line="211" />
         <source>JPEG</source>
-        <translation>JPEG</translation>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/exif_panel.py" line="179" />
+        <location filename="../src/ui/exif_panel.py" line="211" />
         <source>Deflate/ZIP</source>
-        <translation>Deflate/ZIP</translation>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/exif_panel.py" line="180" />
+        <location filename="../src/ui/exif_panel.py" line="212" />
         <source>PackBits (Mac)</source>
-        <translation>PackBits (Mac)</translation>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/exif_panel.py" line="180" />
-        <source>Nikon NEF compressé</source>
-        <translation>Nikon NEF compressed</translation>
+        <location filename="../src/ui/exif_panel.py" line="212" />
+        <source>Nikon NEF compressed</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/exif_panel.py" line="258" />
-        <source>Pas de zoom</source>
-        <translation>No zoom</translation>
+        <location filename="../src/ui/exif_panel.py" line="284" />
+        <source>%m/%d/%Y  %H:%M:%S</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/exif_panel.py" line="262" />
-        <source>Infini</source>
-        <translation>Infinity</translation>
+        <location filename="../src/ui/exif_panel.py" line="291" />
+        <source>No zoom</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/exif_panel.py" line="305" />
-        <source>(données binaires)</source>
-        <translation>(binary data)</translation>
+        <location filename="../src/ui/exif_panel.py" line="295" />
+        <source>Infinity</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/exif_panel.py" line="313" />
-        <source>{n} o</source>
-        <translation>{n} B</translation>
+        <location filename="../src/ui/exif_panel.py" line="338" />
+        <source>(binary data)</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/exif_panel.py" line="315" />
-        <source>{n} Ko</source>
-        <translation>{n} kB</translation>
+        <location filename="../src/ui/exif_panel.py" line="346" />
+        <source>{n} B</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/exif_panel.py" line="317" />
-        <source>{n} Mo</source>
-        <translation>{n} MB</translation>
+        <location filename="../src/ui/exif_panel.py" line="348" />
+        <source>{n} kB</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/exif_panel.py" line="318" />
-        <source>{n} Go</source>
-        <translation>{n} GB</translation>
+        <location filename="../src/ui/exif_panel.py" line="350" />
+        <source>{n} MB</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/exif_panel.py" line="632" />
-        <source>  Métadonnées EXIF</source>
-        <translation>  EXIF metadata</translation>
+        <location filename="../src/ui/exif_panel.py" line="351" />
+        <source>{n} GB</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/exif_panel.py" line="664" />
-        <source>✎  Modifier les métadonnées…</source>
-        <translation>✎  Edit metadata…</translation>
+        <location filename="../src/ui/exif_panel.py" line="667" />
+        <source>  EXIF metadata</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/exif_panel.py" line="698" />
-        <source>Impossible de lire les métadonnées</source>
-        <translation>Could not read the metadata</translation>
+        <location filename="../src/ui/exif_panel.py" line="699" />
+        <source>✎  Edit metadata…</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/exif_panel.py" line="745" />
-        <location filename="../src/ui/exif_panel.py" line="786" />
-        <source>Fichier</source>
-        <translation>File</translation>
+        <location filename="../src/ui/exif_panel.py" line="733" />
+        <source>Could not read the metadata</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/exif_panel.py" line="746" />
-        <location filename="../src/ui/exif_panel.py" line="787" />
-        <source>Nom</source>
-        <translation>Name</translation>
-    </message>
-    <message>
-        <location filename="../src/ui/exif_panel.py" line="747" />
-        <location filename="../src/ui/exif_panel.py" line="789" />
-        <source>Format</source>
-        <translation>Format</translation>
-    </message>
-    <message>
-        <location filename="../src/ui/exif_panel.py" line="748" />
-        <source>Mode couleur</source>
-        <translation>Colour mode</translation>
-    </message>
-    <message>
-        <location filename="../src/ui/exif_panel.py" line="749" />
-        <source>Dimensions</source>
-        <translation>Dimensions</translation>
-    </message>
-    <message>
-        <location filename="../src/ui/exif_panel.py" line="751" />
-        <location filename="../src/ui/exif_panel.py" line="791" />
-        <source>Taille</source>
-        <translation>Size</translation>
-    </message>
-    <message>
-        <location filename="../src/ui/exif_panel.py" line="752" />
-        <location filename="../src/ui/exif_panel.py" line="792" />
-        <source>Modifié</source>
-        <translation>Modified</translation>
+        <location filename="../src/ui/exif_panel.py" line="780" />
+        <location filename="../src/ui/exif_panel.py" line="822" />
+        <source>File</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/exif_panel.py" line="781" />
-        <source>Autres</source>
-        <translation>Other</translation>
+        <location filename="../src/ui/exif_panel.py" line="823" />
+        <source>Name</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/exif_panel.py" line="796" />
-        <source>Vidéo</source>
-        <translation>Video</translation>
+        <location filename="../src/ui/exif_panel.py" line="782" />
+        <location filename="../src/ui/exif_panel.py" line="825" />
+        <source>Format</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/exif_panel.py" line="797" />
-        <source>Résolution</source>
-        <translation>Resolution</translation>
+        <location filename="../src/ui/exif_panel.py" line="783" />
+        <source>Colour mode</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/exif_panel.py" line="801" />
-        <source>Images/s</source>
-        <translation>Frames/s</translation>
+        <location filename="../src/ui/exif_panel.py" line="784" />
+        <source>Dimensions</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/exif_panel.py" line="806" />
-        <source>Durée</source>
-        <translation>Duration</translation>
+        <location filename="../src/ui/exif_panel.py" line="786" />
+        <location filename="../src/ui/exif_panel.py" line="827" />
+        <source>Size</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/exif_panel.py" line="810" />
-        <source>Codec</source>
-        <translation>Codec</translation>
-    </message>
-    <message>
+        <location filename="../src/ui/exif_panel.py" line="787" />
         <location filename="../src/ui/exif_panel.py" line="828" />
-        <source>Latitude</source>
-        <translation>Latitude</translation>
+        <source>Modified</source>
+        <translation type="unfinished" />
     </message>
     <message>
+        <location filename="../src/ui/exif_panel.py" line="789" />
         <location filename="../src/ui/exif_panel.py" line="830" />
-        <source>Longitude</source>
-        <translation>Longitude</translation>
+        <source>%m/%d/%Y  %H:%M</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/exif_panel.py" line="841" />
-        <source>Altitude</source>
-        <translation>Altitude</translation>
+        <location filename="../src/ui/exif_panel.py" line="817" />
+        <source>Miscellaneous</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/exif_panel.py" line="851" />
-        <source>km/h</source>
-        <translation>km/h</translation>
+        <location filename="../src/ui/exif_panel.py" line="833" />
+        <source>Video</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/exif_panel.py" line="852" />
-        <source>mph</source>
-        <translation>mph</translation>
+        <location filename="../src/ui/exif_panel.py" line="834" />
+        <source>Resolution</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/exif_panel.py" line="853" />
-        <source>nœuds</source>
-        <translation>knots</translation>
+        <location filename="../src/ui/exif_panel.py" line="838" />
+        <source>Frames/s</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/exif_panel.py" line="854" />
-        <source>Vitesse GPS</source>
-        <translation>GPS speed</translation>
+        <location filename="../src/ui/exif_panel.py" line="843" />
+        <source>Duration</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/exif_panel.py" line="864" />
-        <source>Direction (magnétique)</source>
-        <translation>Heading (magnetic)</translation>
+        <location filename="../src/ui/exif_panel.py" line="847" />
+        <source>Codec</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/exif_panel.py" line="865" />
-        <source>Direction (vraie)</source>
-        <translation>Heading (true)</translation>
+        <source>Latitude</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/exif_panel.py" line="876" />
-        <source>Date/heure GPS</source>
-        <translation>GPS date/time</translation>
+        <location filename="../src/ui/exif_panel.py" line="867" />
+        <source>Longitude</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/exif_panel.py" line="885" />
-        <source>Précision GPS</source>
-        <translation>GPS accuracy</translation>
+        <location filename="../src/ui/exif_panel.py" line="878" />
+        <source>Altitude</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/ui/exif_panel.py" line="888" />
+        <source>km/h</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/ui/exif_panel.py" line="889" />
+        <source>mph</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/ui/exif_panel.py" line="890" />
+        <source>knots</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/ui/exif_panel.py" line="891" />
+        <source>GPS speed</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/ui/exif_panel.py" line="901" />
+        <source>Heading (magnetic)</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/ui/exif_panel.py" line="902" />
+        <source>Heading (true)</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/ui/exif_panel.py" line="913" />
+        <source>GPS date/time</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/ui/exif_panel.py" line="922" />
+        <source>GPS accuracy</source>
+        <translation type="unfinished" />
     </message>
 </context>
 <context>
     <name>ExportDialog</name>
     <message>
         <location filename="../src/ui/export_dialogs.py" line="18" />
-        <source>Taille maximale — résolution originale</source>
-        <translation>Maximum size — original resolution</translation>
+        <source>Maximum size — original resolution</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/export_dialogs.py" line="20" />
-        <source>Grande  (~4 Mpx)</source>
-        <translation>Large  (~4 Mpx)</translation>
+        <source>Large  (~4 Mpx)</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/export_dialogs.py" line="21" />
-        <source>600–1 600 Ko</source>
-        <translation>600–1,600 KB</translation>
+        <source>600–1,600 KB</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/export_dialogs.py" line="22" />
-        <source>Moyenne (~2 Mpx)</source>
-        <translation>Medium (~2 Mpx)</translation>
+        <source>Medium (~2 Mpx)</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/export_dialogs.py" line="23" />
-        <source>320–800 Ko</source>
-        <translation>320–800 KB</translation>
+        <source>320–800 KB</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/export_dialogs.py" line="24" />
-        <source>Petite  (~500 kpx)</source>
-        <translation>Small  (~500 kpx)</translation>
+        <source>Small  (~500 kpx)</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/export_dialogs.py" line="25" />
-        <source>75–300 Ko</source>
-        <translation>75–300 KB</translation>
+        <source>75–300 KB</source>
+        <translation type="unfinished" />
     </message>
     <message numerus="yes">
         <location filename="../src/ui/export_dialogs.py" line="35" />
-        <source>Exporter %n photo(s)</source>
+        <source>Export %n photo(s)</source>
         <translation><numerusform>Export %n photo</numerusform><numerusform>Export %n photos</numerusform></translation></message>
     <message>
         <location filename="../src/ui/export_dialogs.py" line="45" />
-        <source>Dossier de destination</source>
-        <translation>Destination folder</translation>
+        <source>Destination folder</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/export_dialogs.py" line="49" />
-        <source>Parcourir…</source>
-        <translation>Browse…</translation>
+        <source>Browse…</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/export_dialogs.py" line="56" />
-        <source>Taille d'export</source>
-        <translation>Export size</translation>
+        <source>Export size</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/export_dialogs.py" line="90" />
-        <source>qualité {q}  •  ≈ {hint}</source>
-        <translation>quality {q}  •  ≈ {hint}</translation>
+        <source>quality {q}  •  ≈ {hint}</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/export_dialogs.py" line="102" />
-        <source>Exporter</source>
-        <translation>Export</translation>
+        <source>Export</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/export_dialogs.py" line="103" />
-        <source>Annuler</source>
-        <translation>Cancel</translation>
+        <source>Cancel</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/export_dialogs.py" line="110" />
-        <source>Choisir le dossier d'export</source>
-        <translation>Choose the export folder</translation>
+        <source>Choose the export folder</source>
+        <translation type="unfinished" />
     </message>
 </context>
 <context>
     <name>FaceBackupDialog</name>
     <message>
         <location filename="../src/ui/face_backup_dialog.py" line="34" />
-        <source>janv.</source>
-        <translation>Jan</translation>
+        <source>Jan</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/face_backup_dialog.py" line="34" />
-        <source>févr.</source>
-        <translation>Feb</translation>
+        <source>Feb</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/face_backup_dialog.py" line="35" />
-        <source>mars</source>
-        <translation>Mar</translation>
+        <source>Mar</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/face_backup_dialog.py" line="35" />
-        <source>avr.</source>
-        <translation>Apr</translation>
+        <source>Apr</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/face_backup_dialog.py" line="36" />
-        <source>mai</source>
-        <translation>May</translation>
+        <source>May</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/face_backup_dialog.py" line="36" />
-        <source>juin</source>
-        <translation>Jun</translation>
+        <source>Jun</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/face_backup_dialog.py" line="37" />
-        <source>juil.</source>
-        <translation>Jul</translation>
+        <source>Jul</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/face_backup_dialog.py" line="37" />
-        <source>août</source>
-        <translation>Aug</translation>
+        <source>Aug</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/face_backup_dialog.py" line="38" />
-        <source>sept.</source>
-        <translation>Sep</translation>
+        <source>Sep</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/face_backup_dialog.py" line="38" />
-        <source>oct.</source>
-        <translation>Oct</translation>
+        <source>Oct</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/face_backup_dialog.py" line="39" />
-        <source>nov.</source>
-        <translation>Nov</translation>
+        <source>Nov</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/face_backup_dialog.py" line="39" />
-        <source>déc.</source>
-        <translation>Dec</translation>
+        <source>Dec</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/face_backup_dialog.py" line="56" />
-        <source>{d} {month} {y} à {time}</source>
-        <translation>{month} {d}, {y} at {time}</translation>
+        <source>{month} {d}, {y} at {time}</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/face_backup_dialog.py" line="263" />
-        <source>Sauvegardes — Reconnaissance faciale</source>
-        <translation>Backups — Face recognition</translation>
+        <source>Backups — Face recognition</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/face_backup_dialog.py" line="278" />
-        <source>Chaque sauvegarde capture l'état complet de la reconnaissance : visages détectés, groupes, associations personnes.</source>
-        <translation>Each backup captures the complete state of the recognition: detected faces, groups, person assignments.</translation>
+        <source>Each backup captures the complete state of the recognition: detected faces, groups, person assignments.</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/face_backup_dialog.py" line="312" />
-        <source>＋  Créer une sauvegarde</source>
-        <translation>＋  Create a backup</translation>
+        <location filename="../src/ui/face_backup_dialog.py" line="313" />
+        <source>＋  Create a backup</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/face_backup_dialog.py" line="320" />
-        <source>Fermer</source>
-        <translation>Close</translation>
+        <location filename="../src/ui/face_backup_dialog.py" line="321" />
+        <source>Close</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/face_backup_dialog.py" line="348" />
-        <source>Aucune sauvegarde disponible.</source>
-        <translation>No backup available.</translation>
+        <location filename="../src/ui/face_backup_dialog.py" line="349" />
+        <source>No backup available.</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/face_backup_dialog.py" line="379" />
-        <source>Restaurer</source>
-        <translation>Restore</translation>
+        <location filename="../src/ui/face_backup_dialog.py" line="380" />
+        <source>Restore</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/face_backup_dialog.py" line="390" />
-        <source>Supprimer cette sauvegarde</source>
-        <translation>Delete this backup</translation>
+        <location filename="../src/ui/face_backup_dialog.py" line="391" />
+        <source>Delete this backup</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/face_backup_dialog.py" line="427" />
-        <source>Sauvegarde créée : {name}</source>
-        <translation>Backup created: {name}</translation>
-    </message>
-    <message>
-        <location filename="../src/ui/face_backup_dialog.py" line="434" />
-        <source>Restaurer la sauvegarde</source>
-        <translation>Restore the backup</translation>
+        <location filename="../src/ui/face_backup_dialog.py" line="428" />
+        <source>Backup created: {name}</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/face_backup_dialog.py" line="435" />
-        <source>Restaurer la reconnaissance faciale au point :
-
-  {date}
-
-L'état actuel sera remplacé. Cette action est irréversible
-(pensez à sauvegarder l'état actuel avant de continuer).</source>
-        <translation>Restore face recognition to this point:
+        <source>Restore the backup</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/ui/face_backup_dialog.py" line="436" />
+        <source>Restore face recognition to this point:
 
   {date}
 
 The current state will be replaced. This cannot be undone
-(you may want to back up the current state first).</translation>
+(you may want to back up the current state first).</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/face_backup_dialog.py" line="466" />
-        <source>Restauration réussie</source>
-        <translation>Restore successful</translation>
+        <source>Restore successful</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/face_backup_dialog.py" line="467" />
-        <source>La reconnaissance faciale a été restaurée.
-La liste des personnes et les associations sont à jour.</source>
-        <translation>Face recognition has been restored.
-The list of people and the assignments are up to date.</translation>
+        <source>Face recognition has been restored.
+The list of people and the assignments are up to date.</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/face_backup_dialog.py" line="475" />
-        <source>Supprimer la sauvegarde</source>
-        <translation>Delete the backup</translation>
+        <source>Delete the backup</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/face_backup_dialog.py" line="476" />
-        <source>Envoyer à la corbeille :
+        <source>Send to the recycle bin:
 
-  {name} ?</source>
-        <translation>Send to the recycle bin:
-
-  {name}?</translation>
+  {name}?</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/face_backup_dialog.py" line="488" />
         <location filename="../src/ui/face_backup_dialog.py" line="502" />
-        <source>Erreur</source>
-        <translation>Error</translation>
+        <source>Error</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/face_backup_dialog.py" line="489" />
-        <source>Impossible de supprimer :
+        <source>Cannot delete:
 {error}</source>
-        <translation>Cannot delete:
-{error}</translation>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/face_backup_dialog.py" line="503" />
-        <source>Opération échouée :
+        <source>The operation failed:
 
 {error}</source>
-        <translation>The operation failed:
-
-{error}</translation>
+        <translation type="unfinished" />
     </message>
 </context>
 <context>
@@ -2659,1376 +2804,1386 @@ The list of people and the assignments are up to date.</translation>
     <message>
         <location filename="../src/ui/face_cluster_grid.py" line="251" />
         <source>← Photos</source>
-        <translation>← Photos</translation>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/face_cluster_grid.py" line="252" />
-        <source>Retourner à la grille de photos</source>
-        <translation>Back to the photo grid</translation>
+        <source>Back to the photo grid</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/face_cluster_grid.py" line="271" />
-        <source>Initialisation…</source>
-        <translation>Initialising…</translation>
+        <source>Initialising…</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/face_cluster_grid.py" line="308" />
-        <source>Voir les photos</source>
-        <translation>View the photos</translation>
+        <source>View the photos</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/face_cluster_grid.py" line="313" />
-        <source>Associer à…</source>
-        <translation>Assign to…</translation>
+        <source>Assign to…</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/face_cluster_grid.py" line="318" />
-        <source>Ignorer</source>
-        <translation>Ignore</translation>
+        <source>Ignore</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/face_cluster_grid.py" line="325" />
-        <source>Désélectionner tout</source>
-        <translation>Deselect all</translation>
+        <source>Deselect all</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/face_cluster_grid.py" line="426" />
-        <source>Chargement…</source>
-        <translation>Loading…</translation>
+        <source>Loading…</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/face_cluster_grid.py" line="515" />
-        <location filename="../src/ui/face_cluster_grid.py" line="847" />
-        <location filename="../src/ui/face_cluster_grid.py" line="1269" />
-        <source>Charger {n} de plus  </source>
-        <translation>Load {n} more  </translation>
+        <location filename="../src/ui/face_cluster_grid.py" line="848" />
+        <location filename="../src/ui/face_cluster_grid.py" line="1270" />
+        <source>Load {n} more  </source>
+        <translation type="unfinished" />
     </message>
     <message numerus="yes">
         <location filename="../src/ui/face_cluster_grid.py" line="516" />
-        <location filename="../src/ui/face_cluster_grid.py" line="848" />
-        <location filename="../src/ui/face_cluster_grid.py" line="1270" />
-        <source>(%n restant(s))</source>
+        <location filename="../src/ui/face_cluster_grid.py" line="849" />
+        <location filename="../src/ui/face_cluster_grid.py" line="1271" />
+        <source>(%n left)</source>
         <translation><numerusform>(%n left)</numerusform><numerusform>(%n left)</numerusform></translation></message>
     <message>
         <location filename="../src/ui/face_cluster_grid.py" line="582" />
-        <source>Analyse annulée</source>
-        <translation>Analysis cancelled</translation>
+        <source>Analysis cancelled</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/face_cluster_grid.py" line="620" />
-        <source>Erreur lors du chargement</source>
-        <translation>Error while loading</translation>
+        <source>Error while loading</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/face_cluster_grid.py" line="694" />
-        <source>Aucun groupe à identifier</source>
-        <translation>No group to identify</translation>
+        <source>No group to identify</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/face_cluster_grid.py" line="695" />
-        <source>Tous les groupes ont été identifiés ou ignorés.</source>
-        <translation>Every group has been identified or ignored.</translation>
+        <source>Every group has been identified or ignored.</source>
+        <translation type="unfinished" />
     </message>
     <message numerus="yes">
-        <location filename="../src/ui/face_cluster_grid.py" line="704" />
-        <location filename="../src/ui/face_cluster_grid.py" line="759" />
-        <source>%n groupe(s)</source>
+        <location filename="../src/ui/face_cluster_grid.py" line="705" />
+        <location filename="../src/ui/face_cluster_grid.py" line="760" />
+        <source>%n group(s)</source>
         <translation><numerusform>%n group</numerusform><numerusform>%n groups</numerusform></translation></message>
     <message numerus="yes">
-        <location filename="../src/ui/face_cluster_grid.py" line="706" />
-        <source>%n visage(s) isolé(s)</source>
+        <location filename="../src/ui/face_cluster_grid.py" line="707" />
+        <source>%n isolated face(s)</source>
         <translation><numerusform>%n isolated face</numerusform><numerusform>%n isolated faces</numerusform></translation></message>
     <message>
-        <location filename="../src/ui/face_cluster_grid.py" line="708" />
-        <source> — analyse en cours…</source>
-        <translation> — analysis running…</translation>
+        <location filename="../src/ui/face_cluster_grid.py" line="709" />
+        <source> — analysis running…</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/face_cluster_grid.py" line="713" />
-        <source> — analyse interrompue, regroupement partiel</source>
-        <translation> — analysis interrupted, partial grouping</translation>
+        <location filename="../src/ui/face_cluster_grid.py" line="714" />
+        <source> — analysis interrupted, partial grouping</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/face_cluster_grid.py" line="749" />
-        <source>Personne #{id}</source>
-        <translation>Person #{id}</translation>
+        <location filename="../src/ui/face_cluster_grid.py" line="750" />
+        <source>Person #{id}</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/face_cluster_grid.py" line="756" />
-        <source>≈ Probablement {name} ({pct} %)</source>
-        <translation>≈ Probably {name} ({pct} %)</translation>
+        <location filename="../src/ui/face_cluster_grid.py" line="757" />
+        <source>≈ Probably {name} ({pct} %)</source>
+        <translation type="unfinished" />
     </message>
     <message numerus="yes">
-        <location filename="../src/ui/face_cluster_grid.py" line="761" />
-        <location filename="../src/ui/face_cluster_grid.py" line="964" />
-        <source>%n visage(s)</source>
+        <location filename="../src/ui/face_cluster_grid.py" line="762" />
+        <location filename="../src/ui/face_cluster_grid.py" line="965" />
+        <source>%n face(s)</source>
         <translation><numerusform>%n face</numerusform><numerusform>%n faces</numerusform></translation></message>
     <message>
-        <location filename="../src/ui/face_cluster_grid.py" line="782" />
-        <source>Visages isolés</source>
-        <translation>Isolated faces</translation>
+        <location filename="../src/ui/face_cluster_grid.py" line="783" />
+        <source>Isolated faces</source>
+        <translation type="unfinished" />
     </message>
     <message numerus="yes">
-        <location filename="../src/ui/face_cluster_grid.py" line="929" />
-        <source>%n visage(s) isolé(s) sélectionné(s)</source>
+        <location filename="../src/ui/face_cluster_grid.py" line="930" />
+        <source>%n isolated face(s) selected</source>
         <translation><numerusform>%n isolated face selected</numerusform><numerusform>%n isolated faces selected</numerusform></translation></message>
     <message numerus="yes">
-        <location filename="../src/ui/face_cluster_grid.py" line="932" />
-        <source>%n groupe(s) sélectionné(s)</source>
+        <location filename="../src/ui/face_cluster_grid.py" line="933" />
+        <source>%n group(s) selected</source>
         <translation><numerusform>%n group selected</numerusform><numerusform>%n groups selected</numerusform></translation></message>
     <message numerus="yes">
-        <location filename="../src/ui/face_cluster_grid.py" line="935" />
-        <source>%n élément(s) sélectionné(s)</source>
+        <location filename="../src/ui/face_cluster_grid.py" line="936" />
+        <source>%n item(s) selected</source>
         <translation><numerusform>%n item selected</numerusform><numerusform>%n items selected</numerusform></translation></message>
     <message>
-        <location filename="../src/ui/face_cluster_grid.py" line="954" />
-        <source>Visage isolé</source>
-        <translation>Isolated face</translation>
-    </message>
-    <message>
-        <location filename="../src/ui/face_cluster_grid.py" line="959" />
-        <source>Isolé</source>
-        <translation>Isolated</translation>
+        <location filename="../src/ui/face_cluster_grid.py" line="955" />
+        <source>Isolated face</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/face_cluster_grid.py" line="960" />
-        <source>Groupe {id}</source>
-        <translation>Group {id}</translation>
+        <source>Isolated</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/ui/face_cluster_grid.py" line="961" />
+        <source>Group {id}</source>
+        <translation type="unfinished" />
     </message>
 </context>
 <context>
     <name>FaceClusterWorkers</name>
     <message>
         <location filename="../src/ui/face_cluster_workers.py" line="272" />
-        <source>Récupération des groupes de visages…</source>
-        <translation>Fetching the face groups…</translation>
+        <source>Fetching the face groups…</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/face_cluster_workers.py" line="282" />
-        <source>Aucun groupe à analyser</source>
-        <translation>No group to analyse</translation>
+        <source>No group to analyse</source>
+        <translation type="unfinished" />
     </message>
     <message numerus="yes">
         <location filename="../src/ui/face_cluster_workers.py" line="300" />
-        <source>Chargement des visages représentatifs (%n groupe(s))…</source>
+        <source>Loading representative faces (%n group(s))…</source>
         <translation><numerusform>Loading representative faces (%n group)…</numerusform><numerusform>Loading representative faces (%n groups)…</numerusform></translation></message>
     <message numerus="yes">
         <location filename="../src/ui/face_cluster_workers.py" line="328" />
-        <source>Calcul des représentations vectorielles (%n groupe(s) non-isolé(s))…</source>
+        <source>Computing vector representations (%n non-isolated group(s))…</source>
         <translation><numerusform>Computing vector representations (%n non-isolated group)…</numerusform><numerusform>Computing vector representations (%n non-isolated groups)…</numerusform></translation></message>
     <message>
         <location filename="../src/ui/face_cluster_workers.py" line="347" />
-        <source>Récupération des personnes connues…</source>
-        <translation>Fetching the known people…</translation>
+        <source>Fetching the known people…</source>
+        <translation type="unfinished" />
     </message>
     <message numerus="yes">
         <location filename="../src/ui/face_cluster_workers.py" line="353" />
-        <source>Analyse des personnes connues (%n personne(s))…</source>
+        <source>Analysing the known people (%n person(s))…</source>
         <translation><numerusform>Analysing the known people (%n person)…</numerusform><numerusform>Analysing the known people (%n people)…</numerusform></translation></message>
     <message>
         <location filename="../src/ui/face_cluster_workers.py" line="360" />
-        <source>Représentations vectorielles des personnes…</source>
-        <translation>Vector representations of the people…</translation>
+        <source>Vector representations of the people…</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/face_cluster_workers.py" line="378" />
-        <source>Regroupement des visages similaires… {pct} %</source>
-        <translation>Grouping similar faces… {pct} %</translation>
+        <source>Grouping similar faces… {pct} %</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/face_cluster_workers.py" line="381" />
-        <source>  ({groups} groupes, blocs de {chunk})</source>
-        <translation>  ({groups} groups, blocks of {chunk})</translation>
+        <source>  ({groups} groups, blocks of {chunk})</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/face_cluster_workers.py" line="389" />
-        <source>{groups} groupes — regroupement désactivé (limite : {limit})</source>
-        <translation>{groups} groups — grouping disabled (limit: {limit})</translation>
+        <source>{groups} groups — grouping disabled (limit: {limit})</source>
+        <translation type="unfinished" />
     </message>
     <message numerus="yes">
         <location filename="../src/ui/face_cluster_workers.py" line="420" />
-        <source>Calcul des étiquettes de groupes (%n groupe(s))…</source>
+        <source>Computing the group labels (%n group(s))…</source>
         <translation><numerusform>Computing the group labels (%n group)…</numerusform><numerusform>Computing the group labels (%n groups)…</numerusform></translation></message>
     <message>
         <location filename="../src/ui/face_cluster_workers.py" line="458" />
-        <source>≈ Probablement la même personne</source>
-        <translation>≈ Probably the same person</translation>
+        <source>≈ Probably the same person</source>
+        <translation type="unfinished" />
     </message>
     <message numerus="yes">
         <location filename="../src/ui/face_cluster_workers.py" line="461" />
-        <source>%n groupes</source>
+        <source>%n group(s)</source>
         <translation><numerusform>%n group</numerusform><numerusform>%n groups</numerusform></translation></message>
     <message numerus="yes">
         <location filename="../src/ui/face_cluster_workers.py" line="464" />
-        <source>%n visage(s)</source>
+        <source>%n face(s)</source>
         <translation><numerusform>%n face</numerusform><numerusform>%n faces</numerusform></translation></message>
     <message>
         <location filename="../src/ui/face_cluster_workers.py" line="467" />
         <source>(sim. {pct} %)</source>
-        <translation>(sim. {pct} %)</translation>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/face_cluster_workers.py" line="479" />
-        <source>Calcul des suggestions d'identification…</source>
-        <translation>Computing the identification suggestions…</translation>
+        <source>Computing the identification suggestions…</source>
+        <translation type="unfinished" />
     </message>
     <message numerus="yes">
         <location filename="../src/ui/face_cluster_workers.py" line="480" />
-        <source>%n personne(s) connue(s)</source>
+        <source>%n known person(s)</source>
         <translation><numerusform>%n known person</numerusform><numerusform>%n known people</numerusform></translation></message>
 </context>
 <context>
     <name>FaceCountersDialog</name>
     <message>
         <location filename="../src/ui/face_counters_dialog.py" line="45" />
-        <source>Compteurs de reconnaissance faciale</source>
-        <translation>Face recognition counters</translation>
+        <source>Face recognition counters</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/face_counters_dialog.py" line="56" />
-        <source>Reconnaissance faciale</source>
-        <translation>Face recognition</translation>
+        <source>Face recognition</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/face_counters_dialog.py" line="57" />
-        <source>Personnes identifiées</source>
-        <translation>Identified people</translation>
+        <source>Identified people</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/face_counters_dialog.py" line="58" />
-        <source>Visages identifiés</source>
-        <translation>Identified faces</translation>
+        <source>Identified faces</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/face_counters_dialog.py" line="59" />
-        <source>Visages reconnus (analyse faciale)</source>
-        <translation>Recognised faces (face analysis)</translation>
+        <source>Recognised faces (face analysis)</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/face_counters_dialog.py" line="61" />
-        <source>Visages en attente de confirmation</source>
-        <translation>Faces awaiting confirmation</translation>
+        <source>Faces awaiting confirmation</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/face_counters_dialog.py" line="63" />
-        <source>Visages inconnus</source>
-        <translation>Unknown faces</translation>
+        <source>Unknown faces</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/face_counters_dialog.py" line="66" />
-        <source>Import Picasa</source>
-        <translation>Picasa import</translation>
+        <source>Picasa import</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/face_counters_dialog.py" line="67" />
-        <source>Visages importés</source>
-        <translation>Imported faces</translation>
+        <source>Imported faces</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/face_counters_dialog.py" line="68" />
-        <source>Fusionnés avec la reconnaissance</source>
-        <translation>Merged with the recognition</translation>
+        <source>Merged with the recognition</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/face_counters_dialog.py" line="70" />
-        <source>En attente de reconnaissance</source>
-        <translation>Awaiting recognition</translation>
+        <source>Awaiting recognition</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/face_counters_dialog.py" line="74" />
-        <source>Totalité</source>
-        <translation>Overall</translation>
+        <source>Overall</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/face_counters_dialog.py" line="75" />
-        <source>Visages détectés</source>
-        <translation>Detected faces</translation>
+        <source>Detected faces</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/face_counters_dialog.py" line="76" />
-        <source>Visages ignorés (taille)</source>
-        <translation>Ignored faces (size)</translation>
+        <source>Ignored faces (size)</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/face_counters_dialog.py" line="77" />
-        <source>Groupes (clusters)</source>
-        <translation>Groups (clusters)</translation>
+        <source>Groups (clusters)</source>
+        <translation type="unfinished" />
     </message>
 </context>
 <context>
     <name>FaceDatabase</name>
     <message>
         <location filename="../src/faces/face_database.py" line="683" />
-        <source>Clustering : sauvegarde {done}/{total} visages…</source>
-        <translation>Clustering: saving {done}/{total} faces…</translation>
+        <source>Clustering: saving {done}/{total} faces…</source>
+        <translation type="unfinished" />
     </message>
 </context>
 <context>
     <name>FaceItem</name>
     <message>
         <location filename="../src/ui/face_panel.py" line="334" />
-        <source>Ignorer ce visage</source>
-        <translation>Ignore this face</translation>
+        <source>Ignore this face</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/face_panel.py" line="343" />
-        <source>Confirmer cette personne (tout le groupe)</source>
-        <translation>Confirm this person (the whole group)</translation>
+        <source>Confirm this person (the whole group)</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/face_panel.py" line="355" />
-        <source>Rejeter cette suggestion</source>
-        <translation>Reject this suggestion</translation>
+        <location filename="../src/ui/face_panel.py" line="356" />
+        <source>Reject this suggestion</source>
+        <translation type="unfinished" />
     </message>
 </context>
 <context>
     <name>FaceMergeDialog</name>
     <message>
         <location filename="../src/ui/face_merge_dialog.py" line="72" />
-        <source>Isolé</source>
-        <translation>Isolated</translation>
+        <source>Isolated</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/face_merge_dialog.py" line="73" />
-        <source>Groupe {id}</source>
-        <translation>Group {id}</translation>
+        <source>Group {id}</source>
+        <translation type="unfinished" />
     </message>
     <message numerus="yes">
         <location filename="../src/ui/face_merge_dialog.py" line="74" />
-        <source>{group}  —  %n visage(s)</source>
+        <source>{group}  —  %n face(s)</source>
         <translation><numerusform>{group}  —  %n face</numerusform><numerusform>{group}  —  %n faces</numerusform></translation></message>
     <message>
         <location filename="../src/ui/face_merge_dialog.py" line="119" />
-        <source>Fusionner le groupe {id}</source>
-        <translation>Merge group {id}</translation>
+        <source>Merge group {id}</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/face_merge_dialog.py" line="130" />
-        <source>Fusionner le groupe {id} avec :</source>
-        <translation>Merge group {id} with:</translation>
+        <source>Merge group {id} with:</source>
+        <translation type="unfinished" />
     </message>
 </context>
 <context>
     <name>FacePanel</name>
     <message numerus="yes">
-        <location filename="../src/ui/face_panel.py" line="420" />
-        <source>%n visage(s) ignoré(s) sur cette photo :</source>
+        <location filename="../src/ui/face_panel.py" line="421" />
+        <source>%n ignored face(s) on this photo:</source>
         <translation><numerusform>%n ignored face on this photo:</numerusform><numerusform>%n ignored faces on this photo:</numerusform></translation></message>
     <message>
-        <location filename="../src/ui/face_panel.py" line="583" />
-        <source>Visages</source>
-        <translation>Faces</translation>
+        <location filename="../src/ui/face_panel.py" line="584" />
+        <source>Faces</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/face_panel.py" line="588" />
-        <source>Tous</source>
-        <translation>All</translation>
+        <location filename="../src/ui/face_panel.py" line="589" />
+        <source>All</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/face_panel.py" line="592" />
-        <source>Afficher tous les visages dans l'image</source>
-        <translation>Show every face in the picture</translation>
+        <location filename="../src/ui/face_panel.py" line="593" />
+        <source>Show every face in the picture</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/face_panel.py" line="609" />
-        <source>➕  Ajouter une personne</source>
-        <translation>➕  Add a person</translation>
+        <location filename="../src/ui/face_panel.py" line="610" />
+        <source>➕  Add a person</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/face_panel.py" line="616" />
-        <source>Dessiner une bboxe pour une personne non détectée automatiquement</source>
-        <translation>Draw a box for a person that was not detected automatically</translation>
+        <location filename="../src/ui/face_panel.py" line="617" />
+        <source>Draw a box for a person that was not detected automatically</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/face_panel.py" line="622" />
-        <location filename="../src/ui/face_panel.py" line="725" />
-        <source>Visages ignorés…</source>
-        <translation>Ignored faces…</translation>
+        <location filename="../src/ui/face_panel.py" line="623" />
+        <location filename="../src/ui/face_panel.py" line="727" />
+        <source>Ignored faces…</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/face_panel.py" line="625" />
-        <source>Restaurer un visage ignoré sur cette photo</source>
-        <translation>Restore an ignored face on this photo</translation>
+        <location filename="../src/ui/face_panel.py" line="626" />
+        <source>Restore an ignored face on this photo</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/face_panel.py" line="724" />
-        <source>Visages ignorés… ({n})</source>
-        <translation>Ignored faces… ({n})</translation>
+        <location filename="../src/ui/face_panel.py" line="726" />
+        <source>Ignored faces… ({n})</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/face_panel.py" line="729" />
-        <source>Aucun visage
-détecté</source>
-        <translation>No face
-detected</translation>
-    </message>
-    <message>
-        <location filename="../src/ui/face_panel.py" line="759" />
-        <location filename="../src/ui/face_panel.py" line="789" />
-        <source>Groupe {id}</source>
-        <translation>Group {id}</translation>
+        <location filename="../src/ui/face_panel.py" line="731" />
+        <source>No face
+detected</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/face_panel.py" line="761" />
-        <source>Séparé</source>
-        <translation>Separated</translation>
+        <location filename="../src/ui/face_panel.py" line="791" />
+        <source>Group {id}</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/face_panel.py" line="782" />
-        <source>Probablement</source>
-        <translation>Probably</translation>
+        <location filename="../src/ui/face_panel.py" line="763" />
+        <source>Separated</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/face_panel.py" line="784" />
-        <source>Peut-être</source>
-        <translation>Maybe</translation>
+        <source>Probably</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/face_panel.py" line="785" />
+        <location filename="../src/ui/face_panel.py" line="786" />
+        <source>Maybe</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/ui/face_panel.py" line="787" />
         <source>≈ {qualifier} {name} ({pct} %)</source>
-        <translation>≈ {qualifier} {name} ({pct} %)</translation>
-    </message>
-    <message>
-        <location filename="../src/ui/face_panel.py" line="839" />
-        <source>Identifier cette personne…</source>
-        <translation>Identify this person…</translation>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/face_panel.py" line="841" />
-        <source>Sépare ce visage de son groupe et l'attache à une personne nommée</source>
-        <translation>Detaches this face from its group and attaches it to a named person</translation>
+        <source>Identify this person…</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/face_panel.py" line="843" />
-        <source>Identifier ce groupe…</source>
-        <translation>Identify this group…</translation>
-    </message>
-    <message>
-        <location filename="../src/ui/face_panel.py" line="844" />
-        <source>Attribue l'ensemble du groupe à une personne nommée</source>
-        <translation>Assigns the whole group to a named person</translation>
+        <source>Detaches this face from its group and attaches it to a named person</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/face_panel.py" line="846" />
-        <source>Désallouer le groupe</source>
-        <translation>Unassign the group</translation>
+        <source>Identify this group…</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/face_panel.py" line="851" />
-        <source>Ignorer ce visage</source>
-        <translation>Ignore this face</translation>
+        <location filename="../src/ui/face_panel.py" line="847" />
+        <source>Assigns the whole group to a named person</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/face_panel.py" line="942" />
-        <source>Nommer ce visage</source>
-        <translation>Name this face</translation>
+        <location filename="../src/ui/face_panel.py" line="849" />
+        <source>Unassign the group</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/face_panel.py" line="1030" />
-        <source>Identifier cette personne</source>
-        <translation>Identify this person</translation>
+        <location filename="../src/ui/face_panel.py" line="854" />
+        <source>Ignore this face</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/ui/face_panel.py" line="945" />
+        <source>Name this face</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/ui/face_panel.py" line="1033" />
+        <source>Identify this person</source>
+        <translation type="unfinished" />
     </message>
 </context>
 <context>
     <name>FaceRecognitionPage</name>
     <message>
-        <location filename="../src/ui/settings_dialog.py" line="129" />
-        <source>Reconnaissance de visages</source>
-        <translation>Face recognition</translation>
+        <location filename="../src/ui/settings_dialog.py" line="128" />
+        <source>Face recognition</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/settings_dialog.py" line="140" />
-        <source>Tolérance de similarité</source>
-        <translation>Similarity tolerance</translation>
+        <location filename="../src/ui/settings_dialog.py" line="139" />
+        <source>Similarity tolerance</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/settings_dialog.py" line="145" />
-        <source>Contrôle à quel point deux visages doivent se ressembler pour être
-placés dans le même groupe. Une valeur plus élevée regroupe davantage
-de visages ensemble, mais risque de mélanger des personnes différentes.</source>
-        <translation>Controls how alike two faces must be to end up in the same
+        <location filename="../src/ui/settings_dialog.py" line="144" />
+        <source>Controls how alike two faces must be to end up in the same
 group. A higher value gathers more faces together, but risks
-mixing different people.</translation>
+mixing different people.</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/settings_dialog.py" line="177" />
-        <source>Si vous modifiez ce paramètre, les groupes seront recalculés
-automatiquement lorsque vous fermez cette fenêtre.</source>
-        <translation>If you change this setting, the groups will be recomputed
-automatically when you close this window.</translation>
+        <source>If you change this setting, the groups will be recomputed
+automatically when you close this window.</source>
+        <translation type="unfinished" />
     </message>
 </context>
 <context>
     <name>FaceThumb</name>
     <message>
         <location filename="../src/ui/person_cluster_view.py" line="183" />
-        <source>Accepter cette suggestion</source>
-        <translation>Accept this suggestion</translation>
+        <source>Accept this suggestion</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/person_cluster_view.py" line="191" />
-        <source>Rejeter cette suggestion</source>
-        <translation>Reject this suggestion</translation>
+        <source>Reject this suggestion</source>
+        <translation type="unfinished" />
     </message>
 </context>
 <context>
     <name>FacesController</name>
     <message numerus="yes">
         <location filename="../src/ui/main_window_faces.py" line="114" />
-        <source>%n photo(s) avec des visages identifiés</source>
+        <source>%n photo(s) with identified faces</source>
         <translation><numerusform>%n photo with identified faces</numerusform><numerusform>%n photos with identified faces</numerusform></translation></message>
     <message numerus="yes">
         <location filename="../src/ui/main_window_faces.py" line="117" />
-        <source>%n photo(s) avec des retouches</source>
+        <source>%n photo(s) with edits</source>
         <translation><numerusform>%n photo with edits</numerusform><numerusform>%n photos with edits</numerusform></translation></message>
     <message>
         <location filename="../src/ui/main_window_faces.py" line="119" />
-        <source> et </source>
-        <translation> and </translation>
+        <source> and </source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/main_window_faces.py" line="122" />
-        <source>Données Picasa détectées</source>
-        <translation>Picasa data found</translation>
+        <source>Picasa data found</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/main_window_faces.py" line="123" />
-        <source>Le dossier ajouté contient des données Picasa :
+        <source>The folder you added holds Picasa data:
 {details}.
 
-Voulez-vous les importer pour ce dossier ?</source>
-        <translation>The folder you added holds Picasa data:
-{details}.
-
-Import it for this folder?</translation>
+Import it for this folder?</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/main_window_faces.py" line="138" />
-        <source>Import Picasa du nouveau dossier en cours…</source>
-        <translation>Importing Picasa data from the new folder…</translation>
+        <source>Importing Picasa data from the new folder…</source>
+        <translation type="unfinished" />
     </message>
     <message numerus="yes">
-        <location filename="../src/ui/main_window_faces.py" line="150" />
-        <source>%n personne(s) créée(s)</source>
+        <location filename="../src/ui/main_window_faces.py" line="151" />
+        <source>%n person(s) created</source>
         <translation><numerusform>%n person created</numerusform><numerusform>%n people created</numerusform></translation></message>
     <message numerus="yes">
-        <location filename="../src/ui/main_window_faces.py" line="154" />
-        <source>%n annotation(s) de visage dans {photos}</source>
+        <location filename="../src/ui/main_window_faces.py" line="155" />
+        <source>%n face annotation(s) in {photos}</source>
         <translation><numerusform>%n face annotation in {photos}</numerusform><numerusform>%n face annotations in {photos}</numerusform></translation></message>
     <message numerus="yes">
-        <location filename="../src/ui/main_window_faces.py" line="156" />
+        <location filename="../src/ui/main_window_faces.py" line="157" />
         <source>%n photo(s)</source>
         <translation><numerusform>%n photo</numerusform><numerusform>%n photos</numerusform></translation></message>
     <message numerus="yes">
-        <location filename="../src/ui/main_window_faces.py" line="160" />
-        <source>%n retouche(s) importée(s)</source>
+        <location filename="../src/ui/main_window_faces.py" line="161" />
+        <source>%n edit(s) imported</source>
         <translation><numerusform>%n edit imported</numerusform><numerusform>%n edits imported</numerusform></translation></message>
     <message>
-        <location filename="../src/ui/main_window_faces.py" line="163" />
-        <source>Import Picasa terminé</source>
-        <translation>Picasa import finished</translation>
+        <location filename="../src/ui/main_window_faces.py" line="164" />
+        <source>Picasa import finished</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/main_window_faces.py" line="189" />
-        <source>Arrêt des analyses en cours…</source>
-        <translation>Stopping the running analyses…</translation>
+        <location filename="../src/ui/main_window_faces.py" line="190" />
+        <source>Stopping the running analyses…</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/main_window_faces.py" line="191" />
-        <source>Réinitialisation en cours…</source>
-        <translation>Resetting…</translation>
+        <location filename="../src/ui/main_window_faces.py" line="192" />
+        <source>Resetting…</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/main_window_faces.py" line="214" />
-        <source>La réinitialisation des groupes est terminée.
+        <location filename="../src/ui/main_window_faces.py" line="215" />
+        <source>The groups have been reset.
 
-Le regroupement HDBSCAN va redémarrer.</source>
-        <translation>The groups have been reset.
-
-HDBSCAN grouping will start again.</translation>
+HDBSCAN grouping will start again.</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/main_window_faces.py" line="220" />
-        <source>La réinitialisation complète est terminée.
-
-L'analyse des visages va redémarrer. Cette opération peut
-prendre plusieurs heures selon la taille de la bibliothèque.</source>
-        <translation>The full reset is done.
+        <source>The full reset is done.
 
 Face analysis will start again. It can take
-several hours depending on the size of the library.</translation>
+several hours depending on the size of the library.</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/main_window_faces.py" line="226" />
-        <source>Réinitialisation terminée</source>
-        <translation>Reset finished</translation>
+        <location filename="../src/ui/main_window_faces.py" line="225" />
+        <source>Reset finished</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/ui/main_window_faces.py" line="254" />
+        <source>Search running</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/main_window_faces.py" line="255" />
-        <source>Recherche en cours</source>
-        <translation>Search running</translation>
+        <source>A search for similar faces is already running.
+Follow its progress in the status bar.</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/main_window_faces.py" line="256" />
-        <source>Une recherche de visages similaires est déjà en cours.
-Suivez sa progression dans la barre de statut.</source>
-        <translation>A search for similar faces is already running.
-Follow its progress in the status bar.</translation>
+        <location filename="../src/ui/main_window_faces.py" line="275" />
+        <source>Searching for similar faces…</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/main_window_faces.py" line="276" />
-        <source>Recherche de visages similaires…</source>
-        <translation>Searching for similar faces…</translation>
+        <location filename="../src/ui/main_window_faces.py" line="284" />
+        <source>Similarity search… {cur} / {total} groups</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/main_window_faces.py" line="285" />
-        <source>Recherche similarité… {cur} / {total} groupes</source>
-        <translation>Similarity search… {cur} / {total} groups</translation>
+        <location filename="../src/ui/main_window_faces.py" line="293" />
+        <source>Search finished: {made} suggestion(s) created out of {total} group(s) checked.</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/main_window_faces.py" line="294" />
-        <source>Recherche terminée : {made} suggestion(s) créée(s) sur {total} groupe(s) vérifiés.</source>
-        <translation>Search finished: {made} suggestion(s) created out of {total} group(s) checked.</translation>
+        <location filename="../src/ui/main_window_faces.py" line="326" />
+        <source>Import from Picasa</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/main_window_faces.py" line="328" />
-        <source>Importer depuis Picasa</source>
-        <translation>Import from Picasa</translation>
+        <source>&lt;b&gt;Import face annotations from Google Picasa&lt;/b&gt;</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/main_window_faces.py" line="330" />
-        <source>&lt;b&gt;Import des annotations de visages depuis Google Picasa&lt;/b&gt;</source>
-        <translation>&lt;b&gt;Import face annotations from Google Picasa&lt;/b&gt;</translation>
-    </message>
-    <message>
-        <location filename="../src/ui/main_window_faces.py" line="332" />
-        <source>&lt;b&gt;Ce que cette option fait :&lt;/b&gt;&lt;br&gt;• Parcourt les fichiers &lt;code&gt;.picasa.ini&lt;/code&gt; de vos dossiers photos.&lt;br&gt;• Importe les noms et régions de visages annotés dans Picasa.&lt;br&gt;• Crée ou enrichit les personnes correspondantes dans PixelPhotoManager.&lt;br&gt;&lt;br&gt;&lt;b&gt;Limitations et précautions :&lt;/b&gt;&lt;br&gt;• &lt;b&gt;À ne faire qu'une seule fois&lt;/b&gt; — l'option sera grisée une fois l'import terminé.&lt;br&gt;• N'écrase pas les associations que vous avez faites manuellement.&lt;br&gt;• Les visages Picasa non appariés à une détection InsightFace créent des entrées sans embedding (non utilisables pour le clustering).</source>
-        <translation>&lt;b&gt;What this does:&lt;/b&gt;&lt;br&gt;• Reads the &lt;code&gt;.picasa.ini&lt;/code&gt; files in your photo folders.&lt;br&gt;• Imports the names and face regions annotated in Picasa.&lt;br&gt;• Creates or enriches the matching people in PixelPhotoManager.&lt;br&gt;&lt;br&gt;&lt;b&gt;Limits and caveats:&lt;/b&gt;&lt;br&gt;• &lt;b&gt;Do this only once&lt;/b&gt; — the option is greyed out after the import.&lt;br&gt;• It never overwrites the assignments you made by hand.&lt;br&gt;• Picasa faces that match no InsightFace detection create entries without an embedding (unusable for clustering).</translation>
-    </message>
-    <message>
-        <location filename="../src/ui/main_window_faces.py" line="377" />
-        <source>Sauvegarde créée</source>
-        <translation>Backup created</translation>
+        <location filename="../src/ui/main_window_faces.py" line="331" />
+        <source>&lt;b&gt;What this does:&lt;/b&gt;&lt;br&gt;• Reads the &lt;code&gt;.picasa.ini&lt;/code&gt; files in your photo folders.&lt;br&gt;• Imports the names and face regions annotated in Picasa.&lt;br&gt;• Creates or enriches the matching people in PixelPhotoManager.&lt;br&gt;&lt;br&gt;&lt;b&gt;Limits and caveats:&lt;/b&gt;&lt;br&gt;• &lt;b&gt;Do this only once&lt;/b&gt; — the option is greyed out after the import.&lt;br&gt;• It never overwrites the assignments you made by hand.&lt;br&gt;• Picasa faces that match no InsightFace detection create entries without an embedding (unusable for clustering).</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/main_window_faces.py" line="378" />
-        <source>Sauvegarde enregistrée :
+        <source>Backup created</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/ui/main_window_faces.py" line="379" />
+        <source>Backup saved:
 {when}
 
 ({name})</source>
-        <translation>Backup saved:
-{when}
-
-({name})</translation>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/main_window_faces.py" line="385" />
-        <source>Erreur de sauvegarde</source>
-        <translation>Backup error</translation>
+        <location filename="../src/ui/main_window_faces.py" line="386" />
+        <source>Backup error</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/main_window_faces.py" line="390" />
-        <source>Sauvegarde de la reconnaissance en cours…</source>
-        <translation>Backing up the recognition data…</translation>
+        <location filename="../src/ui/main_window_faces.py" line="391" />
+        <source>Backing up the recognition data…</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/main_window_faces.py" line="425" />
-        <source>Initialisation de l'analyse des visages…</source>
-        <translation>Starting face analysis…</translation>
+        <location filename="../src/ui/main_window_faces.py" line="426" />
+        <source>Starting face analysis…</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/main_window_faces.py" line="427" />
-        <source>Analyse visages… {cur}/{total}</source>
-        <translation>Face analysis… {cur}/{total}</translation>
-    </message>
-    <message>
-        <location filename="../src/ui/main_window_faces.py" line="459" />
-        <source>Regroupement en cours</source>
-        <translation>Grouping in progress</translation>
+        <location filename="../src/ui/main_window_faces.py" line="428" />
+        <source>Face analysis… {cur}/{total}</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/main_window_faces.py" line="460" />
-        <source>Un regroupement des visages est déjà en cours.
-Suivez sa progression dans la barre de statut.</source>
-        <translation>A face grouping is already running.
-Follow its progress in the status bar.</translation>
+        <source>Grouping in progress</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/main_window_faces.py" line="470" />
-        <source>Regrouper les visages</source>
-        <translation>Group faces</translation>
+        <location filename="../src/ui/main_window_faces.py" line="461" />
+        <source>A face grouping is already running.
+Follow its progress in the status bar.</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/main_window_faces.py" line="472" />
-        <source>&lt;b&gt;Regroupement automatique des visages (clustering)&lt;/b&gt;</source>
-        <translation>&lt;b&gt;Automatic face grouping (clustering)&lt;/b&gt;</translation>
+        <location filename="../src/ui/main_window_faces.py" line="471" />
+        <source>Group faces</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/main_window_faces.py" line="474" />
-        <source>Cette opération analyse les visages non encore identifiés et les regroupe automatiquement par similarité (algorithme HDBSCAN sur vecteurs ArcFace).&lt;br&gt;&lt;br&gt;&lt;b&gt;{unidentified}&lt;/b&gt; visages non identifiés seront traités ({identified} visages déjà identifiés sont conservés intacts).&lt;br&gt;&lt;br&gt;Les groupes obtenus apparaîtront dans &lt;i&gt;Identifier les personnes…&lt;/i&gt; pour que vous puissiez nommer chaque groupe.&lt;br&gt;&lt;br&gt;&lt;b&gt;Durée estimée : 15 à 30 minutes.&lt;/b&gt; La progression s'affiche dans la barre de statut en bas de la fenêtre.</source>
-        <translation>This analyses the faces not yet identified and groups them by similarity (HDBSCAN over ArcFace vectors).&lt;br&gt;&lt;br&gt;&lt;b&gt;{unidentified}&lt;/b&gt; unidentified faces will be processed ({identified} already identified faces are left untouched).&lt;br&gt;&lt;br&gt;The resulting groups appear under &lt;i&gt;Identify people…&lt;/i&gt;, where you can name each one.&lt;br&gt;&lt;br&gt;&lt;b&gt;Estimated time: 15 to 30 minutes.&lt;/b&gt; Progress is shown in the status bar at the bottom of the window.</translation>
+        <location filename="../src/ui/main_window_faces.py" line="473" />
+        <source>&lt;b&gt;Automatic face grouping (clustering)&lt;/b&gt;</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/main_window_faces.py" line="491" />
-        <source>Démarrer</source>
-        <translation>Start</translation>
+        <location filename="../src/ui/main_window_faces.py" line="475" />
+        <source>This analyses the faces not yet identified and groups them by similarity (HDBSCAN over ArcFace vectors).&lt;br&gt;&lt;br&gt;&lt;b&gt;{unidentified}&lt;/b&gt; unidentified faces will be processed ({identified} already identified faces are left untouched).&lt;br&gt;&lt;br&gt;The resulting groups appear under &lt;i&gt;Identify people…&lt;/i&gt;, where you can name each one.&lt;br&gt;&lt;br&gt;&lt;b&gt;Estimated time: 15 to 30 minutes.&lt;/b&gt; Progress is shown in the status bar at the bottom of the window.</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/main_window_faces.py" line="492" />
-        <source>Annuler</source>
-        <translation>Cancel</translation>
+        <location filename="../src/ui/main_window_faces.py" line="489" />
+        <source>Start</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/main_window_faces.py" line="511" />
-        <source>Regroupement en cours…</source>
-        <translation>Grouping…</translation>
+        <location filename="../src/ui/main_window_faces.py" line="490" />
+        <source>Cancel</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/main_window_faces.py" line="518" />
-        <source>Regrouper les visages…</source>
-        <translation>Group faces…</translation>
+        <location filename="../src/ui/main_window_faces.py" line="509" />
+        <source>Grouping…</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/main_window_faces.py" line="536" />
-        <source>Reconnaissance faciale indisponible</source>
-        <translation>Face recognition unavailable</translation>
+        <location filename="../src/ui/main_window_faces.py" line="516" />
+        <source>Group faces…</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/main_window_faces.py" line="537" />
-        <source>Le module insightface n'est pas installé.
+        <location filename="../src/ui/main_window_faces.py" line="534" />
+        <source>Face recognition unavailable</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/ui/main_window_faces.py" line="535" />
+        <source>The insightface module is not installed.
 
 pip install insightface onnxruntime</source>
-        <translation>The insightface module is not installed.
-
-pip install insightface onnxruntime</translation>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/main_window_faces.py" line="645" />
-        <source>Renommer la personne</source>
-        <translation>Rename the person</translation>
+        <location filename="../src/ui/main_window_faces.py" line="643" />
+        <source>Rename the person</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/main_window_faces.py" line="645" />
-        <source>Nouveau nom :</source>
-        <translation>New name:</translation>
+        <location filename="../src/ui/main_window_faces.py" line="643" />
+        <source>New name:</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/ui/main_window_faces.py" line="655" />
+        <source>Clear the name</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/main_window_faces.py" line="656" />
-        <source>Effacer le nom</source>
-        <translation>Clear the name</translation>
+        <source>Clear “{name}” and drop all of its face assignments?
+
+The faces go back to their anonymous groups.</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/main_window_faces.py" line="657" />
-        <source>Effacer « {name} » et supprimer toutes ses associations de visages ?
-
-Les visages retourneront dans leurs groupes anonymes.</source>
-        <translation>Clear “{name}” and drop all of its face assignments?
-
-The faces go back to their anonymous groups.</translation>
+        <location filename="../src/ui/main_window_faces.py" line="867" />
+        <source>Attempt running</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/main_window_faces.py" line="868" />
-        <source>Tentative en cours</source>
-        <translation>Attempt running</translation>
-    </message>
-    <message>
-        <location filename="../src/ui/main_window_faces.py" line="869" />
-        <source>Une autre tentative d'identification est déjà en cours.</source>
-        <translation>Another identification attempt is already running.</translation>
+        <source>Another identification attempt is already running.</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/main_window_faces.py" line="877" />
-        <source>Nouvelle tentative d'identification : {name}…</source>
-        <translation>Retrying identification: {name}…</translation>
+        <source>Retrying identification: {name}…</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/main_window_faces.py" line="893" />
-        <source>Identification réussie</source>
-        <translation>Identification succeeded</translation>
+        <source>Identification succeeded</source>
+        <translation type="unfinished" />
     </message>
     <message numerus="yes">
         <location filename="../src/ui/main_window_faces.py" line="894" />
-        <source>« {name} » : %n visage(s) détecté(s).</source>
+        <source>“{name}”: %n face(s) detected.</source>
         <translation><numerusform>“{name}”: %n face detected.</numerusform><numerusform>“{name}”: %n faces detected.</numerusform></translation></message>
     <message>
         <location filename="../src/ui/main_window_faces.py" line="901" />
-        <source>Échec de l'identification</source>
-        <translation>Identification failed</translation>
+        <source>Identification failed</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/main_window_faces.py" line="903" />
-        <source>L'identification des visages a de nouveau échoué pour « {name} ».</source>
-        <translation>Face identification failed again for “{name}”.</translation>
+        <source>Face identification failed again for “{name}”.</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/main_window_faces.py" line="909" />
-        <source>Voulez-vous supprimer ce fichier, ou l'exclure définitivement du scan et de la reconnaissance faciale (il restera dans la photothèque) ?</source>
-        <translation>Delete this file, or exclude it for good from scanning and face recognition (it stays in the library)?</translation>
+        <source>Delete this file, or exclude it for good from scanning and face recognition (it stays in the library)?</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/main_window_faces.py" line="913" />
-        <source>Supprimer le fichier…</source>
-        <translation>Delete the file…</translation>
+        <location filename="../src/ui/main_window_faces.py" line="914" />
+        <source>Delete the file…</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/main_window_faces.py" line="916" />
-        <source>Exclure définitivement</source>
-        <translation>Exclude for good</translation>
+        <location filename="../src/ui/main_window_faces.py" line="917" />
+        <source>Exclude for good</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/main_window_faces.py" line="918" />
-        <source>Laisser en erreur</source>
-        <translation>Leave it in error</translation>
-    </message>
-    <message>
-        <location filename="../src/ui/main_window_faces.py" line="944" />
-        <source>Détection en cours</source>
-        <translation>Detection running</translation>
+        <location filename="../src/ui/main_window_faces.py" line="919" />
+        <source>Leave it in error</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/main_window_faces.py" line="945" />
-        <source>Une nouvelle détection est déjà en cours sur cette photo.</source>
-        <translation>A new detection is already running on this photo.</translation>
+        <source>Detection running</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/main_window_faces.py" line="955" />
-        <source>Nouvelle détection sans limite de taille : {name}…</source>
-        <translation>New detection with no size limit: {name}…</translation>
+        <location filename="../src/ui/main_window_faces.py" line="946" />
+        <source>A new detection is already running on this photo.</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/main_window_faces.py" line="965" />
-        <source>Détection terminée</source>
-        <translation>Detection finished</translation>
+        <location filename="../src/ui/main_window_faces.py" line="956" />
+        <source>New detection with no size limit: {name}…</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/ui/main_window_faces.py" line="966" />
+        <source>Detection finished</source>
+        <translation type="unfinished" />
     </message>
     <message numerus="yes">
-        <location filename="../src/ui/main_window_faces.py" line="966" />
-        <source>« {name} » : %n visage(s) détecté(s), aucun ignoré par taille.</source>
+        <location filename="../src/ui/main_window_faces.py" line="967" />
+        <source>“{name}”: %n face(s) detected, none ignored for their size.</source>
         <translation><numerusform>“{name}”: %n face detected, none ignored for its size.</numerusform><numerusform>“{name}”: %n faces detected, none ignored for their size.</numerusform></translation></message>
 </context>
 <context>
     <name>FolderManagerDialog</name>
     <message>
         <location filename="../src/ui/folder_manager_dialog.py" line="42" />
-        <source>sauvegarde Picasa</source>
-        <translation>Picasa backup</translation>
+        <source>Picasa backup</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/folder_manager_dialog.py" line="45" />
-        <source>dossier caché</source>
-        <translation>hidden folder</translation>
+        <source>hidden folder</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/folder_manager_dialog.py" line="98" />
-        <source>{n} fichiers</source>
-        <translation>{n} files</translation>
+        <source>{n} files</source>
+        <translation type="unfinished" />
     </message>
     <message numerus="yes">
         <location filename="../src/ui/folder_manager_dialog.py" line="148" />
-        <source>%n sous-dossier(s)</source>
+        <source>%n subfolder(s)</source>
         <translation><numerusform>%n subfolder</numerusform><numerusform>%n subfolders</numerusform></translation></message>
     <message numerus="yes">
         <location filename="../src/ui/folder_manager_dialog.py" line="150" />
-        <source>(%n exclu(s))</source>
+        <source>(%n excluded)</source>
         <translation><numerusform>(%n excluded)</numerusform><numerusform>(%n excluded)</numerusform></translation></message>
     <message>
         <location filename="../src/ui/folder_manager_dialog.py" line="227" />
-        <source>Gestion des dossiers surveillés</source>
-        <translation>Watched folder management</translation>
+        <source>Watched folder management</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/folder_manager_dialog.py" line="238" />
-        <source>Dossiers surveillés par le scan</source>
-        <translation>Folders watched by the scan</translation>
+        <source>Folders watched by the scan</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/folder_manager_dialog.py" line="258" />
-        <source>Règles d'exclusion : dossiers masqués Windows (attribut «Caché» ou préfixe «.») et dossiers nommés «Originals» (sauvegardes Picasa).</source>
-        <translation>Exclusion rules: folders hidden by Windows (“Hidden” attribute or “.” prefix) and folders named “Originals” (Picasa backups).</translation>
+        <source>Exclusion rules: folders hidden by Windows (“Hidden” attribute or “.” prefix) and folders named “Originals” (Picasa backups).</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/folder_manager_dialog.py" line="266" />
-        <source>＋  Ajouter un dossier…</source>
-        <translation>＋  Add a folder…</translation>
+        <location filename="../src/ui/folder_manager_dialog.py" line="267" />
+        <source>＋  Add a folder…</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/folder_manager_dialog.py" line="275" />
-        <source>Fermer</source>
-        <translation>Close</translation>
+        <location filename="../src/ui/folder_manager_dialog.py" line="276" />
+        <source>Close</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/folder_manager_dialog.py" line="292" />
-        <source>Aucun dossier configuré. Cliquez sur «Ajouter» pour commencer.</source>
-        <translation>No folder configured. Click “Add” to get started.</translation>
+        <location filename="../src/ui/folder_manager_dialog.py" line="293" />
+        <source>No folder configured. Click “Add” to get started.</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/folder_manager_dialog.py" line="309" />
-        <source>Re-scan lancé</source>
-        <translation>Rescan started</translation>
+        <location filename="../src/ui/folder_manager_dialog.py" line="311" />
+        <source>Rescan started</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/folder_manager_dialog.py" line="310" />
-        <source>Le re-scan forcé de «{name}» est en cours.
-Tous les fichiers seront relus, même si inchangés.</source>
-        <translation>The forced rescan of “{name}” is running.
-Every file will be read again, even the unchanged ones.</translation>
+        <location filename="../src/ui/folder_manager_dialog.py" line="312" />
+        <source>The forced rescan of “{name}” is running.
+Every file will be read again, even the unchanged ones.</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/folder_manager_dialog.py" line="324" />
-        <source>Choisir un dossier à surveiller</source>
-        <translation>Choose a folder to watch</translation>
+        <location filename="../src/ui/folder_manager_dialog.py" line="326" />
+        <source>Choose a folder to watch</source>
+        <translation type="unfinished" />
     </message>
 </context>
 <context>
     <name>FolderRow</name>
     <message>
         <location filename="../src/ui/folder_manager_dialog.py" line="105" />
-        <source>⟳  Re-scanner</source>
-        <translation>⟳  Rescan</translation>
+        <source>⟳  Rescan</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/folder_manager_dialog.py" line="107" />
-        <source>Forcer le re-scan complet de ce dossier.
-Tous les fichiers sont relus, même si non modifiés depuis le dernier scan.</source>
-        <translation>Force a full rescan of this folder.
-Every file is read again, even if unchanged since the last scan.</translation>
+        <source>Force a full rescan of this folder.
+Every file is read again, even if unchanged since the last scan.</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/folder_manager_dialog.py" line="118" />
-        <source>Retirer</source>
-        <translation>Remove</translation>
+        <source>Remove</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/folder_manager_dialog.py" line="119" />
-        <source>Retirer ce dossier de la surveillance</source>
-        <translation>Stop watching this folder</translation>
+        <source>Stop watching this folder</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/folder_manager_dialog.py" line="131" />
-        <source>  Ce dossier est introuvable sur le disque.</source>
-        <translation>  This folder cannot be found on the disk.</translation>
+        <source>  This folder cannot be found on the disk.</source>
+        <translation type="unfinished" />
     </message>
 </context>
 <context>
     <name>FrameDialog</name>
     <message>
         <location filename="../src/ui/frame_dialog.py" line="190" />
-        <source>Cadre</source>
-        <translation>Frame</translation>
+        <source>Frame</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/frame_dialog.py" line="210" />
-        <source>Choisissez un cadre — il se place autour de la photo, sans recouvrir l'image (sauf le second cadre de l'entourage uni, à activer explicitement).</source>
-        <translation>Pick a frame — it sits around the photo without covering the image (except the second frame of the flat surround, which you enable explicitly).</translation>
+        <source>Pick a frame — it sits around the photo without covering the image (except the second frame of the flat surround, which you enable explicitly).</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/frame_dialog.py" line="243" />
-        <source>Réglages du cadre</source>
-        <translation>Frame settings</translation>
+        <location filename="../src/ui/frame_dialog.py" line="244" />
+        <source>Frame settings</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/frame_dialog.py" line="254" />
-        <source>Couleur :</source>
-        <translation>Colour:</translation>
+        <location filename="../src/ui/frame_dialog.py" line="255" />
+        <source>Colour:</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/frame_dialog.py" line="266" />
-        <source>Couleur principale</source>
-        <translation>Main colour</translation>
+        <location filename="../src/ui/frame_dialog.py" line="267" />
+        <source>Main colour</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/frame_dialog.py" line="272" />
-        <source>Seconde couleur (dégradé, éclats du pailleté)</source>
-        <translation>Second colour (gradient, glitter flecks)</translation>
+        <location filename="../src/ui/frame_dialog.py" line="273" />
+        <source>Second colour (gradient, glitter flecks)</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/frame_dialog.py" line="291" />
-        <location filename="../src/ui/frame_dialog.py" line="548" />
-        <source>Cadre extérieur</source>
-        <translation>Outer frame</translation>
+        <location filename="../src/ui/frame_dialog.py" line="282" />
+        <source>{color} surround</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/frame_dialog.py" line="300" />
-        <source>Second cadre par-dessus la photo</source>
-        <translation>Second frame over the photo</translation>
+        <location filename="../src/ui/frame_dialog.py" line="293" />
+        <location filename="../src/ui/frame_dialog.py" line="550" />
+        <source>Outer frame</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/frame_dialog.py" line="302" />
-        <source>Ajoute un cadre intérieur peint sur l'image ; une bande de photo
-reste visible entre les deux cadres.</source>
-        <translation>Adds an inner frame painted onto the image; a strip of the photo
-stays visible between the two frames.</translation>
+        <source>Second frame over the photo</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/frame_dialog.py" line="316" />
-        <source>Intervalle</source>
-        <translation>Gap</translation>
+        <location filename="../src/ui/frame_dialog.py" line="304" />
+        <source>Adds an inner frame painted onto the image; a strip of the photo
+stays visible between the two frames.</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/frame_dialog.py" line="322" />
-        <location filename="../src/ui/frame_dialog.py" line="557" />
-        <source>Cadre intérieur</source>
-        <translation>Inner frame</translation>
+        <location filename="../src/ui/frame_dialog.py" line="318" />
+        <source>Gap</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/frame_dialog.py" line="337" />
-        <source>Ferronnerie :</source>
-        <translation>Ironwork:</translation>
+        <location filename="../src/ui/frame_dialog.py" line="324" />
+        <location filename="../src/ui/frame_dialog.py" line="559" />
+        <source>Inner frame</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/frame_dialog.py" line="358" />
-        <source>Rendu :</source>
-        <translation>Rendering:</translation>
+        <location filename="../src/ui/frame_dialog.py" line="339" />
+        <source>Ironwork:</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/frame_dialog.py" line="374" />
-        <source>Ornements</source>
-        <translation>Ornaments</translation>
+        <location filename="../src/ui/frame_dialog.py" line="360" />
+        <source>Rendering:</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/frame_dialog.py" line="389" />
-        <source>Intervalle :</source>
-        <translation>Gap:</translation>
+        <location filename="../src/ui/frame_dialog.py" line="376" />
+        <source>Ornaments</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/frame_dialog.py" line="392" />
-        <source>Couleur de l'intervalle</source>
-        <translation>Gap colour</translation>
+        <location filename="../src/ui/frame_dialog.py" line="391" />
+        <source>Gap:</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/frame_dialog.py" line="397" />
-        <source>Cadre intérieur :</source>
-        <translation>Inner frame:</translation>
+        <location filename="../src/ui/frame_dialog.py" line="394" />
+        <source>Gap colour</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/frame_dialog.py" line="400" />
-        <source>Couleur du cadre intérieur</source>
-        <translation>Inner frame colour</translation>
+        <location filename="../src/ui/frame_dialog.py" line="399" />
+        <source>Inner frame:</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/frame_dialog.py" line="413" />
-        <source>Valider</source>
-        <translation>Apply</translation>
+        <location filename="../src/ui/frame_dialog.py" line="402" />
+        <source>Inner frame colour</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/frame_dialog.py" line="414" />
-        <source>Annuler</source>
-        <translation>Cancel</translation>
+        <location filename="../src/ui/frame_dialog.py" line="415" />
+        <source>Apply</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/frame_dialog.py" line="549" />
-        <source>Épaisseur</source>
-        <translation>Thickness</translation>
+        <location filename="../src/ui/frame_dialog.py" line="416" />
+        <source>Cancel</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/frame_dialog.py" line="556" />
-        <source>Second cadre</source>
-        <translation>Second frame</translation>
+        <location filename="../src/ui/frame_dialog.py" line="551" />
+        <source>Thickness</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/ui/frame_dialog.py" line="558" />
+        <source>Second frame</source>
+        <translation type="unfinished" />
     </message>
 </context>
 <context>
     <name>Frames</name>
     <message>
         <location filename="../src/processing/frames.py" line="69" />
-        <source>Aucun</source>
-        <translation>None</translation>
+        <source>None</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/processing/frames.py" line="70" />
-        <source>Entourage uni</source>
-        <translation>Flat surround</translation>
+        <source>Flat surround</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/processing/frames.py" line="71" />
         <source>Simple</source>
-        <translation>Simple</translation>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/processing/frames.py" line="72" />
         <source>Double</source>
-        <translation>Double</translation>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/processing/frames.py" line="73" />
-        <source>Baroque doré</source>
-        <translation>Gilt baroque</translation>
+        <source>Gilt baroque</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/processing/frames.py" line="74" />
-        <source>Oves et perles</source>
-        <translation>Egg-and-dart</translation>
+        <source>Egg-and-dart</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/processing/frames.py" line="75" />
-        <source>Grecque</source>
-        <translation>Greek key</translation>
+        <source>Greek key</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/processing/frames.py" line="76" />
-        <source>Art déco</source>
-        <translation>Art deco</translation>
+        <source>Art deco</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/processing/frames.py" line="77" />
-        <source>Sculpture bois</source>
-        <translation>Carved wood</translation>
+        <source>Carved wood</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/processing/frames.py" line="78" />
-        <source>Feuilles de vigne</source>
-        <translation>Vine leaves</translation>
+        <source>Vine leaves</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/processing/frames.py" line="79" />
         <source>Roses</source>
-        <translation>Roses</translation>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/processing/frames.py" line="80" />
-        <source>Fleurs</source>
-        <translation>Flowers</translation>
+        <source>Flowers</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/processing/frames.py" line="81" />
-        <source>Métallique</source>
-        <translation>Metallic</translation>
+        <source>Metallic</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/processing/frames.py" line="82" />
-        <source>Reflets</source>
-        <translation>Highlights</translation>
+        <source>Highlights</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/processing/frames.py" line="109" />
-        <source>Noir</source>
-        <translation>Black</translation>
+        <source>Black</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/processing/frames.py" line="110" />
-        <source>Blanc</source>
-        <translation>White</translation>
+        <source>White</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/processing/frames.py" line="116" />
-        <source>Ligne simple</source>
-        <translation>Plain line</translation>
+        <source>Plain line</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/processing/frames.py" line="117" />
-        <source>Volutes d'angle</source>
-        <translation>Corner scrolls</translation>
+        <source>Corner scrolls</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/processing/frames.py" line="118" />
-        <source>Rinceaux courants</source>
-        <translation>Running scrollwork</translation>
+        <source>Running scrollwork</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/processing/frames.py" line="119" />
-        <source>Barreau torsadé</source>
-        <translation>Twisted bar</translation>
+        <source>Twisted bar</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/processing/frames.py" line="120" />
-        <source>Clous forgés</source>
-        <translation>Forged studs</translation>
+        <source>Forged studs</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/processing/frames.py" line="134" />
-        <source>Relief léger</source>
-        <translation>Light relief</translation>
+        <source>Light relief</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/processing/frames.py" line="135" />
-        <source>Aplat strict</source>
-        <translation>Flat colour</translation>
+        <source>Flat colour</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/processing/frames.py" line="140" />
-        <source>Uni</source>
-        <translation>Solid</translation>
+        <source>Solid</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/processing/frames.py" line="141" />
-        <source>Dégradé</source>
-        <translation>Gradient</translation>
+        <source>Gradient</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/processing/frames.py" line="142" />
-        <source>Pailleté</source>
-        <translation>Glitter</translation>
+        <source>Glitter</source>
+        <translation type="unfinished" />
     </message>
 </context>
 <context>
     <name>GpuUtils</name>
     <message>
         <location filename="../src/faces/gpu_utils.py" line="45" />
-        <source>CPU (TensorFlow non disponible)</source>
-        <translation>CPU (TensorFlow not available)</translation>
+        <source>CPU (TensorFlow not available)</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/faces/gpu_utils.py" line="51" />
-        <source>CPU (erreur détection GPU : {err})</source>
-        <translation>CPU (GPU detection error: {err})</translation>
+        <source>CPU (GPU detection error: {err})</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/faces/gpu_utils.py" line="66" />
-        <source>GPU : </source>
-        <translation>GPU: </translation>
+        <source>GPU: </source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/faces/gpu_utils.py" line="74" />
-        <source>CPU  (GPU détecté : {hw} — accélération GPU non disponible sur Windows natif avec TF ≥ 2.11)</source>
-        <translation>CPU  (GPU found: {hw} — GPU acceleration is not available on native Windows with TF ≥ 2.11)</translation>
+        <source>CPU  (GPU found: {hw} — GPU acceleration is not available on native Windows with TF ≥ 2.11)</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/faces/gpu_utils.py" line="81" />
-        <source>CPU  (GPU détecté : {hw} — CUDA/cuDNN requis pour l'utiliser)</source>
-        <translation>CPU  (GPU found: {hw} — CUDA/cuDNN required to use it)</translation>
+        <source>CPU  (GPU found: {hw} — CUDA/cuDNN required to use it)</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/faces/gpu_utils.py" line="88" />
-        <source>CPU  (aucun GPU détecté)</source>
-        <translation>CPU  (no GPU found)</translation>
+        <location filename="../src/faces/gpu_utils.py" line="87" />
+        <source>CPU  (no GPU found)</source>
+        <translation type="unfinished" />
     </message>
 </context>
 <context>
     <name>HelpDialog</name>
     <message>
-        <location filename="../src/ui/help_dialog.py" line="51" />
-        <source>Vue d'ensemble</source>
-        <extracomment>Libellés affichés des onglets, indexés par leur clé (cf. _TABS).</extracomment>
-        <translation>Overview</translation>
-    </message>
-    <message>
-        <location filename="../src/ui/help_dialog.py" line="52" />
-        <source>Navigation</source>
-        <translation>Navigation</translation>
-    </message>
-    <message>
         <location filename="../src/ui/help_dialog.py" line="53" />
-        <source>Diaporama</source>
-        <translation>Slideshow</translation>
+        <source>Overview</source>
+        <extracomment>Libellés affichés des onglets, indexés par leur clé (cf. _TABS).</extracomment>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/help_dialog.py" line="54" />
-        <source>Retouches</source>
-        <translation>Editing</translation>
+        <source>Navigation</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/help_dialog.py" line="55" />
-        <source>Visages</source>
-        <translation>Faces</translation>
+        <source>Slideshow</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/help_dialog.py" line="56" />
-        <source>Doublons</source>
-        <translation>Duplicates</translation>
+        <source>Editing</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/help_dialog.py" line="57" />
-        <source>Raccourcis</source>
-        <translation>Shortcuts</translation>
+        <source>Faces</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/help_dialog.py" line="58" />
-        <source>Paramètres</source>
-        <translation>Settings</translation>
+        <source>Duplicates</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/help_dialog.py" line="59" />
-        <source>À propos</source>
-        <translation>About</translation>
+        <source>Shortcuts</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/help_dialog.py" line="138" />
-        <source>Aide — PixelPhotoManager</source>
-        <translation>Help — PixelPhotoManager</translation>
+        <location filename="../src/ui/help_dialog.py" line="60" />
+        <source>Settings</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/help_dialog.py" line="146" />
-        <source>Rechercher dans l'aide…  (Entrée : occurrence suivante)</source>
-        <translation>Search the help…  (Enter: next match)</translation>
+        <location filename="../src/ui/help_dialog.py" line="61" />
+        <source>About</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/help_dialog.py" line="169" />
-        <source>Vérification de la version…</source>
-        <translation>Checking the version…</translation>
+        <location filename="../src/ui/help_dialog.py" line="91" />
+        <source>Help content unavailable ({filename}).</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/help_dialog.py" line="257" />
-        <source>⚠ Une nouvelle version est disponible : &lt;b&gt;{version}&lt;/b&gt; — &lt;a href="{url}" style="color:#6aacf0;"&gt;ouvrir la page de téléchargement&lt;/a&gt;</source>
-        <translation>⚠ A new version is available: &lt;b&gt;{version}&lt;/b&gt; — &lt;a href="{url}" style="color:#6aacf0;"&gt;open the download page&lt;/a&gt;</translation>
+        <location filename="../src/ui/help_dialog.py" line="142" />
+        <source>Help — PixelPhotoManager</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/help_dialog.py" line="266" />
-        <source>✓ Vous disposez de la dernière version.</source>
-        <translation>✓ You have the latest version.</translation>
+        <location filename="../src/ui/help_dialog.py" line="150" />
+        <source>Search the help…  (Enter: next match)</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/help_dialog.py" line="271" />
-        <source>Version locale non comparable (mode développement) — dernière version publiée : &lt;b&gt;{version}&lt;/b&gt;.</source>
-        <translation>Local version not comparable (development mode) — latest published version: &lt;b&gt;{version}&lt;/b&gt;.</translation>
+        <location filename="../src/ui/help_dialog.py" line="174" />
+        <source>Checking the version…</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/help_dialog.py" line="280" />
-        <source>Impossible de vérifier la disponibilité d'une nouvelle version (pas de connexion ?).</source>
-        <translation>Could not check whether a new version is available (no connection?).</translation>
+        <location filename="../src/ui/help_dialog.py" line="262" />
+        <source>⚠ A new version is available: &lt;b&gt;{version}&lt;/b&gt; — &lt;a href="{url}" style="color:#6aacf0;"&gt;open the download page&lt;/a&gt;</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/ui/help_dialog.py" line="270" />
+        <source>✓ You have the latest version.</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/ui/help_dialog.py" line="275" />
+        <source>Local version not comparable (development mode) — latest published version: &lt;b&gt;{version}&lt;/b&gt;.</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/ui/help_dialog.py" line="284" />
+        <source>Could not check whether a new version is available (no connection?).</source>
+        <translation type="unfinished" />
     </message>
 </context>
 <context>
     <name>IgnoredFacesDialog</name>
     <message>
-        <location filename="../src/ui/face_panel.py" line="411" />
-        <source>Visages ignorés</source>
-        <translation>Ignored faces</translation>
+        <location filename="../src/ui/face_panel.py" line="412" />
+        <source>Ignored faces</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/face_panel.py" line="454" />
-        <source>Restaurer</source>
-        <translation>Restore</translation>
+        <location filename="../src/ui/face_panel.py" line="455" />
+        <source>Restore</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/face_panel.py" line="497" />
-        <source>Restauré</source>
-        <translation>Restored</translation>
+        <location filename="../src/ui/face_panel.py" line="498" />
+        <source>Restored</source>
+        <translation type="unfinished" />
     </message>
 </context>
 <context>
     <name>IndexErrorsDialog</name>
     <message>
         <location filename="../src/ui/index_errors_dialog.py" line="19" />
-        <source>Timeout pendant la détection</source>
-        <translation>Timeout during detection</translation>
+        <source>Timeout during detection</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/index_errors_dialog.py" line="20" />
-        <source>Crash du sous-processus de détection</source>
-        <translation>Detection subprocess crashed</translation>
+        <source>Detection subprocess crashed</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/index_errors_dialog.py" line="101" />
-        <source>Visualisation des erreurs d'identification</source>
-        <translation>Identification error review</translation>
+        <location filename="../src/ui/index_errors_dialog.py" line="102" />
+        <source>Identification error review</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/index_errors_dialog.py" line="112" />
-        <source>Photos en erreur d'identification faciale</source>
-        <translation>Photos with a face identification error</translation>
+        <location filename="../src/ui/index_errors_dialog.py" line="113" />
+        <source>Photos with a face identification error</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/index_errors_dialog.py" line="117" />
-        <source>Ces fichiers ont provoqué un timeout ou un crash pendant la détection des visages. Ils sont automatiquement exclus des analyses tant que le problème persiste — relancez le traitement fichier par fichier.</source>
-        <translation>These files caused a timeout or a crash during face detection. They are left out of the analyses as long as the problem lasts — rerun the processing file by file.</translation>
+        <location filename="../src/ui/index_errors_dialog.py" line="118" />
+        <source>These files caused a timeout or a crash during face detection. They are left out of the analyses as long as the problem lasts — rerun the processing file by file.</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/index_errors_dialog.py" line="142" />
-        <source>Fermer</source>
-        <translation>Close</translation>
+        <location filename="../src/ui/index_errors_dialog.py" line="144" />
+        <source>Close</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/index_errors_dialog.py" line="159" />
-        <source>Aucune erreur d'identification en attente.</source>
-        <translation>No identification error pending.</translation>
+        <location filename="../src/ui/index_errors_dialog.py" line="161" />
+        <source>No identification error pending.</source>
+        <translation type="unfinished" />
+    </message>
+</context>
+<context>
+    <name>LanguageButton</name>
+    <message>
+        <location filename="../src/ui/language_button.py" line="56" />
+        <source>Interface language: {language}</source>
+        <extracomment>Émis avec le code retenu quand l'utilisateur change de langue.</extracomment>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/ui/language_button.py" line="58" />
+        <source>Interface language: {language} — applied the next time PixelPhotoManager starts</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/ui/language_button.py" line="92" />
+        <source>Language</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/ui/language_button.py" line="93" />
+        <source>The new language will be applied the next time PixelPhotoManager starts.</source>
+        <translation type="unfinished" />
     </message>
 </context>
 <context>
@@ -4036,2611 +4191,2636 @@ stays visible between the two frames.</translation>
     <message>
         <location filename="../src/ui/treatment_dialogs.py" line="284" />
         <location filename="../src/ui/treatment_dialogs.py" line="294" />
-        <source>Luminosité</source>
-        <translation>Brightness</translation>
+        <source>Brightness</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/treatment_dialogs.py" line="300" />
-        <source>Fonctions avancées…</source>
-        <translation>Advanced options…</translation>
+        <source>Advanced options…</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/treatment_dialogs.py" line="316" />
-        <source>Fonctions très avancées…</source>
-        <translation>Expert options…</translation>
+        <source>Expert options…</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/treatment_dialogs.py" line="328" />
-        <source>Cliquer pour ajouter un point · Glisser pour déplacer · Clic droit pour supprimer</source>
-        <translation>Click to add a point · Drag to move · Right-click to remove</translation>
+        <source>Click to add a point · Drag to move · Right-click to remove</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/treatment_dialogs.py" line="351" />
-        <source>Valider</source>
-        <translation>Apply</translation>
+        <source>Apply</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/treatment_dialogs.py" line="352" />
-        <source>Annuler</source>
-        <translation>Cancel</translation>
+        <source>Cancel</source>
+        <translation type="unfinished" />
     </message>
 </context>
 <context>
     <name>Main</name>
     <message>
         <location filename="../main.py" line="66" />
-        <source>Erreur — PixelPhotoManager</source>
-        <translation>Error — PixelPhotoManager</translation>
+        <source>Error — PixelPhotoManager</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../main.py" line="69" />
-        <source>&lt;b&gt;Une erreur non gérée s'est produite :&lt;/b&gt;</source>
-        <translation>&lt;b&gt;An unhandled error occurred:&lt;/b&gt;</translation>
+        <source>&lt;b&gt;An unhandled error occurred:&lt;/b&gt;</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../main.py" line="78" />
-        <source>Copier le texte</source>
-        <translation>Copy the text</translation>
+        <source>Copy the text</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../main.py" line="80" />
-        <source>Fermer</source>
-        <translation>Close</translation>
+        <source>Close</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../main.py" line="180" />
-        <source>Bienvenue dans PixelPhotoManager</source>
-        <translation>Welcome to PixelPhotoManager</translation>
+        <source>Welcome to PixelPhotoManager</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../main.py" line="187" />
-        <source>Bienvenue dans PixelPhotoManager !</source>
-        <translation>Welcome to PixelPhotoManager!</translation>
+        <source>Welcome to PixelPhotoManager!</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../main.py" line="196" />
-        <source>Où sont vos photos ? Choisissez au moins un dossier à surveiller.</source>
-        <translation>Where are your photos? Choose at least one folder to watch.</translation>
+        <source>Where are your photos? Choose at least one folder to watch.</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../main.py" line="205" />
-        <source>+ Ajouter un dossier</source>
-        <translation>+ Add a folder</translation>
+        <source>+ Add a folder</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../main.py" line="209" />
-        <source>Choisir un dossier</source>
-        <translation>Choose a folder</translation>
+        <source>Choose a folder</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../main.py" line="228" />
-        <source>Reconnaissance des personnes</source>
-        <translation>People recognition</translation>
+        <source>People recognition</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../main.py" line="234" />
-        <source>Analyser automatiquement les visages après chaque scan
-(traitement en arrière-plan — recommandé)</source>
-        <translation>Analyse faces automatically after each scan
-(runs in the background — recommended)</translation>
+        <source>Analyse faces automatically after each scan
+(runs in the background — recommended)</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../main.py" line="242" />
-        <source>La première analyse peut prendre plusieurs minutes selon la taille
-de votre bibliothèque. Elle n'est faite qu'une seule fois par photo.</source>
-        <translation>The first analysis can take several minutes depending on the size
-of your library. It runs only once per photo.</translation>
+        <location filename="../main.py" line="241" />
+        <source>The first analysis can take several minutes depending on the size
+of your library. It runs only once per photo.</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../main.py" line="251" />
-        <source>Commencer →</source>
-        <translation>Get started →</translation>
+        <location filename="../main.py" line="250" />
+        <source>Get started →</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../main.py" line="305" />
-        <source>Chargement des modules…</source>
-        <translation>Loading modules…</translation>
+        <location filename="../main.py" line="304" />
+        <source>Loading modules…</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../main.py" line="321" />
-        <source>Lecture de la configuration…</source>
-        <translation>Reading the configuration…</translation>
+        <location filename="../main.py" line="320" />
+        <source>Reading the configuration…</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../main.py" line="326" />
-        <source>Ouverture du catalogue…</source>
-        <translation>Opening the catalogue…</translation>
+        <location filename="../main.py" line="325" />
+        <source>Opening the catalogue…</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../main.py" line="331" />
-        <source>Initialisation du cache de vignettes…</source>
-        <translation>Setting up the thumbnail cache…</translation>
+        <location filename="../main.py" line="330" />
+        <source>Setting up the thumbnail cache…</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../main.py" line="339" />
-        <source>Préparation du scanner de bibliothèque…</source>
-        <translation>Preparing the library scanner…</translation>
+        <location filename="../main.py" line="338" />
+        <source>Preparing the library scanner…</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../main.py" line="344" />
-        <source>Initialisation de la base de données des visages…</source>
-        <translation>Setting up the face database…</translation>
+        <location filename="../main.py" line="343" />
+        <source>Setting up the face database…</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../main.py" line="359" />
-        <source>Création de la fenêtre principale…</source>
-        <translation>Building the main window…</translation>
+        <location filename="../main.py" line="358" />
+        <source>Building the main window…</source>
+        <translation type="unfinished" />
     </message>
 </context>
 <context>
     <name>MainWindow</name>
     <message>
-        <location filename="../src/ui/main_window.py" line="304" />
-        <source>Fichier</source>
-        <translation>File</translation>
-    </message>
-    <message>
         <location filename="../src/ui/main_window.py" line="305" />
-        <source>Ajouter un dossier…</source>
-        <translation>Add a folder…</translation>
+        <source>File</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/main_window.py" line="309" />
-        <source>Recherche avancée…</source>
-        <translation>Advanced search…</translation>
+        <location filename="../src/ui/main_window.py" line="306" />
+        <source>Add a folder…</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/main_window.py" line="314" />
-        <source>Quitter</source>
-        <translation>Quit</translation>
+        <location filename="../src/ui/main_window.py" line="310" />
+        <source>Advanced search…</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/main_window.py" line="320" />
-        <source>Affichage</source>
-        <translation>View</translation>
+        <location filename="../src/ui/main_window.py" line="315" />
+        <source>Quit</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/main_window.py" line="321" />
-        <source>Afficher/masquer sidebar</source>
-        <translation>Show/hide sidebar</translation>
+        <source>View</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/main_window.py" line="325" />
-        <source>Plein écran</source>
-        <translation>Full screen</translation>
+        <location filename="../src/ui/main_window.py" line="322" />
+        <source>Show/hide sidebar</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/main_window.py" line="330" />
-        <source>Diaporama</source>
-        <translation>Slideshow</translation>
+        <location filename="../src/ui/main_window.py" line="326" />
+        <source>Full screen</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/main_window.py" line="335" />
-        <source>Ordre d'affichage…</source>
-        <translation>Sort order…</translation>
+        <location filename="../src/ui/main_window.py" line="331" />
+        <source>Slideshow</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/main_window.py" line="340" />
-        <source>Outils</source>
-        <translation>Tools</translation>
+        <location filename="../src/ui/main_window.py" line="336" />
+        <source>Sort order…</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/main_window.py" line="341" />
-        <source>Dossiers…</source>
-        <translation>Folders…</translation>
+        <source>Tools</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/main_window.py" line="342" />
-        <source>Gérer les dossiers surveillés et forcer un re-scan</source>
-        <translation>Manage the watched folders and force a rescan</translation>
+        <source>Folders…</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/main_window.py" line="346" />
-        <source>État des doublons…</source>
-        <translation>Duplicate status…</translation>
+        <location filename="../src/ui/main_window.py" line="343" />
+        <source>Manage the watched folders and force a rescan</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/main_window.py" line="347" />
-        <source>Afficher l'état actuel de la détection de doublons</source>
-        <translation>Show the current state of duplicate detection</translation>
+        <location filename="../src/ui/main_window.py" line="348" />
+        <source>Duplicate status…</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/main_window.py" line="351" />
-        <source>Fichiers corrompus…</source>
-        <translation>Corrupted files…</translation>
+        <location filename="../src/ui/main_window.py" line="349" />
+        <source>Show the current state of duplicate detection</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/main_window.py" line="353" />
-        <source>Afficher les fichiers corrompus détectés par l'analyse des doublons</source>
-        <translation>Show the corrupted files found by duplicate analysis</translation>
+        <location filename="../src/ui/main_window.py" line="354" />
+        <source>Corrupted files…</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/main_window.py" line="357" />
-        <source>Fichiers corrompus supprimés…</source>
-        <translation>Deleted corrupted files…</translation>
+        <location filename="../src/ui/main_window.py" line="356" />
+        <source>Show the corrupted files found by duplicate analysis</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/main_window.py" line="359" />
-        <source>Afficher les fichiers corrompus envoyés à la corbeille (pour les y retrouver, ou dans une sauvegarde si elle a été vidée)</source>
-        <translation>Show the corrupted files sent to the recycle bin (to find them there, or in a backup if it has been emptied)</translation>
+        <location filename="../src/ui/main_window.py" line="360" />
+        <source>Deleted corrupted files…</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/main_window.py" line="365" />
-        <source>Synchroniser dates de création avec l'EXIF…</source>
-        <translation>Sync creation dates with EXIF…</translation>
+        <location filename="../src/ui/main_window.py" line="362" />
+        <source>Show the corrupted files sent to the recycle bin (to find them there, or in a backup if it has been emptied)</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/main_window.py" line="367" />
-        <source>Remplace la date de création Windows par la date EXIF pour les fichiers où elles diffèrent</source>
-        <translation>Replaces the Windows creation date with the EXIF date wherever the two differ</translation>
+        <location filename="../src/ui/main_window.py" line="368" />
+        <source>Sync creation dates with EXIF…</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/main_window.py" line="373" />
-        <source>Journal des threads…</source>
-        <translation>Thread journal…</translation>
+        <location filename="../src/ui/main_window.py" line="370" />
+        <source>Replaces the Windows creation date with the EXIF date wherever the two differ</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/main_window.py" line="374" />
-        <source>Afficher le journal d'activité des threads de fond</source>
-        <translation>Show the activity log of the background threads</translation>
+        <location filename="../src/ui/main_window.py" line="376" />
+        <source>Thread journal…</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/main_window.py" line="378" />
-        <source>Historique des problèmes…</source>
-        <translation>Problem history…</translation>
+        <location filename="../src/ui/main_window.py" line="377" />
+        <source>Show the activity log of the background threads</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/main_window.py" line="380" />
-        <source>Afficher l'historique des fichiers corrompus détectés et réparés</source>
-        <translation>Show the history of corrupted files found and repaired</translation>
+        <location filename="../src/ui/main_window.py" line="382" />
+        <source>Problem history…</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/main_window.py" line="385" />
-        <source>Applications externes…</source>
-        <translation>External applications…</translation>
+        <location filename="../src/ui/main_window.py" line="384" />
+        <source>Show the history of corrupted files found and repaired</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/main_window.py" line="387" />
-        <source>Configurer les applications tierces disponibles depuis la visionneuse</source>
-        <translation>Set up the third-party applications available from the viewer</translation>
+        <location filename="../src/ui/main_window.py" line="389" />
+        <source>External applications…</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/main_window.py" line="392" />
-        <source>Paramètres</source>
-        <translation>Settings</translation>
+        <location filename="../src/ui/main_window.py" line="391" />
+        <source>Set up the third-party applications available from the viewer</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/main_window.py" line="397" />
-        <location filename="../src/ui/main_window.py" line="471" />
-        <source>Visages</source>
-        <translation>Faces</translation>
+        <source>Settings</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/main_window.py" line="398" />
-        <source>Importer depuis Picasa…</source>
-        <translation>Import from Picasa…</translation>
+        <location filename="../src/ui/main_window.py" line="402" />
+        <location filename="../src/ui/main_window.py" line="476" />
+        <source>Faces</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/main_window.py" line="403" />
-        <source>Réinitialiser et réindexer…</source>
-        <translation>Reset and reindex…</translation>
+        <source>Import from Picasa…</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/main_window.py" line="406" />
-        <source>Regrouper les visages…</source>
-        <translation>Group faces…</translation>
-    </message>
-    <message>
-        <location filename="../src/ui/main_window.py" line="409" />
-        <source>Rechercher des visages similaires…</source>
-        <translation>Find similar faces…</translation>
+        <location filename="../src/ui/main_window.py" line="408" />
+        <source>Reset and reindex…</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/main_window.py" line="411" />
-        <source>Compare les groupes non identifiés aux personnes déjà nommées et propose les correspondances à vérifier</source>
-        <translation>Compares unidentified groups with people already named and offers the matches for review</translation>
+        <source>Group faces…</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/main_window.py" line="417" />
-        <source>Visualisation des erreurs…</source>
-        <translation>Error review…</translation>
+        <location filename="../src/ui/main_window.py" line="414" />
+        <source>Find similar faces…</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/main_window.py" line="419" />
-        <source>Afficher les photos dont l'identification des visages a échoué (timeout/crash) et relancer le traitement fichier par fichier</source>
-        <translation>Show the photos whose face identification failed (timeout/crash) and reprocess them file by file</translation>
+        <location filename="../src/ui/main_window.py" line="416" />
+        <source>Compares unidentified groups with people already named and offers the matches for review</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/main_window.py" line="425" />
-        <source>Sauvegarder la reconnaissance…</source>
-        <translation>Back up recognition data…</translation>
+        <location filename="../src/ui/main_window.py" line="422" />
+        <source>Error review…</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/main_window.py" line="427" />
-        <source>Crée une sauvegarde de l'état actuel des visages, groupes et personnes</source>
-        <translation>Creates a backup of the current faces, groups and people</translation>
+        <location filename="../src/ui/main_window.py" line="424" />
+        <source>Show the photos whose face identification failed (timeout/crash) and reprocess them file by file</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/main_window.py" line="431" />
-        <source>Gérer les sauvegardes…</source>
-        <translation>Manage backups…</translation>
+        <location filename="../src/ui/main_window.py" line="430" />
+        <source>Back up recognition data…</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/main_window.py" line="433" />
-        <source>Voir, restaurer ou supprimer les sauvegardes de reconnaissance faciale</source>
-        <translation>View, restore or delete the face recognition backups</translation>
+        <location filename="../src/ui/main_window.py" line="432" />
+        <source>Creates a backup of the current faces, groups and people</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/ui/main_window.py" line="436" />
+        <source>Manage backups…</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/main_window.py" line="438" />
-        <source>Compteurs…</source>
-        <translation>Counters…</translation>
+        <source>View, restore or delete the face recognition backups</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/main_window.py" line="443" />
-        <source>Aide</source>
-        <translation>Help</translation>
+        <source>Counters…</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/main_window.py" line="444" />
-        <source>Aide…</source>
-        <translation>Help…</translation>
+        <location filename="../src/ui/main_window.py" line="448" />
+        <source>Help</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/main_window.py" line="449" />
-        <source>À propos</source>
-        <translation>About</translation>
+        <source>Help…</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/main_window.py" line="473" />
-        <source>Afficher / masquer les visages de la photo</source>
-        <translation>Show / hide the faces in the photo</translation>
+        <location filename="../src/ui/main_window.py" line="454" />
+        <source>About</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/main_window.py" line="482" />
-        <source>Afficher / masquer les métadonnées EXIF</source>
-        <translation>Show / hide the EXIF metadata</translation>
+        <location filename="../src/ui/main_window.py" line="478" />
+        <source>Show / hide the faces in the photo</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/main_window.py" line="489" />
-        <source>✏ Annotations</source>
-        <translation>✏ Annotations</translation>
+        <location filename="../src/ui/main_window.py" line="488" />
+        <source>Show / hide the EXIF metadata</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/main_window.py" line="495" />
-        <source>Afficher / masquer le calque d'annotations (dessin/texte)</source>
-        <translation>Show / hide the annotation layer (drawing/text)</translation>
+        <source>✏ Annotations</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/main_window.py" line="501" />
-        <source>⬆  Exporter</source>
-        <translation>⬆  Export</translation>
+        <source>Show / hide the annotation layer (drawing/text)</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/main_window.py" line="503" />
-        <source>Exporter la photo en cours (visionneuse) ou les photos sélectionnées (grille)</source>
-        <translation>Export the current photo (viewer) or the selected photos (grid)</translation>
+        <location filename="../src/ui/main_window.py" line="509" />
+        <source>⬆  Export</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/main_window.py" line="616" />
-        <source>Retour à la page précédente</source>
-        <translation>Back to the previous page</translation>
+        <location filename="../src/ui/main_window.py" line="511" />
+        <source>Export the current photo (viewer) or the selected photos (grid)</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/main_window.py" line="815" />
+        <location filename="../src/ui/main_window.py" line="633" />
+        <source>Back to the previous page</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/ui/main_window.py" line="832" />
         <source>%v / %m photos</source>
-        <translation>%v / %m photos</translation>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/main_window.py" line="844" />
-        <source>Taille :</source>
-        <translation>Size:</translation>
+        <location filename="../src/ui/main_window.py" line="861" />
+        <source>Size:</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/main_window.py" line="858" />
-        <source>Zoom :</source>
-        <translation>Zoom:</translation>
+        <location filename="../src/ui/main_window.py" line="875" />
+        <source>Zoom:</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/main_window.py" line="878" />
-        <source>Retour à la grille</source>
-        <translation>Back to the grid</translation>
+        <location filename="../src/ui/main_window.py" line="895" />
+        <source>Back to the grid</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/main_window.py" line="909" />
-        <source>Mise à jour disponible</source>
-        <translation>Update available</translation>
+        <location filename="../src/ui/main_window.py" line="926" />
+        <source>Update available</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/main_window.py" line="911" />
-        <source>Une nouvelle version de Pixel Photo Manager est disponible : {new}
-(version actuelle : {cur}).
-
-Pensez à lire les notes de version avant d'installer, pour connaître les nouvelles fonctionnalités et vérifier la compatibilité avec votre bibliothèque existante.</source>
-        <translation>A new version of Pixel Photo Manager is available: {new}
+        <location filename="../src/ui/main_window.py" line="928" />
+        <source>A new version of Pixel Photo Manager is available: {new}
 (current version: {cur}).
 
-Do read the release notes before installing, to see what is new and to check compatibility with your existing library.</translation>
+Do read the release notes before installing, to see what is new and to check compatibility with your existing library.</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/main_window.py" line="921" />
-        <source>Ouvrir la page de téléchargement</source>
-        <translation>Open the download page</translation>
+        <location filename="../src/ui/main_window.py" line="936" />
+        <source>Open the download page</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/main_window.py" line="922" />
-        <source>Plus tard</source>
-        <translation>Later</translation>
+        <location filename="../src/ui/main_window.py" line="937" />
+        <source>Later</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/main_window.py" line="1146" />
-        <source>Initialisation de la reconnaissance faciale…</source>
-        <translation>Initialising face recognition…</translation>
+        <location filename="../src/ui/main_window.py" line="1161" />
+        <source>Initialising face recognition…</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/main_window.py" line="1204" />
+        <location filename="../src/ui/main_window.py" line="1222" />
         <source>Photo</source>
         <extracomment>Portée média d'une application externe : la valeur stockée en config ("image"/"video"/"both") n'est jamais traduite — elle est comparée à PhotoInfo.media_type. Seul son libellé l'est.</extracomment>
-        <translation>Photo</translation>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/main_window.py" line="1205" />
-        <source>Vidéo</source>
-        <translation>Video</translation>
-    </message>
-    <message>
-        <location filename="../src/ui/main_window.py" line="1206" />
-        <source>Les deux</source>
-        <translation>Both</translation>
-    </message>
-    <message>
-        <location filename="../src/ui/main_window.py" line="1219" />
-        <source>Applications externes</source>
-        <translation>External applications</translation>
+        <location filename="../src/ui/main_window.py" line="1223" />
+        <source>Video</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/main_window.py" line="1224" />
-        <source>Applications disponibles via leur icône dans la barre de la visionneuse :</source>
-        <translation>Applications available from their icon in the viewer bar:</translation>
+        <source>Both</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/main_window.py" line="1233" />
-        <source>Ajouter…</source>
-        <translation>Add…</translation>
+        <location filename="../src/ui/main_window.py" line="1237" />
+        <source>External applications</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/main_window.py" line="1234" />
-        <source>Supprimer</source>
-        <translation>Remove</translation>
+        <location filename="../src/ui/main_window.py" line="1242" />
+        <source>Applications available from their icon in the viewer bar:</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/main_window.py" line="1248" />
-        <source>Choisir une application</source>
-        <translation>Choose an application</translation>
+        <location filename="../src/ui/main_window.py" line="1251" />
+        <source>Add…</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/main_window.py" line="1249" />
-        <source>Exécutables (*.exe);;Tous les fichiers (*)</source>
-        <translation>Executables (*.exe);;All files (*)</translation>
+        <location filename="../src/ui/main_window.py" line="1252" />
+        <source>Remove</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/main_window.py" line="1255" />
-        <source>Nom de l'application</source>
-        <translation>Application name</translation>
+        <location filename="../src/ui/main_window.py" line="1266" />
+        <source>Choose an application</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/main_window.py" line="1256" />
-        <source>Nom affiché dans l'infobulle :</source>
-        <translation>Name shown in the tooltip:</translation>
+        <location filename="../src/ui/main_window.py" line="1267" />
+        <source>Executables (*.exe);;All files (*)</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/main_window.py" line="1262" />
-        <source>Type de média</source>
-        <translation>Media type</translation>
+        <location filename="../src/ui/main_window.py" line="1273" />
+        <source>Application name</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/main_window.py" line="1263" />
-        <source>Afficher l'icône de cette application pour :</source>
-        <translation>Show this application's icon for:</translation>
+        <location filename="../src/ui/main_window.py" line="1274" />
+        <source>Name shown in the tooltip:</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/main_window.py" line="1495" />
-        <source>Ce dossier ne contient aucune photo cataloguée, mais semble être une copie de DVD (dossier VIDEO_TS).</source>
-        <translation>This folder holds no catalogued photo, but looks like a DVD copy (VIDEO_TS folder).</translation>
+        <location filename="../src/ui/main_window.py" line="1280" />
+        <source>Media type</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/main_window.py" line="1497" />
-        <source>Ouvrir avec un lecteur externe</source>
-        <translation>Open with an external player</translation>
+        <location filename="../src/ui/main_window.py" line="1281" />
+        <source>Show this application's icon for:</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/ui/main_window.py" line="1345" />
+        <source>Scanning… {percent}%  —  {path}</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/ui/main_window.py" line="1515" />
+        <source>This folder holds no catalogued photo, but looks like a DVD copy (VIDEO_TS folder).</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/main_window.py" line="1517" />
-        <source>Aucune application externe configurée</source>
-        <translation>No external application set up</translation>
+        <source>Open with an external player</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/main_window.py" line="1520" />
-        <source>Aucune application externe configurée n'est compatible avec la vidéo (toutes sont limitées aux photos). Configurez-en une (ex. VLC) via le menu Outils › Applications externes… pour pouvoir ouvrir ce dossier.</source>
-        <translation>None of the external applications set up handles video (they are all limited to photos). Set one up (VLC, for instance) from Tools › External applications… to open this folder.</translation>
+        <location filename="../src/ui/main_window.py" line="1537" />
+        <source>No external application set up</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/main_window.py" line="1527" />
-        <source>Configurez d'abord une application externe (ex. VLC) via le menu Outils › Applications externes… pour pouvoir ouvrir ce dossier.</source>
-        <translation>Set up an external application first (VLC, for instance) from Tools › External applications… to open this folder.</translation>
+        <location filename="../src/ui/main_window.py" line="1540" />
+        <source>None of the external applications set up handles video (they are all limited to photos). Set one up (VLC, for instance) from Tools › External applications… to open this folder.</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/main_window.py" line="1562" />
-        <source>Impossible de lancer l'application</source>
-        <translation>Could not start the application</translation>
+        <location filename="../src/ui/main_window.py" line="1547" />
+        <source>Set up an external application first (VLC, for instance) from Tools › External applications… to open this folder.</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/main_window.py" line="1563" />
-        <source>Échec du lancement de :
+        <location filename="../src/ui/main_window.py" line="1583" />
+        <source>Could not start the application</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/ui/main_window.py" line="1584" />
+        <source>Failed to start:
 {path}
 
 {error}</source>
-        <translation>Failed to start:
-{path}
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/ui/main_window.py" line="1747" />
+        <source>Remove the folder</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/ui/main_window.py" line="1748" />
+        <source>Stop watching “{folder}”?
 
-{error}</translation>
+&lt;b&gt;{count}&lt;/b&gt; photo(s) will be removed from the catalogue, along with their thumbnails and faces. The files themselves stay untouched on disk.</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/main_window.py" line="1726" />
-        <source>Retirer le dossier</source>
-        <translation>Remove the folder</translation>
+        <location filename="../src/ui/main_window.py" line="1788" />
+        <source>{name}: already exists at the destination</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/main_window.py" line="1727" />
-        <source>Retirer «{folder}» de la surveillance ?
-
-&lt;b&gt;{count}&lt;/b&gt; photo(s) seront supprimées du catalogue, ainsi que les vignettes et les visages associés. Les fichiers restent intacts sur le disque.</source>
-        <translation>Stop watching “{folder}”?
-
-&lt;b&gt;{count}&lt;/b&gt; photo(s) will be removed from the catalogue, along with their thumbnails and faces. The files themselves stay untouched on disk.</translation>
+        <location filename="../src/ui/main_window.py" line="1818" />
+        <source>Errors while moving</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/main_window.py" line="1768" />
-        <source>{name} : existe déjà dans la destination</source>
-        <translation>{name}: already exists at the destination</translation>
+        <location filename="../src/ui/main_window.py" line="1868" />
+        <source>Photo not found</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/main_window.py" line="1798" />
-        <source>Erreurs lors du déplacement</source>
-        <translation>Errors while moving</translation>
-    </message>
-    <message>
-        <location filename="../src/ui/main_window.py" line="1848" />
-        <source>Photo introuvable</source>
-        <translation>Photo not found</translation>
-    </message>
-    <message>
-        <location filename="../src/ui/main_window.py" line="1849" />
-        <source>La photo n'est plus dans la bibliothèque :
+        <location filename="../src/ui/main_window.py" line="1869" />
+        <source>The photo is no longer in the library:
 {path}</source>
-        <translation>The photo is no longer in the library:
-{path}</translation>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/main_window.py" line="1923" />
-        <source>Supprimer l'album</source>
-        <translation>Delete the album</translation>
+        <location filename="../src/ui/main_window.py" line="1943" />
+        <source>Delete the album</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/main_window.py" line="1924" />
-        <source>Supprimer l'album «{name}» ({count} photo(s)) ?
+        <location filename="../src/ui/main_window.py" line="1944" />
+        <source>Delete the album “{name}” ({count} photo(s))?
 
-Les photos restent intactes dans le catalogue et sur le disque ; seul l'album est supprimé.</source>
-        <translation>Delete the album “{name}” ({count} photo(s))?
+The photos stay untouched in the catalogue and on disk; only the album is deleted.</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/ui/main_window.py" line="1964" />
+        <source>Delete the keyword</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/ui/main_window.py" line="1965" />
+        <source>Delete the keyword “{tag}” ({count} photo(s))?
 
-The photos stay untouched in the catalogue and on disk; only the album is deleted.</translation>
+The keyword will be removed from every photo that carries it. The photos and their other keywords stay untouched.</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/main_window.py" line="1945" />
-        <source>Supprimer le mot-clé</source>
-        <translation>Delete the keyword</translation>
+        <location filename="../src/ui/main_window.py" line="2000" />
+        <location filename="../src/ui/main_window.py" line="2005" />
+        <source>Add to an album</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/main_window.py" line="1946" />
-        <source>Supprimer le mot-clé « {tag} » ({count} photo(s)) ?
-
-Le mot-clé sera retiré de toutes les photos concernées. Les photos et les autres mots-clés restent intacts.</source>
-        <translation>Delete the keyword “{tag}” ({count} photo(s))?
-
-The keyword will be removed from every photo that carries it. The photos and their other keywords stay untouched.</translation>
+        <location filename="../src/ui/main_window.py" line="2001" />
+        <source>No album yet.
+Create one first from the Albums panel.</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/main_window.py" line="1981" />
-        <location filename="../src/ui/main_window.py" line="1986" />
-        <source>Ajouter à un album</source>
-        <translation>Add to an album</translation>
+        <location filename="../src/ui/main_window.py" line="2009" />
+        <source>Choose the album for {count} photo(s):</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/main_window.py" line="1982" />
-        <source>Aucun album existant.
-Créez d'abord un album via le panneau Albums.</source>
-        <translation>No album yet.
-Create one first from the Albums panel.</translation>
-    </message>
-    <message>
-        <location filename="../src/ui/main_window.py" line="1990" />
-        <source>Choisissez l'album pour {count} photo(s) :</source>
-        <translation>Choose the album for {count} photo(s):</translation>
-    </message>
-    <message>
-        <location filename="../src/ui/main_window.py" line="1994" />
+        <location filename="../src/ui/main_window.py" line="2013" />
         <source>{name}  ({count} photo(s))</source>
-        <translation>{name}  ({count} photo(s))</translation>
-    </message>
-    <message>
-        <location filename="../src/ui/main_window.py" line="2012" />
-        <source>{count} photo(s) ajoutée(s) à « {name} »</source>
-        <translation>{count} photo(s) added to “{name}”</translation>
-    </message>
-    <message>
-        <location filename="../src/ui/main_window.py" line="2019" />
-        <source>Nouvel album</source>
-        <translation>New album</translation>
-    </message>
-    <message>
-        <location filename="../src/ui/main_window.py" line="2020" />
-        <source>Nom du nouvel album ({count} photo(s) sélectionnée(s)) :</source>
-        <translation>Name of the new album ({count} photo(s) selected):</translation>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/main_window.py" line="2031" />
-        <source>Album « {name} » créé avec {count} photo(s)</source>
-        <translation>Album “{name}” created with {count} photo(s)</translation>
+        <source>{count} photo(s) added to “{name}”</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/main_window.py" line="2134" />
-        <source>Choisir un dossier de photos</source>
-        <translation>Choose a photo folder</translation>
+        <location filename="../src/ui/main_window.py" line="2038" />
+        <source>New album</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/main_window.py" line="2252" />
-        <source>Envoyer « {name} » à la corbeille Windows ?
+        <location filename="../src/ui/main_window.py" line="2039" />
+        <source>Name of the new album ({count} photo(s) selected):</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/ui/main_window.py" line="2050" />
+        <source>Album “{name}” created with {count} photo(s)</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/ui/main_window.py" line="2153" />
+        <source>Choose a photo folder</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/ui/main_window.py" line="2271" />
+        <source>Send “{name}” to the Windows recycle bin?
 
-Le fichier restera récupérable depuis la corbeille.</source>
-        <translation>Send “{name}” to the Windows recycle bin?
+The file will still be recoverable from the recycle bin.</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/ui/main_window.py" line="2277" />
+        <source>Send the {count} selected files to the Windows recycle bin?
 
-The file will still be recoverable from the recycle bin.</translation>
+They will still be recoverable from the recycle bin.</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/main_window.py" line="2258" />
-        <source>Envoyer les {count} fichiers sélectionnés à la corbeille Windows ?
-
-Ils resteront récupérables depuis la corbeille.</source>
-        <translation>Send the {count} selected files to the Windows recycle bin?
-
-They will still be recoverable from the recycle bin.</translation>
+        <location filename="../src/ui/main_window.py" line="2282" />
+        <source>Confirm deletion</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/main_window.py" line="2263" />
-        <source>Confirmer la suppression</source>
-        <translation>Confirm deletion</translation>
+        <location filename="../src/ui/main_window.py" line="2285" />
+        <source>Do not ask again</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/main_window.py" line="2266" />
-        <source>Ne plus demander de confirmation</source>
-        <translation>Do not ask again</translation>
+        <location filename="../src/ui/main_window.py" line="2302" />
+        <source>Deletion queued…</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/main_window.py" line="2283" />
-        <source>Suppression mise en file d'attente…</source>
-        <translation>Deletion queued…</translation>
+        <location filename="../src/ui/main_window.py" line="2337" />
+        <location filename="../src/ui/main_window_duplicates.py" line="615" />
+        <source>Deleting… {done}/{total}</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/main_window.py" line="2399" />
-        <source>Erreurs de suppression</source>
-        <translation>Deletion errors</translation>
+        <location filename="../src/ui/main_window.py" line="2420" />
+        <source>Deletion errors</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/main_window.py" line="2400" />
-        <source>Impossible de supprimer :
+        <location filename="../src/ui/main_window.py" line="2421" />
+        <source>Cannot delete:
 {details}</source>
-        <translation>Cannot delete:
-{details}</translation>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/main_window.py" line="2592" />
-        <source>{sel} photos sélectionnées  —  {total} au total</source>
-        <translation>{sel} photos selected  —  {total} in total</translation>
+        <location filename="../src/ui/main_window.py" line="2613" />
+        <source>{sel} photos selected  —  {total} in total</source>
+        <translation type="unfinished" />
     </message>
     <message numerus="yes">
-        <location filename="../src/ui/main_window.py" line="2596" />
+        <location filename="../src/ui/main_window.py" line="2617" />
         <source>%n photo(s)</source>
         <translation><numerusform>%n photo</numerusform><numerusform>%n photos</numerusform></translation></message>
     <message>
-        <location filename="../src/ui/main_window.py" line="2608" />
-        <source>Renommer l'image</source>
-        <translation>Rename the image</translation>
+        <location filename="../src/ui/main_window.py" line="2629" />
+        <source>Rename the image</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/main_window.py" line="2609" />
-        <source>Nouveau nom :</source>
-        <translation>New name:</translation>
-    </message>
-    <message>
-        <location filename="../src/ui/main_window.py" line="2621" />
-        <source>Nom invalide</source>
-        <translation>Invalid name</translation>
-    </message>
-    <message>
-        <location filename="../src/ui/main_window.py" line="2622" />
-        <source>Le nom ne peut pas contenir les caractères : \ / : * ? " &lt; &gt; |</source>
-        <translation>The name cannot contain these characters: \ / : * ? " &lt; &gt; |</translation>
-    </message>
-    <message>
-        <location filename="../src/ui/main_window.py" line="2631" />
-        <location filename="../src/ui/main_window.py" line="2679" />
-        <source>Fichier existant</source>
-        <translation>File already exists</translation>
-    </message>
-    <message>
-        <location filename="../src/ui/main_window.py" line="2632" />
-        <location filename="../src/ui/main_window.py" line="2680" />
-        <source>Un fichier nommé « {name} » existe déjà dans ce dossier.</source>
-        <translation>A file named “{name}” already exists in this folder.</translation>
+        <location filename="../src/ui/main_window.py" line="2630" />
+        <source>New name:</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/main_window.py" line="2642" />
-        <location filename="../src/ui/main_window.py" line="2690" />
-        <location filename="../src/ui/main_window.py" line="2915" />
-        <source>Erreur</source>
-        <translation>Error</translation>
+        <source>Invalid name</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/main_window.py" line="2643" />
-        <source>Impossible de renommer le fichier :
+        <source>The name cannot contain these characters: \ / : * ? " &lt; &gt; |</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/ui/main_window.py" line="2653" />
+        <location filename="../src/ui/main_window.py" line="2701" />
+        <source>File already exists</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/ui/main_window.py" line="2654" />
+        <location filename="../src/ui/main_window.py" line="2702" />
+        <source>A file named “{name}” already exists in this folder.</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/ui/main_window.py" line="2664" />
+        <location filename="../src/ui/main_window.py" line="2712" />
+        <location filename="../src/ui/main_window.py" line="2938" />
+        <source>Error</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/ui/main_window.py" line="2665" />
+        <source>Cannot rename the file:
 {error}</source>
-        <translation>Cannot rename the file:
-{error}</translation>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/main_window.py" line="2668" />
-        <source>Déplacer vers…</source>
-        <translation>Move to…</translation>
+        <location filename="../src/ui/main_window.py" line="2690" />
+        <source>Move to…</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/main_window.py" line="2691" />
-        <source>Impossible de déplacer le fichier :
+        <location filename="../src/ui/main_window.py" line="2713" />
+        <source>Cannot move the file:
 {error}</source>
-        <translation>Cannot move the file:
-{error}</translation>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/main_window.py" line="2733" />
-        <source>Échec de la sauvegarde</source>
-        <translation>Save failed</translation>
+        <location filename="../src/ui/main_window.py" line="2755" />
+        <source>Save failed</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/main_window.py" line="2734" />
-        <source>Impossible de copier l'original dans .tmp_originals :
+        <location filename="../src/ui/main_window.py" line="2756" />
+        <source>Cannot copy the original into .tmp_originals:
 {error}
 
-Voulez-vous quand même écraser le fichier original ?</source>
-        <translation>Cannot copy the original into .tmp_originals:
-{error}
-
-Do you still want to overwrite the original file?</translation>
+Do you still want to overwrite the original file?</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/main_window.py" line="2748" />
-        <source>_retouché</source>
-        <translation>_edited</translation>
+        <location filename="../src/ui/main_window.py" line="2770" />
+        <source>_edited</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/main_window.py" line="2751" />
-        <source>Enregistrer l'image traitée</source>
-        <translation>Save the edited image</translation>
+        <location filename="../src/ui/main_window.py" line="2773" />
+        <source>Save the edited image</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/main_window.py" line="2753" />
-        <source>JPEG (*.jpg *.jpeg);;PNG (*.png);;Tous les fichiers (*)</source>
-        <translation>JPEG (*.jpg *.jpeg);;PNG (*.png);;All files (*)</translation>
+        <location filename="../src/ui/main_window.py" line="2775" />
+        <source>JPEG (*.jpg *.jpeg);;PNG (*.png);;All files (*)</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/main_window.py" line="2826" />
-        <source>Image sauvée : {name}</source>
-        <translation>Image saved: {name}</translation>
+        <location filename="../src/ui/main_window.py" line="2848" />
+        <source>Image saved: {name}</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/main_window.py" line="2831" />
-        <source>Erreur d'export</source>
-        <translation>Export error</translation>
+        <location filename="../src/ui/main_window.py" line="2853" />
+        <source>Export error</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/main_window.py" line="2832" />
-        <source>Impossible de sauver l'image :
+        <location filename="../src/ui/main_window.py" line="2854" />
+        <source>Cannot save the image:
 {error}</source>
-        <translation>Cannot save the image:
-{error}</translation>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/main_window.py" line="2888" />
-        <source>Exporter</source>
-        <translation>Export</translation>
+        <location filename="../src/ui/main_window.py" line="2910" />
+        <source>Export</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/main_window.py" line="2889" />
-        <source>Sélectionnez au moins une photo dans la grille avant d'exporter.</source>
-        <translation>Select at least one photo in the grid before exporting.</translation>
+        <location filename="../src/ui/main_window.py" line="2911" />
+        <source>Select at least one photo in the grid before exporting.</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/main_window.py" line="2916" />
-        <source>Impossible de créer le dossier :
+        <location filename="../src/ui/main_window.py" line="2939" />
+        <source>Cannot create the folder:
 {error}</source>
-        <translation>Cannot create the folder:
-{error}</translation>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/main_window.py" line="2925" />
+        <location filename="../src/ui/main_window.py" line="2948" />
         <source>Export {cur}/{total}  —  {name}</source>
-        <translation>Export {cur}/{total}  —  {name}</translation>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/main_window.py" line="2978" />
-        <source>Erreurs d'export</source>
-        <translation>Export errors</translation>
+        <location filename="../src/ui/main_window.py" line="3001" />
+        <source>Export errors</source>
+        <translation type="unfinished" />
     </message>
     <message numerus="yes">
-        <location filename="../src/ui/main_window.py" line="2979" />
-        <source>%n fichier(s) non exporté(s) :</source>
+        <location filename="../src/ui/main_window.py" line="3002" />
+        <source>%n file(s) not exported:</source>
         <translation><numerusform>%n file not exported:</numerusform><numerusform>%n files not exported:</numerusform></translation></message>
     <message numerus="yes">
-        <location filename="../src/ui/main_window.py" line="2984" />
-        <source>%n photo(s) exportée(s)</source>
+        <location filename="../src/ui/main_window.py" line="3007" />
+        <source>%n photo(s) exported</source>
         <translation><numerusform>%n photo exported</numerusform><numerusform>%n photos exported</numerusform></translation></message>
     <message>
-        <location filename="../src/ui/main_window.py" line="3027" />
-        <source>Toutes les photos</source>
-        <translation>All photos</translation>
+        <location filename="../src/ui/main_window.py" line="3050" />
+        <source>All photos</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/main_window.py" line="3028" />
-        <source>Favoris</source>
-        <translation>Favourites</translation>
+        <location filename="../src/ui/main_window.py" line="3051" />
+        <source>Favourites</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/main_window.py" line="3029" />
-        <source>Vidéos</source>
-        <translation>Videos</translation>
+        <location filename="../src/ui/main_window.py" line="3052" />
+        <source>Videos</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/main_window.py" line="3030" />
-        <source>Par notes</source>
-        <translation>By rating</translation>
+        <location filename="../src/ui/main_window.py" line="3053" />
+        <source>By rating</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/main_window.py" line="3031" />
-        <source>Recherche avancée</source>
-        <translation>Advanced search</translation>
+        <location filename="../src/ui/main_window.py" line="3054" />
+        <source>Advanced search</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/main_window.py" line="3037" />
-        <source>Par notes : {n}★ et plus</source>
-        <translation>By rating: {n}★ and above</translation>
+        <location filename="../src/ui/main_window.py" line="3060" />
+        <source>By rating: {n}★ and above</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/main_window.py" line="3040" />
-        <source>Fichiers : {query}</source>
-        <translation>Files: {query}</translation>
+        <location filename="../src/ui/main_window.py" line="3063" />
+        <source>Files: {query}</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/main_window.py" line="3041" />
-        <source>Mot-clé : {query}</source>
-        <translation>Keyword: {query}</translation>
+        <location filename="../src/ui/main_window.py" line="3064" />
+        <source>Keyword: {query}</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/main_window.py" line="3110" />
-        <source>Regroupement en cours</source>
-        <translation>Grouping in progress</translation>
+        <location filename="../src/ui/main_window.py" line="3133" />
+        <source>Grouping in progress</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/main_window.py" line="3112" />
-        <source>&lt;b&gt;Un regroupement de visages est en cours.&lt;/b&gt;</source>
-        <translation>&lt;b&gt;A face grouping is running.&lt;/b&gt;</translation>
+        <location filename="../src/ui/main_window.py" line="3135" />
+        <source>&lt;b&gt;A face grouping is running.&lt;/b&gt;</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/main_window.py" line="3114" />
-        <source>Le regroupement tourne depuis &lt;b&gt;{duration}&lt;/b&gt;.&lt;br&gt;&lt;br&gt;Si vous fermez l'application maintenant, le calcul sera interrompu et &lt;b&gt;le résultat sera perdu&lt;/b&gt;. Il faudra tout recommencer au prochain démarrage.&lt;br&gt;&lt;br&gt;Voulez-vous quand même fermer l'application ?</source>
-        <translation>Grouping has been running for &lt;b&gt;{duration}&lt;/b&gt;.&lt;br&gt;&lt;br&gt;If you close the application now, the computation stops and &lt;b&gt;its result is lost&lt;/b&gt;. It will have to start over at the next launch.&lt;br&gt;&lt;br&gt;Close the application anyway?</translation>
+        <location filename="../src/ui/main_window.py" line="3137" />
+        <source>Grouping has been running for &lt;b&gt;{duration}&lt;/b&gt;.&lt;br&gt;&lt;br&gt;If you close the application now, the computation stops and &lt;b&gt;its result is lost&lt;/b&gt;. It will have to start over at the next launch.&lt;br&gt;&lt;br&gt;Close the application anyway?</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/main_window.py" line="3127" />
-        <source>Fermer quand même</source>
-        <translation>Close anyway</translation>
+        <location filename="../src/ui/main_window.py" line="3149" />
+        <source>Close anyway</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/main_window.py" line="3128" />
-        <source>Annuler</source>
-        <translation>Cancel</translation>
+        <location filename="../src/ui/main_window.py" line="3151" />
+        <source>Cancel</source>
+        <translation type="unfinished" />
     </message>
 </context>
 <context>
     <name>MergePersonsDialog</name>
     <message>
-        <location filename="../src/ui/people_panel.py" line="495" />
-        <source>Fusionner avec…</source>
-        <translation>Merge with…</translation>
+        <location filename="../src/ui/people_panel.py" line="496" />
+        <source>Merge with…</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/people_panel.py" line="507" />
-        <source>Fusionner &lt;b&gt;{name}&lt;/b&gt; avec :</source>
-        <translation>Merge &lt;b&gt;{name}&lt;/b&gt; with:</translation>
+        <location filename="../src/ui/people_panel.py" line="508" />
+        <source>Merge &lt;b&gt;{name}&lt;/b&gt; with:</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/people_panel.py" line="511" />
-        <source>Aucune autre personne à fusionner.</source>
-        <translation>No other person to merge with.</translation>
+        <location filename="../src/ui/people_panel.py" line="512" />
+        <source>No other person to merge with.</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/people_panel.py" line="521" />
-        <source>🔍  Rechercher un nom…</source>
-        <translation>🔍  Search for a name…</translation>
+        <location filename="../src/ui/people_panel.py" line="523" />
+        <source>🔍  Search for a name…</source>
+        <translation type="unfinished" />
     </message>
     <message numerus="yes">
-        <location filename="../src/ui/people_panel.py" line="536" />
+        <location filename="../src/ui/people_panel.py" line="539" />
         <source>%n photo(s)</source>
         <translation><numerusform>%n photo</numerusform><numerusform>%n photos</numerusform></translation></message>
     <message>
-        <location filename="../src/ui/people_panel.py" line="557" />
-        <source>Les visages de &lt;i&gt;{name}&lt;/i&gt; seront rattachés à la personne choisie.
-{name} sera ensuite supprimé.</source>
-        <translation>The faces of &lt;i&gt;{name}&lt;/i&gt; will be attached to the person you pick.
-{name} will then be deleted.</translation>
+        <location filename="../src/ui/people_panel.py" line="560" />
+        <source>The faces of &lt;i&gt;{name}&lt;/i&gt; will be attached to the person you pick.
+{name} will then be deleted.</source>
+        <translation type="unfinished" />
     </message>
 </context>
 <context>
     <name>MergePickerDialog</name>
     <message>
         <location filename="../src/ui/face_merge_dialog.py" line="156" />
-        <source>Aucun autre groupe disponible.</source>
-        <translation>No other group available.</translation>
+        <source>No other group available.</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/face_merge_dialog.py" line="163" />
-        <source>Fusionner</source>
-        <translation>Merge</translation>
+        <source>Merge</source>
+        <translation type="unfinished" />
     </message>
 </context>
 <context>
     <name>OrderSection</name>
     <message>
         <location filename="../src/ui/display_order_dialog.py" line="48" />
-        <source>Alphabétique</source>
-        <translation>Alphabetical</translation>
+        <source>Alphabetical</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/display_order_dialog.py" line="49" />
-        <source>Chronologique</source>
-        <translation>Chronological</translation>
+        <source>Chronological</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/display_order_dialog.py" line="58" />
-        <source>Croissant</source>
-        <translation>Ascending</translation>
+        <source>Ascending</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/display_order_dialog.py" line="59" />
-        <source>Décroissant</source>
-        <translation>Descending</translation>
+        <source>Descending</source>
+        <translation type="unfinished" />
     </message>
 </context>
 <context>
     <name>PeopleDialog</name>
     <message>
-        <location filename="../src/ui/people_panel.py" line="619" />
-        <source>Identifier les personnes</source>
-        <translation>Identify the people</translation>
+        <location filename="../src/ui/people_panel.py" line="622" />
+        <source>Identify the people</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/people_panel.py" line="630" />
-        <source>PixelPhotoManager a regroupé automatiquement les visages similaires.
-Nommez chaque groupe pour créer un album par personne.</source>
-        <translation>PixelPhotoManager has automatically gathered the similar faces.
-Name each group to create one album per person.</translation>
+        <location filename="../src/ui/people_panel.py" line="633" />
+        <source>PixelPhotoManager has automatically gathered the similar faces.
+Name each group to create one album per person.</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/people_panel.py" line="647" />
-        <source>Fermer</source>
-        <translation>Close</translation>
+        <location filename="../src/ui/people_panel.py" line="651" />
+        <source>Close</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/people_panel.py" line="674" />
-        <source>Tous les groupes ont été nommés.
-
-Ajoutez de nouvelles photos et relancez
-l'analyse pour détecter de nouveaux visages.</source>
-        <translation>Every group has been named.
+        <location filename="../src/ui/people_panel.py" line="678" />
+        <source>Every group has been named.
 
 Add new photos and run the analysis
-again to find new faces.</translation>
+again to find new faces.</source>
+        <translation type="unfinished" />
     </message>
 </context>
 <context>
     <name>PeoplePanel</name>
     <message>
-        <location filename="../src/ui/people_panel.py" line="425" />
-        <source>Isolé</source>
-        <translation>Isolated</translation>
+        <location filename="../src/ui/people_panel.py" line="426" />
+        <source>Isolated</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/people_panel.py" line="426" />
-        <source>Groupe {id}</source>
-        <translation>Group {id}</translation>
+        <location filename="../src/ui/people_panel.py" line="427" />
+        <source>Group {id}</source>
+        <translation type="unfinished" />
     </message>
     <message numerus="yes">
-        <location filename="../src/ui/people_panel.py" line="427" />
-        <source>%n visage(s)</source>
+        <location filename="../src/ui/people_panel.py" line="428" />
+        <source>%n face(s)</source>
         <translation><numerusform>%n face</numerusform><numerusform>%n faces</numerusform></translation></message>
     <message>
-        <location filename="../src/ui/people_panel.py" line="437" />
-        <source>→ Probablement {name} ({pct} %)</source>
-        <translation>→ Probably {name} ({pct} %)</translation>
+        <location filename="../src/ui/people_panel.py" line="438" />
+        <source>→ Probably {name} ({pct} %)</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/people_panel.py" line="441" />
-        <source>→ Peut-être {name} ({pct} %)</source>
-        <translation>→ Maybe {name} ({pct} %)</translation>
+        <location filename="../src/ui/people_panel.py" line="442" />
+        <source>→ Maybe {name} ({pct} %)</source>
+        <translation type="unfinished" />
     </message>
 </context>
 <context>
     <name>PerformancePage</name>
     <message>
-        <location filename="../src/ui/settings_dialog.py" line="332" />
-        <source>Économe (recommandé)</source>
-        <translation>Frugal (recommended)</translation>
-    </message>
-    <message>
-        <location filename="../src/ui/settings_dialog.py" line="333" />
-        <source>Priorité à la réactivité et au silence du ventilateur.
-Les analyses de fond prennent nettement plus longtemps.</source>
-        <translation>Favours responsiveness and a quiet fan.
-Background analyses take noticeably longer.</translation>
+        <location filename="../src/ui/settings_dialog.py" line="335" />
+        <source>Frugal (recommended)</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/settings_dialog.py" line="336" />
-        <source>Équilibré</source>
-        <translation>Balanced</translation>
-    </message>
-    <message>
-        <location filename="../src/ui/settings_dialog.py" line="337" />
-        <source>Compromis entre avancement des analyses et confort d'utilisation.</source>
-        <translation>A compromise between analysis progress and comfort of use.</translation>
+        <source>Favours responsiveness and a quiet fan.
+Background analyses take noticeably longer.</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/settings_dialog.py" line="339" />
-        <source>Maximum</source>
-        <translation>Maximum</translation>
+        <source>Balanced</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/settings_dialog.py" line="340" />
-        <source>Aucun bridage : les analyses vont aussi vite que possible,
-au prix d'une machine sensiblement plus chargée.</source>
-        <translation>No throttling: the analyses run as fast as they can,
-at the cost of a noticeably busier machine.</translation>
+        <source>A compromise between analysis progress and comfort of use.</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/settings_dialog.py" line="356" />
-        <source>Performances</source>
-        <translation>Performance</translation>
+        <location filename="../src/ui/settings_dialog.py" line="342" />
+        <source>Maximum</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/settings_dialog.py" line="367" />
-        <source>Charge CPU des traitements de fond</source>
-        <translation>CPU load of the background processing</translation>
+        <location filename="../src/ui/settings_dialog.py" line="343" />
+        <source>No throttling: the analyses run as fast as they can,
+at the cost of a noticeably busier machine.</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/settings_dialog.py" line="372" />
-        <source>La détection de doublons et l'indexation des visages tournent en
-continu, sans intervention de votre part. Ce réglage détermine la
-part de processeur qu'elles s'autorisent pendant que vous utilisez
-l'application.</source>
-        <translation>Duplicate detection and face indexing run continuously, without
+        <location filename="../src/ui/settings_dialog.py" line="359" />
+        <source>Performance</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/ui/settings_dialog.py" line="370" />
+        <source>CPU load of the background processing</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/ui/settings_dialog.py" line="375" />
+        <source>Duplicate detection and face indexing run continuously, without
 any action from you. This setting decides how much of the
 processor they may use while you are working in the
-application.</translation>
+application.</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/settings_dialog.py" line="390" />
-        <source>{label} — environ {pct} % du temps de calcul</source>
-        <translation>{label} — about {pct} % of the computing time</translation>
+        <location filename="../src/ui/settings_dialog.py" line="393" />
+        <source>{label} — about {pct} % of the computing time</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/settings_dialog.py" line="408" />
-        <source>Quelle que soit la valeur choisie, le bridage est automatiquement
-levé après {sec} secondes sans interaction : si vous ne vous servez
-pas de l'application, les analyses reprennent à pleine vitesse.</source>
-        <translation>Whatever value you pick, the throttling is lifted automatically
+        <location filename="../src/ui/settings_dialog.py" line="411" />
+        <source>Whatever value you pick, the throttling is lifted automatically
 after {sec} seconds without interaction: if you are not using
-the application, the analyses go back to full speed.</translation>
+the application, the analyses go back to full speed.</source>
+        <translation type="unfinished" />
     </message>
 </context>
 <context>
     <name>PersonClusterView</name>
     <message>
         <location filename="../src/ui/person_cluster_view.py" line="294" />
-        <location filename="../src/ui/person_cluster_view.py" line="471" />
-        <source>Visages de {name}</source>
-        <translation>Faces of {name}</translation>
+        <location filename="../src/ui/person_cluster_view.py" line="472" />
+        <source>Faces of {name}</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/person_cluster_view.py" line="316" />
-        <source>← Retour</source>
-        <translation>← Back</translation>
+        <source>← Back</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/person_cluster_view.py" line="358" />
-        <source>En attente de vérification</source>
-        <translation>Awaiting verification</translation>
+        <source>Awaiting verification</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/person_cluster_view.py" line="365" />
-        <source>✗ Rejeter toutes</source>
-        <translation>✗ Reject all</translation>
+        <source>✗ Reject all</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/person_cluster_view.py" line="376" />
-        <source>✓ Accepter toutes</source>
-        <translation>✓ Accept all</translation>
+        <source>✓ Accept all</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/person_cluster_view.py" line="419" />
-        <location filename="../src/ui/person_cluster_view.py" line="485" />
-        <location filename="../src/ui/person_cluster_view.py" line="842" />
-        <source>Aucun visage associé à cette personne.</source>
-        <translation>No face assigned to this person.</translation>
+        <location filename="../src/ui/person_cluster_view.py" line="486" />
+        <location filename="../src/ui/person_cluster_view.py" line="845" />
+        <source>No face assigned to this person.</source>
+        <translation type="unfinished" />
     </message>
     <message numerus="yes">
-        <location filename="../src/ui/person_cluster_view.py" line="508" />
-        <source>Suggestion {pct} % — %n visage(s)</source>
+        <location filename="../src/ui/person_cluster_view.py" line="510" />
+        <source>Suggestion {pct} % — %n face(s)</source>
         <translation><numerusform>Suggestion {pct} % — %n face</numerusform><numerusform>Suggestion {pct} % — %n faces</numerusform></translation></message>
     <message>
-        <location filename="../src/ui/person_cluster_view.py" line="634" />
-        <source>✓ Accepter cette suggestion</source>
-        <translation>✓ Accept this suggestion</translation>
+        <location filename="../src/ui/person_cluster_view.py" line="636" />
+        <source>✓ Accept this suggestion</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/person_cluster_view.py" line="635" />
-        <source>✗ Rejeter cette suggestion</source>
-        <translation>✗ Reject this suggestion</translation>
+        <location filename="../src/ui/person_cluster_view.py" line="637" />
+        <source>✗ Reject this suggestion</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/person_cluster_view.py" line="757" />
-        <source>les {n} photos</source>
-        <translation>the {n} photos</translation>
+        <location filename="../src/ui/person_cluster_view.py" line="759" />
+        <source>the {n} photos</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/person_cluster_view.py" line="758" />
-        <source>cette photo</source>
-        <translation>this photo</translation>
+        <location filename="../src/ui/person_cluster_view.py" line="760" />
+        <source>this photo</source>
+        <translation type="unfinished" />
     </message>
-    <message numerus="yes">
-        <location filename="../src/ui/person_cluster_view.py" line="763" />
-        <source>Réassigner %n visage(s) à une autre personne…</source>
-        <translation><numerusform>Reassign %n face to another person…</numerusform><numerusform>Reassign %n faces to another person…</numerusform></translation></message>
     <message numerus="yes">
         <location filename="../src/ui/person_cluster_view.py" line="765" />
-        <source>Dé-associer %n visage(s) de la personne</source>
+        <source>Reassign %n face(s) to another person…</source>
+        <translation><numerusform>Reassign %n face to another person…</numerusform><numerusform>Reassign %n faces to another person…</numerusform></translation></message>
+    <message numerus="yes">
+        <location filename="../src/ui/person_cluster_view.py" line="767" />
+        <source>Unassign %n face(s) from the person</source>
         <translation><numerusform>Unassign %n face from the person</numerusform><numerusform>Unassign %n faces from the person</numerusform></translation></message>
     <message>
-        <location filename="../src/ui/person_cluster_view.py" line="768" />
-        <source>Utiliser ce visage comme vignette principale</source>
-        <translation>Use this face as the main thumbnail</translation>
-    </message>
-    <message>
         <location filename="../src/ui/person_cluster_view.py" line="770" />
-        <source>Ajouter {photos} à un album…</source>
-        <translation>Add {photos} to an album…</translation>
+        <source>Use this face as the main thumbnail</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/person_cluster_view.py" line="772" />
-        <source>Créer un nouvel album avec {photos}…</source>
-        <translation>Create a new album with {photos}…</translation>
+        <location filename="../src/ui/person_cluster_view.py" line="773" />
+        <source>Add {photos} to an album…</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/ui/person_cluster_view.py" line="775" />
+        <source>Create a new album with {photos}…</source>
+        <translation type="unfinished" />
     </message>
     <message numerus="yes">
-        <location filename="../src/ui/person_cluster_view.py" line="813" />
-        <source>Réassigner %n visage(s) à une autre personne</source>
+        <location filename="../src/ui/person_cluster_view.py" line="816" />
+        <source>Reassign %n face(s) to another person</source>
         <translation><numerusform>Reassign %n face to another person</numerusform><numerusform>Reassign %n faces to another person</numerusform></translation></message>
 </context>
 <context>
     <name>PhotoViewer</name>
     <message numerus="yes">
         <location filename="../src/ui/photo_viewer.py" line="122" />
-        <source>Noter %n étoile(s)</source>
+        <source>Rate %n star(s)</source>
         <translation><numerusform>Rate %n star</numerusform><numerusform>Rate %n stars</numerusform></translation></message>
     <message>
         <location filename="../src/ui/photo_viewer.py" line="214" />
-        <source>🏷 Mots-clés</source>
-        <translation>🏷 Keywords</translation>
+        <source>🏷 Keywords</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/photo_viewer.py" line="218" />
-        <source>🏷 Mots-clés ({n})</source>
-        <translation>🏷 Keywords ({n})</translation>
+        <source>🏷 Keywords ({n})</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/photo_viewer.py" line="237" />
-        <source>Aucun mot-clé</source>
-        <translation>No keyword</translation>
+        <source>No keyword</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/photo_viewer.py" line="362" />
-        <source>Retour à la grille  (Echap)</source>
-        <translation>Back to the grid  (Esc)</translation>
+        <source>Back to the grid  (Esc)</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/photo_viewer.py" line="376" />
-        <location filename="../src/ui/photo_viewer.py" line="1007" />
-        <source>Marquer comme favori</source>
-        <translation>Mark as favourite</translation>
+        <location filename="../src/ui/photo_viewer.py" line="1011" />
+        <source>Mark as favourite</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/photo_viewer.py" line="404" />
-        <source>Ajuster à la fenêtre  (F)</source>
-        <translation>Fit to window  (F)</translation>
+        <source>Fit to window  (F)</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/photo_viewer.py" line="410" />
         <source>Zoom 100%  (Z)</source>
-        <translation>Zoom 100%  (Z)</translation>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/photo_viewer.py" line="416" />
-        <source>Fermer  (Echap)</source>
-        <translation>Close  (Esc)</translation>
+        <source>Close  (Esc)</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/photo_viewer.py" line="452" />
-        <source>◀  Plus ancienne</source>
-        <translation>◀  Older</translation>
+        <source>◀  Older</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/photo_viewer.py" line="464" />
-        <source>▶  Ouvrir la vidéo</source>
-        <translation>▶  Open the video</translation>
+        <source>▶  Open the video</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/photo_viewer.py" line="465" />
-        <source>Ouvrir dans le lecteur vidéo par défaut</source>
-        <translation>Open in the default video player</translation>
-    </message>
-    <message>
-        <location filename="../src/ui/photo_viewer.py" line="502" />
-        <source>✓  Confirmer le recadrage</source>
-        <translation>✓  Confirm the crop</translation>
+        <source>Open in the default video player</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/photo_viewer.py" line="503" />
-        <source>Valider le recadrage  (Entrée)</source>
-        <translation>Apply the crop  (Enter)</translation>
+        <source>✓  Confirm the crop</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/photo_viewer.py" line="510" />
-        <location filename="../src/ui/photo_viewer.py" line="526" />
-        <source>✕  Annuler</source>
-        <translation>✕  Cancel</translation>
+        <location filename="../src/ui/photo_viewer.py" line="504" />
+        <source>Apply the crop  (Enter)</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/photo_viewer.py" line="511" />
-        <source>Annuler le recadrage  (Echap)</source>
-        <translation>Cancel the crop  (Esc)</translation>
+        <location filename="../src/ui/photo_viewer.py" line="528" />
+        <source>✕  Cancel</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/photo_viewer.py" line="518" />
-        <source>✓  Valider la position</source>
-        <translation>✓  Confirm the position</translation>
+        <location filename="../src/ui/photo_viewer.py" line="512" />
+        <source>Cancel the crop  (Esc)</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/photo_viewer.py" line="519" />
-        <source>Valider la position du visage  (Entrée)</source>
-        <translation>Confirm the face position  (Enter)</translation>
+        <source>✓  Confirm the position</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/photo_viewer.py" line="527" />
-        <source>Annuler l'ajout du visage  (Echap)</source>
-        <translation>Cancel adding the face  (Esc)</translation>
+        <location filename="../src/ui/photo_viewer.py" line="520" />
+        <source>Confirm the face position  (Enter)</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/photo_viewer.py" line="536" />
-        <source>Plus récente  ▶</source>
-        <translation>Newer  ▶</translation>
+        <location filename="../src/ui/photo_viewer.py" line="529" />
+        <source>Cancel adding the face  (Esc)</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/photo_viewer.py" line="544" />
-        <source>⧉ Doublons</source>
-        <translation>⧉ Duplicates</translation>
+        <location filename="../src/ui/photo_viewer.py" line="539" />
+        <source>Newer  ▶</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/photo_viewer.py" line="545" />
-        <source>Cette photo a des doublons — cliquer pour voir</source>
-        <translation>This photo has duplicates — click to see them</translation>
+        <location filename="../src/ui/photo_viewer.py" line="547" />
+        <source>⧉ Duplicates</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/photo_viewer.py" line="959" />
-        <source>Ouvrir avec {app}</source>
-        <translation>Open with {app}</translation>
+        <location filename="../src/ui/photo_viewer.py" line="548" />
+        <source>This photo has duplicates — click to see them</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/photo_viewer.py" line="1006" />
-        <source>Retirer des favoris</source>
-        <translation>Remove from favourites</translation>
-    </message>
-    <message>
-        <location filename="../src/ui/photo_viewer.py" line="1009" />
-        <source>Mots-clés…</source>
-        <translation>Keywords…</translation>
+        <location filename="../src/ui/photo_viewer.py" line="963" />
+        <source>Open with {app}</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/photo_viewer.py" line="1010" />
-        <source>Renommer…</source>
-        <translation>Rename…</translation>
+        <source>Remove from favourites</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/photo_viewer.py" line="1011" />
-        <source>Déplacer vers…</source>
-        <translation>Move to…</translation>
+        <location filename="../src/ui/photo_viewer.py" line="1013" />
+        <source>Keywords…</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/photo_viewer.py" line="1012" />
-        <source>Enregistrer l'image traitée sur le disque	Ctrl+S</source>
-        <translation>Save the edited image to disk	Ctrl+S</translation>
+        <location filename="../src/ui/photo_viewer.py" line="1014" />
+        <source>Rename…</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/photo_viewer.py" line="1015" />
-        <source>Révéler dans l'Explorateur</source>
-        <translation>Show in File Explorer</translation>
+        <source>Move to…</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/photo_viewer.py" line="1017" />
-        <source>Afficher le dossier dans la grille</source>
-        <translation>Show the folder in the grid</translation>
+        <location filename="../src/ui/photo_viewer.py" line="1016" />
+        <source>Save the edited image to disk	Ctrl+S</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/photo_viewer.py" line="1022" />
-        <source>Localiser sur la carte</source>
-        <translation>Locate on the map</translation>
+        <location filename="../src/ui/photo_viewer.py" line="1019" />
+        <source>Show in File Explorer</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/photo_viewer.py" line="1033" />
-        <source>Forcer une nouvelle détection sans limite de taille</source>
-        <translation>Force a new detection with no size limit</translation>
+        <location filename="../src/ui/photo_viewer.py" line="1021" />
+        <source>Show the folder in the grid</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/ui/photo_viewer.py" line="1026" />
+        <source>Locate on the map</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/photo_viewer.py" line="1037" />
-        <source>Retirer de l'album	Suppr</source>
-        <translation>Remove from the album	Del</translation>
+        <source>Force a new detection with no size limit</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/photo_viewer.py" line="1040" />
-        <source>Effacer le fichier…	Suppr</source>
-        <translation>Delete the file…	Del</translation>
+        <location filename="../src/ui/photo_viewer.py" line="1041" />
+        <source>Remove from the album	Del</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/ui/photo_viewer.py" line="1044" />
+        <source>Delete the file…	Del</source>
+        <translation type="unfinished" />
     </message>
 </context>
 <context>
     <name>PicasaImportDialog</name>
     <message>
         <location filename="../src/ui/picasa_import_dialog.py" line="43" />
-        <source>Données Picasa détectées</source>
-        <translation>Picasa data found</translation>
+        <source>Picasa data found</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/picasa_import_dialog.py" line="59" />
-        <source>Données de reconnaissance Picasa détectées</source>
-        <translation>Picasa recognition data found</translation>
+        <source>Picasa recognition data found</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/picasa_import_dialog.py" line="68" />
-        <source>PixelPhotoManager a trouvé des données de visages Picasa
-sur cet ordinateur. Souhaitez-vous les importer ?</source>
-        <translation>PixelPhotoManager found Picasa face data on this
-computer. Would you like to import it?</translation>
+        <source>PixelPhotoManager found Picasa face data on this
+computer. Would you like to import it?</source>
+        <translation type="unfinished" />
     </message>
     <message numerus="yes">
         <location filename="../src/ui/picasa_import_dialog.py" line="85" />
-        <source>%n personne(s) dans la base Picasa</source>
+        <source>%n person(s) in the Picasa database</source>
         <translation><numerusform>%n person in the Picasa database</numerusform><numerusform>%n people in the Picasa database</numerusform></translation></message>
     <message numerus="yes">
         <location filename="../src/ui/picasa_import_dialog.py" line="88" />
-        <source>%n photo(s) avec des visages identifiés</source>
+        <source>%n photo(s) with identified faces</source>
         <translation><numerusform>%n photo with identified faces</numerusform><numerusform>%n photos with identified faces</numerusform></translation></message>
     <message numerus="yes">
         <location filename="../src/ui/picasa_import_dialog.py" line="91" />
-        <source>%n photo(s) avec des retouches (rotation, recadrage, luminosité…)</source>
+        <source>%n photo(s) with edits (rotation, cropping, brightness…)</source>
         <translation><numerusform>%n photo with edits (rotation, cropping, brightness…)</numerusform><numerusform>%n photos with edits (rotation, cropping, brightness…)</numerusform></translation></message>
     <message>
         <location filename="../src/ui/picasa_import_dialog.py" line="102" />
-        <source>L'import créera les personnes manquantes et enregistrera
-les positions des visages Picasa. Elles seront associées
-automatiquement lors de l'analyse ArcFace, même ultérieure.</source>
-        <translation>The import will create the missing people and record
+        <source>The import will create the missing people and record
 the positions of the Picasa faces. They will be matched
-automatically during the ArcFace analysis, even a later one.</translation>
+automatically during the ArcFace analysis, even a later one.</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/picasa_import_dialog.py" line="108" />
-        <source>Importer aussi les retouches Picasa (rotation, recadrage, luminosité…)</source>
-        <translation>Also import the Picasa edits (rotation, cropping, brightness…)</translation>
+        <location filename="../src/ui/picasa_import_dialog.py" line="109" />
+        <source>Also import the Picasa edits (rotation, cropping, brightness…)</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/picasa_import_dialog.py" line="112" />
-        <source>Base de retouches non disponible</source>
-        <translation>Edit database not available</translation>
+        <location filename="../src/ui/picasa_import_dialog.py" line="115" />
+        <source>Edit database not available</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/picasa_import_dialog.py" line="140" />
-        <source>Plus tard</source>
-        <translation>Later</translation>
+        <location filename="../src/ui/picasa_import_dialog.py" line="144" />
+        <source>Later</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/picasa_import_dialog.py" line="146" />
-        <source>Importer →</source>
-        <translation>Import →</translation>
+        <location filename="../src/ui/picasa_import_dialog.py" line="150" />
+        <source>Import →</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/picasa_import_dialog.py" line="165" />
-        <source>Analyse des dossiers en cours…</source>
-        <translation>Scanning the folders…</translation>
+        <location filename="../src/ui/picasa_import_dialog.py" line="169" />
+        <source>Scanning the folders…</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/picasa_import_dialog.py" line="178" />
-        <source>Traitement du dossier {cur} / {total}…</source>
-        <translation>Processing folder {cur} / {total}…</translation>
+        <location filename="../src/ui/picasa_import_dialog.py" line="182" />
+        <source>Processing folder {cur} / {total}…</source>
+        <translation type="unfinished" />
     </message>
-    <message numerus="yes">
-        <location filename="../src/ui/picasa_import_dialog.py" line="191" />
-        <source>%n personne(s) créée(s)</source>
-        <translation><numerusform>%n person created</numerusform><numerusform>%n people created</numerusform></translation></message>
-    <message numerus="yes">
-        <location filename="../src/ui/picasa_import_dialog.py" line="193" />
-        <source>%n annotation(s) de visage dans {photos}</source>
-        <translation><numerusform>%n face annotation in {photos}</numerusform><numerusform>%n face annotations in {photos}</numerusform></translation></message>
     <message numerus="yes">
         <location filename="../src/ui/picasa_import_dialog.py" line="195" />
+        <source>%n person(s) created</source>
+        <translation><numerusform>%n person created</numerusform><numerusform>%n people created</numerusform></translation></message>
+    <message numerus="yes">
+        <location filename="../src/ui/picasa_import_dialog.py" line="197" />
+        <source>%n face annotation(s) in {photos}</source>
+        <translation><numerusform>%n face annotation in {photos}</numerusform><numerusform>%n face annotations in {photos}</numerusform></translation></message>
+    <message numerus="yes">
+        <location filename="../src/ui/picasa_import_dialog.py" line="199" />
         <source>%n photo(s)</source>
         <translation><numerusform>%n photo</numerusform><numerusform>%n photos</numerusform></translation></message>
     <message numerus="yes">
-        <location filename="../src/ui/picasa_import_dialog.py" line="199" />
-        <source>%n retouche(s) importée(s)</source>
+        <location filename="../src/ui/picasa_import_dialog.py" line="203" />
+        <source>%n edit(s) imported</source>
         <translation><numerusform>%n edit imported</numerusform><numerusform>%n edits imported</numerusform></translation></message>
     <message>
-        <location filename="../src/ui/picasa_import_dialog.py" line="205" />
-        <source>Fermer</source>
-        <translation>Close</translation>
+        <location filename="../src/ui/picasa_import_dialog.py" line="209" />
+        <source>Close</source>
+        <translation type="unfinished" />
     </message>
 </context>
 <context>
     <name>ProblemRow</name>
     <message numerus="yes">
         <location filename="../src/ui/problems_history_dialog.py" line="47" />
-        <source>%n fichier(s) corrompu(s) détecté(s)</source>
+        <source>%n corrupted file(s) found</source>
         <translation><numerusform>%n corrupted file found</numerusform><numerusform>%n corrupted files found</numerusform></translation></message>
     <message numerus="yes">
         <location filename="../src/ui/problems_history_dialog.py" line="49" />
-        <source>%n réparé(s)</source>
+        <source>%n repaired</source>
         <translation><numerusform>%n repaired</numerusform><numerusform>%n repaired</numerusform></translation></message>
     <message>
         <location filename="../src/ui/problems_history_dialog.py" line="56" />
-        <source>Ouvrir la liste…</source>
-        <translation>Open the list…</translation>
+        <source>Open the list…</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/problems_history_dialog.py" line="66" />
-        <source>Aucun fichier associé</source>
-        <translation>No file attached</translation>
+        <source>No file attached</source>
+        <translation type="unfinished" />
     </message>
 </context>
 <context>
     <name>ProblemsHistoryDialog</name>
     <message>
         <location filename="../src/ui/problems_history_dialog.py" line="80" />
-        <source>Historique des problèmes</source>
-        <translation>Problem history</translation>
+        <source>Problem history</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/problems_history_dialog.py" line="91" />
-        <source>Problèmes rencontrés (fichiers corrompus détectés lors des analyses)</source>
-        <translation>Problems encountered (corrupted files found during analyses)</translation>
+        <source>Problems encountered (corrupted files found during analyses)</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/problems_history_dialog.py" line="109" />
-        <source>Aucun problème enregistré pour l'instant.</source>
-        <translation>No problem recorded so far.</translation>
+        <location filename="../src/ui/problems_history_dialog.py" line="110" />
+        <source>No problem recorded so far.</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/problems_history_dialog.py" line="123" />
-        <source>Fermer</source>
-        <translation>Close</translation>
+        <location filename="../src/ui/problems_history_dialog.py" line="124" />
+        <source>Close</source>
+        <translation type="unfinished" />
     </message>
 </context>
 <context>
     <name>ProblemsReportDialog</name>
     <message>
-        <location filename="../src/ui/thread_journal_dialog.py" line="590" />
-        <source>Rapport détaillé de performance</source>
-        <translation>Detailed performance report</translation>
+        <location filename="../src/ui/thread_journal_dialog.py" line="618" />
+        <source>Detailed performance report</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/thread_journal_dialog.py" line="601" />
-        <source>Ce rapport décrit en détail les problèmes de performance détectés. Copiez-le et transmettez-le pour obtenir des améliorations ciblées.</source>
-        <translation>This report describes the performance problems found in detail. Copy it and pass it on to get targeted improvements.</translation>
+        <location filename="../src/ui/thread_journal_dialog.py" line="629" />
+        <source>This report describes the performance problems found in detail. Copy it and pass it on to get targeted improvements.</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/thread_journal_dialog.py" line="620" />
-        <source>Copier tout</source>
-        <translation>Copy everything</translation>
+        <location filename="../src/ui/thread_journal_dialog.py" line="649" />
+        <source>Copy everything</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/thread_journal_dialog.py" line="627" />
-        <source>Copié</source>
-        <translation>Copied</translation>
+        <location filename="../src/ui/thread_journal_dialog.py" line="656" />
+        <source>Copied</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/thread_journal_dialog.py" line="627" />
-        <source>Rapport copié dans le presse-papiers.</source>
-        <translation>Report copied to the clipboard.</translation>
+        <location filename="../src/ui/thread_journal_dialog.py" line="656" />
+        <source>Report copied to the clipboard.</source>
+        <translation type="unfinished" />
     </message>
 </context>
 <context>
     <name>ProgressPopup</name>
     <message>
         <location filename="../src/ui/face_cluster_grid.py" line="85" />
-        <source>Analyse des groupes de visages</source>
-        <translation>Analysing the face groups</translation>
+        <source>Analysing the face groups</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/face_cluster_grid.py" line="90" />
-        <source>Glisser pour déplacer la fenêtre</source>
-        <translation>Drag to move the window</translation>
+        <source>Drag to move the window</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/face_cluster_grid.py" line="93" />
-        <source>Initialisation…</source>
-        <translation>Initialising…</translation>
+        <source>Initialising…</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/face_cluster_grid.py" line="121" />
-        <source>Annuler</source>
-        <translation>Cancel</translation>
+        <source>Cancel</source>
+        <translation type="unfinished" />
     </message>
 </context>
 <context>
     <name>ResetFacesDialog</name>
     <message>
         <location filename="../src/ui/reset_faces_dialog.py" line="31" />
-        <source>Réinitialiser l'index des visages</source>
-        <translation>Reset the face index</translation>
+        <source>Reset the face index</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/reset_faces_dialog.py" line="60" />
-        <source>Réinitialiser les groupes uniquement  —  rapide</source>
-        <translation>Reset the groups only  —  fast</translation>
+        <source>Reset the groups only  —  fast</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/reset_faces_dialog.py" line="63" />
-        <source>Réinitialisation complète + réindexation  —  lente</source>
-        <translation>Full reset + reindexing  —  slow</translation>
+        <source>Full reset + reindexing  —  slow</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/reset_faces_dialog.py" line="71" />
-        <source>Les embeddings ArcFace (analyse des visages) sont conservés.</source>
-        <translation>The ArcFace embeddings (face analysis) are kept.</translation>
+        <source>The ArcFace embeddings (face analysis) are kept.</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/reset_faces_dialog.py" line="73" />
-        <source>Seuls les regroupements HDBSCAN sont effacés et recalculés.</source>
-        <translation>Only the HDBSCAN groupings are erased and recomputed.</translation>
+        <source>Only the HDBSCAN groupings are erased and recomputed.</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/reset_faces_dialog.py" line="75" />
-        <source>Les associations visage → personne (Picasa, identification manuelle)</source>
-        <translation>The face → person assignments (Picasa, manual identification)</translation>
+        <source>The face → person assignments (Picasa, manual identification)</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/reset_faces_dialog.py" line="77" />
-        <source>sont préservées et redistribuées dans les nouveaux groupes.</source>
-        <translation>are preserved and spread over the new groups.</translation>
+        <source>are preserved and spread over the new groups.</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/reset_faces_dialog.py" line="79" />
-        <source>⏱  Durée : quelques secondes.</source>
-        <translation>⏱  Time: a few seconds.</translation>
+        <source>⏱  Time: a few seconds.</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/reset_faces_dialog.py" line="85" />
-        <source>Tout est effacé : embeddings, groupes, associations visage → personne.</source>
-        <translation>Everything is erased: embeddings, groups, face → person assignments.</translation>
+        <source>Everything is erased: embeddings, groups, face → person assignments.</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/reset_faces_dialog.py" line="87" />
-        <source>La détection ArcFace est relancée sur l'ensemble de la bibliothèque.</source>
-        <translation>ArcFace detection is rerun over the whole library.</translation>
+        <source>ArcFace detection is rerun over the whole library.</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/reset_faces_dialog.py" line="89" />
-        <source>Les personnes nommées sont conservées ; les annotations Picasa</source>
-        <translation>The named people are kept; the Picasa annotations</translation>
+        <source>The named people are kept; the Picasa annotations</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/reset_faces_dialog.py" line="91" />
-        <source>sont ré-appliquées automatiquement après re-détection.</source>
-        <translation>are applied again automatically after re-detection.</translation>
+        <source>are applied again automatically after re-detection.</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/reset_faces_dialog.py" line="93" />
-        <source>⏱  Durée : plusieurs heures selon la taille de la bibliothèque.</source>
-        <translation>⏱  Time: several hours depending on the size of the library.</translation>
+        <source>⏱  Time: several hours depending on the size of the library.</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/reset_faces_dialog.py" line="101" />
-        <source>Confirmer</source>
-        <translation>Confirm</translation>
+        <source>Confirm</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/reset_faces_dialog.py" line="102" />
-        <source>Annuler</source>
-        <translation>Cancel</translation>
+        <source>Cancel</source>
+        <translation type="unfinished" />
     </message>
 </context>
 <context>
     <name>SaveOptionsDialog</name>
     <message>
         <location filename="../src/ui/export_dialogs.py" line="138" />
-        <source>Enregistrer l'image traitée</source>
-        <translation>Save the edited image</translation>
+        <source>Save the edited image</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/export_dialogs.py" line="160" />
-        <source>Écraser le fichier original</source>
-        <translation>Overwrite the original file</translation>
+        <source>Overwrite the original file</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/export_dialogs.py" line="170" />
-        <source>⚠  Cette action est irréversible : le fichier original sera définitivement
-    remplacé par la version traitée.</source>
-        <translation>⚠  This cannot be undone: the original file will be permanently
-    replaced by the processed version.</translation>
+        <location filename="../src/ui/export_dialogs.py" line="171" />
+        <source>⚠  This cannot be undone: the original file will be permanently
+    replaced by the processed version.</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/export_dialogs.py" line="177" />
-        <source>Copier l'original dans .tmp_originals avant l'écrasement</source>
-        <translation>Copy the original into .tmp_originals before overwriting</translation>
+        <location filename="../src/ui/export_dialogs.py" line="179" />
+        <source>Copy the original into .tmp_originals before overwriting</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/export_dialogs.py" line="181" />
-        <source>L'original sera copié dans :
+        <location filename="../src/ui/export_dialogs.py" line="184" />
+        <source>The original will be copied to:
 {path}</source>
-        <translation>The original will be copied to:
-{path}</translation>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/export_dialogs.py" line="189" />
-        <source>Enregistrer à un autre emplacement…</source>
-        <translation>Save to another location…</translation>
+        <location filename="../src/ui/export_dialogs.py" line="192" />
+        <source>Save to another location…</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/export_dialogs.py" line="199" />
-        <source>Enregistrer</source>
-        <translation>Save</translation>
+        <location filename="../src/ui/export_dialogs.py" line="203" />
+        <source>Save</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/export_dialogs.py" line="200" />
-        <source>Annuler</source>
-        <translation>Cancel</translation>
+        <location filename="../src/ui/export_dialogs.py" line="204" />
+        <source>Cancel</source>
+        <translation type="unfinished" />
     </message>
 </context>
 <context>
     <name>SectionWidget</name>
     <message>
-        <location filename="../src/ui/face_cluster_cards.py" line="328" />
-        <source>Accepter</source>
-        <translation>Accept</translation>
+        <location filename="../src/ui/face_cluster_cards.py" line="332" />
+        <source>Accept</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/face_cluster_cards.py" line="331" />
-        <source>Assigner tous les groupes à la personne suggérée</source>
-        <translation>Assign every group to the suggested person</translation>
+        <location filename="../src/ui/face_cluster_cards.py" line="335" />
+        <source>Assign every group to the suggested person</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/face_cluster_cards.py" line="339" />
-        <source>Associer à…</source>
-        <translation>Assign to…</translation>
+        <location filename="../src/ui/face_cluster_cards.py" line="344" />
+        <source>Assign to…</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/face_cluster_cards.py" line="342" />
-        <source>Assigner tous les groupes à une autre personne</source>
-        <translation>Assign every group to another person</translation>
+        <location filename="../src/ui/face_cluster_cards.py" line="347" />
+        <source>Assign every group to another person</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/face_cluster_cards.py" line="348" />
-        <source>Ignorer</source>
-        <translation>Ignore</translation>
+        <location filename="../src/ui/face_cluster_cards.py" line="354" />
+        <source>Ignore</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/face_cluster_cards.py" line="351" />
-        <source>Ignorer tous les groupes de cette section</source>
-        <translation>Ignore every group in this section</translation>
+        <location filename="../src/ui/face_cluster_cards.py" line="357" />
+        <source>Ignore every group in this section</source>
+        <translation type="unfinished" />
     </message>
 </context>
 <context>
     <name>SettingsDialog</name>
     <message>
         <location filename="../src/ui/settings_dialog.py" line="56" />
-        <location filename="../src/ui/settings_dialog.py" line="457" />
-        <location filename="../src/ui/settings_dialog.py" line="518" />
-        <source>Langue</source>
-        <translation>Language</translation>
+        <location filename="../src/ui/settings_dialog.py" line="459" />
+        <location filename="../src/ui/settings_dialog.py" line="520" />
+        <source>Language</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/settings_dialog.py" line="67" />
-        <source>Langue de l'interface et de l'aide intégrée. Les documents PDF
-(guide de l'utilisateur, note de livraison) restent en français.</source>
-        <translation>Language of the interface and of the built-in help. The PDF documents
-(user guide, release note) stay in French.</translation>
+        <source>Language of the interface and of the built-in help. The PDF documents
+(user guide, release note) stay in French.</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/settings_dialog.py" line="93" />
-        <source>Le changement de langue prend effet au prochain démarrage de
-l'application.</source>
-        <translation>The language change takes effect the next time the application
-is started.</translation>
+        <source>The language change takes effect the next time the application
+is started.</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/settings_dialog.py" line="440" />
-        <source>Paramètres</source>
-        <translation>Settings</translation>
+        <location filename="../src/ui/settings_dialog.py" line="442" />
+        <source>Settings</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/settings_dialog.py" line="461" />
-        <source>Reconnaissance
-de visages</source>
-        <translation>Face
-recognition</translation>
+        <location filename="../src/ui/settings_dialog.py" line="463" />
+        <source>Face
+recognition</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/settings_dialog.py" line="465" />
-        <source>Lecteur vidéo</source>
-        <translation>Video player</translation>
+        <location filename="../src/ui/settings_dialog.py" line="467" />
+        <source>Video player</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/settings_dialog.py" line="469" />
-        <source>Performances</source>
-        <translation>Performance</translation>
+        <location filename="../src/ui/settings_dialog.py" line="471" />
+        <source>Performance</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/settings_dialog.py" line="519" />
-        <source>La nouvelle langue sera appliquée au prochain démarrage de PixelPhotoManager.</source>
-        <translation>The new language will be applied the next time PixelPhotoManager starts.</translation>
+        <location filename="../src/ui/settings_dialog.py" line="521" />
+        <source>The new language will be applied the next time PixelPhotoManager starts.</source>
+        <translation type="unfinished" />
     </message>
 </context>
 <context>
     <name>Sidebar</name>
     <message>
         <location filename="../src/ui/sidebar.py" line="315" />
-        <source>🔍  Filtrer dossiers, personnes et fichiers…</source>
-        <translation>🔍  Filter folders, people and files…</translation>
+        <source>🔍  Filter folders, people and files…</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/sidebar.py" line="324" />
-        <source>Recherche avancée… (Ctrl+F)</source>
-        <translation>Advanced search… (Ctrl+F)</translation>
+        <location filename="../src/ui/sidebar.py" line="325" />
+        <source>Advanced search… (Ctrl+F)</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/sidebar.py" line="350" />
-        <source>Dossiers</source>
-        <translation>Folders</translation>
-    </message>
-    <message>
-        <location filename="../src/ui/sidebar.py" line="354" />
-        <source>Dupliquées</source>
-        <translation>Duplicates</translation>
+        <location filename="../src/ui/sidebar.py" line="351" />
+        <source>Folders</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/sidebar.py" line="355" />
-        <source>Parcourir les groupes de doublons détectés</source>
-        <translation>Browse the duplicate groups found</translation>
+        <source>Duplicates</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/sidebar.py" line="388" />
+        <location filename="../src/ui/sidebar.py" line="356" />
+        <source>Browse the duplicate groups found</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/ui/sidebar.py" line="389" />
         <source>Albums</source>
-        <translation>Albums</translation>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/sidebar.py" line="394" />
-        <source>Créer un album</source>
-        <translation>Create an album</translation>
+        <location filename="../src/ui/sidebar.py" line="395" />
+        <source>Create an album</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/sidebar.py" line="424" />
-        <source>Personnes</source>
-        <translation>People</translation>
+        <location filename="../src/ui/sidebar.py" line="425" />
+        <source>People</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/sidebar.py" line="432" />
-        <source>Nommer les groupes de visages détectés</source>
-        <translation>Name the face groups found</translation>
+        <source>Identify…</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/sidebar.py" line="493" />
-        <source>★ Chronologie de toutes les photos</source>
-        <translation>★ Timeline of every photo</translation>
+        <location filename="../src/ui/sidebar.py" line="433" />
+        <source>Name the face groups found</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/sidebar.py" line="498" />
-        <source>♡ Favoris</source>
-        <translation>♡ Favourites</translation>
+        <location filename="../src/ui/sidebar.py" line="494" />
+        <source>★ Timeline of every photo</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/sidebar.py" line="502" />
-        <source>▶ Vidéos</source>
-        <translation>▶ Videos</translation>
+        <location filename="../src/ui/sidebar.py" line="499" />
+        <source>♡ Favourites</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/sidebar.py" line="508" />
-        <source>Cliquer pour replier/déplier les niveaux de notation</source>
-        <translation>Click to fold/unfold the rating levels</translation>
+        <location filename="../src/ui/sidebar.py" line="503" />
+        <source>▶ Videos</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/sidebar.py" line="513" />
-        <source>🔍 Par nom de fichier</source>
-        <translation>🔍 By file name</translation>
+        <location filename="../src/ui/sidebar.py" line="509" />
+        <source>Click to fold/unfold the rating levels</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/sidebar.py" line="515" />
-        <source>Afficher les photos dont le nom de fichier contient le texte du filtre</source>
-        <translation>Show the photos whose file name contains the filter text</translation>
+        <location filename="../src/ui/sidebar.py" line="514" />
+        <source>🔍 By file name</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/sidebar.py" line="520" />
-        <source>Cliquer pour replier/déplier la liste des mots-clés existants</source>
-        <translation>Click to fold/unfold the list of existing keywords</translation>
+        <location filename="../src/ui/sidebar.py" line="516" />
+        <source>Show the photos whose file name contains the filter text</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/sidebar.py" line="608" />
-        <source>Copie de DVD (VIDEO_TS)</source>
-        <translation>DVD copy (VIDEO_TS)</translation>
+        <location filename="../src/ui/sidebar.py" line="522" />
+        <source>Click to fold/unfold the list of existing keywords</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/sidebar.py" line="773" />
-        <source>Par mot-clé</source>
-        <translation>By keyword</translation>
+        <location filename="../src/ui/sidebar.py" line="611" />
+        <source>DVD copy (VIDEO_TS)</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/sidebar.py" line="790" />
-        <source>Par notes</source>
-        <translation>By rating</translation>
+        <location filename="../src/ui/sidebar.py" line="776" />
+        <source>By keyword</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/ui/sidebar.py" line="793" />
+        <source>By rating</source>
+        <translation type="unfinished" />
     </message>
     <message numerus="yes">
-        <location filename="../src/ui/sidebar.py" line="802" />
-        <source>Photos notées %n étoile(s) ou plus</source>
+        <location filename="../src/ui/sidebar.py" line="805" />
+        <source>Photos rated %n star(s) or more</source>
         <translation><numerusform>Photos rated %n star or more</numerusform><numerusform>Photos rated %n stars or more</numerusform></translation></message>
     <message>
-        <location filename="../src/ui/sidebar.py" line="883" />
-        <source>Supprimer l'album…</source>
-        <translation>Delete the album…</translation>
+        <location filename="../src/ui/sidebar.py" line="886" />
+        <source>Delete the album…</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/sidebar.py" line="890" />
-        <source>Supprimer ce mot-clé…</source>
-        <translation>Delete this keyword…</translation>
+        <location filename="../src/ui/sidebar.py" line="893" />
+        <source>Delete this keyword…</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/sidebar.py" line="902" />
-        <source>Scanner maintenant</source>
-        <translation>Scan now</translation>
-    </message>
-    <message>
-        <location filename="../src/ui/sidebar.py" line="903" />
-        <source>Supprimer des dossiers surveillés</source>
-        <translation>Stop watching this folder</translation>
+        <location filename="../src/ui/sidebar.py" line="905" />
+        <source>Scan now</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/sidebar.py" line="906" />
-        <source>Créer un sous-dossier…</source>
-        <translation>Create a subfolder…</translation>
+        <source>Stop watching this folder</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/sidebar.py" line="908" />
-        <location filename="../src/ui/sidebar.py" line="1289" />
-        <source>Renommer…</source>
-        <translation>Rename…</translation>
+        <location filename="../src/ui/sidebar.py" line="909" />
+        <source>Create a subfolder…</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/sidebar.py" line="910" />
-        <source>Déplacer vers…</source>
-        <translation>Move to…</translation>
+        <location filename="../src/ui/sidebar.py" line="911" />
+        <location filename="../src/ui/sidebar.py" line="1295" />
+        <source>Rename…</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/sidebar.py" line="913" />
-        <source>Ouvrir dans l'Explorateur</source>
-        <translation>Open in File Explorer</translation>
+        <source>Move to…</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/sidebar.py" line="916" />
-        <source>Effacer le dossier…</source>
-        <translation>Delete the folder…</translation>
+        <source>Open in File Explorer</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/sidebar.py" line="922" />
-        <source>Nouveau sous-dossier</source>
-        <translation>New subfolder</translation>
+        <location filename="../src/ui/sidebar.py" line="919" />
+        <source>Delete the folder…</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/sidebar.py" line="923" />
-        <source>Nom du sous-dossier dans « {parent} » :</source>
-        <translation>Name of the subfolder inside “{parent}”:</translation>
+        <location filename="../src/ui/sidebar.py" line="925" />
+        <source>New subfolder</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/sidebar.py" line="932" />
-        <location filename="../src/ui/sidebar.py" line="973" />
-        <source>Dossier existant</source>
-        <translation>Folder already exists</translation>
+        <location filename="../src/ui/sidebar.py" line="926" />
+        <source>Name of the subfolder inside “{parent}”:</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/sidebar.py" line="933" />
-        <source>« {name} » existe déjà dans ce dossier.</source>
-        <translation>“{name}” already exists in this folder.</translation>
+        <location filename="../src/ui/sidebar.py" line="935" />
+        <location filename="../src/ui/sidebar.py" line="976" />
+        <source>Folder already exists</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/sidebar.py" line="937" />
-        <location filename="../src/ui/sidebar.py" line="954" />
-        <location filename="../src/ui/sidebar.py" line="980" />
-        <location filename="../src/ui/sidebar.py" line="1017" />
-        <source>Erreur</source>
-        <translation>Error</translation>
+        <location filename="../src/ui/sidebar.py" line="936" />
+        <source>“{name}” already exists in this folder.</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/sidebar.py" line="938" />
-        <source>Impossible de créer le dossier :
+        <location filename="../src/ui/sidebar.py" line="940" />
+        <location filename="../src/ui/sidebar.py" line="957" />
+        <location filename="../src/ui/sidebar.py" line="983" />
+        <location filename="../src/ui/sidebar.py" line="1022" />
+        <source>Error</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/ui/sidebar.py" line="941" />
+        <source>Cannot create the folder:
 {error}</source>
-        <translation>Cannot create the folder:
-{error}</translation>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/sidebar.py" line="946" />
-        <source>Renommer le dossier</source>
-        <translation>Rename the folder</translation>
+        <location filename="../src/ui/sidebar.py" line="949" />
+        <source>Rename the folder</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/sidebar.py" line="946" />
-        <source>Nouveau nom :</source>
-        <translation>New name:</translation>
+        <location filename="../src/ui/sidebar.py" line="949" />
+        <source>New name:</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/sidebar.py" line="955" />
-        <source>Impossible de renommer le dossier :
+        <location filename="../src/ui/sidebar.py" line="958" />
+        <source>Cannot rename the folder:
 {error}</source>
-        <translation>Cannot rename the folder:
-{error}</translation>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/sidebar.py" line="963" />
-        <source>Déplacer « {name} » — choisir le dossier de destination</source>
-        <translation>Move “{name}” — choose the destination folder</translation>
+        <location filename="../src/ui/sidebar.py" line="966" />
+        <source>Move “{name}” — choose the destination folder</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/sidebar.py" line="974" />
-        <source>« {path} » existe déjà.</source>
-        <translation>“{path}” already exists.</translation>
+        <location filename="../src/ui/sidebar.py" line="977" />
+        <source>“{path}” already exists.</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/sidebar.py" line="981" />
-        <source>Impossible de déplacer le dossier :
+        <location filename="../src/ui/sidebar.py" line="984" />
+        <source>Cannot move the folder:
 {error}</source>
-        <translation>Cannot move the folder:
-{error}</translation>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/sidebar.py" line="990" />
-        <source>Confirmer la suppression</source>
-        <translation>Confirm deletion</translation>
+        <location filename="../src/ui/sidebar.py" line="993" />
+        <source>Confirm deletion</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/sidebar.py" line="991" />
-        <source>Envoyer le dossier « {name} » et tout son contenu à la corbeille Windows ?
+        <location filename="../src/ui/sidebar.py" line="994" />
+        <source>Send the folder “{name}” and everything in it to the Windows recycle bin?
 
-Le dossier restera récupérable depuis la corbeille.</source>
-        <translation>Send the folder “{name}” and everything in it to the Windows recycle bin?
-
-The folder will still be recoverable from the recycle bin.</translation>
+The folder will still be recoverable from the recycle bin.</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/sidebar.py" line="1000" />
-        <source>Supprimer</source>
-        <translation>Remove</translation>
+        <location filename="../src/ui/sidebar.py" line="1005" />
+        <source>Delete</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/sidebar.py" line="1018" />
-        <source>Impossible d'envoyer le dossier à la corbeille :
+        <location filename="../src/ui/sidebar.py" line="1023" />
+        <source>Cannot send the folder to the recycle bin:
 {error}
 
-Le dossier n'a PAS été supprimé.</source>
-        <translation>Cannot send the folder to the recycle bin:
-{error}
-
-The folder was NOT deleted.</translation>
+The folder was NOT deleted.</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/sidebar.py" line="1026" />
-        <source>Nouvel album</source>
-        <translation>New album</translation>
+        <location filename="../src/ui/sidebar.py" line="1031" />
+        <source>New album</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/sidebar.py" line="1026" />
-        <source>Nom de l'album :</source>
-        <translation>Album name:</translation>
+        <location filename="../src/ui/sidebar.py" line="1031" />
+        <source>Album name:</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/sidebar.py" line="1291" />
-        <source>Fusionner avec…</source>
-        <translation>Merge with…</translation>
+        <location filename="../src/ui/sidebar.py" line="1297" />
+        <source>Merge with…</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/sidebar.py" line="1294" />
-        <source>Effacer le nom…</source>
-        <translation>Clear the name…</translation>
+        <location filename="../src/ui/sidebar.py" line="1300" />
+        <source>Clear the name…</source>
+        <translation type="unfinished" />
     </message>
 </context>
 <context>
     <name>Slideshow</name>
     <message>
         <location filename="../src/ui/slideshow.py" line="487" />
-        <source>Mettre en pause  (Espace)</source>
-        <translation>Pause  (Space)</translation>
+        <source>Pause  (Space)</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/slideshow.py" line="488" />
-        <source>Reprendre le défilement  (Espace)</source>
-        <translation>Resume  (Space)</translation>
+        <source>Resume  (Space)</source>
+        <translation type="unfinished" />
     </message>
 </context>
 <context>
     <name>SlideshowWindow</name>
     <message>
         <location filename="../src/ui/slideshow.py" line="226" />
-        <source>Diaporama</source>
-        <translation>Slideshow</translation>
+        <source>Slideshow</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/slideshow.py" line="272" />
-        <source>◀  Précédente</source>
-        <translation>◀  Previous</translation>
+        <source>◀  Previous</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/slideshow.py" line="273" />
-        <source>Photo plus ancienne  (←)</source>
-        <translation>Older photo  (←)</translation>
+        <source>Older photo  (←)</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/slideshow.py" line="282" />
-        <source>Réduire la durée d'affichage</source>
-        <translation>Shorten the display time</translation>
+        <source>Shorten the display time</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/slideshow.py" line="296" />
-        <source>Augmenter la durée d'affichage</source>
-        <translation>Lengthen the display time</translation>
+        <source>Lengthen the display time</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/slideshow.py" line="306" />
-        <source>Pause / Reprendre  (Espace)</source>
-        <translation>Pause / Resume  (Space)</translation>
+        <source>Pause / Resume  (Space)</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/slideshow.py" line="314" />
-        <source>Suivante  ▶</source>
-        <translation>Next  ▶</translation>
+        <source>Next  ▶</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/slideshow.py" line="315" />
-        <source>Photo plus récente  (→)</source>
-        <translation>Newer photo  (→)</translation>
+        <source>Newer photo  (→)</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/slideshow.py" line="324" />
-        <source>Quitter le diaporama  (Échap)</source>
-        <translation>Leave the slideshow  (Esc)</translation>
+        <source>Leave the slideshow  (Esc)</source>
+        <translation type="unfinished" />
     </message>
 </context>
 <context>
     <name>TagDropdown</name>
     <message>
         <location filename="../src/ui/photo_viewer.py" line="165" />
-        <source>Aucun mot-clé</source>
-        <translation>No keyword</translation>
+        <source>No keyword</source>
+        <translation type="unfinished" />
     </message>
 </context>
 <context>
     <name>TagEditDialog</name>
     <message>
         <location filename="../src/ui/tag_dialog.py" line="71" />
-        <source>Mots-clés</source>
-        <translation>Keywords</translation>
+        <source>Keywords</source>
+        <translation type="unfinished" />
     </message>
     <message numerus="yes">
         <location filename="../src/ui/tag_dialog.py" line="87" />
-        <source>%n photo(s) sélectionnée(s)</source>
+        <source>%n photo(s) selected</source>
         <translation><numerusform>%n photo selected</numerusform><numerusform>%n photos selected</numerusform></translation></message>
     <message>
         <location filename="../src/ui/tag_dialog.py" line="90" />
-        <source>Ajouter un mot-clé…</source>
-        <translation>Add a keyword…</translation>
+        <source>Add a keyword…</source>
+        <translation type="unfinished" />
     </message>
 </context>
 <context>
     <name>ThreadJournalDialog</name>
     <message>
         <location filename="../src/ui/thread_journal_dialog.py" line="107" />
-        <source>Bilan d'exécution</source>
-        <translation>Execution summary</translation>
+        <source>Execution summary</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/thread_journal_dialog.py" line="274" />
-        <location filename="../src/ui/thread_journal_dialog.py" line="367" />
+        <location filename="../src/ui/thread_journal_dialog.py" line="295" />
+        <location filename="../src/ui/thread_journal_dialog.py" line="395" />
         <source>Thread</source>
-        <translation>Thread</translation>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/thread_journal_dialog.py" line="275" />
+        <location filename="../src/ui/thread_journal_dialog.py" line="296" />
         <source>Runs</source>
-        <translation>Runs</translation>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/thread_journal_dialog.py" line="276" />
-        <source>Durée moy.</source>
-        <translation>Avg. time</translation>
+        <location filename="../src/ui/thread_journal_dialog.py" line="297" />
+        <source>Avg. time</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/thread_journal_dialog.py" line="277" />
-        <source>Durée max.</source>
-        <translation>Max time</translation>
+        <location filename="../src/ui/thread_journal_dialog.py" line="298" />
+        <source>Max time</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/thread_journal_dialog.py" line="278" />
-        <source>Erreurs</source>
-        <translation>Errors</translation>
+        <location filename="../src/ui/thread_journal_dialog.py" line="299" />
+        <source>Errors</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/thread_journal_dialog.py" line="279" />
-        <source>Statut</source>
-        <translation>Status</translation>
+        <location filename="../src/ui/thread_journal_dialog.py" line="300" />
+        <source>Status</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/thread_journal_dialog.py" line="366" />
-        <source>Heure</source>
-        <translation>Time</translation>
-    </message>
-    <message>
-        <location filename="../src/ui/thread_journal_dialog.py" line="368" />
-        <source>Événement</source>
-        <translation>Event</translation>
-    </message>
-    <message>
-        <location filename="../src/ui/thread_journal_dialog.py" line="369" />
-        <source>Message</source>
-        <translation>Message</translation>
-    </message>
-    <message>
-        <location filename="../src/ui/thread_journal_dialog.py" line="370" />
-        <source>Durée (ms)</source>
-        <translation>Duration (ms)</translation>
-    </message>
-    <message>
-        <location filename="../src/ui/thread_journal_dialog.py" line="637" />
-        <source>Journal d'activité des threads</source>
-        <translation>Thread activity journal</translation>
-    </message>
-    <message>
-        <location filename="../src/ui/thread_journal_dialog.py" line="660" />
-        <source>Thread :</source>
-        <translation>Thread:</translation>
-    </message>
-    <message>
-        <location filename="../src/ui/thread_journal_dialog.py" line="666" />
-        <source>Filtre :</source>
-        <translation>Filter:</translation>
-    </message>
-    <message>
-        <location filename="../src/ui/thread_journal_dialog.py" line="668" />
-        <source>Texte dans le message…</source>
-        <translation>Text in the message…</translation>
-    </message>
-    <message>
-        <location filename="../src/ui/thread_journal_dialog.py" line="673" />
-        <source>↻ Rafraîchir</source>
-        <translation>↻ Refresh</translation>
-    </message>
-    <message>
-        <location filename="../src/ui/thread_journal_dialog.py" line="677" />
-        <location filename="../src/ui/thread_journal_dialog.py" line="770" />
-        <source>▶ Temps réel</source>
-        <translation>▶ Live</translation>
-    </message>
-    <message>
-        <location filename="../src/ui/thread_journal_dialog.py" line="682" />
-        <source>🗑 Vider</source>
-        <translation>🗑 Clear</translation>
-    </message>
-    <message>
-        <location filename="../src/ui/thread_journal_dialog.py" line="695" />
-        <source>Résumé par thread</source>
-        <translation>Summary by thread</translation>
-    </message>
-    <message>
-        <location filename="../src/ui/thread_journal_dialog.py" line="702" />
-        <source>Événements bruts</source>
-        <translation>Raw events</translation>
-    </message>
-    <message>
-        <location filename="../src/ui/thread_journal_dialog.py" line="717" />
-        <source>Rapport de problèmes…</source>
-        <translation>Problem report…</translation>
-    </message>
-    <message>
-        <location filename="../src/ui/thread_journal_dialog.py" line="721" />
-        <source>Ouvre un rapport détaillé des problèmes de performance, prêt à copier pour demander des améliorations.</source>
-        <translation>Opens a detailed report of the performance problems, ready to copy when asking for improvements.</translation>
-    </message>
-    <message>
-        <location filename="../src/ui/thread_journal_dialog.py" line="740" />
-        <source>(tous)</source>
-        <translation>(all)</translation>
+        <location filename="../src/ui/thread_journal_dialog.py" line="345" />
+        <source>Running</source>
+        <translation type="unfinished" />
     </message>
     <message numerus="yes">
-        <location filename="../src/ui/thread_journal_dialog.py" line="749" />
-        <source>%n entrée(s)</source>
+        <location filename="../src/ui/thread_journal_dialog.py" line="349" />
+        <source>%n error(s)</source>
+        <translation><numerusform>%n error</numerusform><numerusform>%n errors</numerusform></translation></message>
+    <message>
+        <location filename="../src/ui/thread_journal_dialog.py" line="354" />
+        <source>Progressing ({photos})</source>
+        <translation type="unfinished" />
+    </message>
+    <message numerus="yes">
+        <location filename="../src/ui/thread_journal_dialog.py" line="356" />
+        <location filename="../src/ui/thread_journal_dialog.py" line="359" />
+        <source>%n photo(s)</source>
+        <translation><numerusform>%n photo</numerusform><numerusform>%n photos</numerusform></translation></message>
+    <message>
+        <location filename="../src/ui/thread_journal_dialog.py" line="360" />
+        <location filename="../src/ui/thread_journal_dialog.py" line="361" />
+        <source>{v} s/photo</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/ui/thread_journal_dialog.py" line="394" />
+        <source>Time</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/ui/thread_journal_dialog.py" line="396" />
+        <source>Event</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/ui/thread_journal_dialog.py" line="397" />
+        <source>Message</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/ui/thread_journal_dialog.py" line="398" />
+        <source>Duration (ms)</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/ui/thread_journal_dialog.py" line="670" />
+        <source>Thread activity journal</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/ui/thread_journal_dialog.py" line="693" />
+        <source>Thread:</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/ui/thread_journal_dialog.py" line="699" />
+        <source>Filter:</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/ui/thread_journal_dialog.py" line="701" />
+        <source>Text in the message…</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/ui/thread_journal_dialog.py" line="707" />
+        <source>↻ Refresh</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/ui/thread_journal_dialog.py" line="711" />
+        <location filename="../src/ui/thread_journal_dialog.py" line="805" />
+        <source>▶ Live</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/ui/thread_journal_dialog.py" line="716" />
+        <source>🗑 Clear</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/ui/thread_journal_dialog.py" line="729" />
+        <source>Summary by thread</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/ui/thread_journal_dialog.py" line="736" />
+        <source>Raw events</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/ui/thread_journal_dialog.py" line="751" />
+        <source>Problem report…</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/ui/thread_journal_dialog.py" line="755" />
+        <source>Opens a detailed report of the performance problems, ready to copy when asking for improvements.</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/ui/thread_journal_dialog.py" line="775" />
+        <source>(all)</source>
+        <translation type="unfinished" />
+    </message>
+    <message numerus="yes">
+        <location filename="../src/ui/thread_journal_dialog.py" line="784" />
+        <source>%n entry(ies)</source>
         <translation><numerusform>%n entry</numerusform><numerusform>%n entries</numerusform></translation></message>
     <message>
-        <location filename="../src/ui/thread_journal_dialog.py" line="750" />
-        <source> — journal : {size}</source>
-        <translation> — journal: {size}</translation>
+        <location filename="../src/ui/thread_journal_dialog.py" line="785" />
+        <source> — journal: {size}</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/thread_journal_dialog.py" line="767" />
-        <source>⏹ Arrêter</source>
-        <translation>⏹ Stop</translation>
+        <location filename="../src/ui/thread_journal_dialog.py" line="802" />
+        <source>⏹ Stop</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/thread_journal_dialog.py" line="776" />
-        <source>Vider le journal</source>
-        <translation>Clear the journal</translation>
+        <location filename="../src/ui/thread_journal_dialog.py" line="811" />
+        <source>Clear the journal</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/thread_journal_dialog.py" line="777" />
-        <source>Supprimer toutes les entrées du journal ?</source>
-        <translation>Delete every entry in the journal?</translation>
+        <location filename="../src/ui/thread_journal_dialog.py" line="812" />
+        <source>Delete every entry in the journal?</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/thread_journal_dialog.py" line="792" />
-        <source>Exporter le journal</source>
-        <translation>Export the journal</translation>
+        <location filename="../src/ui/thread_journal_dialog.py" line="827" />
+        <source>Export the journal</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/thread_journal_dialog.py" line="805" />
+        <location filename="../src/ui/thread_journal_dialog.py" line="840" />
         <source>Export</source>
-        <translation>Export</translation>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/thread_journal_dialog.py" line="806" />
-        <source>Exporté : {path}</source>
-        <translation>Exported: {path}</translation>
+        <location filename="../src/ui/thread_journal_dialog.py" line="841" />
+        <source>Exported: {path}</source>
+        <translation type="unfinished" />
     </message>
 </context>
 <context>
     <name>ThumbnailGrid</name>
     <message>
-        <location filename="../src/ui/thumbnail_grid.py" line="49" />
-        <source>Janvier</source>
-        <translation>January</translation>
+        <location filename="../src/ui/thumbnail_grid.py" line="29" />
+        <source>Del</source>
+        <extracomment>Nom affiché de la touche Suppr dans les libellés « Libellé	Touche ». Séparé du libellé parce que celui-ci varie (singulier/pluriel, album ou non) : concaténé hors de `translate()`, il restait français en toutes langues (« Delete the file…	Suppr »). photo_viewer.py peut l'inclure dans son littéral traduit, lui, puisque le sien est fixe.</extracomment>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/thumbnail_grid.py" line="49" />
-        <source>Février</source>
-        <translation>February</translation>
+        <location filename="../src/ui/thumbnail_grid.py" line="56" />
+        <source>January</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/thumbnail_grid.py" line="50" />
-        <source>Mars</source>
-        <translation>March</translation>
+        <location filename="../src/ui/thumbnail_grid.py" line="56" />
+        <source>February</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/thumbnail_grid.py" line="50" />
-        <source>Avril</source>
-        <translation>April</translation>
+        <location filename="../src/ui/thumbnail_grid.py" line="57" />
+        <source>March</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/thumbnail_grid.py" line="51" />
-        <source>Mai</source>
-        <translation>May</translation>
+        <location filename="../src/ui/thumbnail_grid.py" line="57" />
+        <source>April</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/thumbnail_grid.py" line="51" />
-        <source>Juin</source>
-        <translation>June</translation>
+        <location filename="../src/ui/thumbnail_grid.py" line="58" />
+        <source>May</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/thumbnail_grid.py" line="52" />
-        <source>Juillet</source>
-        <translation>July</translation>
+        <location filename="../src/ui/thumbnail_grid.py" line="58" />
+        <source>June</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/thumbnail_grid.py" line="52" />
-        <source>Août</source>
-        <translation>August</translation>
+        <location filename="../src/ui/thumbnail_grid.py" line="59" />
+        <source>July</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/thumbnail_grid.py" line="53" />
-        <source>Septembre</source>
-        <translation>September</translation>
+        <location filename="../src/ui/thumbnail_grid.py" line="59" />
+        <source>August</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/thumbnail_grid.py" line="53" />
-        <source>Octobre</source>
-        <translation>October</translation>
+        <location filename="../src/ui/thumbnail_grid.py" line="60" />
+        <source>September</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/thumbnail_grid.py" line="54" />
-        <source>Novembre</source>
-        <translation>November</translation>
+        <location filename="../src/ui/thumbnail_grid.py" line="60" />
+        <source>October</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/thumbnail_grid.py" line="54" />
-        <source>Décembre</source>
-        <translation>December</translation>
+        <location filename="../src/ui/thumbnail_grid.py" line="61" />
+        <source>November</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/thumbnail_grid.py" line="584" />
-        <source>Chargement…</source>
-        <translation>Loading…</translation>
+        <location filename="../src/ui/thumbnail_grid.py" line="61" />
+        <source>December</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/thumbnail_grid.py" line="1445" />
-        <source>Ouvrir</source>
-        <translation>Open</translation>
+        <location filename="../src/ui/thumbnail_grid.py" line="591" />
+        <source>Loading…</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/thumbnail_grid.py" line="1447" />
-        <source>Retirer des favoris</source>
-        <translation>Remove from favourites</translation>
+        <location filename="../src/ui/thumbnail_grid.py" line="1452" />
+        <source>Open</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/thumbnail_grid.py" line="1448" />
-        <source>Marquer comme favori</source>
-        <translation>Mark as favourite</translation>
+        <location filename="../src/ui/thumbnail_grid.py" line="1454" />
+        <source>Remove from favourites</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/thumbnail_grid.py" line="1450" />
-        <source>Noter</source>
-        <translation>Rate</translation>
+        <location filename="../src/ui/thumbnail_grid.py" line="1455" />
+        <source>Mark as favourite</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/thumbnail_grid.py" line="1457" />
-        <source>Retirer la note</source>
-        <translation>Clear the rating</translation>
+        <source>Rate</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/thumbnail_grid.py" line="1459" />
-        <source>Mots-clés…</source>
-        <translation>Keywords…</translation>
-    </message>
-    <message>
-        <location filename="../src/ui/thumbnail_grid.py" line="1460" />
-        <source>Renommer l'image</source>
-        <translation>Rename the image</translation>
-    </message>
-    <message>
-        <location filename="../src/ui/thumbnail_grid.py" line="1461" />
-        <source>Déplacer vers…</source>
-        <translation>Move to…</translation>
-    </message>
-    <message>
-        <location filename="../src/ui/thumbnail_grid.py" line="1462" />
-        <source>Enregistrer l'image traitée sur le disque	Ctrl+S</source>
-        <translation>Save the edited image to disk	Ctrl+S</translation>
+        <location filename="../src/ui/thumbnail_grid.py" line="1464" />
+        <source>Clear the rating</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/thumbnail_grid.py" line="1466" />
-        <source>les {n} photos sélectionnées</source>
-        <translation>the {n} selected photos</translation>
+        <source>Keywords…</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/thumbnail_grid.py" line="1467" />
-        <source>cette photo</source>
-        <translation>this photo</translation>
+        <source>Rename the image</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/thumbnail_grid.py" line="1468" />
-        <source>Ajouter {photos} à un album…</source>
-        <translation>Add {photos} to an album…</translation>
+        <source>Move to…</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/thumbnail_grid.py" line="1470" />
-        <source>Créer un nouvel album avec {photos}…</source>
-        <translation>Create a new album with {photos}…</translation>
+        <location filename="../src/ui/thumbnail_grid.py" line="1469" />
+        <source>Save the edited image to disk	Ctrl+S</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/thumbnail_grid.py" line="1473" />
-        <source>Révéler dans l'Explorateur</source>
-        <translation>Show in File Explorer</translation>
+        <source>the {n} selected photos</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/thumbnail_grid.py" line="1478" />
-        <source>Retenter l'identification des visages</source>
-        <translation>Retry face identification</translation>
+        <location filename="../src/ui/thumbnail_grid.py" line="1474" />
+        <source>this photo</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/ui/thumbnail_grid.py" line="1475" />
+        <source>Add {photos} to an album…</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/ui/thumbnail_grid.py" line="1477" />
+        <source>Create a new album with {photos}…</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/ui/thumbnail_grid.py" line="1480" />
+        <source>Show in File Explorer</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/thumbnail_grid.py" line="1485" />
-        <source>Retirer les photos de l'album</source>
-        <translation>Remove the photos from the album</translation>
+        <source>Retry face identification</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/thumbnail_grid.py" line="1486" />
-        <source>Retirer de l'album</source>
-        <translation>Remove from the album</translation>
+        <location filename="../src/ui/thumbnail_grid.py" line="1492" />
+        <source>Remove the photos from the album</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/thumbnail_grid.py" line="1489" />
-        <source>Effacer les fichiers…</source>
-        <translation>Delete the files…</translation>
+        <location filename="../src/ui/thumbnail_grid.py" line="1493" />
+        <source>Remove from the album</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/thumbnail_grid.py" line="1490" />
-        <source>Effacer le fichier…</source>
-        <translation>Delete the file…</translation>
+        <location filename="../src/ui/thumbnail_grid.py" line="1496" />
+        <source>Delete the files…</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/ui/thumbnail_grid.py" line="1497" />
+        <source>Delete the file…</source>
+        <translation type="unfinished" />
     </message>
 </context>
 <context>
     <name>TreatmentDialog</name>
     <message>
         <location filename="../src/ui/treatment_dialogs.py" line="58" />
-        <source>Valider</source>
-        <translation>Apply</translation>
+        <source>Apply</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/treatment_dialogs.py" line="59" />
-        <source>Annuler</source>
-        <translation>Cancel</translation>
+        <source>Cancel</source>
+        <translation type="unfinished" />
+    </message>
+</context>
+<context>
+    <name>Units</name>
+    <message>
+        <location filename="../src/library/duplicate_detector.py" line="1209" />
+        <source>{n}&amp;nbsp;B</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/library/duplicate_detector.py" line="1212" />
+        <source>{n}&amp;nbsp;kB</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/library/duplicate_detector.py" line="1215" />
+        <source>{n}&amp;nbsp;MB</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/library/duplicate_detector.py" line="1218" />
+        <source>{n}&amp;nbsp;GB</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/library/duplicate_detector.py" line="1219" />
+        <source>{n}&amp;nbsp;TB</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/ui/face_backup_dialog.py" line="64" />
+        <location filename="../src/ui/ui_utils.py" line="28" />
+        <source>{n} MB</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/ui/face_backup_dialog.py" line="65" />
+        <location filename="../src/ui/ui_utils.py" line="27" />
+        <source>{n} kB</source>
+        <translation type="unfinished" />
     </message>
 </context>
 <context>
     <name>VideoPlayerPage</name>
     <message>
-        <location filename="../src/ui/settings_dialog.py" line="220" />
-        <source>Lecteur vidéo</source>
-        <translation>Video player</translation>
+        <location filename="../src/ui/settings_dialog.py" line="221" />
+        <source>Video player</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/settings_dialog.py" line="232" />
-        <source>Choisissez le lecteur utilisé par le bouton «▶ Ouvrir la vidéo»
-dans la visionneuse.</source>
-        <translation>Choose the player used by the “▶ Open the video” button
-in the viewer.</translation>
+        <location filename="../src/ui/settings_dialog.py" line="233" />
+        <source>Choose the player used by the “▶ Open the video” button
+in the viewer.</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/settings_dialog.py" line="241" />
-        <source>Lecteur par défaut du système</source>
-        <translation>System default player</translation>
+        <location filename="../src/ui/settings_dialog.py" line="242" />
+        <source>System default player</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/settings_dialog.py" line="246" />
-        <source>   Utilise l'application associée aux fichiers vidéo dans Windows.</source>
-        <translation>   Uses the application Windows associates with video files.</translation>
+        <location filename="../src/ui/settings_dialog.py" line="247" />
+        <source>   Uses the application Windows associates with video files.</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/settings_dialog.py" line="253" />
-        <source>Lecteur personnalisé :</source>
-        <translation>Custom player:</translation>
+        <location filename="../src/ui/settings_dialog.py" line="255" />
+        <source>Custom player:</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/settings_dialog.py" line="262" />
-        <source>Chemin vers l'exécutable…</source>
-        <translation>Path to the executable…</translation>
+        <location filename="../src/ui/settings_dialog.py" line="264" />
+        <source>Path to the executable…</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/settings_dialog.py" line="271" />
-        <source>Parcourir…</source>
-        <translation>Browse…</translation>
+        <location filename="../src/ui/settings_dialog.py" line="274" />
+        <source>Browse…</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/settings_dialog.py" line="279" />
-        <source>   Exemples : C:\Program Files\VLC\vlc.exe
+        <location filename="../src/ui/settings_dialog.py" line="282" />
+        <source>   Examples: C:\Program Files\VLC\vlc.exe
                     C:\Program Files\MPC-HC\mpc-hc64.exe</source>
-        <translation>   Examples: C:\Program Files\VLC\vlc.exe
-                    C:\Program Files\MPC-HC\mpc-hc64.exe</translation>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/settings_dialog.py" line="304" />
-        <source>Choisir le lecteur vidéo</source>
-        <translation>Choose the video player</translation>
+        <location filename="../src/ui/settings_dialog.py" line="307" />
+        <source>Choose the video player</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/settings_dialog.py" line="306" />
-        <source>Exécutables (*.exe);;Tous les fichiers (*)</source>
-        <translation>Executables (*.exe);;All files (*)</translation>
+        <location filename="../src/ui/settings_dialog.py" line="309" />
+        <source>Executables (*.exe);;All files (*)</source>
+        <translation type="unfinished" />
     </message>
 </context>
 <context>
     <name>ViewerCanvas</name>
     <message>
         <location filename="../src/ui/viewer_canvas.py" line="45" />
-        <source>Libre</source>
-        <translation>Free</translation>
+        <source>Free</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/viewer_canvas.py" line="46" />
-        <source>Format libre — quadrilatère quelconque</source>
-        <translation>Free form — any quadrilateral</translation>
+        <source>Free form — any quadrilateral</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/viewer_canvas.py" line="47" />
-        <source>10×15 horizontal  (ratio 3:2)</source>
-        <translation>10×15 landscape  (3:2)</translation>
+        <source>10×15 landscape  (3:2)</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/viewer_canvas.py" line="48" />
-        <source>10×15 vertical  (ratio 2:3)</source>
-        <translation>10×15 portrait  (2:3)</translation>
+        <source>10×15 portrait  (2:3)</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/viewer_canvas.py" line="49" />
-        <source>13×18 horizontal  (ratio 18:13)</source>
-        <translation>13×18 landscape  (18:13)</translation>
+        <source>13×18 landscape  (18:13)</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/viewer_canvas.py" line="50" />
-        <source>13×18 vertical  (ratio 13:18)</source>
-        <translation>13×18 portrait  (13:18)</translation>
+        <source>13×18 portrait  (13:18)</source>
+        <translation type="unfinished" />
     </message>
 </context>
 <context>
     <name>VignetteTreatmentDialog</name>
     <message>
-        <location filename="../src/ui/treatment_dialogs.py" line="565" />
+        <location filename="../src/ui/treatment_dialogs.py" line="569" />
         <source>Vignette</source>
-        <translation>Vignette</translation>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/treatment_dialogs.py" line="576" />
-        <source>Intensité</source>
-        <translation>Strength</translation>
-    </message>
-    <message>
-        <location filename="../src/ui/treatment_dialogs.py" line="582" />
-        <source>Couleur</source>
-        <translation>Colour</translation>
+        <location filename="../src/ui/treatment_dialogs.py" line="580" />
+        <source>Strength</source>
+        <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/ui/treatment_dialogs.py" line="586" />
-        <source>Noir</source>
-        <translation>Black</translation>
+        <source>Colour</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/treatment_dialogs.py" line="587" />
-        <source>Blanc</source>
-        <translation>White</translation>
+        <location filename="../src/ui/treatment_dialogs.py" line="590" />
+        <source>Black</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/treatment_dialogs.py" line="602" />
-        <source>Faites glisser les poignées sur l'image :
-• Cercle intérieur (pointillés) — début du fondu
-• Cercle extérieur — fin du fondu
-• Poignée ronde au sommet — rotation
-• Croix centrale — déplacer</source>
-        <translation>Drag the handles on the image:
+        <location filename="../src/ui/treatment_dialogs.py" line="591" />
+        <source>White</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/ui/treatment_dialogs.py" line="606" />
+        <source>Drag the handles on the image:
 • Inner circle (dotted) — where the fade starts
 • Outer circle — where the fade ends
 • Round handle at the top — rotate
-• Cross in the middle — move</translation>
+• Cross in the middle — move</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/treatment_dialogs.py" line="614" />
-        <source>Valider</source>
-        <translation>Apply</translation>
+        <location filename="../src/ui/treatment_dialogs.py" line="618" />
+        <source>Apply</source>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/ui/treatment_dialogs.py" line="615" />
-        <source>Annuler</source>
-        <translation>Cancel</translation>
+        <location filename="../src/ui/treatment_dialogs.py" line="619" />
+        <source>Cancel</source>
+        <translation type="unfinished" />
     </message>
 </context>
 </TS>

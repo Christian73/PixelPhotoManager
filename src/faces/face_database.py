@@ -681,7 +681,7 @@ class FaceDatabase:
                 if progress_cb:
                     done = min(start + _CHUNK, total)
                     progress_cb(translate(
-                        "FaceDatabase", "Clustering : sauvegarde {done}/{total} visages…"
+                        "FaceDatabase", "Clustering: saving {done}/{total} faces…"
                     ).format(done=f"{done:,}".replace(",", " "),
                              total=f"{total:,}".replace(",", " ")))
             # Nettoyer les faces ArcFace qui sont devenues bruit (cluster_id=NULL)

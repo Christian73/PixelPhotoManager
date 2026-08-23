@@ -157,8 +157,8 @@ def test_save_options_and_settings(isolated_app):
 
     thumb = find_thumbnail(window, str(save_photo), timeout=30.0)
     right_click_element(thumb)
-    click_context_menu_item(window, "Enregistrer l'image traitée sur le disque\tCtrl+S", exact=True, timeout=10.0)
-    find_dialog_button(window, ["Enregistrer"], exact=True, timeout=10.0).click_input()
+    click_context_menu_item(window, "Save the edited image to disk\tCtrl+S", exact=True, timeout=10.0)
+    find_dialog_button(window, ["Save"], exact=True, timeout=10.0).click_input()
     wait_for_condition(
         lambda: backup_dir.is_dir() and any(
             p.name.startswith(save_path.stem + "_") and p.suffix == save_path.suffix
@@ -172,7 +172,7 @@ def test_save_options_and_settings(isolated_app):
 
     thumb1 = find_thumbnail(window, str(photo1), timeout=30.0)
     right_click_element(thumb1)
-    click_context_menu_item(window, "Effacer le fichier…\tSuppr", exact=True, timeout=10.0)
+    click_context_menu_item(window, "Delete the file…\tDel", exact=True, timeout=10.0)
     click_yes(window)
     wait_for_condition(
         lambda: query_one(catalog_db, "SELECT COUNT(*) FROM photos WHERE path=?", (str(photo1),)) == 0,
@@ -182,8 +182,8 @@ def test_save_options_and_settings(isolated_app):
 
     thumb2 = find_thumbnail(window, str(photo2), timeout=15.0)
     right_click_element(thumb2)
-    click_context_menu_item(window, "Effacer le fichier…\tSuppr", exact=True, timeout=10.0)
-    find_checkbox(window, "Ne plus demander", timeout=10.0).click_input()
+    click_context_menu_item(window, "Delete the file…\tDel", exact=True, timeout=10.0)
+    find_checkbox(window, "Do not ask again", timeout=10.0).click_input()
     click_yes(window)
     wait_for_condition(
         lambda: query_one(catalog_db, "SELECT COUNT(*) FROM photos WHERE path=?", (str(photo2),)) == 0,
@@ -196,7 +196,7 @@ def test_save_options_and_settings(isolated_app):
 
     thumb3 = find_thumbnail(window, str(photo3), timeout=15.0)
     right_click_element(thumb3)
-    click_context_menu_item(window, "Effacer le fichier…\tSuppr", exact=True, timeout=10.0)
+    click_context_menu_item(window, "Delete the file…\tDel", exact=True, timeout=10.0)
     with pytest.raises(LookupError):
         find_dialog_button(window, ["Oui", "Yes", "&Oui", "&Yes"], timeout=3.0)
     wait_for_condition(
@@ -210,9 +210,9 @@ def test_save_options_and_settings(isolated_app):
     find_by_accessible_name(window, f"extapp::{_EXTAPP_NAME}", timeout=10.0)
     find_dialog_button(window, ["✕"], exact=True, timeout=10.0).click_input()
 
-    click_menu_item(window, "Outils", "Applications externes…")
+    click_menu_item(window, "Tools", "External applications…")
     click_list_item(window, _EXTAPP_NAME, exact=False, timeout=10.0)
-    find_dialog_button(window, ["Supprimer"], exact=True, timeout=10.0).click_input()
+    find_dialog_button(window, ["Remove"], exact=True, timeout=10.0).click_input()
     find_dialog_button(window, ["OK"], timeout=10.0).click_input()
 
     open_photo_in_viewer(window, ext_photo)
@@ -221,10 +221,10 @@ def test_save_options_and_settings(isolated_app):
     find_dialog_button(window, ["✕"], exact=True, timeout=10.0).click_input()
 
     # ---- 4. Paramètres : lecteur vidéo personnalisé (round-trip config.json) ----
-    click_menu_item(window, "Outils", "Paramètres")
-    click_list_item(window, "Lecteur vidéo", exact=True, timeout=10.0)
-    _click_radio(window, "Lecteur personnalisé :", timeout=10.0)
-    edit_path = _find_edit_near_radio(window, "Lecteur personnalisé :", timeout=10.0)
+    click_menu_item(window, "Tools", "Settings")
+    click_list_item(window, "Video player", exact=True, timeout=10.0)
+    _click_radio(window, "Custom player:", timeout=10.0)
+    edit_path = _find_edit_near_radio(window, "Custom player:", timeout=10.0)
     edit_path.set_edit_text(r"C:\FakePlayer\player.exe")
     find_dialog_button(window, ["OK"], timeout=10.0).click_input()
     wait_for_condition(
@@ -233,9 +233,9 @@ def test_save_options_and_settings(isolated_app):
     )
 
     # ---- 5. Aide / À propos ----
-    click_menu_item(window, "Aide", "Aide…")
-    find_dialog_button(window, ["Fermer"], exact=True, timeout=10.0).click_input()
+    click_menu_item(window, "Help", "Help…")
+    find_dialog_button(window, ["Close"], exact=True, timeout=10.0).click_input()
 
-    click_menu_item(window, "Aide", "À propos")
-    find_dialog_button(window, ["Fermer"], exact=True, timeout=10.0).click_input()
+    click_menu_item(window, "Help", "About")
+    find_dialog_button(window, ["Close"], exact=True, timeout=10.0).click_input()
     assert window.exists()

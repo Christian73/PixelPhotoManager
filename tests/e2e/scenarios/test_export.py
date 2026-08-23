@@ -4,12 +4,12 @@
 
 Chemin exercé : double-clic vignette -> visionneuse -> retouche Luminosité
 (même mécanique que test_edit_nondestructive.py) -> bouton barre d'outils
-"⬆  Exporter" (main_window.py:816, ``_on_export_clicked``) -> ``_ExportDialog``
+"⬆  Export" (main_window.py:816, ``_on_export_clicked``) -> ``_ExportDialog``
 (modal, ``exec()``) -> le champ ``_dir_edit`` (QLineEdit, texte par défaut =
 ``Path.home()/Pictures/PixelPhotoManager/Export`` !) est **explicitement
 écrasé** vers un dossier isolé sous le ``tmp_path`` du test — ne jamais laisser
 ce scénario écrire dans le vrai dossier Images de l'utilisateur, cf. le
-principe d'isolation de tout ce module de tests -> "Exporter" (bouton OK,
+principe d'isolation de tout ce module de tests -> "Export" (bouton OK,
 texte exact, distinct du bouton de la barre d'outils qui porte le glyphe "⬆").
 
 Vérifications sur le fichier `.jpg` produit, pas sur l'UI :
@@ -77,7 +77,7 @@ def test_export_bakes_in_edit_and_preserves_dates(isolated_app):
 
     open_photo_in_viewer(window, photo)
 
-    find_dialog_button(window, ["Luminosité"], exact=True, timeout=15.0).click_input()
+    find_dialog_button(window, ["Brightness"], exact=True, timeout=15.0).click_input()
     sliders = []
     deadline = time.monotonic() + 10.0
     while time.monotonic() < deadline and not sliders:
@@ -85,7 +85,7 @@ def test_export_bakes_in_edit_and_preserves_dates(isolated_app):
         time.sleep(0.3)
     assert sliders, "le slider de luminosité n'est pas apparu"
     sliders[0].set_value(int(_BRIGHTNESS_TARGET * 100))
-    find_dialog_button(window, ["Valider"], exact=True, timeout=10.0).click_input()
+    find_dialog_button(window, ["Apply"], exact=True, timeout=10.0).click_input()
 
     wait_for_condition(
         lambda: query_one(
@@ -98,10 +98,10 @@ def test_export_bakes_in_edit_and_preserves_dates(isolated_app):
     export_dir = catalog_db.parents[2] / "export_out"
 
     # Bouton de la barre d'outils (glyphe "⬆" + texte) — un seul bouton contient "Exporter" avant l'ouverture du dialogue.
-    find_dialog_button(window, ["Exporter"], exact=False, timeout=10.0).click_input()
+    find_dialog_button(window, ["Export"], exact=False, timeout=10.0).click_input()
     _set_export_dir(window, export_dir)
-    # Bouton OK du dialogue : texte exact "Exporter" (sans glyphe), distinct du bouton barre d'outils.
-    find_dialog_button(window, ["Exporter"], exact=True, timeout=10.0).click_input()
+    # Bouton OK du dialogue : texte exact "Export" (sans glyphe), distinct du bouton barre d'outils.
+    find_dialog_button(window, ["Export"], exact=True, timeout=10.0).click_input()
 
     dest = export_dir / (Path(photo).stem + ".jpg")
 

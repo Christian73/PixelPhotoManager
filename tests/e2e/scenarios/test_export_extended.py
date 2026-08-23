@@ -107,10 +107,10 @@ def test_export_extended(isolated_app):
     find_thumbnail(window, str(photo_a), timeout=30.0).click_input()
     find_thumbnail(window, str(photo_b), timeout=15.0).click_input(pressed="control")
 
-    find_dialog_button(window, ["Exporter"], exact=False, timeout=10.0).click_input()
-    _click_size_radio(window, "Petite", timeout=10.0)
+    find_dialog_button(window, ["Export"], exact=False, timeout=10.0).click_input()
+    _click_size_radio(window, "Small", timeout=10.0)
     _set_export_dir(window, export_dir)
-    find_dialog_button(window, ["Exporter"], exact=True, timeout=10.0).click_input()
+    find_dialog_button(window, ["Export"], exact=True, timeout=10.0).click_input()
 
     dest_a = export_dir / (Path(photo_a).stem + ".jpg")
     dest_b = export_dir / (Path(photo_b).stem + ".jpg")
@@ -132,10 +132,10 @@ def test_export_extended(isolated_app):
     # ---- 2. Export mono-photo, préréglage « Moyenne » (pas de redimensionnement) ----
     find_thumbnail(window, str(photo_c), timeout=15.0).click_input()  # clic seul : désélectionne a/b
 
-    find_dialog_button(window, ["Exporter"], exact=False, timeout=10.0).click_input()
-    _click_size_radio(window, "Moyenne", timeout=10.0)
+    find_dialog_button(window, ["Export"], exact=False, timeout=10.0).click_input()
+    _click_size_radio(window, "Average", timeout=10.0)
     _set_export_dir(window, export_dir)
-    find_dialog_button(window, ["Exporter"], exact=True, timeout=10.0).click_input()
+    find_dialog_button(window, ["Export"], exact=True, timeout=10.0).click_input()
 
     dest_c = export_dir / (Path(photo_c).stem + ".jpg")
     wait_for_condition(
@@ -150,9 +150,9 @@ def test_export_extended(isolated_app):
     first_export_size = dest_c.stat().st_size
 
     # ---- 3. Ré-export de la même photo, même dossier : nommage anti-collision ----
-    find_dialog_button(window, ["Exporter"], exact=False, timeout=10.0).click_input()
+    find_dialog_button(window, ["Export"], exact=False, timeout=10.0).click_input()
     _set_export_dir(window, export_dir)
-    find_dialog_button(window, ["Exporter"], exact=True, timeout=10.0).click_input()
+    find_dialog_button(window, ["Export"], exact=True, timeout=10.0).click_input()
 
     dest_c_collision = export_dir / (Path(photo_c).stem + "_1.jpg")
     wait_for_condition(

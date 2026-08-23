@@ -312,7 +312,8 @@ class Sidebar(QWidget):
         filter_row.setSpacing(0)
 
         self._filter_box = QLineEdit()
-        self._filter_box.setPlaceholderText(translate("Sidebar", "🔍  Filtrer dossiers, personnes et fichiers…"))
+        self._filter_box.setPlaceholderText(translate("Sidebar", "🔍  Filter folders, people "
+                                                                 "and files…"))
         self._filter_box.setClearButtonEnabled(True)
         self._filter_box.setStyleSheet("padding: 4px 6px; background: #2a2a2a; color: #ddd; border: none; border-bottom: 1px solid #444;")
         self._filter_box.textChanged.connect(self._apply_filter)
@@ -321,7 +322,7 @@ class Sidebar(QWidget):
         self._btn_advanced_search = QPushButton("🔎")
         self._btn_advanced_search.setFlat(True)
         self._btn_advanced_search.setFixedWidth(28)
-        self._btn_advanced_search.setToolTip(translate("Sidebar", "Recherche avancée… (Ctrl+F)"))
+        self._btn_advanced_search.setToolTip(translate("Sidebar", "Advanced search… (Ctrl+F)"))
         self._btn_advanced_search.setStyleSheet(
             "QPushButton { background: #2a2a2a; color: #ddd; border: none;"
             " border-bottom: 1px solid #444; font-size: 13px; }"
@@ -347,12 +348,12 @@ class Sidebar(QWidget):
         self._folder_arrow.setStyleSheet("color: #888;")
         self._folder_arrow.setFixedWidth(10)
         folder_header_bar.addWidget(self._folder_arrow)
-        _lbl = QLabel(translate("Sidebar", "Dossiers"))
+        _lbl = QLabel(translate("Sidebar", "Folders"))
         _lbl.setStyleSheet("color: #ccc; font-weight: bold;")
         folder_header_bar.addWidget(_lbl)
         folder_header_bar.addStretch()
-        self._btn_duplicates = _BadgeButton(translate("Sidebar", "Dupliquées"))
-        self._btn_duplicates.setToolTip(translate("Sidebar", "Parcourir les groupes de doublons détectés"))
+        self._btn_duplicates = _BadgeButton(translate("Sidebar", "Duplicates"))
+        self._btn_duplicates.setToolTip(translate("Sidebar", "Browse the duplicate groups found"))
         self._btn_duplicates.clicked.connect(self.duplicates_requested)
         folder_header_bar.addWidget(self._btn_duplicates)
         folder_header_container = QWidget()
@@ -391,7 +392,7 @@ class Sidebar(QWidget):
         album_header_bar.addStretch()
         btn_new_album = QPushButton("+")
         btn_new_album.setFixedWidth(24)
-        btn_new_album.setToolTip(translate("Sidebar", "Créer un album"))
+        btn_new_album.setToolTip(translate("Sidebar", "Create an album"))
         btn_new_album.clicked.connect(self._create_album)
         album_header_bar.addWidget(btn_new_album)
 
@@ -421,15 +422,15 @@ class Sidebar(QWidget):
         self._persons_arrow.setStyleSheet("color: #888;")
         self._persons_arrow.setFixedWidth(10)
         persons_header_bar.addWidget(self._persons_arrow)
-        _lbl = QLabel(translate("Sidebar", "Personnes"))
+        _lbl = QLabel(translate("Sidebar", "People"))
         _lbl.setStyleSheet("color: #ccc; font-weight: bold;")
         persons_header_bar.addWidget(_lbl)
         self._persons_count_lbl = QLabel("(0)")
         self._persons_count_lbl.setStyleSheet("color: #888;")
         persons_header_bar.addWidget(self._persons_count_lbl)
         persons_header_bar.addStretch()
-        self._btn_identify = _BadgeButton("Identifier…")
-        self._btn_identify.setToolTip(translate("Sidebar", "Nommer les groupes de visages détectés"))
+        self._btn_identify = _BadgeButton(translate("Sidebar", "Identify…"))
+        self._btn_identify.setToolTip(translate("Sidebar", "Name the face groups found"))
         self._btn_identify.clicked.connect(self.identify_requested)
         persons_header_bar.addWidget(self._btn_identify)
 
@@ -490,34 +491,36 @@ class Sidebar(QWidget):
                 arrow_lbl.setText("▸" if sizes[i] < 50 else "▾")
 
     def _add_special_albums(self) -> None:
-        item_all = QListWidgetItem(translate("Sidebar", "★ Chronologie de toutes les photos"))
+        item_all = QListWidgetItem(translate("Sidebar", "★ Timeline of every photo"))
         item_all.setData(Qt.UserRole, _SPECIAL_ALL)
         self._albums_list.addItem(item_all)
         self._albums_list.setCurrentItem(item_all)
 
-        item_fav = QListWidgetItem(translate("Sidebar", "♡ Favoris"))
+        item_fav = QListWidgetItem(translate("Sidebar", "♡ Favourites"))
         item_fav.setData(Qt.UserRole, _SPECIAL_FAV)
         self._albums_list.addItem(item_fav)
 
-        item_vid = QListWidgetItem(translate("Sidebar", "▶ Vidéos"))
+        item_vid = QListWidgetItem(translate("Sidebar", "▶ Videos"))
         item_vid.setData(Qt.UserRole, _SPECIAL_VIDEOS)
         self._albums_list.addItem(item_vid)
 
         item_rated = QListWidgetItem(self._rated_header_label())
         item_rated.setData(Qt.UserRole, _SPECIAL_RATED)
-        item_rated.setToolTip(translate("Sidebar", "Cliquer pour replier/déplier les niveaux de notation"))
+        item_rated.setToolTip(translate("Sidebar", "Click to fold/unfold the rating levels"))
         self._albums_list.addItem(item_rated)
         self._rated_header_item = item_rated
         self._render_rated_subitems()
 
-        item_fn = QListWidgetItem(translate("Sidebar", "🔍 Par nom de fichier"))
+        item_fn = QListWidgetItem(translate("Sidebar", "🔍 By file name"))
         item_fn.setData(Qt.UserRole, _SPECIAL_FILENAME)
-        item_fn.setToolTip(translate("Sidebar", "Afficher les photos dont le nom de fichier contient le texte du filtre"))
+        item_fn.setToolTip(translate("Sidebar", "Show the photos whose file name contains the "
+                                                "filter text"))
         self._albums_list.addItem(item_fn)
 
         item_tag = QListWidgetItem(self._tag_header_label())
         item_tag.setData(Qt.UserRole, _SPECIAL_TAG)
-        item_tag.setToolTip(translate("Sidebar", "Cliquer pour replier/déplier la liste des mots-clés existants"))
+        item_tag.setToolTip(translate("Sidebar", "Click to fold/unfold the list of existing "
+                                                 "keywords"))
         self._albums_list.addItem(item_tag)
         self._tag_header_item = item_tag
 
@@ -605,7 +608,7 @@ class Sidebar(QWidget):
         if find_dvd_video_ts(path) is None:
             return
         item.setIcon(0, self.style().standardIcon(QStyle.SP_DriveCDIcon))
-        item.setToolTip(0, translate("Sidebar", "Copie de DVD (VIDEO_TS)"))
+        item.setToolTip(0, translate("Sidebar", "DVD copy (VIDEO_TS)"))
 
     def refresh_folders(self, folders: list[str]) -> None:
         self._folder_tree.clear()
@@ -770,7 +773,7 @@ class Sidebar(QWidget):
 
     def _tag_header_label(self) -> str:
         arrow = "▸" if self._tags_collapsed else "▾"
-        return f"{arrow} 🏷 " + translate("Sidebar", "Par mot-clé")
+        return f"{arrow} 🏷 " + translate("Sidebar", "By keyword")
 
     def _render_tag_subitems(self) -> None:
         base = 6 + self._rated_items_count
@@ -787,7 +790,7 @@ class Sidebar(QWidget):
 
     def _rated_header_label(self) -> str:
         arrow = "▸" if self._ratings_collapsed else "▾"
-        return f"{arrow} ★ " + translate("Sidebar", "Par notes")
+        return f"{arrow} ★ " + translate("Sidebar", "By rating")
 
     def _render_rated_subitems(self) -> None:
         base = 4
@@ -799,7 +802,7 @@ class Sidebar(QWidget):
         for i, n in enumerate(range(5, 0, -1)):
             item = QListWidgetItem(f"      {'★' * n}{'☆' * (5 - n)}")
             item.setData(Qt.UserRole, _SPECIAL_RATED_ITEM_PREFIX + str(n))
-            item.setToolTip(translate("Sidebar", "Photos notées %n étoile(s) ou plus", None, n))
+            item.setToolTip(translate("Sidebar", "Photos rated %n star(s) or more", None, n))
             self._albums_list.insertItem(base + i, item)
         self._rated_items_count = 5
 
@@ -880,14 +883,14 @@ class Sidebar(QWidget):
         if isinstance(data, AlbumInfo):
             menu = QMenu(self)
             install_menu_width_fix(menu)
-            menu.addAction(translate("Sidebar", "Supprimer l'album…"),
+            menu.addAction(translate("Sidebar", "Delete the album…"),
                            lambda: self.album_delete_requested.emit(data))
             menu.exec(self._albums_list.mapToGlobal(pos))
         elif isinstance(data, str) and data.startswith(_SPECIAL_TAG_ITEM_PREFIX):
             tag = data[len(_SPECIAL_TAG_ITEM_PREFIX):]
             menu = QMenu(self)
             install_menu_width_fix(menu)
-            menu.addAction(translate("Sidebar", "Supprimer ce mot-clé…"),
+            menu.addAction(translate("Sidebar", "Delete this keyword…"),
                            lambda: self.tag_delete_requested.emit(tag))
             menu.exec(self._albums_list.mapToGlobal(pos))
         # autres albums spéciaux (Chronologie, Favoris, Vidéos…) : pas de menu
@@ -899,28 +902,28 @@ class Sidebar(QWidget):
         path = item.data(0, Qt.UserRole)
         menu = QMenu(self)
         install_menu_width_fix(menu)
-        menu.addAction(translate("Sidebar", "Scanner maintenant"), lambda: self.scan_requested.emit(path))
-        menu.addAction(translate("Sidebar", "Supprimer des dossiers surveillés"),
+        menu.addAction(translate("Sidebar", "Scan now"), lambda: self.scan_requested.emit(path))
+        menu.addAction(translate("Sidebar", "Stop watching this folder"),
                        lambda: self.folder_removed.emit(path))
         menu.addSeparator()
-        menu.addAction(translate("Sidebar", "Créer un sous-dossier…"),
+        menu.addAction(translate("Sidebar", "Create a subfolder…"),
                        lambda: self._create_subfolder(path))
-        menu.addAction(translate("Sidebar", "Renommer…"),
+        menu.addAction(translate("Sidebar", "Rename…"),
                        lambda: self._rename_folder(path))
-        menu.addAction(translate("Sidebar", "Déplacer vers…"),
+        menu.addAction(translate("Sidebar", "Move to…"),
                        lambda: self._move_folder(path))
         menu.addSeparator()
-        menu.addAction(translate("Sidebar", "Ouvrir dans l'Explorateur"),
+        menu.addAction(translate("Sidebar", "Open in File Explorer"),
                        lambda p=path: subprocess.Popen(["explorer", p]))
         menu.addSeparator()
-        menu.addAction(translate("Sidebar", "Effacer le dossier…"),
+        menu.addAction(translate("Sidebar", "Delete the folder…"),
                        lambda: self._delete_folder(path))
         menu.exec(self._folder_tree.mapToGlobal(pos))
 
     def _create_subfolder(self, parent_path: str) -> None:
         name, ok = QInputDialog.getText(
-            self, translate("Sidebar", "Nouveau sous-dossier"),
-            translate("Sidebar", "Nom du sous-dossier dans « {parent} » :"
+            self, translate("Sidebar", "New subfolder"),
+            translate("Sidebar", "Name of the subfolder inside “{parent}”:"
                       ).format(parent=os.path.basename(parent_path)),
         )
         if not ok or not name.strip():
@@ -929,13 +932,13 @@ class Sidebar(QWidget):
         try:
             os.makedirs(new_path, exist_ok=False)
         except FileExistsError:
-            QMessageBox.warning(self, translate("Sidebar", "Dossier existant"),
-                                translate("Sidebar", "« {name} » existe déjà dans ce dossier.")
+            QMessageBox.warning(self, translate("Sidebar", "Folder already exists"),
+                                translate("Sidebar", "“{name}” already exists in this folder.")
                                 .format(name=name.strip()))
             return
         except Exception as e:
-            QMessageBox.critical(self, translate("Sidebar", "Erreur"),
-                                 translate("Sidebar", "Impossible de créer le dossier :\n{error}")
+            QMessageBox.critical(self, translate("Sidebar", "Error"),
+                                 translate("Sidebar", "Cannot create the folder:\n{error}")
                                  .format(error=e))
             return
         self.folder_created.emit(new_path)
@@ -943,7 +946,7 @@ class Sidebar(QWidget):
     def _rename_folder(self, path: str) -> None:
         current_name = os.path.basename(path)
         new_name, ok = QInputDialog.getText(
-            self, translate("Sidebar", "Renommer le dossier"), translate("Sidebar", "Nouveau nom :"), text=current_name,
+            self, translate("Sidebar", "Rename the folder"), translate("Sidebar", "New name:"), text=current_name,
         )
         if not ok or not new_name.strip() or new_name.strip() == current_name:
             return
@@ -951,8 +954,8 @@ class Sidebar(QWidget):
         try:
             os.rename(path, new_path)
         except Exception as e:
-            QMessageBox.critical(self, translate("Sidebar", "Erreur"),
-                                 translate("Sidebar", "Impossible de renommer le dossier :\n{error}")
+            QMessageBox.critical(self, translate("Sidebar", "Error"),
+                                 translate("Sidebar", "Cannot rename the folder:\n{error}")
                                  .format(error=e))
             return
         self.folder_moved.emit(path, new_path)
@@ -960,7 +963,7 @@ class Sidebar(QWidget):
     def _move_folder(self, path: str) -> None:
         folder_name = os.path.basename(path)
         dst = QFileDialog.getExistingDirectory(
-            self, translate("Sidebar", "Déplacer « {name} » — choisir le dossier de destination"
+            self, translate("Sidebar", "Move “{name}” — choose the destination folder"
                             ).format(name=folder_name),
             os.path.dirname(path),
         )
@@ -970,15 +973,15 @@ class Sidebar(QWidget):
         if os.path.normcase(new_path) == os.path.normcase(path):
             return  # même emplacement, rien à faire
         if os.path.exists(new_path):
-            QMessageBox.warning(self, translate("Sidebar", "Dossier existant"),
-                                translate("Sidebar", "« {path} » existe déjà.")
+            QMessageBox.warning(self, translate("Sidebar", "Folder already exists"),
+                                translate("Sidebar", "“{path}” already exists.")
                                 .format(path=new_path))
             return
         try:
             shutil.move(path, dst)
         except Exception as e:
-            QMessageBox.critical(self, translate("Sidebar", "Erreur"),
-                                 translate("Sidebar", "Impossible de déplacer le dossier :\n{error}")
+            QMessageBox.critical(self, translate("Sidebar", "Error"),
+                                 translate("Sidebar", "Cannot move the folder:\n{error}")
                                  .format(error=e))
             return
         self.folder_moved.emit(path, new_path)
@@ -987,17 +990,19 @@ class Sidebar(QWidget):
         folder_name = os.path.basename(path)
         box = QMessageBox(
             QMessageBox.Warning,
-            translate("Sidebar", "Confirmer la suppression"),
+            translate("Sidebar", "Confirm deletion"),
             translate("Sidebar",
-                      "Envoyer le dossier « {name} » et tout son contenu "
-                      "à la corbeille Windows ?\n\n"
-                      "Le dossier restera récupérable depuis la corbeille."
+                      "Send the folder “{name}” and everything in it to the Windows recycle "
+                      "bin?\n\nThe folder will still be recoverable from the recycle bin."
                       ).format(name=folder_name),
             QMessageBox.Yes | QMessageBox.Cancel,
             self,
         )
         box.setDefaultButton(QMessageBox.Cancel)
-        box.button(QMessageBox.Yes).setText(translate("Sidebar", "Supprimer"))
+        # « Delete » et non « Remove » : le bouton « Remove » du gestionnaire de
+        # dossiers retire seulement le dossier de la surveillance, celui-ci
+        # l'envoie à la corbeille avec tout son contenu.
+        box.button(QMessageBox.Yes).setText(translate("Sidebar", "Delete"))
         if box.exec() != QMessageBox.Yes:
             return
         # Mise à la corbeille dans un thread : sur un gros dossier (ou un
@@ -1014,16 +1019,17 @@ class Sidebar(QWidget):
         QApplication.restoreOverrideCursor()
         if error:
             QMessageBox.critical(
-                self, translate("Sidebar", "Erreur"),
+                self, translate("Sidebar", "Error"),
                 translate("Sidebar",
-                          "Impossible d'envoyer le dossier à la corbeille :\n{error}"
-                          "\n\nLe dossier n'a PAS été supprimé.").format(error=error),
+                          "Cannot send the folder to the recycle bin:\n{error}\n\nThe folder "
+                          "was NOT deleted.").format(error=error),
             )
             return
         self.folder_deleted.emit(path)
 
     def _create_album(self) -> None:
-        name, ok = QInputDialog.getText(self, translate("Sidebar", "Nouvel album"), translate("Sidebar", "Nom de l'album :"))
+        name, ok = QInputDialog.getText(self, translate("Sidebar", "New album"), translate("Sidebar", "Album "
+                                                                                                         "name:"))
         if ok and name.strip():
             bus.emit("album.create_requested", name=name.strip())
 
@@ -1286,11 +1292,11 @@ class Sidebar(QWidget):
             return
         menu = QMenu(self)
         install_menu_width_fix(menu)
-        menu.addAction(translate("Sidebar", "Renommer…"),
+        menu.addAction(translate("Sidebar", "Rename…"),
                        lambda: self.person_rename_requested.emit(person))
-        menu.addAction(translate("Sidebar", "Fusionner avec…"),
+        menu.addAction(translate("Sidebar", "Merge with…"),
                        lambda: self.person_merge_requested.emit(person))
         menu.addSeparator()
-        menu.addAction(translate("Sidebar", "Effacer le nom…"),
+        menu.addAction(translate("Sidebar", "Clear the name…"),
                        lambda: self.person_clear_requested.emit(person))
         menu.exec(self._persons_list.mapToGlobal(pos))

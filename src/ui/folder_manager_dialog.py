@@ -39,10 +39,10 @@ def _find_subdirs(folder: str) -> list[tuple[str, bool, str]]:
                 continue
             if name == "Originals":
                 result.append((name, True,
-                               translate("FolderManagerDialog", "sauvegarde Picasa")))
+                               translate("FolderManagerDialog", "Picasa backup")))
             elif _is_hidden(fullpath):
                 result.append((name, True,
-                               translate("FolderManagerDialog", "dossier caché")))
+                               translate("FolderManagerDialog", "hidden folder")))
             else:
                 result.append((name, False, ""))
     except PermissionError:
@@ -95,17 +95,17 @@ class _FolderRow(QWidget):
         path_lbl.setToolTip(folder)
         top.addWidget(path_lbl, stretch=1)
 
-        count_lbl = QLabel(translate("FolderManagerDialog", "{n} fichiers").format(
+        count_lbl = QLabel(translate("FolderManagerDialog", "{n} files").format(
             n=f"{photo_count:,}".replace(",", " ")))
         count_lbl.setStyleSheet("color: #888; font-size: 11px; min-width: 90px; background: transparent; border: none;")
         count_lbl.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
         top.addWidget(count_lbl)
 
         if exists:
-            btn_rescan = QPushButton(translate("FolderRow", "⟳  Re-scanner"))
+            btn_rescan = QPushButton(translate("FolderRow", "⟳  Rescan"))
             btn_rescan.setToolTip(
-                translate("FolderRow", "Forcer le re-scan complet de ce dossier.\n"
-                "Tous les fichiers sont relus, même si non modifiés depuis le dernier scan.")
+                translate("FolderRow", "Force a full rescan of this folder.\nEvery file is "
+                                       "read again, even if unchanged since the last scan.")
             )
             btn_rescan.setStyleSheet(
                 "QPushButton { background: #2a5080; color: white; border: none;"
@@ -115,8 +115,8 @@ class _FolderRow(QWidget):
             btn_rescan.clicked.connect(lambda: self.rescan_clicked.emit(self._folder))
             top.addWidget(btn_rescan)
 
-        btn_remove = QPushButton(translate("FolderRow", "Retirer"))
-        btn_remove.setToolTip(translate("FolderRow", "Retirer ce dossier de la surveillance"))
+        btn_remove = QPushButton(translate("FolderRow", "Remove"))
+        btn_remove.setToolTip(translate("FolderRow", "Stop watching this folder"))
         btn_remove.setStyleSheet(
             "QPushButton { background: #4a2222; color: #daa; border: none;"
             " border-radius: 3px; padding: 3px 10px; }"
@@ -128,7 +128,7 @@ class _FolderRow(QWidget):
         outer.addLayout(top)
 
         if not exists:
-            warn = QLabel(translate("FolderRow", "  Ce dossier est introuvable sur le disque."))
+            warn = QLabel(translate("FolderRow", "  This folder cannot be found on the disk."))
             warn.setStyleSheet("color: #a66; font-size: 10px; background: transparent; border: none;")
             outer.addWidget(warn)
             return
@@ -145,9 +145,9 @@ class _FolderRow(QWidget):
 
         excluded = sum(1 for _, exc, _ in subdirs if exc)
         total = len(subdirs)
-        label = "▶  " + translate("FolderManagerDialog", "%n sous-dossier(s)", None, total)
+        label = "▶  " + translate("FolderManagerDialog", "%n subfolder(s)", None, total)
         if excluded:
-            label += "  " + translate("FolderManagerDialog", "(%n exclu(s))", None, excluded)
+            label += "  " + translate("FolderManagerDialog", "(%n excluded)", None, excluded)
 
         self._toggle_btn = QPushButton(label)
         self._toggle_btn.setStyleSheet(
@@ -224,7 +224,7 @@ class FolderManagerDialog(QDialog):
         super().__init__(parent)
         self._config  = config
         self._catalog = catalog
-        self.setWindowTitle(translate("FolderManagerDialog", "Gestion des dossiers surveillés"))
+        self.setWindowTitle(translate("FolderManagerDialog", "Watched folder management"))
         self.setMinimumWidth(640)
         self.setMinimumHeight(420)
         self.setAttribute(Qt.WA_DeleteOnClose)
@@ -235,7 +235,7 @@ class FolderManagerDialog(QDialog):
         root.setSpacing(10)
         root.setContentsMargins(16, 16, 16, 14)
 
-        lbl = QLabel(translate("FolderManagerDialog", "Dossiers surveillés par le scan"))
+        lbl = QLabel(translate("FolderManagerDialog", "Folders watched by the scan"))
         lbl.setStyleSheet("font-size: 13px; font-weight: bold; color: #ccc;")
         root.addWidget(lbl)
 
@@ -255,15 +255,16 @@ class FolderManagerDialog(QDialog):
         root.addWidget(self._scroll, stretch=1)
 
         note = QLabel(
-            translate("FolderManagerDialog", "Règles d'exclusion : dossiers masqués Windows (attribut «Caché» ou préfixe «.»)"
-            " et dossiers nommés «Originals» (sauvegardes Picasa).")
+            translate("FolderManagerDialog", "Exclusion rules: folders hidden by Windows "
+                                             "(“Hidden” attribute or “.” prefix) and folders "
+                                             "named “Originals” (Picasa backups).")
         )
         note.setStyleSheet("color: #555; font-size: 10px;")
         note.setWordWrap(True)
         root.addWidget(note)
 
         btn_row = QHBoxLayout()
-        btn_add = QPushButton(translate("FolderManagerDialog", "＋  Ajouter un dossier…"))
+        btn_add = QPushButton(translate("FolderManagerDialog", "＋  Add a folder…"))
         btn_add.setStyleSheet(
             "QPushButton { background: #2a3d2a; color: #8d8; border: none;"
             " border-radius: 3px; padding: 4px 12px; }"
@@ -272,7 +273,7 @@ class FolderManagerDialog(QDialog):
         btn_add.clicked.connect(self._on_add)
         btn_row.addWidget(btn_add)
         btn_row.addStretch()
-        btn_close = QPushButton(translate("FolderManagerDialog", "Fermer"))
+        btn_close = QPushButton(translate("FolderManagerDialog", "Close"))
         btn_close.setFixedWidth(80)
         btn_close.clicked.connect(self.accept)
         btn_row.addWidget(btn_close)
@@ -289,7 +290,8 @@ class FolderManagerDialog(QDialog):
 
         folders = self._config.get_scan_folders()
         if not folders:
-            empty = QLabel(translate("FolderManagerDialog", "Aucun dossier configuré. Cliquez sur «Ajouter» pour commencer."))
+            empty = QLabel(translate("FolderManagerDialog", "No folder configured. Click “Add” "
+                                                            "to get started."))
             empty.setStyleSheet("color: #555; font-size: 11px; padding: 24px;")
             empty.setAlignment(Qt.AlignCenter)
             self._layout.insertWidget(0, empty)
@@ -306,10 +308,10 @@ class FolderManagerDialog(QDialog):
         self.rescan_requested.emit(folder)
         QMessageBox.information(
             self,
-            translate("FolderManagerDialog", "Re-scan lancé"),
+            translate("FolderManagerDialog", "Rescan started"),
             translate("FolderManagerDialog",
-                      "Le re-scan forcé de «{name}» est en cours.\n"
-                      "Tous les fichiers seront relus, même si inchangés."
+                      "The forced rescan of “{name}” is running.\nEvery file will be read "
+                      "again, even the unchanged ones."
                       ).format(name=Path(folder).name),
         )
 
@@ -321,7 +323,7 @@ class FolderManagerDialog(QDialog):
 
     def _on_add(self) -> None:
         folder = QFileDialog.getExistingDirectory(
-            self, translate("FolderManagerDialog", "Choisir un dossier à surveiller"), os.path.expanduser("~")
+            self, translate("FolderManagerDialog", "Choose a folder to watch"), os.path.expanduser("~")
         )
         if folder:
             self.folder_added.emit(folder)

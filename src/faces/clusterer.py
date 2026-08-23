@@ -193,7 +193,7 @@ def _run_clustering(
 
     n_synthetic = face_db.assign_person_synthetic_clusters()
     if n_synthetic and progress_cb:
-        progress_cb(translate("Clusterer", "Clustering : {n} visages identifiés pré-assignés…"
+        progress_cb(translate("Clusterer", "Clustering: {n} identified faces pre-assigned…"
                               ).format(n=_fmt_n(n_synthetic)))
 
     X, face_ids = face_db.get_all_embeddings(only_unidentified=True)
@@ -211,7 +211,7 @@ def _run_clustering(
 
     logger.info("Clustering HDBSCAN: %d visages non identifiés", n)
     if progress_cb:
-        progress_cb(translate("Clusterer", "Clustering : normalisation ({n} visages)…"
+        progress_cb(translate("Clusterer", "Clustering: normalisation ({n} faces)…"
                               ).format(n=_fmt_n(n)))
 
     if n == 1:
@@ -267,14 +267,16 @@ def _run_clustering(
                     hdbscan_start = None
                     if progress_cb:
                         progress_cb(
-                            f"Clustering : PCA {d}→{_PCA_DIMS} dims…"
+                            translate("Clusterer",
+                                      "Clustering: PCA {src}→{dst} dims…"
+                                      ).format(src=d, dst=_PCA_DIMS)
                         )
                 elif tag == "hdbscan":
                     hdbscan_start = time.monotonic()
                     if progress_cb:
                         progress_cb(
                             translate("Clusterer",
-                                      "Clustering : HDBSCAN ({n} visages) — {time}…"
+                                      "Clustering: HDBSCAN ({n} faces) — {time}…"
                                       ).format(n=n_fmt, time="0:00")
                         )
                 elif tag == "result":
@@ -291,7 +293,7 @@ def _run_clustering(
                     m, s = divmod(elapsed, 60)
                     progress_cb(
                         translate("Clusterer",
-                                  "Clustering : HDBSCAN ({n} visages) — {time}…"
+                                  "Clustering: HDBSCAN ({n} faces) — {time}…"
                                   ).format(n=n_fmt, time=f"{m}:{s:02d}")
                     )
                 if not proc.is_alive():
@@ -320,7 +322,8 @@ def _run_clustering(
 
     if progress_cb:
         progress_cb(
-            f"Clustering : {_fmt_n(n_clusters)} groupes → sauvegarde…"
+            translate("Clusterer", "Clustering: {n} groups → saving…"
+                      ).format(n=_fmt_n(n_clusters))
         )
 
     face_db.update_clusters(face_ids, result_labels, progress_cb=progress_cb)

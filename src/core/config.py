@@ -20,9 +20,14 @@ _DEFAULTS = {
     "ui": {
         "sidebar_width": 240,
         "theme": "dark",
-        # Langue de l'interface — "fr" | "en" | "de" (cf. src/core/i18n.py).
+        # Langue de l'interface — "en" | "fr" | "de" (cf. src/core/i18n.py).
         # Lue au démarrage uniquement : le changement prend effet au redémarrage.
-        "language": "fr",
+        # Anglais par défaut, comme `i18n.DEFAULT_LANGUAGE` : une installation
+        # neuve démarre donc dans la langue des chaînes sources, la seule où
+        # aucun message ne peut manquer. Ne concerne que les configs sans la
+        # clé — `save()` écrit le dictionnaire fusionné complet, un poste déjà
+        # installé porte donc son choix explicite et n'est pas basculé.
+        "language": "en",
         "splitters": {
             "viewer": "",
             "sidebar_panels": "",

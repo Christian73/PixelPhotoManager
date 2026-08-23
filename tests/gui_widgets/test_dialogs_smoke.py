@@ -178,7 +178,7 @@ class TestProblemsHistoryDialog:
         qtbot.addWidget(dlg)
         rows = dlg.findChildren(_ProblemRow)
         assert len(rows) >= 2
-        # le bouton "Ouvrir la liste…" n'est actif que si le fichier existe
+        # le bouton "Open the list…" n'est actif que si le fichier existe
         states = sorted(
             b.isEnabled() for r in rows for b in r.findChildren(QPushButton)
         )
@@ -363,10 +363,10 @@ class TestPicasaImportDialog:
         dlg._on_import()
         # pas de waitSignal sur dlg._thread.finished : le thread peut émettre
         # avant l'abonnement (course classique) — attendre l'état final de l'UI
-        qtbot.waitUntil(lambda: dlg._btn_skip.text() == "Fermer", timeout=15000)
+        qtbot.waitUntil(lambda: dlg._btn_skip.text() == "Close", timeout=15000)
 
         assert config.get("picasa.import_done") is True
-        assert "personne(s) créée(s)" in dlg._lbl_status.text()
+        assert "person(s) created" in dlg._lbl_status.text()
         assert {p.name for p in catalog.get_persons()} == {"Alice"}
 
     def test_skip_rejects(self, qtbot, tmp_path, config, monkeypatch):
@@ -455,7 +455,7 @@ class TestExifDateSync:
         # cf. test_full_import_flow : attendre l'état final de l'UI, pas le
         # signal du thread (course si le thread finit avant l'abonnement)
         qtbot.waitUntil(lambda: dlg._lbl_result.isVisibleTo(dlg), timeout=15000)
-        assert "0 fichier(s) mis à jour" in dlg._lbl_result.text()
+        assert "0 file(s) updated" in dlg._lbl_result.text()
 
     def test_open_csv_uses_startfile(self, qtbot, tmp_path, monkeypatch):
         from src.ui import exif_date_sync_dialog as mod

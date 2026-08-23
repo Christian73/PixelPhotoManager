@@ -6,7 +6,7 @@ enchaînés dans une seule visionneuse sur une photo témoin.
 
 Chemin exercé pour chaque traitement à curseur simple (Contraste, Couleurs,
 Redresser, Vignette) : bouton de l'EditPanel réel -> dialogue non modal réel ->
-glissé du QSlider réel -> "Valider" -> persistance vérifiée directement sur
+glissé du QSlider réel -> "Apply" -> persistance vérifiée directement sur
 edits.db (jamais l'UI). Rotation/Miroir H/Miroir V : boutons directs, pas de
 dialogue, persistance immédiate. Réinitialiser : suppression immédiate de la
 ligne photo_edits (sans confirmation — action réversible via « Remettre
@@ -118,10 +118,10 @@ def test_edit_treatments_extended(isolated_app):
     # alors que le bouton retrouvé a un rectangle et un état valides. Le
     # bouton reste visible après invocation (pas de fermeture de dialogue à
     # cet endroit) → wait_gone=False.
-    invoke_button(window, ["Contraste"], exact=True, timeout=15.0, wait_gone=False)
+    invoke_button(window, ["Contrast"], exact=True, timeout=15.0, wait_gone=False)
     sliders = _wait_for_n_sliders(window, 1)
     _set_slider(sliders[0], 0.6)
-    find_dialog_button(window, ["Valider"], exact=True, timeout=20.0).click_input()
+    find_dialog_button(window, ["Apply"], exact=True, timeout=20.0).click_input()
     wait_for_condition(
         lambda: _column(edits_db, photo, "contrast") is not None
         and abs(_column(edits_db, photo, "contrast") - 0.6) < 0.02,
@@ -135,18 +135,18 @@ def test_edit_treatments_extended(isolated_app):
     # ouverture après open_photo_in_viewer (confirmé empiriquement : cette même
     # classe de clic a échoué de façon flottante sur Vignette lors d'une
     # exécution ultérieure de ce test, cf. commentaire sur Vignette plus bas).
-    invoke_button(window, ["Couleurs"], exact=True, timeout=15.0, wait_gone=False)
+    invoke_button(window, ["Colours"], exact=True, timeout=15.0, wait_gone=False)
     sliders = _wait_for_n_sliders(window, 1)
     _set_slider(sliders[0], -0.3)   # saturation, toujours le 1er slider du dialogue
-    find_checkbox(window, "Fonctions avancées…", timeout=10.0).click_input()
+    find_checkbox(window, "Advanced options…", timeout=10.0).click_input()
     # Révèle les sliders Rouge/Vert/Bleu (CouleursTreatmentDialog,
     # treatment_dialogs.py:469-478) — identifiés par leur libellé voisin, pas
     # par position (l'ordre de window.descendants() ne suit pas fiablement
     # l'ordre d'ajout au layout, cf. _slider_labeled).
     _wait_for_n_sliders(window, 4)
-    sl_r = _slider_labeled(window, "Rouge")
+    sl_r = _slider_labeled(window, "Red")
     _set_slider(sl_r, 0.4)
-    find_dialog_button(window, ["Valider"], exact=True, timeout=20.0).click_input()
+    find_dialog_button(window, ["Apply"], exact=True, timeout=20.0).click_input()
     wait_for_condition(
         lambda: _column(edits_db, photo, "saturation") is not None
         and abs(_column(edits_db, photo, "saturation") - (-0.3)) < 0.02
@@ -157,10 +157,10 @@ def test_edit_treatments_extended(isolated_app):
     # ---- Redresser : dialogue générique, slider « Angle (°) » ----
     # invoke_button : suit la fermeture du dialogue Couleurs (Valider), même
     # fragilité que ci-dessus.
-    invoke_button(window, ["Redresser"], exact=True, timeout=15.0, wait_gone=False)
+    invoke_button(window, ["Straighten"], exact=True, timeout=15.0, wait_gone=False)
     sliders = _wait_for_n_sliders(window, 1)
     _set_slider(sliders[0], 5.0)
-    find_dialog_button(window, ["Valider"], exact=True, timeout=20.0).click_input()
+    find_dialog_button(window, ["Apply"], exact=True, timeout=20.0).click_input()
     wait_for_condition(
         lambda: _column(edits_db, photo, "straighten") is not None
         and abs(_column(edits_db, photo, "straighten") - 5.0) < 0.15,
@@ -175,7 +175,7 @@ def test_edit_treatments_extended(isolated_app):
     invoke_button(window, ["Vignette"], exact=True, timeout=15.0, wait_gone=False)
     sliders = _wait_for_n_sliders(window, 1)
     _set_slider(sliders[0], 0.5)
-    find_dialog_button(window, ["Valider"], exact=True, timeout=20.0).click_input()
+    find_dialog_button(window, ["Apply"], exact=True, timeout=20.0).click_input()
     wait_for_condition(
         lambda: _column(edits_db, photo, "vignette_strength") is not None
         and abs(_column(edits_db, photo, "vignette_strength") - 0.5) < 0.02,
@@ -197,12 +197,12 @@ def test_edit_treatments_extended(isolated_app):
     # (constaté empiriquement sur Miroir V lors du diagnostic de ce fichier,
     # sans transition de fenêtre identifiable comme cause — flakiness générale
     # de SendInput sur cet environnement plutôt qu'un piège structurel isolé).
-    invoke_button(window, ["Miroir H"], exact=True, timeout=10.0, wait_gone=False)
+    invoke_button(window, ["Mirror H"], exact=True, timeout=10.0, wait_gone=False)
     wait_for_condition(
         lambda: _column(edits_db, photo, "flip_h") == 1,
         timeout=20.0, message="le miroir horizontal n'a pas été persisté",
     )
-    invoke_button(window, ["Miroir V"], exact=True, timeout=10.0, wait_gone=False)
+    invoke_button(window, ["Mirror V"], exact=True, timeout=10.0, wait_gone=False)
     wait_for_condition(
         lambda: _column(edits_db, photo, "flip_v") == 1,
         timeout=20.0, message="le miroir vertical n'a pas été persisté",
@@ -219,9 +219,9 @@ def test_edit_treatments_extended(isolated_app):
     # ---- Régression GammaCurveWidget (commit 34d8c5e) : le simple RENDU du
     # widget plantait avec un NameError avant correctif — reproduire la
     # séquence réelle des deux cases à cocher, pas un glissé de point. ----
-    invoke_button(window, ["Luminosité"], exact=True, timeout=15.0, wait_gone=False)
-    find_checkbox(window, "Fonctions avancées…", timeout=10.0).click_input()
-    find_checkbox(window, "très avancées", timeout=10.0).click_input()
+    invoke_button(window, ["Brightness"], exact=True, timeout=15.0, wait_gone=False)
+    find_checkbox(window, "Advanced options…", timeout=10.0).click_input()
+    find_checkbox(window, "Expert options", timeout=10.0).click_input()
 
     assert isolated_app.app.process.poll() is None, (
         "l'application a quitté de manière inattendue au rendu de GammaCurveWidget "
@@ -229,7 +229,7 @@ def test_edit_treatments_extended(isolated_app):
     )
     assert window.exists(), "la fenêtre principale n'a pas survécu au rendu de GammaCurveWidget"
 
-    find_dialog_button(window, ["Valider"], exact=True, timeout=20.0).click_input()
+    find_dialog_button(window, ["Apply"], exact=True, timeout=20.0).click_input()
     wait_for_condition(
         lambda: _column(edits_db, photo, "gamma_use_curve") == 1,
         timeout=20.0, message="gamma_use_curve n'a pas été persisté après validation de la courbe",

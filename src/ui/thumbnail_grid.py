@@ -21,6 +21,13 @@ from src.core.i18n import translate
 
 logger = logging.getLogger(__name__)
 
+#: Nom affiché de la touche Suppr dans les libellés « Libellé\tTouche ».
+#: Séparé du libellé parce que celui-ci varie (singulier/pluriel, album ou non) :
+#: concaténé hors de `translate()`, il restait français en toutes langues
+#: (« Delete the file…\tSuppr »). photo_viewer.py peut l'inclure dans son
+#: littéral traduit, lui, puisque le sien est fixe.
+_DEL_KEY = "\t" + translate("ThumbnailGrid", "Del")
+
 _img_thumb_pool: "QThreadPool | None" = None
 
 def _get_thumb_pool() -> QThreadPool:
@@ -46,12 +53,12 @@ def _get_video_thumb_pool() -> QThreadPool:
     return _video_thumb_pool
 
 _MONTHS = [
-    translate("ThumbnailGrid", "Janvier"), translate("ThumbnailGrid", "Février"),
-    translate("ThumbnailGrid", "Mars"), translate("ThumbnailGrid", "Avril"),
-    translate("ThumbnailGrid", "Mai"), translate("ThumbnailGrid", "Juin"),
-    translate("ThumbnailGrid", "Juillet"), translate("ThumbnailGrid", "Août"),
-    translate("ThumbnailGrid", "Septembre"), translate("ThumbnailGrid", "Octobre"),
-    translate("ThumbnailGrid", "Novembre"), translate("ThumbnailGrid", "Décembre"),
+    translate("ThumbnailGrid", "January"), translate("ThumbnailGrid", "February"),
+    translate("ThumbnailGrid", "March"), translate("ThumbnailGrid", "April"),
+    translate("ThumbnailGrid", "May"), translate("ThumbnailGrid", "June"),
+    translate("ThumbnailGrid", "July"), translate("ThumbnailGrid", "August"),
+    translate("ThumbnailGrid", "September"), translate("ThumbnailGrid", "October"),
+    translate("ThumbnailGrid", "November"), translate("ThumbnailGrid", "December"),
 ]
 
 # Nombre de colonnes cibles par rangée (extrême, intermédiaire, centre, …).
@@ -581,7 +588,7 @@ class ThumbnailGrid(QScrollArea):
         # Indicateur "Chargement…" pendant une requête photo (dossier/album
         # sélectionné) : retour visuel immédiat au clic dans la sidebar. Différé
         # de 150 ms pour ne pas clignoter quand la requête répond vite.
-        self._loading_label = QLabel(translate("ThumbnailGrid", "Chargement…"), self.viewport())
+        self._loading_label = QLabel(translate("ThumbnailGrid", "Loading…"), self.viewport())
         self._loading_label.setAttribute(Qt.WA_TransparentForMouseEvents)
         self._loading_label.setStyleSheet(
             "QLabel {"
@@ -1442,53 +1449,53 @@ class ThumbnailGrid(QScrollArea):
 
         menu = QMenu(self)
         install_menu_width_fix(menu)
-        menu.addAction(translate("ThumbnailGrid", "Ouvrir"), lambda: self.photo_activated.emit(photo))
+        menu.addAction(translate("ThumbnailGrid", "Open"), lambda: self.photo_activated.emit(photo))
         menu.addSeparator()
-        fav_label = (translate("ThumbnailGrid", "Retirer des favoris") if photo.is_favorite
-                     else translate("ThumbnailGrid", "Marquer comme favori"))
+        fav_label = (translate("ThumbnailGrid", "Remove from favourites") if photo.is_favorite
+                     else translate("ThumbnailGrid", "Mark as favourite"))
         menu.addAction(fav_label, lambda: self._toggle_favorite_from_menu(photo))
-        rating_menu = menu.addMenu(translate("ThumbnailGrid", "Noter"))
+        rating_menu = menu.addMenu(translate("ThumbnailGrid", "Rate"))
         for n in range(1, 6):
             rating_menu.addAction(
                 "★" * n, lambda p=photos, n=n: self._emit_rating_change(p, n)
             )
         rating_menu.addSeparator()
         rating_menu.addAction(
-            translate("ThumbnailGrid", "Retirer la note"), lambda p=photos: self._emit_rating_change(p, 0)
+            translate("ThumbnailGrid", "Clear the rating"), lambda p=photos: self._emit_rating_change(p, 0)
         )
-        menu.addAction(translate("ThumbnailGrid", "Mots-clés…"), lambda p=photos: self.edit_tags_requested.emit(p))
-        menu.addAction(translate("ThumbnailGrid", "Renommer l'image"), lambda: self.rename_requested.emit(photo))
-        menu.addAction(translate("ThumbnailGrid", "Déplacer vers…"), lambda: self.move_requested.emit(photo))
-        menu.addAction(translate("ThumbnailGrid", "Enregistrer l'image traitée sur le disque\tCtrl+S"),
+        menu.addAction(translate("ThumbnailGrid", "Keywords…"), lambda p=photos: self.edit_tags_requested.emit(p))
+        menu.addAction(translate("ThumbnailGrid", "Rename the image"), lambda: self.rename_requested.emit(photo))
+        menu.addAction(translate("ThumbnailGrid", "Move to…"), lambda: self.move_requested.emit(photo))
+        menu.addAction(translate("ThumbnailGrid", "Save the edited image to disk\tCtrl+S"),
                        lambda: self.save_requested.emit(photo))
         menu.addSeparator()
         n = len(photos)
-        lbl = (translate("ThumbnailGrid", "les {n} photos sélectionnées").format(n=n)
-               if n > 1 else translate("ThumbnailGrid", "cette photo"))
-        menu.addAction(translate("ThumbnailGrid", "Ajouter {photos} à un album…").format(photos=lbl),
+        lbl = (translate("ThumbnailGrid", "the {n} selected photos").format(n=n)
+               if n > 1 else translate("ThumbnailGrid", "this photo"))
+        menu.addAction(translate("ThumbnailGrid", "Add {photos} to an album…").format(photos=lbl),
                        lambda p=photos: self.add_to_album_requested.emit(p))
-        menu.addAction(translate("ThumbnailGrid", "Créer un nouvel album avec {photos}…").format(photos=lbl),
+        menu.addAction(translate("ThumbnailGrid", "Create a new album with {photos}…").format(photos=lbl),
                        lambda p=photos: self.create_album_with_requested.emit(p))
         menu.addSeparator()
-        menu.addAction(translate("ThumbnailGrid", "Révéler dans l'Explorateur"),
+        menu.addAction(translate("ThumbnailGrid", "Show in File Explorer"),
                        lambda: __import__('os').startfile(
                            __import__('os.path').path.dirname(photo.path)))
         if os.path.normpath(photo.path) in self._index_error_paths:
             menu.addSeparator()
-            menu.addAction(translate("ThumbnailGrid", "Retenter l'identification des visages"),
+            menu.addAction(translate("ThumbnailGrid", "Retry face identification"),
                            lambda: self.retry_face_index_requested.emit(photo))
         menu.addSeparator()
         if self._album_id is not None:
             # Vue album : seul le retrait (non destructif) est proposé — jamais
             # l'effacement du fichier, même en multi-sélection (même règle que la
             # visionneuse et que la touche Del, cf. _emit_delete_or_remove).
-            rm_lbl = (translate("ThumbnailGrid", "Retirer les photos de l'album") if n > 1
-                      else translate("ThumbnailGrid", "Retirer de l'album"))
-            menu.addAction(rm_lbl + "\tSuppr", lambda p=photos: self.remove_from_album_requested.emit(p))
+            rm_lbl = (translate("ThumbnailGrid", "Remove the photos from the album") if n > 1
+                      else translate("ThumbnailGrid", "Remove from the album"))
+            menu.addAction(rm_lbl + _DEL_KEY, lambda p=photos: self.remove_from_album_requested.emit(p))
         else:
-            del_lbl = (translate("ThumbnailGrid", "Effacer les fichiers…") if n > 1
-                       else translate("ThumbnailGrid", "Effacer le fichier…"))
-            menu.addAction(del_lbl + "\tSuppr", lambda p=photos: self.delete_requested.emit(p))
+            del_lbl = (translate("ThumbnailGrid", "Delete the files…") if n > 1
+                       else translate("ThumbnailGrid", "Delete the file…"))
+            menu.addAction(del_lbl + _DEL_KEY, lambda p=photos: self.delete_requested.emit(p))
         menu.exec(pos)
 
     def _emit_delete_or_remove(self, photos: list) -> None:

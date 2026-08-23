@@ -60,6 +60,7 @@ from src.ui.people_panel import MergePersonsDialog, PeopleDialog
 from src.ui.tag_dialog import TagEditDialog, TagsPrepLoader
 from src.ui.advanced_search_dialog import AdvancedSearchDialog, AdvancedSearchPrepLoader
 from src.ui.settings_dialog import SettingsDialog
+from src.ui.language_button import LanguageButton
 from src.ui.display_order_dialog import DisplayOrderDialog
 from src.ui.face_backup_dialog import FaceBackupDialog
 
@@ -301,152 +302,156 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
         mb.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Expanding)
 
         # Fichier
-        m_file = mb.addMenu(translate("MainWindow", "Fichier"))
-        act_add = QAction(translate("MainWindow", "Ajouter un dossier…"), self)
+        m_file = mb.addMenu(translate("MainWindow", "File"))
+        act_add = QAction(translate("MainWindow", "Add a folder…"), self)
         act_add.triggered.connect(self.open_folder_dialog)
         m_file.addAction(act_add)
         m_file.addSeparator()
-        act_advanced_search = QAction(translate("MainWindow", "Recherche avancée…"), self)
+        act_advanced_search = QAction(translate("MainWindow", "Advanced search…"), self)
         act_advanced_search.setShortcut(QKeySequence("Ctrl+F"))
         act_advanced_search.triggered.connect(self._open_advanced_search)
         m_file.addAction(act_advanced_search)
         m_file.addSeparator()
-        act_quit = QAction(translate("MainWindow", "Quitter"), self)
+        act_quit = QAction(translate("MainWindow", "Quit"), self)
         act_quit.setShortcut(QKeySequence("Ctrl+Q"))
         act_quit.triggered.connect(self.close)
         m_file.addAction(act_quit)
 
         # Affichage
-        m_view = mb.addMenu(translate("MainWindow", "Affichage"))
-        act_sidebar = QAction(translate("MainWindow", "Afficher/masquer sidebar"), self)
+        m_view = mb.addMenu(translate("MainWindow", "View"))
+        act_sidebar = QAction(translate("MainWindow", "Show/hide sidebar"), self)
         act_sidebar.setShortcut(Qt.Key_F9)
         act_sidebar.triggered.connect(self.toggle_sidebar)
         m_view.addAction(act_sidebar)
-        act_fs = QAction(translate("MainWindow", "Plein écran"), self)
+        act_fs = QAction(translate("MainWindow", "Full screen"), self)
         act_fs.setShortcut(Qt.Key_F11)
         act_fs.triggered.connect(self._toggle_fullscreen)
         m_view.addAction(act_fs)
         m_view.addSeparator()
-        act_slideshow = QAction(translate("MainWindow", "Diaporama"), self)
+        act_slideshow = QAction(translate("MainWindow", "Slideshow"), self)
         act_slideshow.setShortcut(Qt.Key_F5)
         act_slideshow.triggered.connect(self._start_slideshow)
         m_view.addAction(act_slideshow)
         m_view.addSeparator()
-        act_order = QAction(translate("MainWindow", "Ordre d'affichage…"), self)
+        act_order = QAction(translate("MainWindow", "Sort order…"), self)
         act_order.triggered.connect(self._open_display_order_dialog)
         m_view.addAction(act_order)
 
         # Outils
-        m_tools = mb.addMenu(translate("MainWindow", "Outils"))
-        act_folders = QAction(translate("MainWindow", "Dossiers…"), self)
-        act_folders.setToolTip(translate("MainWindow", "Gérer les dossiers surveillés et forcer un re-scan"))
+        m_tools = mb.addMenu(translate("MainWindow", "Tools"))
+        act_folders = QAction(translate("MainWindow", "Folders…"), self)
+        act_folders.setToolTip(translate("MainWindow", "Manage the watched folders and force a "
+                                                       "rescan"))
         act_folders.triggered.connect(self._open_folder_manager)
         m_tools.addAction(act_folders)
         m_tools.addSeparator()
-        act_dup_status = QAction(translate("MainWindow", "État des doublons…"), self)
-        act_dup_status.setToolTip(translate("MainWindow", "Afficher l'état actuel de la détection de doublons"))
+        act_dup_status = QAction(translate("MainWindow", "Duplicate status…"), self)
+        act_dup_status.setToolTip(translate("MainWindow", "Show the current state of duplicate "
+                                                          "detection"))
         act_dup_status.triggered.connect(self._show_duplicate_status_dialog)
         m_tools.addAction(act_dup_status)
         m_tools.addSeparator()
-        act_corrupted = QAction(translate("MainWindow", "Fichiers corrompus…"), self)
+        act_corrupted = QAction(translate("MainWindow", "Corrupted files…"), self)
         act_corrupted.setToolTip(
-            translate("MainWindow", "Afficher les fichiers corrompus détectés par l'analyse des doublons")
+            translate("MainWindow", "Show the corrupted files found by duplicate analysis")
         )
         act_corrupted.triggered.connect(self._show_corrupted_status_dialog)
         m_tools.addAction(act_corrupted)
-        act_deleted_corrupted = QAction(translate("MainWindow", "Fichiers corrompus supprimés…"), self)
+        act_deleted_corrupted = QAction(translate("MainWindow", "Deleted corrupted files…"), self)
         act_deleted_corrupted.setToolTip(
-            translate("MainWindow", "Afficher les fichiers corrompus envoyés à la corbeille "
-            "(pour les y retrouver, ou dans une sauvegarde si elle a été vidée)")
+            translate("MainWindow", "Show the corrupted files sent to the recycle bin (to find "
+                                    "them there, or in a backup if it has been emptied)")
         )
         act_deleted_corrupted.triggered.connect(self._open_deleted_corrupted_files_dialog)
         m_tools.addAction(act_deleted_corrupted)
         m_tools.addSeparator()
-        act_exif_date_sync = QAction(translate("MainWindow", "Synchroniser dates de création avec l'EXIF…"), self)
+        act_exif_date_sync = QAction(translate("MainWindow", "Sync creation dates with EXIF…"), self)
         act_exif_date_sync.setToolTip(
-            translate("MainWindow", "Remplace la date de création Windows par la date EXIF "
-            "pour les fichiers où elles diffèrent")
+            translate("MainWindow", "Replaces the Windows creation date with the EXIF date "
+                                    "wherever the two differ")
         )
         act_exif_date_sync.triggered.connect(self._open_exif_date_sync)
         m_tools.addAction(act_exif_date_sync)
         m_tools.addSeparator()
-        act_journal = QAction(translate("MainWindow", "Journal des threads…"), self)
-        act_journal.setToolTip(translate("MainWindow", "Afficher le journal d'activité des threads de fond"))
+        act_journal = QAction(translate("MainWindow", "Thread journal…"), self)
+        act_journal.setToolTip(translate("MainWindow", "Show the activity log of the "
+                                                       "background threads"))
         act_journal.triggered.connect(self._open_thread_journal)
         m_tools.addAction(act_journal)
         m_tools.addSeparator()
-        act_problems = QAction(translate("MainWindow", "Historique des problèmes…"), self)
+        act_problems = QAction(translate("MainWindow", "Problem history…"), self)
         act_problems.setToolTip(
-            translate("MainWindow", "Afficher l'historique des fichiers corrompus détectés et réparés")
+            translate("MainWindow", "Show the history of corrupted files found and repaired")
         )
         act_problems.triggered.connect(self._open_problems_history)
         m_tools.addAction(act_problems)
         m_tools.addSeparator()
-        act_ext_apps = QAction(translate("MainWindow", "Applications externes…"), self)
+        act_ext_apps = QAction(translate("MainWindow", "External applications…"), self)
         act_ext_apps.setToolTip(
-            translate("MainWindow", "Configurer les applications tierces disponibles depuis la visionneuse")
+            translate("MainWindow", "Set up the third-party applications available from the "
+                                    "viewer")
         )
         act_ext_apps.triggered.connect(self._open_external_apps_dialog)
         m_tools.addAction(act_ext_apps)
         m_tools.addSeparator()
-        act_settings = QAction(translate("MainWindow", "Paramètres"), self)
+        act_settings = QAction(translate("MainWindow", "Settings"), self)
         act_settings.triggered.connect(self._open_settings)
         m_tools.addAction(act_settings)
 
         # Visages
-        m_faces = mb.addMenu(translate("MainWindow", "Visages"))
-        self._act_picasa = QAction(translate("MainWindow", "Importer depuis Picasa…"), self)
+        m_faces = mb.addMenu(translate("MainWindow", "Faces"))
+        self._act_picasa = QAction(translate("MainWindow", "Import from Picasa…"), self)
         self._act_picasa.setEnabled(not self._config.get("picasa.import_done", False))
         self._act_picasa.triggered.connect(self._import_from_picasa)
         m_faces.addAction(self._act_picasa)
         m_faces.addSeparator()
-        act_reindex = QAction(translate("MainWindow", "Réinitialiser et réindexer…"), self)
+        act_reindex = QAction(translate("MainWindow", "Reset and reindex…"), self)
         act_reindex.triggered.connect(self._reset_and_reindex_faces)
         m_faces.addAction(act_reindex)
-        self._act_cluster_faces = QAction(translate("MainWindow", "Regrouper les visages…"), self)
+        self._act_cluster_faces = QAction(translate("MainWindow", "Group faces…"), self)
         self._act_cluster_faces.triggered.connect(self._start_clustering_with_confirm)
         m_faces.addAction(self._act_cluster_faces)
-        self._act_similarity = QAction(translate("MainWindow", "Rechercher des visages similaires…"), self)
+        self._act_similarity = QAction(translate("MainWindow", "Find similar faces…"), self)
         self._act_similarity.setToolTip(
-            translate("MainWindow", "Compare les groupes non identifiés aux personnes déjà nommées et "
-            "propose les correspondances à vérifier")
+            translate("MainWindow", "Compares unidentified groups with people already named "
+                                    "and offers the matches for review")
         )
         self._act_similarity.triggered.connect(self._start_similarity_search_manually)
         m_faces.addAction(self._act_similarity)
         m_faces.addSeparator()
-        act_index_errors = QAction(translate("MainWindow", "Visualisation des erreurs…"), self)
+        act_index_errors = QAction(translate("MainWindow", "Error review…"), self)
         act_index_errors.setToolTip(
-            translate("MainWindow", "Afficher les photos dont l'identification des visages a échoué "
-            "(timeout/crash) et relancer le traitement fichier par fichier")
+            translate("MainWindow", "Show the photos whose face identification failed "
+                                    "(timeout/crash) and reprocess them file by file")
         )
         act_index_errors.triggered.connect(self._open_index_errors_dialog)
         m_faces.addAction(act_index_errors)
         m_faces.addSeparator()
-        act_backup = QAction(translate("MainWindow", "Sauvegarder la reconnaissance…"), self)
+        act_backup = QAction(translate("MainWindow", "Back up recognition data…"), self)
         act_backup.setToolTip(
-            translate("MainWindow", "Crée une sauvegarde de l'état actuel des visages, groupes et personnes")
+            translate("MainWindow", "Creates a backup of the current faces, groups and people")
         )
         act_backup.triggered.connect(self._backup_faces)
         m_faces.addAction(act_backup)
-        act_manage_backups = QAction(translate("MainWindow", "Gérer les sauvegardes…"), self)
+        act_manage_backups = QAction(translate("MainWindow", "Manage backups…"), self)
         act_manage_backups.setToolTip(
-            translate("MainWindow", "Voir, restaurer ou supprimer les sauvegardes de reconnaissance faciale")
+            translate("MainWindow", "View, restore or delete the face recognition backups")
         )
         act_manage_backups.triggered.connect(self._manage_face_backups)
         m_faces.addAction(act_manage_backups)
         m_faces.addSeparator()
-        act_face_counters = QAction(translate("MainWindow", "Compteurs…"), self)
+        act_face_counters = QAction(translate("MainWindow", "Counters…"), self)
         act_face_counters.triggered.connect(self._show_face_counters)
         m_faces.addAction(act_face_counters)
 
         # Aide
-        m_help = mb.addMenu(translate("MainWindow", "Aide"))
-        act_help = QAction(translate("MainWindow", "Aide…"), self)
+        m_help = mb.addMenu(translate("MainWindow", "Help"))
+        act_help = QAction(translate("MainWindow", "Help…"), self)
         act_help.setShortcut(QKeySequence("F1"))
         act_help.triggered.connect(self._show_help)
         m_help.addAction(act_help)
         m_help.addSeparator()
-        act_about = QAction(translate("MainWindow", "À propos"), self)
+        act_about = QAction(translate("MainWindow", "About"), self)
         act_about.triggered.connect(self._show_about)
         m_help.addAction(act_about)
 
@@ -468,9 +473,10 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
             "QPushButton:checked { color: #ffd200; }"
         )
 
-        self._btn_faces_toggle = QPushButton(translate("MainWindow", "Visages"))
+        self._btn_faces_toggle = QPushButton(translate("MainWindow", "Faces"))
         self._btn_faces_toggle.setCheckable(True)
-        self._btn_faces_toggle.setToolTip(translate("MainWindow", "Afficher / masquer les visages de la photo"))
+        self._btn_faces_toggle.setToolTip(translate("MainWindow", "Show / hide the faces in "
+                                                                  "the photo"))
         self._btn_faces_toggle.setStyleSheet(_toggle_active_style)
         self._btn_faces_toggle.toggled.connect(self._on_faces_toggle)
         self._btn_faces_toggle.setVisible(False)
@@ -479,7 +485,7 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
 
         self._btn_exif_toggle = QPushButton("EXIF")
         self._btn_exif_toggle.setCheckable(True)
-        self._btn_exif_toggle.setToolTip(translate("MainWindow", "Afficher / masquer les métadonnées EXIF"))
+        self._btn_exif_toggle.setToolTip(translate("MainWindow", "Show / hide the EXIF metadata"))
         self._btn_exif_toggle.setStyleSheet(_toggle_active_style)
         self._btn_exif_toggle.toggled.connect(self._on_exif_toggle)
         self._btn_exif_toggle.setVisible(False)
@@ -492,15 +498,18 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
         # setChecked() avant connect() : évite de déclencher _on_annotations_toggle
         # ici, alors que self._viewer n'existe pas encore (_setup_central() pas encore appelé).
         self._btn_annotations_toggle.setChecked(True)   # actif par défaut
-        self._btn_annotations_toggle.setToolTip(translate("MainWindow", "Afficher / masquer le calque d'annotations (dessin/texte)"))
+        self._btn_annotations_toggle.setToolTip(translate("MainWindow", "Show / hide the "
+                                                                        "annotation layer "
+                                                                        "(drawing/text)"))
         self._btn_annotations_toggle.toggled.connect(self._on_annotations_toggle)
         self._btn_annotations_toggle.setVisible(False)
         lay.addWidget(self._btn_annotations_toggle)
 
         # --- Bouton Export ---
-        self._btn_export = QPushButton(translate("MainWindow", "⬆  Exporter"))
+        self._btn_export = QPushButton(translate("MainWindow", "⬆  Export"))
         self._btn_export.setToolTip(
-            translate("MainWindow", "Exporter la photo en cours (visionneuse) ou les photos sélectionnées (grille)")
+            translate("MainWindow", "Export the current photo (viewer) or the selected photos "
+                                    "(grid)")
         )
         self._btn_export.setStyleSheet(
             "QPushButton { background:#2a5a8a; color:white; border:none;"
@@ -510,6 +519,16 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
         )
         self._btn_export.clicked.connect(self._on_export_clicked)
         lay.addWidget(self._btn_export)
+
+        # --- Sélecteur de langue (drapeau) ---
+        # À l'extrême droite, toujours visible : c'est le seul réglage qu'un
+        # utilisateur doit pouvoir atteindre sans savoir lire l'interface
+        # (cf. src/ui/language_button.py).
+        # Pas de largeur fixe : le bouton se dimensionne sur son icône et sur le
+        # padding de la feuille de style de la barre — une constante gravée ici
+        # rognerait le drapeau au premier changement de l'une ou de l'autre.
+        self._btn_language = LanguageButton(self._config)
+        lay.addWidget(self._btn_language)
 
         margin = QWidget()
         margin.setFixedWidth(10)
@@ -613,7 +632,7 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
         _nav_layout = QHBoxLayout(self._grid_nav_bar)
         _nav_layout.setContentsMargins(8, 4, 8, 4)
         _btn_back_nav = QPushButton("←")
-        _btn_back_nav.setToolTip(translate("MainWindow", "Retour à la page précédente"))
+        _btn_back_nav.setToolTip(translate("MainWindow", "Back to the previous page"))
         _btn_back_nav.setFixedWidth(32)
         _btn_back_nav.clicked.connect(self._on_back_nav_clicked)
         _nav_layout.addWidget(_btn_back_nav)
@@ -841,7 +860,7 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
         sb.addWidget(self._lbl_fileinfo, 1)
 
         # --- Contrôles mode grille ---
-        self._lbl_thumb_size = QLabel(translate("MainWindow", "Taille :"))
+        self._lbl_thumb_size = QLabel(translate("MainWindow", "Size:"))
         sb.addPermanentWidget(self._lbl_thumb_size)
 
         self._thumb_slider = MarkedSlider(
@@ -855,7 +874,7 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
         sb.addPermanentWidget(self._thumb_slider)
 
         # --- Contrôles mode visionneuse (cachés par défaut) ---
-        self._lbl_zoom = QLabel(translate("MainWindow", "Zoom :"))
+        self._lbl_zoom = QLabel(translate("MainWindow", "Zoom:"))
         self._lbl_zoom.hide()
         sb.addPermanentWidget(self._lbl_zoom)
 
@@ -875,7 +894,7 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
 
         # --- Bouton retour grille (masqué en mode visionneuse) ---
         self._btn_grid_status = QPushButton("▦")
-        self._btn_grid_status.setToolTip(translate("MainWindow", "Retour à la grille"))
+        self._btn_grid_status.setToolTip(translate("MainWindow", "Back to the grid"))
         self._btn_grid_status.setFixedWidth(28)
         self._btn_grid_status.clicked.connect(self.show_grid)
         sb.addPermanentWidget(self._btn_grid_status)
@@ -906,20 +925,18 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
             return
         box = QMessageBox(self)
         box.setIcon(QMessageBox.Information)
-        box.setWindowTitle(translate("MainWindow", "Mise à jour disponible"))
+        box.setWindowTitle(translate("MainWindow", "Update available"))
         box.setText(
             translate(
                 "MainWindow",
-                "Une nouvelle version de Pixel Photo Manager est disponible : {new}\n"
-                "(version actuelle : {cur}).\n\n"
-                "Pensez à lire les notes de version avant d'installer, pour connaître les "
-                "nouvelles fonctionnalités et vérifier la compatibilité avec votre "
-                "bibliothèque existante."
+                "A new version of Pixel Photo Manager is available: {new}\n(current version: "
+                "{cur}).\n\nDo read the release notes before installing, to see what is new "
+                "and to check compatibility with your existing library."
             ).format(new=version, cur=get_app_version())
         )
         btn_open = box.addButton(
-            translate("MainWindow", "Ouvrir la page de téléchargement"), QMessageBox.AcceptRole)
-        box.addButton(translate("MainWindow", "Plus tard"), QMessageBox.RejectRole)
+            translate("MainWindow", "Open the download page"), QMessageBox.AcceptRole)
+        box.addButton(translate("MainWindow", "Later"), QMessageBox.RejectRole)
         box.exec()
         if box.clickedButton() is btn_open:
             QDesktopServices.openUrl(QUrl(html_url))
@@ -1143,7 +1160,7 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
             self._grid.set_photos(self._current_photos)
 
         if self._warmup_thread and self._warmup_thread.isRunning():
-            self._lbl_action.setText(translate("MainWindow", "Initialisation de la reconnaissance faciale…"))
+            self._lbl_action.setText(translate("MainWindow", "Initialising face recognition…"))
             self._face_index_pending = True
         else:
             self._start_face_indexing()
@@ -1192,6 +1209,9 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
         dlg = SettingsDialog(self._config, self)
         dlg.recluster_needed.connect(self._run_clustering)
         dlg.exec()
+        # Les deux points d'entrée écrivent la même clé : le drapeau de la
+        # barre du haut serait sinon périmé après un changement fait ici.
+        self._btn_language.refresh()
 
     #: Portée média d'une application externe : la valeur stockée en config
     #: ("image"/"video"/"both") n'est jamais traduite — elle est comparée à
@@ -1202,8 +1222,8 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
     def _media_scope_label(cls, value: str) -> str:
         return {
             "image": translate("MainWindow", "Photo"),
-            "video": translate("MainWindow", "Vidéo"),
-        }.get(value, translate("MainWindow", "Les deux"))
+            "video": translate("MainWindow", "Video"),
+        }.get(value, translate("MainWindow", "Both"))
 
     def _open_external_apps_dialog(self) -> None:
         """Dialogue de configuration des applications externes accessibles depuis le viewer.
@@ -1216,12 +1236,12 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
         apps: list = list(self._config.get("tools.external_apps", []))
 
         dlg = QDialog(self)
-        dlg.setWindowTitle(translate("MainWindow", "Applications externes"))
+        dlg.setWindowTitle(translate("MainWindow", "External applications"))
         dlg.setMinimumWidth(520)
         root = QVBoxLayout(dlg)
 
         root.addWidget(QLabel(
-            translate("MainWindow", "Applications disponibles via leur icône dans la barre de la visionneuse :")
+            translate("MainWindow", "Applications available from their icon in the viewer bar:")
         ))
 
         lst = QListWidget(dlg)
@@ -1230,8 +1250,8 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
             lst.addItem(f"{app['name']}   —   {app['path']}   [{label}]")
 
         btn_row = QHBoxLayout()
-        btn_add = QPushButton(translate("MainWindow", "Ajouter…"))
-        btn_del = QPushButton(translate("MainWindow", "Supprimer"))
+        btn_add = QPushButton(translate("MainWindow", "Add…"))
+        btn_del = QPushButton(translate("MainWindow", "Remove"))
         btn_row.addWidget(btn_add)
         btn_row.addWidget(btn_del)
         btn_row.addStretch()
@@ -1245,22 +1265,22 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
 
         def _add() -> None:
             path, _ = QFileDialog.getOpenFileName(
-                dlg, translate("MainWindow", "Choisir une application"), "",
-                translate("MainWindow", "Exécutables (*.exe);;Tous les fichiers (*)")
+                dlg, translate("MainWindow", "Choose an application"), "",
+                translate("MainWindow", "Executables (*.exe);;All files (*)")
             )
             if not path:
                 return
             default_name = os.path.splitext(os.path.basename(path))[0]
             name, ok = QInputDialog.getText(
-                dlg, translate("MainWindow", "Nom de l'application"),
-                translate("MainWindow", "Nom affiché dans l'infobulle :"), text=default_name
+                dlg, translate("MainWindow", "Application name"),
+                translate("MainWindow", "Name shown in the tooltip:"), text=default_name
             )
             if not (ok and name.strip()):
                 return
             labels = [self._media_scope_label(v) for v in self._MEDIA_SCOPE_VALUES]
             media_label, ok = QInputDialog.getItem(
-                dlg, translate("MainWindow", "Type de média"),
-                translate("MainWindow", "Afficher l'icône de cette application pour :"),
+                dlg, translate("MainWindow", "Media type"),
+                translate("MainWindow", "Show this application's icon for:"),
                 labels, 0, False
             )
             if not ok:
@@ -1323,7 +1343,9 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
 
     @Slot(int, str)
     def _on_scan_progress(self, percent: int, path: str) -> None:
-        self._lbl_action.setText(f"Scan… {percent}%  —  {path}")
+        self._lbl_action.setText(
+            translate("MainWindow", "Scanning… {percent}%  —  {path}"
+                      ).format(percent=percent, path=path))
 
     @Slot(object)
     def _on_photo_activated(self, photo: PhotoInfo) -> None:
@@ -1492,9 +1514,9 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
             video_ts = find_dvd_video_ts(folder_path)
             if video_ts:
                 self._grid.show_empty_message(
-                    translate("MainWindow", "Ce dossier ne contient aucune photo cataloguée, mais semble être "
-                    "une copie de DVD (dossier VIDEO_TS)."),
-                    translate("MainWindow", "Ouvrir avec un lecteur externe"),
+                    translate("MainWindow", "This folder holds no catalogued photo, but looks "
+                                            "like a DVD copy (VIDEO_TS folder)."),
+                    translate("MainWindow", "Open with an external player"),
                     lambda _checked=False, fp=folder_path: self._open_dvd_folder(fp),
                 )
         self._update_status()
@@ -1514,18 +1536,19 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
         if not apps:
             box = QMessageBox(self)
             box.setIcon(QMessageBox.Information)
-            box.setWindowTitle(translate("MainWindow", "Aucune application externe configurée"))
+            box.setWindowTitle(translate("MainWindow", "No external application set up"))
             if all_apps:
                 box.setText(
-                    translate("MainWindow", "Aucune application externe configurée n'est compatible avec "
-                    "la vidéo (toutes sont limitées aux photos). Configurez-en une "
-                    "(ex. VLC) via le menu Outils › Applications externes… pour "
-                    "pouvoir ouvrir ce dossier.")
+                    translate("MainWindow", "None of the external applications set up handles "
+                                            "video (they are all limited to photos). Set one "
+                                            "up (VLC, for instance) from Tools › External "
+                                            "applications… to open this folder.")
                 )
             else:
                 box.setText(
-                    translate("MainWindow", "Configurez d'abord une application externe (ex. VLC) via le menu "
-                    "Outils › Applications externes… pour pouvoir ouvrir ce dossier.")
+                    translate("MainWindow", "Set up an external application first (VLC, for "
+                                            "instance) from Tools › External applications… to "
+                                            "open this folder.")
                 )
             btn_configure = box.addButton("Configurer…", QMessageBox.AcceptRole)
             box.addButton(QMessageBox.Cancel)
@@ -1559,8 +1582,8 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
             logger.warning("Impossible de lancer '%s' : %s", app_path, exc)
             QMessageBox.warning(
                 self,
-                translate("MainWindow", "Impossible de lancer l'application"),
-                translate("MainWindow", "Échec du lancement de :\n{path}\n\n{error}")
+                translate("MainWindow", "Could not start the application"),
+                translate("MainWindow", "Failed to start:\n{path}\n\n{error}")
                 .format(path=app_path, error=exc),
             )
 
@@ -1723,13 +1746,12 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
         count = self._catalog.count_photos_in_folder(folder)
         if count:
             reply = QMessageBox.question(
-                self, translate("MainWindow", "Retirer le dossier"),
+                self, translate("MainWindow", "Remove the folder"),
                 translate(
                     "MainWindow",
-                    "Retirer «{folder}» de la surveillance ?\n\n"
-                    "<b>{count}</b> photo(s) seront supprimées du catalogue, ainsi que "
-                    "les vignettes et les visages associés. Les fichiers restent "
-                    "intacts sur le disque."
+                    "Stop watching “{folder}”?\n\n<b>{count}</b> photo(s) will be removed from "
+                    "the catalogue, along with their thumbnails and faces. The files "
+                    "themselves stay untouched on disk."
                 ).format(folder=folder, count=f"{count:,}"),
                 QMessageBox.Yes | QMessageBox.No,
                 QMessageBox.No,
@@ -1766,7 +1788,7 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
                 continue
             if os.path.exists(dst):
                 errors.append(translate(
-                    "MainWindow", "{name} : existe déjà dans la destination"
+                    "MainWindow", "{name}: already exists at the destination"
                 ).format(name=filename))
                 continue
             try:
@@ -1795,7 +1817,7 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
             self._update_status()
 
         if errors:
-            QMessageBox.warning(self, translate("MainWindow", "Erreurs lors du déplacement"),
+            QMessageBox.warning(self, translate("MainWindow", "Errors while moving"),
                                 "\n".join(errors))
 
     @Slot(str)
@@ -1845,8 +1867,8 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
         results = self._catalog.get_photos_by_paths([path])
         if not results:
             QMessageBox.warning(
-                self, translate("MainWindow", "Photo introuvable"),
-                translate("MainWindow", "La photo n'est plus dans la bibliothèque :\n{path}")
+                self, translate("MainWindow", "Photo not found"),
+                translate("MainWindow", "The photo is no longer in the library:\n{path}")
                 .format(path=path))
             return
         photo = results[0]
@@ -1920,12 +1942,11 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
     @Slot(object)
     def _on_album_delete_requested(self, album: AlbumInfo) -> None:
         reply = QMessageBox.question(
-            self, translate("MainWindow", "Supprimer l'album"),
+            self, translate("MainWindow", "Delete the album"),
             translate(
                 "MainWindow",
-                "Supprimer l'album «{name}» ({count} photo(s)) ?\n\n"
-                "Les photos restent intactes dans le catalogue et sur le disque ; "
-                "seul l'album est supprimé."
+                "Delete the album “{name}” ({count} photo(s))?\n\nThe photos stay untouched in "
+                "the catalogue and on disk; only the album is deleted."
             ).format(name=album.name, count=album.photo_count),
             QMessageBox.Yes | QMessageBox.No,
             QMessageBox.No,
@@ -1942,12 +1963,12 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
     def _on_tag_delete_requested(self, tag: str) -> None:
         photos = self._catalog.get_photos_by_tag(tag)
         reply = QMessageBox.question(
-            self, translate("MainWindow", "Supprimer le mot-clé"),
+            self, translate("MainWindow", "Delete the keyword"),
             translate(
                 "MainWindow",
-                "Supprimer le mot-clé « {tag} » ({count} photo(s)) ?\n\n"
-                "Le mot-clé sera retiré de toutes les photos concernées. Les photos "
-                "et les autres mots-clés restent intacts."
+                "Delete the keyword “{tag}” ({count} photo(s))?\n\nThe keyword will be removed "
+                "from every photo that carries it. The photos and their other keywords stay "
+                "untouched."
             ).format(tag=tag, count=len(photos)),
             QMessageBox.Yes | QMessageBox.No,
             QMessageBox.No,
@@ -1978,17 +1999,17 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
         albums = self._catalog.get_albums()
         if not albums:
             QMessageBox.information(
-                self, translate("MainWindow", "Ajouter à un album"),
-                translate("MainWindow", "Aucun album existant.\nCréez d'abord un album via le panneau Albums.")
+                self, translate("MainWindow", "Add to an album"),
+                translate("MainWindow", "No album yet.\nCreate one first from the Albums panel.")
             )
             return
         dlg = QDialog(self)
-        dlg.setWindowTitle(translate("MainWindow", "Ajouter à un album"))
+        dlg.setWindowTitle(translate("MainWindow", "Add to an album"))
         dlg.setMinimumWidth(320)
         layout = QVBoxLayout(dlg)
         n = len(photos)
         layout.addWidget(QLabel(translate(
-            "MainWindow", "Choisissez l'album pour {count} photo(s) :").format(count=n)))
+            "MainWindow", "Choose the album for {count} photo(s):").format(count=n)))
         lst = QListWidget(dlg)
         for album in albums:
             lst.addItem(translate(
@@ -2009,15 +2030,15 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
         )
         self._sidebar.refresh_albums(self._catalog.get_albums())
         self.statusBar().showMessage(
-            translate("MainWindow", "{count} photo(s) ajoutée(s) à « {name} »"
+            translate("MainWindow", "{count} photo(s) added to “{name}”"
                       ).format(count=added, name=album.name), 4000
         )
 
     def _on_create_album_with(self, photos: list) -> None:
         n = len(photos)
         name, ok = QInputDialog.getText(
-            self, translate("MainWindow", "Nouvel album"),
-            translate("MainWindow", "Nom du nouvel album ({count} photo(s) sélectionnée(s)) :"
+            self, translate("MainWindow", "New album"),
+            translate("MainWindow", "Name of the new album ({count} photo(s) selected):"
                       ).format(count=n)
         )
         if not ok or not name.strip():
@@ -2028,7 +2049,7 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
         )
         self._sidebar.refresh_albums(self._catalog.get_albums())
         self.statusBar().showMessage(
-            translate("MainWindow", "Album « {name} » créé avec {count} photo(s)"
+            translate("MainWindow", "Album “{name}” created with {count} photo(s)"
                       ).format(name=name.strip(), count=added), 4000
         )
 
@@ -2131,7 +2152,7 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
 
     def open_folder_dialog(self) -> None:
         folder = QFileDialog.getExistingDirectory(
-            self, translate("MainWindow", "Choisir un dossier de photos"), os.path.expanduser("~")
+            self, translate("MainWindow", "Choose a photo folder"), os.path.expanduser("~")
         )
         if folder:
             self._config.add_scan_folder(folder)
@@ -2251,19 +2272,19 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
             if n == 1:
                 msg = translate(
                     "MainWindow",
-                    "Envoyer « {name} » à la corbeille Windows ?\n\n"
-                    "Le fichier restera récupérable depuis la corbeille."
+                    "Send “{name}” to the Windows recycle bin?\n\nThe file will still be "
+                    "recoverable from the recycle bin."
                 ).format(name=photos[0].filename)
             else:
                 msg = translate(
                     "MainWindow",
-                    "Envoyer les {count} fichiers sélectionnés à la corbeille Windows ?"
-                    "\n\nIls resteront récupérables depuis la corbeille."
+                    "Send the {count} selected files to the Windows recycle bin?\n\nThey will "
+                    "still be recoverable from the recycle bin."
                 ).format(count=n)
-            box = QMessageBox(QMessageBox.Warning, translate("MainWindow", "Confirmer la suppression"), msg,
+            box = QMessageBox(QMessageBox.Warning, translate("MainWindow", "Confirm deletion"), msg,
                               QMessageBox.Yes | QMessageBox.Cancel, self)
             box.setDefaultButton(QMessageBox.Cancel)
-            chk = QCheckBox(translate("MainWindow", "Ne plus demander de confirmation"))
+            chk = QCheckBox(translate("MainWindow", "Do not ask again"))
             box.setCheckBox(chk)
             if box.exec() != QMessageBox.Yes:
                 return
@@ -2280,7 +2301,7 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
         # l'utilisateur avant ce correctif).
         if self._delete_thread is not None and self._delete_thread.isRunning():
             self._pending_deletes.append(photos)
-            self.statusBar().showMessage(translate("MainWindow", "Suppression mise en file d'attente…"), 3000)
+            self.statusBar().showMessage(translate("MainWindow", "Deletion queued…"), 3000)
             return
 
         self._start_delete_worker(photos)
@@ -2314,7 +2335,9 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
         )
         self._delete_thread = worker
         worker.progress.connect(
-            lambda done, total: self._lbl_action.setText(f"Suppression… {done}/{total}")
+            lambda done, total: self._lbl_action.setText(
+                translate("MainWindow", "Deleting… {done}/{total}"
+                          ).format(done=done, total=total))
         )
         worker.finished_delete.connect(
             lambda deleted, errors: self._on_delete_finished(
@@ -2396,8 +2419,8 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
                 self._grid.select_photo(neighbor_path)
 
         if errors:
-            QMessageBox.warning(self, translate("MainWindow", "Erreurs de suppression"),
-                                translate("MainWindow", "Impossible de supprimer :\n{details}")
+            QMessageBox.warning(self, translate("MainWindow", "Deletion errors"),
+                                translate("MainWindow", "Cannot delete:\n{details}")
                                 .format(details="\n".join(errors)))
 
         if self._pending_deletes:
@@ -2590,7 +2613,7 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
             self._lbl_fileinfo.setText(text)
         elif n_sel > 1:
             self._lbl_fileinfo.setText(translate(
-                "MainWindow", "{sel} photos sélectionnées  —  {total} au total"
+                "MainWindow", "{sel} photos selected  —  {total} in total"
             ).format(sel=n_sel, total=n_total))
         else:
             count_str = translate("MainWindow", "%n photo(s)", None, n_total)
@@ -2605,8 +2628,8 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
         old_p = Path(photo.path)
         new_stem, ok = QInputDialog.getText(
             self,
-            translate("MainWindow", "Renommer l'image"),
-            translate("MainWindow", "Nouveau nom :"),
+            translate("MainWindow", "Rename the image"),
+            translate("MainWindow", "New name:"),
             text=old_p.stem,
         )
         if not ok:
@@ -2618,8 +2641,9 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
         forbidden = set('\\/:*?"<>|')
         if any(c in forbidden for c in new_stem):
             QMessageBox.warning(
-                self, translate("MainWindow", "Nom invalide"),
-                translate("MainWindow", "Le nom ne peut pas contenir les caractères : \\ / : * ? \" < > |"),
+                self, translate("MainWindow", "Invalid name"),
+                translate("MainWindow", "The name cannot contain these characters: \\ / : * ? "
+                                        "\" < > |"),
             )
             return
 
@@ -2628,9 +2652,9 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
             return
         if new_p.exists():
             QMessageBox.warning(
-                self, translate("MainWindow", "Fichier existant"),
+                self, translate("MainWindow", "File already exists"),
                 translate("MainWindow",
-                          "Un fichier nommé « {name} » existe déjà dans ce dossier.")
+                          "A file named “{name}” already exists in this folder.")
                 .format(name=new_p.name),
             )
             return
@@ -2639,8 +2663,8 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
             old_p.rename(new_p)
         except OSError as e:
             QMessageBox.critical(
-                self, translate("MainWindow", "Erreur"),
-                translate("MainWindow", "Impossible de renommer le fichier :\n{error}")
+                self, translate("MainWindow", "Error"),
+                translate("MainWindow", "Cannot rename the file:\n{error}")
                 .format(error=e))
             return
 
@@ -2665,7 +2689,7 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
         old_p = Path(photo.path)
         dest_dir = QFileDialog.getExistingDirectory(
             self,
-            translate("MainWindow", "Déplacer vers…"),
+            translate("MainWindow", "Move to…"),
             str(old_p.parent),
         )
         if not dest_dir:
@@ -2676,9 +2700,9 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
         new_p = dest_dir_p / old_p.name
         if new_p.exists():
             QMessageBox.warning(
-                self, translate("MainWindow", "Fichier existant"),
+                self, translate("MainWindow", "File already exists"),
                 translate("MainWindow",
-                          "Un fichier nommé « {name} » existe déjà dans ce dossier.")
+                          "A file named “{name}” already exists in this folder.")
                 .format(name=old_p.name),
             )
             return
@@ -2687,8 +2711,8 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
             shutil.move(str(old_p), str(new_p))
         except OSError as e:
             QMessageBox.critical(
-                self, translate("MainWindow", "Erreur"),
-                translate("MainWindow", "Impossible de déplacer le fichier :\n{error}")
+                self, translate("MainWindow", "Error"),
+                translate("MainWindow", "Cannot move the file:\n{error}")
                 .format(error=e))
             return
 
@@ -2730,11 +2754,11 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
                     logger.error("Échec sauvegarde original %s : %s",
                                  photo.path, e, exc_info=True)
                     answer = QMessageBox.warning(
-                        self, translate("MainWindow", "Échec de la sauvegarde"),
+                        self, translate("MainWindow", "Save failed"),
                         translate(
                             "MainWindow",
-                            "Impossible de copier l'original dans .tmp_originals :\n{error}"
-                            "\n\nVoulez-vous quand même écraser le fichier original ?")
+                            "Cannot copy the original into .tmp_originals:\n{error}\n\nDo you "
+                            "still want to overwrite the original file?")
                         .format(error=e),
                         QMessageBox.Yes | QMessageBox.Cancel,
                         QMessageBox.Cancel,
@@ -2745,12 +2769,12 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
         else:
             original = Path(photo.path)
             suggested = original.parent / (
-                original.stem + translate("MainWindow", "_retouché") + original.suffix)
+                original.stem + translate("MainWindow", "_edited") + original.suffix)
             dest, _ = QFileDialog.getSaveFileName(
                 self,
-                translate("MainWindow", "Enregistrer l'image traitée"),
+                translate("MainWindow", "Save the edited image"),
                 str(suggested),
-                translate("MainWindow", "JPEG (*.jpg *.jpeg);;PNG (*.png);;Tous les fichiers (*)"),
+                translate("MainWindow", "JPEG (*.jpg *.jpeg);;PNG (*.png);;All files (*)"),
             )
             if not dest:
                 return
@@ -2824,12 +2848,12 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
                 self._edit_panel.set_photo(photo)
 
             self._lbl_action.setText(translate(
-                "MainWindow", "Image sauvée : {name}").format(name=Path(dest).name))
+                "MainWindow", "Image saved: {name}").format(name=Path(dest).name))
             QTimer.singleShot(4000, lambda: self._lbl_action.setText(""))
         except Exception as e:
             logger.error("Erreur export image %s : %s", photo.path, e, exc_info=True)
-            QMessageBox.critical(self, translate("MainWindow", "Erreur d'export"),
-                                 translate("MainWindow", "Impossible de sauver l'image :\n{error}")
+            QMessageBox.critical(self, translate("MainWindow", "Export error"),
+                                 translate("MainWindow", "Cannot save the image:\n{error}")
                                  .format(error=e))
         finally:
             QApplication.restoreOverrideCursor()
@@ -2885,8 +2909,9 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
             photos = self._grid.get_selected()
             if not photos:
                 QMessageBox.information(
-                    self, translate("MainWindow", "Exporter"),
-                    translate("MainWindow", "Sélectionnez au moins une photo dans la grille avant d'exporter."),
+                    self, translate("MainWindow", "Export"),
+                    translate("MainWindow", "Select at least one photo in the grid before "
+                                            "exporting."),
                 )
                 return
 
@@ -2912,8 +2937,8 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
             export_dir.mkdir(parents=True, exist_ok=True)
         except Exception as e:
             QMessageBox.critical(
-                self, translate("MainWindow", "Erreur"),
-                translate("MainWindow", "Impossible de créer le dossier :\n{error}")
+                self, translate("MainWindow", "Error"),
+                translate("MainWindow", "Cannot create the folder:\n{error}")
                 .format(error=e))
             return
 
@@ -2975,13 +3000,13 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
             # sinon lupdate retire le message du catalogue (cf. CLAUDE.md).
             n_errors = len(errors)
             QMessageBox.warning(
-                self, translate("MainWindow", "Erreurs d'export"),
-                translate("MainWindow", "%n fichier(s) non exporté(s) :", None, n_errors)
+                self, translate("MainWindow", "Export errors"),
+                translate("MainWindow", "%n file(s) not exported:", None, n_errors)
                 + "\n" + "\n".join(errors),
             )
         else:
             n = len(photos)
-            msg = (translate("MainWindow", "%n photo(s) exportée(s)", None, n)
+            msg = (translate("MainWindow", "%n photo(s) exported", None, n)
                    + f"  →  {export_dir}")
             self._lbl_action.setText(msg)
             QTimer.singleShot(5000, lambda: self._lbl_action.setText(""))
@@ -3024,21 +3049,21 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
         traduction se fait ici, au seul endroit où la valeur est montrée à
         l'utilisateur (`_update_status`)."""
         exact = {
-            "Toutes les photos": translate("MainWindow", "Toutes les photos"),
-            "Favoris":           translate("MainWindow", "Favoris"),
-            "Vidéos":            translate("MainWindow", "Vidéos"),
-            "Par notes":         translate("MainWindow", "Par notes"),
-            "Recherche avancée": translate("MainWindow", "Recherche avancée"),
+            "Toutes les photos": translate("MainWindow", "All photos"),
+            "Favoris":           translate("MainWindow", "Favourites"),
+            "Vidéos":            translate("MainWindow", "Videos"),
+            "Par notes":         translate("MainWindow", "By rating"),
+            "Recherche avancée": translate("MainWindow", "Advanced search"),
         }
         if ctx in exact:
             return exact[ctx]
         m = re.match(r"^Par notes : (\d+)★ et plus$", ctx)
         if m:
             return translate(
-                "MainWindow", "Par notes : {n}★ et plus").format(n=m.group(1))
+                "MainWindow", "By rating: {n}★ and above").format(n=m.group(1))
         for key, fmt in (
-            ("Fichiers : ", translate("MainWindow", "Fichiers : {query}")),
-            ("Mot-clé : ",  translate("MainWindow", "Mot-clé : {query}")),
+            ("Fichiers : ", translate("MainWindow", "Files: {query}")),
+            ("Mot-clé : ",  translate("MainWindow", "Keyword: {query}")),
         ):
             if ctx.startswith(key):
                 return fmt.format(query=ctx[len(key):])
@@ -3107,25 +3132,25 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
             else:
                 duree = f"{s}s"
             dlg = QMessageBox(self)
-            dlg.setWindowTitle(translate("MainWindow", "Regroupement en cours"))
+            dlg.setWindowTitle(translate("MainWindow", "Grouping in progress"))
             dlg.setIcon(QMessageBox.Icon.Warning)
-            dlg.setText(translate("MainWindow", "<b>Un regroupement de visages est en cours.</b>"))
+            dlg.setText(translate("MainWindow", "<b>A face grouping is running.</b>"))
             dlg.setInformativeText(
                 translate(
                     "MainWindow",
-                    "Le regroupement tourne depuis <b>{duration}</b>.<br><br>"
-                    "Si vous fermez l'application maintenant, le calcul sera "
-                    "interrompu et <b>le résultat sera perdu</b>. "
-                    "Il faudra tout recommencer au prochain démarrage.<br><br>"
-                    "Voulez-vous quand même fermer l'application ?"
+                    "Grouping has been running for <b>{duration}</b>.<br><br>If you close the "
+                    "application now, the computation stops and <b>its result is lost</b>. It "
+                    "will have to start over at the next launch.<br><br>Close the application "
+                    "anyway?"
                 ).format(duration=duree)
             )
             dlg.setStandardButtons(
                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
             )
             dlg.setDefaultButton(QMessageBox.StandardButton.No)
-            dlg.button(QMessageBox.StandardButton.Yes).setText(translate("MainWindow", "Fermer quand même"))
-            dlg.button(QMessageBox.StandardButton.No).setText(translate("MainWindow", "Annuler"))
+            dlg.button(QMessageBox.StandardButton.Yes).setText(translate("MainWindow", "Close "
+                                                                                       "anyway"))
+            dlg.button(QMessageBox.StandardButton.No).setText(translate("MainWindow", "Cancel"))
             if dlg.exec() != QMessageBox.StandardButton.Yes:
                 event.ignore()
                 return

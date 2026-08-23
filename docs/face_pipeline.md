@@ -1,73 +1,73 @@
-# Pipeline : détection, groupement et identification des visages
+# Pipeline: face detection, clustering and identification
 
-## Vue d'ensemble
+## Overview
 
 ```
-Photo sur disque
+Photo on disk
       │
       ▼
-┌─────────────┐     embedding 512-dim
-│  Détection  │ ──────────────────────► Table faces (BD SQLite)
+┌─────────────┐     512-dim embedding
+│  Detection  │ ──────────────────────► faces table (SQLite DB)
 │  RetinaFace │                          person_id = NULL
 │  + ArcFace  │                          cluster_id = NULL
 └─────────────┘
                                               │
-                                   Déclenchement manuel
-                                   « Lancer le clustering »
+                                     Manual trigger
+                                     "Run the clustering"
                                               │
                                               ▼
                                    ┌────────────────────┐
-                                   │    Clustering       │
-                                   │  PCA 512→32 dims    │
-                                   │  + HDBSCAN          │
+                                   │     Clustering     │
+                                   │  PCA 512→32 dims   │
+                                   │  + HDBSCAN         │
                                    └────────────────────┘
                                               │
-                                   cluster_id attribué
-                                   (entier positif)
+                                     cluster_id assigned
+                                     (positive integer)
                                               │
                                               ▼
                                    ┌────────────────────┐
-                                   │   Suggestions       │
-                                   │  similarité cosinus │
-                                   │  cluster ↔ personne │
+                                   │    Suggestions     │
+                                   │ cosine similarity  │
+                                   │ cluster ↔ person   │
                                    └────────────────────┘
                                               │
-                                   suggestion_person_id
+                                     suggestion_person_id
                                               │
                                               ▼
                                    ┌────────────────────┐
-                                   │  Validation humaine │
-                                   │  Accepter / Rejeter │
+                                   │ Human validation   │
+                                   │  Accept / Reject   │
                                    └────────────────────┘
                                               │
-                                   person_id attribué
+                                      person_id assigned
 ```
 
 ---
 
-## Phase 1 — Détection et embedding
+## Phase 1 — Detection and embedding
 
-**Fichier** : `src/faces/detector.py`
+**File**: `src/faces/detector.py`
 
-À chaque scan d'une photo :
+Every time a photo is scanned:
 
 ```
 Photo (JPEG/PNG/…)
        │
        ▼
-  RetinaFace  ──► bounding box (x, y, w, h)  ◄── stocké dans faces.bbox_*
+  RetinaFace  ──► bounding box (x, y, w, h)  ◄── stored in faces.bbox_*
        │
        ▼
-   ArcFace    ──► vecteur 512 flottants        ◄── stocké dans faces.embedding (blob)
+   ArcFace    ──► vector of 512 floats        ◄── stored in faces.embedding (blob)
 ```
 
-Chaque visage détecté devient une ligne dans la table `faces` :
+Every detected face becomes a row in the `faces` table:
 
-| Colonne            | Valeur initiale     |
+| Column             | Initial value       |
 |--------------------|---------------------|
-| `photo_path`       | chemin de la photo  |
-| `bbox_x/y/w/h`     | rectangle détecté   |
-| `embedding`        | vecteur 512-dim     |
+| `photo_path`       | path of the photo   |
+| `bbox_x/y/w/h`     | detected rectangle  |
+| `embedding`        | 512-dim vector      |
 | `person_id`        | `NULL`              |
 | `cluster_id`       | `NULL`              |
 | `pinned`           | `0`                 |
@@ -76,52 +76,52 @@ Chaque visage détecté devient une ligne dans la table `faces` :
 
 ---
 
-## Phase 2 — Clustering HDBSCAN
+## Phase 2 — HDBSCAN clustering
 
-**Fichiers** : `src/faces/clusterer.py`, `src/faces/face_database.py`
+**Files**: `src/faces/clusterer.py`, `src/faces/face_database.py`
 
-Le clustering est déclenché manuellement depuis le menu Visages. Il tourne dans un **subprocess isolé** (via `multiprocessing.Process + Pipe`) pour ne pas bloquer l'UI.
+Clustering is triggered manually from the Faces menu. It runs in an **isolated subprocess** (through `multiprocessing.Process + Pipe`) so that it never blocks the UI.
 
-### 2a. Pré-assignation des visages déjà identifiés
+### 2a. Pre-assignment of already identified faces
 
-Avant HDBSCAN, les visages qui ont déjà un `person_id` reçoivent un `cluster_id` **synthétique** :
+Before HDBSCAN, faces that already have a `person_id` are given a **synthetic** `cluster_id`:
 
 ```
 cluster_id = 10 000 000 + person_id
 ```
 
-Cela les exclut du clustering et évite que HDBSCAN réutilise le même entier pour un groupe différent d'un run au suivant.
+This excludes them from the clustering and prevents HDBSCAN from reusing the same integer for a different group from one run to the next.
 
-### 2b. Pipeline HDBSCAN sur les visages non identifiés
+### 2b. HDBSCAN pipeline on the unidentified faces
 
 ```
-N visages sans person_id
+N faces without person_id
         │
         ▼
-Normalisation L2  (→ sphère unité)
+L2 normalisation  (→ unit sphere)
         │
         ▼
-PCA 512 → 32 dims  (>90 % variance conservée)
-   + re-normalisation L2
+PCA 512 → 32 dims  (>90% of variance kept)
+   + L2 re-normalisation
         │
         ▼
-HDBSCAN  (euclidien, boruvka_balltree)
+HDBSCAN  (euclidean, boruvka_balltree)
    min_cluster_size = 2
    min_samples      = 1
         │
-        ├─► label ≥ 0 → cluster_id = label  (groupe de ≥ 2 visages)
+        ├─► label ≥ 0 → cluster_id = label  (group of ≥ 2 faces)
         │
         └─► label = -1 → singleton → cluster_id = max_label + 1, +2, +3…
-                         (chaque singleton est son propre cluster)
+                         (each singleton is its own cluster)
 ```
 
-### 2c. Sauvegarde et propagation
+### 2c. Saving and propagation
 
-Après HDBSCAN, `update_clusters()` :
+After HDBSCAN, `update_clusters()`:
 
-1. Remet `cluster_id = NULL` sur tous les visages non identifiés non pinnés (reset propre)
-2. Écrit les nouveaux `cluster_id` en masse
-3. **Propage le `person_id`** aux visages sans personne dans un cluster où d'autres visages ont déjà un `person_id` :
+1. Resets `cluster_id = NULL` on every unidentified, unpinned face (clean reset)
+2. Writes the new `cluster_id` values in bulk
+3. **Propagates the `person_id`** to faces without a person in a cluster where other faces already have a `person_id`:
 
 ```sql
 UPDATE faces
@@ -135,199 +135,199 @@ WHERE cluster_id IS NOT NULL
                 AND f3.person_id IS NOT NULL)
 ```
 
-Résultat : un nouveau visage de la même personne, regroupé dans son cluster habituel, hérite automatiquement du `person_id`.
+Result: a new face of the same person, grouped into its usual cluster, automatically inherits the `person_id`.
 
 ---
 
-## Phase 3 — Calcul des suggestions
+## Phase 3 — Computing the suggestions
 
-**Fichier** : `src/ui/face_cluster_grid.py`, fonction `_compute_all_suggestions_bg()`
+**File**: `src/ui/face_cluster_grid.py`, function `_compute_all_suggestions_bg()`
 
-Pour chaque cluster sans `person_id`, on calcule la similarité cosinus entre son centroïde et les centroïdes des personnes connues.
+For every cluster without a `person_id`, the cosine similarity between its centroid and the centroids of the known people is computed.
 
 ```
-Clusters sans personne          Personnes connues
+Clusters without a person       Known people
    (cluster_id > 0,               (person_id ≠ NULL)
     person_id = NULL)
          │                               │
          ▼                               ▼
-   centroïde cluster C          centroïde personne P
-   (moyenne des embeddings)     (moyenne par sous-cluster)
+   cluster centroid C            person centroid P
+   (mean of the embeddings)      (mean per sub-cluster)
          │                               │
-         └──────── similarité cosinus ───┘
+         └──────── cosine similarity ────┘
                          │
                ┌─────────┴──────────┐
                │  score ≥ 0.82      │  score ∈ [0.50, 0.82)
                ▼                    ▼
-         suggestion forte     suggestion faible
-         « ≈ Prénom (85%) »   « ~ Prénom (67%) »
-         couleur bleue        couleur grise
+         strong suggestion    weak suggestion
+         "≈ Name (85%)"       "~ Name (67%)"
+         blue                 grey
 ```
 
-La similarité est calculée par **produit matriciel** en une seule passe :
+The similarity is computed as a **matrix product** in a single pass:
 
 ```
-(n_clusters, 512) × (n_embeddings_personnes, 512)ᵀ
+(n_clusters, 512) × (n_person_embeddings, 512)ᵀ
           ─────────────────────────────────────────
-                    matrice (n_clusters × n_pers)
+                    matrix (n_clusters × n_persons)
 ```
 
-Le résultat est stocké dans `faces.suggestion_person_id` et `faces.suggestion_score`.
+The result is stored in `faces.suggestion_person_id` and `faces.suggestion_score`.
 
-### Seuils
+### Thresholds
 
-| Seuil  | Valeur | Signification                        |
-|--------|--------|--------------------------------------|
-| `_SIM_WEAK`    | 0.50 | minimum pour proposer une suggestion |
-| `_SIM_STRONG`  | 0.82 | suggestion forte (couleur bleue)     |
-| `_SIM_SUGGEST` | 0.50 | seuil après dé-association manuelle  |
+| Threshold | Value | Meaning                              |
+|-----------|-------|--------------------------------------|
+| `_SIM_WEAK`    | 0.50 | minimum before offering a suggestion |
+| `_SIM_STRONG`  | 0.82 | strong suggestion (blue)             |
+| `_SIM_SUGGEST` | 0.50 | threshold after a manual unassignment |
 
 ---
 
-## Phase 4 — Validation et identification
+## Phase 4 — Validation and identification
 
-### 4a. Accepter une suggestion (cluster entier)
+### 4a. Accepting a suggestion (whole cluster)
 
 ```
-Clic ✓ sur la carte de groupe
+Click ✓ on the group card
         │
         ▼
 assign_cluster_to_person(cluster_id, person_id)
    → UPDATE faces SET person_id=? WHERE cluster_id=?
-   → déduplique (une seule face par photo)
+   → deduplicates (a single face per photo)
 ```
 
-### 4b. Identifier un visage seul (isolation + assignation)
+### 4b. Identifying a single face (isolation + assignment)
 
 ```
-Clic-droit → Identifier
+Right-click → Identify
         │
         ▼
 isolate_and_assign_face(face_id, person_id)
-   → cluster_id = MIN(cluster_id_pinnés) - 1  (entier négatif unique)
+   → cluster_id = MIN(pinned cluster_id) - 1  (unique negative integer)
    → pinned = 1
-   → person_id = person_id choisi
+   → person_id = the chosen person_id
 ```
 
-Ce visage est désormais **isolé** : ni le clustering ni la propagation ne le toucheront plus.
+That face is now **isolated**: neither the clustering nor the propagation will touch it again.
 
-### 4c. Rejeter une suggestion
+### 4c. Rejecting a suggestion
 
 ```
-Clic ✗ sur la vignette (ou bouton de la carte)
+Click ✗ on the thumbnail (or the card button)
         │
-        ▼  (immédiat — UI)
+        ▼  (immediate — UI)
 PersonClusterView.remove_pending_cluster(cluster_id)
-   → retire la vignette de la section « En attente »
+   → removes the thumbnail from the "Pending" section
 
         │
-        ▼  (arrière-plan — _ResuggestThread)
-FaceDatabase.resuggest_clusters([cluster_id], exclude_person_id=personne_courante)
-   → suggestion_person_id = NULL  (rejet enregistré)
-   → charge les centroids de toutes les autres personnes
-   → calcule la similarité cosinus contre le cluster
-   → si score ≥ 0.50 → enregistre la nouvelle suggestion_person_id
-                       → apparaîtra dans « En attente » de la prochaine personne
+        ▼  (background — _ResuggestThread)
+FaceDatabase.resuggest_clusters([cluster_id], exclude_person_id=current person)
+   → suggestion_person_id = NULL  (rejection recorded)
+   → loads the centroids of every other person
+   → computes the cosine similarity against the cluster
+   → if score ≥ 0.50 → records the new suggestion_person_id
+                       → will show up in the "Pending" of the next person
 ```
 
-La face rejetée **n'est pas perdue** : elle est immédiatement réévaluée pour les
-autres personnes. Si la similarité est suffisante, elle apparaîtra dans les
-suggestions d'une autre personne lors de sa prochaine ouverture.
+The rejected face is **not lost**: it is immediately re-evaluated for the other
+people. If the similarity is high enough, it will appear in the suggestions of
+another person the next time that person is opened.
 
 ---
 
-## États possibles d'un visage
+## Possible states of a face
 
 ```
                          ┌───────────────────────────────────────────────┐
-                         │                   TABLE faces                  │
+                         │                  faces TABLE                   │
                          │  cluster_id  person_id  pinned  suggestion_*  │
                          └───────────────────────────────────────────────┘
 
-  Juste détecté          │  NULL        NULL       0       NULL          │
-  (pas encore clustérisé)│                                               │
+  Just detected          │  NULL        NULL       0       NULL          │
+  (not yet clustered)    │                                               │
 
-  Dans un groupe         │  > 0         NULL       0       NULL          │
-  (sans suggestion)      │                                               │
+  In a group             │  > 0         NULL       0       NULL          │
+  (no suggestion)        │                                               │
 
-  Suggestion en attente  │  > 0         NULL       0       person_id = X │
+  Pending suggestion     │  > 0         NULL       0       person_id = X │
                          │                                               │
 
-  Identifié (naturel)    │  > 0         person_id  0       NULL          │
-  (cluster HDBSCAN)      │                                               │
+  Identified (natural)   │  > 0         person_id  0       NULL          │
+  (HDBSCAN cluster)      │                                               │
 
-  Identifié (synthétique)│  10M+pid     person_id  0       NULL          │
-  (pré-clustering)       │                                               │
+  Identified (synthetic) │  10M+pid     person_id  0       NULL          │
+  (pre-clustering)       │                                               │
 
-  Isolé+identifié        │  < 0         person_id  1       NULL          │
-  (assigné manuellement) │                                               │
+  Isolated + identified  │  < 0         person_id  1       NULL          │
+  (assigned manually)    │                                               │
 
-  Isolé sans personne    │  < 0         NULL       1       person_id = X │
-  (dé-associé, en        │                   ou NULL si aucune suggestion│
-  attente de suggestion) │                                               │
+  Isolated, no person    │  < 0         NULL       1       person_id = X │
+  (unassigned, awaiting  │                    or NULL if no suggestion   │
+  a suggestion)          │                                               │
 
-  Ignoré                 │  quelconque  quelconque quelconque ignored=1  │
+  Ignored                │  any         any        any     ignored=1     │
 ```
 
 ---
 
-## Dé-association et réallocation
+## Unassignment and reallocation
 
-### Dé-association depuis la section confirmée
+### Unassigning from the confirmed section
 
-Lorsque l'utilisateur **dé-associe** un visage d'une personne depuis `PersonClusterView` :
+When the user **unassigns** a face from a person in `PersonClusterView`:
 
 ```
 _flat_unassign(face_ids)
         │
         ▼  (thread _UnassignThread)
-isolate_and_suggest(face_ids, exclude_person_id=personne_courante)
+isolate_and_suggest(face_ids, exclude_person_id=current person)
         │
-        ├─► cluster_id = entier négatif unique, pinned=1, person_id=NULL
+        ├─► cluster_id = unique negative integer, pinned=1, person_id=NULL
         │
-        └─► similarité cosinus vs toutes les autres personnes
+        └─► cosine similarity vs every other person
                   │
-                  ├─ score ≥ 0.50 → suggestion_person_id enregistré
-                  │                  → apparaît dans « En attente »
-                  │                    de la personne suggérée
+                  ├─ score ≥ 0.50 → suggestion_person_id recorded
+                  │                  → shows up in the "Pending" of the
+                  │                    suggested person
                   │
-                  └─ score < 0.50 → aucune suggestion (face toujours isolée)
+                  └─ score < 0.50 → no suggestion (face still isolated)
 ```
 
-La personne d'origine est **exclue** du calcul pour ne pas proposer immédiatement
-de réassigner le visage à la même personne.
+The original person is **excluded** from the computation so that the face is not
+immediately offered back to the same person.
 
-### Rejet d'une suggestion en attente
+### Rejecting a pending suggestion
 
-Lorsque l'utilisateur **rejette** une suggestion depuis la section « En attente » :
+When the user **rejects** a suggestion from the "Pending" section:
 
 ```
 suggestion_rejected.emit(cluster_id)
         │
         ▼  (thread _ResuggestThread)
-resuggest_clusters([cluster_id], exclude_person_id=personne_courante)
+resuggest_clusters([cluster_id], exclude_person_id=current person)
         │
-        ├─► suggestion_person_id = NULL (rejet enregistré)
+        ├─► suggestion_person_id = NULL (rejection recorded)
         │
-        └─► similarité cosinus vs toutes les autres personnes (hors personne courante)
+        └─► cosine similarity vs every other person (current person excluded)
                   │
-                  ├─ score ≥ 0.50 → nouvelle suggestion_person_id
-                  │                  → visible dans la prochaine personne concernée
+                  ├─ score ≥ 0.50 → new suggestion_person_id
+                  │                  → visible in the next person concerned
                   │
-                  └─ score < 0.50 → aucune suggestion (face toujours isolée, pinned=1)
+                  └─ score < 0.50 → no suggestion (face still isolated, pinned=1)
 ```
 
-La face reste **isolée** (pinned=1, cluster_id < 0) dans les deux cas — seule la
-suggestion change. Elle n'est jamais perdue dans les clusters sans nom.
+The face stays **isolated** (pinned=1, cluster_id < 0) in both cases — only the
+suggestion changes. It is never lost among the unnamed clusters.
 
 ---
 
-## Résumé des cluster_id
+## Summary of cluster_id values
 
-| Plage            | Signification                                   |
+| Range            | Meaning                                         |
 |------------------|-------------------------------------------------|
-| `NULL`           | Visage détecté, pas encore clustérisé           |
-| `1 … ~175 000`   | Groupe HDBSCAN réel (≥ 2 visages)               |
-| `175 001 … 9,9M` | Singleton HDBSCAN (1 visage, unique)            |
-| `10 000 000+`    | Cluster synthétique (faces déjà identifiées)    |
-| `< 0`            | Visage isolé manuellement (pinned=1)            |
+| `NULL`           | Face detected, not clustered yet                |
+| `1 … ~175,000`   | Real HDBSCAN group (≥ 2 faces)                  |
+| `175,001 … 9.9M` | HDBSCAN singleton (1 face, unique)              |
+| `10,000,000+`    | Synthetic cluster (already identified faces)    |
+| `< 0`            | Face isolated manually (pinned=1)               |

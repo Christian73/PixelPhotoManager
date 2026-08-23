@@ -223,7 +223,7 @@ class SlideshowWindow(QWidget):
         self._screensaver = ScreensaverGuard()
         self._screensaver.inhibit()
 
-        self.setWindowTitle(translate("SlideshowWindow", "Diaporama"))
+        self.setWindowTitle(translate("SlideshowWindow", "Slideshow"))
         self.setStyleSheet("background: black;")
         self.setAttribute(Qt.WA_DeleteOnClose)
         self.setMouseTracking(True)
@@ -269,8 +269,8 @@ class SlideshowWindow(QWidget):
         ol.addStretch()
 
         # ◀ Plus ancienne
-        self._btn_prev = QPushButton(translate("SlideshowWindow", "◀  Précédente"))
-        self._btn_prev.setToolTip(translate("SlideshowWindow", "Photo plus ancienne  (←)"))
+        self._btn_prev = QPushButton(translate("SlideshowWindow", "◀  Previous"))
+        self._btn_prev.setToolTip(translate("SlideshowWindow", "Older photo  (←)"))
         self._btn_prev.setStyleSheet(_BTN_STYLE)
         self._btn_prev.clicked.connect(self._go_older)
         ol.addWidget(self._btn_prev)
@@ -279,7 +279,7 @@ class SlideshowWindow(QWidget):
 
         # Contrôle du temps d'affichage : [−] [Xs] [+]
         btn_minus = QPushButton("−")
-        btn_minus.setToolTip(translate("SlideshowWindow", "Réduire la durée d'affichage"))
+        btn_minus.setToolTip(translate("SlideshowWindow", "Shorten the display time"))
         btn_minus.setStyleSheet(_BTN_SMALL)
         btn_minus.setFixedWidth(36)
         btn_minus.clicked.connect(self._decrease_interval)
@@ -293,7 +293,7 @@ class SlideshowWindow(QWidget):
         ol.addWidget(self._lbl_interval)
 
         btn_plus = QPushButton("+")
-        btn_plus.setToolTip(translate("SlideshowWindow", "Augmenter la durée d'affichage"))
+        btn_plus.setToolTip(translate("SlideshowWindow", "Lengthen the display time"))
         btn_plus.setStyleSheet(_BTN_SMALL)
         btn_plus.setFixedWidth(36)
         btn_plus.clicked.connect(self._increase_interval)
@@ -303,7 +303,7 @@ class SlideshowWindow(QWidget):
 
         # ⏸ / ▶ Play-pause
         self._btn_playpause = QPushButton("⏸")
-        self._btn_playpause.setToolTip(translate("SlideshowWindow", "Pause / Reprendre  (Espace)"))
+        self._btn_playpause.setToolTip(translate("SlideshowWindow", "Pause / Resume  (Space)"))
         self._btn_playpause.setStyleSheet(_BTN_STYLE)
         self._btn_playpause.clicked.connect(self._toggle_play)
         ol.addWidget(self._btn_playpause)
@@ -311,8 +311,8 @@ class SlideshowWindow(QWidget):
         ol.addSpacing(16)
 
         # ▶ Plus récente
-        self._btn_next = QPushButton(translate("SlideshowWindow", "Suivante  ▶"))
-        self._btn_next.setToolTip(translate("SlideshowWindow", "Photo plus récente  (→)"))
+        self._btn_next = QPushButton(translate("SlideshowWindow", "Next  ▶"))
+        self._btn_next.setToolTip(translate("SlideshowWindow", "Newer photo  (→)"))
         self._btn_next.setStyleSheet(_BTN_STYLE)
         self._btn_next.clicked.connect(self._go_newer)
         ol.addWidget(self._btn_next)
@@ -321,7 +321,7 @@ class SlideshowWindow(QWidget):
 
         # ✕ Fermer
         btn_close = QPushButton("✕")
-        btn_close.setToolTip(translate("SlideshowWindow", "Quitter le diaporama  (Échap)"))
+        btn_close.setToolTip(translate("SlideshowWindow", "Leave the slideshow  (Esc)"))
         btn_close.setStyleSheet(_BTN_SMALL)
         btn_close.setFixedWidth(36)
         btn_close.clicked.connect(self.close)
@@ -484,8 +484,8 @@ class SlideshowWindow(QWidget):
         self._playing = playing
         self._btn_playpause.setText("⏸" if playing else "▶")
         self._btn_playpause.setToolTip(
-            translate("Slideshow", "Mettre en pause  (Espace)") if playing
-            else translate("Slideshow", "Reprendre le défilement  (Espace)")
+            translate("Slideshow", "Pause  (Space)") if playing
+            else translate("Slideshow", "Resume  (Space)")
         )
         if playing:
             self._advance_timer.start()

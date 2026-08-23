@@ -223,7 +223,7 @@ class TestDuplicateGrid:
         buttons = {b.text(): b for b in grid.findChildren(QPushButton)}
         buttons["← Photos"].click()
         assert back == [True]
-        buttons["Vérifier maintenant"].click()
+        buttons["Check now"].click()
         assert detect == [True]
 
     def test_reflow_places_cards(self, grid, tmp_path):

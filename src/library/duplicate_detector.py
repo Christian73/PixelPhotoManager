@@ -31,7 +31,7 @@ from src.core.cpu_throttle import (
     throttle_tick,
     throttled_worker_count,
 )
-from src.core.i18n import translate
+from src.core.i18n import active_language, translate
 from src.library.dedup_cache import DedupCache
 from src.library.image_loader import RAW_EXT
 
@@ -408,8 +408,9 @@ class DuplicateDetectorThread(QThread):
             if cache_hits:
                 # Signal immédiat : évite que la barre semble figée pendant
                 # qu'on saute la majorité d'une grosse bibliothèque déjà en cache.
-                self.progress.emit(done, grand_total,
-                                   f"Tier 1 — empreintes {done}/{total} (cache)…")
+                self.progress.emit(done, grand_total, translate(
+                    "DuplicateDetector", "Tier 1 — fingerprints {done}/{total} (cache)…"
+                ).format(done=done, total=total))
 
             last_emit = time.monotonic()
             last_persist = last_emit
@@ -472,8 +473,9 @@ class DuplicateDetectorThread(QThread):
                         now = time.monotonic()
                         if now - last_emit >= _PROGRESS_INTERVAL:
                             last_emit = now
-                            self.progress.emit(done, grand_total,
-                                               f"Tier 1 — empreintes {done}/{total}…")
+                            self.progress.emit(done, grand_total, translate(
+                                "DuplicateDetector", "Tier 1 — fingerprints {done}/{total}…"
+                            ).format(done=done, total=total))
                             logger.info("Tier 1 : %d/%d empreintes calculées", done, total)
                         if pending_fp and now - last_persist >= _PROGRESS_INTERVAL:
                             last_persist = now
@@ -533,8 +535,9 @@ class DuplicateDetectorThread(QThread):
                 "contre %d ancienne(s) (%d paire(s) à évaluer)…",
                 n, len(old_list), total_pairs,
             )
-            self.progress.emit(total, grand_total,
-                               f"Tier 1 — comparaison des empreintes (0/{n})…")
+            self.progress.emit(total, grand_total, translate(
+                "DuplicateDetector", "Tier 1 — comparing fingerprints (0/{n})…"
+            ).format(n=n))
 
             def _compare_pair(path_i, hash_i, path_j, hash_j) -> None:
                 # Discriminant le plus simple et le moins cher évalué en premier
@@ -610,7 +613,13 @@ class DuplicateDetectorThread(QThread):
                     n_groups = len({v for v in group_of.values()})
                     self.progress.emit(
                         total + int((i + 1) * total / n), grand_total,
-                        f"Tier 1 — comparaison des empreintes ({i + 1}/{n}, {n_groups} groupe(s))…",
+                        translate(
+                            "DuplicateDetector",
+                            "Tier 1 — comparing fingerprints ({done}/{total}, {groups})…"
+                        ).format(
+                            done=i + 1, total=n,
+                            groups=translate("DuplicateDetector", "%n group(s)",
+                                             None, n_groups)),
                     )
                     logger.info("Tier 1 : %d/%d empreintes comparées (%d groupe(s) formés)",
                                 i + 1, n, n_groups)
@@ -672,8 +681,9 @@ class DuplicateDetectorThread(QThread):
             return
 
         n = len(unmatched)
-        self.progress.emit(phase1_total, grand_total,
-                           f"Tier 2 — extraction ORB ({n} photos)…")
+        self.progress.emit(phase1_total, grand_total, translate(
+            "DuplicateDetector", "Tier 2 — ORB extraction ({photos})…"
+        ).format(photos=translate("DuplicateDetector", "%n photo(s)", None, n)))
 
         orb = cv2.ORB_create(nfeatures=_ORB_MAX_KP)
         gray_cache = _GrayImageCache()
@@ -789,7 +799,9 @@ class DuplicateDetectorThread(QThread):
                         phase1_total
                         + idx * (grand_total - phase1_total) // (max(1, total_needed) * 2),
                         grand_total,
-                        f"Tier 2 — ORB descripteurs {idx}/{total_needed}…",
+                        translate("DuplicateDetector",
+                                  "Tier 2 — ORB descriptors {done}/{total}…"
+                                  ).format(done=idx, total=total_needed),
                     )
                     if pending_orb:
                         cache.store_orb_features(pending_orb)
@@ -849,7 +861,9 @@ class DuplicateDetectorThread(QThread):
         self.progress.emit(
             phase1_total + (grand_total - phase1_total) // 2,
             grand_total,
-            f"Tier 2 — comparaison ORB ({m} photos)…",
+            translate("DuplicateDetector", "Tier 2 — ORB comparison ({photos})…"
+                      ).format(photos=translate("DuplicateDetector",
+                                                "%n photo(s)", None, m)),
         )
 
         # `old_paths_set` / `new_paths_set` ont été établis plus haut, sur
@@ -1021,7 +1035,14 @@ class DuplicateDetectorThread(QThread):
                     current = comparison_start + int((i + 1) * (grand_total - comparison_start) / m)
                     self.progress.emit(
                         current, grand_total,
-                        f"Tier 2 — comparaison ORB ({i + 1}/{m}, {pairs_checked} paire(s) vérifiée(s))…",
+                        translate(
+                            "DuplicateDetector",
+                            "Tier 2 — ORB comparison ({done}/{total}, {pairs})…"
+                        ).format(
+                            done=i + 1, total=m,
+                            pairs=translate("DuplicateDetector",
+                                            "%n pair(s) checked",
+                                            None, pairs_checked)),
                     )
                     logger.info("Tier 2 : %d/%d photos comparées (%d paire(s) vérifiée(s))",
                                 i + 1, m, pairs_checked)
@@ -1107,14 +1128,17 @@ def generate_html_report(groups: dict, output_path: str) -> None:
     n_groups = len(groups)
     n_files  = sum(len(v) for v in groups.values())
     now      = datetime.now().strftime(
-        translate("DuplicateReport", "%d/%m/%Y à %H:%M"))
+        translate("DuplicateReport", "%m/%d/%Y at %H:%M"))
 
     lines = [
         "<!DOCTYPE html>",
-        "<html lang='fr'>",
+        # `lang` doit suivre la langue du contenu (lecture d'écran, césure du
+        # navigateur) : c'est un code de langue, pas une chaîne traduisible.
+        f"<html lang='{active_language()}'>",
         "<head>",
         "<meta charset='UTF-8'>",
-        "<title>Doublons — PixelPhotoManager</title>",
+        "<title>" + translate("DuplicateReport",
+                              "Duplicates — PixelPhotoManager") + "</title>",
         "<style>",
         "body{font-family:system-ui,sans-serif;background:#1a1a1a;color:#ccc;"
         "     margin:0;padding:24px}",
@@ -1134,14 +1158,14 @@ def generate_html_report(groups: dict, output_path: str) -> None:
         "</head>",
         "<body>",
         "<h1>" + translate("DuplicateReport",
-                           "Rapport de doublons — PixelPhotoManager") + "</h1>",
+                           "Duplicate report — PixelPhotoManager") + "</h1>",
         "<div class='summary'>"
-        + translate("DuplicateReport", "Généré le {date}").format(date=now)
+        + translate("DuplicateReport", "Generated on {date}").format(date=now)
         + " &nbsp;·&nbsp; "
-        + translate("DuplicateReport", "<b>%n</b> groupe(s) de doublons",
+        + translate("DuplicateReport", "<b>%n</b> duplicate group(s)",
                     None, n_groups)
         + " &nbsp;·&nbsp; "
-        + translate("DuplicateReport", "<b>%n</b> fichier(s) concerné(s)",
+        + translate("DuplicateReport", "<b>%n</b> file(s) affected",
                     None, n_files)
         + "</div>",
     ]
@@ -1151,9 +1175,9 @@ def generate_html_report(groups: dict, output_path: str) -> None:
         n_members = len(members)
         lines.append(
             "<div class='gtitle'>"
-            + translate("DuplicateReport", "Groupe&nbsp;#{id}").format(id=gid)
+            + translate("DuplicateReport", "Group&nbsp;#{id}").format(id=gid)
             + " — "
-            + translate("DuplicateReport", "%n fichier(s)", None, n_members)
+            + translate("DuplicateReport", "%n file(s)", None, n_members)
             + "</div>"
         )
         for path in members:
@@ -1177,8 +1201,19 @@ def generate_html_report(groups: dict, output_path: str) -> None:
 
 
 def _fmt_size(n: int) -> str:
-    for unit in ("o", "Ko", "Mo", "Go"):
-        if n < 1024:
-            return f"{n}&nbsp;{unit}"
-        n //= 1024
-    return f"{n}&nbsp;To"
+    # Le libellé complet (nombre + unité) est traduisible : l'anglais et
+    # l'allemand écrivent « kB/MB », pas « Ko/Mo » (octets). Source et contexte
+    # doivent rester des littéraux sur place (lupdate lit le code, il ne
+    # l'exécute pas) : pas de boucle sur une liste d'unités ici.
+    if n < 1024:
+        return translate("Units", "{n}&nbsp;B").format(n=n)
+    n //= 1024
+    if n < 1024:
+        return translate("Units", "{n}&nbsp;kB").format(n=n)
+    n //= 1024
+    if n < 1024:
+        return translate("Units", "{n}&nbsp;MB").format(n=n)
+    n //= 1024
+    if n < 1024:
+        return translate("Units", "{n}&nbsp;GB").format(n=n)
+    return translate("Units", "{n}&nbsp;TB").format(n=n // 1024)

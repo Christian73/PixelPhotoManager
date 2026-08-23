@@ -307,7 +307,7 @@ def invoke_button(
     précis (l'instance retournée par `find_dialog_button`, pas une nouvelle
     recherche par libellé) devienne invisible (dialogue fermé) avant de
     rendre la main — sans ça, un enchaînement `invoke_button(..., "OK")` puis
-    `invoke_button(..., "Fermer")` peut invoquer « Fermer » sur la boîte de
+    `invoke_button(..., "Close")` peut invoquer « Close » sur la boîte de
     dialogue parente (`FolderManagerDialog`) alors que la `QMessageBox`
     enfant n'a pas fini de se fermer : comme `.invoke()` est indépendant du
     focus/z-order OS, il ne passe pas par le filtrage de modalité de Qt
@@ -617,10 +617,10 @@ def wait_for_duplicate_detection(window, catalog_db, pairs, *, timeout: float = 
         for attempt in range(2):
             try:
                 window.set_focus()
-                click_menu_item(window, "Outils", "État des doublons…")
-                find_dialog_button(window, ["Vérifier maintenant"], timeout=15.0).click_input()
+                click_menu_item(window, "Tools", "Duplicate status…")
+                find_dialog_button(window, ["Check now"], timeout=15.0).click_input()
                 time.sleep(0.5)
-                find_dialog_button(window, ["Fermer"], timeout=15.0).click_input()
+                find_dialog_button(window, ["Close"], timeout=15.0).click_input()
                 break
             except LookupError:
                 if attempt == 1:
@@ -736,8 +736,8 @@ def open_photo_in_viewer(window, photo_path, *, attempts: int = 4) -> None:
     stabilité de position ajouté avant le clic) : le double-clic peut
     « réussir » (bouton « 1:1 » présent) tout en affichant une photo
     différente de celle visée — pas un cas rare, un mode de défaillance stable.
-    Le menu contextuel « Ouvrir » (`thumbnail_grid.py::_on_right_click`,
-    `menu.addAction("Ouvrir", lambda: self.photo_activated.emit(photo))`)
+    Le menu contextuel « Open » (`thumbnail_grid.py::_on_right_click`,
+    `menu.addAction("Open", lambda: self.photo_activated.emit(photo))`)
     n'a besoin que d'un seul clic pour atterrir sur la bonne cellule, et
     capture la `PhotoInfo` cliquée dans la fermeture du callback dès
     l'ouverture du menu — aucune fenêtre de réassignation entre deux clics.
@@ -754,7 +754,7 @@ def open_photo_in_viewer(window, photo_path, *, attempts: int = 4) -> None:
         try:
             right_click_and_click_context_menu_item(
                 lambda: find_thumbnail(window, str(photo_path), timeout=30.0),
-                window, "Ouvrir", exact=True, timeout=10.0,
+                window, "Open", exact=True, timeout=10.0,
             )
             find_dialog_button(window, ["1:1"], exact=True, timeout=4.0)
             wait_for_condition(

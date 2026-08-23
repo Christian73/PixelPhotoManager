@@ -5,15 +5,15 @@ vraie visionneuse.
 
 Chemin exercé : double-clic sur une vignette (photo_activated) -> show_viewer
 bascule _left_stack sur l'EditPanel réel -> clic sur le bouton de traitement
-"Luminosité" (QToolButton, cf. edit_panel.py::_TREATMENTS/_make_treatment_button)
+"Brightness" (QToolButton, cf. edit_panel.py::_TREATMENTS/_make_treatment_button)
 -> ouverture de LuminositeTreatmentDialog (QDialog non modal, dlg.show()) ->
 glissé du QSlider interne (EditSlider -> MarkedSlider -> QSlider, seul slider
-visible tant que "Fonctions avancées…" n'est pas coché) -> "Valider" ->
+visible tant que "Advanced options…" n'est pas coché) -> "Apply" ->
 EditPanel._finish() persiste via EditDatabase.save() (table photo_edits,
 colonne brightness) -> vérification directe sur edits.db, PAS sur l'UI (la
 seule source de vérité pour la non-régression, cf. tests/e2e/conftest.py).
 
-Puis Ctrl+Z (bouton "Annuler" de l'EditPanel, raccourci Ctrl+Z réel,
+Puis Ctrl+Z (bouton "Undo" de l'EditPanel, raccourci Ctrl+Z réel,
 edit_panel.py:1514) -> re-vérification en base -> ré-ouverture de la même
 photo (nouvelle instance logique de visionneuse, undo_stack rechargé depuis
 la DB, cf. CLAUDE.md "Retouches non destructives") -> re-vérification de la
@@ -48,9 +48,9 @@ def test_luminosity_edit_applies_persists_and_undoes(isolated_app):
 
     open_photo_in_viewer(window, photo)
 
-    # Bouton de traitement "Luminosité" (QToolButton, texte exact) — descendant
+    # Bouton de traitement "Brightness" (QToolButton, texte exact) — descendant
     # de la fenêtre principale, apparaît une fois l'EditPanel affiché (_left_stack -> index 1).
-    btn_luminosite = find_dialog_button(window, ["Luminosité"], exact=True, timeout=15.0)
+    btn_luminosite = find_dialog_button(window, ["Brightness"], exact=True, timeout=15.0)
     btn_luminosite.click_input()
 
     # LuminositeTreatmentDialog : un seul QSlider visible tant que "Fonctions
@@ -58,7 +58,7 @@ def test_luminosity_edit_applies_persists_and_undoes(isolated_app):
     slider = _wait_for_slider(window)
     slider.set_value(int(_BRIGHTNESS_TARGET * 100))
 
-    find_dialog_button(window, ["Valider"], exact=True, timeout=10.0).click_input()
+    find_dialog_button(window, ["Apply"], exact=True, timeout=10.0).click_input()
 
     wait_for_condition(
         lambda: _brightness(edits_db, photo) is not None
@@ -67,11 +67,11 @@ def test_luminosity_edit_applies_persists_and_undoes(isolated_app):
         message="la retouche de luminosité n'a pas été persistée dans edits.db",
     )
 
-    # Annuler (bouton undo de l'EditPanel). Libellé DYNAMIQUE depuis
-    # l'évolution UI : « Annuler  <opération> » (ex. « Annuler  Luminosité »),
-    # d'où la recherche non exacte — le « Annuler » du dialogue de traitement
+    # Undo (bouton undo de l'EditPanel). Libellé DYNAMIQUE depuis
+    # l'évolution UI : « Undo  <opération> » (ex. « Undo  Luminosité »),
+    # d'où la recherche non exacte — le « Cancel » du dialogue de traitement
     # est fermé à ce stade, pas d'ambiguïté.
-    find_dialog_button(window, ["Annuler"], exact=False, timeout=10.0).click_input()
+    find_dialog_button(window, ["Undo"], exact=False, timeout=10.0).click_input()
 
     # État vierge restauré : depuis l'évolution d'EditDatabase, une photo
     # revenue à l'état d'origine voit sa ligne photo_edits SUPPRIMÉE (et non

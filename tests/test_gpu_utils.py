@@ -61,7 +61,7 @@ class TestConfigureNoTensorflow:
         _reset(monkeypatch)
         monkeypatch.setitem(sys.modules, "tensorflow", None)  # force ImportError
 
-        assert gpu_utils_module.configure() == "CPU (TensorFlow non disponible)"
+        assert gpu_utils_module.configure() == "CPU (TensorFlow not available)"
 
 
 class TestConfigureMemoization:
@@ -196,7 +196,7 @@ class TestConfigureNoGpuNoHardware:
         fake_tf = _fake_tf(gpus=[])
         monkeypatch.setitem(sys.modules, "tensorflow", fake_tf)
 
-        assert gpu_utils_module.configure() == "CPU  (aucun GPU détecté)"
+        assert gpu_utils_module.configure() == "CPU  (no GPU found)"
 
 
 class TestDetectBackend:
@@ -297,7 +297,7 @@ class TestDeviceLabel:
         _reset(monkeypatch)
         monkeypatch.setitem(sys.modules, "tensorflow", None)
 
-        assert gpu_utils_module.device_label() == "CPU (TensorFlow non disponible)"
+        assert gpu_utils_module.device_label() == "CPU (TensorFlow not available)"
 
     def test_returns_cached_label_without_reconfiguring(self, monkeypatch):
         monkeypatch.setattr(gpu_utils_module, "_configured", True)

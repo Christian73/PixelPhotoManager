@@ -5,17 +5,17 @@ chemin de suppression. Un seul lancement d'application, étapes séquentielles
 (ordre imposé par le plan : création -> peuplement -> suppression) :
 
 1. « + » de la sidebar (`Sidebar._create_album`, `sidebar.py:810`) ->
-   `QInputDialog.getText(..., "Nouvel album", "Nom de l'album :")` ->
+   `QInputDialog.getText(..., "New album", "Album name:")` ->
    `bus.emit("album.create_requested", ...)` -> `MainWindow._on_album_create`
    (main_window.py:1592) -> `Catalog.create_album` seul, sans photo -> une
    ligne `albums` créée, 0 ligne `album_photos` associée.
 
 2. Grille, sélection multiple (clic + Ctrl+clic sur 2 photos témoin) -> menu
-   contextuel « Créer un nouvel album avec les 2 photos sélectionnées… »
+   contextuel « Create a new album with the 2 selected photos… »
    (`thumbnail_grid.py:1234`, libellé dynamique donc recherche par
    sous-chaîne) -> `_on_create_album_with` (main_window.py:1650) ->
-   `QInputDialog.getText(..., "Nouvel album", f"Nom du nouvel album ({n}
-   photo(s) sélectionnée(s)) :")` -> nouvel album + `add_photos_to_album` ->
+   `QInputDialog.getText(..., "New album", f"Name of the new album ({n}
+   photo(s) selected):")` -> nouvel album + `add_photos_to_album` ->
    vérifie que les 2 `album_photos` attendues existent.
 
 3. Grille, sélection simple d'une 3e photo témoin (pas encore dans un album)
@@ -155,7 +155,7 @@ def test_albums(isolated_app):
     thumb_b = find_thumbnail(window, str(photo_b), timeout=15.0)
     thumb_b.click_input(pressed="control")
     right_click_element(thumb_b)
-    click_context_menu_item(window, "Créer un nouvel album avec", exact=False, timeout=10.0)
+    click_context_menu_item(window, "Create a new album with", exact=False, timeout=10.0)
     edit_populated = _find_edit_near_text(window, "Nom du nouvel album", timeout=10.0)
     edit_populated.set_edit_text(_POPULATED_ALBUM_NAME)
     find_dialog_button(window, ["OK"], exact=True, timeout=10.0).click_input()
@@ -183,7 +183,7 @@ def test_albums(isolated_app):
     thumb_c = find_thumbnail(window, str(photo_c), timeout=15.0)
     thumb_c.click_input()  # clic seul : désélectionne a/b
     right_click_element(thumb_c)
-    click_context_menu_item(window, "à un album", exact=False, timeout=10.0)
+    click_context_menu_item(window, "to an album", exact=False, timeout=10.0)
     _find_list_item(window, _POPULATED_ALBUM_NAME, timeout=10.0).click_input()
     find_dialog_button(window, ["OK"], exact=True, timeout=10.0).click_input()
 
@@ -202,7 +202,7 @@ def test_albums(isolated_app):
     # ---- 4. Suppression de l'album peuplé (confirmation standard Oui/Non) ----
     _reveal_sidebar_albums_tail(window)
     right_click_element(_find_list_item(window, _POPULATED_ALBUM_NAME, timeout=10.0))
-    click_context_menu_item(window, "Supprimer l'album…", exact=True, timeout=10.0)
+    click_context_menu_item(window, "Delete the album…", exact=True, timeout=10.0)
     click_yes(window)
 
     wait_for_condition(

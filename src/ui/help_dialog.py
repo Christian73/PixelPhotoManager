@@ -8,9 +8,11 @@ l'aide soit éditable sans toucher au code, puis réparti par langue en 2026-08.
 En mode figé (PyInstaller), le dossier est embarqué sous _internal/help_content
 (cf. pixelphotomanager.spec, entrée datas) et résolu via sys._MEIPASS.
 
-La résolution se fait **fichier par fichier** (_help_file), avec repli sur le
-français : une langue dont un seul onglet n'est pas encore traduit affiche cet
-onglet en français au lieu de perdre toute son aide."""
+La résolution se fait **fichier par fichier** (_help_file), avec repli sur
+l'anglais (`DEFAULT_LANGUAGE`) : une langue dont un seul onglet n'est pas encore
+traduit affiche cet onglet en anglais au lieu de perdre toute son aide. C'est
+aussi pourquoi `_style.html`, qui est du CSS pur et n'a donc pas de version par
+langue, vit dans `en/` et n'existe que là."""
 
 import logging
 import sys
@@ -48,15 +50,15 @@ _TABS = [
 
 #: Libellés affichés des onglets, indexés par leur clé (cf. _TABS).
 _TAB_LABELS: dict[str, str] = {
-    "Vue d'ensemble": translate("HelpDialog", "Vue d'ensemble"),
+    "Vue d'ensemble": translate("HelpDialog", "Overview"),
     "Navigation":     translate("HelpDialog", "Navigation"),
-    "Diaporama":      translate("HelpDialog", "Diaporama"),
-    "Retouches":      translate("HelpDialog", "Retouches"),
-    "Visages":        translate("HelpDialog", "Visages"),
-    "Doublons":       translate("HelpDialog", "Doublons"),
-    "Raccourcis":     translate("HelpDialog", "Raccourcis"),
-    "Paramètres":     translate("HelpDialog", "Paramètres"),
-    "À propos":       translate("HelpDialog", "À propos"),
+    "Diaporama":      translate("HelpDialog", "Slideshow"),
+    "Retouches":      translate("HelpDialog", "Editing"),
+    "Visages":        translate("HelpDialog", "Faces"),
+    "Doublons":       translate("HelpDialog", "Duplicates"),
+    "Raccourcis":     translate("HelpDialog", "Shortcuts"),
+    "Paramètres":     translate("HelpDialog", "Settings"),
+    "À propos":       translate("HelpDialog", "About"),
 }
 
 
@@ -68,8 +70,8 @@ def _content_dir() -> Path:
 
 
 def _help_file(filename: str) -> Path:
-    """Chemin du fichier d'aide dans la langue courante, avec repli sur le
-    français (page non encore traduite, ou langue inconnue)."""
+    """Chemin du fichier d'aide dans la langue courante, avec repli sur
+    l'anglais (page non encore traduite, ou langue inconnue)."""
     base = _content_dir()
     localized = base / active_language() / filename
     if localized.is_file():
@@ -86,7 +88,9 @@ def _load_tab_html(filename: str) -> str:
         body = _help_file(filename).read_text(encoding="utf-8")
     except OSError as exc:
         logger.error("Aide : fichier introuvable %s (%s)", filename, exc)
-        return f"<p>Contenu d'aide indisponible ({filename}).</p>"
+        return "<p>" + translate(
+            "HelpDialog", "Help content unavailable ({filename})."
+        ).format(filename=filename) + "</p>"
     # _style.html contient déjà ses balises <style>…</style>
     return style + body.replace("__VERSION__", get_app_version())
 
@@ -135,7 +139,7 @@ class HelpDialog(QDialog):
         # laissait le QDialog et son QThread de vérification de version en vie
         # indéfiniment, parentés à MainWindow — fuite qui grossit à chaque ouverture.
         self.setAttribute(Qt.WA_DeleteOnClose)
-        self.setWindowTitle(translate("HelpDialog", "Aide — PixelPhotoManager"))
+        self.setWindowTitle(translate("HelpDialog", "Help — PixelPhotoManager"))
         self.resize(760, 560)
 
         layout = QVBoxLayout(self)
@@ -143,7 +147,8 @@ class HelpDialog(QDialog):
         layout.setSpacing(6)
 
         self._search_edit = QLineEdit()
-        self._search_edit.setPlaceholderText(translate("HelpDialog", "Rechercher dans l'aide…  (Entrée : occurrence suivante)"))
+        self._search_edit.setPlaceholderText(translate("HelpDialog", "Search the help…  "
+                                                                     "(Enter: next match)"))
         self._search_edit.setClearButtonEnabled(True)
         self._search_edit.textChanged.connect(lambda text: self._search(text, continue_search=False))
         self._search_edit.returnPressed.connect(
@@ -166,7 +171,7 @@ class HelpDialog(QDialog):
                 html = html.replace(
                     "__VERSION_CHECK__",
                     '<span style="color:#888;">'
-                    + translate("HelpDialog", "Vérification de la version…")
+                    + translate("HelpDialog", "Checking the version…")
                     + '</span>',
                 )
             browser.setHtml(html)
@@ -255,22 +260,21 @@ class HelpDialog(QDialog):
             fragment = (
                 '<span style="color:#e0a030;">'
                 + translate("HelpDialog",
-                            "⚠ Une nouvelle version est disponible : <b>{version}</b> — "
-                            '<a href="{url}" style="color:#6aacf0;">'
-                            "ouvrir la page de téléchargement</a>"
+                            "⚠ A new version is available: <b>{version}</b> — <a "
+                            "href=\"{url}\" style=\"color:#6aacf0;\">open the download page</a>"
                             ).format(version=version, url=html_url)
                 + "</span>"
             )
         elif status == STATUS_UP_TO_DATE:
             fragment = ('<span style="color:#6abf6a;">'
-                        + translate("HelpDialog", "✓ Vous disposez de la dernière version.")
+                        + translate("HelpDialog", "✓ You have the latest version.")
                         + "</span>")
         elif status == STATUS_VERSION_UNKNOWN:
             fragment = (
                 '<span style="color:#888;">'
                 + translate("HelpDialog",
-                            "Version locale non comparable (mode développement) — "
-                            "dernière version publiée : <b>{version}</b>."
+                            "Local version not comparable (development mode) — latest "
+                            "published version: <b>{version}</b>."
                             ).format(version=version)
                 + "</span>"
             )
@@ -278,8 +282,8 @@ class HelpDialog(QDialog):
             fragment = (
                 '<span style="color:#888;">'
                 + translate("HelpDialog",
-                            "Impossible de vérifier la disponibilité d'une nouvelle "
-                            "version (pas de connexion ?).")
+                            "Could not check whether a new version is available (no "
+                            "connection?).")
                 + "</span>"
             )
         scroll_pos = self._about_browser.verticalScrollBar().value()

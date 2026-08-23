@@ -61,7 +61,7 @@ class TestEmptyMessage:
         qtbot.waitExposed(grid)
         calls: list = []
 
-        grid.show_empty_message("Copie de DVD détectée", "Ouvrir", lambda: calls.append(1))
+        grid.show_empty_message("Copie de DVD détectée", "Open", lambda: calls.append(1))
 
         assert grid._empty_overlay.isVisible()
         assert grid._empty_label.text() == "Copie de DVD détectée"
@@ -83,7 +83,7 @@ class TestEmptyMessage:
         grid = _make_grid(qtbot, tmp_path)
         grid.show()
         qtbot.waitExposed(grid)
-        grid.show_empty_message("Copie de DVD détectée", "Ouvrir", lambda: None)
+        grid.show_empty_message("Copie de DVD détectée", "Open", lambda: None)
 
         grid.clear_empty_message()
 
@@ -93,7 +93,7 @@ class TestEmptyMessage:
         grid = _make_grid(qtbot, tmp_path)
         grid.show()
         qtbot.waitExposed(grid)
-        grid.show_empty_message("Copie de DVD détectée", "Ouvrir", lambda: None)
+        grid.show_empty_message("Copie de DVD détectée", "Open", lambda: None)
 
         grid.set_photos([_photo("C:/lib/a.jpg")])
 
@@ -104,8 +104,8 @@ class TestEmptyMessage:
         signal clicked (sinon un clic déclenche N callbacks après N appels)."""
         grid = _make_grid(qtbot, tmp_path)
         calls: list = []
-        grid.show_empty_message("Message 1", "Ouvrir", lambda: calls.append("first"))
-        grid.show_empty_message("Message 2", "Ouvrir", lambda: calls.append("second"))
+        grid.show_empty_message("Message 1", "Open", lambda: calls.append("first"))
+        grid.show_empty_message("Message 2", "Open", lambda: calls.append("second"))
 
         grid._empty_action_btn.click()
 

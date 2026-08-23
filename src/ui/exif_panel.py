@@ -22,66 +22,66 @@ logger = logging.getLogger(__name__)
 # Groupes et tags curated
 
 _CURATED_GROUPS: list[tuple[str, list[tuple[str, str]]]] = [
-    (translate("ExifPanel", "Appareil photo"), [
-        ("Make",             translate("ExifPanel", "Fabricant")),
-        ("Model",            translate("ExifPanel", "Modèle")),
-        ("SerialNumber",     translate("ExifPanel", "N° de série")),
-        ("LensMake",         translate("ExifPanel", "Fabricant objectif")),
-        ("LensModel",        translate("ExifPanel", "Objectif")),
-        ("LensSpecification",translate("ExifPanel", "Spéc. objectif")),
-        ("LensSerialNumber", translate("ExifPanel", "N° série objectif")),
-        ("Software",         translate("ExifPanel", "Logiciel")),
+    (translate("ExifPanel", "Camera"), [
+        ("Make",             translate("ExifPanel", "Make")),
+        ("Model",            translate("ExifPanel", "Model")),
+        ("SerialNumber",     translate("ExifPanel", "Serial number")),
+        ("LensMake",         translate("ExifPanel", "Lens make")),
+        ("LensModel",        translate("ExifPanel", "Lens")),
+        ("LensSpecification",translate("ExifPanel", "Lens spec.")),
+        ("LensSerialNumber", translate("ExifPanel", "Lens serial no.")),
+        ("Software",         translate("ExifPanel", "Software")),
     ]),
-    (translate("ExifPanel", "Prise de vue"), [
+    (translate("ExifPanel", "Capture"), [
         ("DateTimeOriginal",      translate("ExifPanel", "Date")),
-        ("ExposureTime",          translate("ExifPanel", "Exposition")),
-        ("FNumber",               translate("ExifPanel", "Ouverture")),
-        ("MaxApertureValue",      translate("ExifPanel", "Ouverture max")),
+        ("ExposureTime",          translate("ExifPanel", "Exposure")),
+        ("FNumber",               translate("ExifPanel", "Aperture")),
+        ("MaxApertureValue",      translate("ExifPanel", "Max aperture")),
         ("ISOSpeedRatings",       translate("ExifPanel", "ISO")),
-        ("SensitivityType",       translate("ExifPanel", "Type ISO")),
-        ("RecommendedExposureIndex", translate("ExifPanel", "Indice expo. recommandé")),
-        ("FocalLength",           translate("ExifPanel", "Focale")),
-        ("FocalLengthIn35mmFilm", translate("ExifPanel", "Focale éq. 35 mm")),
-        ("DigitalZoomRatio",      translate("ExifPanel", "Zoom numérique")),
-        ("ExposureProgram",       translate("ExifPanel", "Programme")),
-        ("MeteringMode",          translate("ExifPanel", "Mesure")),
-        ("ExposureMode",          translate("ExifPanel", "Mode expo.")),
-        ("ExposureBiasValue",     translate("ExifPanel", "Correction expo.")),
-        ("BrightnessValue",       translate("ExifPanel", "Valeur de luminosité")),
-        ("WhiteBalance",          translate("ExifPanel", "Balance des blancs")),
-        ("LightSource",           translate("ExifPanel", "Source lumière")),
+        ("SensitivityType",       translate("ExifPanel", "ISO type")),
+        ("RecommendedExposureIndex", translate("ExifPanel", "Recommended exposure index")),
+        ("FocalLength",           translate("ExifPanel", "Focal length")),
+        ("FocalLengthIn35mmFilm", translate("ExifPanel", "Focal length (35 mm eq.)")),
+        ("DigitalZoomRatio",      translate("ExifPanel", "Digital zoom")),
+        ("ExposureProgram",       translate("ExifPanel", "Program")),
+        ("MeteringMode",          translate("ExifPanel", "Metering")),
+        ("ExposureMode",          translate("ExifPanel", "Exposure mode")),
+        ("ExposureBiasValue",     translate("ExifPanel", "Exposure compensation")),
+        ("BrightnessValue",       translate("ExifPanel", "Brightness value")),
+        ("WhiteBalance",          translate("ExifPanel", "White balance")),
+        ("LightSource",           translate("ExifPanel", "Light source")),
         ("Flash",                 translate("ExifPanel", "Flash")),
-        ("SceneCaptureType",      translate("ExifPanel", "Type de scène")),
-        ("SceneType",             translate("ExifPanel", "Type scène brut")),
-        ("SubjectDistance",       translate("ExifPanel", "Distance sujet (m)")),
-        ("SubjectDistanceRange",  translate("ExifPanel", "Gamme distance sujet")),
-        ("GainControl",           translate("ExifPanel", "Contrôle gain")),
-        ("Contrast",              translate("ExifPanel", "Contraste")),
+        ("SceneCaptureType",      translate("ExifPanel", "Scene type")),
+        ("SceneType",             translate("ExifPanel", "Scene capture type")),
+        ("SubjectDistance",       translate("ExifPanel", "Subject distance (m)")),
+        ("SubjectDistanceRange",  translate("ExifPanel", "Subject distance range")),
+        ("GainControl",           translate("ExifPanel", "Gain control")),
+        ("Contrast",              translate("ExifPanel", "Contrast")),
         ("Saturation",            translate("ExifPanel", "Saturation")),
-        ("Sharpness",             translate("ExifPanel", "Netteté")),
-        ("CustomRendered",        translate("ExifPanel", "Rendu personnalisé")),
+        ("Sharpness",             translate("ExifPanel", "Sharpness")),
+        ("CustomRendered",        translate("ExifPanel", "Custom rendered")),
     ]),
     (translate("ExifPanel", "Image"), [
-        ("PixelXDimension",  translate("ExifPanel", "Largeur (px)")),
-        ("PixelYDimension",  translate("ExifPanel", "Hauteur (px)")),
-        ("ColorSpace",       translate("ExifPanel", "Espace colorimétrique")),
+        ("PixelXDimension",  translate("ExifPanel", "Width (px)")),
+        ("PixelYDimension",  translate("ExifPanel", "Height (px)")),
+        ("ColorSpace",       translate("ExifPanel", "Colour space")),
         ("Orientation",      translate("ExifPanel", "Orientation")),
-        ("ResolutionUnit",   translate("ExifPanel", "Unité résolution")),
-        ("XResolution",      translate("ExifPanel", "Résolution X")),
-        ("YResolution",      translate("ExifPanel", "Résolution Y")),
+        ("ResolutionUnit",   translate("ExifPanel", "Resolution unit")),
+        ("XResolution",      translate("ExifPanel", "X resolution")),
+        ("YResolution",      translate("ExifPanel", "Y resolution")),
         ("Compression",      translate("ExifPanel", "Compression")),
-        ("BitsPerSample",    translate("ExifPanel", "Bits par canal")),
-        ("SamplesPerPixel",  translate("ExifPanel", "Canaux")),
+        ("BitsPerSample",    translate("ExifPanel", "Bits per channel")),
+        ("SamplesPerPixel",  translate("ExifPanel", "Channels")),
     ]),
-    (translate("ExifPanel", "Auteur / Droits"), [
-        ("Artist",           translate("ExifPanel", "Artiste")),
+    (translate("ExifPanel", "Author / rights"), [
+        ("Artist",           translate("ExifPanel", "Artist")),
         ("Copyright",        translate("ExifPanel", "Copyright")),
         ("ImageDescription", translate("ExifPanel", "Description")),
-        ("XPTitle",          translate("ExifPanel", "Titre (Windows)")),
-        ("XPComment",        translate("ExifPanel", "Commentaire (Windows)")),
-        ("XPAuthor",         translate("ExifPanel", "Auteur (Windows)")),
-        ("XPKeywords",       translate("ExifPanel", "Mots-clés (Windows)")),
-        ("XPSubject",        translate("ExifPanel", "Sujet (Windows)")),
+        ("XPTitle",          translate("ExifPanel", "Title (Windows)")),
+        ("XPComment",        translate("ExifPanel", "Comment (Windows)")),
+        ("XPAuthor",         translate("ExifPanel", "Author (Windows)")),
+        ("XPKeywords",       translate("ExifPanel", "Keywords (Windows)")),
+        ("XPSubject",        translate("ExifPanel", "Subject (Windows)")),
     ]),
 ]
 
@@ -103,81 +103,114 @@ for _grp, _tags in _CURATED_GROUPS:
 # Tables de décodage
 
 _EXPOSURE_PROGRAMS = {
-    0: translate("ExifPanel", "Non défini"), 1: translate("ExifPanel", "Manuel"), 2: translate("ExifPanel", "Programme auto"),
-    3: translate("ExifPanel", "Priorité ouverture"), 4: translate("ExifPanel", "Priorité vitesse"),
-    5: translate("ExifPanel", "Créatif (profondeur)"), 6: translate("ExifPanel", "Action (vitesse)"), 7: translate("ExifPanel", "Portrait"), 8: translate("ExifPanel", "Paysage"),
+    0: translate("ExifPanel", "Not defined"), 1: translate("ExifPanel", "Manual"), 2: translate("ExifPanel", "Program "
+                                                                                                            "AE"),
+    3: translate("ExifPanel", "Aperture priority"), 4: translate("ExifPanel", "Shutter "
+                                                                               "priority"),
+    5: translate("ExifPanel", "Creative (depth of field)"), 6: translate("ExifPanel", "Action (fast "
+                                                                                 "shutter)"), 7: translate("ExifPanel", "Portrait"), 8: translate("ExifPanel", "Landscape"),
 }
 _METERING_MODES = {
-    0: translate("ExifPanel", "Inconnu"), 1: translate("ExifPanel", "Moyenne"), 2: translate("ExifPanel", "Centrale pondérée"),
-    3: translate("ExifPanel", "Point"), 4: translate("ExifPanel", "Multi-point"), 5: translate("ExifPanel", "Évaluative"), 6: translate("ExifPanel", "Partielle"),
+    0: translate("ExifPanel", "Unknown"), 1: translate("ExifPanel", "Average"), 2: translate("ExifPanel", "Centre-weighted "
+                                                                                                          "average"),
+    3: translate("ExifPanel", "Spot"), 4: translate("ExifPanel", "Multi-spot"), 5: translate("ExifPanel", "Pattern"), 6: translate("ExifPanel", "Partial"),
 }
-_WHITE_BALANCE  = {0: translate("ExifPanel", "Auto"), 1: translate("ExifPanel", "Manuel")}
-_EXPOSURE_MODES = {0: translate("ExifPanel", "Auto"), 1: translate("ExifPanel", "Manuel"), 2: translate("ExifPanel", "Bracketing")}
-_COLOR_SPACES   = {1: translate("ExifPanel", "sRGB"), 2: translate("ExifPanel", "Adobe RGB"), 65535: translate("ExifPanel", "Non calibré")}
+_WHITE_BALANCE  = {0: translate("ExifPanel", "Auto"), 1: translate("ExifPanel", "Manual")}
+_EXPOSURE_MODES = {0: translate("ExifPanel", "Auto"), 1: translate("ExifPanel", "Manual"), 2: translate("ExifPanel", "Auto "
+                                                                                                                     "bracket")}
+_COLOR_SPACES   = {1: translate("ExifPanel", "sRGB"), 2: translate("ExifPanel", "Adobe RGB"), 65535: translate("ExifPanel", "Uncalibrated")}
 _ORIENTATIONS   = {
-    1: translate("ExifPanel", "Normal"), 2: translate("ExifPanel", "Miroir H"), 3: translate("ExifPanel", "180°"), 4: translate("ExifPanel", "Miroir V"),
-    5: translate("ExifPanel", "Miroir H + 270°"), 6: translate("ExifPanel", "90° horaire"),
-    7: translate("ExifPanel", "Miroir H + 90°"),  8: translate("ExifPanel", "270° horaire"),
+    1: translate("ExifPanel", "Normal"), 2: translate("ExifPanel", "Mirror H"), 3: translate("ExifPanel", "180°"), 4: translate("ExifPanel", "Mirror "
+                                                                                                                                             "V"),
+    5: translate("ExifPanel", "Mirror H + 270°"), 6: translate("ExifPanel", "90° clockwise"),
+    7: translate("ExifPanel", "Mirror H + 90°"),  8: translate("ExifPanel", "270° clockwise"),
 }
-_RESOLUTION_UNITS = {1: translate("ExifPanel", "Sans unité"), 2: translate("ExifPanel", "dpi"), 3: translate("ExifPanel", "dpc")}
-_SCENE_CAPTURE = {0: translate("ExifPanel", "Standard"), 1: translate("ExifPanel", "Paysage"), 2: translate("ExifPanel", "Portrait"), 3: translate("ExifPanel", "Nuit")}
+_RESOLUTION_UNITS = {1: translate("ExifPanel", "No unit"), 2: translate("ExifPanel", "dpi"), 3: translate("ExifPanel", "dpcm")}
+_SCENE_CAPTURE = {0: translate("ExifPanel", "Standard"), 1: translate("ExifPanel", "Landscape"), 2: translate("ExifPanel", "Portrait"), 3: translate("ExifPanel", "Night "
+                                                                                                                                                                "scene")}
 _LIGHT_SOURCES = {
-    0: translate("ExifPanel", "Inconnu"), 1: translate("ExifPanel", "Lumière du jour"), 2: translate("ExifPanel", "Fluorescent"),
-    3: translate("ExifPanel", "Tungstène (ampoule)"), 4: translate("ExifPanel", "Flash"), 9: translate("ExifPanel", "Beau temps"),
-    10: translate("ExifPanel", "Nuageux"), 11: translate("ExifPanel", "Ombre"), 12: translate("ExifPanel", "Fluorescent lumière du jour (D)"),
-    13: translate("ExifPanel", "Fluorescent blanc (N)"), 14: translate("ExifPanel", "Fluorescent blanc chaud (W)"),
-    15: translate("ExifPanel", "Fluorescent blanc froid"), 17: translate("ExifPanel", "Lampe standard A"),
-    18: translate("ExifPanel", "Lampe standard B"), 19: translate("ExifPanel", "Lampe standard C"),
-    20: translate("ExifPanel", "D55"), 21: translate("ExifPanel", "D65"), 22: translate("ExifPanel", "D75"), 255: translate("ExifPanel", "Autre"),
+    0: translate("ExifPanel", "Unknown"), 1: translate("ExifPanel", "Daylight"), 2: translate("ExifPanel", "Fluorescent"),
+    3: translate("ExifPanel", "Tungsten (incandescent)"), 4: translate("ExifPanel", "Flash"), 9: translate("ExifPanel", "Fine "
+                                                                                                                    "weather"),
+    10: translate("ExifPanel", "Cloudy"), 11: translate("ExifPanel", "Shade"), 12: translate("ExifPanel", "Daylight "
+                                                                                                           "fluorescent "
+                                                                                                           "(D)"),
+    13: translate("ExifPanel", "Day white fluorescent (N)"), 14: translate("ExifPanel", "Warm "
+                                                                                    "white "
+                                                                                    "fluorescent "
+                                                                                    "(W)"),
+    15: translate("ExifPanel", "Cool white fluorescent"), 17: translate("ExifPanel", "Standard "
+                                                                                      "light A"),
+    18: translate("ExifPanel", "Standard light B"), 19: translate("ExifPanel", "Standard light "
+                                                                               "C"),
+    20: translate("ExifPanel", "D55"), 21: translate("ExifPanel", "D65"), 22: translate("ExifPanel", "D75"), 255: translate("ExifPanel", "Other"),
 }
 _GAIN_CONTROLS = {
-    0: translate("ExifPanel", "Aucun"), 1: translate("ExifPanel", "Faible gain +"), 2: translate("ExifPanel", "Fort gain +"),
-    3: translate("ExifPanel", "Faible gain -"), 4: translate("ExifPanel", "Fort gain -"),
+    0: translate("ExifPanel", "None"), 1: translate("ExifPanel", "Low gain up"), 2: translate("ExifPanel", "High "
+                                                                                                              "gain "
+                                                                                                              "up"),
+    3: translate("ExifPanel", "Low gain down"), 4: translate("ExifPanel", "High gain down"),
 }
-_PROCESS_VALUES = {0: translate("ExifPanel", "Normal"), 1: translate("ExifPanel", "Doux"), 2: translate("ExifPanel", "Fort")}
+_PROCESS_VALUES = {0: translate("ExifPanel", "Normal"), 1: translate("ExifPanel", "Soft"), 2: translate("ExifPanel", "Hard")}
 _SUBJECT_DIST_RANGES = {
-    0: translate("ExifPanel", "Inconnu"), 1: translate("ExifPanel", "Macro"), 2: translate("ExifPanel", "Vue proche"), 3: translate("ExifPanel", "Vue distante"),
+    0: translate("ExifPanel", "Unknown"), 1: translate("ExifPanel", "Macro"), 2: translate("ExifPanel", "Close "
+                                                                                                        "view"), 3: translate("ExifPanel", "Distant "
+                                                                                                                                                 "view"),
 }
 _SENSITIVITY_TYPES = {
-    0: translate("ExifPanel", "Inconnu"), 1: translate("ExifPanel", "SOS"), 2: translate("ExifPanel", "REI"), 3: translate("ExifPanel", "Sensibilité ISO standard"),
-    4: translate("ExifPanel", "SOS + REI"), 5: translate("ExifPanel", "SOS + ISO"), 6: translate("ExifPanel", "REI + ISO"), 7: translate("ExifPanel", "SOS + REI + ISO"),
+    0: translate("ExifPanel", "Unknown"), 1: translate("ExifPanel", "SOS"), 2: translate("ExifPanel", "REI"), 3: translate("ExifPanel", "Standard "
+                                                                                                                                        "output "
+                                                                                                                                        "sensitivity"),
+    4: translate("ExifPanel", "SOS + REI"), 5: translate("ExifPanel", "SOS + ISO"), 6: translate("ExifPanel", "REI "
+                                                                                                              "+ "
+                                                                                                              "ISO"), 7: translate("ExifPanel", "SOS "
+                                                                                                                                                      "+ "
+                                                                                                                                                      "REI "
+                                                                                                                                                      "+ "
+                                                                                                                                                      "ISO"),
 }
-_CUSTOM_RENDERED = {0: translate("ExifPanel", "Processus normal"), 1: translate("ExifPanel", "Processus personnalisé")}
+_CUSTOM_RENDERED = {0: translate("ExifPanel", "Normal process"), 1: translate("ExifPanel", "Custom "
+                                                                                             "process")}
 _FLASH_DECODE = {
-    0x00: translate("ExifPanel", "Non déclenché"),
-    0x01: translate("ExifPanel", "Déclenché"),
-    0x05: translate("ExifPanel", "Déclenché, retour non détecté"),
-    0x07: translate("ExifPanel", "Déclenché, retour détecté"),
-    0x08: translate("ExifPanel", "On, non déclenché"),
-    0x09: translate("ExifPanel", "On, déclenché"),
-    0x0D: translate("ExifPanel", "On, retour non détecté"),
-    0x0F: translate("ExifPanel", "On, retour détecté"),
-    0x10: translate("ExifPanel", "Off, non déclenché"),
-    0x18: translate("ExifPanel", "Off, retour non détecté"),
-    0x19: translate("ExifPanel", "Off, déclenché"),
-    0x1D: translate("ExifPanel", "Off, retour non détecté"),
-    0x1F: translate("ExifPanel", "Off, retour détecté"),
-    0x20: translate("ExifPanel", "Auto, non déclenché"),
-    0x24: translate("ExifPanel", "Auto, non déclenché, réduction yeux rouges"),
-    0x25: translate("ExifPanel", "Auto, déclenché"),
-    0x27: translate("ExifPanel", "Auto, retour détecté"),
-    0x29: translate("ExifPanel", "Auto, déclenché, yeux rouges"),
-    0x2F: translate("ExifPanel", "Auto, retour détecté, yeux rouges"),
-    0x30: translate("ExifPanel", "Flash absent"),
-    0x41: translate("ExifPanel", "Déclenché, yeux rouges"),
-    0x45: translate("ExifPanel", "Déclenché, retour non détecté, yeux rouges"),
-    0x47: translate("ExifPanel", "Déclenché, retour détecté, yeux rouges"),
-    0x49: translate("ExifPanel", "On, déclenché, yeux rouges"),
-    0x4D: translate("ExifPanel", "On, retour non détecté, yeux rouges"),
-    0x4F: translate("ExifPanel", "On, retour détecté, yeux rouges"),
-    0x59: translate("ExifPanel", "Auto, déclenché, yeux rouges"),
-    0x5D: translate("ExifPanel", "Auto, retour non détecté, yeux rouges"),
-    0x5F: translate("ExifPanel", "Auto, retour détecté, yeux rouges"),
+    0x00: translate("ExifPanel", "Did not fire"),
+    0x01: translate("ExifPanel", "Fired"),
+    0x05: translate("ExifPanel", "Fired, return not detected"),
+    0x07: translate("ExifPanel", "Fired, return detected"),
+    0x08: translate("ExifPanel", "On, did not fire"),
+    0x09: translate("ExifPanel", "On, fired"),
+    0x0D: translate("ExifPanel", "On, return not detected"),
+    0x0F: translate("ExifPanel", "On, return detected"),
+    0x10: translate("ExifPanel", "Off, did not fire"),
+    0x18: translate("ExifPanel", "Off, return not detected"),
+    0x19: translate("ExifPanel", "Off, fired"),
+    0x1D: translate("ExifPanel", "Off, return not detected"),
+    0x1F: translate("ExifPanel", "Off, return detected"),
+    0x20: translate("ExifPanel", "Auto, did not fire"),
+    0x24: translate("ExifPanel", "Auto, did not fire, red-eye reduction"),
+    0x25: translate("ExifPanel", "Auto, fired"),
+    0x27: translate("ExifPanel", "Auto, return detected"),
+    0x29: translate("ExifPanel", "Auto, fired, red-eye reduction"),
+    0x2F: translate("ExifPanel", "Auto, return detected, red-eye reduction"),
+    0x30: translate("ExifPanel", "No flash function"),
+    0x41: translate("ExifPanel", "Fired, red-eye reduction"),
+    0x45: translate("ExifPanel", "Fired, return not detected, red-eye reduction"),
+    0x47: translate("ExifPanel", "Fired, return detected, red-eye reduction"),
+    0x49: translate("ExifPanel", "On, fired, red-eye reduction"),
+    0x4D: translate("ExifPanel", "On, return not detected, red-eye reduction"),
+    0x4F: translate("ExifPanel", "On, return detected, red-eye reduction"),
+    0x59: translate("ExifPanel", "Auto, fired, red-eye reduction"),
+    0x5D: translate("ExifPanel", "Auto, return not detected, red-eye reduction"),
+    0x5F: translate("ExifPanel", "Auto, return detected, red-eye reduction"),
 }
 _COMPRESSIONS = {
-    1: translate("ExifPanel", "Non compressé"), 2: translate("ExifPanel", "CCITT 1D"), 3: translate("ExifPanel", "CCITT Groupe 3"), 4: translate("ExifPanel", "CCITT Groupe 4"),
+    1: translate("ExifPanel", "Uncompressed"), 2: translate("ExifPanel", "CCITT 1D"), 3: translate("ExifPanel", "CCITT "
+                                                                                                                 "Group "
+                                                                                                                 "3"), 4: translate("ExifPanel", "CCITT "
+                                                                                                                                                              "Group "
+                                                                                                                                                              "4"),
     5: translate("ExifPanel", "LZW"), 6: translate("ExifPanel", "JPEG (old)"), 7: translate("ExifPanel", "JPEG"), 8: translate("ExifPanel", "Deflate/ZIP"),
-    32773: translate("ExifPanel", "PackBits (Mac)"), 34713: translate("ExifPanel", "Nikon NEF compressé"),
+    32773: translate("ExifPanel", "PackBits (Mac)"), 34713: translate("ExifPanel", "Nikon NEF "
+                                                                                   "compressed"),
 }
 
 
@@ -248,18 +281,18 @@ def _fmt_value(tag: str, val) -> str:
             return str(int(val))
         if tag == "DateTimeOriginal":
             dt = datetime.strptime(str(val), "%Y:%m:%d %H:%M:%S")
-            return dt.strftime("%d/%m/%Y  %H:%M:%S")
+            return dt.strftime(translate("ExifPanel", "%m/%d/%Y  %H:%M:%S"))
         if tag == "ExposureBiasValue":
             return f"{float(val):+.1f} EV"
         if tag == "BrightnessValue":
             return f"{float(val):.2f} EV"
         if tag == "DigitalZoomRatio":
             z = float(val)
-            return (translate("ExifPanel", "Pas de zoom")
+            return (translate("ExifPanel", "No zoom")
                     if z == 0 or z == 1 else f"×{z:.2f}")
         if tag == "SubjectDistance":
             f = float(val)
-            return f"{f:.2f} m" if f < 9999 else translate("ExifPanel", "Infini")
+            return f"{f:.2f} m" if f < 9999 else translate("ExifPanel", "Infinity")
         if tag == "ExposureProgram":
             return _EXPOSURE_PROGRAMS.get(int(val), str(val))
         if tag == "MeteringMode":
@@ -302,7 +335,7 @@ def _fmt_value(tag: str, val) -> str:
     except Exception:
         pass
     if isinstance(val, bytes):
-        return translate("ExifPanel", "(données binaires)")
+        return translate("ExifPanel", "(binary data)")
     if isinstance(val, (list, tuple)):
         return ", ".join(str(v) for v in val)
     return str(val).strip()
@@ -310,12 +343,12 @@ def _fmt_value(tag: str, val) -> str:
 
 def _fmt_size(n: int) -> str:
     if n < 1024:
-        return translate("ExifPanel", "{n} o").format(n=n)
+        return translate("ExifPanel", "{n} B").format(n=n)
     if n < 1024 ** 2:
-        return translate("ExifPanel", "{n} Ko").format(n=f"{n / 1024:.1f}")
+        return translate("ExifPanel", "{n} kB").format(n=f"{n / 1024:.1f}")
     if n < 1024 ** 3:
-        return translate("ExifPanel", "{n} Mo").format(n=f"{n / 1024 ** 2:.1f}")
-    return translate("ExifPanel", "{n} Go").format(n=f"{n / 1024 ** 3:.1f}")
+        return translate("ExifPanel", "{n} MB").format(n=f"{n / 1024 ** 2:.1f}")
+    return translate("ExifPanel", "{n} GB").format(n=f"{n / 1024 ** 3:.1f}")
 
 
 def _set_file_dates(path: str, dt: datetime) -> None:
@@ -406,12 +439,13 @@ class ExifEditDialog(QDialog):
         self._load_values()
 
     def _setup_ui(self) -> None:
-        self.setWindowTitle(translate("ExifEditDialog", "Modifier les métadonnées EXIF"))
+        self.setWindowTitle(translate("ExifEditDialog", "Edit the EXIF metadata"))
         self.setMinimumWidth(460)
         layout = QVBoxLayout(self)
         layout.setSpacing(12)
 
-        warn = QLabel(translate("ExifEditDialog", "⚠  Ces modifications écrivent directement dans le fichier image."))
+        warn = QLabel(translate("ExifEditDialog", "⚠  These changes are written straight into "
+                                                  "the image file."))
         warn.setStyleSheet("color: #f0a800; font-size: 11px; padding: 4px 0;")
         layout.addWidget(warn)
 
@@ -422,31 +456,32 @@ class ExifEditDialog(QDialog):
         self._dt_edit = QDateTimeEdit()
         self._dt_edit.setDisplayFormat("dd/MM/yyyy  HH:mm:ss")
         self._dt_edit.setCalendarPopup(True)
-        form.addRow(translate("ExifEditDialog", "Date de prise de vue :"), self._dt_edit)
+        form.addRow(translate("ExifEditDialog", "Date taken:"), self._dt_edit)
 
         self._desc_edit = QLineEdit()
-        self._desc_edit.setPlaceholderText(translate("ExifEditDialog", "Description de l'image"))
-        form.addRow(translate("ExifEditDialog", "Description :"), self._desc_edit)
+        self._desc_edit.setPlaceholderText(translate("ExifEditDialog", "Description of the "
+                                                                       "picture"))
+        form.addRow(translate("ExifEditDialog", "Description:"), self._desc_edit)
 
         self._artist_edit = QLineEdit()
-        self._artist_edit.setPlaceholderText(translate("ExifEditDialog", "Photographe / auteur"))
-        form.addRow(translate("ExifEditDialog", "Artiste :"), self._artist_edit)
+        self._artist_edit.setPlaceholderText(translate("ExifEditDialog", "Photographer / author"))
+        form.addRow(translate("ExifEditDialog", "Artist:"), self._artist_edit)
 
         self._copyright_edit = QLineEdit()
-        self._copyright_edit.setPlaceholderText(translate("ExifEditDialog", "© Auteur 2024"))
-        form.addRow(translate("ExifEditDialog", "Copyright :"), self._copyright_edit)
+        self._copyright_edit.setPlaceholderText(translate("ExifEditDialog", "© Author 2024"))
+        form.addRow(translate("ExifEditDialog", "Copyright:"), self._copyright_edit)
 
         layout.addLayout(form)
 
         self._cb_file_date = QCheckBox(
-            translate("ExifEditDialog", "Mettre à jour aussi la date du fichier (mtime + date de création)")
+            translate("ExifEditDialog", "Also update the file date (mtime + creation date)")
         )
         self._cb_file_date.setChecked(True)
         layout.addWidget(self._cb_file_date)
 
         btns = QDialogButtonBox(QDialogButtonBox.Cancel | QDialogButtonBox.Save)
-        btns.button(QDialogButtonBox.Save).setText(translate("ExifEditDialog", "Enregistrer"))
-        btns.button(QDialogButtonBox.Cancel).setText(translate("ExifEditDialog", "Annuler"))
+        btns.button(QDialogButtonBox.Save).setText(translate("ExifEditDialog", "Save"))
+        btns.button(QDialogButtonBox.Cancel).setText(translate("ExifEditDialog", "Cancel"))
         btns.accepted.connect(self._on_save)
         btns.rejected.connect(self.reject)
         layout.addWidget(btns)
@@ -481,8 +516,8 @@ class ExifEditDialog(QDialog):
             self.accept()
         except Exception as e:
             QMessageBox.critical(
-                self, translate("ExifEditDialog", "Erreur"),
-                translate("ExifEditDialog", "Impossible d'écrire les métadonnées :\n{error}")
+                self, translate("ExifEditDialog", "Error"),
+                translate("ExifEditDialog", "Cannot write the metadata:\n{error}")
                 .format(error=e))
 
     def _write_exif(self) -> None:
@@ -629,7 +664,7 @@ class ExifPanel(QWidget):
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
 
-        header = QLabel(translate("ExifPanel", "  Métadonnées EXIF"))
+        header = QLabel(translate("ExifPanel", "  EXIF metadata"))
         header.setStyleSheet(
             "background: #2a2a2a; color: #ccc; font-weight: bold;"
             "padding: 8px 0; border-bottom: 1px solid #444;"
@@ -661,7 +696,7 @@ class ExifPanel(QWidget):
         scroll.setWidget(self._content)
         root.addWidget(scroll, stretch=1)
 
-        self._btn_edit = QPushButton(translate("ExifPanel", "✎  Modifier les métadonnées…"))
+        self._btn_edit = QPushButton(translate("ExifPanel", "✎  Edit metadata…"))
         self._btn_edit.setFixedHeight(42)
         self._btn_edit.setEnabled(False)
         self._btn_edit.setStyleSheet(
@@ -696,7 +731,7 @@ class ExifPanel(QWidget):
             return  # navigation entre-temps → résultat obsolète
         if data is None:
             self._add_row("", translate(
-                "ExifPanel", "Impossible de lire les métadonnées"), error=True)
+                "ExifPanel", "Could not read the metadata"), error=True)
             return
         if data.get("type") == "video":
             self._populate_from_video_data(data, path)
@@ -742,15 +777,16 @@ class ExifPanel(QWidget):
                 w.deleteLater()
 
     def _populate_from_image_data(self, data: dict, photo_path: str) -> None:
-        self._add_section(translate("ExifPanel", "Fichier"))
-        self._add_row(translate("ExifPanel", "Nom"),          Path(photo_path).name)
+        self._add_section(translate("ExifPanel", "File"))
+        self._add_row(translate("ExifPanel", "Name"),          Path(photo_path).name)
         self._add_row(translate("ExifPanel", "Format"),       data["format"])
-        self._add_row(translate("ExifPanel", "Mode couleur"), data["mode"])
+        self._add_row(translate("ExifPanel", "Colour mode"), data["mode"])
         self._add_row(translate("ExifPanel", "Dimensions"),
                       f"{data['width']} × {data['height']} px")
-        self._add_row(translate("ExifPanel", "Taille"),       _fmt_size(data["size"]))
-        self._add_row(translate("ExifPanel", "Modifié"),
-                      datetime.fromtimestamp(data["mtime"]).strftime("%d/%m/%Y  %H:%M"))
+        self._add_row(translate("ExifPanel", "Size"),       _fmt_size(data["size"]))
+        self._add_row(translate("ExifPanel", "Modified"),
+                      datetime.fromtimestamp(data["mtime"]).strftime(
+                          translate("ExifPanel", "%m/%d/%Y  %H:%M")))
 
         exif = data["exif"]
         for group_name, tags in _CURATED_GROUPS:
@@ -778,32 +814,33 @@ class ExifPanel(QWidget):
             and _fmt_value(tag, val)
         )
         if extra:
-            self._add_section(translate("ExifPanel", "Autres"))
+            self._add_section(translate("ExifPanel", "Miscellaneous"))
             for tag, val in extra:
                 self._add_row(tag, val)
 
     def _populate_from_video_data(self, data: dict, video_path: str) -> None:
-        self._add_section(translate("ExifPanel", "Fichier"))
-        self._add_row(translate("ExifPanel", "Nom"),
+        self._add_section(translate("ExifPanel", "File"))
+        self._add_row(translate("ExifPanel", "Name"),
                       Path(video_path).name)
         self._add_row(translate("ExifPanel", "Format"),
                       Path(video_path).suffix.upper().lstrip("."))
-        self._add_row(translate("ExifPanel", "Taille"), _fmt_size(data["size"]))
-        self._add_row(translate("ExifPanel", "Modifié"),
-                      datetime.fromtimestamp(data["mtime"]).strftime("%d/%m/%Y  %H:%M"))
+        self._add_row(translate("ExifPanel", "Size"), _fmt_size(data["size"]))
+        self._add_row(translate("ExifPanel", "Modified"),
+                      datetime.fromtimestamp(data["mtime"]).strftime(
+                          translate("ExifPanel", "%m/%d/%Y  %H:%M")))
 
         if data.get("width") and data.get("height"):
-            self._add_section(translate("ExifPanel", "Vidéo"))
-            self._add_row(translate("ExifPanel", "Résolution"),
+            self._add_section(translate("ExifPanel", "Video"))
+            self._add_row(translate("ExifPanel", "Resolution"),
                           f"{data['width']} × {data['height']} px")
             fps = data.get("fps", 0)
             if fps:
-                self._add_row(translate("ExifPanel", "Images/s"), f"{fps:.3f}")
+                self._add_row(translate("ExifPanel", "Frames/s"), f"{fps:.3f}")
             dur = data.get("duration", 0)
             if dur:
                 hh, rem = divmod(int(dur), 3600)
                 mm, ss  = divmod(rem, 60)
-                self._add_row(translate("ExifPanel", "Durée"),
+                self._add_row(translate("ExifPanel", "Duration"),
                               f"{hh}:{mm:02d}:{ss:02d}" if hh else f"{mm}:{ss:02d}")
             codec = data.get("codec", "").strip()
             if codec:
@@ -850,8 +887,8 @@ class ExifPanel(QWidget):
                 ref  = gps_tags.get("GPSSpeedRef", "K")
                 unit = {"K": translate("ExifPanel", "km/h"),
                         "M": translate("ExifPanel", "mph"),
-                        "N": translate("ExifPanel", "nœuds")}.get(ref, ref)
-                self._add_row(translate("ExifPanel", "Vitesse GPS"), f"{spd:.1f} {unit}")
+                        "N": translate("ExifPanel", "knots")}.get(ref, ref)
+                self._add_row(translate("ExifPanel", "GPS speed"), f"{spd:.1f} {unit}")
             except Exception:
                 pass
 
@@ -861,8 +898,8 @@ class ExifPanel(QWidget):
             try:
                 deg = float(direction)
                 ref = gps_tags.get("GPSImgDirectionRef", "T")
-                label = (translate("ExifPanel", "Direction (magnétique)") if ref == "M"
-                         else translate("ExifPanel", "Direction (vraie)"))
+                label = (translate("ExifPanel", "Heading (magnetic)") if ref == "M"
+                         else translate("ExifPanel", "Heading (true)"))
                 self._add_row(label, f"{deg:.1f}°")
             except Exception:
                 pass
@@ -873,7 +910,7 @@ class ExifPanel(QWidget):
         if gps_date and gps_time:
             try:
                 h, m, s = (float(x) for x in gps_time)
-                self._add_row(translate("ExifPanel", "Date/heure GPS"),
+                self._add_row(translate("ExifPanel", "GPS date/time"),
                               f"{gps_date}  {int(h):02d}:{int(m):02d}:{s:04.1f} UTC")
             except Exception:
                 pass
@@ -882,7 +919,7 @@ class ExifPanel(QWidget):
         hdop = gps_tags.get("GPSDOP") or gps_tags.get("GPSHPositioningError")
         if hdop is not None:
             try:
-                self._add_row(translate("ExifPanel", "Précision GPS"),
+                self._add_row(translate("ExifPanel", "GPS accuracy"),
                               f"±{float(hdop):.1f} m")
             except Exception:
                 pass

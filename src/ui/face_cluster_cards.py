@@ -131,9 +131,12 @@ class _ClusterCard(QFrame):
         self.setCursor(Qt.PointingHandCursor)
         self.setStyleSheet(self._STYLE_NORMAL)
         if is_solo:
-            self.setToolTip(translate("ClusterCard", "Clic : sélectionner  —  Double-clic : voir la photo  —  Clic droit : identifier / ignorer"))
+            self.setToolTip(translate("ClusterCard", "Click: select  —  Double-click: view the "
+                                                     "photo  —  Right click: identify / ignore"))
         else:
-            self.setToolTip(translate("ClusterCard", "Clic : sélectionner  —  Double-clic : voir les photos  —  Clic droit : identifier / fusionner / ignorer"))
+            self.setToolTip(translate("ClusterCard", "Click: select  —  Double-click: view the "
+                                                     "photos  —  Right click: identify / merge "
+                                                     "/ ignore"))
 
         col = QVBoxLayout(self)
         col.setContentsMargins(6, 6, 6, 6)
@@ -148,7 +151,7 @@ class _ClusterCard(QFrame):
         col.addWidget(self._lbl_img, alignment=Qt.AlignHCenter)
 
         if not is_solo:
-            lbl_count = QLabel(translate("ClusterCard", "%n visage(s)", None, face_count))
+            lbl_count = QLabel(translate("ClusterCard", "%n face(s)", None, face_count))
             lbl_count.setAlignment(Qt.AlignCenter)
             lbl_count.setStyleSheet("border: none; font-size: 11px; color: #aaa;")
             col.addWidget(lbl_count)
@@ -170,27 +173,28 @@ class _ClusterCard(QFrame):
         btn_name.setGeometry(_CARD_IMG - _BTN_OVL - 3, _y, _BTN_OVL, _BTN_OVL)
         btn_name.setStyleSheet(_BTN_ACCEPT_STYLE)
         btn_name.setCursor(Qt.PointingHandCursor)
-        btn_name.setToolTip(translate("ClusterCard", "Identifier ce visage…") if is_solo
-                            else translate("ClusterCard", "Identifier cette personne…"))
+        btn_name.setToolTip(translate("ClusterCard", "Identify this face…") if is_solo
+                            else translate("ClusterCard", "Identify this person…"))
         btn_name.clicked.connect(self._on_accept_clicked)
 
         btn_ignore = QPushButton("✗", self._lbl_img)
         btn_ignore.setGeometry(3, _y, _BTN_OVL, _BTN_OVL)
         btn_ignore.setStyleSheet(_BTN_REJECT_STYLE)
         btn_ignore.setCursor(Qt.PointingHandCursor)
-        btn_ignore.setToolTip(translate("ClusterCard", "Ignorer ce visage") if is_solo
-                              else translate("ClusterCard", "Ignorer ce groupe"))
+        btn_ignore.setToolTip(translate("ClusterCard", "Ignore this face") if is_solo
+                              else translate("ClusterCard", "Ignore this group"))
         btn_ignore.clicked.connect(lambda: self.ignore_requested.emit(self._cluster_id))
 
         if show_eject:
-            btn_eject = QPushButton(translate("ClusterCard", "✕ Retirer du groupe"))
+            btn_eject = QPushButton(translate("ClusterCard", "✕ Remove from the group"))
             btn_eject.setFixedHeight(18)
             btn_eject.setStyleSheet(
                 "QPushButton { background: transparent; border: 1px solid #555;"
                 " border-radius: 3px; color: #888; font-size: 9px; padding: 0 4px; }"
                 "QPushButton:hover { border-color: #ba5d5d; color: #ba5d5d; }"
             )
-            btn_eject.setToolTip(translate("ClusterCard", "Retirer ce groupe de la suggestion de personne"))
+            btn_eject.setToolTip(translate("ClusterCard", "Remove this group from the person "
+                                                          "suggestion"))
             btn_eject.clicked.connect(
                 lambda: self.eject_from_section_requested.emit(self._cluster_id)
             )
@@ -258,20 +262,20 @@ class _ClusterCard(QFrame):
             act_associate = None
             if bulk:
                 act_associate = menu.addAction(translate(
-                    "ClusterCard", "Associer ({n} sélectionnés)").format(n=n_selected))
+                    "ClusterCard", "Assign ({n} selected)").format(n=n_selected))
                 menu.addSeparator()
             if self._is_solo:
-                act_name = menu.addAction(translate("ClusterCard", "Identifier ce visage…"))
+                act_name = menu.addAction(translate("ClusterCard", "Identify this face…"))
                 menu.addSeparator()
-                act_ignore = menu.addAction(translate("ClusterCard", "Ignorer ces visages") if bulk
-                                            else translate("ClusterCard", "Ignorer ce visage"))
+                act_ignore = menu.addAction(translate("ClusterCard", "Ignore these faces") if bulk
+                                            else translate("ClusterCard", "Ignore this face"))
                 act_merge  = None
             else:
-                act_name   = menu.addAction(translate("ClusterCard", "Identifier cette personne…"))
+                act_name   = menu.addAction(translate("ClusterCard", "Identify this person…"))
                 act_merge  = None
                 menu.addSeparator()
-                act_ignore = menu.addAction(translate("ClusterCard", "Ignorer ces groupes") if bulk
-                                            else translate("ClusterCard", "Ignorer ce groupe"))
+                act_ignore = menu.addAction(translate("ClusterCard", "Ignore these groups") if bulk
+                                            else translate("ClusterCard", "Ignore this group"))
             chosen = menu.exec(event.globalPosition().toPoint())
             if chosen == act_associate:
                 self.associate_requested.emit()
@@ -325,10 +329,11 @@ class _SectionWidget(QFrame):
 
             _bs = "QPushButton { padding: 1px 8px; font-size: 11px; }"
             if suggested_person_id is not None:
-                btn_accept = QPushButton(translate("SectionWidget", "Accepter"))
+                btn_accept = QPushButton(translate("SectionWidget", "Accept"))
                 btn_accept.setFixedHeight(22)
                 btn_accept.setStyleSheet(_bs)
-                btn_accept.setToolTip(translate("SectionWidget", "Assigner tous les groupes à la personne suggérée"))
+                btn_accept.setToolTip(translate("SectionWidget", "Assign every group to the "
+                                                                 "suggested person"))
                 btn_accept.clicked.connect(
                     lambda: self.accept_requested.emit(
                         [c for c, _ in self._entries], self._suggested_person_id
@@ -336,19 +341,21 @@ class _SectionWidget(QFrame):
                 )
                 hdr_row.addWidget(btn_accept)
 
-            btn_assign = QPushButton(translate("SectionWidget", "Associer à…"))
+            btn_assign = QPushButton(translate("SectionWidget", "Assign to…"))
             btn_assign.setFixedHeight(22)
             btn_assign.setStyleSheet(_bs)
-            btn_assign.setToolTip(translate("SectionWidget", "Assigner tous les groupes à une autre personne"))
+            btn_assign.setToolTip(translate("SectionWidget", "Assign every group to another "
+                                                             "person"))
             btn_assign.clicked.connect(
                 lambda: self.assign_requested.emit([c for c, _ in self._entries])
             )
             hdr_row.addWidget(btn_assign)
 
-            btn_ignore = QPushButton(translate("SectionWidget", "Ignorer"))
+            btn_ignore = QPushButton(translate("SectionWidget", "Ignore"))
             btn_ignore.setFixedHeight(22)
             btn_ignore.setStyleSheet(_bs)
-            btn_ignore.setToolTip(translate("SectionWidget", "Ignorer tous les groupes de cette section"))
+            btn_ignore.setToolTip(translate("SectionWidget", "Ignore every group in this "
+                                                             "section"))
             btn_ignore.clicked.connect(
                 lambda: self.ignore_requested.emit([c for c, _ in self._entries])
             )

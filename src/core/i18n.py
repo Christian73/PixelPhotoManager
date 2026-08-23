@@ -1,14 +1,15 @@
 # Copyright 2026 Christian Guyot
 # SPDX-License-Identifier: Apache-2.0
-"""Internationalisation : français (langue source), anglais, allemand.
+"""Internationalisation : anglais (langue source), français, allemand.
 
-Le français est la langue des chaînes écrites dans le code : toute chaîne non
-traduite retombe donc automatiquement sur un français correct. Il a malgré
-tout son propre catalogue, mais pour un seul usage : les **pluriels**. Une
-chaîne `%n` est écrite dans le code sous une forme neutre (« %n visage(s) »)
-puisqu'un même littéral doit servir au singulier comme au pluriel ; c'est
-`ppm_fr.qm` qui porte les deux formes réelles (« %n visage » / « %n visages »).
-Les autres messages y restent vides et retombent sur la source.
+L'anglais est la langue des chaînes écrites dans le code : toute chaîne non
+traduite retombe donc automatiquement sur un anglais correct, dans n'importe
+quelle langue d'interface. Il a malgré tout son propre catalogue, mais pour un
+seul usage : les **pluriels**. Une chaîne `%n` est écrite dans le code sous une
+forme neutre (« %n face(s) ») puisqu'un même littéral doit servir au singulier
+comme au pluriel ; c'est `ppm_en.qm` qui porte les deux formes réelles
+(« %n face » / « %n faces »). Les autres messages y restent vides et retombent
+sur la source.
 
 Les catalogues `.ts` (sources, versionnés) et `.qm` (compilés, chargés à
 l'exécution) vivent dans `translations/` à la racine du dépôt et sont
@@ -29,7 +30,7 @@ Marquage des chaînes — une seule forme dans tout le projet ::
 
     from src.core.i18n import translate
     ...
-    translate("MainWindow", "Texte affiché")
+    translate("MainWindow", "Displayed text")
 
 `translate` est `QCoreApplication.translate` ; `pyside6-lupdate` reconnaît ce
 nom tel quel, y compris importé d'ici (test : `tests/test_i18n.py`).
@@ -53,14 +54,16 @@ from PySide6.QtCore import QCoreApplication, QLibraryInfo, QLocale, QTranslator
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_LANGUAGE = "fr"
+#: Langue de repli : celle des chaînes sources écrites dans le code. Un message
+#: sans traduction s'affiche donc en anglais, jamais vide.
+DEFAULT_LANGUAGE = "en"
 
 #: Codes ISO 639-1 pris en charge -> nom de la langue dans cette langue
 #: (un utilisateur qui a mis l'application dans une langue qu'il ne lit pas
 #: doit pouvoir retrouver la sienne dans la liste).
 LANGUAGES: dict[str, str] = {
-    "fr": "Français",
     "en": "English",
+    "fr": "Français",
     "de": "Deutsch",
 }
 
@@ -99,16 +102,24 @@ def _qt_translations_dirs() -> list[Path]:
     return dirs
 
 
+def _bare_code(value) -> str:
+    """« fr_FR », « fr-FR », « FR » -> « fr ». Chaîne vide si rien d'exploitable."""
+    return str(value or "").strip().replace("-", "_").split("_")[0].lower()
+
+
 def normalize(code: str | None) -> str:
     """Ramène n'importe quelle valeur de config à un code pris en charge."""
-    if not code:
-        return DEFAULT_LANGUAGE
-    code = str(code).strip().replace("-", "_").split("_")[0].lower()
-    return code if code in LANGUAGES else DEFAULT_LANGUAGE
+    bare = _bare_code(code)
+    return bare if bare in LANGUAGES else DEFAULT_LANGUAGE
 
 
 def system_language() -> str:
-    """Langue du système si elle est prise en charge, sinon le français.
+    """Langue du système si elle est prise en charge, sinon `DEFAULT_LANGUAGE`.
+
+    Passe par `_bare_code` et non par `normalize` : cette dernière rabat tout
+    code inconnu sur `DEFAULT_LANGUAGE`, ce qui rendrait « système en japonais »
+    indistinguable de « système en anglais » et arrêterait le parcours des
+    langues sur la première venue.
 
     Volontairement **pas** utilisée comme valeur par défaut : la langue de
     l'interface Windows ne dit pas la langue que l'utilisateur veut lire (cas
@@ -118,14 +129,14 @@ def system_language() -> str:
     « détecter automatiquement » explicite dans les paramètres.
     """
     for name in QLocale.system().uiLanguages():
-        code = normalize(name)
-        if code != DEFAULT_LANGUAGE or name.lower().startswith("fr"):
+        code = _bare_code(name)
+        if code in LANGUAGES:
             return code
     return DEFAULT_LANGUAGE
 
 
 def current_language(config) -> str:
-    """Langue choisie par l'utilisateur, à défaut le français (cf. ci-dessus)."""
+    """Langue choisie par l'utilisateur, à défaut l'anglais (cf. ci-dessus)."""
     return normalize(config.get(CONFIG_KEY))
 
 
@@ -164,8 +175,11 @@ def install(app: QCoreApplication, code: str) -> str:
         app.installTranslator(translator)
         _installed.append(translator)
     elif code != DEFAULT_LANGUAGE:
-        # Repli silencieux sur le français plutôt qu'une interface vide : les
-        # chaînes sources restent affichées telles quelles.
+        # Repli silencieux sur l'anglais plutôt qu'une interface vide : les
+        # chaînes sources restent affichées telles quelles. Pas de mise en garde
+        # pour `DEFAULT_LANGUAGE` lui-même : son catalogue ne porte que les
+        # pluriels, son absence dégrade « 3 photos » en « 3 photo(s) », rien de
+        # plus.
         logger.warning("Catalogue de traduction introuvable ou illisible : %s", qm)
 
     _install_qt_base(app, code)

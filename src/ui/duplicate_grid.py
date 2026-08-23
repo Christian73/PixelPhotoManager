@@ -96,7 +96,8 @@ class _DuplicateCard(QFrame):
         self.setFrameShape(QFrame.StyledPanel)
         self.setCursor(Qt.PointingHandCursor)
         self.setStyleSheet(self._STYLE)
-        self.setToolTip(translate("DuplicateCard", "Double-clic : comparer dans la visionneuse — ✗ : ignorer ce groupe"))
+        self.setToolTip(translate("DuplicateCard", "Double-click: compare in the viewer — ✗: "
+                                                   "ignore this group"))
         # Nom accessible pour l'automatisation pywinauto (e2e) — même convention
         # que ThumbnailCell (thumbnail_grid.py: "thumb::<path>").
         self.setAccessibleName(f"dupgroup::{group_id}")
@@ -113,8 +114,7 @@ class _DuplicateCard(QFrame):
         col.addWidget(self._lbl_img, alignment=Qt.AlignHCenter)
 
         n = len(photos)
-        plural = "s" if n > 1 else ""
-        lbl_count = QLabel(f"{n} exemplaire{plural}")
+        lbl_count = QLabel(translate("DuplicateGrid", "%n copy(ies)", None, n))
         lbl_count.setAlignment(Qt.AlignCenter)
         lbl_count.setStyleSheet("border: none; font-size: 11px; color: #aaa;")
         col.addWidget(lbl_count)
@@ -123,7 +123,7 @@ class _DuplicateCard(QFrame):
         btn_ignore.setGeometry(3, _CARD_IMG - _BTN_OVL - 3, _BTN_OVL, _BTN_OVL)
         btn_ignore.setStyleSheet(_BTN_REJECT_STYLE)
         btn_ignore.setCursor(Qt.PointingHandCursor)
-        btn_ignore.setToolTip(translate("DuplicateCard", "Ignorer ce groupe de doublons"))
+        btn_ignore.setToolTip(translate("DuplicateCard", "Ignore this duplicate group"))
         btn_ignore.setAccessibleName(f"dupgroup_ignore::{group_id}")
         btn_ignore.clicked.connect(lambda: self.ignore_requested.emit(self._group_id))
 
@@ -216,7 +216,7 @@ class DuplicateGrid(QWidget):
 
         bar = QHBoxLayout()
         btn_back = QPushButton(translate("DuplicateGrid", "← Photos"))
-        btn_back.setToolTip(translate("DuplicateGrid", "Retourner à la grille de photos"))
+        btn_back.setToolTip(translate("DuplicateGrid", "Back to the photo grid"))
         btn_back.clicked.connect(self.back_requested)
         bar.addWidget(btn_back)
         bar.addStretch()
@@ -224,10 +224,10 @@ class DuplicateGrid(QWidget):
         self._lbl_title.setStyleSheet("font-weight: bold; color: #ccc; font-size: 13px;")
         bar.addWidget(self._lbl_title)
         bar.addStretch()
-        btn_detect = QPushButton(translate("DuplicateGrid", "Vérifier maintenant"))
+        btn_detect = QPushButton(translate("DuplicateGrid", "Check now"))
         btn_detect.setToolTip(
-            translate("DuplicateGrid", "Force une vérification immédiate — l'analyse tourne aussi "
-            "automatiquement en arrière-plan")
+            translate("DuplicateGrid", "Forces an immediate check — the analysis also runs "
+                                       "automatically in the background")
         )
         btn_detect.clicked.connect(self.detect_requested)
         bar.addWidget(btn_detect)
@@ -255,20 +255,20 @@ class DuplicateGrid(QWidget):
         empty_vbox.setAlignment(Qt.AlignCenter)
         empty_vbox.setSpacing(10)
 
-        self._lbl_empty = QLabel(translate("DuplicateGrid", "Aucun groupe de doublons."))
+        self._lbl_empty = QLabel(translate("DuplicateGrid", "No duplicate group."))
         self._lbl_empty.setAlignment(Qt.AlignCenter)
         self._lbl_empty.setStyleSheet("color: #555; padding: 8px;")
         empty_vbox.addWidget(self._lbl_empty)
 
-        self._btn_detect_empty = QPushButton(translate("DuplicateGrid", "Vérifier maintenant"))
+        self._btn_detect_empty = QPushButton(translate("DuplicateGrid", "Check now"))
         self._btn_detect_empty.setToolTip(
-            translate("DuplicateGrid", "Force une vérification immédiate — l'analyse tourne aussi "
-            "automatiquement en arrière-plan")
+            translate("DuplicateGrid", "Forces an immediate check — the analysis also runs "
+                                       "automatically in the background")
         )
         self._btn_detect_empty.clicked.connect(self.detect_requested)
         empty_vbox.addWidget(self._btn_detect_empty, alignment=Qt.AlignHCenter)
 
-        self._lbl_scanning = QLabel(translate("DuplicateGrid", "Recherche de doublons en cours…"))
+        self._lbl_scanning = QLabel(translate("DuplicateGrid", "Looking for duplicates…"))
         self._lbl_scanning.setAlignment(Qt.AlignCenter)
         self._lbl_scanning.setStyleSheet("color: #aaa; font-size: 13px; padding: 8px;")
         empty_vbox.addWidget(self._lbl_scanning)
@@ -397,7 +397,7 @@ class DuplicateGrid(QWidget):
 
         n = len(groups)
         self._lbl_title.setText(
-            translate("DuplicateGrid", "%n groupe(s) de doublons", None, n) if n else ""
+            translate("DuplicateGrid", "%n duplicate group(s)", None, n) if n else ""
         )
 
         for group_id, photos in groups.items():
@@ -425,7 +425,7 @@ class DuplicateGrid(QWidget):
             self._last_signature.pop(group_id, None)
         n = len(self._cards)
         self._lbl_title.setText(
-            translate("DuplicateGrid", "%n groupe(s) de doublons", None, n) if n else ""
+            translate("DuplicateGrid", "%n duplicate group(s)", None, n) if n else ""
         )
         self._update_empty_state()
         self._reflow()

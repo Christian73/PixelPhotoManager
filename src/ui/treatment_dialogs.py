@@ -55,8 +55,8 @@ class TreatmentDialog(QDialog):
             layout.addWidget(sl)
 
         btn_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
-        btn_box.button(QDialogButtonBox.Ok).setText(translate("TreatmentDialog", "Valider"))
-        btn_box.button(QDialogButtonBox.Cancel).setText(translate("TreatmentDialog", "Annuler"))
+        btn_box.button(QDialogButtonBox.Ok).setText(translate("TreatmentDialog", "Apply"))
+        btn_box.button(QDialogButtonBox.Cancel).setText(translate("TreatmentDialog", "Cancel"))
         btn_box.accepted.connect(self.accept)
         btn_box.rejected.connect(self.reject)
         layout.addWidget(btn_box)
@@ -281,7 +281,7 @@ class LuminositeTreatmentDialog(QDialog):
 
     def __init__(self, edit: EditInfo, photo_path: str | None = None, parent=None):
         super().__init__(parent)
-        self.setWindowTitle(translate("LuminositeTreatmentDialog", "Luminosité"))
+        self.setWindowTitle(translate("LuminositeTreatmentDialog", "Brightness"))
         self.setMinimumWidth(400)
         self._edit = copy.copy(edit)
         self._panel = None
@@ -291,13 +291,13 @@ class LuminositeTreatmentDialog(QDialog):
         layout.setContentsMargins(12, 12, 12, 12)
 
         # Slider luminosité principal
-        self._sl_lum = EditSlider(translate("LuminositeTreatmentDialog", "Luminosité"),
+        self._sl_lum = EditSlider(translate("LuminositeTreatmentDialog", "Brightness"),
                                   -1.0, 1.0, edit.brightness, 2)
         self._sl_lum.value_changed.connect(lambda v: self._on_changed("brightness", v))
         layout.addWidget(self._sl_lum)
 
         # Checkbox "Fonctions avancées…" (gamma)
-        self._chk = QCheckBox(translate("LuminositeTreatmentDialog", "Fonctions avancées…"))
+        self._chk = QCheckBox(translate("LuminositeTreatmentDialog", "Advanced options…"))
         has_gamma = edit.gamma != 1.0 or edit.gamma_use_curve
         self._chk.setChecked(has_gamma)
         self._chk.toggled.connect(self._on_advanced_toggled)
@@ -313,7 +313,7 @@ class LuminositeTreatmentDialog(QDialog):
         self._gamma_slider.value_changed.connect(self._on_gamma_changed)
         adv_layout.addWidget(self._gamma_slider)
 
-        self._chk_curve = QCheckBox(translate("LuminositeTreatmentDialog", "Fonctions très avancées…"))
+        self._chk_curve = QCheckBox(translate("LuminositeTreatmentDialog", "Expert options…"))
         self._chk_curve.setChecked(edit.gamma_use_curve)
         self._chk_curve.toggled.connect(self._on_curve_toggled)
         adv_layout.addWidget(self._chk_curve)
@@ -325,8 +325,8 @@ class LuminositeTreatmentDialog(QDialog):
         cs_layout.setSpacing(4)
 
         lbl = QLabel(
-            translate("LuminositeTreatmentDialog", "Cliquer pour ajouter un point · Glisser pour déplacer · "
-            "Clic droit pour supprimer")
+            translate("LuminositeTreatmentDialog", "Click to add a point · Drag to move · "
+                                                   "Right-click to remove")
         )
         lbl.setWordWrap(True)
         lbl.setStyleSheet("color: #999; font-size: 10px;")
@@ -348,8 +348,8 @@ class LuminositeTreatmentDialog(QDialog):
         self._adv.setVisible(has_gamma)
 
         btn_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
-        btn_box.button(QDialogButtonBox.Ok).setText(translate("LuminositeTreatmentDialog", "Valider"))
-        btn_box.button(QDialogButtonBox.Cancel).setText(translate("LuminositeTreatmentDialog", "Annuler"))
+        btn_box.button(QDialogButtonBox.Ok).setText(translate("LuminositeTreatmentDialog", "Apply"))
+        btn_box.button(QDialogButtonBox.Cancel).setText(translate("LuminositeTreatmentDialog", "Cancel"))
         btn_box.accepted.connect(self.accept)
         btn_box.rejected.connect(self.reject)
         layout.addWidget(btn_box)
@@ -405,7 +405,7 @@ class CouleursTreatmentDialog(QDialog):
 
     def __init__(self, edit: EditInfo, parent=None):
         super().__init__(parent)
-        self.setWindowTitle(translate("CouleursTreatmentDialog", "Couleurs"))
+        self.setWindowTitle(translate("CouleursTreatmentDialog", "Colours"))
         self.setMinimumWidth(720)
         self._edit = copy.copy(edit)
         self._panel = None
@@ -421,7 +421,7 @@ class CouleursTreatmentDialog(QDialog):
         layout.addWidget(self._sl_sat)
 
         # Checkbox avancé
-        self._chk = QCheckBox(translate("CouleursTreatmentDialog", "Fonctions avancées…"))
+        self._chk = QCheckBox(translate("CouleursTreatmentDialog", "Advanced options…"))
         has_channel_edits = any(v != 0.0 for v in (edit.color_red, edit.color_green, edit.color_blue))
         self._chk.setChecked(has_channel_edits)
         layout.addWidget(self._chk)
@@ -432,21 +432,25 @@ class CouleursTreatmentDialog(QDialog):
         adv_layout.setContentsMargins(0, 4, 0, 0)
         adv_layout.setSpacing(4)
 
-        lbl = QLabel(translate("CouleursTreatmentDialog", "Réglage des couleurs indépendantes"))
+        lbl = QLabel(translate("CouleursTreatmentDialog", "Per-channel colour adjustment"))
         lbl.setStyleSheet("color: #999; font-size: 10px;")
         adv_layout.addWidget(lbl)
 
         # --- Pipette balance des blancs ---
         pip_row = QHBoxLayout()
         pip_row.setContentsMargins(0, 4, 0, 0)
-        self._btn_pip = QPushButton(translate("CouleursTreatmentDialog", "⌖  Pipette balance des blancs"))
+        self._btn_pip = QPushButton(translate("CouleursTreatmentDialog", "⌖  White balance "
+                                                                         "eyedropper"))
         self._btn_pip.setCheckable(True)
         self._btn_pip.setToolTip(
-            translate("CouleursTreatmentDialog", "Cliquez sur une zone neutre (blanc ou gris) dans l'image\n"
-            "pour équilibrer automatiquement les canaux R, V, B.")
+            translate("CouleursTreatmentDialog", "Click a neutral area (white or grey) in the "
+                                                 "image\nto balance the R, G, B channels "
+                                                 "automatically.")
         )
         pip_row.addWidget(self._btn_pip)
-        self._lbl_pip_hint = QLabel(translate("CouleursTreatmentDialog", "→ Cliquez sur un point neutre dans l'image principale"))
+        self._lbl_pip_hint = QLabel(translate("CouleursTreatmentDialog", "→ Click a neutral "
+                                                                         "point in the main "
+                                                                         "image"))
         self._lbl_pip_hint.setStyleSheet("color: #7ab; font-size: 10px;")
         self._lbl_pip_hint.hide()
         pip_row.addWidget(self._lbl_pip_hint, stretch=1)
@@ -454,7 +458,7 @@ class CouleursTreatmentDialog(QDialog):
 
         # Swatch de feedback (couleur prélevée)
         swatch_row = QHBoxLayout()
-        self._wb_swatch_lbl = QLabel(translate("CouleursTreatmentDialog", "Couleur prélevée :"))
+        self._wb_swatch_lbl = QLabel(translate("CouleursTreatmentDialog", "Sampled colour:"))
         self._wb_swatch_lbl.setStyleSheet("color: #888; font-size: 10px;")
         self._wb_swatch_lbl.hide()
         self._wb_swatch = QLabel()
@@ -469,11 +473,11 @@ class CouleursTreatmentDialog(QDialog):
         self._btn_pip.toggled.connect(self._on_pip_toggled)
 
         # Sliders RVB
-        self._sl_r = EditSlider(translate("CouleursTreatmentDialog", "Rouge"),
+        self._sl_r = EditSlider(translate("CouleursTreatmentDialog", "Red"),
                                 -1.0, 1.0, edit.color_red,   2)
-        self._sl_g = EditSlider(translate("CouleursTreatmentDialog", "Vert"),
+        self._sl_g = EditSlider(translate("CouleursTreatmentDialog", "Green"),
                                 -1.0, 1.0, edit.color_green, 2)
-        self._sl_b = EditSlider(translate("CouleursTreatmentDialog", "Bleu"),
+        self._sl_b = EditSlider(translate("CouleursTreatmentDialog", "Blue"),
                                 -1.0, 1.0, edit.color_blue,  2)
         for sl, attr in [
             (self._sl_r, "color_red"),
@@ -489,8 +493,8 @@ class CouleursTreatmentDialog(QDialog):
         layout.addWidget(self._adv)
 
         btn_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
-        btn_box.button(QDialogButtonBox.Ok).setText(translate("CouleursTreatmentDialog", "Valider"))
-        btn_box.button(QDialogButtonBox.Cancel).setText(translate("CouleursTreatmentDialog", "Annuler"))
+        btn_box.button(QDialogButtonBox.Ok).setText(translate("CouleursTreatmentDialog", "Apply"))
+        btn_box.button(QDialogButtonBox.Cancel).setText(translate("CouleursTreatmentDialog", "Cancel"))
         btn_box.accepted.connect(self.accept)
         btn_box.rejected.connect(self.reject)
         layout.addWidget(btn_box)
@@ -522,7 +526,7 @@ class CouleursTreatmentDialog(QDialog):
         # Feedback : swatch de la couleur prélevée
         self._wb_swatch.setStyleSheet(f"background: rgb({r},{g},{b}); border: 1px solid #666;")
         self._wb_swatch.setToolTip(
-            translate("CouleursTreatmentDialog", "Pixel prélevé — R : {r}  V : {g}  B : {b}"
+            translate("CouleursTreatmentDialog", "Sampled pixel — R: {r}  G: {g}  B: {b}"
                       ).format(r=r, g=g, b=b))
         self._wb_swatch_lbl.show()
         self._wb_swatch.show()
@@ -573,18 +577,18 @@ class VignetteTreatmentDialog(QDialog):
         layout.setContentsMargins(14, 14, 14, 10)
 
         # ---- Intensité ----
-        self._sl_strength = EditSlider(translate("VignetteTreatmentDialog", "Intensité"),
+        self._sl_strength = EditSlider(translate("VignetteTreatmentDialog", "Strength"),
                                        0.0, 1.0, self._edit.vignette_strength, 2)
         self._sl_strength.value_changed.connect(lambda v: self._on_changed("vignette_strength", v))
         layout.addWidget(self._sl_strength)
 
         # ---- Couleur ----
-        color_grp = QGroupBox(translate("VignetteTreatmentDialog", "Couleur"))
+        color_grp = QGroupBox(translate("VignetteTreatmentDialog", "Colour"))
         color_row = QHBoxLayout(color_grp)
         color_row.setSpacing(6)
 
-        self._btn_black = QPushButton(translate("VignetteTreatmentDialog", "Noir"))
-        self._btn_white = QPushButton(translate("VignetteTreatmentDialog", "Blanc"))
+        self._btn_black = QPushButton(translate("VignetteTreatmentDialog", "Black"))
+        self._btn_white = QPushButton(translate("VignetteTreatmentDialog", "White"))
         for btn in (self._btn_black, self._btn_white):
             btn.setCheckable(True)
             btn.setStyleSheet(_TOGGLE_BTN_STYLE)
@@ -599,11 +603,11 @@ class VignetteTreatmentDialog(QDialog):
 
         # ---- Instructions ----
         hint = QLabel(
-            translate("VignetteTreatmentDialog", "Faites glisser les poignées sur l'image :\n"
-            "• Cercle intérieur (pointillés) — début du fondu\n"
-            "• Cercle extérieur — fin du fondu\n"
-            "• Poignée ronde au sommet — rotation\n"
-            "• Croix centrale — déplacer")
+            translate("VignetteTreatmentDialog", "Drag the handles on the image:\n• Inner "
+                                                 "circle (dotted) — where the fade starts\n• "
+                                                 "Outer circle — where the fade ends\n• Round "
+                                                 "handle at the top — rotate\n• Cross in the "
+                                                 "middle — move")
         )
         hint.setStyleSheet("color: #999; font-size: 10px;")
         hint.setWordWrap(True)
@@ -611,8 +615,8 @@ class VignetteTreatmentDialog(QDialog):
 
         # ---- Boutons OK / Annuler ----
         btn_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
-        btn_box.button(QDialogButtonBox.Ok).setText(translate("VignetteTreatmentDialog", "Valider"))
-        btn_box.button(QDialogButtonBox.Cancel).setText(translate("VignetteTreatmentDialog", "Annuler"))
+        btn_box.button(QDialogButtonBox.Ok).setText(translate("VignetteTreatmentDialog", "Apply"))
+        btn_box.button(QDialogButtonBox.Cancel).setText(translate("VignetteTreatmentDialog", "Cancel"))
         btn_box.accepted.connect(self.accept)
         btn_box.rejected.connect(self.reject)
         layout.addWidget(btn_box)
@@ -653,9 +657,9 @@ class VignetteTreatmentDialog(QDialog):
 # ne sont que de l'affichage et sont traduits ici.
 _TREATMENTS: list[tuple] = [
     ("Luminosité", _icon_brightness,
-     [(translate("EditPanel", "Luminosité"), "brightness", -1.0, 1.0, 2)]),
+     [(translate("EditPanel", "Brightness"), "brightness", -1.0, 1.0, 2)]),
     ("Contraste",  _icon_contrast,
-     [(translate("EditPanel", "Contraste"),  "contrast",   -1.0, 1.0, 2)]),
+     [(translate("EditPanel", "Contrast"),  "contrast",   -1.0, 1.0, 2)]),
     ("Couleurs",   _icon_saturation,
      [(translate("EditPanel", "Saturation"), "saturation", -1.0, 1.0, 2)]),
     ("Vignette",   _icon_vignette,   []),   # dialogue dédié — sliders_def ignoré

@@ -266,13 +266,13 @@ class TestIgnoredFacesDialog:
 
         from PySide6.QtWidgets import QPushButton
         restore_btn = next(
-            b for b in dlg.findChildren(QPushButton) if b.text() == "Restaurer"
+            b for b in dlg.findChildren(QPushButton) if b.text() == "Restore"
         )
         restore_btn.click()
 
         assert dlg.restored_ids() == [fid]
         assert not restore_btn.isEnabled()
-        assert restore_btn.text() == "Restauré"
+        assert restore_btn.text() == "Restored"
 
 
 # ---------------------------------------------------------------------------

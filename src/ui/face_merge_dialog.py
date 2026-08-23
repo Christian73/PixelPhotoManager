@@ -69,9 +69,9 @@ class _MergeRow(QFrame):
         self._lbl_avatar.start_loading()
         row.addWidget(self._lbl_avatar)
 
-        group_label = (translate("FaceMergeDialog", "Isolé") if face_count == 1
-                       else translate("FaceMergeDialog", "Groupe {id}").format(id=cluster_id))
-        lbl = QLabel(translate("FaceMergeDialog", "{group}  —  %n visage(s)",
+        group_label = (translate("FaceMergeDialog", "Isolated") if face_count == 1
+                       else translate("FaceMergeDialog", "Group {id}").format(id=cluster_id))
+        lbl = QLabel(translate("FaceMergeDialog", "{group}  —  %n face(s)",
                                None, face_count).format(group=group_label))
         lbl.setStyleSheet("border: none; color: #ddd;")
         row.addWidget(lbl, stretch=1)
@@ -116,7 +116,7 @@ class _MergePickerDialog(QDialog):
         self._rows: dict[int, _MergeRow] = {}
         self._loader = None
 
-        self.setWindowTitle(translate("FaceMergeDialog", "Fusionner le groupe {id}"
+        self.setWindowTitle(translate("FaceMergeDialog", "Merge group {id}"
                                       ).format(id=source_cluster_id))
         self.setMinimumSize(340, 420)
         self._build()
@@ -127,7 +127,7 @@ class _MergePickerDialog(QDialog):
         layout.setSpacing(10)
         layout.setContentsMargins(16, 16, 16, 16)
 
-        lbl = QLabel(translate("FaceMergeDialog", "Fusionner le groupe {id} avec :"
+        lbl = QLabel(translate("FaceMergeDialog", "Merge group {id} with:"
                                ).format(id=self._source_id))
         lbl.setStyleSheet("font-weight: bold; font-size: 12px;")
         layout.addWidget(lbl)
@@ -153,14 +153,14 @@ class _MergePickerDialog(QDialog):
         layout.addWidget(scroll, stretch=1)
 
         if not self._rows:
-            lbl_empty = QLabel(translate("MergePickerDialog", "Aucun autre groupe disponible."))
+            lbl_empty = QLabel(translate("MergePickerDialog", "No other group available."))
             lbl_empty.setAlignment(Qt.AlignCenter)
             lbl_empty.setStyleSheet("color: #555;")
             vbox.addWidget(lbl_empty)
 
         buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         self._btn_ok = buttons.button(QDialogButtonBox.Ok)
-        self._btn_ok.setText(translate("MergePickerDialog", "Fusionner"))
+        self._btn_ok.setText(translate("MergePickerDialog", "Merge"))
         self._btn_ok.setEnabled(False)
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)

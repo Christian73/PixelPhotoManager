@@ -244,8 +244,8 @@ class TestFilter:
 
 class TestAlbums:
     # Disposition par défaut (rien de replié, aucun mot-clé/album) : 0 Chronologie,
-    # 1 Favoris, 2 Vidéos, 3 en-tête "Par notes", 4-8 les 5 niveaux d'étoiles
-    # (5 à 1), 9 "Par nom de fichier", 10 en-tête "Par mot-clé" — soit 11 éléments
+    # 1 Favoris, 2 Vidéos, 3 en-tête "By rating", 4-8 les 5 niveaux d'étoiles
+    # (5 à 1), 9 "Par nom de fichier", 10 en-tête "By keyword" — soit 11 éléments
     # spéciaux au total avant les mots-clés/albums.
 
     def test_special_albums_present(self, sidebar):
@@ -379,7 +379,7 @@ class TestAlbums:
         sidebar.refresh_tags(["travail"])
 
         # notes ET mots-clés repliés dès la construction : plus de sous-éléments
-        # (0 Chronologie, 1 Favoris, 2 Vidéos, 3 "Par notes", 4 "Par nom de
+        # (0 Chronologie, 1 Favoris, 2 Vidéos, 3 "By rating", 4 "Par nom de
         # fichier", 5 "Par mot-clé" — sans les 5 niveaux ni le mot-clé "travail")
         assert sidebar._albums_list.count() == 6
         assert sidebar._albums_list.item(3).text().startswith("▸")
@@ -393,7 +393,7 @@ class TestAlbums:
             raise AssertionError("aucun menu ne devrait s'ouvrir sur un niveau de notation")
         monkeypatch.setattr(sidebar_module, "QMenu", _boom)
 
-        for i in range(3, 9):  # en-tête "Par notes" + ses 5 sous-éléments
+        for i in range(3, 9):  # en-tête "By rating" + ses 5 sous-éléments
             pos = sidebar._albums_list.visualItemRect(sidebar._albums_list.item(i)).center()
             sidebar._album_context_menu(pos)  # ne doit pas lever
 
@@ -426,7 +426,7 @@ class TestAlbums:
         sidebar._album_context_menu(pos)
         assert len(captured) == 1
         (label, callback), = captured.items()
-        assert "Supprimer" in label
+        assert "Delete" in label
 
         with qtbot.waitSignal(sidebar.tag_delete_requested, timeout=1000) as blocker:
             callback()
