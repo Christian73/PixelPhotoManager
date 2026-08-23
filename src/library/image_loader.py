@@ -1,12 +1,12 @@
 # Copyright 2026 Christian Guyot
 # SPDX-License-Identifier: Apache-2.0
 """
-Point de décodage image unique — formats standards, RAW et HEIC/HEIF.
+Single image decoding point — standard formats, RAW and HEIC/HEIF.
 
-register_heif_opener() est appelé au NIVEAU MODULE (pas dans une fonction) :
-les workers ProcessPoolExecutor (spawn, cf. faces/detector.py) ré-importent ce
-module sans jamais passer par main(), un enregistrement paresseux ne serait
-donc jamais exécuté pour eux si on le déclenchait ailleurs.
+register_heif_opener() is called at MODULE LEVEL (not inside a function):
+the ProcessPoolExecutor workers (spawn, cf. faces/detector.py) re-import this
+module without ever going through main(), so a lazy registration triggered
+somewhere else would never run for them.
 """
 import io
 import logging
@@ -22,17 +22,17 @@ try:
 except ImportError:
     pass
 
-# CR2/NEF/ARW/DNG/ORF/RW2 : formats RAW supportés, décodage via rawpy.
+# CR2/NEF/ARW/DNG/ORF/RW2: the supported RAW formats, decoded through rawpy.
 RAW_EXT = {".cr2", ".nef", ".arw", ".dng", ".orf", ".rw2"}
 
-# Étendues que PIL ne peut pas ré-écrire telles quelles (Image.save échoue) —
-# utilisé pour choisir un suffixe sûr quand on écrit un fichier temporaire à
-# partir d'une image décodée depuis l'un de ces formats.
+# Extensions PIL cannot write back as such (Image.save fails) — used to
+# pick a safe suffix when writing a temporary file from an image decoded
+# from one of these formats.
 _UNSAVABLE_BY_PIL = RAW_EXT | {".heic", ".heif"}
 
 
 def is_raw_available() -> bool:
-    """True si rawpy est installé (import cache, coûteux à charger)."""
+    """True if rawpy is installed (a cached import, expensive to load)."""
     try:
         import rawpy  # noqa: F401
     except ImportError:
@@ -41,9 +41,10 @@ def is_raw_available() -> bool:
 
 
 def safe_temp_suffix(path: str) -> str:
-    """Suffixe sûr pour un fichier temporaire destiné à recevoir une image via
-    PIL Image.save() — RAW n'est jamais ré-savable par PIL, HEIC ne l'est pas
-    forcément selon la version de pillow-heif installée : .jpg dans ces cas."""
+    """Safe suffix for a temporary file meant to receive an image through
+    PIL Image.save() — RAW can never be saved back by PIL, and HEIC not
+    necessarily depending on the installed pillow-heif version: .jpg in
+    those cases."""
     ext = Path(path).suffix.lower()
     if not ext or ext in _UNSAVABLE_BY_PIL:
         return ".jpg"
@@ -51,9 +52,9 @@ def safe_temp_suffix(path: str) -> str:
 
 
 def _open_raw(path: str) -> Image.Image:
-    """Décode un RAW via son aperçu JPEG embarqué (rapide, conserve l'EXIF
-    d'origine écrit par l'appareil) ; repli sur un dématriçage réduit
-    (postprocess half_size) si le fichier n'a pas d'aperçu exploitable."""
+    """Decodes a RAW through its embedded JPEG preview (fast, keeps the
+    original EXIF written by the camera); falls back on a reduced
+    demosaicing (postprocess half_size) when the file has no usable preview."""
     import rawpy
 
     with rawpy.imread(path) as raw:
@@ -71,12 +72,12 @@ def _open_raw(path: str) -> Image.Image:
 
 
 def open_image(path: str) -> Image.Image:
-    """Ouvre `path` en image PIL, quel que soit le format — point de décodage
-    unique du projet (thumbnails, visionneuse, EXIF, détection de visages).
+    """Opens `path` as a PIL image, whatever the format — the project's single
+    decoding point (thumbnails, viewer, EXIF, face detection).
 
-    RAW (RAW_EXT) : via rawpy (cf. _open_raw). HEIC/HEIF et tous les autres
-    formats : Image.open standard (HEIC transparent grâce à
-    register_heif_opener() enregistré au chargement de ce module)."""
+    RAW (RAW_EXT): through rawpy (cf. _open_raw). HEIC/HEIF and every other
+    format: the standard Image.open (HEIC transparent thanks to
+    register_heif_opener(), registered when this module is loaded)."""
     ext = Path(path).suffix.lower()
     if ext in RAW_EXT and is_raw_available():
         return _open_raw(path)

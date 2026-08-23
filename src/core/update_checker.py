@@ -1,11 +1,11 @@
 # Copyright 2026 Christian Guyot
 # SPDX-License-Identifier: Apache-2.0
-"""Vérification de mise à jour : interroge la dernière release GitHub.
+"""Update check: queries the latest GitHub release.
 
-Dépôt public (Christian73/PixelPhotoManager) : l'API Releases est accessible
-sans authentification. Utilisé au démarrage (notification silencieuse si à
-jour ou en cas d'erreur, cf. main_window.py) et depuis la popup "À propos"
-(qui affiche aussi les états "à jour" et "erreur", cf. help_dialog.py).
+Public repository (Christian73/PixelPhotoManager): the Releases API is
+reachable without authentication. Used at startup (a silent notification if up
+to date or on error, cf. main_window.py) and from the "About" popup (which also
+shows the "up to date" and "error" states, cf. help_dialog.py).
 """
 
 import json
@@ -24,12 +24,12 @@ _TIMEOUT_S = 5
 
 STATUS_UPDATE_AVAILABLE = "update_available"
 STATUS_UP_TO_DATE = "up_to_date"
-STATUS_ERROR = "error"                    # réseau/API indisponible
+STATUS_ERROR = "error"                    # network/API unavailable
 STATUS_VERSION_UNKNOWN = "version_unknown"  # version locale non comparable (mode dev, hash git)
 
 
 def _parse_version(text: str) -> "tuple[int, ...] | None":
-    """"v1.2.0" / "1.2.0" -> (1, 2, 0). None si illisible (ex. hash git en mode dev)."""
+    """"v1.2.0" / "1.2.0" -> (1, 2, 0). None if unreadable (e.g. a git hash in dev mode)."""
     text = text.strip().lstrip("vV")
     if not text:
         return None
@@ -40,12 +40,11 @@ def _parse_version(text: str) -> "tuple[int, ...] | None":
 
 
 class UpdateCheckThread(QThread):
-    """Interroge l'API GitHub Releases en arrière-plan (règle : l'UI ne bloque jamais).
+    """Queries the GitHub Releases API in the background (rule: the UI never blocks).
 
-    Émet toujours `checked`, avec l'un des trois statuts ci-dessus — contrairement
-    à une simple notification "silencieuse si rien à signaler", la popup "À propos"
-    a besoin de distinguer "à jour" de "vérification impossible".
-    """
+    Always emits `checked`, with one of the three statuses above — unlike a
+    plain notification "silent if there is nothing to report", the "About" popup
+    needs to tell "up to date" apart from "check impossible"."""
 
     checked = Signal(str, str, str)  # (status, latest_version, html_url)
 
@@ -53,8 +52,8 @@ class UpdateCheckThread(QThread):
         super().__init__(parent)
 
     def run(self) -> None:
-        # get_app_version() en mode dev lance `git describe` (jusqu'à 2s) — calculé
-        # ici plutôt que passé au constructeur pour ne jamais bloquer le thread UI.
+        # get_app_version() runs `git describe` in dev mode (up to 2s) — computed
+        # here rather than passed to the constructor so as to never block the UI thread.
         current_version = get_app_version()
         try:
             req = urllib.request.Request(
@@ -79,18 +78,18 @@ class UpdateCheckThread(QThread):
         html_url = str(data.get("html_url", ""))
         latest = _parse_version(latest_tag)
         if latest is None or not html_url:
-            # Réponse API inattendue (pas de tag/URL exploitable) — problème côté
-            # GitHub, distinct d'une version locale non comparable.
+            # Unexpected API response (no usable tag/URL) — a problem on the GitHub
+            # side, distinct from a local version that cannot be compared.
             self.checked.emit(STATUS_ERROR, "", "")
             return
 
         version = latest_tag.lstrip("vV")
         current = _parse_version(current_version)
         if current is None:
-            # Mode dev sur une branche où le tag n'est pas un ancêtre de HEAD :
-            # get_app_version() retombe sur un hash git (ex. "17ab7a3-dirty"),
-            # non comparable à un numéro sémantique — à ne pas confondre avec
-            # une erreur réseau (l'appel à l'API a bien réussi).
+            # Dev mode on a branch where the tag is not an ancestor of HEAD:
+            # get_app_version() falls back on a git hash (e.g. "17ab7a3-dirty"), not
+            # comparable to a semantic number — not to be confused with a network
+            # error (the API call did succeed).
             self.checked.emit(STATUS_VERSION_UNKNOWN, version, html_url)
             return
 

@@ -12,12 +12,12 @@ _cached_version: "str | None" = None
 
 
 def get_app_version() -> str:
-    """Version affichée dans "À propos" : dernier tag git atteignable depuis HEAD.
+    """Version shown in "About": the latest git tag reachable from HEAD.
 
-    Mémoïsée : en mode dev, le `git describe` sous-jacent peut prendre jusqu'à 2s
-    (timeout ci-dessous) — sans cache, les 4 points d'appel (démarrage, popup
-    mise à jour dispo, ouverture de l'aide) le relanceraient chacun. Voir aussi
-    `warm_app_version_async()` pour précalculer ce résultat hors thread UI.
+    Memoised: in dev mode the underlying `git describe` can take up to 2s
+    (timeout below) — without a cache, the 4 call sites (startup, update-available
+    popup, opening the help) would each rerun it. See also
+    `warm_app_version_async()` to precompute that result outside the UI thread.
     """
     global _cached_version
     with _cache_lock:
@@ -27,19 +27,19 @@ def get_app_version() -> str:
 
 
 def warm_app_version_async() -> None:
-    """Précalcule get_app_version() dans un thread d'arrière-plan, appelé tôt au
-    démarrage pour que le résultat soit déjà en cache quand l'UI en a besoin
-    (règle : l'UI ne bloque jamais)."""
+    """Precomputes get_app_version() in a background thread, called early at
+    startup so that the result is already cached when the UI needs it
+    (rule: the UI never blocks)."""
     threading.Thread(target=get_app_version, daemon=True).start()
 
 
 def _compute_app_version() -> str:
-    """Version affichée dans "À propos" : dernier tag git atteignable depuis HEAD.
+    """Version shown in "About": the latest git tag reachable from HEAD.
 
-    En mode figé (PyInstaller), le dossier .git n'est pas embarqué dans le bundle :
-    on lit alors le fichier VERSION embarqué à la racine du bundle (écrit par
-    build.ps1 à partir du VERSION du dépôt, cf. pixelphotomanager.spec), et on
-    ne retombe sur _FALLBACK_VERSION que si ce fichier est absent/illisible.
+    In frozen mode (PyInstaller) the .git folder is not embedded in the bundle:
+    we then read the VERSION file embedded at the root of the bundle (written by
+    build.ps1 from the repository VERSION, cf. pixelphotomanager.spec), and only
+    fall back on _FALLBACK_VERSION if that file is missing or unreadable.
     """
     if getattr(sys, "frozen", False):
         try:

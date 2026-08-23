@@ -1,14 +1,14 @@
 # Copyright 2026 Christian Guyot
 # SPDX-License-Identifier: Apache-2.0
-"""Cache persistant des empreintes calculées par la détection de doublons
-(Tier 1 pHash + Tier 2 ORB), pour permettre l'interruption et la reprise
-d'un scan entre deux démarrages de l'application sans tout recalculer.
+"""Persistent cache of the fingerprints computed by duplicate detection
+(Tier 1 pHash + Tier 2 ORB), so that a scan can be interrupted and resumed
+between two starts of the application without recomputing everything.
 
-Fichier SQLite dédié (`dedup_cache.db`), sur le même modèle que
-`thumbnail_cache.py` — pas de connexions par-thread ici : le thread appelant
-(DuplicateDetectorThread) est le seul consommateur, tout le calcul parallèle
-interne (ThreadPoolExecutor) ne fait que renvoyer des résultats en mémoire,
-jamais d'accès SQLite direct depuis les workers."""
+A dedicated SQLite file (`dedup_cache.db`), on the same model as
+`thumbnail_cache.py` — no per-thread connections here: the calling thread
+(DuplicateDetectorThread) is the only consumer, and all the internal parallel
+computation (ThreadPoolExecutor) only returns results in memory, never a
+direct SQLite access from the workers."""
 import logging
 import sqlite3
 import time
@@ -20,13 +20,13 @@ logger = logging.getLogger(__name__)
 
 _DB_PATH = APP_DATA_DIR / "dedup_cache.db"
 
-# Incrémenter si des constantes affectant ce qui est calculé/stocké changent
-# (ex. _ORB_MAX_KP dans duplicate_detector.py) — sinon d'anciennes entrées de
-# cache seraient silencieusement réutilisées comme si elles avaient été
-# calculées avec les constantes actuelles.
+# Increment when constants affecting what is computed/stored change
+# (e.g. _ORB_MAX_KP in duplicate_detector.py) — otherwise old cache entries
+# would silently be reused as if they had been computed with the current
+# constants.
 _CACHE_VERSION = "1"
 
-# Limite SQLite par défaut : 999 paramètres liés par requête.
+# SQLite default limit: 999 bound parameters per query.
 _IN_CLAUSE_CHUNK = 900
 
 _CREATE_TABLES = """
@@ -87,10 +87,10 @@ def _chunks(items: list, size: int):
 
 
 class DedupCache:
-    """Cache SQLite des empreintes Tier 1 (pHash) et Tier 2 (ORB) par photo,
-    clé par chemin + mtime. Usage : instancier, `open()` depuis le thread qui
-    fera le scan, utiliser, `close()` en fin de scan (idéalement dans un
-    `finally`)."""
+    """SQLite cache of the Tier 1 (pHash) and Tier 2 (ORB) fingerprints per
+    photo, keyed by path + mtime. Usage: instantiate, `open()` from the thread
+    that will run the scan, use it, `close()` at the end of the scan (ideally
+    in a `finally`)."""
 
     def __init__(self, db_path: str | Path = _DB_PATH):
         self._db_path = str(db_path)
@@ -172,11 +172,11 @@ class DedupCache:
     # ── Tier 2 : ORB features ────────────────────────────────────────────────
 
     def get_orb_meta(self, paths: list[str]) -> dict[str, tuple[float, int, int]]:
-        """{path: (file_mtime, width, height)} — métadonnées seules, sans le
-        moindre blob. Sert au Tier 2 à décider *avant* tout chargement quelles
-        photos participent réellement à une paire à évaluer (validité du cache
-        + aire pour le préfiltre `_ORB_AREA_FACTOR`), pour ne charger ensuite
-        que celles-là via `get_orb_descriptors()`."""
+        """{path: (file_mtime, width, height)} — the metadata alone, without a
+        single blob. It lets Tier 2 decide *before* any loading which photos
+        really take part in a pair to evaluate (cache validity + area for the
+        `_ORB_AREA_FACTOR` prefilter), so that only those are then loaded
+        through `get_orb_descriptors()`."""
         result: dict[str, tuple[float, int, int]] = {}
         for chunk in _chunks(paths, _IN_CLAUSE_CHUNK):
             placeholders = ",".join("?" * len(chunk))
@@ -192,8 +192,8 @@ class DedupCache:
     def get_orb_descriptors(self, paths: list[str]) -> dict[str, tuple]:
         """{path: (file_mtime, width, height, keypoints_xy_blob, descriptors_blob)}
 
-        La colonne héritée `image_jpeg` n'est volontairement pas sélectionnée
-        (cf. commentaire du schéma)."""
+        The legacy `image_jpeg` column is deliberately not selected
+        (cf. the comment on the schema)."""
         result: dict[str, tuple] = {}
         for chunk in _chunks(paths, _IN_CLAUSE_CHUNK):
             placeholders = ",".join("?" * len(chunk))
@@ -207,10 +207,10 @@ class DedupCache:
         return result
 
     def store_orb_features(self, rows: list[tuple]) -> None:
-        """rows : (path, file_mtime, width, height, keypoints_xy_blob, descriptors_blob)
+        """rows: (path, file_mtime, width, height, keypoints_xy_blob, descriptors_blob)
 
-        `image_jpeg` est écrite vide : colonne héritée NOT NULL, plus jamais
-        lue (cf. commentaire du schéma)."""
+        `image_jpeg` is written empty: a legacy NOT NULL column, never read
+        again (cf. the comment on the schema)."""
         if not rows:
             return
         self._conn.executemany(
@@ -223,11 +223,11 @@ class DedupCache:
         )
         self._conn.commit()
 
-    # ── Tier 1/2 : complétude des comparaisons (incrémentalité) ────────────────
+    # ── Tier 1/2: completeness of the comparisons (incrementality) ───────────
 
     def _get_compared(self, table: str, paths: list[str]) -> dict[str, float]:
-        """{path: file_mtime} — chemins déjà comparés à tout le reste de la
-        bibliothèque connue lors d'une passe complète antérieure."""
+        """{path: file_mtime} — paths already compared with all the rest of the
+        known library during an earlier full pass."""
         result: dict[str, float] = {}
         for chunk in _chunks(paths, _IN_CLAUSE_CHUNK):
             placeholders = ",".join("?" * len(chunk))
@@ -262,13 +262,13 @@ class DedupCache:
         self._store_compared("compared_tier2", rows)
 
     def remove_compared(self, paths) -> None:
-        """Retire des chemins précis de compared_tier1 ET compared_tier2, pour
-        forcer leur recomparaison complète (Tier 1 + Tier 2) contre le reste de
-        la bibliothèque lors du prochain passage — les empreintes/features déjà
-        calculées (fingerprints/orb_features) restent valables et ne sont pas
-        touchées, seule la marque « déjà comparé » est retirée. Utilisé par les
-        migrations ponctuelles qui invalident des groupes de doublons déjà
-        formés (cf. MainWindow._migrate_dissolve_date_conflicted_duplicate_groups)."""
+        """Removes specific paths from compared_tier1 AND compared_tier2, to force
+        a full recomparison of them (Tier 1 + Tier 2) against the rest of the
+        library on the next pass — the fingerprints/features already computed
+        (fingerprints/orb_features) stay valid and are not touched, only the
+        "already compared" mark is removed. Used by the one-off migrations that
+        invalidate duplicate groups already formed
+        (cf. MainWindow._migrate_dissolve_date_conflicted_duplicate_groups)."""
         paths = list(paths)
         if not paths:
             return
@@ -282,15 +282,15 @@ class DedupCache:
             )
         self._conn.commit()
 
-    # ── Fichiers corrompus ────────────────────────────────────────────────────
-    # Persistés ici plutôt que gardés seulement en mémoire (MainWindow) pour
-    # survivre à un redémarrage de l'application. Un fichier corrompu n'obtient
-    # jamais d'empreinte/de features (cf. duplicate_detector.py), donc à chaque
-    # passage il est systématiquement retenté et retombe dans ce même set — la
-    # liste persistée est donc remplacée intégralement en fin de passage
-    # (`replace_corrupted_paths`), ce qui la maintient à jour automatiquement
-    # (réparé ou supprimé -> disparaît au passage suivant) sans logique de
-    # réconciliation dédiée.
+    # ── Corrupted files ──────────────────────────────────────────────────────
+    # Persisted here rather than only kept in memory (MainWindow) so as to
+    # survive a restart of the application. A corrupted file never gets a
+    # fingerprint/features (cf. duplicate_detector.py), so it is systematically
+    # retried on every pass and falls back into that same set — the persisted
+    # list is therefore replaced in full at the end of a pass
+    # (`replace_corrupted_paths`), which keeps it up to date automatically
+    # (repaired or deleted -> gone on the next pass) with no dedicated
+    # reconciliation logic.
 
     def get_corrupted_paths(self) -> list[str]:
         return [row[0] for row in self._conn.execute(
@@ -298,8 +298,8 @@ class DedupCache:
         )]
 
     def replace_corrupted_paths(self, paths) -> None:
-        """Remplace intégralement la liste persistée par `paths` (l'état
-        complet et à jour à la fin d'un passage Tier 1 + Tier 2)."""
+        """Replaces the persisted list in full with `paths` (the complete, up to
+        date state at the end of a Tier 1 + Tier 2 pass)."""
         now = time.time()
         self._conn.execute("DELETE FROM corrupted_files")
         if paths:
@@ -310,8 +310,8 @@ class DedupCache:
         self._conn.commit()
 
     def remove_corrupted_paths(self, paths) -> None:
-        """Retire des chemins précis (réparation ou suppression manuelle
-        réussie) sans attendre la fin du prochain passage complet."""
+        """Removes specific paths (a successful repair or manual deletion)
+        without waiting for the end of the next full pass."""
         paths = list(paths)
         if not paths:
             return
@@ -325,16 +325,15 @@ class DedupCache:
     # ── Maintenance ───────────────────────────────────────────────────────────
 
     def purge_missing(self, keep_paths: set[str]) -> int:
-        """Supprime de toutes les tables toute entrée dont le chemin n'est pas
-        dans keep_paths (photos supprimées/déplacées/retirées de la
-        bibliothèque depuis le dernier scan). Retourne le nombre de lignes
-        supprimées (fingerprints + orb_features uniquement, à titre
-        indicatif — compared_tier1/2 et corrupted_files sont purgées de la
-        même façon mais ne comptent pas dans le total retourné, comme avant
-        cette extension). Un fichier corrompu n'a jamais de fingerprint (cf.
-        `replace_corrupted_paths`) : sans l'inclure explicitement ici, son
-        chemin ne serait jamais vu comme « connu » et donc jamais purgé de
-        corrupted_files après suppression du fichier/dossier."""
+        """Removes from every table any entry whose path is not in keep_paths
+        (photos deleted/moved/removed from the library since the last scan).
+        Returns the number of rows deleted (fingerprints + orb_features only,
+        as an indication — compared_tier1/2 and corrupted_files are purged the
+        same way but do not count towards the returned total, as before this
+        extension). A corrupted file never has a fingerprint (cf.
+        `replace_corrupted_paths`): without including it explicitly here, its
+        path would never be seen as "known" and therefore never purged from
+        corrupted_files after the file/folder is deleted."""
         cached_paths: set[str] = set()
         for row in self._conn.execute("SELECT path FROM fingerprints"):
             cached_paths.add(row[0])

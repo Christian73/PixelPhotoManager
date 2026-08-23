@@ -15,11 +15,11 @@ VIDEO_EXT = {".mp4", ".mov", ".avi", ".mkv", ".wmv", ".webm", ".m4v", ".3gp", ".
 
 @contextlib.contextmanager
 def ascii_safe_path(path: str):
-    """Chemin garanti encodable en ASCII pour cv2 (imread/VideoCapture), qui
-    rejette les chemins non-ASCII sur Windows. Si `path` est déjà ASCII, le
-    retourne tel quel (aucune I/O). Sinon, crée un hardlink temporaire vers un
-    chemin ASCII (repli sur une copie si hardlink impossible, ex. volume
-    différent) et le supprime en sortie de bloc."""
+    """A path guaranteed to be ASCII-encodable for cv2 (imread/VideoCapture),
+    which rejects non-ASCII paths on Windows. If `path` is already ASCII, it
+    is returned as such (no I/O). Otherwise a temporary hardlink to an ASCII
+    path is created (falling back on a copy when a hardlink is impossible,
+    e.g. a different volume) and removed when the block exits."""
     try:
         path.encode("ascii")
         yield path
@@ -30,7 +30,7 @@ def ascii_safe_path(path: str):
     suffix = os.path.splitext(path)[1]
     fd, temp_path = tempfile.mkstemp(suffix=suffix)
     os.close(fd)
-    os.remove(temp_path)  # os.link exige que la destination n'existe pas
+    os.remove(temp_path)  # os.link requires the destination not to exist
     try:
         try:
             os.link(path, temp_path)
@@ -45,7 +45,7 @@ def ascii_safe_path(path: str):
 
 
 def preserve_file_dates(src_stat: os.stat_result, dst_path: str) -> None:
-    """Copie atime, mtime et date de création (Windows) de src_stat vers dst_path."""
+    """Copies atime, mtime and the creation date (Windows) from src_stat to dst_path."""
     os.utime(dst_path, (src_stat.st_atime, src_stat.st_mtime))
     try:
         import ctypes
@@ -55,7 +55,7 @@ def preserve_file_dates(src_stat: os.stat_result, dst_path: str) -> None:
             _fields_ = [("dwLowDateTime",  ctypes.wintypes.DWORD),
                          ("dwHighDateTime", ctypes.wintypes.DWORD)]
 
-        # Convertir timestamp Unix → FILETIME (100 ns depuis le 1er janvier 1601)
+        # Convert a Unix timestamp → FILETIME (100 ns since 1 January 1601)
         val = int((src_stat.st_ctime + 11644473600) * 10_000_000)
         ft = FILETIME(dwLowDateTime=val & 0xFFFFFFFF,
                       dwHighDateTime=(val >> 32) & 0xFFFFFFFF)
@@ -68,7 +68,7 @@ def preserve_file_dates(src_stat: os.stat_result, dst_path: str) -> None:
             kernel32.SetFileTime(handle, ctypes.byref(ft), None, None)
             kernel32.CloseHandle(handle)
     except Exception:
-        pass   # non-Windows ou droits insuffisants : mtime suffit
+        pass   # non-Windows or insufficient rights: mtime is enough
 
 
 _SUBSEC_TAG_FOR = {
@@ -79,9 +79,9 @@ _SUBSEC_TAG_FOR = {
 
 
 def _parse_subsec(value: str) -> int:
-    """Convertit un tag EXIF SubsecTime* (ex. '05', '563') en microsecondes.
-    Le tag représente les décimales de la seconde, pas des microsecondes
-    brutes : '05' = 0.05s = 50000µs (et non 5µs), d'où le padding à droite."""
+    """Converts an EXIF SubsecTime* tag (e.g. '05', '563') into microseconds.
+    The tag holds the decimals of the second, not raw microseconds:
+    '05' = 0.05s = 50000µs (not 5µs), hence the padding on the right."""
     value = value.strip()
     if not value or not value.isdigit():
         return 0

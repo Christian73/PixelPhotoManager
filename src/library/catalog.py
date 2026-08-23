@@ -46,9 +46,9 @@ CREATE TABLE IF NOT EXISTS photos (
     rating INTEGER DEFAULT 0
 )
 """
-# ⚠ Toute nouvelle colonne s'ajoute EN FIN de _CREATE_PHOTOS (et via ALTER TABLE
-# en migration) : _photo_from_row unpacke positionnellement avec *rest — l'ordre
-# des colonnes d'une base neuve doit correspondre à celui d'une base migrée.
+# ⚠ Every new column is added AT THE END of _CREATE_PHOTOS (and through an
+# ALTER TABLE migration): _photo_from_row unpacks positionally with *rest — the
+# column order of a fresh database must match that of a migrated one.
 
 _CREATE_ALBUMS = """
 CREATE TABLE IF NOT EXISTS albums (
@@ -77,8 +77,9 @@ CREATE TABLE IF NOT EXISTS persons (
 
 
 def _normalize_tags(tags: list[str]) -> list[str]:
-    """Nettoie une liste de tags : strip, rejette vide/contenant une virgule
-    (la virgule sert de séparateur au stockage), dédoublonne en préservant l'ordre."""
+    """Cleans a list of tags: strip, reject an empty one or one containing a
+    comma (the comma is the storage separator), deduplicate while preserving
+    the order."""
     cleaned: list[str] = []
     seen: set[str] = set()
     for t in tags:
@@ -141,26 +142,26 @@ class Catalog:
     def __init__(self, db_path: str | Path = _DB_PATH):
         self._db_path = str(db_path)
         self._lock = threading.Lock()
-        # Connexion SQLite par (instance, thread), créée une fois puis
-        # réutilisée (pattern ThumbnailCache) : chaque méthode ouvrait avant
-        # une connexion neuve + 2 PRAGMAs, payés à chaque requête — sur les
-        # chemins chauds (scan, requêtes de vues, badge), ce coût dépassait
-        # souvent celui de la requête elle-même. threading.local est porté par
-        # l'instance : deux Catalog sur le même chemin (tests) gardent chacun
-        # leur connexion.
+        # One SQLite connection per (instance, thread), created once then
+        # reused (the ThumbnailCache pattern): every method used to open a
+        # fresh connection + 2 PRAGMAs, paid on every query — on the hot
+        # paths (scan, view queries, badge) that cost often exceeded the one
+        # of the query itself. threading.local is carried by the instance:
+        # two Catalogs on the same path (tests) each keep their own
+        # connection.
         self._tls = threading.local()
         Path(self._db_path).parent.mkdir(parents=True, exist_ok=True)
         self._init_db()
 
     @contextmanager
     def _guard(self):
-        """Verrou + connexion thread-local + rollback garanti sur exception.
+        """Lock + thread-local connection + a rollback guaranteed on exception.
 
-        Remplace le motif répété « with self._lock: conn = self._conn();
-        try: … except BaseException: conn.rollback(); raise » (cf. CLAUDE.md,
-        pattern de connexion) : la connexion mise en cache ne doit JAMAIS
-        rester dans une transaction ouverte, sinon toutes les écritures
-        suivantes échouent en « database is locked »."""
+        Replaces the repeated pattern "with self._lock: conn = self._conn();
+        try: … except BaseException: conn.rollback(); raise" (cf. CLAUDE.md,
+        the connection pattern): the cached connection must NEVER stay inside
+        an open transaction, or every subsequent write fails with
+        "database is locked"."""
         with self._lock:
             conn = self._conn()
             try:
@@ -170,14 +171,13 @@ class Catalog:
                 raise
 
     def _conn(self) -> sqlite3.Connection:
-        """Connexion SQLite du thread courant, créée une seule fois par thread.
+        """SQLite connection of the current thread, created once per thread.
 
-        Les méthodes d'écriture ne ferment plus la connexion : en cas
-        d'exception, leur garde `except BaseException: conn.rollback()`
-        remplace le rollback implicite qu'assurait l'ancienne fermeture —
-        une connexion mise en cache ne doit jamais rester au milieu d'une
-        transaction ouverte (les écritures suivantes échoueraient en
-        « database is locked »)."""
+        The write methods no longer close the connection: on an exception,
+        their `except BaseException: conn.rollback()` guard replaces the
+        implicit rollback the former close used to provide — a cached
+        connection must never stay in the middle of an open transaction (the
+        subsequent writes would fail with "database is locked")."""
         conn = getattr(self._tls, "conn", None)
         if conn is None:
             conn = sqlite3.connect(self._db_path, timeout=5, check_same_thread=False)
@@ -188,7 +188,7 @@ class Catalog:
         return conn
 
     def close(self) -> None:
-        """Ferme la connexion du thread courant (tests, arrêt de l'application)."""
+        """Closes the connection of the current thread (tests, application shutdown)."""
         conn = getattr(self._tls, "conn", None)
         if conn is not None:
             conn.close()
@@ -219,15 +219,14 @@ class Catalog:
             conn.execute(
                 "CREATE INDEX IF NOT EXISTS idx_photos_media_type ON photos(media_type)"
             )
-            # Filet de sécurité au démarrage : dissout les groupes de 1 exemplaire
-            # déjà présents en base (ex. créés avant l'ajout de la dissolution
-            # systématique dans delete_photo/delete_photos).
+            # Safety net at startup: dissolves the groups of a single copy already
+            # present in the database (e.g. created before the systematic dissolution
+            # was added to delete_photo/delete_photos).
             self._dissolve_singleton_duplicate_groups(conn)
-            # Filet de sécurité au démarrage : purge les entrées album_photos
-            # orphelines (photo supprimée du catalogue sans passer par delete_photo/
-            # delete_photos, ex. cleanup_asset_dirs ou migration de chemins avant
-            # correction) — sinon get_albums() surcompte des photos qui n'existent
-            # plus.
+            # Safety net at startup: purges the orphan album_photos entries (a photo
+            # removed from the catalog without going through delete_photo/
+            # delete_photos, e.g. cleanup_asset_dirs or a path migration before the
+            # fix) — otherwise get_albums() overcounts photos that no longer exist.
             conn.execute(
                 "DELETE FROM album_photos WHERE photo_id NOT IN (SELECT id FROM photos)"
             )
@@ -241,8 +240,8 @@ class Catalog:
             try:
                 conn.execute(stmt)
             except Exception:
-                pass  # colonne déjà présente
-        # Rétro-remplissage : vidéos ajoutées avant le support vidéo ont media_type='image'
+                pass  # column already present
+        # Backfill: videos added before video support have media_type='image'
         video_exts = (
             ".mp4", ".mov", ".avi", ".mkv", ".wmv", ".webm",
             ".m4v", ".3gp", ".flv", ".ts", ".mts", ".mpg", ".mpeg",
@@ -250,9 +249,9 @@ class Catalog:
         like_clauses = " OR ".join(
             f"LOWER(filename) LIKE '%{ext}'" for ext in video_exts
         )
-        # Vérification rapide avant l'UPDATE : si aucune photo 'image' ne correspond
-        # à une extension vidéo, la retrofill est déjà faite — évite de payer le coût
-        # d'un UPDATE complet (écriture) à chaque démarrage une fois la migration faite.
+        # A quick check before the UPDATE: if no 'image' photo matches a video
+        # extension, the backfill is already done — this avoids paying the cost of a
+        # full UPDATE (a write) on every start once the migration has been done.
         if not conn.execute(
             f"SELECT id FROM photos WHERE media_type='image' AND ({like_clauses}) LIMIT 1"
         ).fetchone():
@@ -266,19 +265,19 @@ class Catalog:
         try:
             conn.execute("ALTER TABLE photos ADD COLUMN duplicate_group_id INTEGER")
         except Exception:
-            pass  # colonne déjà présente
+            pass  # column already present
 
     def _migrate_rating_field(self, conn) -> None:
         try:
             conn.execute("ALTER TABLE photos ADD COLUMN rating INTEGER DEFAULT 0")
         except Exception:
-            pass  # colonne déjà présente
+            pass  # column already present
 
     def _migrate_normalize_paths(self, conn) -> None:
-        """Normalise les séparateurs de chemin dans les données existantes.
-        Supprime les doublons qui apparaissent après normalisation (garde le premier vu)."""
-        # Vérification rapide : s'il n'existe aucun chemin avec '/', la normalisation
-        # est déjà faite — évite de charger toutes les lignes à chaque démarrage.
+        """Normalises the path separators in the existing data.
+        Removes the duplicates that appear after normalisation (keeps the first seen)."""
+        # A quick check: if no path contains a '/', the normalisation is already
+        # done — this avoids loading every row on every start.
         if not conn.execute(
             "SELECT id FROM photos WHERE instr(path, '/') > 0 LIMIT 1"
         ).fetchone():
@@ -286,7 +285,7 @@ class Catalog:
         rows = conn.execute("SELECT id, path, directory FROM photos").fetchall()
         if not rows:
             return
-        seen: dict[str, int] = {}   # norm_path → id conservé
+        seen: dict[str, int] = {}   # norm_path → the id kept
         to_delete: list[int] = []
         to_update: list[tuple] = []
         for rid, path, directory in rows:
@@ -362,7 +361,7 @@ class Catalog:
         return photo
 
     def count_photos_in_folder(self, folder: str) -> int:
-        """Retourne le nombre de photos (et vidéos) indexées sous folder (récursivement)."""
+        """Returns the number of photos (and videos) indexed under folder (recursively)."""
         folder = os.path.normpath(folder)
         like_pattern = folder + os.sep + "%"
         with self._guard() as conn:
@@ -373,19 +372,19 @@ class Catalog:
         return row[0] if row else 0
 
     def get_recursive_photo_counts(self, folders: list[str]) -> dict[str, int]:
-        """Retourne pour chaque dossier de folders son nombre de photos (et vidéos),
-        lui-même inclus ses sous-dossiers. Une seule requête groupée par dossier exact
-        (pas une requête récursive par dossier demandé) — utilisé pour peupler l'arbre
-        de la sidebar sans multiplier les allers-retours SQLite à chaque niveau.
+        """Returns, for each folder of folders, its number of photos (and videos),
+        itself and its subfolders included. A single query grouped by exact folder
+        (not a recursive query per requested folder) — used to populate the sidebar
+        tree without multiplying the SQLite round trips at every level.
 
-        Piège vécu : une première version filtrait la requête avec un WHERE construit
-        d'une condition "directory=? OR directory LIKE ?" par dossier demandé — un
-        dossier avec plusieurs centaines de sous-dossiers dépasse alors la profondeur
-        d'arbre d'expression maximale de SQLite (1000, sqlite3.OperationalError:
-        "Expression tree is too large"). La requête groupe donc désormais sur TOUTE
-        la table (une ligne par dossier distinct, pas par photo), et le filtrage par
-        préfixe se fait en Python — coût négligeable même sur une grosse bibliothèque
-        (le nombre de dossiers distincts reste très inférieur au nombre de photos)."""
+        A trap lived through: a first version filtered the query with a WHERE built
+        from one "directory=? OR directory LIKE ?" condition per requested folder —
+        a folder with several hundred subfolders then exceeds SQLite's maximum
+        expression tree depth (1000, sqlite3.OperationalError: "Expression tree is
+        too large"). The query therefore now groups over the WHOLE table (one row
+        per distinct folder, not per photo), and the prefix filtering happens in
+        Python — a negligible cost even on a large library (the number of distinct
+        folders stays far below the number of photos)."""
         if not folders:
             return {}
         normed = [os.path.normpath(f) for f in folders]
@@ -412,7 +411,7 @@ class Catalog:
         return [_photo_from_row(r) for r in rows]
 
     def get_all_photo_paths(self) -> list[str]:
-        """Retourne uniquement les chemins de toutes les photos (plus léger que get_all_photos)."""
+        """Returns only the paths of every photo (lighter than get_all_photos)."""
         with self._guard() as conn:
             rows = conn.execute("SELECT path FROM photos").fetchall()
         return [r[0] for r in rows]
@@ -445,7 +444,7 @@ class Catalog:
         return _photo_from_row(row) if row else None
 
     def update_paths_prefix(self, old_prefix: str, new_prefix: str) -> None:
-        """Met à jour tous les chemins dont le début correspond à old_prefix."""
+        """Updates every path whose beginning matches old_prefix."""
         n = len(old_prefix)
         like_pattern = old_prefix + os.sep + "%"
         with self._guard() as conn:
@@ -461,7 +460,7 @@ class Catalog:
             conn.commit()
 
     def move_photo(self, old_path: str, new_path: str) -> None:
-        """Met à jour le chemin d'un fichier photo dans le catalogue."""
+        """Updates the path of a photo file in the catalog."""
         old_path = os.path.normpath(old_path)
         new_path = os.path.normpath(new_path)
         new_dir = str(Path(new_path).parent)
@@ -473,10 +472,10 @@ class Catalog:
             conn.commit()
 
     def delete_photo(self, path: str) -> None:
-        """Supprime la photo du catalogue (ne touche pas au fichier disque)."""
+        """Removes the photo from the catalog (does not touch the file on disk)."""
         with self._guard() as conn:
-            # Doit précéder le DELETE sur photos : la sous-requête a besoin que la
-            # ligne existe encore pour résoudre son id (pas de FK/cascade déclarée).
+            # Must precede the DELETE on photos: the subquery needs the row to still
+            # exist to resolve its id (no FK/cascade declared).
             conn.execute(
                 "DELETE FROM album_photos WHERE photo_id IN "
                 "(SELECT id FROM photos WHERE path=?)",
@@ -495,7 +494,7 @@ class Catalog:
             conn.commit()
 
     def set_rating(self, photo_id: int, rating: int) -> None:
-        """Note 0-5 étoiles (0 = retirer la note)."""
+        """A 0-5 star rating (0 = remove the rating)."""
         rating = max(0, min(5, int(rating)))
         with self._guard() as conn:
             conn.execute(
@@ -504,7 +503,7 @@ class Catalog:
             conn.commit()
 
     def set_rating_for_ids(self, photo_ids: list[int], rating: int) -> None:
-        """Applique la même note à plusieurs photos en une transaction."""
+        """Applies the same rating to several photos in a single transaction."""
         if not photo_ids:
             return
         rating = max(0, min(5, int(rating)))
@@ -516,7 +515,7 @@ class Catalog:
             conn.commit()
 
     def get_photos_min_rating(self, min_rating: int = 1) -> list[PhotoInfo]:
-        """Photos notées au moins min_rating étoiles, tri chronologique DESC."""
+        """Photos rated at least min_rating stars, chronological DESC order."""
         with self._guard() as conn:
             rows = conn.execute(
                 "SELECT * FROM photos WHERE rating >= ?"
@@ -526,7 +525,7 @@ class Catalog:
         return [_photo_from_row(r) for r in rows]
 
     def get_all_tags(self) -> list[str]:
-        """Liste dédoublonnée et triée de tous les tags utilisés dans le catalogue."""
+        """Deduplicated, sorted list of every tag used in the catalog."""
         with self._guard() as conn:
             rows = conn.execute(
                 "SELECT DISTINCT tags FROM photos WHERE tags IS NOT NULL AND tags != ''"
@@ -537,14 +536,14 @@ class Catalog:
         return sorted(all_tags)
 
     def set_tags(self, photo_id: int, tags: list[str]) -> None:
-        """Remplace la liste complète de tags d'une photo."""
+        """Replaces the complete tag list of a photo."""
         tags_str = ",".join(_normalize_tags(tags))
         with self._guard() as conn:
             conn.execute("UPDATE photos SET tags=? WHERE id=?", (tags_str, photo_id))
             conn.commit()
 
     def add_tags_to_photos(self, photo_ids: list[int], tags: list[str]) -> None:
-        """Ajoute des tags (union, sans doublon) à chaque photo listée."""
+        """Adds tags (a union, without duplicates) to each listed photo."""
         new_tags = _normalize_tags(tags)
         if not photo_ids or not new_tags:
             return
@@ -563,7 +562,7 @@ class Catalog:
             conn.commit()
 
     def remove_tag_from_photos(self, photo_ids: list[int], tag: str) -> None:
-        """Retire un tag précis de chaque photo listée (les autres tags survivent)."""
+        """Removes one specific tag from each listed photo (the other tags survive)."""
         if not photo_ids:
             return
         with self._guard() as conn:
@@ -581,7 +580,7 @@ class Catalog:
             conn.commit()
 
     def get_photos_by_tag(self, tag: str) -> list[PhotoInfo]:
-        """Photos portant exactement ce tag (pas de correspondance de sous-chaîne)."""
+        """Photos carrying exactly this tag (no substring matching)."""
         with self._guard() as conn:
             rows = conn.execute(
                 "SELECT * FROM photos WHERE ',' || tags || ',' LIKE '%,' || ? || ',%'"
@@ -591,8 +590,8 @@ class Catalog:
         return [_photo_from_row(r) for r in rows]
 
     def get_distinct_cameras(self) -> list[str]:
-        """Liste triée des appareils distincts (« marque modèle »), pour préremplir
-        le combo appareil de la recherche avancée."""
+        """Sorted list of the distinct cameras ("make model"), to prefill the
+        camera combo of the advanced search."""
         with self._guard() as conn:
             rows = conn.execute(
                 "SELECT DISTINCT camera_make, camera_model FROM photos"
@@ -606,10 +605,10 @@ class Catalog:
         return sorted(labels)
 
     def search_advanced(self, criteria: dict) -> list[PhotoInfo]:
-        """Recherche multi-critères (dates, appareil, dossier, note min, tags,
-        favoris, type média). La personne n'est PAS un critère SQL ici — deux
-        bases séparées (catalog.db / faces.db), l'intersection avec
-        face_db.get_photos_for_person() se fait côté appelant (MainWindow)."""
+        """Multi-criteria search (dates, camera, folder, minimum rating, tags,
+        favourites, media type). The person is NOT a SQL criterion here — two
+        separate databases (catalog.db / faces.db), the intersection with
+        face_db.get_photos_for_person() happens on the caller side (MainWindow)."""
         clauses: list[str] = []
         params: list = []
         date_expr = "COALESCE(date_taken, datetime(file_mtime, 'unixepoch'))"
@@ -683,8 +682,8 @@ class Catalog:
         return AlbumInfo(name=name, id=album_id)
 
     def delete_album(self, album_id: int) -> None:
-        """Supprime un album et son contenu (album_photos). Les photos elles-mêmes
-        ne sont pas affectées : seule l'association à l'album est retirée."""
+        """Deletes an album and its content (album_photos). The photos themselves
+        are not affected: only the association with the album is removed."""
         with self._guard() as conn:
             conn.execute("DELETE FROM album_photos WHERE album_id = ?", (album_id,))
             conn.execute("DELETE FROM albums WHERE id = ?", (album_id,))
@@ -699,13 +698,13 @@ class Catalog:
             conn.commit()
 
     def add_photos_to_album(self, album_id: int, photo_ids: list[int]) -> int:
-        """Ajoute plusieurs photos à un album en une seule transaction.
-        Retourne le nombre de photos réellement ajoutées (déjà présentes ignorées)."""
+        """Adds several photos to an album in a single transaction.
+        Returns the number of photos actually added (already present ones ignored)."""
         if not photo_ids:
             return 0
         with self._guard() as conn:
-            # total_changes (et non SELECT changes()) : executemany ne
-            # rapporte sinon que la dernière ligne.
+            # total_changes (and not SELECT changes()): executemany otherwise
+            # only reports the last row.
             before = conn.total_changes
             conn.executemany(
                 "INSERT OR IGNORE INTO album_photos (album_id, photo_id) VALUES (?,?)",
@@ -716,7 +715,7 @@ class Catalog:
         return added
 
     def remove_photo_from_album(self, album_id: int, photo_id: int) -> None:
-        """Retire une photo d'un album (le fichier et la photo elle-même ne sont pas touchés)."""
+        """Removes a photo from an album (the file and the photo itself are untouched)."""
         with self._guard() as conn:
             conn.execute(
                 "DELETE FROM album_photos WHERE album_id=? AND photo_id=?",
@@ -725,8 +724,8 @@ class Catalog:
             conn.commit()
 
     def remove_photos_from_album(self, album_id: int, photo_ids: list[int]) -> None:
-        """Retire plusieurs photos d'un album en un seul DELETE (fichiers et
-        photos non touchés)."""
+        """Removes several photos from an album in a single DELETE (files and
+        photos untouched)."""
         if not photo_ids:
             return
         with self._guard() as conn:
@@ -812,8 +811,8 @@ class Catalog:
         return {r[0] for r in rows}
 
     def cleanup_asset_dirs(self) -> list[str]:
-        """Supprime du catalogue les fichiers dans des répertoires *_assets (assets logiciels
-        type Lightroom/Capture One). Retourne les chemins supprimés."""
+        """Removes from the catalog the files inside *_assets directories (software
+        assets of the Lightroom/Capture One kind). Returns the removed paths."""
         to_delete: list[str] = []
         with self._guard() as conn:
             rows = conn.execute("SELECT path FROM photos").fetchall()
@@ -835,7 +834,7 @@ class Catalog:
         return to_delete
 
     def delete_photos(self, paths: list[str]) -> None:
-        """Supprime en une seule transaction les entrées dont les fichiers ont disparu."""
+        """Removes in a single transaction the entries whose files have disappeared."""
         if not paths:
             return
         with self._guard() as conn:
@@ -851,13 +850,13 @@ class Catalog:
             conn.commit()
 
     def _dissolve_singleton_duplicate_groups(self, conn) -> None:
-        """Dissout tout groupe de doublons retombé à 0 ou 1 exemplaire suite à une
-        suppression. Invariant nécessaire quel que soit le chemin de suppression
-        emprunté (suppression manuelle, nettoyage d'entrées fantômes par le
-        scanner, purge de dossier...) — voir dedup_singleton_groups_any_delete_path
-        en mémoire pour le contexte : avant ce correctif seule la suppression
-        manuelle via l'UI dissolvait ces groupes, laissant réapparaître des
-        groupes de 1 exemplaire après un scan qui retire des fichiers disparus."""
+        """Dissolves any duplicate group that has fallen back to 0 or 1 copy after a
+        deletion. An invariant needed whatever the deletion path taken (manual
+        deletion, cleanup of ghost entries by the scanner, folder purge...) — see
+        dedup_singleton_groups_any_delete_path in memory for the context: before
+        this fix only the manual deletion through the UI dissolved those groups,
+        letting groups of a single copy reappear after a scan that removes
+        vanished files."""
         conn.execute(
             """
             UPDATE photos SET duplicate_group_id = NULL
@@ -870,18 +869,18 @@ class Catalog:
             """
         )
 
-    # ------------------------------------------------------------------ doublons
+    # ------------------------------------------------------------------ duplicates
 
     def set_duplicate_groups(self, assignments: dict) -> None:
-        """Enregistre les groupes de doublons détectés. assignments = {path: group_id}.
+        """Records the detected duplicate groups. assignments = {path: group_id}.
 
-        Dissout aussi tout groupe retombé à 0/1 exemplaire par cet appel : un
-        DuplicateDetectorThread en cours au moment d'une suppression calcule ses
-        assignations sur un état capturé avant celle-ci, et peut donc réécrire ici
-        un membre survivant seul dans son ancien groupe — sans ce garde-fou, le
-        groupe de 1 réapparaît jusqu'au prochain delete_photo(s)/redémarrage (cf.
-        dedup_singleton_groups_any_delete_path en mémoire, dont ce chemin n'était
-        pas couvert)."""
+        Also dissolves any group fallen back to 0/1 copy by this call: a
+        DuplicateDetectorThread running at the time of a deletion computes its
+        assignments on a state captured before it, and can therefore rewrite here
+        a member left alone in its former group — without this safeguard the group
+        of 1 reappears until the next delete_photo(s)/restart (cf.
+        dedup_singleton_groups_any_delete_path in memory, whose path this one was
+        not covered by)."""
         if not assignments:
             return
         with self._guard() as conn:
@@ -893,13 +892,13 @@ class Catalog:
             conn.commit()
 
     def clear_duplicate_groups(self) -> None:
-        """Efface tous les marqueurs de doublons."""
+        """Clears every duplicate marker."""
         with self._guard() as conn:
             conn.execute("UPDATE photos SET duplicate_group_id=NULL")
             conn.commit()
 
     def get_duplicates_for_group(self, group_id: int) -> list:
-        """Retourne toutes les photos du groupe de doublons donné."""
+        """Returns every photo of the given duplicate group."""
         with self._guard() as conn:
             rows = conn.execute(
                 "SELECT * FROM photos WHERE duplicate_group_id=? "
@@ -909,7 +908,7 @@ class Catalog:
         return [_photo_from_row(r) for r in rows]
 
     def get_duplicate_groups(self) -> dict:
-        """Retourne tous les groupes de doublons {group_id: [PhotoInfo, ...]}."""
+        """Returns every duplicate group {group_id: [PhotoInfo, ...]}."""
         with self._guard() as conn:
             rows = conn.execute(
                 "SELECT * FROM photos WHERE duplicate_group_id IS NOT NULL "
@@ -923,9 +922,9 @@ class Catalog:
         return groups
 
     def get_duplicate_group_assignments(self) -> dict:
-        """{path: group_id} pour toutes les photos actuellement groupées —
-        version légère de get_duplicate_groups() (pas de PhotoInfo complet),
-        utilisée pour amorcer (seed) une passe de détection incrémentale."""
+        """{path: group_id} for every photo currently grouped — a lightweight
+        version of get_duplicate_groups() (no complete PhotoInfo), used to seed an
+        incremental detection pass."""
         with self._guard() as conn:
             rows = conn.execute(
                 "SELECT path, duplicate_group_id FROM photos "
@@ -934,7 +933,7 @@ class Catalog:
         return {path: gid for path, gid in rows}
 
     def count_duplicate_groups(self) -> int:
-        """Nombre de groupes de doublons distincts actuellement enregistrés."""
+        """Number of distinct duplicate groups currently recorded."""
         with self._guard() as conn:
             row = conn.execute(
                 "SELECT COUNT(DISTINCT duplicate_group_id) FROM photos "
@@ -943,12 +942,12 @@ class Catalog:
         return row[0] if row else 0
 
     def ignore_duplicate_group(self, group_id: int) -> None:
-        """Dissout un groupe de doublons. Avec la détection incrémentale
-        (DuplicateDetectorThread ne recompare jamais deux fichiers déjà tous
-        les deux vérifiés lors d'une passe complète antérieure, cf.
-        dedup_cache.compared_tier1/2), ce groupe ne sera plus recréé tant
-        qu'aucun de ses membres ne change — un nouveau fichier correspondant
-        à l'un d'eux reste en revanche détecté normalement."""
+        """Dissolves a duplicate group. With the incremental detection
+        (DuplicateDetectorThread never recompares two files both already
+        checked during an earlier full pass, cf.
+        dedup_cache.compared_tier1/2), that group will not be recreated as
+        long as none of its members changes — a new file matching one of them
+        is, on the other hand, still detected normally."""
         with self._guard() as conn:
             conn.execute(
                 "UPDATE photos SET duplicate_group_id=NULL WHERE duplicate_group_id=?",
@@ -957,7 +956,7 @@ class Catalog:
             conn.commit()
 
     def get_all_photo_paths_for_dedup(self) -> list:
-        """Retourne la liste de tous les chemins de photos pour la détection de doublons."""
+        """Returns the list of every photo path for duplicate detection."""
         with self._guard() as conn:
             rows = conn.execute(
                 "SELECT path FROM photos ORDER BY path"
@@ -965,10 +964,10 @@ class Catalog:
         return [r[0] for r in rows]
 
     def get_photo_dates_for_dedup(self) -> dict:
-        """Retourne {path: datetime|None} (date_taken EXIF, précision sous-seconde
-        si disponible) pour tous les chemins catalogués — utilisé par la détection
-        de doublons pour ne pas fusionner deux photos dont la date de prise de vue
-        diffère (ex. rafale : même scène, instants de capture différents)."""
+        """Returns {path: datetime|None} (the EXIF date_taken, with sub-second
+        precision when available) for every catalogued path — used by duplicate
+        detection so as not to merge two photos whose capture date differs
+        (e.g. a burst: the same scene, different capture instants)."""
         with self._guard() as conn:
             rows = conn.execute("SELECT path, date_taken FROM photos").fetchall()
         result: dict = {}

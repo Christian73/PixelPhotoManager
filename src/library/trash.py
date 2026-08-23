@@ -1,15 +1,15 @@
 # Copyright 2026 Christian Guyot
 # SPDX-License-Identifier: Apache-2.0
-"""Suppression via la corbeille Windows — point unique pour toute l'application.
+"""Deletion through the Windows recycle bin — the single point for the whole application.
 
-Règle : l'application n'efface JAMAIS définitivement un fichier utilisateur.
-Toute suppression passe par move_to_trash() ; en cas d'échec (lecteur réseau
-ou volume sans corbeille → TrashPermissionError), l'exception remonte à
-l'appelant qui doit informer l'utilisateur que le fichier n'a PAS été
-supprimé — surtout pas de repli unlink silencieux.
+Rule: the application NEVER permanently erases a user file. Every deletion
+goes through move_to_trash(); on failure (network drive or volume with no
+recycle bin → TrashPermissionError), the exception propagates to the caller,
+which must tell the user that the file has NOT been deleted — never a silent
+unlink fallback.
 
-Les fichiers temporaires internes (tempfile, dossiers _restore_tmp…) ne sont
-pas concernés : leur unlink direct reste légitime.
+The internal temporary files (tempfile, _restore_tmp… folders) are not
+concerned: their direct unlink stays legitimate.
 """
 
 import logging
@@ -19,11 +19,11 @@ logger = logging.getLogger(__name__)
 
 
 def move_to_trash(path: str) -> None:
-    """Envoie un fichier ou un dossier (récursivement) à la corbeille Windows.
+    """Sends a file or a folder (recursively) to the Windows recycle bin.
 
-    Lève FileNotFoundError si le chemin n'existe pas, et laisse remonter
-    TrashPermissionError / OSError si la corbeille est indisponible pour ce
-    volume (lecteur réseau, clé USB configurée sans corbeille…).
+    Raises FileNotFoundError if the path does not exist, and lets
+    TrashPermissionError / OSError propagate if the recycle bin is unavailable
+    for that volume (network drive, USB key configured without one…).
     """
     from send2trash import send2trash
 
@@ -35,7 +35,7 @@ def move_to_trash(path: str) -> None:
 
 
 def is_trash_available() -> bool:
-    """True si le module send2trash est importable (toujours le cas en
-    installation normale — sert de garde-fou aux tests et au packaging)."""
+    """True if the send2trash module is importable (always the case in a
+    normal installation — a safety net for the tests and the packaging)."""
     import importlib.util
     return importlib.util.find_spec("send2trash") is not None

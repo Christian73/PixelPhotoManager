@@ -28,12 +28,12 @@ class PhotoInfo:
     gps_lat: Optional[float] = None
     gps_lon: Optional[float] = None
     is_favorite: bool = False
-    rating: int = 0             # note 0-5 étoiles (0 = non notée)
+    rating: int = 0             # rating 0-5 stars (0 = unrated)
     tags: list[str] = field(default_factory=list)
     id: Optional[int] = None
     media_type: str = "image"   # "image" or "video"
-    duration: float = 0.0       # durée en secondes (vidéos uniquement)
-    duplicate_group_id: Optional[int] = None  # groupe de doublons (None = unique)
+    duration: float = 0.0       # duration in seconds (videos only)
+    duplicate_group_id: Optional[int] = None  # duplicate group (None = unique)
 
     def __post_init__(self):
         if self.path:
@@ -68,35 +68,35 @@ class EditInfo:
     color_red: float = 0.0
     color_green: float = 0.0
     color_blue: float = 0.0
-    red_eye_regions: list = field(default_factory=list)  # [(cx, cy, r), ...] normalisés 0-1
-    vignette_strength: float = 0.0    # 0 = aucune, 1 = maximale
-    vignette_color: str = "black"     # "black" ou "white"
-    vignette_cx: float = 0.5          # centre X normalisé (0-1)
-    vignette_cy: float = 0.5          # centre Y normalisé (0-1)
-    vignette_rx1: float = 0.40        # rayon X interne (1.0 = demi-largeur image)
-    vignette_ry1: float = 0.40        # rayon Y interne (1.0 = demi-hauteur image)
-    vignette_rx2: float = 0.80        # rayon X externe (1.0 = demi-largeur image)
-    vignette_ry2: float = 0.80        # rayon Y externe (1.0 = demi-hauteur image)
-    vignette_angle: float = 0.0       # rotation en degrés
-    annotations: list = field(default_factory=list)  # calque dessin/texte, cf. annotation_renderer.py
-    # Cadre décoratif — cf. src/processing/frames.py. Les largeurs sont des
-    # fractions du plus petit côté de la photo (indépendantes de la résolution) ;
-    # le cadre s'ajoute AUTOUR de l'image, il n'empiète jamais dessus — seule
-    # exception, le second cadre facultatif de « plain » (frame_inner_enabled),
-    # dessiné SUR la photo (cf. frames.inner_overlay_px).
+    red_eye_regions: list = field(default_factory=list)  # [(cx, cy, r), ...] normalised 0-1
+    vignette_strength: float = 0.0    # 0 = none, 1 = maximum
+    vignette_color: str = "black"     # "black" or "white"
+    vignette_cx: float = 0.5          # normalised X centre (0-1)
+    vignette_cy: float = 0.5          # normalised Y centre (0-1)
+    vignette_rx1: float = 0.40        # inner X radius (1.0 = half the image width)
+    vignette_ry1: float = 0.40        # inner Y radius (1.0 = half the image height)
+    vignette_rx2: float = 0.80        # outer X radius (1.0 = half the image width)
+    vignette_ry2: float = 0.80        # outer Y radius (1.0 = half the image height)
+    vignette_angle: float = 0.0       # rotation in degrees
+    annotations: list = field(default_factory=list)  # drawing/text layer, cf. annotation_renderer.py
+    # Decorative frame — cf. src/processing/frames.py. The widths are fractions
+    # of the short side of the photo (independent of the resolution); the frame is
+    # added AROUND the image, it never encroaches on it — the only exception being
+    # the optional second frame of "plain" (frame_inner_enabled), drawn ON the
+    # photo (cf. frames.inner_overlay_px).
     frame_type: str = "none"           # "none", "plain", "simple", "double", "vine", …
-    frame_width: float = 0.05          # largeur du cadre extérieur
-    frame_inner_width: float = 0.015   # largeur du cadre intérieur (double, plain)
-    frame_gap: float = 0.02            # intervalle entre les deux cadres (double, plain)
+    frame_width: float = 0.05          # width of the outer frame
+    frame_inner_width: float = 0.015   # width of the inner frame (double, plain)
+    frame_gap: float = 0.02            # gap between the two frames (double, plain)
     frame_style: str = "solid"         # "solid", "gradient", "glitter"
-    frame_color: str = "#f2f2f2"       # couleur principale du cadre extérieur
-    frame_color2: str = "#8c8c8c"      # 2e couleur (dégradé / éclats du pailleté)
-    frame_inner_color: str = "#303030"  # couleur du cadre intérieur (double)
-    frame_gap_color: str = "#ffffff"   # couleur de l'intervalle (double)
-    frame_inner_enabled: bool = False  # second cadre de « plain » (sur la photo)
-    frame_inner_motif: str = "line"    # ferronnerie du second cadre, cf. frames.INNER_MOTIFS
-    frame_inner_relief: bool = True    # relief léger (False = aplat strict)
-    frame_inner_ornament: float = 1.0  # échelle des ornements (curseur « Ornements »)
+    frame_color: str = "#f2f2f2"       # main colour of the outer frame
+    frame_color2: str = "#8c8c8c"      # 2nd colour (gradient / glitter flecks)
+    frame_inner_color: str = "#303030"  # colour of the inner frame (double)
+    frame_gap_color: str = "#ffffff"   # colour of the gap (double)
+    frame_inner_enabled: bool = False  # second frame of "plain" (on the photo)
+    frame_inner_motif: str = "line"    # ironwork of the second frame, cf. frames.INNER_MOTIFS
+    frame_inner_relief: bool = True    # light relief (False = strict flat fill)
+    frame_inner_ornament: float = 1.0  # scale of the ornaments ("Ornaments" slider)
 
     def is_modified(self) -> bool:
         return (
@@ -241,9 +241,9 @@ class PersonInfo:
     id: Optional[int] = None
     photo_count: int = 0
     cover_path: str = ""
-    cover_bbox: Optional[tuple] = None            # (x, y, w, h) dans cover_path
-    cover_detected_rotation: int = 0             # rotation CW lors de la détection
-    pending_count: int = 0                        # groupes en attente de vérification
+    cover_bbox: Optional[tuple] = None            # (x, y, w, h) in cover_path
+    cover_detected_rotation: int = 0             # CW rotation at detection time
+    pending_count: int = 0                        # groups awaiting verification
 
 
 @dataclass
@@ -257,7 +257,7 @@ class FaceInfo:
     cluster_id: Optional[int] = None
     person_id: Optional[int] = None
     ignored: bool = False
-    pinned: bool = False   # True = face isolée manuellement, exclue du re-clustering
-    detected_rotation: int = 0   # rotation CW (degrés) appliquée lors de la détection
-    suggestion_person_id: Optional[int] = None   # personne suggérée (en attente de vérification)
-    suggestion_score: float = 0.0                # similarité cosinus de la suggestion ci-dessus
+    pinned: bool = False   # True = face isolated manually, excluded from re-clustering
+    detected_rotation: int = 0   # CW rotation (degrees) applied at detection time
+    suggestion_person_id: Optional[int] = None   # suggested person (awaiting verification)
+    suggestion_score: float = 0.0                # cosine similarity of the suggestion above

@@ -1,13 +1,13 @@
 # Copyright 2026 Christian Guyot
 # SPDX-License-Identifier: Apache-2.0
-"""Registre persistant des fichiers corrompus supprimés par l'application (cf.
-main_window_duplicates.py::_offer_corrupted_delete), au format JSON Lines dans
-%LOCALAPPDATA%\\PixelPhotoManager\\deleted_corrupted_files.jsonl — permet à
-l'utilisateur de retrouver après coup la liste exacte des chemins supprimés,
-soit dans la corbeille Windows (où ils sont partis, cf. src/library/trash.py),
-soit dans une sauvegarde externe si la corbeille a depuis été vidée.
+"""Persistent registry of the corrupted files deleted by the application (cf.
+main_window_duplicates.py::_offer_corrupted_delete), in JSON Lines format in
+%LOCALAPPDATA%\PixelPhotoManager\deleted_corrupted_files.jsonl — it lets the
+user find, after the fact, the exact list of the deleted paths, either in the
+Windows recycle bin (where they went, cf. src/library/trash.py) or in an
+external backup if the recycle bin has been emptied since.
 
-API publique :
+Public API:
     deleted_corrupted_files.add_deleted(paths)
     deleted_corrupted_files.get_entries()
 """
@@ -30,10 +30,10 @@ class _DeletedCorruptedFiles:
         self._path.parent.mkdir(parents=True, exist_ok=True)
 
     def add_deleted(self, paths: list[str]) -> None:
-        """Ajoute une entrée par fichier supprimé. Append-only : l'historique
-        complet est conservé, jamais purgé automatiquement — c'est le seul
-        endroit où le chemin d'un fichier corrompu supprimé survit après sa
-        disparition du catalogue."""
+        """Adds one entry per deleted file. Append-only: the complete history is
+        kept, never purged automatically — this is the only place where the
+        path of a deleted corrupted file survives its disappearance from the
+        catalogue."""
         if not paths:
             return
         now = time.time()
@@ -50,7 +50,7 @@ class _DeletedCorruptedFiles:
                 pass
 
     def get_entries(self) -> list[dict]:
-        """Retourne toutes les entrées, plus récente en dernier."""
+        """Returns every entry, most recent last."""
         try:
             with self._lock:
                 with open(self._path, "r", encoding="utf-8") as f:

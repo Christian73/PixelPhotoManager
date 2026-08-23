@@ -20,13 +20,13 @@ _DEFAULTS = {
     "ui": {
         "sidebar_width": 240,
         "theme": "dark",
-        # Langue de l'interface — "en" | "fr" | "de" (cf. src/core/i18n.py).
-        # Lue au démarrage uniquement : le changement prend effet au redémarrage.
-        # Anglais par défaut, comme `i18n.DEFAULT_LANGUAGE` : une installation
-        # neuve démarre donc dans la langue des chaînes sources, la seule où
-        # aucun message ne peut manquer. Ne concerne que les configs sans la
-        # clé — `save()` écrit le dictionnaire fusionné complet, un poste déjà
-        # installé porte donc son choix explicite et n'est pas basculé.
+        # Interface language — "en" | "fr" | "de" (cf. src/core/i18n.py).
+        # Read at startup only: a change takes effect on restart.
+        # English by default, like `i18n.DEFAULT_LANGUAGE`: a fresh install therefore
+        # starts in the language of the source strings, the only one where no message
+        # can be missing. This only concerns configs without the key — `save()` writes
+        # the complete merged dictionary, so an already installed machine carries its
+        # explicit choice and is not switched over.
         "language": "en",
         "splitters": {
             "viewer": "",
@@ -101,9 +101,9 @@ class Config:
         self.save()
 
     def get_scan_folders(self) -> list[str]:
-        # normpath() : les dossiers peuvent avoir été enregistrés avec des
-        # séparateurs "/" (QFileDialog) — on normalise à la lecture pour que
-        # les comparaisons de chemin (ex. remove_scan_folder) restent fiables.
+        # normpath(): folders may have been recorded with "/" separators
+        # (QFileDialog) — we normalise on read so that path comparisons
+        # (e.g. remove_scan_folder) stay reliable.
         return [os.path.normpath(p) for p in self._data.get("scan_folders", [])]
 
     def add_scan_folder(self, path: str) -> None:

@@ -15,9 +15,9 @@ logger = logging.getLogger(__name__)
 
 
 def _app_root() -> Path:
-    """Racine de l'application : dossier de l'exe en mode figé, racine du dépôt en mode dev.
-    Ne jamais dériver ceci du cwd — un lancement depuis un autre dossier de travail
-    ne doit pas faire chercher les plugins au mauvais endroit."""
+    """Root of the application: folder of the exe in frozen mode, root of the repository in dev mode.
+    Never derive this from the cwd — launching from another working directory
+    must not make us look for the plugins in the wrong place."""
     if getattr(sys, "frozen", False):
         return Path(sys.executable).parent
     return Path(__file__).resolve().parent.parent.parent

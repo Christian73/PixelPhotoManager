@@ -1,78 +1,79 @@
 # Copyright 2026 Christian Guyot
 # SPDX-License-Identifier: Apache-2.0
-"""Limitation de la charge CPU des traitements de fond permanents (détection
-de doublons, reconnaissance faciale).
+"""Limiting the CPU load of the permanent background tasks (duplicate
+detection, face recognition).
 
-Trois leviers complémentaires — les deux premiers réduisent le *nombre* de
-threads qui travaillent, le troisième réduit le *débit* de chacun :
+Three complementary levers — the first two reduce the *number* of threads
+that work, the third reduces the *throughput* of each one:
 
-1. `throttled_worker_count()` — nombre de workers/subprocesses Python à ~15 %
-   des cœurs disponibles.
+1. `throttled_worker_count()` — number of Python workers/subprocesses at ~15%
+   of the available cores.
 2. `lower_current_thread_priority()` / `lower_current_process_priority()` —
-   priorité OS minimale (IDLE), pour que le premier plan reste réactif.
-   `limit_cv2_threads()` complète les deux : sans lui, un seul de nos workers
-   « throttlés » peut saturer tous les cœurs, OpenCV parallélisant en interne
-   ses propres appels sur un pool de threads que nous n'avons jamais créés
-   (donc ni comptés, ni abaissés en priorité).
-3. `throttle_tick()` — cycle de service (duty cycle) : chaque thread de fond
-   s'endort périodiquement pour ne consommer qu'une fraction paramétrable du
-   temps CPU. C'est le seul levier qui plafonne réellement la consommation :
-   un thread en priorité IDLE occupe malgré tout 100 % d'un cœur inoccupé
-   (ventilateur, batterie), la priorité ne fait que céder le passage.
+   minimum OS priority (IDLE), so that the foreground stays responsive.
+   `limit_cv2_threads()` completes the two: without it, a single one of our
+   "throttled" workers can saturate every core, since OpenCV parallelises its
+   own calls internally over a thread pool we never created (hence neither
+   counted nor lowered in priority).
+3. `throttle_tick()` — duty cycle: each background thread sleeps periodically
+   so as to consume only a configurable fraction of the CPU time. It is the
+   only lever that really caps the consumption: a thread at IDLE priority
+   still occupies 100% of an otherwise unused core (fan, battery) — priority
+   only yields the way.
 """
 import os
 import threading
 import time
 
-THROTTLE_FRACTION = 0.15  # ~15 % des cœurs disponibles
+THROTTLE_FRACTION = 0.15  # ~15% of the available cores
 
-# Niveaux exposés dans les paramètres : fraction du temps réellement passée à
-# travailler (le reste est du sommeil). 1.0 = aucun bridage.
+# Levels exposed in the settings: the fraction of time actually spent working
+# (the rest is sleep). 1.0 = no throttling at all.
 BACKGROUND_CPU_LEVELS: dict[str, float] = {
     "low": 0.25,
     "medium": 0.60,
     "max": 1.00,
 }
-# "low" par défaut : les analyses de fond (doublons, visages) sont permanentes
-# et sans échéance, alors que la réactivité de l'interface, elle, se remarque
-# immédiatement. Qui veut avancer plus vite peut monter le niveau dans les
-# paramètres — l'inverse (découvrir un bridage à poser) suppose de comprendre
-# d'où vient la lenteur.
+# "low" by default: the background analyses (duplicates, faces) are permanent
+# and have no deadline, whereas the responsiveness of the interface is noticed
+# immediately. Whoever wants to go faster can raise the level in the settings —
+# the opposite (discovering that a throttle needs to be applied) assumes one
+# understands where the sluggishness comes from.
 DEFAULT_BACKGROUND_CPU = "low"
 
-# Délai d'inactivité de l'utilisateur au-delà duquel le bridage est levé : si
-# personne ne se sert de l'application, autant finir le travail de fond vite.
+# How long the user must stay idle before the throttle is lifted: if nobody is
+# using the application, the background work may as well finish quickly.
 IDLE_GRACE_SECONDS = 45.0
 
-# Durée de travail accumulée avant d'envisager une pause. Trop court, le coût
-# des appels time.sleep() domine ; trop long, la pause devient perceptible sur
-# la réactivité de l'annulation (cf. closeEvent).
+# Amount of accumulated work before a pause is considered. Too short and the
+# cost of the time.sleep() calls dominates; too long and the pause becomes
+# noticeable on how fast a cancellation reacts (cf. closeEvent).
 _WORK_SLICE = 0.10
-# Le sommeil est fractionné pour rester interruptible (annulation/fermeture).
+# The sleep is split up so as to stay interruptible (cancellation/shutdown).
 _SLEEP_STEP = 0.05
 
 _ratio_lock = threading.Lock()
-_ratio: float | None = None  # None = pas encore lu depuis la configuration
+_ratio: float | None = None  # None = not read from the configuration yet
 _last_activity = time.monotonic()
 _local = threading.local()
 
 
 def throttled_worker_count(minimum: int = 1) -> int:
-    """Nombre de workers/subprocesses correspondant à ~15 % des cœurs
-    disponibles, jamais moins que `minimum`."""
+    """Number of workers/subprocesses matching ~15% of the available cores,
+    never fewer than `minimum`."""
     return max(minimum, round((os.cpu_count() or 4) * THROTTLE_FRACTION))
 
 
 def lower_current_thread_priority() -> None:
-    """Windows : abaisse la priorité du thread OS courant au minimum
-    (THREAD_PRIORITY_IDLE) pour laisser le premier plan répondre — le thread
-    ne s'exécute quasiment que quand le CPU est autrement inactif. À utiliser
-    dans QThread.run() (threads secondaires) et comme `initializer` de
-    ThreadPoolExecutor (chaque worker thread s'auto-abaisse à son démarrage).
+    """Windows: lowers the priority of the current OS thread to the minimum
+    (THREAD_PRIORITY_IDLE) so as to let the foreground respond — the thread
+    then runs almost only when the CPU is otherwise idle. To be used inside
+    QThread.run() (secondary threads) and as the `initializer` of a
+    ThreadPoolExecutor (each worker thread lowers itself when it starts).
 
-    À préférer à `QThread.setPriority(QThread.LowestPriority)`, qui ne descend
-    qu'à THREAD_PRIORITY_LOWEST (-2) là où IDLE (-15) place le thread sous
-    quasiment tout le reste du système. No-op silencieux si indisponible."""
+    To be preferred over `QThread.setPriority(QThread.LowestPriority)`, which
+    only goes down to THREAD_PRIORITY_LOWEST (-2) where IDLE (-15) places the
+    thread below just about everything else on the system. Silent no-op if
+    unavailable."""
     try:
         import ctypes
         THREAD_PRIORITY_IDLE = -15
@@ -83,11 +84,11 @@ def lower_current_thread_priority() -> None:
 
 
 def lower_current_process_priority() -> None:
-    """Abaisse la priorité du process courant au minimum via psutil
-    (IDLE_PRIORITY_CLASS). À utiliser comme `initializer` de
-    ProcessPoolExecutor : chaque worker est un process dédié sans UI, donc
-    abaisser tout le process (contrairement au process principal, où ça
-    pénaliserait aussi l'UI) est sûr. No-op silencieux si indisponible."""
+    """Lowers the priority of the current process to the minimum through psutil
+    (IDLE_PRIORITY_CLASS). To be used as the `initializer` of a
+    ProcessPoolExecutor: each worker is a dedicated process with no UI, so
+    lowering the whole process (unlike the main process, where it would
+    penalise the UI too) is safe. Silent no-op if unavailable."""
     try:
         import psutil
         psutil.Process().nice(psutil.IDLE_PRIORITY_CLASS)
@@ -96,21 +97,21 @@ def lower_current_process_priority() -> None:
 
 
 def limit_cv2_threads(n: int = 1) -> None:
-    """Limite le pool de threads interne d'OpenCV (`cv2.parallel_for_`) à `n`.
+    """Limits OpenCV's internal thread pool (`cv2.parallel_for_`) to `n`.
 
-    Sans ça, `cv2.setNumThreads()` vaut par défaut le nombre de cœurs (16 sur
-    une machine typique) : chacun de nos workers « throttlés » peut alors, sur
-    un seul appel (`imdecode`, `resize`, `warpPerspective`, `knnMatch`,
-    `detectAndCompute`…), déclencher autant de threads natifs, à priorité
-    NORMALE puisque nous ne les créons pas nous-mêmes — le plafond de
-    `throttled_worker_count()` ne plafonne alors plus rien du tout.
+    Without this, `cv2.setNumThreads()` defaults to the number of cores (16 on
+    a typical machine): each of our "throttled" workers can then, on a single
+    call (`imdecode`, `resize`, `warpPerspective`, `knnMatch`,
+    `detectAndCompute`…), spawn as many native threads, at NORMAL priority
+    since we do not create them ourselves — the ceiling of
+    `throttled_worker_count()` then caps nothing at all.
 
-    Attention : le réglage est **global au process**, pas au thread appelant.
-    Il s'applique donc aussi aux usages interactifs d'OpenCV (vignettes vidéo,
-    rotations à l'export, réparation de fichiers) ; ceux-ci sont des opérations
-    unitaires courtes où la parallélisation interne n'apporte quasiment rien,
-    contrairement aux boucles de fond qui, elles, tournent en continu.
-    No-op silencieux si OpenCV est absent."""
+    Careful: the setting is **global to the process**, not to the calling
+    thread. It therefore also applies to the interactive uses of OpenCV (video
+    thumbnails, rotations on export, file repair); those are short one-shot
+    operations where the internal parallelism brings next to nothing, unlike
+    the background loops, which run continuously.
+    Silent no-op if OpenCV is absent."""
     try:
         import cv2
         cv2.setNumThreads(max(1, int(n)))
@@ -119,18 +120,17 @@ def limit_cv2_threads(n: int = 1) -> None:
 
 
 def init_background_process() -> None:
-    """`initializer` à passer à tout ProcessPoolExecutor de fond : abaisse la
-    priorité du process worker **et** plafonne le pool interne d'OpenCV.
+    """`initializer` to pass to every background ProcessPoolExecutor: lowers the
+    priority of the worker process **and** caps OpenCV's internal pool.
 
-    Doit rester une fonction MODULE-LEVEL (non-lambda, non-méthode) pour être
-    picklable par multiprocessing sur Windows (spawn) — même contrainte que
-    `warmup_worker` dans faces/detector.py.
+    Must stay a MODULE-LEVEL function (not a lambda, not a method) so as to be
+    picklable by multiprocessing on Windows (spawn) — the same constraint as
+    `warmup_worker` in faces/detector.py.
 
-    Remplace l'usage direct de `lower_current_process_priority` comme
-    initializer : la priorité seule ne suffit pas, un worker de détection qui
-    décode et redimensionne une photo de 24 Mpx déclenche autant de threads
-    OpenCV que de cœurs, à priorité normale puisqu'ils naissent hors de notre
-    contrôle."""
+    Replaces the direct use of `lower_current_process_priority` as the
+    initializer: priority alone is not enough — a detection worker decoding and
+    resizing a 24 Mpx photo spawns as many OpenCV threads as there are cores,
+    at normal priority since they are born outside our control."""
     lower_current_process_priority()
     limit_cv2_threads(1)
 
@@ -138,19 +138,20 @@ def init_background_process() -> None:
 # ── Cycle de service (duty cycle) ──────────────────────────────────────────────
 
 def set_background_cpu_level(level: str) -> None:
-    """Fixe le niveau de bridage des traitements de fond (clé de
-    BACKGROUND_CPU_LEVELS). Appelé au démarrage puis à chaque changement dans
-    les paramètres — la valeur est gardée en mémoire pour que `throttle_tick()`
-    reste bon marché (appelé des milliers de fois par seconde)."""
+    """Sets the throttling level of the background tasks (a key of
+    BACKGROUND_CPU_LEVELS). Called at startup and then on every change in the
+    settings — the value is kept in memory so that `throttle_tick()` stays
+    cheap (it is called thousands of times per second)."""
     global _ratio
     with _ratio_lock:
         _ratio = BACKGROUND_CPU_LEVELS.get(level, BACKGROUND_CPU_LEVELS[DEFAULT_BACKGROUND_CPU])
 
 
 def background_cpu_ratio() -> float:
-    """Fraction du temps CPU allouée aux traitements de fond, lue une seule
-    fois depuis la configuration si `set_background_cpu_level()` n'a pas déjà
-    été appelé (cas des tests et des scripts hors application)."""
+    """Fraction of the CPU time allocated to the background tasks, read once
+    from the configuration if `set_background_cpu_level()` has not been called
+    already (the case of the tests and of scripts running outside the
+    application)."""
     with _ratio_lock:
         if _ratio is not None:
             return _ratio
@@ -165,9 +166,9 @@ def background_cpu_ratio() -> float:
 
 
 def note_user_activity() -> None:
-    """Signale une interaction utilisateur (clic, touche, molette). Appelé par
-    le filtre d'événements de MainWindow ; au-delà de IDLE_GRACE_SECONDS sans
-    interaction, le bridage est levé (personne ne regarde, autant avancer)."""
+    """Reports a user interaction (click, key, wheel). Called by the event
+    filter of MainWindow; beyond IDLE_GRACE_SECONDS with no interaction, the
+    throttle is lifted (nobody is watching, we may as well make progress)."""
     global _last_activity
     _last_activity = time.monotonic()
 
@@ -177,20 +178,20 @@ def user_is_idle() -> bool:
 
 
 def effective_cpu_ratio() -> float:
-    """Fraction effective, une fois pris en compte l'état d'activité de
-    l'utilisateur."""
+    """Effective fraction, once the user's activity state is taken into
+    account."""
     if user_is_idle():
         return 1.0
     return background_cpu_ratio()
 
 
 class DutyCycle:
-    """Régulateur de débit d'un seul thread : accumule le temps de travail
-    écoulé entre deux `tick()` et s'endort pour tenir le ratio demandé.
+    """Throughput regulator for a single thread: accumulates the working time
+    elapsed between two `tick()` calls and sleeps to hold the requested ratio.
 
-    Un régulateur par thread (cf. `throttle_tick()`) plutôt qu'un compteur
-    global partagé : pas de verrou sur un chemin très chaud, et le ratio se
-    compose naturellement (N threads bridés à r consomment ~N·r cœurs)."""
+    One regulator per thread (cf. `throttle_tick()`) rather than a shared
+    global counter: no lock on a very hot path, and the ratio composes
+    naturally (N threads throttled to r consume ~N·r cores)."""
 
     def __init__(self, slice_s: float = _WORK_SLICE) -> None:
         self._slice = slice_s
@@ -200,9 +201,9 @@ class DutyCycle:
         self._work_start = time.monotonic()
 
     def tick(self, cancelled=None) -> None:
-        """À appeler à chaque unité de travail (une photo, une ligne de la
-        boucle O(N²), un lot de paires). `cancelled` : callable optionnel
-        interrogé pendant le sommeil pour rendre la main immédiatement."""
+        """To be called on every unit of work (a photo, one row of the O(N²)
+        loop, a batch of pairs). `cancelled`: an optional callable polled
+        during the sleep so as to hand back control immediately."""
         ratio = effective_cpu_ratio()
         now = time.monotonic()
         if ratio >= 1.0:
@@ -221,10 +222,10 @@ class DutyCycle:
 
 
 def throttle_tick(cancelled=None) -> None:
-    """Cycle de service pour le thread courant (régulateur créé à la volée et
-    conservé en thread-local). À appeler dans toute boucle de fond soutenue,
-    y compris depuis les workers d'un ThreadPoolExecutor — c'est là que le
-    travail a lieu, donc c'est là que la pause doit être prise."""
+    """Duty cycle for the current thread (the regulator is created on the fly
+    and kept in thread-local storage). To be called in every sustained
+    background loop, including from the workers of a ThreadPoolExecutor —
+    that is where the work happens, so that is where the pause must be taken."""
     duty = getattr(_local, "duty", None)
     if duty is None:
         duty = _local.duty = DutyCycle()

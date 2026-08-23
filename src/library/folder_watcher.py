@@ -11,17 +11,17 @@ logger = logging.getLogger(__name__)
 _DEBOUNCE_MS = 400
 
 
-# Ré-export : implémentation partagée (cf. fs_utils), alias conservé pour les
-# usages internes et les tests existants.
+# Re-export: shared implementation (cf. fs_utils), the alias is kept for the
+# internal uses and the existing tests.
 from src.library.fs_utils import is_hidden_path as _is_hidden  # noqa: E402
 
 
 class _TreeScanThread(QThread):
-    """Parcourt récursivement les dossiers racine hors thread UI.
+    """Walks the root folders recursively, outside the UI thread.
 
-    os.scandir répété sur une grosse arborescence (ou un lecteur réseau lent)
-    peut largement dépasser le budget de 50ms — cf. règle "l'UI ne bloque
-    jamais" (CLAUDE.md).
+    A repeated os.scandir on a large tree (or a slow network drive) can go
+    well beyond the 50 ms budget — cf. the "the UI never blocks" rule
+    (CLAUDE.md).
     """
 
     finished_scan = Signal(list)  # list[tuple[str, frozenset, frozenset]]
@@ -55,11 +55,11 @@ class _TreeScanThread(QThread):
 
 class FolderWatcher(QObject):
     """
-    Surveille un ensemble de dossiers racine (récursivement) via QFileSystemWatcher.
+    Watches a set of root folders (recursively) through QFileSystemWatcher.
 
-    Signaux :
-        files_changed(path)   — des fichiers ont été ajoutés ou supprimés dans path
-        subfolder_added(path) — un nouveau sous-dossier est apparu à path
+    Signals:
+        files_changed(path)   — files were added to or removed from path
+        subfolder_added(path) — a new subfolder appeared at path
     """
 
     files_changed   = Signal(str)
@@ -78,23 +78,23 @@ class FolderWatcher(QObject):
         self._debounce.timeout.connect(self._flush_pending)
         self._scan_thread: "_TreeScanThread | None" = None
         self._scan_generation = 0
-        # Changements auto-infligés à absorber : dir -> (noms de fichiers,
-        # deadline time.monotonic). Quand l'application supprime/déplace
-        # elle-même des fichiers (touche Del, drag & drop), l'événement watcher
-        # qui suit ne fait que constater ce que l'UI a déjà traité — sans cette
-        # absorption, chaque suppression déclenchait un rescan complet du
-        # dossier suivi d'un refresh albums/personnes redondant.
+        # Self-inflicted changes to absorb: dir -> (file names,
+        # time.monotonic deadline). When the application deletes/moves files
+        # itself (the Del key, drag & drop), the watcher event that follows only
+        # reports what the UI has already handled — without this absorption,
+        # every deletion triggered a full rescan of the folder followed by a
+        # redundant album/person refresh.
         self._self_deleted: dict[str, tuple[set[str], float]] = {}
         self._self_added: dict[str, tuple[set[str], float]] = {}
 
     # ------------------------------------------------------------------ public
 
     def set_folders(self, folders: list[str]) -> None:
-        """Remplace l'ensemble surveillé par ces dossiers racine (récursif).
+        """Replaces the watched set with these root folders (recursive).
 
-        Le parcours récursif se fait dans un QThread (cf. _TreeScanThread) —
-        une grosse arborescence ou un lecteur réseau lent rendrait sinon cet
-        appel bloquant pour l'UI bien au-delà de 50ms."""
+        The recursive walk happens in a QThread (cf. _TreeScanThread) — a
+        large tree or a slow network drive would otherwise make this call
+        block the UI well beyond 50 ms."""
         self._scan_generation += 1
         generation = self._scan_generation
 
@@ -113,17 +113,17 @@ class FolderWatcher(QObject):
         thread.start()
 
     def notify_self_deletions(self, paths: list[str], ttl_s: float = 10.0) -> None:
-        """Déclare des fichiers que l'application va supprimer elle-même : les
-        événements du watcher qui ne font que constater ces disparitions seront
-        absorbés (pas de files_changed → pas de rescan redondant). Un
-        changement EXTERNE dans le même dossier (autre fichier ajouté ou
-        supprimé) émet toujours. Le TTL borne le cas où la suppression échoue
-        finalement (le nom resterait sinon absorbé indéfiniment)."""
+        """Declares files the application is about to delete itself: the watcher
+        events that merely report those disappearances will be absorbed (no
+        files_changed → no redundant rescan). An EXTERNAL change in the same
+        folder (another file added or removed) is still emitted. The TTL
+        bounds the case where the deletion eventually fails (the name would
+        otherwise stay absorbed indefinitely)."""
         self._notify_self(self._self_deleted, paths, ttl_s)
 
     def notify_self_additions(self, paths: list[str], ttl_s: float = 10.0) -> None:
-        """Pendant du précédent pour des fichiers que l'application va créer
-        elle-même (destination d'un déplacement par drag & drop)."""
+        """Counterpart of the above for files the application is about to create
+        itself (the destination of a drag & drop move)."""
         self._notify_self(self._self_added, paths, ttl_s)
 
     @staticmethod
@@ -137,9 +137,9 @@ class FolderWatcher(QObject):
 
     @staticmethod
     def _consume_suppressed(table: dict, directory: str, names: frozenset) -> frozenset:
-        """Retourne l'intersection de names avec les noms déclarés pour ce
-        dossier (si la deadline n'est pas dépassée) et retire les noms
-        consommés de la table."""
+        """Returns the intersection of names with the names declared for this
+        folder (if the deadline has not passed) and removes the consumed
+        names from the table."""
         entry = table.get(directory)
         if entry is None:
             return frozenset()
@@ -157,7 +157,7 @@ class FolderWatcher(QObject):
 
     def _apply_scan(self, generation: int, results: list) -> None:
         if generation != self._scan_generation:
-            return  # un set_folders() plus récent a eu lieu entretemps — résultat obsolète
+            return  # a more recent set_folders() happened in the meantime — stale result
         for path, files, dirs in results:
             self._snapshots[path] = (files, dirs)
             self._watcher.addPath(path)
@@ -166,7 +166,7 @@ class FolderWatcher(QObject):
     # ------------------------------------------------------------------ internal
 
     def _add_tree(self, path: str) -> None:
-        """Ajoute path et tous ses sous-dossiers non cachés au watcher."""
+        """Adds path and all of its non-hidden subfolders to the watcher."""
         if not os.path.isdir(path):
             return
         self._take_snapshot(path)
@@ -179,7 +179,7 @@ class FolderWatcher(QObject):
             pass
 
     def _remove_tree(self, path: str) -> None:
-        """Supprime path et tous ses sous-snapshots du watcher."""
+        """Removes path and all of its sub-snapshots from the watcher."""
         prefix = path + os.sep
         to_remove = [p for p in self._snapshots if p == path or p.startswith(prefix)]
         for p in to_remove:
@@ -201,7 +201,7 @@ class FolderWatcher(QObject):
 
     def _on_dir_changed(self, path: str) -> None:
         self._pending.add(path)
-        self._debounce.start()  # repart à chaque nouvel événement
+        self._debounce.start()  # restarts on every new event
 
     def _flush_pending(self) -> None:
         pending = list(self._pending)
@@ -225,9 +225,9 @@ class FolderWatcher(QObject):
 
         self._snapshots[path] = (new_files, new_dirs)
 
-        # Absorber les changements que l'application a elle-même provoqués
-        # (cf. notify_self_deletions/notify_self_additions) : tout autre
-        # changement dans le même événement émet normalement.
+        # Absorb the changes the application caused itself
+        # (cf. notify_self_deletions/notify_self_additions): any other change
+        # in the same event is emitted normally.
         disappeared = old_files - new_files
         appeared    = new_files - old_files
         sup_del = self._consume_suppressed(self._self_deleted, path, disappeared)

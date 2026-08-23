@@ -1,14 +1,14 @@
 # Copyright 2026 Christian Guyot
 # SPDX-License-Identifier: Apache-2.0
-"""Utilitaires système de fichiers partagés (scanner, watcher, dialogues)."""
+"""Shared filesystem helpers (scanner, watcher, dialogs)."""
 
 import os
 
 
 def is_hidden_path(path: str) -> bool:
-    """True si le chemin est caché : attribut Windows « Caché » ou nom à
-    préfixe point. Un chemin illisible (supprimé entre-temps, droits) n'est
-    pas considéré caché."""
+    """True if the path is hidden: the Windows "Hidden" attribute or a name
+    with a dot prefix. An unreadable path (deleted in the meantime, rights)
+    is not considered hidden."""
     if os.path.basename(path).startswith("."):
         return True
     try:
@@ -18,10 +18,10 @@ def is_hidden_path(path: str) -> bool:
 
 
 def find_dvd_video_ts(folder: str) -> "str | None":
-    """Retourne le chemin du sous-dossier VIDEO_TS si folder est une copie de
-    DVD (VIDEO_TS attendu en enfant direct, structure standard des copies de
-    DVD), sinon None. Recherche insensible à la casse. Un dossier illisible
-    ou inexistant renvoie None plutôt que de lever une exception."""
+    """Returns the path of the VIDEO_TS subfolder if folder is a DVD copy
+    (VIDEO_TS expected as a direct child, the standard structure of DVD
+    copies), None otherwise. Case-insensitive search. An unreadable or
+    missing folder returns None rather than raising an exception."""
     try:
         with os.scandir(folder) as it:
             for entry in it:

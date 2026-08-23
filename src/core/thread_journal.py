@@ -1,13 +1,13 @@
 ﻿# Copyright 2026 Christian Guyot
 # SPDX-License-Identifier: Apache-2.0
 """
-Journal d'activité des threads.
+Activity journal of the threads.
 
-Chaque événement est enregistré au format JSON Lines dans
-%LOCALAPPDATA%\PixelPhotoManager\thread_journal.jsonl
+Each event is recorded in JSON Lines format in the file
+thread_journal.jsonl under %LOCALAPPDATA%\PixelPhotoManager
 
-API publique :
-    journal.start(thread, msg, **extra)  → retourne un token (float t0)
+Public API:
+    journal.start(thread, msg, **extra)  → returns a token (float t0)
     journal.step(thread, msg, t0=None, **extra)
     journal.end(thread, msg, t0, **extra)
     journal.error(thread, msg, **extra)
@@ -28,7 +28,7 @@ from src.core.app_dirs import APP_DATA_DIR
 
 
 def rss_mb() -> float:
-    """Retourne la mémoire résidente (RSS) du processus en Mo. 0.0 si indisponible."""
+    """Returns the resident memory (RSS) of the process in MB. 0.0 if unavailable."""
     try:
         import psutil
         return psutil.Process().memory_info().rss / 1_048_576
@@ -36,8 +36,8 @@ def rss_mb() -> float:
         return 0.0
 
 _JOURNAL_PATH = APP_DATA_DIR / "thread_journal.jsonl"
-_MAX_LINES    = 8_000   # rotation au-delà de cette limite
-_KEEP_LINES   = 5_000   # lignes conservées après rotation
+_MAX_LINES    = 8_000   # rotation beyond this limit
+_KEEP_LINES   = 5_000   # lines kept after a rotation
 
 
 class _ThreadJournal:
@@ -50,28 +50,28 @@ class _ThreadJournal:
     # ------------------------------------------------------------------ public
 
     def start(self, thread: str, msg: str, **extra) -> float:
-        """Enregistre le démarrage d'un thread. Retourne t0 (perf_counter)."""
+        """Records the start of a thread. Returns t0 (perf_counter)."""
         t0 = time.perf_counter()
         self._write("START", thread, msg, elapsed_ms=None, **extra)
         return t0
 
     def step(self, thread: str, msg: str, t0: float | None = None, **extra) -> None:
-        """Enregistre une étape intermédiaire."""
+        """Records an intermediate step."""
         elapsed = (time.perf_counter() - t0) * 1000 if t0 is not None else None
         self._write("STEP", thread, msg, elapsed_ms=elapsed, **extra)
 
     def end(self, thread: str, msg: str, t0: float, **extra) -> None:
-        """Enregistre la fin d'un thread avec la durée totale."""
+        """Records the end of a thread with the total duration."""
         elapsed = (time.perf_counter() - t0) * 1000
         self._write("END", thread, msg, elapsed_ms=round(elapsed, 1), **extra)
 
     def error(self, thread: str, msg: str, t0: float | None = None, **extra) -> None:
-        """Enregistre une erreur."""
+        """Records an error."""
         elapsed = (time.perf_counter() - t0) * 1000 if t0 is not None else None
         self._write("ERROR", thread, msg, elapsed_ms=elapsed, **extra)
 
     def get_entries(self, limit: int = 2000) -> list[dict]:
-        """Retourne les `limit` dernières entrées, plus récente en dernier."""
+        """Returns the last `limit` entries, most recent last."""
         try:
             with self._lock:
                 with open(self._path, "r", encoding="utf-8") as f:
@@ -124,7 +124,7 @@ class _ThreadJournal:
                 pass
 
     def _rotate(self) -> None:
-        """Garde les _KEEP_LINES dernières lignes."""
+        """Keeps the last _KEEP_LINES lines."""
         try:
             with open(self._path, "r", encoding="utf-8") as f:
                 lines = f.readlines()

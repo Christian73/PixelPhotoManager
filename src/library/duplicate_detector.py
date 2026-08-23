@@ -1,16 +1,16 @@
 ﻿# Copyright 2026 Christian Guyot
 # SPDX-License-Identifier: Apache-2.0
-"""Détection des doublons perceptuels dans la bibliothèque de photos.
+"""Detection of perceptual duplicates in the photo library.
 
-Deux niveaux de détection :
-  Tier 1 — pHash (distance de Hamming) :
-      Couvre les doublons exacts, redimensionnés et retouchés (couleur, luminosité).
-      Rapide : O(N²) comparaisons de hashes 64-bit.
+Two detection tiers:
+  Tier 1 — pHash (Hamming distance):
+      Covers exact, resized and edited duplicates (colour, brightness).
+      Fast: O(N²) comparisons of 64-bit hashes.
 
-  Tier 2 — ORB + RANSAC (correspondance de points-clés) :
-      Couvre les doublons recadrés (jusqu'à ~60 % de surface recadrée).
-      S'exécute uniquement sur les photos non groupées par le Tier 1.
-      Filtre préalable par ratio d'aire pour éviter les paires impossibles.
+  Tier 2 — ORB + RANSAC (keypoint matching):
+      Covers cropped duplicates (up to ~60 % of the area cropped away).
+      Runs only on the photos not grouped by Tier 1.
+      A prior area ratio filter avoids the impossible pairs.
 """
 import bisect
 import logging
@@ -37,41 +37,42 @@ from src.library.image_loader import RAW_EXT
 
 logger = logging.getLogger(__name__)
 
-_PROGRESS_INTERVAL = 0.5  # secondes — throttle des logs/signaux dans les boucles O(N²)
-_LIVE_SNAPSHOT_INTERVAL = 2.0  # secondes — throttle des instantanés partial_results
-# (renumérotation + écriture catalogue + rafraîchissement UI), plus coûteux qu'un
-# simple signal de progression, donc cadencé plus lentement que _PROGRESS_INTERVAL.
+_PROGRESS_INTERVAL = 0.5  # seconds — throttle of the logs/signals in the O(N²) loops
+_LIVE_SNAPSHOT_INTERVAL = 2.0  # seconds — throttle of the partial_results snapshots
+# (renumbering + catalog write + UI refresh), more expensive than a plain
+# progress signal, hence paced more slowly than _PROGRESS_INTERVAL.
 
 # ── Tier 1 ─────────────────────────────────────────────────────────────────────
-_HASH_THRESHOLD  = 10    # distance de Hamming max (8 = exact/resize ; 10 couvre les éditions modérées)
-_HASH_MICRO_SIZE     = 8    # miniature (px) pour la vérification post-hash
-_HASH_PIXEL_MAX_DIFF = 0.34  # écart moyen (miniature 8x8 normalisée) au-delà
-# duquel une paire pHash-positive est rejetée. Calibré empiriquement : pire
-# retouche légitime plausible (rotation 5°, sous le seuil pHash) ~0.31 ;
-# deux faux positifs réels observés (photos sans rapport, hash coïncidant
-# tout juste au seuil, silhouette clair/sombre similaire — ex. ciel+côte vs
-# ciel+falaise) ~0.375 et ~0.88. Le premier faux positif (0.375) est proche
-# du cas légitime (0.31) : marge résiduelle étroite (~0.03 de chaque côté).
-# Si un nouveau faux négatif apparaît (vraie retouche non détectée), il faut
-# remonter ce seuil et se reposer sur le bouton ✕ (Catalog.ignore_duplicate_group,
-# persistant) pour les faux positifs résiduels plutôt que sur ce seul seuil.
+_HASH_THRESHOLD  = 10    # max Hamming distance (8 = exact/resize; 10 covers moderate edits)
+_HASH_MICRO_SIZE     = 8    # thumbnail (px) for the post-hash check
+_HASH_PIXEL_MAX_DIFF = 0.34  # mean deviation (normalised 8x8 thumbnail) beyond
+# which a pHash-positive pair is rejected. Calibrated empirically: the worst
+# plausible legitimate edit (a 5° rotation, under the pHash threshold) ~0.31;
+# two real false positives observed (unrelated photos, hashes coinciding just
+# at the threshold, a similar light/dark silhouette — e.g. sky+coast vs
+# sky+cliff) ~0.375 and ~0.88. The first false positive (0.375) is close to
+# the legitimate case (0.31): a narrow residual margin (~0.03 on each side).
+# If a new false negative appears (a genuine edit not detected), this
+# threshold must be raised and the ✕ button (Catalog.ignore_duplicate_group,
+# persistent) relied on for the residual false positives rather than this
+# threshold alone.
 
 # ── Tier 2 ─────────────────────────────────────────────────────────────────────
-_ORB_MIN_INLIERS = 40    # inliers RANSAC minimum pour valider un appariement
-_ORB_AREA_FACTOR = 6.0   # ratio d'aire max entre deux photos pour être candidates
-_ORB_MAX_KP      = 300   # keypoints ORB max par image (vitesse vs rappel)
-_ORB_RATIO_TEST  = 0.75  # seuil du ratio test de Lowe
-_ORB_LOAD_SIZE   = 800   # dimension max (px) pour charger une image en Tier 2
-_ORB_GOOD_MIN    = 15    # matches après ratio test requis avant de lancer RANSAC
-_ORB_MAX_MEAN_DIFF = 25.0  # écart de pixels (0-255) après recalage par
-# homographie, sur la zone de recouvrement. Calibré empiriquement : un
-# vrai recadrage (paire synthétique crop_duplicate_pair) donne ~14 ;
-# deux faux positifs réels observés (rafale, arrière-plan statique très
-# texturé mais sujet différent) donnaient 38 et 42 — c'est le seul des
-# signaux testés (nombre d'inliers, ratio inliers/good) qui sépare
-# nettement les deux cas.
+_ORB_MIN_INLIERS = 40    # minimum RANSAC inliers to validate a match
+_ORB_AREA_FACTOR = 6.0   # max area ratio between two photos to be candidates
+_ORB_MAX_KP      = 300   # max ORB keypoints per image (speed vs recall)
+_ORB_RATIO_TEST  = 0.75  # threshold of Lowe's ratio test
+_ORB_LOAD_SIZE   = 800   # max dimension (px) to load an image in Tier 2
+_ORB_GOOD_MIN    = 15    # matches after the ratio test required before running RANSAC
+_ORB_MAX_MEAN_DIFF = 25.0  # pixel deviation (0-255) after registration by
+# a homography, over the overlap area. Calibrated empirically: a genuine
+# crop (the synthetic crop_duplicate_pair pair) gives ~14; two real false
+# positives observed (a burst, a static and heavily textured background
+# but a different subject) gave 38 and 42 — it is the only one of the
+# signals tested (number of inliers, inliers/good ratio) that separates
+# the two cases clearly.
 
-_GRAY_CACHE_SIZE = 32  # images de travail Tier 2 gardées décodées (cf. _GrayImageCache)
+_GRAY_CACHE_SIZE = 32  # Tier 2 working images kept decoded (cf. _GrayImageCache)
 
 _VIDEO_EXT = {'.mp4', '.mov', '.avi', '.mkv', '.wmv', '.webm',
               '.m4v', '.3gp', '.flv', '.ts', '.mts', '.mpg', '.mpeg', '.vob'}
@@ -80,20 +81,20 @@ _VIDEO_EXT = {'.mp4', '.mov', '.avi', '.mkv', '.wmv', '.webm',
 # ── helpers ────────────────────────────────────────────────────────────────────
 
 def _load_gray(path: str, max_dim: int) -> "np.ndarray | None":
-    """Charge en niveaux de gris, réduit si > max_dim. Retourne None en cas d'erreur.
+    """Loads in greyscale, downscaled if > max_dim. Returns None on error.
 
-    cv2.imread rejette les chemins non-ASCII sur Windows (cf. detector.py::
-    _exif_corrected) : on passe directement par PIL dans ce cas pour éviter
-    une tentative cv2 vouée à l'échec (warning console + double décodage).
+    cv2.imread rejects non-ASCII paths on Windows (cf. detector.py::
+    _exif_corrected): PIL is used directly in that case, to avoid a cv2
+    attempt doomed to fail (a console warning + a double decoding).
 
-    Le TIFF est exclu de cv2.imread quel que soit le chemin : certains TIFF
-    avec des tags de métadonnées exotiques (ex. tag 50341/0xc4a5, observé en
-    usage réel) déclenchent un bug connu du décodeur libtiff d'OpenCV
-    (assertion interne "original_ptr == real_mat.data" dans loadsave.cpp) qui
-    peut aboutir à un abort() du process plutôt qu'à une cv2.error Python
-    normalement rattrapable — un try/except ne protège pas contre ce cas.
-    PIL décode ces mêmes fichiers sans problème (déjà utilisé sans incident
-    par le Tier 1, qui ne passe jamais par cv2)."""
+    TIFF is excluded from cv2.imread whatever the path: some TIFFs with
+    exotic metadata tags (e.g. tag 50341/0xc4a5, observed in real use)
+    trigger a known bug of OpenCV's libtiff decoder (the internal assertion
+    "original_ptr == real_mat.data" in loadsave.cpp) that can end in an
+    abort() of the process rather than a normally catchable Python cv2.error
+    — a try/except does not protect against that case. PIL decodes those very
+    files without trouble (already used without incident by Tier 1, which
+    never goes through cv2)."""
     try:
         import numpy as np
         import cv2
@@ -123,19 +124,19 @@ def _load_gray(path: str, max_dim: int) -> "np.ndarray | None":
 
 
 class _GrayImageCache:
-    """LRU thread-safe des images de travail du Tier 2 (niveaux de gris,
-    réduites à `_ORB_LOAD_SIZE`), chargées **à la demande**.
+    """A thread-safe LRU of the Tier 2 working images (greyscale, downscaled
+    to `_ORB_LOAD_SIZE`), loaded **on demand**.
 
-    Ces images ne servent qu'à l'ultime vérification d'une paire (recalage par
-    homographie puis comparaison pixel, cf. `_ORB_MAX_MEAN_DIFF`), atteinte
-    seulement par les rares paires qui ont déjà passé le ratio test de Lowe et
-    le seuil d'inliers RANSAC. Les garder toutes décodées dans `desc_list`
-    coûtait, sur une bibliothèque de 65 000 photos, un décodage JPEG par photo
-    à chaque démarrage (~80 s de CPU) et une empreinte mémoire de plusieurs
-    dizaines de Go — pour un tableau dont on n'utilisait qu'une poignée
-    d'entrées. Rechargées depuis le fichier d'origine via `_load_gray()`, qui
-    est exactement la fonction ayant servi à calculer les keypoints : mêmes
-    dimensions, donc homographie et masque de recouvrement restent valides."""
+    Those images only serve the final check of a pair (registration by
+    homography then a pixel comparison, cf. `_ORB_MAX_MEAN_DIFF`), reached
+    only by the rare pairs that have already passed Lowe's ratio test and the
+    RANSAC inlier threshold. Keeping them all decoded in `desc_list` cost, on
+    a library of 65,000 photos, one JPEG decoding per photo on every start
+    (~80 s of CPU) and a memory footprint of several dozen GB — for an array
+    of which only a handful of entries were used. They are reloaded from the
+    original file through `_load_gray()`, exactly the function that served to
+    compute the keypoints: the same dimensions, so the homography and the
+    overlap mask stay valid."""
 
     def __init__(self, capacity: int = _GRAY_CACHE_SIZE) -> None:
         self._capacity = capacity
@@ -143,10 +144,10 @@ class _GrayImageCache:
         self._items: "OrderedDict[str, object]" = OrderedDict()
 
     def get(self, path: str):
-        """Image en niveaux de gris, ou None si le fichier est illisible.
-        Deux threads peuvent décoder le même chemin simultanément (le verrou
-        n'est pas tenu pendant le décodage, qui est long) : sans conséquence,
-        le résultat est identique et le second écrase le premier."""
+        """The greyscale image, or None if the file is unreadable.
+        Two threads may decode the same path simultaneously (the lock is not
+        held during the decoding, which is long): of no consequence, the
+        result is identical and the second overwrites the first."""
         with self._lock:
             img = self._items.get(path)
             if img is not None:
@@ -165,7 +166,7 @@ class _GrayImageCache:
 
 def _merge(group_of: dict[str, int], path_a: str, path_b: str,
            next_group: list[int]) -> None:
-    """Fusionne les groupes de path_a et path_b dans group_of (union-find naïf)."""
+    """Merges the groups of path_a and path_b in group_of (a naive union-find)."""
     ga = group_of.get(path_a)
     gb = group_of.get(path_b)
     if ga is None and gb is None:
@@ -184,12 +185,12 @@ def _merge(group_of: dict[str, int], path_a: str, path_b: str,
 
 
 def _dates_differ(dates: dict, path_a: str, path_b: str) -> bool:
-    """True seulement si les deux photos ont une date EXIF connue et
-    différente — une rafale (même seconde EXIF, sous-secondes différentes)
-    doit être exclue des doublons même si le contenu visuel est
-    quasi-identique, sur demande explicite de l'utilisateur. Une date
-    manquante d'un côté ou des deux ne bloque jamais la fusion (repli sur le
-    seul signal visuel, comme avant l'ajout de cette vérification)."""
+    """True only if both photos have a known and different EXIF date — a
+    burst (the same EXIF second, different sub-seconds) must be excluded
+    from the duplicates even when the visual content is nearly identical,
+    at the explicit request of the user. A date missing on one side or on
+    both never blocks the merge (a fallback on the visual signal alone, as
+    before this check was added)."""
     dt_a = dates.get(path_a)
     dt_b = dates.get(path_b)
     if dt_a is None or dt_b is None:
@@ -198,9 +199,9 @@ def _dates_differ(dates: dict, path_a: str, path_b: str) -> bool:
 
 
 def _renumber(group_of: dict[str, int]) -> dict[int, list[str]]:
-    """Renumérote les group_id bruts (1, 2, 3…) et exclut les singletons —
-    utilisable aussi bien sur un `group_of` final que sur un instantané
-    provisoire pris en cours de scan (les groupes ne font que croître)."""
+    """Renumbers the raw group_ids (1, 2, 3…) and excludes the singletons —
+    usable on a final `group_of` as well as on a provisional snapshot taken
+    during a scan (the groups only ever grow)."""
     raw: dict[int, list[str]] = {}
     for path, gid in group_of.items():
         raw.setdefault(gid, []).append(path)
@@ -214,46 +215,44 @@ def _renumber(group_of: dict[str, int]) -> dict[int, list[str]]:
     return groups
 
 
-# ── thread principal ────────────────────────────────────────────────────────────
+# ── main thread ────────────────────────────────────────────────────────────────
 
 class DuplicateDetectorThread(QThread):
-    """Détecte les doublons en deux passes (pHash + ORB/RANSAC)."""
+    """Detects the duplicates in two passes (pHash + ORB/RANSAC)."""
 
     progress  = Signal(int, int, str)  # (courant, total, message)
-    # object (pas dict) : PySide6 mappe Signal(dict) sur QVariantMap, qui exige des
-    # clés str côté C++ — avec des clés int (group_id), la conversion cross-thread
-    # échoue silencieusement (Shiboken log une erreur en stderr, pas d'exception
-    # Python) et le slot reçoit un dict vide, faisant croire à "aucun doublon".
+    # object (not dict): PySide6 maps Signal(dict) onto QVariantMap, which requires
+    # str keys on the C++ side — with int keys (group_id), the cross-thread
+    # conversion fails silently (Shiboken logs an error on stderr, no Python
+    # exception) and the slot receives an empty dict, suggesting "no duplicates".
     finished  = Signal(object)         # {group_id: [path, ...]}
-    # Instantané provisoire pendant le scan, même contrainte de clés que ci-dessus.
+    # A provisional snapshot during the scan, the same key constraint as above.
     partial_results = Signal(object, object)  # ({group_id: [path,...]}, [chemin_corrompu, ...])
     error     = Signal(str)
-    cancelled = Signal()              # émis une fois le thread réellement arrêté
+    cancelled = Signal()              # emitted once the thread has really stopped
 
     def __init__(self, photo_paths: list, seed_groups: dict[str, int] | None = None,
                  cache_db_path: str | None = None,
                  full_catalog_scan: bool = True, parent=None,
                  dates: dict | None = None):
-        """seed_groups : {path: group_id} connu au moment du déclenchement
-        (typiquement Catalog.get_duplicate_group_assignments()) — amorce
-        group_of pour que la comparaison reste vraiment incrémentale (cf.
-        compared_tier1/compared_tier2 dans dedup_cache.py). Attention :
-        omettre seed_groups lors d'un 2e run sur un même cache_db_path déjà
-        peuplé par un run précédent ne redéclenche PAS une comparaison
-        complète — toutes les paires apparaîtront comme « déjà comparées »
-        et aucun groupe ne sera (re)formé. Toujours passer le seed_groups
-        courant, y compris pour un nouveau scan complet volontaire (auquel
-        cas passer {} explicitement n'aide pas non plus : purger
-        compared_tier1/compared_tier2 via un nouveau cache_db_path ou une
-        purge de cache serait nécessaire).
+        """seed_groups: {path: group_id} known at the time of the trigger
+        (typically Catalog.get_duplicate_group_assignments()) — it seeds
+        group_of so that the comparison stays genuinely incremental (cf.
+        compared_tier1/compared_tier2 in dedup_cache.py). Careful: omitting
+        seed_groups on a 2nd run over the same cache_db_path, already
+        populated by a previous run, does NOT retrigger a full comparison —
+        every pair will look "already compared" and no group will be
+        (re)formed. Always pass the current seed_groups, including for a
+        deliberate new full scan (in which case passing {} explicitly does
+        not help either: purging compared_tier1/compared_tier2 through a new
+        cache_db_path or a cache purge would be needed).
 
-        dates : {path: datetime|None} — date de prise de vue (EXIF, précision
-        sous-seconde si disponible ; typiquement
-        Catalog.get_photo_dates_for_dedup()). Deux photos dont les dates sont
-        toutes deux connues et différentes ne sont jamais fusionnées en
-        doublons, même si les signaux visuels (pHash, ORB) concordent — cf.
-        _dates_differ(). Une date manquante ne bloque rien (repli sur le seul
-        signal visuel)."""
+        dates: {path: datetime|None} — the capture date (EXIF, with
+        sub-second precision when available; typically
+        Catalog.get_photo_dates_for_dedup()). Two photos whose dates are both
+        known and different are never merged as duplicates, even when the
+        visual signals (pHash, ORB) agree — cf. _dates_differ(). A missing
+        date blocks nothing (a fallback on the visual signal alone)."""
         super().__init__(parent)
         self._paths = photo_paths
         self._seed_groups = dict(seed_groups) if seed_groups else {}
@@ -267,9 +266,9 @@ class DuplicateDetectorThread(QThread):
         self._cancelled = True
 
     def _is_cancelled(self) -> bool:
-        """Vérifie la demande d'annulation ; émet `cancelled` une seule fois
-        au point d'arrêt effectif (les boucles O(N²) la testent à chaque
-        itération, mais l'arrêt réel n'a lieu qu'une fois)."""
+        """Checks the cancellation request; emits `cancelled` exactly once at
+        the effective stopping point (the O(N²) loops test it on every
+        iteration, but the real stop only happens once)."""
         if self._cancelled:
             self.cancelled.emit()
             return True
@@ -277,21 +276,21 @@ class DuplicateDetectorThread(QThread):
 
     @property
     def corrupted_paths(self) -> list[str]:
-        """Chemins des fichiers dont le chargement a échoué pendant le scan
-        (probablement corrompus). Stable une fois le signal `finished` émis."""
+        """Paths of the files whose loading failed during the scan (probably
+        corrupted). Stable once the `finished` signal has been emitted."""
         return sorted(self._corrupted)
 
     def run(self) -> None:
         self.setPriority(QThread.LowestPriority)
-        # setPriority() ci-dessus ne descend qu'à THREAD_PRIORITY_LOWEST (-2) :
-        # insuffisant pour la boucle O(N²) du Tier 1, qui est la partie
-        # mono-thread la plus lourde de toute la détection et tourne
-        # précisément sur ce thread-ci (les ThreadPoolExecutor, eux, passent
-        # déjà lower_current_thread_priority en initializer).
+        # The setPriority() above only goes down to THREAD_PRIORITY_LOWEST (-2):
+        # not enough for the O(N²) loop of Tier 1, which is the heaviest
+        # single-threaded part of the whole detection and runs precisely on
+        # this very thread (the ThreadPoolExecutors, for their part, already
+        # pass lower_current_thread_priority as their initializer).
         lower_current_thread_priority()
-        # Réglage global au process (cf. docstring) : sans lui, chacun de nos
-        # workers « throttlés » peut à lui seul occuper les 16 cœurs via le
-        # pool interne d'OpenCV.
+        # A process-wide setting (cf. the docstring): without it, each of our
+        # "throttled" workers can on its own occupy all 16 cores through
+        # OpenCV's internal pool.
         limit_cv2_threads(1)
         try:
             self._detect()
@@ -299,7 +298,7 @@ class DuplicateDetectorThread(QThread):
             logger.exception("Erreur détection doublons")
             self.error.emit(str(e))
 
-    # ── Tier 1 : pHash ─────────────────────────────────────────────────────────
+    # ── Tier 1: pHash ─────────────────────────────────────────────────────────
 
     def _detect(self) -> None:
         try:
@@ -323,7 +322,7 @@ class DuplicateDetectorThread(QThread):
             self.finished.emit({})
             return
 
-        # Les deux phases comptent chacune pour la moitié de la barre de progression.
+        # Each of the two phases counts for half of the progress bar.
         grand_total = total * 2
 
         cache = DedupCache(self._cache_db_path) if self._cache_db_path else DedupCache()
@@ -334,15 +333,15 @@ class DuplicateDetectorThread(QThread):
                 if removed:
                     logger.info("dedup_cache : %d entrée(s) obsolète(s) purgée(s).", removed)
 
-            # Phase 1 : calcul des empreintes pHash + dimensions (utilisées par le Tier 2)
+            # Phase 1: computing the pHash fingerprints + dimensions (used by Tier 2)
             hashes: list[tuple[str, object]] = []
             dims: dict[str, tuple[int, int]] = {}
             micro: dict[str, "np.ndarray"] = {}
             mtimes: dict[str, float] = {}
             n_workers = throttled_worker_count()
 
-            # Réutilisation du cache : une photo dont le mtime n'a pas changé
-            # depuis le dernier scan n'a pas besoin d'être rouverte/rehashée.
+            # Reuse of the cache: a photo whose mtime has not changed since the
+            # last scan does not need to be reopened/rehashed.
             cached_fp = cache.get_fingerprints(paths)
             to_compute: list[str] = []
             for path in paths:
@@ -370,13 +369,13 @@ class DuplicateDetectorThread(QThread):
             )
 
             def _compute_fingerprint(path: str):
-                # Fonction pure (aucun état partagé écrit) : chaque appel décode son
-                # propre fichier et retourne son résultat, fusionné ensuite sur ce
-                # thread au fur et à mesure des complétions — décodage JPEG/PNG (PIL)
-                # et calcul du DCT (imagehash, numpy) libèrent tous deux le GIL le
-                # temps du calcul C, donc un pool de threads exploite réellement
-                # plusieurs cœurs ici (même raisonnement que pour ORB/RANSAC au Tier 2
-                # plus bas dans ce fichier).
+                # A pure function (no shared state written): each call decodes its own
+                # file and returns its result, merged afterwards on this thread as the
+                # completions come in — JPEG/PNG decoding (PIL) and the DCT computation
+                # (imagehash, numpy) both release the GIL for the duration of the C
+                # computation, so a thread pool really does exploit several cores here
+                # (the same reasoning as for ORB/RANSAC in Tier 2, further down in this
+                # file).
                 try:
                     with Image.open(path) as img:
                         d = img.size
@@ -387,8 +386,8 @@ class DuplicateDetectorThread(QThread):
                             ),
                             dtype=np.float64,
                         )
-                    # Lu après l'ouverture réussie (pas avant) pour que le mtime
-                    # persisté corresponde au contenu réellement empreinté.
+                    # Read after the successful open (not before) so that the persisted
+                    # mtime matches the content actually fingerprinted.
                     mtime = os.path.getmtime(path)
                     arr -= arr.mean()
                     std = arr.std()
@@ -397,17 +396,18 @@ class DuplicateDetectorThread(QThread):
                     result = (path, h, d, arr, mtime, None)
                 except Exception as exc:
                     result = (path, None, None, None, None, exc)
-                # Cycle de service pris ici, dans le worker qui vient de
-                # consommer le CPU, et non côté consommateur (`as_completed`)
-                # : toutes les futures sont soumises d'avance, ralentir la
-                # boucle de collecte ne ralentirait donc pas le pool d'un iota.
+                # The duty cycle is taken here, in the worker that has just
+                # consumed the CPU, and not on the consumer side
+                # (`as_completed`): every future is submitted in advance, so
+                # slowing the collection loop down would not slow the pool by
+                # one iota.
                 throttle_tick(lambda: self._cancelled)
                 return result
 
             done = cache_hits
             if cache_hits:
-                # Signal immédiat : évite que la barre semble figée pendant
-                # qu'on saute la majorité d'une grosse bibliothèque déjà en cache.
+                # An immediate signal: keeps the bar from looking frozen while
+                # most of a large, already cached library is being skipped.
                 self.progress.emit(done, grand_total, translate(
                     "DuplicateDetector", "Tier 1 — fingerprints {done}/{total} (cache)…"
                 ).format(done=done, total=total))
@@ -423,10 +423,10 @@ class DuplicateDetectorThread(QThread):
                 try:
                     futures = {}
                     for path in to_compute:
-                        # Log systématique (pas throttlé) à la soumission : si le
-                        # traitement se bloque sur un fichier précis (image corrompue,
-                        # volume réseau lent…), cette ligne reste la dernière du log —
-                        # elle identifie le fichier en cause même en exécution parallèle.
+                        # A systematic log (not throttled) at submission time: if the
+                        # processing hangs on a specific file (a corrupted image, a slow
+                        # network volume…), this line stays the last one of the log — it
+                        # identifies the offending file even under parallel execution.
                         logger.debug("Tier 1 empreinte (soumission) : %s", path)
                         futures[executor.submit(_compute_fingerprint, path)] = path
 
@@ -439,22 +439,21 @@ class DuplicateDetectorThread(QThread):
                         try:
                             path, h, d, arr, mtime, exc = future.result()
                         except Exception as e:
-                            # _compute_fingerprint capture déjà toute exception en interne
-                            # (retournée dans le tuple plutôt que levée) : ce garde-fou ne
-                            # devrait normalement jamais se déclencher, mais une panne
-                            # inattendue d'un worker ne doit pas faire échouer tout le scan.
+                            # _compute_fingerprint already catches every exception internally
+                            # (returned in the tuple rather than raised): this safeguard should
+                            # normally never fire, but an unexpected failure of one worker must
+                            # not make the whole scan fail.
                             logger.warning("Worker Tier 1 en échec pour %s : %s", path, e)
                             h = d = arr = mtime = None
                             exc = e
                         done += 1
                         if exc is not None:
-                            # Un fichier supprimé (par l'utilisateur, pendant que ce
-                            # scan tourne) échoue à l'ouverture exactement comme un
-                            # fichier corrompu (FileNotFoundError capturée dans le
-                            # même except Exception ci-dessus) — vérifier qu'il existe
-                            # encore avant de le classer corrompu, sinon il resterait
-                            # signalé (et proposé à la suppression/réparation) pour un
-                            # fichier qui n'existe déjà plus.
+                            # A file deleted (by the user, while this scan is running)
+                            # fails to open exactly like a corrupted file (a
+                            # FileNotFoundError caught in the same except Exception above)
+                            # — check that it still exists before classifying it as
+                            # corrupted, otherwise it would stay reported (and offered for
+                            # deletion/repair) for a file that no longer exists.
                             if os.path.exists(path):
                                 logger.warning("Fichier illisible (Tier 1) : %s (%s)", path, exc)
                                 self._corrupted.add(path)
@@ -482,36 +481,35 @@ class DuplicateDetectorThread(QThread):
                             cache.store_fingerprints(pending_fp)
                             pending_fp = []
                 finally:
-                    # Un thread Python ne peut pas être tué proprement de l'extérieur
-                    # (contrairement à un ProcessPoolExecutor, cf. FaceIndexThread), mais
-                    # shutdown(wait=False, cancel_futures=True) évite au moins d'attendre
-                    # ici la fin des ~n_workers tâches déjà en cours (chacune : un seul
-                    # décodage d'image, borné) — sans ça, le `with ThreadPoolExecutor`
-                    # implicite bloquait sur shutdown(wait=True) jusqu'à la fin de TOUT
-                    # le lot restant à chaque annulation, un des principaux contributeurs
-                    # à la fermeture lente de l'application quand une détection de
-                    # doublons est en cours (cf. MainWindow.closeEvent).
+                    # A Python thread cannot be killed cleanly from the outside (unlike a
+                    # ProcessPoolExecutor, cf. FaceIndexThread), but
+                    # shutdown(wait=False, cancel_futures=True) at least avoids waiting here
+                    # for the ~n_workers tasks already running to finish (each one: a single,
+                    # bounded image decoding) — without it, the implicit
+                    # `with ThreadPoolExecutor` blocked on shutdown(wait=True) until ALL the
+                    # remaining batch was done on every cancellation, one of the main
+                    # contributors to the slow shutdown of the application while a duplicate
+                    # detection is running (cf. MainWindow.closeEvent).
                     executor.shutdown(
                         wait=not cancelled_mid_flight, cancel_futures=cancelled_mid_flight
                     )
                 if cancelled_mid_flight:
                     return
             finally:
-                # Persiste tout ce qui a été calculé jusqu'ici, y compris en cas
-                # d'annulation (return ci-dessus) — c'est ce qui rend le scan reprenable.
+                # Persists everything computed so far, cancellation included (the return
+                # above) — that is what makes the scan resumable.
                 if pending_fp:
                     cache.store_fingerprints(pending_fp)
 
             if self._is_cancelled():
                 return
 
-            # Phase 2 : groupement incrémental par distance de Hamming — amorcé
-            # avec les groupes déjà connus (self._seed_groups), puis seules les
-            # paires impliquant au moins un fichier « nouveau » (jamais comparé
-            # lors d'une passe complète antérieure, ou modifié depuis) sont
-            # évaluées. Les paires ancien×ancien ne sont même pas itérées : déjà
-            # vérifiées lors d'une passe précédente et ne peuvent pas changer
-            # tant qu'aucun des deux fichiers n'est modifié.
+            # Phase 2: incremental grouping by Hamming distance — seeded with
+            # the groups already known (self._seed_groups), then only the pairs
+            # involving at least one "new" file (never compared during an earlier
+            # full pass, or modified since) are evaluated. The old×old pairs are
+            # not even iterated over: already checked during a previous pass and
+            # unable to change as long as neither of the two files is modified.
             paths_set = set(paths)
             group_of: dict[str, int] = {
                 p: gid for p, gid in self._seed_groups.items() if p in paths_set
@@ -540,10 +538,10 @@ class DuplicateDetectorThread(QThread):
             ).format(n=n))
 
             def _compare_pair(path_i, hash_i, path_j, hash_j) -> None:
-                # Discriminant le plus simple et le moins cher évalué en premier
-                # (lookup dict + comparaison, pas d'accès image) : deux photos de
-                # dates EXIF connues et différentes ne sont jamais des doublons,
-                # inutile de calculer quoi que ce soit d'autre pour la paire.
+                # The simplest and cheapest discriminant evaluated first (a dict
+                # lookup + a comparison, no image access): two photos with known and
+                # different EXIF dates are never duplicates, so there is no point
+                # computing anything else for the pair.
                 if _dates_differ(self._dates, path_i, path_j):
                     return
                 try:
@@ -551,11 +549,10 @@ class DuplicateDetectorThread(QThread):
                 except Exception:
                     return
                 if dist <= _HASH_THRESHOLD:
-                    # Un pHash peut coïncider par hasard entre deux photos sans
-                    # rapport (répartition de luminosité globale similaire),
-                    # surtout quand la distance tombe tout juste au seuil —
-                    # vérification de secours sur une miniature 8x8 normalisée
-                    # (cf. _HASH_PIXEL_MAX_DIFF).
+                    # A pHash can coincide by chance between two unrelated photos
+                    # (a similar overall brightness distribution), especially when
+                    # the distance falls just at the threshold — a backup check on
+                    # a normalised 8x8 thumbnail (cf. _HASH_PIXEL_MAX_DIFF).
                     arr_i = micro.get(path_i)
                     arr_j = micro.get(path_j)
                     if arr_i is not None and arr_j is not None:
@@ -564,26 +561,24 @@ class DuplicateDetectorThread(QThread):
                             return
                     _merge(group_of, path_i, path_j, next_group)
 
-            # Persistance incrémentale de la complétude des comparaisons : les
-            # lignes 0..i étant traitées dans l'ordre, une fois la ligne i
-            # terminée, `new_list[0..i]` a été comparé à *tout* le reste (les
-            # lignes précédentes ont chacune couvert leurs paires avec i).
-            # Sans ce jalonnement, une passe interrompue (fermeture de
-            # l'application) ne persistait rien du tout et repartait de zéro au
-            # démarrage suivant — soit, sur une grosse bibliothèque, une heure
-            # de CPU rejouée à chaque session, indéfiniment.
+            # Incremental persistence of the completeness of the comparisons: rows
+            # 0..i being processed in order, once row i is finished `new_list[0..i]`
+            # has been compared with *all* the rest (the previous rows have each
+            # covered their pairs with i). Without that milestoning, an interrupted
+            # pass (closing the application) persisted nothing at all and started
+            # from scratch on the next launch — that is, on a large library, an hour
+            # of CPU replayed every session, indefinitely.
             #
-            # Le jalon reste volontairement en retard d'un instantané sur la
-            # progression réelle : les groupes formés ne sont persistés dans le
-            # catalogue que via `partial_results`, traité en asynchrone sur le
-            # thread UI. Marquer une ligne « comparée » avant que ses fusions
-            # n'aient été diffusées risquerait de perdre définitivement un
-            # groupe (la paire ne serait plus jamais réévaluée). En ne jalonnant
-            # que jusqu'à l'indice du snapshot *précédent*, on laisse au moins
-            # un intervalle complet (_LIVE_SNAPSHOT_INTERVAL) à l'UI pour
-            # l'avoir traité.
-            stored_upto = -1     # dernier indice de new_list persisté
-            snapshot_idx = -1    # indice atteint lors du dernier partial_results
+            # The milestone deliberately stays one snapshot behind the real
+            # progress: the groups formed are only persisted in the catalog
+            # through `partial_results`, handled asynchronously on the UI thread.
+            # Marking a row "compared" before its merges have been broadcast would
+            # risk losing a group for good (the pair would never be re-evaluated).
+            # By milestoning only up to the index of the *previous* snapshot, the
+            # UI is left at least one full interval (_LIVE_SNAPSHOT_INTERVAL) to
+            # have handled it.
+            stored_upto = -1     # last index of new_list persisted
+            snapshot_idx = -1    # index reached at the last partial_results
 
             def _checkpoint_tier1(upto: int) -> None:
                 nonlocal stored_upto
@@ -631,32 +626,32 @@ class DuplicateDetectorThread(QThread):
 
             _checkpoint_tier1(n - 1)
 
-            # ── Tier 2 : ORB + RANSAC sur les photos non groupées ──────────────────
+            # ── Tier 2: ORB + RANSAC on the ungrouped photos ───────────────────────
             unmatched = [p for p in paths if p not in group_of]
             logger.info("Tier 1 : %d groupe(s). Tier 2 sur %d photos non groupées.",
                         len({v for v in group_of.values()}), len(unmatched))
 
-            # Émission inconditionnelle : rend visibles les résultats du Tier 1
-            # (souvent déjà la majorité des vrais doublons) avant que la phase
-            # ORB, plus lente, ne démarre.
+            # An unconditional emission: makes the Tier 1 results visible (often
+            # already the majority of the real duplicates) before the slower ORB
+            # phase starts.
             self.partial_results.emit(_renumber(group_of), sorted(self._corrupted))
 
             self._detect_crops(unmatched, dims, group_of, next_group, total, grand_total, cache)
 
-            # Phase finale : renumérotation (1, 2, 3…)
+            # Final phase: renumbering (1, 2, 3…)
             self.finished.emit(_renumber(group_of))
         finally:
-            # self._corrupted est, à ce stade (quelle que soit la sortie —
-            # normale ou annulation), l'état complet et à jour : tout fichier
-            # corrompu est systématiquement retenté à chaque passage (jamais
-            # mis en cache dans fingerprints/orb_features), donc un fichier
-            # réparé ou supprimé depuis le dernier passage n'y figure plus.
-            # Persisté ici (et pas seulement gardé en mémoire côté UI) pour
-            # survivre à un redémarrage de l'application.
+            # self._corrupted is, at this point (whatever the exit — normal or a
+            # cancellation), the complete and up to date state: every corrupted
+            # file is systematically retried on every pass (never cached in
+            # fingerprints/orb_features), so a file repaired or deleted since the
+            # last pass no longer appears in it. Persisted here (and not merely
+            # kept in memory on the UI side) so as to survive a restart of the
+            # application.
             cache.replace_corrupted_paths(self._corrupted)
             cache.close()
 
-    # ── Tier 2 : ORB + RANSAC ──────────────────────────────────────────────────
+    # ── Tier 2: ORB + RANSAC ──────────────────────────────────────────────────
 
     def _detect_crops(
         self,
@@ -668,7 +663,7 @@ class DuplicateDetectorThread(QThread):
         grand_total: int,
         cache: "DedupCache",
     ) -> None:
-        """Détecte les doublons recadrés par correspondance ORB + vérification RANSAC."""
+        """Detects cropped duplicates by ORB matching + RANSAC verification."""
         if len(unmatched) < 2:
             return
 
@@ -688,17 +683,16 @@ class DuplicateDetectorThread(QThread):
         orb = cv2.ORB_create(nfeatures=_ORB_MAX_KP)
         gray_cache = _GrayImageCache()
 
-        # ── Sélection paresseuse : déterminer quoi charger, avant de charger ───
-        # Une paire n'est évaluée que si au moins un de ses deux membres est
-        # nouveau ou modifié depuis la dernière passe complète (les paires
-        # ancien×ancien sont sautées plus bas) et que le préfiltre par ratio
-        # d'aire ne l'écarte pas d'emblée. Ces deux critères ne dépendent que
-        # de métadonnées (mtime, dimensions) : les évaluer *avant* de toucher
-        # aux features évite de reconstruire toute la bibliothèque à chaque
-        # démarrage pour finalement ne comparer aucune paire — sur 65 000
-        # photos, plusieurs Go lus en base, un décodage JPEG et ~300 objets
-        # cv2.KeyPoint par photo, systématiquement, dans le cas nominal où
-        # rien n'a changé.
+        # ── Lazy selection: decide what to load, before loading ────────────────
+        # A pair is only evaluated if at least one of its two members is new or
+        # modified since the last full pass (the old×old pairs are skipped
+        # further down) and the area ratio prefilter does not rule it out right
+        # away. Both criteria depend on metadata alone (mtime, dimensions):
+        # evaluating them *before* touching the features avoids rebuilding the
+        # whole library on every start only to compare no pair at all — on
+        # 65,000 photos, several GB read from the database, one JPEG decoding
+        # and ~300 cv2.KeyPoint objects per photo, systematically, in the
+        # nominal case where nothing has changed.
         orb_meta = cache.get_orb_meta(unmatched)
         compared_tier2 = cache.get_compared_tier2(unmatched)
 
@@ -710,7 +704,7 @@ class DuplicateDetectorThread(QThread):
             try:
                 current_mtime = os.path.getmtime(path)
             except OSError:
-                continue  # disparu depuis le Tier 1
+                continue  # gone since Tier 1
             mtimes2[path] = current_mtime
             meta = orb_meta.get(path)
             if meta is not None and abs(meta[0] - current_mtime) < 1.0:
@@ -729,8 +723,8 @@ class DuplicateDetectorThread(QThread):
             )
             return
 
-        # Aire de chaque photo, connue sans rien charger : dimensions réelles
-        # relevées par le Tier 1, ou celles mémorisées avec les features.
+        # The area of each photo, known without loading anything: the real
+        # dimensions recorded by Tier 1, or the ones memorised with the features.
         def _area_of(path: str) -> int:
             d = dims.get(path)
             if d is not None:
@@ -740,11 +734,11 @@ class DuplicateDetectorThread(QThread):
 
         areas = {path: _area_of(path) for path in mtimes2}
 
-        # Une photo ancienne n'est utile que si son aire tombe dans la fenêtre
-        # [a/F, a·F] d'au moins une photo nouvelle — sinon le préfiltre par
-        # ratio d'aire de la boucle de comparaison écarterait de toute façon
-        # chacune de ses paires. Aire inconnue (0) : la boucle désactive alors
-        # le préfiltre, donc tout devient candidat, on ne peut rien exclure.
+        # An old photo is only useful if its area falls inside the [a/F, a·F]
+        # window of at least one new photo — otherwise the area ratio prefilter
+        # of the comparison loop would rule out each of its pairs anyway. An
+        # unknown area (0): the loop then disables the prefilter, so everything
+        # becomes a candidate and nothing can be excluded.
         new_areas = sorted(areas[p] for p in new_paths_set)
         keep_everything = new_areas and new_areas[0] <= 0
 
@@ -761,7 +755,7 @@ class DuplicateDetectorThread(QThread):
         cached_paths = [p for p in cached_paths if _is_needed(p)]
         to_compute = [p for p in to_compute if _is_needed(p)]
 
-        # ── Chargement des features des seules photos retenues ────────────────
+        # ── Loading the features of the selected photos only ───────────────────
         desc_list: list[tuple[str, object, object, int]] = []  # (path, pts, des, area)
         cached_orb = cache.get_orb_descriptors(cached_paths)
         for path in cached_paths:
@@ -809,8 +803,8 @@ class DuplicateDetectorThread(QThread):
                 try:
                     img = _load_gray(path, _ORB_LOAD_SIZE)
                     if img is None:
-                        # Cf. commentaire équivalent au Tier 1 : un fichier supprimé
-                        # entre-temps échoue à l'ouverture comme un fichier corrompu.
+                        # Cf. the equivalent comment in Tier 1: a file deleted in the
+                        # meantime fails to open like a corrupted file.
                         if os.path.exists(path):
                             logger.warning("Fichier illisible (Tier 2) : %s", path)
                             self._corrupted.add(path)
@@ -826,22 +820,22 @@ class DuplicateDetectorThread(QThread):
                     if path in dims:
                         w, h = dims[path]
                     else:
-                        # Le Tier 1 n'a pas pu ouvrir ce fichier (Image.open a échoué) :
-                        # retenter avec PIL pour obtenir la vraie résolution plutôt que
-                        # de mélanger une aire réduite (_load_gray, max 800px) avec les
-                        # aires réelles des autres photos — ça fausserait le préfiltre
-                        # _ORB_AREA_FACTOR trié par aire (break prématuré possible).
+                        # Tier 1 could not open this file (Image.open failed): retry with
+                        # PIL to get the real resolution rather than mixing a reduced area
+                        # (_load_gray, 800 px max) with the real areas of the other photos
+                        # — that would skew the _ORB_AREA_FACTOR prefilter sorted by area
+                        # (a premature break becomes possible).
                         try:
                             with Image.open(path) as pil_img:
                                 w, h = pil_img.size
                         except Exception:
                             w, h = img.shape[1], img.shape[0]
                     mtimes2[path] = mtime
-                    # Seules les coordonnées des keypoints sont conservées : le
-                    # reste de l'algorithme ne lit que `.pt` (cf. _compare_chunk),
-                    # et un tableau (N,2) float32 remplace avantageusement ~300
-                    # objets cv2.KeyPoint par photo — que le cache devait de
-                    # toute façon reconstruire un à un à chaque démarrage.
+                    # Only the coordinates of the keypoints are kept: the rest of the
+                    # algorithm only reads `.pt` (cf. _compare_chunk), and an (N,2)
+                    # float32 array advantageously replaces ~300 cv2.KeyPoint objects
+                    # per photo — which the cache had to rebuild one by one on every
+                    # start anyway.
                     pts = np.array([k.pt for k in kp], dtype=np.float32)
                     desc_list.append((path, pts, des, w * h))
                     pending_orb.append((path, mtime, w, h, pts.tobytes(), des.tobytes()))
@@ -849,8 +843,8 @@ class DuplicateDetectorThread(QThread):
                     logger.debug("ORB descripteur échoué %s : %s", os.path.basename(path), exc)
                 throttle_tick(lambda: self._cancelled)
         finally:
-            # Persiste tout ce qui a été calculé jusqu'ici, y compris en cas
-            # d'annulation (return ci-dessus) — c'est ce qui rend le scan reprenable.
+            # Persists everything computed so far, cancellation included (the return
+            # above) — that is what makes the scan resumable.
             if pending_orb:
                 cache.store_orb_features(pending_orb)
 
@@ -866,73 +860,72 @@ class DuplicateDetectorThread(QThread):
                                                 "%n photo(s)", None, m)),
         )
 
-        # `old_paths_set` / `new_paths_set` ont été établis plus haut, sur
-        # l'ensemble des photos non groupées et non plus sur `desc_list` — ce
-        # dernier ne contient désormais que les photos réellement impliquées
-        # dans une paire à évaluer. Seuls les chemins effectivement présents
-        # dans desc_list peuvent être marqués « comparés » en fin de passe.
+        # `old_paths_set` / `new_paths_set` were established above, over the set
+        # of ungrouped photos and no longer over `desc_list` — the latter now only
+        # contains the photos really involved in a pair to evaluate. Only the
+        # paths actually present in desc_list can be marked "compared" at the end
+        # of the pass.
         new_paths_set &= {path for path, *_ in desc_list}
 
-        # Tri par aire croissante : accélère le prefiltre (photos similaires proches)
+        # Sorted by increasing area: speeds the prefilter up (similar photos close together)
         desc_list.sort(key=lambda x: x[3])
 
         pairs_checked = 0
         logger.info("Tier 2 : comparaison ORB de %d photos non groupées par le Tier 1.", m)
 
-        # Comparaison des paires d'une même ligne `i` en parallèle : les appels
-        # cv2 (knnMatch/findHomography) libèrent le GIL, donc un pool de threads
-        # apporte un vrai gain sans le coût de sérialisation d'un pool de process.
-        # Chaque tâche traite un *lot* (chunk) de candidats plutôt qu'une seule
-        # paire : une paire se compare en général en bien moins d'une milliseconde,
-        # et soumettre une tâche par paire fait dominer le coût de dispatch du
-        # ThreadPoolExecutor sur le gain du parallélisme (mesuré : ~10 % de gain
-        # seulement au lieu d'un gain proche du nombre de coeurs). Découper en
-        # `n_workers` lots amortit ce coût tout en gardant tous les coeurs actifs.
-        # Les fusions (_merge) restent appliquées séquentiellement sur ce thread
-        # une fois les résultats de la ligne connus — _merge est order-independent
-        # pour une même ligne (tous les appels partagent path_i), donc paralléliser
-        # ne change jamais le résultat final (juste, potentiellement, les ids de
-        # groupe intermédiaires, renumérotés de toute façon en fin de _detect()).
+        # Comparing the pairs of one same row `i` in parallel: the cv2 calls
+        # (knnMatch/findHomography) release the GIL, so a thread pool brings a real
+        # gain without the serialisation cost of a process pool. Each task handles a
+        # *chunk* of candidates rather than a single pair: a pair usually compares in
+        # far less than a millisecond, and submitting one task per pair makes the
+        # dispatch cost of the ThreadPoolExecutor dominate the gain of the
+        # parallelism (measured: only ~10 % of gain instead of a gain close to the
+        # number of cores). Splitting into `n_workers` chunks amortises that cost
+        # while keeping every core busy. The merges (_merge) are still applied
+        # sequentially on this thread once the results of the row are known — _merge
+        # is order-independent within a row (every call shares path_i), so
+        # parallelising never changes the final result (only, potentially, the
+        # intermediate group ids, renumbered at the end of _detect() anyway).
         def _compare_chunk(items, des_i=None, pts_i=None, path_i=""):
-            # BFMatcher local au worker plutôt qu'une instance partagée entre
-            # threads du pool : le thread-safety de cv2.BFMatcher.knnMatch()
-            # n'est pas documenté par OpenCV, et un objet natif partagé appelé
-            # concurremment est un candidat plausible à un crash dur (segfault),
-            # donc non rattrapable par un try/except Python. Le coût de création
-            # est négligeable face au travail du lot (plusieurs comparaisons ORB).
+            # A BFMatcher local to the worker rather than an instance shared
+            # between the threads of the pool: the thread-safety of
+            # cv2.BFMatcher.knnMatch() is not documented by OpenCV, and a shared
+            # native object called concurrently is a plausible candidate for a hard
+            # crash (a segfault), hence not catchable by a Python try/except. The
+            # creation cost is negligible next to the work of the chunk (several ORB
+            # comparisons).
             local_bf = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=False)
             results = []
             for path_j, pts_j, des_j in items:
-                # Lecture directe du flag (pas _is_cancelled(), qui émet le
-                # signal `cancelled` à chaque appel) : permet d'interrompre un
-                # lot en cours d'item en item plutôt que d'attendre qu'il aille
-                # au bout — un lot peut contenir des dizaines de candidats,
-                # chacun coûtant potentiellement plusieurs dizaines de ms
-                # (knnMatch + RANSAC + warpPerspective + absdiff), et le
-                # `with ThreadPoolExecutor(...)` englobant attend (wait=True à
-                # la sortie du bloc) que les tâches déjà en cours se terminent
-                # avant de rendre la main à closeEvent — sans ce garde-fou,
-                # fermer l'application pendant le Tier 2 pouvait rester bloqué
-                # plusieurs secondes de plus que nécessaire.
+                # Reading the flag directly (not _is_cancelled(), which emits the
+                # `cancelled` signal on every call): it allows interrupting a chunk
+                # item by item rather than waiting for it to finish — a chunk can
+                # hold dozens of candidates, each potentially costing several dozen
+                # ms (knnMatch + RANSAC + warpPerspective + absdiff), and the
+                # enclosing `with ThreadPoolExecutor(...)` waits (wait=True on
+                # leaving the block) for the tasks already running to finish before
+                # handing control back to closeEvent — without this safeguard,
+                # closing the application during Tier 2 could stay blocked several
+                # seconds longer than necessary.
                 if self._cancelled:
                     break
                 throttle_tick(lambda: self._cancelled)
-                # Discriminant le plus simple et le moins cher d'abord (lookup
-                # dict), avant tout le pipeline ORB (knnMatch + RANSAC +
-                # warpPerspective + absdiff) qui est de loin le plus coûteux de
-                # toute la détection — deux photos de dates EXIF connues et
-                # différentes ne sont jamais des doublons.
+                # The simplest and cheapest discriminant first (a dict lookup),
+                # before the whole ORB pipeline (knnMatch + RANSAC +
+                # warpPerspective + absdiff), by far the most expensive of the
+                # entire detection — two photos with known and different EXIF
+                # dates are never duplicates.
                 if _dates_differ(self._dates, path_i, path_j):
                     results.append((path_j, False))
                     continue
-                # Tout le corps de la comparaison (pas seulement knnMatch) est
-                # protégé : une géométrie dégénérée (ex. homographie quasi
-                # singulière) peut faire échouer n'importe quel appel cv2 en
-                # aval (findHomography, warpPerspective, absdiff) — une paire
-                # en erreur ne doit ni faire planter tout le lot, ni annuler
-                # le scan entier (cf. run() qui, sinon, transformerait ça en
-                # message d'erreur pour l'utilisateur au lieu d'un simple
-                # "pas de correspondance" pour cette paire).
+                # The whole body of the comparison (not just knnMatch) is
+                # protected: a degenerate geometry (e.g. a nearly singular
+                # homography) can make any downstream cv2 call fail
+                # (findHomography, warpPerspective, absdiff) — a pair in error
+                # must neither crash the whole chunk nor cancel the entire scan
+                # (cf. run(), which would otherwise turn that into an error
+                # message for the user instead of a plain "no match" for that
+                # pair).
                 try:
                     raw_matches = local_bf.knnMatch(des_i, des_j, k=2)
 
@@ -958,19 +951,19 @@ class DuplicateDetectorThread(QThread):
                         results.append((path_j, False))
                         continue
 
-                    # Un arrière-plan riche et statique (ex: rafale de photos)
-                    # peut fournir à lui seul assez d'inliers cohérents même si
-                    # le sujet réel diffère complètement — le nombre d'inliers
-                    # ne suffit pas à garantir que les photos se ressemblent
-                    # réellement. Vérification supplémentaire : recaler j sur i
-                    # via l'homographie trouvée et exiger que les pixels
-                    # concordent sur la zone de recouvrement (cf. _ORB_MAX_MEAN_DIFF).
+                    # A rich, static background (e.g. a burst of photos) can on its
+                    # own provide enough consistent inliers even when the real
+                    # subject differs completely — the number of inliers is not
+                    # enough to guarantee that the photos really do look alike. An
+                    # extra check: register j onto i through the homography found
+                    # and require the pixels to agree over the overlap area
+                    # (cf. _ORB_MAX_MEAN_DIFF).
                     #
-                    # Les deux images de travail ne sont décodées qu'ici, au
-                    # seul endroit qui en a besoin : y parvenir suppose d'avoir
-                    # déjà passé le ratio test de Lowe *et* le seuil d'inliers
-                    # RANSAC, ce que ne font que de vrais quasi-doublons — une
-                    # infime minorité des paires évaluées (cf. _GrayImageCache).
+                    # The two working images are only decoded here, at the single
+                    # place that needs them: reaching it means having already passed
+                    # Lowe's ratio test *and* the RANSAC inlier threshold, which
+                    # only genuine near-duplicates do — a tiny minority of the pairs
+                    # evaluated (cf. _GrayImageCache).
                     img_i = gray_cache.get(path_i)
                     img_j = gray_cache.get(path_j)
                     if img_i is None or img_j is None:
@@ -1002,11 +995,11 @@ class DuplicateDetectorThread(QThread):
             max_workers=n_workers, initializer=lower_current_thread_priority
         )
         cancelled_mid_flight = False
-        # Jalonnement de la complétude des comparaisons, même raisonnement
-        # qu'au Tier 1 (`_checkpoint_tier1`) : la ligne i traitée, les lignes
-        # 0..i ont couvert toutes leurs paires ; on ne persiste toutefois que
-        # jusqu'à l'indice du snapshot précédent, pour laisser à l'UI le temps
-        # d'avoir écrit les groupes correspondants dans le catalogue.
+        # Milestoning of the completeness of the comparisons, the same reasoning
+        # as in Tier 1 (`_checkpoint_tier1`): row i handled, rows 0..i have
+        # covered all of their pairs; only up to the index of the previous
+        # snapshot is persisted, though, to give the UI time to have written the
+        # corresponding groups into the catalog.
         stored_upto2 = -1
         snapshot_idx2 = -1
 
@@ -1056,16 +1049,16 @@ class DuplicateDetectorThread(QThread):
                 for j in range(i + 1, m):
                     path_j, pts_j, des_j, area_j = desc_list[j]
 
-                    # Prefiltre ratio d'aire : sortie anticipée (liste triée — area_j ≥ area_i)
+                    # Area ratio prefilter: early exit (sorted list — area_j ≥ area_i)
                     if area_i > 0 and area_j / area_i > _ORB_AREA_FACTOR:
                         break
 
-                    # Paire ancien×ancien : déjà entièrement vérifiée lors d'une
-                    # passe complète antérieure, aucun des deux n'a changé depuis.
+                    # An old×old pair: already fully checked during an earlier full
+                    # pass, and neither of the two has changed since.
                     if path_i in old_paths_set and path_j in old_paths_set:
                         continue
 
-                    # Inutile de re-matcher deux photos déjà dans le même groupe
+                    # No point rematching two photos already in the same group
                     gi, gj = group_of.get(path_i), group_of.get(path_j)
                     if gi is not None and gi == gj:
                         continue
@@ -1089,10 +1082,10 @@ class DuplicateDetectorThread(QThread):
                     try:
                         chunk_result = future.result()
                     except Exception as exc:
-                        # _compare_chunk protège déjà chaque paire individuellement ;
-                        # ce garde-fou supplémentaire évite qu'une panne inattendue
-                        # d'un lot entier (ex. MemoryError) n'interrompe tout le
-                        # scan pour les photos restantes.
+                        # _compare_chunk already protects each pair individually; this
+                        # extra safeguard keeps an unexpected failure of a whole chunk
+                        # (e.g. a MemoryError) from interrupting the entire scan for the
+                        # remaining photos.
                         logger.warning("Tier 2 : lot de comparaison échoué pour %s : %s",
                                       os.path.basename(path_i), exc)
                         continue
@@ -1106,13 +1099,13 @@ class DuplicateDetectorThread(QThread):
                 if cancelled_mid_flight:
                     break
         finally:
-            # Cf. le commentaire équivalent au Tier 1 : un thread Python ne peut pas
-            # être tué de l'extérieur, mais shutdown(wait=False, cancel_futures=True)
-            # évite d'attendre ici la fin des tâches déjà en cours — chacune sort déjà
-            # vite via `if self._cancelled: break` dans _compare_chunk (item par item),
-            # donc ce non-blocage est surtout une garantie supplémentaire (ex. si un
-            # seul appel cv2 est en cours et prend plus longtemps que prévu) plutôt
-            # que le principal gain, contrairement au Tier 1.
+            # Cf. the equivalent comment in Tier 1: a Python thread cannot be killed
+            # from the outside, but shutdown(wait=False, cancel_futures=True) avoids
+            # waiting here for the tasks already running — each of them already exits
+            # quickly through `if self._cancelled: break` in _compare_chunk (item by
+            # item), so this non-blocking call is mostly an extra guarantee (e.g. if a
+            # single cv2 call is running and takes longer than expected) rather than
+            # the main gain, unlike in Tier 1.
             executor.shutdown(wait=not cancelled_mid_flight, cancel_futures=cancelled_mid_flight)
         if cancelled_mid_flight:
             return
@@ -1121,10 +1114,10 @@ class DuplicateDetectorThread(QThread):
         _checkpoint_tier2(m - 1)
 
 
-# ── rapport HTML ────────────────────────────────────────────────────────────────
+# ── HTML report ────────────────────────────────────────────────────────────────
 
 def generate_html_report(groups: dict, output_path: str) -> None:
-    """Génère un rapport HTML listant tous les groupes de doublons."""
+    """Generates an HTML report listing every duplicate group."""
     n_groups = len(groups)
     n_files  = sum(len(v) for v in groups.values())
     now      = datetime.now().strftime(
@@ -1132,8 +1125,8 @@ def generate_html_report(groups: dict, output_path: str) -> None:
 
     lines = [
         "<!DOCTYPE html>",
-        # `lang` doit suivre la langue du contenu (lecture d'écran, césure du
-        # navigateur) : c'est un code de langue, pas une chaîne traduisible.
+        # `lang` must follow the language of the content (screen readers, browser
+        # hyphenation): it is a language code, not a translatable string.
         f"<html lang='{active_language()}'>",
         "<head>",
         "<meta charset='UTF-8'>",
@@ -1201,10 +1194,10 @@ def generate_html_report(groups: dict, output_path: str) -> None:
 
 
 def _fmt_size(n: int) -> str:
-    # Le libellé complet (nombre + unité) est traduisible : l'anglais et
-    # l'allemand écrivent « kB/MB », pas « Ko/Mo » (octets). Source et contexte
-    # doivent rester des littéraux sur place (lupdate lit le code, il ne
-    # l'exécute pas) : pas de boucle sur une liste d'unités ici.
+    # The complete label (number + unit) is translatable: English and German
+    # write "kB/MB", not "Ko/Mo" (octets). Source and context must stay
+    # literals on the spot (lupdate reads the code, it does not execute it):
+    # no loop over a list of units here.
     if n < 1024:
         return translate("Units", "{n}&nbsp;B").format(n=n)
     n //= 1024

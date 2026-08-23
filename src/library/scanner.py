@@ -18,17 +18,17 @@ logger = logging.getLogger(__name__)
 SUPPORTED_EXT = ExifReader.SUPPORTED | VIDEO_EXT | (RAW_EXT if is_raw_available() else set())
 
 
-# Ré-export : implémentation partagée (cf. fs_utils), alias conservé pour les
-# usages internes et les tests existants.
+# Re-export: shared implementation (cf. fs_utils), the alias is kept for the
+# internal uses and the existing tests.
 from src.library.fs_utils import is_hidden_path as _is_hidden  # noqa: E402
 
 
-_BATCH_SIZE = 50   # photos regroupées par émission pour éviter de saturer l'event loop
+_BATCH_SIZE = 50   # photos grouped per emission, so as not to flood the event loop
 
 
 class ScanThread(QThread):
-    photos_batch     = Signal(list)   # list[PhotoInfo] — nouvelles/modifiées, par lots
-    photos_removed   = Signal(list)   # list[str] — chemins supprimés du catalogue
+    photos_batch     = Signal(list)   # list[PhotoInfo] — new/modified, in batches
+    photos_removed   = Signal(list)   # list[str] — paths removed from the catalog
     progress         = Signal(int, str)
     finished         = Signal(int)
 
@@ -82,7 +82,7 @@ class ScanThread(QThread):
 
         batch: list = []
         last_emit = 0.0
-        _PROGRESS_INTERVAL = 0.15  # secondes — rafraîchir la barre de statut souvent, quelle que soit la vitesse de traitement
+        _PROGRESS_INTERVAL = 0.15  # seconds — refresh the status bar often, whatever the processing speed
 
         for file_count, filepath in enumerate(all_files, 1):
             if self._stop_flag:
@@ -143,9 +143,9 @@ class ScanThread(QThread):
         if batch and not self._stop_flag:
             self.photos_batch.emit(batch)
 
-        # Nettoyage des entrées fantômes (fichiers déplacés ou supprimés hors de l'app)
-        # Seulement si le scan n'a pas été interrompu (stop_flag) pour éviter les
-        # faux positifs : un scan partiel ne doit pas supprimer des entrées valides.
+        # Clean up the ghost entries (files moved or deleted outside the app)
+        # Only if the scan was not interrupted (stop_flag), to avoid false
+        # positives: a partial scan must not remove valid entries.
         if not self._stop_flag:
             all_files_set = set(all_files)
             removed: list[str] = []
@@ -185,9 +185,9 @@ class LibraryScanner:
         self.wait_stopped()
 
     def request_stop(self) -> None:
-        """Signale l'arrêt sans attendre. Permet à MainWindow.closeEvent de
-        signaler tous les threads d'arrière-plan avant de les attendre, pour
-        qu'ils s'arrêtent en parallèle plutôt que l'un après l'autre."""
+        """Signals the stop without waiting. Lets MainWindow.closeEvent signal
+        every background thread before waiting on them, so that they stop in
+        parallel rather than one after the other."""
         if self._thread and self._thread.isRunning():
             self._thread.stop()
 

@@ -1,9 +1,9 @@
 # Copyright 2026 Christian Guyot
 # SPDX-License-Identifier: Apache-2.0
-"""Tentative de réparation de fichiers image corrompus (ex. JPEG avec une
-erreur fatale libjpeg "Invalid SOS parameters for sequential JPEG") en
-essayant des décodeurs plus tolérants que ceux utilisés pour la détection de
-doublons, puis en ré-enregistrant une copie propre à la place de l'original.
+"""Repair attempt for corrupted image files (e.g. a JPEG with a fatal
+libjpeg error "Invalid SOS parameters for sequential JPEG") by trying
+decoders more tolerant than the ones used for duplicate detection, then
+saving a clean copy in place of the original.
 """
 import ctypes
 import io
@@ -23,8 +23,8 @@ _JPEG_EOI = b"\xff\xd9"
 
 
 def _backup_before_repair(path: str) -> None:
-    """Copie l'original dans .tmp_originals (dossier caché) avant réparation,
-    même convention que MainWindow._backup_original()."""
+    """Copies the original into .tmp_originals (a hidden folder) before the
+    repair, the same convention as MainWindow._backup_original()."""
     import shutil
 
     original = Path(path)
@@ -34,7 +34,7 @@ def _backup_before_repair(path: str) -> None:
     try:
         ctypes.windll.kernel32.SetFileAttributesW(str(backup_dir), 0x02)
     except Exception:
-        pass  # non bloquant sur les systèmes non-Windows
+        pass  # not blocking on non-Windows systems
 
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     backup_name = f"{original.stem}_{ts}{original.suffix}"
@@ -42,8 +42,8 @@ def _backup_before_repair(path: str) -> None:
 
 
 def _decode_truncated_pil(path: str):
-    """Tente un décodage PIL tolérant aux fichiers tronqués. Retourne une
-    image PIL RGB ou None."""
+    """Attempts a PIL decoding tolerant of truncated files. Returns a PIL RGB
+    image or None."""
     try:
         from PIL import Image, ImageFile
 
@@ -60,8 +60,8 @@ def _decode_truncated_pil(path: str):
 
 
 def _decode_qimage(path: str):
-    """Tente un décodage via le codec JPEG de Qt (indépendant de libjpeg
-    strict). Retourne une image PIL RGB ou None."""
+    """Attempts a decoding through Qt's JPEG codec (independent of a strict
+    libjpeg). Returns a PIL RGB image or None."""
     try:
         from PySide6.QtGui import QImage
         from PIL.ImageQt import fromqimage
@@ -75,11 +75,11 @@ def _decode_qimage(path: str):
 
 
 def _decode_cv2_truncated(path: str):
-    """Décodeur tolérant basé sur OpenCV/libjpeg-turbo — troisième
-    implémentation indépendante de PIL et de Qt. Selon le point exact de la
-    troncature, un décodeur peut récupérer plus de lignes qu'un autre : d'où
-    l'intérêt de comparer plutôt que de se limiter à PIL+Qt. Retourne une
-    image PIL RGB ou None."""
+    """A tolerant decoder based on OpenCV/libjpeg-turbo — a third
+    implementation independent of PIL and of Qt. Depending on the exact point
+    of the truncation, one decoder may recover more rows than another: hence
+    the value of comparing them rather than settling for PIL+Qt. Returns a
+    PIL RGB image or None."""
     try:
         import cv2
         import numpy as np
@@ -95,15 +95,15 @@ def _decode_cv2_truncated(path: str):
 
 
 def _decode_strict_with_eoi_fix(path: str):
-    """Beaucoup de JPEG « corrompus » sont en fait intacts à l'exception du
-    marqueur de fin (EOI, 0xFFD9) manquant — cas typique d'un transfert de
-    fichier interrompu en cours de copie. Si lui ajouter ce marqueur suffit à
-    obtenir un décodage STRICT (non tolérant, donc sans ligne de secours
-    remplie de gris/noir), la récupération est parfaite : aucun pixel perdu,
-    contrairement aux décodeurs tolérants de `_try_repair_file` qui laissent
-    la portion non décodée du fichier en données non définies. En cas d'autre
-    corruption, le décodage strict échoue proprement (exception) et l'appelant
-    retombe sur ces décodeurs tolérants. Retourne une image PIL RGB ou None."""
+    """Many "corrupted" JPEGs are in fact intact apart from a missing end
+    marker (EOI, 0xFFD9) — the typical case of a file transfer interrupted
+    mid-copy. If adding that marker is enough to obtain a STRICT decoding
+    (not tolerant, hence with no fallback row filled with grey/black), the
+    recovery is perfect: not a single pixel lost, unlike the tolerant
+    decoders of `_try_repair_file`, which leave the undecoded portion of the
+    file as undefined data. On any other corruption the strict decoding
+    fails cleanly (an exception) and the caller falls back on those tolerant
+    decoders. Returns a PIL RGB image or None."""
     try:
         with open(path, "rb") as f:
             data = f.read()
@@ -111,7 +111,7 @@ def _decode_strict_with_eoi_fix(path: str):
         return None
 
     if not data.startswith(b"\xff\xd8") or data.endswith(_JPEG_EOI):
-        return None  # pas un JPEG, ou déjà terminé : la troncature finale n'est pas la cause
+        return None  # not a JPEG, or already complete: a final truncation is not the cause
 
     try:
         from PIL import Image, ImageFile
@@ -129,13 +129,14 @@ def _decode_strict_with_eoi_fix(path: str):
 
 
 def _usable_height(img) -> int:
-    """Heuristique de score pour comparer des décodages tolérants entre eux :
-    un décodeur libjpeg-style s'arrête au point de corruption et remplit le
-    reste de l'image avec une couleur unie (gris/noir) plutôt que de la
-    tronquer réellement. En partant du bas, la première ligne dont l'écart-
-    type des pixels dépasse le seuil marque la fin du contenu réel récupéré.
-    Ne sert qu'à départager plusieurs décodages du même fichier, pas à
-    valider une image saine (une vraie image peut avoir un bas uniforme)."""
+    """A scoring heuristic to compare tolerant decodings with one another: a
+    libjpeg-style decoder stops at the point of corruption and fills the rest
+    of the image with a plain colour (grey/black) rather than truly
+    truncating it. Starting from the bottom, the first row whose pixel
+    standard deviation exceeds the threshold marks the end of the real
+    content recovered. It only serves to pick between several decodings of
+    the same file, never to validate a healthy image (a genuine image may
+    well have a uniform bottom)."""
     import numpy as np
 
     arr = np.asarray(img)
@@ -152,8 +153,8 @@ def _usable_height(img) -> int:
 
 
 def _save_repaired(path: str, img, orig_stat: os.stat_result) -> bool:
-    """Sauvegarde d'un décodage retenu comme réparation : sauvegarde de
-    l'original puis ré-enregistrement à sa place, dates préservées."""
+    """Saves a decoding retained as the repair: back up the original, then
+    save in its place, dates preserved."""
     try:
         _backup_before_repair(path)
         img.save(path, format="JPEG", quality=_JPEG_QUALITY, subsampling=0)
@@ -165,29 +166,28 @@ def _save_repaired(path: str, img, orig_stat: os.stat_result) -> bool:
 
 
 def _try_repair_file(path: str) -> bool:
-    """Tente de ré-enregistrer une copie propre de `path`. Retourne True si
-    la réparation a réussi (fichier sauvegardé puis remplacé), False sinon.
+    """Attempts to save a clean copy of `path`. Returns True if the repair
+    succeeded (file backed up then replaced), False otherwise.
 
-    Deux niveaux : (1) réparation sans perte si la seule anomalie est un
-    marqueur de fin JPEG manquant ; (2) à défaut, comparaison de plusieurs
-    décodeurs tolérants pour retenir celui qui a récupéré le plus de contenu
-    réel (au lieu de s'arrêter au premier qui ne lève pas d'exception, qui
-    peut être le moins bon des trois).
+    Two levels: (1) a lossless repair if the only anomaly is a missing JPEG
+    end marker; (2) failing that, a comparison of several tolerant decoders
+    to keep the one that recovered the most real content (instead of
+    stopping at the first one that does not raise, which may be the worst of
+    the three).
 
-    Piège évité : un décodage STRICT après ajout de l'EOI peut malgré tout
-    « réussir » sans lever d'exception sur un fichier tronqué en plein
-    milieu — libjpeg traite certaines fins de flux entropique prématurées
-    comme récupérables et remplit le reste avec du gris uni au lieu
-    d'échouer. On ne fait donc confiance au résultat du niveau 1 comme
-    « sans perte » que s'il n'a *aucune* ligne de filler détectable
-    (`_usable_height` == hauteur totale) ; sinon il rejoint le lot de
-    candidats comparés au niveau 2 comme les autres."""
+    Trap avoided: a STRICT decoding after the EOI is added can nevertheless
+    "succeed" without raising on a file truncated right in the middle —
+    libjpeg treats some premature ends of the entropy stream as recoverable
+    and fills the rest with plain grey instead of failing. The result of
+    level 1 is therefore only trusted as "lossless" when it has *no*
+    detectable filler row (`_usable_height` == the full height); otherwise it
+    joins the pool of candidates compared at level 2 like the others."""
     try:
         orig_stat = os.stat(path)
     except OSError:
-        # Le fichier a disparu entre la détection et la tentative de
-        # réparation (déplacé/supprimé manuellement, dossier réseau
-        # débranché…) : rien à réparer, pas une erreur de décodage.
+        # The file disappeared between the detection and the repair attempt
+        # (moved/deleted by hand, network folder unplugged…): nothing to
+        # repair, not a decoding error.
         return False
 
     candidates = []
@@ -210,11 +210,11 @@ def _try_repair_file(path: str) -> bool:
 
 
 class FileRepairThread(QThread):
-    """Tente de réparer une liste de fichiers corrompus dans un thread
-    séparé (l'UI ne doit jamais bloquer sur ces opérations d'I/O)."""
+    """Attempts to repair a list of corrupted files in a separate thread (the
+    UI must never block on those I/O operations)."""
 
-    progress = Signal(int, int, str)   # (courant, total, chemin en cours)
-    finished = Signal(int, list)       # (nb réparés, chemins toujours en échec)
+    progress = Signal(int, int, str)   # (current, total, path being processed)
+    finished = Signal(int, list)       # (number repaired, paths still failing)
 
     def __init__(self, paths: list[str], parent=None):
         super().__init__(parent)
@@ -235,8 +235,8 @@ class FileRepairThread(QThread):
             try:
                 ok = _try_repair_file(path)
             except Exception:
-                # Un fichier imprévisible ne doit pas interrompre le reste du
-                # lot et laisser la barre de progression bloquée indéfiniment.
+                # An unpredictable file must not interrupt the rest of the batch
+                # and leave the progress bar stuck indefinitely.
                 logger.exception("Échec inattendu de la réparation de %s", path)
                 ok = False
             if ok:
