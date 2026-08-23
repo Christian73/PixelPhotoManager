@@ -1,8 +1,8 @@
 ﻿# Copyright 2026 Christian Guyot
 # SPDX-License-Identifier: Apache-2.0
-"""Canvas de la visionneuse (extrait de photo_viewer.py) : affichage zoom/pan,
-recadrage, yeux rouges, vignette, ajout de visage et calque d'annotations
-(_Canvas, ~2200 lignes), avec l'éditeur de texte en place (_InlineTextEdit)."""
+"""Canvas of the viewer (extracted from photo_viewer.py): zoom/pan display,
+crop, red eyes, vignette, face addition and annotation layer
+(_Canvas, ~2200 lines), with the in-place text editor (_InlineTextEdit)."""
 import copy
 import io
 import logging
@@ -32,15 +32,15 @@ from src.core.i18n import translate
 
 logger = logging.getLogger(__name__)
 
-# Résolution maximale pour l'affichage à l'écran.
-# Les retouches (rotation, recadrage, etc.) s'appliquent sur cette copie réduite.
+# Maximum resolution for the on-screen display.
+# The edits (rotation, crop, etc.) are applied to this reduced copy.
 
 def _make_rect_quad(x0: float, y0: float, x1: float, y1: float) -> list:
-    """Retourne [TL, TR, BR, BL] pour un rectangle axis-aligned."""
+    """Returns [TL, TR, BR, BL] for an axis-aligned rectangle."""
     return [QPointF(x0, y0), QPointF(x1, y0), QPointF(x1, y1), QPointF(x0, y1)]
 
-# Formats de recadrage : (libellé, tooltip, ratio w/h ou None)
-# L'icône de chaque bouton montre visuellement l'orientation paysage/portrait.
+# Crop formats: (label, tooltip, w/h ratio or None)
+# The icon of each button visually shows the landscape/portrait orientation.
 _CROP_FORMAT_DATA: list[tuple[str, str, float | None]] = [
     (translate("ViewerCanvas", "Free"),
      translate("ViewerCanvas", "Free form — any quadrilateral"),  None),
@@ -56,15 +56,15 @@ _CORNER_CURSORS = [
     Qt.SizeFDiagCursor,  # 2: BR
     Qt.SizeBDiagCursor,  # 3: BL
 ]
-_HANDLE_HIT = 10   # pixels de tolérance pour détecter une poignée de coin
-_EDGE_HIT   = 12   # pixels de tolérance pour détecter une poignée d'arête
-# Paires de coins formant chaque arête : haut, droite, bas, gauche
+_HANDLE_HIT = 10   # pixels of tolerance to detect a corner handle
+_EDGE_HIT   = 12   # pixels of tolerance to detect an edge handle
+# Pairs of corners forming each edge: top, right, bottom, left
 _EDGE_INDICES = [(0, 1), (1, 2), (2, 3), (3, 0)]
 
-# Poignées de redimensionnement/rotation d'une annotation sélectionnée
-_ANNOTATION_HANDLE_HIT     = 10   # pixels de tolérance pour détecter une poignée coin/rotation
-_ANNOTATION_ROTATE_OFFSET  = 28   # pixels au-dessus du coin haut pour la poignée de rotation
-_ANNOTATION_MIN_SIZE_PX    = 8.0  # taille minimale (largeur/hauteur locale) pendant un redimensionnement
+# Resize/rotation handles of a selected annotation
+_ANNOTATION_HANDLE_HIT     = 10   # pixels of tolerance to detect a corner/rotation handle
+_ANNOTATION_ROTATE_OFFSET  = 28   # pixels above the top corner for the rotation handle
+_ANNOTATION_MIN_SIZE_PX    = 8.0  # minimum size (local width/height) during a resize
 _ANNOTATION_CORNER_CURSORS = {
     'tl': Qt.SizeFDiagCursor, 'br': Qt.SizeFDiagCursor,
     'tr': Qt.SizeBDiagCursor, 'bl': Qt.SizeBDiagCursor,
@@ -72,9 +72,9 @@ _ANNOTATION_CORNER_CURSORS = {
 
 
 class _InlineTextEdit(QTextEdit):
-    """Éditeur de texte flottant pour l'outil Texte du calque d'annotations.
-    Entrée (sans Shift) valide, Échap annule, perte de focus valide — pas de
-    QInputDialog modal pour rester en manipulation directe sur le canvas."""
+    """Floating text editor for the Text tool of the annotation layer.
+    Enter (without Shift) validates, Escape cancels, losing the focus validates - no
+    modal QInputDialog, so as to stay in direct manipulation on the canvas."""
     confirmed = Signal()
     cancelled = Signal()
 
@@ -94,22 +94,22 @@ class _InlineTextEdit(QTextEdit):
 
 class _Canvas(QWidget):
     zoom_changed                = Signal(float)
-    wheel_navigate              = Signal(int)    # ±1 photo
-    crop_confirmed              = Signal(object) # tuple 8 coords relatives (x0,y0,…,x3,y3)
-    context_menu_requested      = Signal(object) # QPoint global
+    wheel_navigate              = Signal(int)    # +/-1 photo
+    crop_confirmed              = Signal(object) # tuple of 8 relative coords (x0,y0,...,x3,y3)
+    context_menu_requested      = Signal(object) # global QPoint
     red_eye_point_added         = Signal(float, float)  # cx_norm, cy_norm (0-1)
-    pixel_sampled               = Signal(int, int, int)  # R, G, B — pipette balance des blancs
-    face_context_menu_requested = Signal(object, object) # (FaceInfo, QPoint global)
-    vignette_changed            = Signal(object) # EditInfo (géométrie mise à jour par drag)
+    pixel_sampled               = Signal(int, int, int)  # R, G, B - white balance eyedropper
+    face_context_menu_requested = Signal(object, object) # (FaceInfo, global QPoint)
+    vignette_changed            = Signal(object) # EditInfo (geometry updated by a drag)
     face_add_confirmed          = Signal(object) # tuple (bbox_x,bbox_y,bbox_w,bbox_h) int
-    annotation_added             = Signal(object)  # dict annotation ajoutée
-    annotation_deleted           = Signal(str)     # id de l'annotation supprimée
-    annotation_deleted_multi     = Signal(object)  # list[str] ids supprimés (suppression groupée)
-    annotation_selection_changed = Signal(object)  # list[str] ids sélectionnés (peut être vide)
-    annotation_moved              = Signal(str, object)  # (id, dict annotation à jour)
-    annotation_moved_multi        = Signal(object)  # dict[id, annotation à jour] (déplacement groupé)
-    annotation_resized            = Signal(str, object)  # (id, dict annotation à jour)
-    annotation_grouped            = Signal(object)  # dict[id, annotation à jour] (groupe/dégroupe)
+    annotation_added             = Signal(object)  # annotation dict added
+    annotation_deleted           = Signal(str)     # id of the deleted annotation
+    annotation_deleted_multi     = Signal(object)  # list[str] of deleted ids (batch deletion)
+    annotation_selection_changed = Signal(object)  # list[str] of selected ids (may be empty)
+    annotation_moved              = Signal(str, object)  # (id, up-to-date annotation dict)
+    annotation_moved_multi        = Signal(object)  # dict[id, up-to-date annotation] (batch move)
+    annotation_resized            = Signal(str, object)  # (id, up-to-date annotation dict)
+    annotation_grouped            = Signal(object)  # dict[id, up-to-date annotation] (group/ungroup)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -120,83 +120,83 @@ class _Canvas(QWidget):
         self._drag_offset_start = QPointF(0, 0)
         # Crop
         self._crop_mode   = False
-        self._crop_quad:  list[QPointF] | None = None   # [TL, TR, BR, BL] coords écran
+        self._crop_quad:  list[QPointF] | None = None   # [TL, TR, BR, BL] screen coords
         self._crop_action: str | None   = None          # None | 'DRAWING' | 'MOVING' | 'RESIZING' | 'PANNING'
-        self._crop_handle: int | None   = None          # index coin actif (0-3)
-        self._aspect_ratio: float | None = None         # ratio largeur/hauteur verrouillé (None = libre)
-        self._drag_ratio:   float | None = None         # ratio effectif pour le drag en cours
+        self._crop_handle: int | None   = None          # index of the active corner (0-3)
+        self._aspect_ratio: float | None = None         # locked width/height ratio (None = free)
+        self._drag_ratio:   float | None = None         # effective ratio for the drag in progress
         self._crop_mouse_start:  QPointF | None = None
         self._crop_quad_start:   list[QPointF] | None = None
         self._crop_draw_start:   QPointF | None = None
         self._grid_visible = False
-        # Visage(s) mis en surbrillance — un seul (FacePanel clic) ou tous (bouton "Tous")
-        self._highlighted_face  = None   # FaceInfo unique
-        self._highlighted_faces: list = []  # liste pour le mode "Tous"
+        # Highlighted face(s) - a single one (FacePanel click) or all of them ("All" button)
+        self._highlighted_face  = None   # single FaceInfo
+        self._highlighted_faces: list = []  # list for the "All" mode
         self._orig_w: int = 0
         self._orig_h: int = 0
-        self._current_edit = None   # EditInfo courant pour transformer les bbox
-        # Mode correction yeux rouges
+        self._current_edit = None   # current EditInfo to transform the bboxes
+        # Red-eye correction mode
         self._red_eye_mode: bool = False
-        self._red_eye_radius: float = 0.03   # rayon normalisé (0-1) pour le curseur
+        self._red_eye_radius: float = 0.03   # normalised radius (0-1) for the cursor
         self._red_eye_mouse: QPointF | None = None
-        # Mode pipette balance des blancs
+        # White balance eyedropper mode
         self._wb_pick_mode: bool = False
-        # Mode vignette interactive
+        # Interactive vignette mode
         self._vignette_mode: bool = False
-        self._vignette_edit = None           # EditInfo courant de la vignette
+        self._vignette_edit = None           # current EditInfo of the vignette
         self._vignette_drag: str | None = None
         self._vignette_drag_start: "QPointF | None" = None
-        self._vignette_edit_start = None     # copie de EditInfo au début du drag
-        # Mode ajout manuel d'un visage (bbox non détectée par InsightFace)
+        self._vignette_edit_start = None     # copy of EditInfo at the start of the drag
+        # Manual face addition mode (bbox not detected by InsightFace)
         self._face_add_mode: bool = False
-        self._face_add_rect: "QRectF | None" = None     # écran, rectangle axis-aligned
+        self._face_add_rect: "QRectF | None" = None     # screen, axis-aligned rectangle
         self._face_add_action: "str | None" = None      # None | 'DRAWING' | 'MOVING' | 'RESIZING'
-        self._face_add_handle: "int | None" = None       # index coin actif (0=TL,1=TR,2=BR,3=BL)
+        self._face_add_handle: "int | None" = None       # index of the active corner (0=TL,1=TR,2=BR,3=BL)
         self._face_add_draw_start: "QPointF | None" = None
         self._face_add_mouse_start: "QPointF | None" = None
         self._face_add_rect_start: "QRectF | None" = None
-        # Calque d'annotations (dessin/texte par-dessus la photo)
+        # Annotation layer (drawing/text over the photo)
         self._annotation_mode: bool = False
         self._annotation_tool: str = "pen"   # "pen"|"line"|"curve"|"rect"|"ellipse"|"text"|"select"
         self._annotations_visible: bool = True
         self._annotations: list = []
         self._annotation_color: str = "#ffff0000"
-        self._annotation_width: float = 0.006     # fraction de min(largeur, hauteur)
-        self._annotation_fill_color: str = "#ffff0000"   # rect/ellipse : couleur de fond (alpha ignoré, cf. opacity)
-        self._annotation_opacity: float = 0.4             # rect/ellipse : opacité de la surface (0-1)
-        self._annotation_blur: float = 0.0                 # rect/ellipse : flou, fraction de min(largeur, hauteur)
+        self._annotation_width: float = 0.006     # fraction of min(width, height)
+        self._annotation_fill_color: str = "#ffff0000"   # rect/ellipse: background colour (alpha ignored, cf. opacity)
+        self._annotation_opacity: float = 0.4             # rect/ellipse: opacity of the surface (0-1)
+        self._annotation_blur: float = 0.0                 # rect/ellipse: blur, fraction of min(width, height)
         self._annotation_font_family: str = "Arial"
-        self._annotation_font_size: float = 0.04  # fraction de min(largeur, hauteur)
+        self._annotation_font_size: float = 0.04  # fraction of min(width, height)
         self._annotation_bold: bool = False
         self._annotation_italic: bool = False
-        self._annotation_selected_ids: set = set()            # sélection multiple, outil "select"
+        self._annotation_selected_ids: set = set()            # multiple selection, "select" tool
         self._annotation_draft_type: "str | None" = None    # None|"pen"|"line"|"curve"|"rect"|"ellipse"
-        self._annotation_draft_points: list = []             # points écran en cours
-        self._annotation_hover_pos: "QPointF | None" = None  # aperçu du prochain point (courbe)
+        self._annotation_draft_points: list = []             # screen points in progress
+        self._annotation_hover_pos: "QPointF | None" = None  # preview of the next point (curve)
         self._annotation_text_editor: "_InlineTextEdit | None" = None
-        self._annotation_text_pos: "QPointF | None" = None   # position écran de l'éditeur ouvert
-        self._annotation_edit_id: "str | None" = None        # id du texte en cours d'édition (None = création)
-        # Déplacement (drag) des éléments sélectionnés, outil "select"
+        self._annotation_text_pos: "QPointF | None" = None   # screen position of the open editor
+        self._annotation_edit_id: "str | None" = None        # id of the text being edited (None = creation)
+        # Dragging of the selected elements, "select" tool
         self._annotation_drag_ids: list = []
         self._annotation_drag_start: "QPointF | None" = None
-        self._annotation_drag_origs: dict = {}                # id -> copie points/pos avant drag
-        self._annotation_drag_moved: bool = False             # dépassé le seuil anti-clic
-        # Sélection rectangulaire (marquee) en zone vide
+        self._annotation_drag_origs: dict = {}                # id -> copy of the points/pos before the drag
+        self._annotation_drag_moved: bool = False             # the anti-click threshold has been passed
+        # Rectangular (marquee) selection in an empty area
         self._annotation_marquee_start: "QPointF | None" = None
         self._annotation_marquee_rect: "QRectF | None" = None
-        # Redimensionnement/rotation via les poignées de l'élément sélectionné
+        # Resize/rotation through the handles of the selected element
         self._annotation_resize_handle: "str | None" = None   # 'tl'|'tr'|'br'|'bl'|'rotate'
         self._annotation_resize_id: "str | None" = None
-        self._annotation_resize_orig: "dict | None" = None    # copie de l'annotation avant drag
-        self._annotation_resize_start: "QPointF | None" = None  # position souris écran au début
-        self._annotation_resize_bbox0: "QRectF | None" = None   # bbox locale (non tournée) au début
+        self._annotation_resize_orig: "dict | None" = None    # copy of the annotation before the drag
+        self._annotation_resize_start: "QPointF | None" = None  # screen mouse position at the start
+        self._annotation_resize_bbox0: "QRectF | None" = None   # local (unrotated) bbox at the start
         self.setMouseTracking(True)
         self.setFocusPolicy(Qt.NoFocus)
 
-    # ------------------------------------------------------------------ pipette couleur
+    # ------------------------------------------------------------------ colour eyedropper
 
     def start_color_pick(self) -> None:
-        """Active le mode pipette : prochain clic gauche → pixel_sampled(r, g, b)."""
+        """Enables the eyedropper mode: the next left click -> pixel_sampled(r, g, b)."""
         self._wb_pick_mode = True
         self.setCursor(Qt.CrossCursor)
 
@@ -235,7 +235,7 @@ class _Canvas(QWidget):
     def set_zoom(self, factor: float) -> None:
         new_zoom = max(0.1, min(factor, 4.0))
         if self._pixmap and self._zoom > 0:
-            # Zoom centré sur le centre du viewport : préserve le point visible central
+            # Zoom centred on the centre of the viewport: preserves the central visible point
             ratio = new_zoom / self._zoom
             cx, cy = self.width() / 2, self.height() / 2
             self._offset = QPointF(
@@ -256,12 +256,12 @@ class _Canvas(QWidget):
     # ------------------------------------------------------------------ crop helpers
 
     def _frame_border_px(self) -> int:
-        """Épaisseur du cadre décoratif dans le pixmap affiché (0 si aucun cadre).
+        """Thickness of the decorative frame in the displayed pixmap (0 if there is no frame).
 
-        Le cadre fait partie du pixmap (posé par ImageAdjuster.apply_all) mais
-        n'est PAS de l'image : toutes les coordonnées relatives manipulées ici
-        (recadrage, annotations, vignette, bbox de visage) se rapportent au seul
-        contenu photo, d'où le retrait de cette bordure dans _img_rect()."""
+        The frame is part of the pixmap (laid down by ImageAdjuster.apply_all) but
+        is NOT part of the image: every relative coordinate manipulated here
+        (crop, annotations, vignette, face bbox) refers to the photo
+        content alone, hence the removal of that border in _img_rect()."""
         if not self._pixmap:
             return 0
         edit = self._current_edit
@@ -272,8 +272,8 @@ class _Canvas(QWidget):
         return int(round(x)) if w > 0 else 0
 
     def _img_rect(self) -> QRectF:
-        """Rect du CONTENU photo à l'écran, en coordonnées entières — identique à
-        ce que drawPixmap dessine réellement, moins le cadre décoratif éventuel."""
+        """Rect of the photo CONTENT on screen, in integer coordinates - identical to
+        what drawPixmap really draws, minus the possible decorative frame."""
         if not self._pixmap:
             return QRectF()
         b = self._frame_border_px()
@@ -344,7 +344,7 @@ class _Canvas(QWidget):
 
     def _constrained_rect(self, s: QPointF, dx: float, dy: float,
                           r: float, ir: QRectF) -> list:
-        """Rectangle à partir du point de départ s, delta (dx,dy) et ratio r=w/h."""
+        """Rectangle from the starting point s, the delta (dx,dy) and the ratio r=w/h."""
         sx = 1 if dx >= 0 else -1
         sy = 1 if dy >= 0 else -1
         if abs(dy) < 1 or abs(dx) / (abs(dy) + 1e-9) >= r:
@@ -374,7 +374,7 @@ class _Canvas(QWidget):
         if self._drag_ratio is None:
             self._crop_quad[self._crop_handle] = QPointF(px, py)
             return
-        # Format verrouillé : le coin opposé est l'ancre, on recrée le rectangle
+        # Locked format: the opposite corner is the anchor, we recreate the rectangle
         r   = self._drag_ratio
         opp = (self._crop_handle + 2) % 4
         fx  = self._crop_quad[opp].x()
@@ -385,8 +385,8 @@ class _Canvas(QWidget):
         self._crop_quad = self._constrained_rect(QPointF(fx, fy), dx, dy, r, ir)
 
     def _apply_drag_edge(self, pos: QPointF) -> None:
-        """Déplace l'arête en conservant l'orientation des côtés adjacents.
-        Chaque coin glisse le long de son côté adjacent — allongement/réduction seulement."""
+        """Moves the edge while preserving the orientation of the adjacent sides.
+        Each corner slides along its adjacent side - lengthening/shortening only."""
         if self._crop_quad is None or self._crop_handle is None:
             return
         if not self._crop_quad_start or not self._crop_mouse_start:
@@ -397,14 +397,14 @@ class _Canvas(QWidget):
         eid = self._crop_handle
 
         if self._drag_ratio is not None:
-            # Format verrouillé : rectangle, bord opposé ancré, ratio maintenu
+            # Locked format: rectangle, opposite edge anchored, ratio maintained
             r = self._drag_ratio
             xs = [pt.x() for pt in self._crop_quad_start]
             ys = [pt.y() for pt in self._crop_quad_start]
             x0, x1 = min(xs), max(xs)
             y0, y1 = min(ys), max(ys)
             cx, cy = (x0 + x1) / 2, (y0 + y1) / 2
-            if eid == 0:            # bord haut : y0 change
+            if eid == 0:            # top edge: y0 changes
                 ny0 = max(ir.top(),    min(y1 - 1, y0 + dy))
                 h   = y1 - ny0
                 w   = min(h * r, ir.width())
@@ -412,7 +412,7 @@ class _Canvas(QWidget):
                 hx  = w / 2
                 cx2 = max(ir.left() + hx, min(ir.right() - hx, cx))
                 self._crop_quad = _make_rect_quad(cx2-hx, y1-h, cx2+hx, y1)
-            elif eid == 2:          # bord bas : y1 change
+            elif eid == 2:          # bottom edge: y1 changes
                 ny1 = max(y0 + 1,   min(ir.bottom(), y1 + dy))
                 h   = ny1 - y0
                 w   = min(h * r, ir.width())
@@ -420,7 +420,7 @@ class _Canvas(QWidget):
                 hx  = w / 2
                 cx2 = max(ir.left() + hx, min(ir.right() - hx, cx))
                 self._crop_quad = _make_rect_quad(cx2-hx, y0, cx2+hx, y0+h)
-            elif eid == 1:          # bord droit : x1 change
+            elif eid == 1:          # right edge: x1 changes
                 nx1 = max(x0 + 1,   min(ir.right(), x1 + dx))
                 w   = nx1 - x0
                 h   = min(w / r, ir.height())
@@ -428,7 +428,7 @@ class _Canvas(QWidget):
                 hy  = h / 2
                 cy2 = max(ir.top() + hy, min(ir.bottom() - hy, cy))
                 self._crop_quad = _make_rect_quad(x0, cy2-hy, x0+w, cy2+hy)
-            elif eid == 3:          # bord gauche : x0 change
+            elif eid == 3:          # left edge: x0 changes
                 nx0 = max(ir.left(), min(x1 - 1, x0 + dx))
                 w   = x1 - nx0
                 h   = min(w / r, ir.height())
@@ -439,40 +439,40 @@ class _Canvas(QWidget):
             return
 
         i, j = _EDGE_INDICES[self._crop_handle]
-        # Coin adjacent fixe pour chaque extrémité de l'arête
-        # Dans le cycle TL(0)-TR(1)-BR(2)-BL(3), les voisins de i (≠j) et j (≠i) sont :
+        # Fixed adjacent corner for each end of the edge
+        # In the TL(0)-TR(1)-BR(2)-BL(3) cycle, the neighbours of i (!=j) and j (!=i) are:
         i_adj = (i - 1) % 4
         j_adj = (j + 1) % 4
 
-        q_i = self._crop_quad_start[i]       # position de départ du coin i
-        q_j = self._crop_quad_start[j]       # position de départ du coin j
-        p_i = self._crop_quad_start[i_adj]   # coin adjacent fixe de i
-        p_j = self._crop_quad_start[j_adj]   # coin adjacent fixe de j
+        q_i = self._crop_quad_start[i]       # starting position of corner i
+        q_j = self._crop_quad_start[j]       # starting position of corner j
+        p_i = self._crop_quad_start[i_adj]   # fixed adjacent corner of i
+        p_j = self._crop_quad_start[j_adj]   # fixed adjacent corner of j
 
-        # Normale à l'arête
+        # Normal to the edge
         ex, ey = q_j.x() - q_i.x(), q_j.y() - q_i.y()
         length = math.hypot(ex, ey)
         if length < 1:
             return
         nx, ny = -ey / length, ex / length
 
-        # Projection du déplacement souris sur la normale
+        # Projection of the mouse movement on the normal
         proj = dx * nx + dy * ny
 
-        # Pour chaque coin : déplacement le long du côté adjacent
-        # new_corner = q + proj * (q - p) / ((q - p) · n)
-        # soit new_corner = q + proj * (sx, sy)
+        # For each corner: movement along the adjacent side
+        # new_corner = q + proj * (q - p) / ((q - p) . n)
+        # that is new_corner = q + proj * (sx, sy)
         dq_i_dot_n = (q_i.x() - p_i.x()) * nx + (q_i.y() - p_i.y()) * ny
         dq_j_dot_n = (q_j.x() - p_j.x()) * nx + (q_j.y() - p_j.y()) * ny
         if abs(dq_i_dot_n) < 1e-9 or abs(dq_j_dot_n) < 1e-9:
-            return  # côté adjacent quasi-parallèle à l'arête — cas dégénéré
+            return  # adjacent side almost parallel to the edge - degenerate case
 
         si_x = (q_i.x() - p_i.x()) / dq_i_dot_n
         si_y = (q_i.y() - p_i.y()) / dq_i_dot_n
         sj_x = (q_j.x() - p_j.x()) / dq_j_dot_n
         sj_y = (q_j.y() - p_j.y()) / dq_j_dot_n
 
-        # Clamp proj pour que les deux nouveaux coins restent dans l'image
+        # Clamp proj so that the two new corners stay inside the image
         proj_min, proj_max = -1e9, 1e9
         for sx, sy, qx, qy in [(si_x, si_y, q_i.x(), q_i.y()),
                                  (sj_x, sj_y, q_j.x(), q_j.y())]:
@@ -511,7 +511,7 @@ class _Canvas(QWidget):
     # ------------------------------------------------------------------ crop coords helpers
 
     def _crop_to_rel(self) -> tuple | None:
-        """Renvoie le quad en coords relatives (0-1) : (x0,y0,x1,y1,x2,y2,x3,y3)."""
+        """Returns the quad in relative coords (0-1): (x0,y0,x1,y1,x2,y2,x3,y3)."""
         if not self._crop_quad:
             return None
         ir = self._img_rect()
@@ -524,8 +524,8 @@ class _Canvas(QWidget):
         return tuple(result)
 
     def _crop_from_rel(self, rel: tuple) -> None:
-        """Restaure _crop_quad depuis des coords relatives.
-        Accepte l'ancien format rectangulaire (4 valeurs x,y,w,h) ou le nouveau quad (8 valeurs)."""
+        """Restores _crop_quad from relative coords.
+        Accepts the old rectangular format (4 values x,y,w,h) or the new quad (8 values)."""
         ir = self._img_rect()
         if len(rel) == 4:
             x, y, w, h = rel
@@ -573,12 +573,12 @@ class _Canvas(QWidget):
         self.update()
 
     def _locked_ratio_from_quad(self) -> float | None:
-        """Ratio verrouillé pour le drag en cours — utilise _aspect_ratio tel quel."""
+        """Ratio locked for the drag in progress - uses _aspect_ratio as it is."""
         return self._aspect_ratio
 
     def _fit_rect_to_ratio(self, ratio: float) -> None:
-        """Recadre le quad au ratio donné en conservant l'aire (rotation 90° si changement
-        d'orientation, redimensionnement isométrique sinon)."""
+        """Crops the quad to the given ratio while preserving the area (90 degree rotation on an
+        orientation change, isometric resizing otherwise)."""
         if not self._crop_quad:
             return
         ir = self._img_rect()
@@ -588,12 +588,12 @@ class _Canvas(QWidget):
         cy = (min(ys) + max(ys)) / 2
         w  = max(xs) - min(xs)
         h  = max(ys) - min(ys)
-        # Nouvelles dimensions qui conservent l'aire : w_new*h_new = w*h et w_new/h_new = ratio
+        # New dimensions preserving the area: w_new*h_new = w*h and w_new/h_new = ratio
         area = w * h
         if area > 0:
             w = math.sqrt(area * ratio)
             h = math.sqrt(area / ratio)
-        # Clamper à l'image en re-enforçant le ratio
+        # Clamp to the image while re-enforcing the ratio
         w = min(w, ir.width())
         h = min(h, ir.height())
         if w / ratio > h:
@@ -627,7 +627,7 @@ class _Canvas(QWidget):
         ir = self._img_rect()
         if ir.width() < 1 or ir.height() < 1:
             return
-        # Lignes fines en pointillés : 10 divisions régulières
+        # Thin dotted lines: 10 regular divisions
         pen_dots = QPen(QColor(255, 255, 255, 255), 0.8, Qt.DotLine)
         p.setPen(pen_dots)
         for i in range(1, 10):
@@ -636,7 +636,7 @@ class _Canvas(QWidget):
                        QPointF(ir.left() + t * ir.width(), ir.bottom()))
             p.drawLine(QPointF(ir.left(),  ir.top() + t * ir.height()),
                        QPointF(ir.right(), ir.top() + t * ir.height()))
-        # Lignes de tiers pleines (repères d'alignement clés)
+        # Solid thirds lines (key alignment marks)
         p.setPen(QPen(QColor(255, 255, 255, 255), 1.2))
         for t in (1 / 3, 2 / 3):
             p.drawLine(QPointF(ir.left() + t * ir.width(), ir.top()),
@@ -645,15 +645,15 @@ class _Canvas(QWidget):
                        QPointF(ir.right(), ir.top() + t * ir.height()))
 
     def set_orig_size(self, w: int, h: int) -> None:
-        """Dimensions EXIF-corrigées de l'image chargée (source de vérité pour les bbox)."""
+        """EXIF-corrected dimensions of the loaded image (the source of truth for the bboxes)."""
         self._orig_w = w
         self._orig_h = h
 
     def set_edit(self, edit) -> None:
-        """Edit courant à prendre en compte pour le mapping bbox → écran."""
+        """Current edit to take into account for the bbox -> screen mapping."""
         self._current_edit = edit
 
-    # ------------------------------------------------------------------ ajout manuel de visage
+    # ------------------------------------------------------------------ manual face addition
 
     def enter_face_add_mode(self) -> None:
         self._face_add_mode   = True
@@ -724,15 +724,15 @@ class _Canvas(QWidget):
         self._face_add_rect = QRectF(nx, ny, r.width(), r.height())
 
     def _bbox_from_screen_rect(self, rect: QRectF) -> "tuple[int, int, int, int] | None":
-        """Inverse de _face_screen_rect() pour detected_rotation=0 — le seul cas
-        pertinent pour un visage ajouté manuellement (embedding=NULL garantit que
-        detected_rotation résoudra à 0 à la relecture, cf. add_manual_face)."""
+        """Inverse of _face_screen_rect() for detected_rotation=0 - the only case
+        relevant for a manually added face (embedding=NULL guarantees that
+        detected_rotation will resolve to 0 on re-reading, cf. add_manual_face)."""
         if self._pixmap is None or self._orig_w == 0 or self._orig_h == 0:
             return None
         dw0, dh0 = float(self._orig_w), float(self._orig_h)
 
-        # Dimensions après rotation puis crop de l'edit courant (même logique
-        # géométrique que _face_screen_rect, mais uniquement les tailles ici).
+        # Dimensions after the rotation then the crop of the current edit (the same
+        # geometric logic as _face_screen_rect, but only the sizes here).
         dw_postrot, dh_postrot = dw0, dh0
         edit = self._current_edit
         rot = 0
@@ -755,8 +755,8 @@ class _Canvas(QWidget):
         if dw_crop <= 0 or dh_crop <= 0 or self._zoom <= 0:
             return None
 
-        # 1) écran → espace image (post-rotation, post-crop) ; _img_rect exclut
-        #    déjà le cadre décoratif, qui n'appartient pas à l'image.
+        # 1) screen -> image space (post-rotation, post-crop); _img_rect already
+        #    excludes the decorative frame, which does not belong to the image.
         ir = self._img_rect()
         sx = ir.width()  / dw_crop
         sy = ir.height() / dh_crop
@@ -767,18 +767,18 @@ class _Canvas(QWidget):
         bw = rect.width()  / sx
         bh = rect.height() / sy
 
-        # 2) undo crop → espace post-rotation
+        # 2) undo crop -> post-rotation space
         bx += cx_rel * dw_postrot
         by += cy_rel * dh_postrot
 
-        # 3) undo flip (toujours en espace post-rotation)
+        # 3) undo flip (still in post-rotation space)
         if edit is not None:
             if getattr(edit, "flip_h", False):
                 bx = dw_postrot - bx - bw
             if getattr(edit, "flip_v", False):
                 by = dh_postrot - by - bh
 
-        # 4) undo rotation edit → espace EXIF-corrigé d'origine (dw0, dh0)
+        # 4) undo edit rotation -> original EXIF-corrected space (dw0, dh0)
         if rot == 90:
             bx, by, bw, bh = by, dh0 - bx - bw, bh, bw
         elif rot == 180:
@@ -792,7 +792,7 @@ class _Canvas(QWidget):
         bh = max(1.0, min(bh, dh0 - by))
         return int(round(bx)), int(round(by)), int(round(bw)), int(round(bh))
 
-    # ------------------------------------------------------------------ vignette interactive
+    # ------------------------------------------------------------------ interactive vignette
 
     def enter_vignette_mode(self, edit) -> None:
         self._vignette_mode = True
@@ -925,7 +925,7 @@ class _Canvas(QWidget):
         rx2_s = e.vignette_rx2 * ir.width()  / 2.0
         ry2_s = e.vignette_ry2 * ir.height() / 2.0
 
-        # Ellipse interne — pointillés jaunes
+        # Inner ellipse - yellow dots
         p.save()
         p.translate(cx_s, cy_s)
         p.rotate(e.vignette_angle)
@@ -934,7 +934,7 @@ class _Canvas(QWidget):
         p.drawEllipse(QPointF(0, 0), rx1_s, ry1_s)
         p.restore()
 
-        # Ellipse externe — trait continu jaune
+        # Outer ellipse - solid yellow line
         p.save()
         p.translate(cx_s, cy_s)
         p.rotate(e.vignette_angle)
@@ -945,7 +945,7 @@ class _Canvas(QWidget):
 
         handles = self._vignette_handle_positions()
 
-        # Tige de rotation (outer_n → rotate)
+        # Rotation stem (outer_n -> rotate)
         outer_n = handles.get('outer_n')
         rot_h   = handles.get('rotate')
         if outer_n and rot_h:
@@ -998,10 +998,10 @@ class _Canvas(QWidget):
         self.update()
 
     def _red_eye_screen_radius(self) -> float:
-        """Rayon du curseur yeux rouges en pixels écran."""
+        """Radius of the red-eye cursor in screen pixels."""
         if not self._pixmap:
             return 20.0
-        ir = self._img_rect()   # rayon relatif au contenu photo, cadre exclu
+        ir = self._img_rect()   # radius relative to the photo content, frame excluded
         return self._red_eye_radius * min(ir.width(), ir.height())
 
     def _draw_red_eye_overlay(self, p: QPainter) -> None:
@@ -1012,13 +1012,13 @@ class _Canvas(QWidget):
         p.setPen(QPen(QColor(220, 60, 60, 200), 1.5))
         p.setBrush(QColor(220, 60, 60, 40))
         p.drawEllipse(center, r, r)
-        # Réticule
+        # Crosshair
         p.setPen(QPen(QColor(220, 60, 60, 160), 1))
         arm = r * 0.6
         p.drawLine(QPointF(center.x() - arm, center.y()), QPointF(center.x() + arm, center.y()))
         p.drawLine(QPointF(center.x(), center.y() - arm), QPointF(center.x(), center.y() + arm))
 
-    # ------------------------------------------------------------------ calque d'annotations
+    # ------------------------------------------------------------------ annotation layer
 
     def enter_annotation_mode(self, tool: str = "pen") -> None:
         self._annotation_mode = True
@@ -1097,10 +1097,10 @@ class _Canvas(QWidget):
             elif "pos" in orig:
                 ox, oy = orig["pos"]
                 ann["pos"] = [ox + dx, oy + dy]
-        # repaint() forcé (pas update()) : sous Windows, un flot rapide de
-        # WM_MOUSEMOVE natifs peut affamer la file de repaint asynchrone de Qt,
-        # ce qui donnait l'impression que l'élément d'origine restait affiché
-        # ("fantôme") jusqu'au relâchement du clic.
+        # forced repaint() (not update()): on Windows, a fast flow of
+        # native WM_MOUSEMOVE can starve the asynchronous repaint queue of Qt,
+        # which gave the impression that the original element stayed displayed
+        # (a "ghost") until the click was released.
         self.repaint()
 
     def _finish_annotation_drag(self) -> None:
@@ -1142,9 +1142,9 @@ class _Canvas(QWidget):
         self.update()
 
     def _annotation_bbox_local(self, ann: dict) -> "QRectF | None":
-        """Bbox écran de ``ann`` dans son repère local non tourné (avant ``angle``),
-        origine (0,0) = coin de l'image affichée. Sert de base fixe aux poignées :
-        le centre de cette bbox reste le pivot de rotation quel que soit ``angle``."""
+        """Screen bbox of ``ann`` in its local unrotated frame (before ``angle``),
+        origin (0,0) = corner of the displayed image. Serves as a fixed base for the handles:
+        the centre of that bbox stays the rotation pivot whatever ``angle`` is."""
         ir = self._img_rect()
         if ir.width() <= 0 or ir.height() <= 0:
             return None
@@ -1154,9 +1154,9 @@ class _Canvas(QWidget):
         return rect
 
     def _annotation_handle_positions(self, ann: dict) -> dict:
-        """Positions écran (repère widget) des 4 poignées de coin + la poignée de
-        rotation, tournées de ``ann['angle']`` autour du centre de la bbox locale —
-        même transformation que celle appliquée au rendu (render_annotations)."""
+        """Screen positions (widget frame) of the 4 corner handles + the rotation
+        handle, rotated by ``ann['angle']`` around the centre of the local bbox -
+        the same transformation as the one applied at render time (render_annotations)."""
         rect = self._annotation_bbox_local(ann)
         if rect is None:
             return {}
@@ -1209,7 +1209,7 @@ class _Canvas(QWidget):
         cos_a, sin_a = math.cos(rad), math.sin(rad)
         cx0, cy0 = bbox0.center().x(), bbox0.center().y()
 
-        # Position souris ramenée dans le repère local non tourné (origine image, sans ir offset)
+        # Mouse position brought back into the local unrotated frame (image origin, without the ir offset)
         lx, ly = pos.x() - ir.x(), pos.y() - ir.y()
         dx, dy = lx - cx0, ly - cy0
         local_x = cx0 + dx * cos_a + dy * sin_a
@@ -1239,8 +1239,8 @@ class _Canvas(QWidget):
         scale_y = new_h / old_h
 
         if ann.get("type") == "text":
-            # Le texte n'a pas de largeur/hauteur indépendantes : un seul facteur
-            # d'échelle (distance à l'ancre) pilote font_size, geste "diagonal" naturel.
+            # Text has no independent width/height: a single scale
+            # factor (distance to the anchor) governs font_size, a natural "diagonal" gesture.
             old_diag = math.hypot(old_w, old_h)
             new_diag = math.hypot(new_w, new_h)
             scale = new_diag / max(1e-6, old_diag)
@@ -1440,8 +1440,8 @@ class _Canvas(QWidget):
         self._annotation_edit_id = ann.get("id") if ann is not None else None
 
     def _open_text_editor_for_edit(self, ann: dict) -> None:
-        """Double-clic sur un texte existant (outil select) : ré-ouvre l'éditeur
-        flottant pré-rempli, à la place de l'annotation, pour modification in-place."""
+        """Double-click on an existing text (select tool): reopens the prefilled
+        floating editor, in place of the annotation, for an in-place modification."""
         if self._annotation_text_editor is not None:
             return
         ir = self._img_rect()
@@ -1519,10 +1519,10 @@ class _Canvas(QWidget):
         ir = self._img_rect()
         if ir.width() <= 0 or ir.height() <= 0:
             return
-        # Le flou échantillonne le fond en supposant qu'il recouvre exactement la
-        # zone cible : avec un cadre, il faut donc lui donner le seul contenu.
-        # (recadrage seulement si une annotation floute réellement — la copie a
-        #  un coût, et paintEvent passe ici à chaque rafraîchissement)
+        # The blur samples the background assuming it covers exactly the
+        # target area: with a frame, it must therefore be given the content alone.
+        # (cropping only if an annotation really blurs - the copy has
+        #  a cost, and paintEvent goes through here at every refresh)
         b = self._frame_border_px()
         background = self._pixmap
         if b > 0 and any(float(a.get("blur", 0.0) or 0.0) >= 0.5 for a in self._annotations):
@@ -1613,8 +1613,8 @@ class _Canvas(QWidget):
             p.restore()
 
     def _draw_annotation_handles(self, p: QPainter, ann: dict) -> None:
-        """Poignées de redimensionnement (coins) + rotation d'un élément sélectionné,
-        même style visuel que les poignées de vignette (_vignette_handle_positions)."""
+        """Resize (corner) + rotation handles of a selected element,
+        the same visual style as the vignette handles (_vignette_handle_positions)."""
         handles = self._annotation_handle_positions(ann)
         if not handles:
             return
@@ -1650,8 +1650,8 @@ class _Canvas(QWidget):
         f = face if face is not None else self._highlighted_face
         if f is None or self._pixmap is None or self._orig_w == 0 or self._orig_h == 0:
             return None
-        # bbox stocké dans l'espace de l'image après detected_rotation CW supplémentaire.
-        # On ramène dans l'espace d'affichage (image EXIF-corrigée, sans rotation extra).
+        # bbox stored in the space of the image after an extra detected_rotation CW.
+        # We bring it back into the display space (EXIF-corrected image, without the extra rotation).
         bx, by, bw, bh = float(f.bbox_x), float(f.bbox_y), float(f.bbox_w), float(f.bbox_h)
         r = getattr(f, "detected_rotation", 0) % 360
         dw, dh = float(self._orig_w), float(self._orig_h)
@@ -1662,8 +1662,8 @@ class _Canvas(QWidget):
         elif r == 270:
             bx, by, bw, bh = dw - by - bh, bx, bh, bw
 
-        # Appliquer les transformations géométriques de l'edit (même ordre que apply_all) :
-        # rotation CW → straighten (ignoré, petit angle) → flip → crop
+        # Apply the geometric transformations of the edit (the same order as apply_all):
+        # rotation CW -> straighten (ignored, small angle) -> flip -> crop
         edit = self._current_edit
         if edit is not None:
             rot = int(round(getattr(edit, "rotation", 0.0))) % 360
@@ -1689,7 +1689,7 @@ class _Canvas(QWidget):
                 dw = cw * dw
                 dh = ch * dh
             elif crop and len(crop) == 8:
-                # Format quad TL,TR,BR,BL (coords relatives 0-1)
+                # TL,TR,BR,BL quad format (relative coords 0-1)
                 xs = [crop[i] for i in range(0, 8, 2)]
                 ys = [crop[i] for i in range(1, 8, 2)]
                 cx, cy = min(xs), min(ys)
@@ -1699,7 +1699,7 @@ class _Canvas(QWidget):
                 dw = cw * dw
                 dh = ch * dh
 
-        # Mise à l'échelle vers l'emprise écran du contenu photo (hors cadre)
+        # Scaling to the screen footprint of the photo content (frame excluded)
         ir = self._img_rect()
         if dw <= 0 or dh <= 0 or ir.width() <= 0 or ir.height() <= 0:
             return None
@@ -1776,7 +1776,7 @@ class _Canvas(QWidget):
     def _draw_crop_overlay(self, p: QPainter) -> None:
         ir = self._img_rect()
 
-        # Bordure de mode crop (liseré autour de l'image)
+        # Crop mode border (an edging around the image)
         p.setPen(QPen(QColor(255, 255, 255, 120), 2))
         p.setBrush(Qt.NoBrush)
         p.drawRect(ir)
@@ -1787,7 +1787,7 @@ class _Canvas(QWidget):
         tl, tr, br, bl = self._crop_quad
         poly = QPolygonF([tl, tr, br, bl])
 
-        # Zone sombre hors du quadrilatère
+        # Dark area outside the quadrilateral
         outer = QPainterPath()
         outer.addRect(ir)
         inner = QPainterPath()
@@ -1795,12 +1795,12 @@ class _Canvas(QWidget):
         inner.closeSubpath()
         p.fillPath(outer.subtracted(inner), QColor(0, 0, 0, 155))
 
-        # Bordure pointillée du quadrilatère
+        # Dotted border of the quadrilateral
         p.setPen(QPen(QColor(255, 255, 255), 1, Qt.DashLine))
         p.setBrush(Qt.NoBrush)
         p.drawPolygon(poly)
 
-        # Grille des tiers (interpolation bilinéaire dans le quad)
+        # Grid of thirds (bilinear interpolation inside the quad)
         p.setPen(QPen(QColor(255, 255, 255, 80), 1))
         for t in (1 / 3, 2 / 3):
             top_pt  = tl + (tr - tl) * t
@@ -1810,14 +1810,14 @@ class _Canvas(QWidget):
             p.drawLine(top_pt, bot_pt)
             p.drawLine(left_pt, rgt_pt)
 
-        # 4 poignées de coin
+        # 4 corner handles
         hs = 8
         p.setBrush(QColor(255, 255, 255))
         p.setPen(Qt.NoPen)
         for pt in self._crop_quad:
             p.drawRect(QRectF(pt.x() - hs / 2, pt.y() - hs / 2, hs, hs))
 
-        # Poignées d'arête ("saucisses") — milieu de chaque côté
+        # Edge handles ("sausages") - middle of each side
         for eid, (i, j) in enumerate(_EDGE_INDICES):
             a, b = self._crop_quad[i], self._crop_quad[j]
             mid = QPointF((a.x() + b.x()) / 2, (a.y() + b.y()) / 2)
@@ -1834,7 +1834,7 @@ class _Canvas(QWidget):
             p.drawRoundedRect(QRectF(-11, -5, 22, 10), 5, 5)
             p.restore()
 
-        # Indicateur de déplacement au centre
+        # Move indicator at the centre
         cx = sum(pt.x() for pt in self._crop_quad) / 4
         cy = sum(pt.y() for pt in self._crop_quad) / 4
         c = QPointF(cx, cy)
@@ -1852,7 +1852,7 @@ class _Canvas(QWidget):
         if self._red_eye_mode or self._face_add_mode or self._annotation_mode:
             return
         if self._crop_mode:
-            # Zoom centré sur le milieu, en préservant le quadrilatère de crop
+            # Zoom centred on the middle, preserving the crop quadrilateral
             factor = 1.15 if delta > 0 else 1 / 1.15
             new_zoom = self._zoom * factor
             if new_zoom < 0.1 or new_zoom > 4.0:
@@ -1874,7 +1874,7 @@ class _Canvas(QWidget):
     def mousePressEvent(self, event: QMouseEvent) -> None:
         if self._annotation_mode:
             if event.button() == Qt.RightButton:
-                return  # géré par contextMenuEvent (confirmation de la courbe en cours)
+                return  # handled by contextMenuEvent (confirmation of the curve in progress)
             if event.button() != Qt.LeftButton:
                 return
             pos = event.position()
@@ -1895,7 +1895,7 @@ class _Canvas(QWidget):
                 x, y = pos.x() - ir.x(), pos.y() - ir.y()
                 hit_id = hit_test_annotations(self._annotations, x, y, ir.width(), ir.height(), tol_px=8.0)
                 if hit_id is None:
-                    # zone vide : démarre une sélection rectangulaire (marquee)
+                    # empty area: starts a rectangular (marquee) selection
                     if not ctrl:
                         self._set_annotation_selection(set())
                     self._annotation_marquee_start = QPointF(pos)
@@ -1962,8 +1962,8 @@ class _Canvas(QWidget):
                 pos = event.position()
                 ir  = self._img_rect()
                 if ir.contains(pos) and ir.width() > 0 and ir.height() > 0:
-                    # Coordonnées pixmap : le contenu photo commence après le
-                    # cadre décoratif (b = 0 quand il n'y en a pas).
+                    # Pixmap coordinates: the photo content starts after the
+                    # decorative frame (b = 0 when there is none).
                     b  = self._frame_border_px()
                     cw = self._pixmap.width()  - 2 * b
                     ch = self._pixmap.height() - 2 * b
@@ -2037,18 +2037,18 @@ class _Canvas(QWidget):
                 self._drag_ratio       = None
             elif ir.contains(pos):
                 if self._crop_quad is not None:
-                    # Zone déjà définie → pan
+                    # Area already defined -> pan
                     self._crop_action       = 'PANNING'
                     self._drag_start        = pos.toPoint()
                     self._drag_offset_start = QPointF(self._offset)
                     self._drag_ratio        = None
                     self.setCursor(Qt.ClosedHandCursor)
                 else:
-                    # Première définition de la zone
+                    # First definition of the area
                     self._crop_action     = 'DRAWING'
                     self._crop_draw_start = QPointF(pos)
                     self._crop_quad       = [QPointF(pos) for _ in range(4)]
-                    self._drag_ratio      = None  # déterminé au premier mouvement
+                    self._drag_ratio      = None  # determined at the first movement
                 self.update()
         else:
             if event.button() == Qt.LeftButton:
@@ -2111,7 +2111,7 @@ class _Canvas(QWidget):
             if self._vignette_drag:
                 self._vignette_update_drag(pos)
             else:
-                # Mettre à jour le curseur selon la proximité des poignées
+                # Update the cursor according to the proximity of the handles
                 hit = self._vignette_hit_test(pos)
                 self.setCursor(Qt.PointingHandCursor if hit else Qt.ArrowCursor)
             return
@@ -2154,8 +2154,8 @@ class _Canvas(QWidget):
                 raw_y = max(ir.top(),  min(ir.bottom(), pos.y()))
                 dx, dy = raw_x - s.x(), raw_y - s.y()
                 if self._aspect_ratio is not None:
-                    # Verrouiller le ratio dès le premier mouvement significatif,
-                    # en respectant l'orientation explicitement choisie (H ou V).
+                    # Lock the ratio from the first significant movement on,
+                    # respecting the explicitly chosen orientation (H or V).
                     if self._drag_ratio is None and (abs(dx) > 4 or abs(dy) > 4):
                         self._drag_ratio = self._aspect_ratio
                     if self._drag_ratio is not None:
@@ -2185,7 +2185,7 @@ class _Canvas(QWidget):
                     self._crop_from_rel(crop_rel)
                 self.update()
             else:
-                # Pas d'action en cours — mettre à jour le curseur
+                # No action in progress - update the cursor
                 self._update_cursor_for_pos(pos)
         else:
             if self._drag_start is not None:
@@ -2276,8 +2276,8 @@ class _Canvas(QWidget):
                     return
         if (self._annotation_mode and self._annotation_tool == "curve"
                 and event.button() == Qt.LeftButton and self._annotation_draft_points):
-            # Le 2e clic du double-clic a déjà ajouté un point quasi dupliqué
-            # via mousePressEvent — on le retire avant de valider le tracé.
+            # The 2nd click of the double-click has already added an almost duplicate point
+            # through mousePressEvent - we remove it before validating the stroke.
             if len(self._annotation_draft_points) > 1:
                 self._annotation_draft_points.pop()
             self.confirm_annotation_draft()
@@ -2292,13 +2292,13 @@ class _Canvas(QWidget):
             if crop_rel:
                 self._crop_from_rel(crop_rel)
             if self._face_add_mode:
-                # Le rectangle écran ne survit pas à un changement de zoom/offset.
+                # The screen rectangle does not survive a zoom/offset change.
                 self._face_add_rect   = None
                 self._face_add_action = None
             if self._annotation_mode:
-                # Les points en cours sont en coordonnées écran — un changement
-                # de zoom/offset les invaliderait ; les annotations déjà validées
-                # (coordonnées normalisées) ne sont pas affectées.
+                # The points in progress are in screen coordinates - a zoom/offset
+                # change would invalidate them; the annotations already validated
+                # (normalised coordinates) are not affected.
                 self.cancel_annotation_draft()
 
 

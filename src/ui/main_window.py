@@ -68,8 +68,8 @@ logger = logging.getLogger(__name__)
 
 _THUMB_SIZES = [110, 180, 250, 350]
 
-# Classes extraites de ce fichier (2026-07) — importées sous leurs noms
-# historiques : elles restent des détails d'implémentation de MainWindow.
+# Classes extracted from this file (2026-07) - imported under their
+# historical names: they remain implementation details of MainWindow.
 from src.ui.ui_utils import (  # noqa: E402
     fmt_size as _fmt_size, install_menu_width_fix,
 )
@@ -86,7 +86,7 @@ from src.ui.main_window_faces import _PERSON_CTX_PREFIX  # noqa: E402
 
 
 def _photo_sort_key(p: "PhotoInfo"):
-    """Clé de tri chronologique : date_taken, puis file_mtime en fallback."""
+    """Chronological sort key: date_taken, then file_mtime as a fallback."""
     if p.date_taken:
         return p.date_taken
     if p.file_mtime:
@@ -95,12 +95,12 @@ def _photo_sort_key(p: "PhotoInfo"):
 
 
 def _photo_filename_sort_key(p: "PhotoInfo"):
-    """Clé de tri alphabétique (nom de fichier, insensible à la casse)."""
+    """Alphabetical sort key (file name, case-insensitive)."""
     return (p.filename or "").lower()
 
 
-# Contrôleurs par domaine (2026-07) : méthodes MainWindow déplacées par pans
-# entiers — voir les modules pour le périmètre exact de chacun.
+# Controllers per domain (2026-07): MainWindow methods moved in whole
+# blocks - see the modules for the exact perimeter of each one.
 from src.ui.main_window_faces import FacesController  # noqa: E402
 from src.ui.main_window_duplicates import DuplicatesController  # noqa: E402
 from src.core.i18n import translate
@@ -125,26 +125,26 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
         self._edit_db = EditDatabase()
         self._face_indexer: FaceIndexThread | None = None
         self._reindex_thread: SingleFaceReindexThread | None = None
-        # Dernière rotation demandée pendant qu'une re-détection tournait déjà
-        # (photo_path, rotation) — relancée par _drain_pending_reindex().
+        # Last rotation requested while a re-detection was already running
+        # (photo_path, rotation) - restarted by _drain_pending_reindex().
         self._pending_reindex: "tuple[str, int] | None" = None
         self._retry_face_thread: RetryFaceIndexThread | None = None
         self._duplicate_thread: DuplicateDetectorThread | None = None
         self._live_corrupted_paths: list[str] = []
         self._last_duplicate_check: datetime | None = None
-        # (courant, total, message) de la passe de détection en cours, ou None
-        # si aucune n'est en cours — alimente la barre de progression de
-        # "État des doublons…" (cf. _show_duplicate_status_dialog).
+        # (current, total, message) of the detection pass in progress, or None
+        # if none is in progress - feeds the progress bar of
+        # "Duplicate status..." (cf. _show_duplicate_status_dialog).
         self._dup_progress: "tuple[int, int, str] | None" = None
-        # Chemins ignorés via le bouton ✗ pendant le passage de détection en
-        # cours — cf. _on_duplicate_group_ignored pour la raison d'être.
+        # Paths ignored through the X button during the detection pass in
+        # progress - cf. _on_duplicate_group_ignored for the reason why.
         self._duplicate_ignored_paths: set[str] = set()
         self._duplicates_popup: "_DuplicatesPopup | None" = None
-        self._index_errors_dialog = None    # IndexErrorsDialog ouverte (ou None)
+        self._index_errors_dialog = None    # IndexErrorsDialog open (or None)
         self._force_redetect_thread: ForceRedetectThread | None = None
         self._cluster_thread: ClusterThread | None = None
         self._cluster_start_time: float | None = None
-        self._warmup_thread = None          # TFWarmUpThread — pré-charge TF au démarrage
+        self._warmup_thread = None          # TFWarmUpThread - preloads TF at startup
         self._reset_worker: _ResetWorkerThread | None = None
         self._slideshow_win = None
         self._face_index_pending: bool = False
@@ -152,38 +152,38 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
         self._persons_refresh_thread: _PersonsRefreshThread | None = None
         self._dup_migration_thread: _DupMigrationThread | None = None
         self._delete_thread: _DeleteWorkerThread | None = None
-        self._pending_deletes: list = []  # suppressions confirmées en attente (worker déjà occupé)
+        self._pending_deletes: list = []  # confirmed deletions pending (worker already busy)
         self._scan_had_removals: bool = False
-        # Garde manuelle (pas Qt.UniqueConnection : voir _on_scan_finished) —
-        # une seule connexion du portillon persons_thumbnails_ready par appli.
+        # Manual guard (not Qt.UniqueConnection: see _on_scan_finished) -
+        # a single connection of the persons_thumbnails_ready gate per application.
         self._dup_gate_connected: bool = False
-        # False tant que la liste des personnes de la sidebar n'a jamais été
-        # peuplée : le premier _on_scan_finished doit toujours déclencher un
-        # refresh, même si le scan n'a rien changé — c'est lui qui assure le
-        # remplissage initial (aucun autre chemin ne le fait au démarrage).
+        # False as long as the list of people of the sidebar has never been
+        # populated: the first _on_scan_finished must always trigger a
+        # refresh, even if the scan changed nothing - it is what ensures the
+        # initial filling (no other path does it at startup).
         self._persons_loaded: bool = False
         self._from_person_cluster_view: bool = False
         self._viewer_back_target: str = "grid"  # "grid" | "person_cluster_view" | "duplicate_grid"
-        # Filtre global de session (pas persisté) pour le calque d'annotations
+        # Global session filter (not persisted) for the annotation layer
         self._annotations_globally_visible: bool = True
 
         self._current_photos: list[PhotoInfo] = []
         self._current_paths: set[str] = set()
         self._current_photo_index: int = 0
-        self._current_context: str = ""   # dossier ou album actif
-        self._current_album_id: int | None = None   # id de l'album actif, sinon None
+        self._current_context: str = ""   # active folder or album
+        self._current_album_id: int | None = None   # id of the active album, otherwise None
         self._pending_person_view_id: int | None = None
         self._catalog_loader: _CatalogLoadThread | None = None
         self._update_check_thread: UpdateCheckThread | None = None
-        # Debounce du refresh du face panel après clustering (peut être déclenché
-        # plusieurs fois par seconde pendant l'indexation) — délai de 3 s.
+        # Debounce of the face panel refresh after clustering (may be triggered
+        # several times per second during the indexing) - a delay of 3 s.
         self._face_panel_refresh_timer = QTimer()
         self._face_panel_refresh_timer.setSingleShot(True)
         self._face_panel_refresh_timer.setInterval(3000)
-        # Debounce de la recherche de visages similaires : chaque identification
-        # déplace le centroïde d'une personne et peut rendre de nouveaux groupes
-        # proposables, mais on identifie souvent en rafale — un seul passage à la
-        # fin de la série suffit (cf. _schedule_similarity_search).
+        # Debounce of the search for similar faces: every identification
+        # moves the centroid of a person and may make new groups
+        # proposable, but one often identifies in bursts - a single pass at the
+        # end of the series is enough (cf. _schedule_similarity_search).
         self._similarity_debounce = QTimer()
         self._similarity_debounce.setSingleShot(True)
         self._similarity_debounce.setInterval(30000)
@@ -198,52 +198,52 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
         self._connect_scanner()
         self._setup_folder_watcher()
 
-        # Filtre posé sur l'application entière (et non sur `self`) : il doit
-        # aussi voir les événements des dialogues modaux et de la visionneuse
-        # plein écran, qui ne sont pas des enfants de la fenêtre principale.
+        # Filter installed on the whole application (and not on `self`): it must
+        # also see the events of the modal dialogs and of the full-screen
+        # viewer, which are not children of the main window.
         app = QApplication.instance()
         if app is not None:
             app.installEventFilter(self)
 
-        # Déféré : laisse window.show() s'exécuter avant de charger la bibliothèque.
+        # Deferred: lets window.show() run before loading the library.
         QTimer.singleShot(0, self._load_library)
         _sw = self._config.get("ui.sidebar_width", 280)
 
         def _apply_initial_splitter_sizes() -> None:
             self._splitter.setSizes([_sw, max(1, self._splitter.width() - _sw)])
-            # Si la visionneuse a déjà été ouverte avant que ce timer différé
-            # ne se déclenche (ex. tests e2e enchaînant vite), le setSizes()
-            # ci-dessus écraserait silencieusement l'ajustement déjà fait par
-            # _ensure_left_pane_min_width() lors de l'ouverture — reforcer ici.
+            # If the viewer has already been opened before this deferred timer
+            # fires (e.g. e2e tests chaining quickly), the setSizes()
+            # above would silently overwrite the adjustment already made by
+            # _ensure_left_pane_min_width() on opening - force it again here.
             self._ensure_left_pane_min_width()
 
         QTimer.singleShot(0, _apply_initial_splitter_sizes)
         QTimer.singleShot(0, self._restore_splitter_states)
-        # Migration des groupes de doublons + comptage pour le badge, en thread
-        # (au premier lancement après upgrade elle charge tous les groupes —
-        # exécutée en synchrone ici, elle retardait le premier affichage).
+        # Migration of the duplicate groups + counting for the badge, in a thread
+        # (at the first launch after an upgrade it loads every group -
+        # run synchronously here, it delayed the first display).
         self._dup_migration_thread = _DupMigrationThread(self._catalog, self)
         self._dup_migration_thread.done.connect(self._sidebar.update_duplicates_badge)
         self._dup_migration_thread.start()
         QTimer.singleShot(0, self._start_update_check)
 
-    # --------------------------------------------------- activité utilisateur
+    # ---------------------------------------------------------- user activity
 
     def _apply_background_cpu_level(self) -> None:
-        """Applique le niveau de bridage CPU des traitements de fond.
+        """Applies the CPU throttling level of the background treatments.
 
-        Appelé au tout début de __init__, donc avant le démarrage du moindre
-        thread : sans ça, cpu_throttle lirait la configuration paresseusement au
-        premier `throttle_tick()`, c'est-à-dire depuis un thread de fond, ce qui
-        instancierait Config() hors du thread UI."""
+        Called at the very beginning of __init__, hence before the start of the least
+        thread: without that, cpu_throttle would read the configuration lazily at the
+        first `throttle_tick()`, that is from a background thread, which
+        would instantiate Config() outside the UI thread."""
         set_background_cpu_level(
             self._config.get("performance.background_cpu", DEFAULT_BACKGROUND_CPU)
         )
 
-    # Volontairement limité au clic, à la touche et à la molette (cf. docstring
-    # de note_user_activity) : MouseMove passerait ici des centaines de fois par
-    # seconde pour un simple survol, alors que le filtre est appelé pour *tout*
-    # événement de *tout* objet de l'application.
+    # Deliberately limited to the click, the key and the wheel (cf. the docstring
+    # of note_user_activity): MouseMove would come through here hundreds of times per
+    # second for a simple hover, while the filter is called for *every*
+    # event of *every* object of the application.
     _ACTIVITY_EVENTS = frozenset({
         QEvent.Type.MouseButtonPress,
         QEvent.Type.KeyPress,
@@ -251,19 +251,19 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
     })
 
     def eventFilter(self, obj, event):
-        """Alimente l'horodatage d'activité utilisateur de cpu_throttle.
+        """Feeds the user activity timestamp of cpu_throttle.
 
-        Sans ce filtre, `_last_activity` reste figé à l'heure d'import du module
-        et `user_is_idle()` renvoie True en permanence passé IDLE_GRACE_SECONDS :
-        `effective_cpu_ratio()` vaut alors toujours 1.0 et le cycle de service ne
-        bride jamais rien, quel que soit le niveau choisi dans les paramètres."""
+        Without this filter, `_last_activity` stays frozen at the import time of the module
+        and `user_is_idle()` returns True permanently past IDLE_GRACE_SECONDS:
+        `effective_cpu_ratio()` is then always 1.0 and the duty cycle never
+        throttles anything, whatever the level chosen in the settings."""
         if event.type() in self._ACTIVITY_EVENTS:
             note_user_activity()
-        # Filtre purement passif : toujours False, l'événement doit poursuivre
-        # sa route vers son destinataire. `return False` plutôt que
-        # `super().eventFilter(...)` — la chaîne d'héritage ne surcharge pas
-        # eventFilter (QObject renvoie False), et c'est un appel de moins sur un
-        # chemin traversé par *tous* les événements de l'application.
+        # A purely passive filter: always False, the event must carry on
+        # its way to its recipient. `return False` rather than
+        # `super().eventFilter(...)` - the inheritance chain does not override
+        # eventFilter (QObject returns False), and it is one call fewer on a
+        # path crossed by *all* the events of the application.
         return False
 
     # ------------------------------------------------------------------ setup
@@ -276,14 +276,14 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
         self.resize(w, h)
 
     def _setup_menu(self) -> None:
-        # Barre unifiée : icône | menus | spacer | boutons contextuels | export
+        # Unified bar: icon | menus | spacer | contextual buttons | export
         top_bar = QWidget()
         top_bar.setObjectName("top_bar")
         lay = QHBoxLayout(top_bar)
         lay.setContentsMargins(2, 0, 0, 0)
         lay.setSpacing(0)
 
-        # --- Icône application (gauche) ---
+        # --- Application icon (left) ---
         icon_path = Path(__file__).resolve().parent.parent.parent / "assets" / "cubic.png"
         if icon_path.exists():
             pix = QPixmap(str(icon_path)).scaled(
@@ -297,11 +297,11 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
             lbl_icon.setToolTip("PixelPhotoManager")
             lay.addWidget(lbl_icon)
 
-        # --- Barre de menus ---
+        # --- Menu bar ---
         mb = QMenuBar(top_bar)
         mb.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Expanding)
 
-        # Fichier
+        # File
         m_file = mb.addMenu(translate("MainWindow", "File"))
         act_add = QAction(translate("MainWindow", "Add a folder…"), self)
         act_add.triggered.connect(self.open_folder_dialog)
@@ -317,7 +317,7 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
         act_quit.triggered.connect(self.close)
         m_file.addAction(act_quit)
 
-        # Affichage
+        # View
         m_view = mb.addMenu(translate("MainWindow", "View"))
         act_sidebar = QAction(translate("MainWindow", "Show/hide sidebar"), self)
         act_sidebar.setShortcut(Qt.Key_F9)
@@ -337,7 +337,7 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
         act_order.triggered.connect(self._open_display_order_dialog)
         m_view.addAction(act_order)
 
-        # Outils
+        # Tools
         m_tools = mb.addMenu(translate("MainWindow", "Tools"))
         act_folders = QAction(translate("MainWindow", "Folders…"), self)
         act_folders.setToolTip(translate("MainWindow", "Manage the watched folders and force a "
@@ -398,7 +398,7 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
         act_settings.triggered.connect(self._open_settings)
         m_tools.addAction(act_settings)
 
-        # Visages
+        # Faces
         m_faces = mb.addMenu(translate("MainWindow", "Faces"))
         self._act_picasa = QAction(translate("MainWindow", "Import from Picasa…"), self)
         self._act_picasa.setEnabled(not self._config.get("picasa.import_done", False))
@@ -444,7 +444,7 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
         act_face_counters.triggered.connect(self._show_face_counters)
         m_faces.addAction(act_face_counters)
 
-        # Aide
+        # Help
         m_help = mb.addMenu(translate("MainWindow", "Help"))
         act_help = QAction(translate("MainWindow", "Help…"), self)
         act_help.setShortcut(QKeySequence("F1"))
@@ -455,7 +455,7 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
         act_about.triggered.connect(self._show_about)
         m_help.addAction(act_about)
 
-        # Élargit les popups quand le style laisse le raccourci mordre sur le libellé.
+        # Widens the popups when the style lets the shortcut bite into the label.
         install_menu_width_fix(mb)
 
         lay.addWidget(mb)
@@ -465,10 +465,10 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
         spacer.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
         lay.addWidget(spacer)
 
-        # --- Boutons contextuels (masqués par défaut) ---
-        # Jaune #ffd200 partagé avec le coeur favori et les étoiles de notation
-        # (PhotoViewer._btn_fav / _RatingStars) : même code couleur "actif" que
-        # ces boutons de la barre d'outils de la visionneuse.
+        # --- Contextual buttons (hidden by default) ---
+        # Yellow #ffd200 shared with the favourite heart and the rating stars
+        # (PhotoViewer._btn_fav / _RatingStars): the same "active" colour code as
+        # those buttons of the toolbar of the viewer.
         _toggle_active_style = (
             "QPushButton:checked { color: #ffd200; }"
         )
@@ -495,9 +495,9 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
         self._btn_annotations_toggle = QPushButton(translate("MainWindow", "✏ Annotations"))
         self._btn_annotations_toggle.setCheckable(True)
         self._btn_annotations_toggle.setStyleSheet(_toggle_active_style)
-        # setChecked() avant connect() : évite de déclencher _on_annotations_toggle
-        # ici, alors que self._viewer n'existe pas encore (_setup_central() pas encore appelé).
-        self._btn_annotations_toggle.setChecked(True)   # actif par défaut
+        # setChecked() before connect(): avoids triggering _on_annotations_toggle
+        # here, while self._viewer does not exist yet (_setup_central() not called yet).
+        self._btn_annotations_toggle.setChecked(True)   # active by default
         self._btn_annotations_toggle.setToolTip(translate("MainWindow", "Show / hide the "
                                                                         "annotation layer "
                                                                         "(drawing/text)"))
@@ -505,7 +505,7 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
         self._btn_annotations_toggle.setVisible(False)
         lay.addWidget(self._btn_annotations_toggle)
 
-        # --- Bouton Export ---
+        # --- Export button ---
         self._btn_export = QPushButton(translate("MainWindow", "⬆  Export"))
         self._btn_export.setToolTip(
             translate("MainWindow", "Export the current photo (viewer) or the selected photos "
@@ -520,13 +520,13 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
         self._btn_export.clicked.connect(self._on_export_clicked)
         lay.addWidget(self._btn_export)
 
-        # --- Sélecteur de langue (drapeau) ---
-        # À l'extrême droite, toujours visible : c'est le seul réglage qu'un
-        # utilisateur doit pouvoir atteindre sans savoir lire l'interface
+        # --- Language selector (flag) ---
+        # At the far right, always visible: it is the only setting a
+        # user must be able to reach without being able to read the interface
         # (cf. src/ui/language_button.py).
-        # Pas de largeur fixe : le bouton se dimensionne sur son icône et sur le
-        # padding de la feuille de style de la barre — une constante gravée ici
-        # rognerait le drapeau au premier changement de l'une ou de l'autre.
+        # No fixed width: the button sizes itself on its icon and on the
+        # padding of the stylesheet of the bar - a constant carved here
+        # would clip the flag at the first change of either of them.
         self._btn_language = LanguageButton(self._config)
         lay.addWidget(self._btn_language)
 
@@ -534,7 +534,7 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
         margin.setFixedWidth(10)
         lay.addWidget(margin)
 
-        # Fond noir, items de menu centrés verticalement dans la barre 54 px
+        # Black background, menu items centred vertically in the 54 px bar
         top_bar.setStyleSheet("""
             QWidget#top_bar {
                 background: #000;
@@ -575,7 +575,7 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
         self.setMenuWidget(top_bar)
 
     def _setup_toolbar(self) -> None:
-        pass  # Fusionné dans _setup_menu
+        pass  # Merged into _setup_menu
 
     def _setup_central(self) -> None:
         central = QWidget()
@@ -587,7 +587,7 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
         self._splitter = QSplitter(Qt.Horizontal)
         root.addWidget(self._splitter)
 
-        # Panneau gauche : sidebar (grille) ou edit panel (visionneuse)
+        # Left panel: sidebar (grid) or edit panel (viewer)
         sidebar_w = self._config.get("ui.sidebar_width", 280)
         self._left_stack = QStackedWidget()
         self._left_stack.setMinimumWidth(160)
@@ -596,21 +596,21 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
 
         self._sidebar = Sidebar()
         self._sidebar.set_folder_count_provider(self._catalog.get_recursive_photo_counts)
-        self._left_stack.addWidget(self._sidebar)   # index 0 — mode grille
+        self._left_stack.addWidget(self._sidebar)   # index 0 - grid mode
 
         self._edit_panel = EditPanel()
-        self._left_stack.addWidget(self._edit_panel)  # index 1 — mode visionneuse
+        self._left_stack.addWidget(self._edit_panel)  # index 1 - viewer mode
 
-        # Zone principale : grille ou visionneuse
+        # Main area: grid or viewer
         self._stack = QStackedWidget()
         self._splitter.addWidget(self._stack)
         self._splitter.setStretchFactor(0, 0)
         self._splitter.setStretchFactor(1, 1)
 
-        # Index 0 — Grille photos (avec barre de contexte masquée par défaut)
+        # Index 0 - Photo grid (with the context bar hidden by default)
         self._grid = ThumbnailGrid(self._thumb_cache)
-        # Les vignettes reflètent les retouches non destructives (rotation,
-        # recadrage…) : la grille relit la table à chaque changement de contenu.
+        # The thumbnails reflect the non-destructive edits (rotation,
+        # crop...): the grid reads the table again at every content change.
         self._grid.set_edit_provider(self._edit_db.all_edits)
         self._grid.photo_activated.connect(self._on_photo_activated)
         self._grid.selection_changed.connect(self._on_selection_changed)
@@ -647,7 +647,7 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
         _grid_vbox.setSpacing(0)
         _grid_vbox.addWidget(self._grid_nav_bar)
 
-        # Rangée grille + ascenseur ruban (affiché uniquement en mode chronologie)
+        # Grid row + ribbon scrollbar (displayed in chronology mode only)
         _grid_row = QWidget()
         _grid_hbox = QHBoxLayout(_grid_row)
         _grid_hbox.setContentsMargins(0, 0, 0, 0)
@@ -660,7 +660,7 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
         self._grid.bind_ribbon_nav_bar(self._ribbon_scroll)
         self._stack.addWidget(_grid_container)
 
-        # Index 1 — Visionneuse (avec panneau Visages rétractable à gauche)
+        # Index 1 - Viewer (with a retractable Faces panel on the left)
         self._viewer = PhotoViewer(config=self._config, thumb_cache=self._thumb_cache)
         self._viewer.closed.connect(self._on_viewer_closed)
         self._viewer.navigate.connect(self._navigate_photo)
@@ -709,8 +709,8 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
         self._face_panel.face_highlighted.connect(self._on_face_highlighted)
         self._face_panel.all_faces_toggled.connect(self._on_all_faces_toggled)
         self._face_panel.person_assigned.connect(self._update_persons_counts)
-        # Identifier depuis la visionneuse déplace aussi un centroïde de personne :
-        # même déclencheur (différé) que depuis la vue des groupes.
+        # Identifying from the viewer also moves a person centroid:
+        # the same (deferred) trigger as from the group view.
         self._face_panel.person_assigned.connect(self._schedule_similarity_search)
         self._face_panel.cover_face_set.connect(self._on_cover_face_set)
         self._face_panel.person_cluster_requested.connect(
@@ -726,7 +726,7 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
         self._exif_panel.photo_saved.connect(self._on_exif_photo_saved)
         self._exif_panel.hide()
 
-        # Conteneur droit (face OU exif) — un seul visible à la fois
+        # Right container (face OR exif) - only one visible at a time
         self._right_panel = QWidget(self)
         _rp_layout = QVBoxLayout(self._right_panel)
         _rp_layout.setContentsMargins(0, 0, 0, 0)
@@ -744,7 +744,7 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
         self._viewer_splitter.setCollapsible(1, False)
         self._stack.addWidget(self._viewer_splitter)
 
-        # Index 2 — Grille des groupes de visages
+        # Index 2 - Grid of the face groups
         self._face_cluster_grid = FaceClusterGrid(
             self._face_db, self._catalog, self
         )
@@ -760,7 +760,7 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
         self._face_cluster_grid.persons_updated.connect(self._update_persons_counts)
         self._stack.addWidget(self._face_cluster_grid)
 
-        # Index 3 — Vue des groupes d'une personne nommée
+        # Index 3 - View of the groups of a named person
         self._person_cluster_view = PersonClusterView(self._face_db, self._catalog, self)
         self._person_cluster_view.photos_requested.connect(
             self._on_person_cluster_photos_requested
@@ -784,7 +784,7 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
         self._person_cluster_view.create_album_with_requested.connect(self._on_create_album_with)
         self._stack.addWidget(self._person_cluster_view)
 
-        # Index 4 — Grille des groupes de doublons
+        # Index 4 - Grid of the duplicate groups
         self._duplicate_grid = DuplicateGrid(self._catalog, self._thumb_cache, self)
         self._duplicate_grid.back_requested.connect(self.show_grid)
         self._duplicate_grid.view_requested.connect(self._on_duplicate_group_view_requested)
@@ -792,7 +792,7 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
         self._duplicate_grid.detect_requested.connect(self._start_duplicate_detection)
         self._stack.addWidget(self._duplicate_grid)
 
-        # Connexions sidebar
+        # Sidebar connections
         self._sidebar.folder_selected.connect(self._on_folder_selected)
         self._sidebar.album_selected.connect(self._on_album_selected)
         self._sidebar.album_delete_requested.connect(self._on_album_delete_requested)
@@ -821,13 +821,13 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
     def _setup_statusbar(self) -> None:
         sb = self.statusBar()
 
-        # Tiers gauche — actions en cours (scan, chargement…)
+        # Left third - actions in progress (scan, loading...)
         self._lbl_action = QLabel("")
         self._lbl_action.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
         self._lbl_action.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
         sb.addWidget(self._lbl_action, 1)
 
-        # Barre de progression pour les opérations longues (cachée par défaut)
+        # Progress bar for the long operations (hidden by default)
         self._sb_progress_bar = QProgressBar()
         self._sb_progress_bar.setFixedWidth(220)
         self._sb_progress_bar.setTextVisible(True)
@@ -840,8 +840,8 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
         self._sb_progress_bar.hide()
         sb.addWidget(self._sb_progress_bar)
 
-        # Compteur de fichiers corrompus détectés pendant un scan de doublons
-        # (masqué par défaut) — cliquable pour afficher la liste courante.
+        # Counter of the corrupted files detected during a duplicate scan
+        # (hidden by default) - clickable to display the current list.
         self._lbl_corrupted = QPushButton("")
         self._lbl_corrupted.setFlat(True)
         self._lbl_corrupted.setCursor(Qt.PointingHandCursor)
@@ -849,17 +849,17 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
         self._lbl_corrupted.hide()
         self._lbl_corrupted.clicked.connect(self._show_corrupted_list_dialog)
         sb.addWidget(self._lbl_corrupted)
-        # Restaure l'état persisté (survit à un redémarrage — voir dedup_cache.py)
-        # plutôt que d'attendre la fin du prochain scan pour le réafficher.
+        # Restores the persisted state (survives a restart - see dedup_cache.py)
+        # rather than waiting for the end of the next scan to display it again.
         self._update_corrupted_indicator(self._load_persisted_corrupted_paths())
 
-        # Tiers centre — nom du fichier sélectionné et sa taille
+        # Centre third - name of the selected file and its size
         self._lbl_fileinfo = QLabel("")
         self._lbl_fileinfo.setAlignment(Qt.AlignCenter)
         self._lbl_fileinfo.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
         sb.addWidget(self._lbl_fileinfo, 1)
 
-        # --- Contrôles mode grille ---
+        # --- Grid mode controls ---
         self._lbl_thumb_size = QLabel(translate("MainWindow", "Size:"))
         sb.addPermanentWidget(self._lbl_thumb_size)
 
@@ -873,13 +873,13 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
         self._thumb_slider.valueChanged.connect(self._on_thumb_size_changed)
         sb.addPermanentWidget(self._thumb_slider)
 
-        # --- Contrôles mode visionneuse (cachés par défaut) ---
+        # --- Viewer mode controls (hidden by default) ---
         self._lbl_zoom = QLabel(translate("MainWindow", "Zoom:"))
         self._lbl_zoom.hide()
         sb.addPermanentWidget(self._lbl_zoom)
 
         self._zoom_slider = MarkedSlider(Qt.Horizontal, fmt=lambda v: f"{v}%")
-        self._zoom_slider.setRange(10, 400)    # 10 % à 400 %
+        self._zoom_slider.setRange(10, 400)    # 10 % to 400 %
         self._zoom_slider.setValue(100)
         self._zoom_slider.setFixedWidth(120)
         self._zoom_slider.valueChanged.connect(self._on_zoom_slider_changed)
@@ -892,7 +892,7 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
         self._zoom_pct_label.hide()
         sb.addPermanentWidget(self._zoom_pct_label)
 
-        # --- Bouton retour grille (masqué en mode visionneuse) ---
+        # --- Back to grid button (hidden in viewer mode) ---
         self._btn_grid_status = QPushButton("▦")
         self._btn_grid_status.setToolTip(translate("MainWindow", "Back to the grid"))
         self._btn_grid_status.setFixedWidth(28)
@@ -912,10 +912,10 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
         self._folder_watcher.files_changed.connect(self._on_watcher_files_changed)
         self._folder_watcher.subfolder_added.connect(self._on_folder_created)
 
-    # ------------------------------------------------------------------ mise à jour
+    # ------------------------------------------------------------------ update
 
     def _start_update_check(self) -> None:
-        """Interroge la dernière release GitHub en arrière-plan (silencieux si à jour ou en erreur)."""
+        """Queries the latest GitHub release in the background (silent if up to date or on error)."""
         self._update_check_thread = UpdateCheckThread(self)
         self._update_check_thread.checked.connect(self._on_update_checked)
         self._update_check_thread.start()
@@ -966,7 +966,7 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
             error_paths = self._face_db.get_error_paths()
             self._grid.set_index_error_paths(error_paths)
             self._restore_last_view(albums, folders)
-            # Pré-charger InsightFace en parallèle du scan
+            # Preload InsightFace in parallel with the scan
             self._warmup_thread = TFWarmUpThread(self)
             self._warmup_thread.finished.connect(self._on_warmup_done)
             self._warmup_thread.start()
@@ -977,7 +977,7 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
             self._sidebar.select_album_item(_SPECIAL_ALL)
 
     def _restore_last_view(self, albums: list, folders: list) -> None:
-        """Restaure la dernière vue active depuis la config."""
+        """Restores the last active view from the config."""
         saved = self._config.get("ui.last_view", {})
         vtype = saved.get("type", "all") if saved else "all"
 
@@ -1015,17 +1015,17 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
                 return
         elif vtype == "person":
             self._pending_person_view_id = saved.get("value")
-            # Affichage intermédiaire en attendant le chargement des personnes
+            # Intermediate display while waiting for the people to load
 
         self._show_all_photos()
         self._sidebar.select_album_item(_SPECIAL_ALL)
 
     def _cancel_grid_display_ops(self) -> None:
-        """Annule tout chargement de photos pour la grille encore en vol.
-        À appeler avant de démarrer un nouvel affichage (dossier/album/Toutes les
-        photos) : sans ça, une requête précédente encore en cours peut se terminer
-        après coup et écraser la vue actuelle avec des photos qui ne correspondent
-        plus au contexte affiché."""
+        """Cancels any photo loading for the grid still in flight.
+        To be called before starting a new display (folder/album/All the
+        photos): without that, a previous query still in progress may finish
+        afterwards and overwrite the current view with photos that no longer
+        match the displayed context."""
         if self._catalog_loader is not None:
             self._catalog_loader.stop()
             if self._catalog_loader.isRunning():
@@ -1077,9 +1077,9 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
         self._update_status()
 
     def _start_scan(self, folders: list[str], force: bool = False) -> None:
-        # Trace si ce scan a retiré des photos (fichiers disparus du disque) :
-        # _on_scan_finished s'en sert pour ne rafraîchir albums/personnes que
-        # si quelque chose a réellement changé.
+        # Records whether this scan removed photos (files gone from the disk):
+        # _on_scan_finished uses it to refresh the albums/people only
+        # if something really changed.
         self._scan_had_removals = False
         thread = self._scanner.scan(folders, force=force)
         thread.photos_batch.connect(self._on_photos_batch)
@@ -1102,9 +1102,9 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
                 self._current_photos.append(photo)
                 self._current_paths.add(photo.path)
         if visible_new:
-            # Les photos découvertes pendant le scan arrivent dans l'ordre du
-            # système de fichiers, pas trié : on re-trie pour respecter le
-            # réglage "Ordre d'affichage" pendant le scan (pas seulement à la fin).
+            # The photos discovered during the scan arrive in the order of the
+            # file system, unsorted: we sort them again to respect the
+            # "Display order" setting during the scan (not only at the end).
             self._current_photos = self._sort_photos_for_display(
                 self._current_photos, self._current_context
             )
@@ -1113,7 +1113,7 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
 
     @Slot(list)
     def _on_photos_removed(self, paths: list[str]) -> None:
-        """Retire de l'UI les photos dont le fichier a disparu du disque."""
+        """Removes from the UI the photos whose file has disappeared from the disk."""
         removed_set = set(paths)
         self._scan_had_removals = True
         self._current_photos = [p for p in self._current_photos
@@ -1128,30 +1128,30 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
     def _on_scan_finished(self, total: int) -> None:
         self._lbl_action.setText("")
         self._update_status()
-        # Ne rafraîchir albums et personnes que si le scan a réellement changé
-        # quelque chose (nouvelles photos, ou fichiers disparus du disque) : un
-        # rescan sans changement — cas fréquent d'un événement watcher sur un
-        # simple attribut de fichier — ne doit rien coûter.
+        # Refresh the albums and people only if the scan really changed
+        # something (new photos, or files gone from the disk): a
+        # rescan with no change - the frequent case of a watcher event on a
+        # simple file attribute - must cost nothing.
         if total or self._scan_had_removals:
             self._sidebar.refresh_albums(self._catalog.get_albums())
-        # Rebuild complet uniquement si le scan a trouvé de nouvelles photos
-        # (donc potentiellement de nouveaux visages/personnes) ; mise à jour
-        # légère des compteurs sur simple suppression — évite de vider et
-        # recharger toute la liste des personnes avec ses vignettes. Le tout
-        # premier passage refresh toujours (remplissage initial de la liste,
-        # cf. _persons_loaded) : update_persons_data bascule alors d'elle-même
-        # sur un rebuild complet puisque la liste est encore vide.
+        # Full rebuild only if the scan found new photos
+        # (hence potentially new faces/people); a light update
+        # of the counters on a simple deletion - avoids emptying and
+        # reloading the whole list of people with its thumbnails. The very
+        # first pass always refreshes (initial filling of the list,
+        # cf. _persons_loaded): update_persons_data then switches on its own
+        # to a full rebuild since the list is still empty.
         if total:
             self._refresh_persons()
         elif self._scan_had_removals or not self._persons_loaded:
             self._update_persons_counts()
         self._persons_loaded = True
 
-        # Le scan ajoute les nouvelles photos dans l'ordre filesystem (non trié).
-        # On re-trie la liste courante selon le réglage "Ordre d'affichage".
-        # Applicable à "Toutes les photos" et aux vues dossier (les vues spéciales
-        # comme Favoris, Vidéos ou Person ne reçoivent pas de photos via _on_photos_batch).
-        # Inutile si le scan n'a rien ajouté : l'ordre courant est déjà bon.
+        # The scan adds the new photos in filesystem (unsorted) order.
+        # We sort the current list again according to the "Display order" setting.
+        # Applicable to "All the photos" and to the folder views (the special views
+        # such as Favorites, Videos or Person do not receive photos through _on_photos_batch).
+        # Useless if the scan added nothing: the current order is already right.
         if total and self._current_photos \
                 and not self._current_context.startswith(_PERSON_CTX_PREFIX):
             self._current_photos = self._sort_photos_for_display(
@@ -1164,16 +1164,16 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
             self._face_index_pending = True
         else:
             self._start_face_indexing()
-        # Différer la détection des doublons jusqu'à ce que les vignettes des
-        # visages des personnes connues (sidebar) soient chargées, pour ne pas
-        # leur faire concurrence en CPU/E-S dès le démarrage de l'application.
-        # Garde manuelle plutôt que Qt.UniqueConnection : sur cette connexion
-        # précise (méthode @Slot() héritée d'un mixin non-QObject, connectée
-        # avec Qt.UniqueConnection), PySide6 renvoie un QMetaObject.Connection
-        # valide mais le slot n'est ensuite jamais invoqué — connexion fantôme
-        # silencieuse. Sans Qt.UniqueConnection la connexion fonctionne
-        # normalement ; la garde évite juste les connexions multiples si
-        # _on_scan_finished est appelé plusieurs fois avant le premier tir.
+        # Defer the duplicate detection until the face thumbnails of
+        # the known people (sidebar) are loaded, so as not to
+        # compete with them for CPU/IO as soon as the application starts.
+        # A manual guard rather than Qt.UniqueConnection: on this precise
+        # connection (a @Slot() method inherited from a non-QObject mixin, connected
+        # with Qt.UniqueConnection), PySide6 returns a valid
+        # QMetaObject.Connection but the slot is then never invoked - a silent
+        # ghost connection. Without Qt.UniqueConnection the connection works
+        # normally; the guard just avoids the multiple connections if
+        # _on_scan_finished is called several times before the first firing.
         if not self._dup_gate_connected:
             self._dup_gate_connected = True
             self._sidebar.persons_thumbnails_ready.connect(
@@ -1209,13 +1209,13 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
         dlg = SettingsDialog(self._config, self)
         dlg.recluster_needed.connect(self._run_clustering)
         dlg.exec()
-        # Les deux points d'entrée écrivent la même clé : le drapeau de la
-        # barre du haut serait sinon périmé après un changement fait ici.
+        # Both entry points write the same key: the flag of the
+        # top bar would otherwise be out of date after a change made here.
         self._btn_language.refresh()
 
-    #: Portée média d'une application externe : la valeur stockée en config
-    #: ("image"/"video"/"both") n'est jamais traduite — elle est comparée à
-    #: PhotoInfo.media_type. Seul son libellé l'est.
+    #: Media scope of an external application: the value stored in the config
+    #: ("image"/"video"/"both") is never translated - it is compared with
+    #: PhotoInfo.media_type. Only its label is.
     _MEDIA_SCOPE_VALUES = ("both", "image", "video")
 
     @classmethod
@@ -1226,13 +1226,13 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
         }.get(value, translate("MainWindow", "Both"))
 
     def _open_external_apps_dialog(self) -> None:
-        """Dialogue de configuration des applications externes accessibles depuis le viewer.
+        """Configuration dialog of the external applications reachable from the viewer.
 
-        Chaque application est taguée d'une portée média (photo / vidéo / les
-        deux) qui détermine dans quel cas son icône apparaît dans la barre de
-        la visionneuse (PhotoViewer.refresh_external_apps) — une entrée sans
-        clé "media" (config antérieure à cette fonctionnalité) est traitée
-        comme "both", donc reste visible partout comme avant."""
+        Each application is tagged with a media scope (photo / video / both)
+        that determines in which case its icon appears in the bar of
+        the viewer (PhotoViewer.refresh_external_apps) - an entry without a
+        "media" key (a config predating this feature) is treated
+        as "both", and therefore stays visible everywhere as before."""
         apps: list = list(self._config.get("tools.external_apps", []))
 
         dlg = QDialog(self)
@@ -1422,8 +1422,8 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
     def _update_nav_arrows(self) -> None:
         n = len(self._current_photos)
         self._viewer.update_nav_arrows(
-            has_prev=self._current_photo_index < n - 1,  # il y a des photos plus anciennes
-            has_next=self._current_photo_index > 0,       # il y a des photos plus récentes
+            has_prev=self._current_photo_index < n - 1,  # there are older photos
+            has_next=self._current_photo_index > 0,       # there are newer photos
         )
         self._viewer.set_nav_position(self._current_photo_index + 1, n)
 
@@ -1453,8 +1453,8 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
         self._prefetch_viewer_neighbors()
 
     def _prefetch_viewer_neighbors(self) -> None:
-        """Précharge l'image de base des photos voisines de celle affichée dans
-        la visionneuse (les plus proches d'abord) : prev/next devient instantané."""
+        """Preloads the base image of the photos neighbouring the one displayed in
+        the viewer (the closest first): prev/next becomes instant."""
         idx = self._current_photo_index
         photos = self._current_photos
         neighbors = [
@@ -1481,17 +1481,17 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
     def _start_photo_query(
         self, fn, context_key: str, album_id: int | None = None, folder_path: str | None = None
     ) -> None:
-        """Lance une requête photo en arrière-plan et met à jour la grille à l'arrivée.
-        folder_path : chemin réel du dossier sélectionné (seulement pour la sidebar
-        « Dossiers », distinct de context_key qui sert aussi de libellé d'affichage
-        pour les autres vues) — permet de détecter une copie de DVD sans confondre
-        avec un nom d'album qui coïnciderait par hasard avec un chemin du disque."""
+        """Starts a photo query in the background and updates the grid on arrival.
+        folder_path: real path of the selected folder (only for the
+        "Folders" sidebar, distinct from context_key which also serves as a display label
+        for the other views) - makes it possible to detect a DVD copy without confusing it
+        with an album name that would coincide by chance with a path on the disk."""
         self._cancel_grid_display_ops()
-        # Retour visuel immédiat au clic (l'indicateur ne s'affiche réellement
-        # que si la requête dépasse 150 ms) ; masqué par grid.set_photos().
+        # Immediate visual feedback on the click (the indicator only really appears
+        # if the query goes beyond 150 ms); hidden by grid.set_photos().
         self._grid.set_loading(True)
-        # Paramètres de tri résolus ici (thread UI : lectures de Config),
-        # tri exécuté dans le thread avec la requête.
+        # Sort parameters resolved here (UI thread: Config reads),
+        # sorting run in the thread with the query.
         key_fn, reverse = self._sort_params_for_context(context_key)
         self._photo_query_thread = _PhotoQueryThread(
             fn, context_key, key_fn, reverse, self
@@ -1522,15 +1522,15 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
         self._update_status()
 
     def _open_dvd_folder(self, folder_path: str) -> None:
-        """Ouvre un dossier « copie de DVD » dans une application externe déjà
-        configurée par l'utilisateur (menu Outils › Applications externes…, même
-        liste que celle utilisée par le viewer pour ouvrir une photo — cf.
-        PhotoViewer._open_with). On lui passe le dossier lui-même (et non le
-        sous-dossier VIDEO_TS) : VLC et la plupart des lecteurs détectent
-        VIDEO_TS à l'intérieur d'un dossier passé en argument. Seules les
-        applications taguées "vidéo" ou "les deux" sont proposées ici — une
-        application taguée "photo" (ex. un éditeur d'images) n'a pas de sens
-        pour ouvrir un dossier VIDEO_TS."""
+        """Opens a "DVD copy" folder in an external application already
+        configured by the user (Tools > External applications... menu, the same
+        list as the one used by the viewer to open a photo - cf.
+        PhotoViewer._open_with). We pass it the folder itself (and not the
+        VIDEO_TS subfolder): VLC and most players detect
+        VIDEO_TS inside a folder passed as an argument. Only the
+        applications tagged "video" or "both" are offered here - an
+        application tagged "photo" (e.g. an image editor) makes no sense
+        for opening a VIDEO_TS folder."""
         all_apps: list = list(self._config.get("tools.external_apps", []))
         apps = [a for a in all_apps if a.get("media", "both") != "image"]
         if not apps:
@@ -1564,9 +1564,9 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
         self._external_apps_menu(apps, folder_path).exec(self.cursor().pos())
 
     def _external_apps_menu(self, apps: list, target_path: str) -> QMenu:
-        """Construit (sans l'afficher) le menu de choix d'application externe
-        pour target_path — extrait de _open_dvd_folder pour rester testable
-        sans passer par un QMenu.exec() modal."""
+        """Builds (without displaying it) the external application choice menu
+        for target_path - extracted from _open_dvd_folder to stay testable
+        without going through a modal QMenu.exec()."""
         menu = QMenu(self)
         install_menu_width_fix(menu)
         for app in apps:
@@ -1588,15 +1588,15 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
             )
 
     def _sort_params_for_context(self, context: str) -> tuple:
-        """Résout les paramètres de tri (key_fn, reverse) du réglage "Ordre
-        d'affichage" pour un contexte donné. Doit être appelé sur le thread UI
-        (lectures de Config) ; le tri lui-même peut ensuite s'exécuter dans un
-        thread secondaire (_PhotoQueryThread). La vue "Toutes les photos"
-        (Chronologie) reste toujours triée chronologiquement — un tri
-        alphabétique n'a pas de sens pour un album qui s'appelle
-        "Chronologie" — mais sa direction suit un réglage dédié
-        (`display_order.chrono_album_dir`), indépendant de celui de la
-        grille de photos standard (`display_order.grid_dir`)."""
+        """Resolves the sort parameters (key_fn, reverse) of the "Display
+        order" setting for a given context. Must be called on the UI thread
+        (Config reads); the sorting itself can then run in a
+        secondary thread (_PhotoQueryThread). The "All the photos" view
+        (Chronology) always stays sorted chronologically - an alphabetical
+        sort makes no sense for an album called
+        "Chronology" - but its direction follows a dedicated setting
+        (`display_order.chrono_album_dir`), independent of the one of the
+        standard photo grid (`display_order.grid_dir`)."""
         if context == "Toutes les photos":
             mode = "chrono"
             direction = self._config.get(
@@ -1610,9 +1610,9 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
         return key_fn, direction == "desc"
 
     def _sort_photos_for_display(self, photos: list, context: str) -> list:
-        """Applique le réglage "Ordre d'affichage" à une liste de photos, sur
-        le thread courant (voir _sort_params_for_context pour la version
-        déportée dans _PhotoQueryThread)."""
+        """Applies the "Display order" setting to a list of photos, on
+        the current thread (see _sort_params_for_context for the version
+        moved into _PhotoQueryThread)."""
         key_fn, reverse = self._sort_params_for_context(context)
         return sorted(photos, key=key_fn, reverse=reverse)
 
@@ -1623,9 +1623,9 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
             self._apply_display_order()
 
     def _apply_display_order(self) -> None:
-        """Réapplique le réglage "Ordre d'affichage" à l'arbre de dossiers et
-        à la grille couramment affichée (appelé après modification via le
-        dialogue, ou au chargement de la bibliothèque)."""
+        """Reapplies the "Display order" setting to the folder tree and
+        to the currently displayed grid (called after a modification through the
+        dialog, or when the library is loaded)."""
         self._sidebar.set_folder_order(
             self._config.get("display_order.folder_mode", "alpha"),
             self._config.get("display_order.folder_dir", "asc"),
@@ -1770,11 +1770,11 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
 
     @Slot(list, str)
     def _on_photos_dropped(self, file_paths: list, dest_folder: str) -> None:
-        """Déplace les fichiers glissés vers dest_folder et met à jour toutes les références."""
-        # Déclarer les déplacements au watcher AVANT de toucher au disque :
-        # toutes les références (catalogue, vignettes, visages, grille) sont
-        # mises à jour ici même, le rescan que déclencherait sinon le watcher
-        # serait purement redondant.
+        """Moves the dragged files to dest_folder and updates every reference."""
+        # Declare the moves to the watcher BEFORE touching the disk:
+        # every reference (catalog, thumbnails, faces, grid) is
+        # updated right here, the rescan the watcher would otherwise trigger
+        # would be purely redundant.
         self._folder_watcher.notify_self_deletions(file_paths)
         self._folder_watcher.notify_self_additions(
             [os.path.join(dest_folder, os.path.basename(p)) for p in file_paths]
@@ -1806,7 +1806,7 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
             moved_old.append(src)
 
         if moved_old:
-            # Naviguer vers le dossier destination pour montrer les photos déplacées
+            # Navigate to the destination folder to show the moved photos
             photos = self._sort_photos_for_display(
                 self._catalog.get_photos_in_folder(dest_folder), dest_folder
             )
@@ -1822,45 +1822,45 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
 
     @Slot(str)
     def _on_folder_created(self, path: str) -> None:
-        """Nouveau sous-dossier créé sur disque : rafraîchir l'arbre et scanner."""
+        """New subfolder created on disk: refresh the tree and scan."""
         self._sidebar.refresh_folders(self._config.get_scan_folders())
         self._start_scan([path])
 
     @Slot(str, str)
     def _on_folder_moved(self, old_path: str, new_path: str) -> None:
-        """Dossier renommé ou déplacé : mettre à jour catalogue, config et UI."""
-        # Normaliser pour garantir la cohérence des chemins Windows
+        """Folder renamed or moved: update the catalog, the config and the UI."""
+        # Normalise to guarantee the consistency of the Windows paths
         old_path = os.path.normpath(old_path)
         new_path = os.path.normpath(new_path)
-        # Catalogue + visages
+        # Catalog + faces
         self._catalog.update_paths_prefix(old_path, new_path)
         self._face_db.update_paths_prefix(old_path, new_path)
-        # Config : remplacer les dossiers surveillés concernés
+        # Config: replace the watched folders concerned
         for folder in list(self._config.get_scan_folders()):
             if folder == old_path or folder.startswith(old_path + os.sep):
                 updated = new_path + folder[len(old_path):]
                 self._config.remove_scan_folder(folder)
                 self._config.add_scan_folder(updated)
-        # Photos en mémoire
+        # Photos in memory
         n = len(old_path)
         for photo in self._current_photos:
             if photo.path == old_path or photo.path.startswith(old_path + os.sep):
                 photo.path      = new_path + photo.path[n:]
                 photo.directory = new_path + photo.directory[n:]
-        # Contexte actif
+        # Active context
         if self._current_context and (
             self._current_context == old_path
             or self._current_context.startswith(old_path + os.sep)
         ):
             self._current_context = new_path + self._current_context[n:]
-        # Rafraîchir sidebar, grille et watcher
+        # Refresh the sidebar, the grid and the watcher
         updated_folders = self._config.get_scan_folders()
         self._sidebar.refresh_folders(updated_folders)
         self._folder_watcher.set_folders(updated_folders)
         self._grid.set_photos(self._current_photos)
         self._update_status()
 
-    # ------------------------------------------------------------------ doublons
+    # ------------------------------------------------------------------ duplicates
 
     @Slot(str)
     def _navigate_to_photo_path(self, path: str) -> None:
@@ -1880,11 +1880,11 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
         ))
 
     def _purge_catalog_for_folder(self, folder: str) -> list[str]:
-        """Supprime du catalogue, du cache de vignettes et de la base de visages
-        toutes les photos d'un dossier (et de ses sous-dossiers).
-        Retourne les chemins supprimés."""
+        """Deletes from the catalog, from the thumbnail cache and from the face database
+        every photo of a folder (and of its subfolders).
+        Returns the deleted paths."""
         photos = self._catalog.get_photos_in_folder(folder)
-        # Inclure les sous-dossiers via le catalogue
+        # Include the subfolders through the catalog
         all_paths = [p.path for p in photos
                      if p.path == folder or p.path.startswith(folder + os.sep)
                      or os.path.normpath(p.directory) == folder
@@ -1907,18 +1907,18 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
 
     @Slot(str)
     def _on_folder_deleted(self, folder: str) -> None:
-        """Dossier supprimé du disque : nettoyer catalogue, caches et UI."""
+        """Folder deleted from the disk: clean up the catalog, the caches and the UI."""
         folder = os.path.normpath(folder)
         deleted_paths = self._purge_catalog_for_folder(folder)
         self._duplicate_grid.invalidate()
         self._sidebar.update_duplicates_badge(self._catalog.count_duplicate_groups())
 
-        # Retirer de la config si c'était un dossier surveillé
+        # Remove from the config if it was a watched folder
         for watched in list(self._config.get_scan_folders()):
             if watched == folder or watched.startswith(folder + os.sep):
                 self._config.remove_scan_folder(watched)
 
-        # Si le contexte actif était dans le dossier supprimé, revenir à la grille vide
+        # If the active context was in the deleted folder, go back to the empty grid
         if self._current_context and (
             self._current_context == folder
             or self._current_context.startswith(folder + os.sep)
@@ -2080,7 +2080,7 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
         self._update_status()
 
     def _on_viewer_closed(self) -> None:
-        """Bouton ← dans la visionneuse : retourne à l'écran d'origine."""
+        """Back arrow in the viewer: goes back to the original screen."""
         target = self._viewer_back_target
         self._viewer_back_target = "grid"
         last_photo = self._viewer.current_photo()
@@ -2093,21 +2093,21 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
             self.show_duplicate_grid()
             return
         self.show_grid()
-        # Retour visuel : la dernière photo affichée dans la visionneuse
-        # redevient repérable immédiatement dans la grille (visible + sélectionnée),
-        # centrée en vue chronologique (mode ruban).
+        # Visual feedback: the last photo displayed in the viewer
+        # becomes immediately locatable again in the grid (visible + selected),
+        # centred in chronological view (ribbon mode).
         if last_photo is not None:
             self._grid.scroll_to_photo(last_photo.path)
             self._grid.select_photo(last_photo.path)
 
     def _ensure_left_pane_min_width(self) -> None:
-        """QStackedWidget ne déclenche pas de relayout du QSplitter quand sa
-        page courante change — sans cet appel, si la page qui vient de
-        devenir courante (typiquement EditPanel) a un besoin minimal en
-        largeur supérieur à ce que le splitter lui a déjà alloué (ex. resté
-        calé sur la largeur, plus petite, de la sidebar), elle reste
-        comprimée sous ce minimum : sa 2e colonne de boutons de traitement
-        devient invisible et inatteignable au clic, silencieusement."""
+        """QStackedWidget does not trigger a relayout of the QSplitter when its
+        current page changes - without this call, if the page that has just
+        become current (typically EditPanel) has a minimum width
+        requirement greater than what the splitter has already allocated to it (e.g. still
+        stuck on the smaller width of the sidebar), it stays
+        squeezed below that minimum: its 2nd column of treatment buttons
+        becomes invisible and unreachable by click, silently."""
         sizes = self._splitter.sizes()
         if len(sizes) != 2:
             return
@@ -2136,7 +2136,7 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
         self._act_faces_toggle.setVisible(True)
         self._act_exif_toggle.setVisible(True)
         self._btn_annotations_toggle.setVisible(True)
-        # Un nouveau _Canvas ne connaît pas spontanément l'état de session.
+        # A new _Canvas does not spontaneously know the session state.
         self._viewer.set_annotations_visible(self._annotations_globally_visible)
         if self._face_panel.isVisible():
             self._face_panel.set_photo(photo.path)
@@ -2173,9 +2173,9 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
         if not self._current_photos:
             return
         from src.ui.slideshow import SlideshowWindow
-        # Priorité : visionneuse ouverte → photo affichée
-        #            mode chronologie    → photo au centre du ruban
-        #            sinon              → photo la plus ancienne
+        # Priority: viewer open      -> displayed photo
+        #           chronology mode  -> photo at the centre of the ribbon
+        #           otherwise        -> oldest photo
         if self._viewer.isVisible() and 0 <= self._current_photo_index < len(self._current_photos):
             start_index = self._current_photo_index
         elif (ribbon_center := self._grid.center_photo_index()) is not None:
@@ -2204,8 +2204,8 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
 
     @Slot(str)
     def _on_exif_photo_saved(self, photo_path: str) -> None:
-        """Mise à jour du catalogue après modification EXIF (date_taken peut avoir changé)."""
-        # Fichier réécrit sur disque : oublier l'image de base en cache du viewer.
+        """Update of the catalog after an EXIF modification (date_taken may have changed)."""
+        # File rewritten on disk: forget the base image cached by the viewer.
         self._viewer.invalidate_base_cache(photo_path)
         for photo in self._current_photos:
             if photo.path == photo_path:
@@ -2222,16 +2222,16 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
                 break
 
     def _on_rotation_stepped(self, photo_path: str, rotation: int) -> None:
-        """Re-détecte les visages après une rotation 90° de l'utilisateur."""
+        """Re-detects the faces after a 90 degree rotation by the user."""
         from src.faces.detector import is_available
         if not is_available():
             return
         if self._reindex_thread and self._reindex_thread.isRunning():
-            # Détection déjà en cours (plusieurs secondes sur une photo 24 Mpx) :
-            # mémoriser la DERNIÈRE rotation demandée et la relancer à la fin.
-            # L'abandonner laissait indexed_photos.rotation figé sur une
-            # orientation intermédiaire (deux clics rapides sur ↻), et la
-            # détection ne retrouvait plus qu'une partie des visages.
+            # Detection already in progress (several seconds on a 24 Mpx photo):
+            # memorise the LAST rotation requested and restart it at the end.
+            # Dropping it left indexed_photos.rotation frozen on an
+            # intermediate orientation (two quick clicks on the rotate button), and the
+            # detection only found part of the faces again.
             self._pending_reindex = (photo_path, rotation)
             return
         self._pending_reindex = None
@@ -2248,12 +2248,12 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
         self._reindex_thread.start()
 
     def _drain_pending_reindex(self) -> None:
-        """Relance la dernière rotation demandée pendant qu'une détection tournait.
+        """Restarts the last rotation requested while a detection was running.
 
-        Appelé à la fin de SingleFaceReindexThread. Le signal `finished` est émis
-        depuis run(), donc avant que le thread soit réellement terminé : on
-        réessaie tant qu'il tourne encore plutôt que de deleteLater() un QThread
-        vivant (fail-fast Qt)."""
+        Called at the end of SingleFaceReindexThread. The `finished` signal is emitted
+        from run(), hence before the thread is really finished: we
+        try again as long as it is still running rather than deleteLater() a live
+        QThread (Qt fail-fast)."""
         if self._pending_reindex is None:
             return
         if self._reindex_thread is not None and self._reindex_thread.isRunning():
@@ -2291,14 +2291,14 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
             if chk.isChecked():
                 self._config.set("ui.delete_no_confirm", True)
 
-        # Un seul worker de suppression à la fois : deux workers entrelacés
-        # rendraient l'épilogue (grille, groupes de doublons) incohérent. La
-        # suppression est déjà confirmée à ce stade : la mettre en file plutôt
-        # que de l'abandonner silencieusement (cf. _pending_deletes en mémoire —
-        # un worker peut rester `isRunning()` plusieurs secondes, notamment sur
-        # `FaceDatabase.delete_for_paths` en cas de contention SQLite passagère,
-        # largement plus long que le message de statut furtif qui avertissait
-        # l'utilisateur avant ce correctif).
+        # A single deletion worker at a time: two interleaved workers
+        # would make the epilogue (grid, duplicate groups) inconsistent. The
+        # deletion is already confirmed at this stage: queue it rather
+        # than drop it silently (cf. _pending_deletes in memory -
+        # a worker may stay `isRunning()` for several seconds, notably on
+        # `FaceDatabase.delete_for_paths` in case of a passing SQLite contention,
+        # far longer than the fleeting status message that warned
+        # the user before this fix).
         if self._delete_thread is not None and self._delete_thread.isRunning():
             self._pending_deletes.append(photos)
             self.statusBar().showMessage(translate("MainWindow", "Deletion queued…"), 3000)
@@ -2307,28 +2307,28 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
         self._start_delete_worker(photos)
 
     def _start_delete_worker(self, photos: list) -> None:
-        # Mémoriser l'état du viewer avant la suppression
+        # Memorise the state of the viewer before the deletion
         in_viewer = self._stack.currentIndex() == 1
         viewed_index = self._current_photo_index
         deleted_paths_set = {p.path for p in photos}
 
-        # Index du premier fichier supprimé (pour recentrer le ruban après)
+        # Index of the first deleted file (to recentre the ribbon afterwards)
         first_deleted_idx = next(
             (i for i, p in enumerate(self._current_photos) if p.path in deleted_paths_set),
             None,
         )
 
-        # Groupes de doublons concernés par cette suppression : si la suppression
-        # fait passer un groupe sous 2 exemplaires, ce n'est plus un doublon.
+        # Duplicate groups concerned by this deletion: if the deletion
+        # brings a group below 2 copies, it is no longer a duplicate.
         affected_groups = {p.duplicate_group_id for p in photos if p.duplicate_group_id is not None}
 
-        # Déclarer les suppressions au watcher AVANT de toucher au disque : le
-        # rescan qu'il déclencherait sinon (debounce 400 ms) referait en pur
-        # gaspillage tout ce que l'épilogue ci-dessous met déjà à jour.
+        # Declare the deletions to the watcher BEFORE touching the disk: the
+        # rescan it would otherwise trigger (400 ms debounce) would redo, in pure
+        # waste, everything the epilogue below already updates.
         self._folder_watcher.notify_self_deletions([p.path for p in photos])
 
-        # Unlink + purge catalogue/vignettes/visages dans un thread : la boucle
-        # synchrone gelait l'UI plusieurs secondes sur une multi-sélection.
+        # Unlink + purge of the catalog/thumbnails/faces in a thread: the
+        # synchronous loop froze the UI for several seconds on a multi-selection.
         worker = _DeleteWorkerThread(
             [p.path for p in photos], self._catalog, self._thumb_cache,
             self._face_db, self,
@@ -2350,10 +2350,10 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
     def _on_delete_finished(self, deleted: list, errors: list, in_viewer: bool,
                             viewed_index: int, first_deleted_idx,
                             affected_groups: set) -> None:
-        """Épilogue UI d'une suppression exécutée par _DeleteWorkerThread :
-        mise à jour grille/albums/groupes de doublons et navigation voisin.
-        Reste sur le thread UI — il touche _duplicate_ignored_paths et l'état
-        des widgets."""
+        """UI epilogue of a deletion carried out by _DeleteWorkerThread:
+        update of the grid/albums/duplicate groups and neighbour navigation.
+        Stays on the UI thread - it touches _duplicate_ignored_paths and the state
+        of the widgets."""
         self._lbl_action.setText("")
         deleted_paths_set = set(deleted)
         if deleted:
@@ -2363,21 +2363,21 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
                                     if p.path not in deleted_set]
             self._current_paths -= deleted_set
             self._update_status()
-            # Rafraîchir immédiatement les compteurs d'albums : le watcher
-            # n'émettra plus pour cette suppression (notify_self_deletions).
+            # Refresh the album counters immediately: the watcher
+            # will no longer emit for this deletion (notify_self_deletions).
             self._sidebar.refresh_albums(self._catalog.get_albums())
             self._sidebar.refresh_tags(self._catalog.get_all_tags())
 
-            # Dissoudre les groupes de doublons devenus des singletons (ou vides)
-            # suite à cette suppression : sinon la carte reste affichée dans
-            # DuplicateGrid pour un groupe qui n'a plus lieu d'être.
+            # Dissolve the duplicate groups that have become singletons (or empty)
+            # following this deletion: otherwise the card stays displayed in
+            # DuplicateGrid for a group that no longer has any reason to exist.
             stale_groups = []
             for gid in affected_groups:
                 remaining = self._catalog.get_duplicates_for_group(gid)
                 if len(remaining) < 2:
-                    # Même piège que le bouton ✗ (cf. _on_duplicate_group_ignored) :
-                    # un passage de détection en cours peut encore fusionner ce
-                    # groupe en mémoire depuis avant la suppression.
+                    # The same trap as the X button (cf. _on_duplicate_group_ignored):
+                    # a detection pass in progress may still merge this
+                    # group in memory from before the deletion.
                     self._duplicate_ignored_paths |= {p.path for p in remaining}
                     self._catalog.ignore_duplicate_group(gid)
                     self._duplicate_grid.remove_group(gid)
@@ -2391,18 +2391,18 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
                                     if p.duplicate_group_id is None}
                 if grid_assignments:
                     self._grid.refresh_duplicate_status(grid_assignments)
-                # Filet de sécurité : force un rechargement depuis le catalogue au
-                # prochain affichage de la grille des doublons, même si
-                # remove_group() a déjà mis les cartes à jour en mémoire.
+                # Safety net: forces a reload from the catalog at the
+                # next display of the duplicates grid, even if
+                # remove_group() has already updated the cards in memory.
                 self._duplicate_grid.invalidate()
 
-            # Si le viewer affichait une photo supprimée, naviguer vers le voisin
+            # If the viewer displayed a deleted photo, navigate to the neighbour
             if in_viewer and any(p in deleted_paths_set
                                  for p in [self._viewer.current_photo().path]
                                  if self._viewer.current_photo()):
-                # Comparaison de doublons réduite à 0 ou 1 exemplaire : elle n'a
-                # plus lieu d'être, retour automatique à la grille des doublons
-                # plutôt que de continuer à afficher le seul exemplaire restant.
+                # Duplicate comparison reduced to 0 or 1 copy: it no
+                # longer has any reason to exist, automatic return to the duplicates grid
+                # rather than carrying on displaying the single remaining copy.
                 if self._viewer_back_target == "duplicate_grid" and len(self._current_photos) <= 1:
                     self._viewer_back_target = "grid"
                     self.show_duplicate_grid()
@@ -2427,29 +2427,29 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
             self._start_delete_worker(self._pending_deletes.pop(0))
 
     def _on_favorite_toggle_requested(self, photo: PhotoInfo) -> None:
-        """Persiste la bascule favori demandée par la grille (menu contextuel)
-        ou la visionneuse (bouton ★ / menu contextuel) — les deux émetteurs
-        basculent photo.is_favorite avant d'émettre, ce handler n'a qu'à écrire
-        l'état déjà à jour."""
+        """Persists the favourite toggle requested by the grid (context menu)
+        or the viewer (star button / context menu) - both emitters
+        toggle photo.is_favorite before emitting, this handler only has to write
+        the already up-to-date state."""
         if photo.id is not None:
             self._catalog.set_favorite(photo.id, photo.is_favorite)
 
     def _on_rating_change_requested(self, photos: list, rating: int) -> None:
-        """Persiste la note demandée par la grille (menu contextuel, éventuellement
-        multi-sélection) ou la visionneuse (étoiles / clavier 0-5 / menu contextuel),
-        puis rafraîchit les badges de la grille — la grille et la visionneuse ne
-        partagent pas forcément la même instance de PhotoInfo pour un chemin donné."""
+        """Persists the rating requested by the grid (context menu, possibly a
+        multi-selection) or the viewer (stars / 0-5 keyboard / context menu),
+        then refreshes the badges of the grid - the grid and the viewer do not
+        necessarily share the same PhotoInfo instance for a given path."""
         ids = [p.id for p in photos if p.id is not None]
         if ids:
             self._catalog.set_rating_for_ids(ids, rating)
         self._grid.refresh_rating({p.path: rating for p in photos})
 
     def _on_edit_tags_requested(self, photos: list) -> None:
-        """Ouvre le dialogue d'édition des mots-clés pour la sélection (menu
-        contextuel grille ou visionneuse) — précharge la liste des tags déjà
-        connus du catalogue dans un thread avant l'ouverture (pattern
-        _AssignPrepLoader de face_panel.py), pour ne jamais bloquer l'UI le
-        temps de la requête."""
+        """Opens the keyword editing dialog for the selection (grid or viewer
+        context menu) - preloads the list of the tags already
+        known to the catalog in a thread before the opening (the
+        _AssignPrepLoader pattern of face_panel.py), so as never to block the UI for
+        the duration of the query."""
         if not photos:
             return
         QApplication.setOverrideCursor(Qt.BusyCursor)
@@ -2493,10 +2493,10 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
                     self._exif_panel.set_tags(current.tags)
 
     def _on_viewer_tag_toggle_requested(self, photo: PhotoInfo, tag: str, added: bool) -> None:
-        """Entrée de la liste déroulante de mots-clés cliquée dans la barre
-        d'outils de la visionneuse (PhotoViewer._tag_dropdown) — photo.tags a
-        déjà été mis à jour de façon optimiste par le viewer lui-même avant
-        l'émission du signal."""
+        """Entry of the keyword drop-down list clicked in the toolbar
+        of the viewer (PhotoViewer._tag_dropdown) - photo.tags has
+        already been updated optimistically by the viewer itself before
+        the signal was emitted."""
         if photo.id is None:
             return
         if added:
@@ -2508,10 +2508,10 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
             self._exif_panel.set_tags(photo.tags)
 
     def _open_advanced_search(self) -> None:
-        """Ouvre le dialogue de recherche avancée (menu Fichier › Recherche
-        avancée…, Ctrl+F, ou bouton loupe de la sidebar) — précharge appareils/
-        personnes/tags dans un thread avant l'ouverture (pattern
-        _AssignPrepLoader de face_panel.py), pour ne jamais bloquer l'UI."""
+        """Opens the advanced search dialog (File > Advanced search...
+        menu, Ctrl+F, or magnifier button of the sidebar) - preloads the cameras/
+        people/tags in a thread before the opening (the
+        _AssignPrepLoader pattern of face_panel.py), so as never to block the UI."""
         QApplication.setOverrideCursor(Qt.BusyCursor)
         t = AdvancedSearchPrepLoader(self._catalog, self)
         t.ready.connect(self._continue_advanced_search)
@@ -2536,11 +2536,11 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
         )
 
     def _run_advanced_search(self, criteria: dict, person_id: "int | None") -> list:
-        """Exécute la recherche avancée (sur le thread de _PhotoQueryThread) :
-        critères SQL via Catalog.search_advanced(), puis intersection Python
-        avec les photos de la personne sélectionnée — catalog.db et faces.db
-        sont deux bases séparées, sans JOIN possible entre elles (cf.
-        CLAUDE.md), d'où cette intersection côté appelant plutôt qu'en SQL."""
+        """Runs the advanced search (on the thread of _PhotoQueryThread):
+        SQL criteria through Catalog.search_advanced(), then a Python intersection
+        with the photos of the selected person - catalog.db and faces.db
+        are two separate databases, with no JOIN possible between them (cf.
+        CLAUDE.md), hence this intersection on the caller side rather than in SQL."""
         photos = self._catalog.search_advanced(criteria)
         if person_id is not None:
             person_paths = set(self._face_db.get_photos_for_person(person_id))
@@ -2548,9 +2548,9 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
         return photos
 
     def _on_remove_from_album_requested(self, photos: list) -> None:
-        """Retire les photos de l'album affiché (touche Del / menu contextuel en
-        contexte album, grille ou visionneuse) : ne touche ni au fichier disque
-        ni à la photo elle-même, contrairement à _on_delete_requested."""
+        """Removes the photos from the displayed album (Del key / context menu in
+        an album context, grid or viewer): touches neither the file on disk
+        nor the photo itself, unlike _on_delete_requested."""
         if not photos or self._current_album_id is None:
             return
 
@@ -2575,8 +2575,8 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
         self._update_status()
         self._sidebar.refresh_albums(self._catalog.get_albums())
 
-        # Si la visionneuse affichait une photo retirée, naviguer vers le voisin
-        # (même logique que _on_delete_requested).
+        # If the viewer displayed a removed photo, navigate to the neighbour
+        # (the same logic as _on_delete_requested).
         if in_viewer and current_viewed and current_viewed.path in removed_set:
             if not self._current_photos:
                 self.show_grid()
@@ -2723,7 +2723,7 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
         self._face_db.update_path(old_path_str, new_path_str)
         self._thumb_cache.invalidate(old_path_str)
 
-        # La photo n'est plus dans le dossier courant : on la retire de la grille
+        # The photo is no longer in the current folder: we remove it from the grid
         in_viewer = self._stack.currentIndex() == 1
         viewed_index = self._current_photo_index
         self._grid.remove_photos([old_path_str])
@@ -2746,7 +2746,7 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
             return
 
         if dlg.overwrite:
-            # Sauvegarde optionnelle de l'original avant écrasement
+            # Optional backup of the original before overwriting
             if dlg.backup_before_overwrite:
                 try:
                     self._backup_original(photo.path)
@@ -2782,16 +2782,16 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
         self._export_image(photo, dest)
 
     def _backup_original(self, photo_path: str) -> None:
-        """Copie le fichier original dans .tmp_originals (dossier caché) avec horodatage."""
+        """Copies the original file into .tmp_originals (a hidden folder) with a timestamp."""
         original = Path(photo_path)
         backup_dir = original.parent / ".tmp_originals"
         backup_dir.mkdir(exist_ok=True)
 
-        # Rendre le dossier caché sur Windows
+        # Make the folder hidden on Windows
         try:
             ctypes.windll.kernel32.SetFileAttributesW(str(backup_dir), 0x02)
         except Exception:
-            pass  # non bloquant sur les systèmes non-Windows
+            pass  # non-blocking on non-Windows systems
 
         ts = datetime.now().strftime("%Y%m%d_%H%M%S")
         backup_name = f"{original.stem}_{ts}{original.suffix}"
@@ -2799,7 +2799,7 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
         logger.info("Original sauvegardé : %s", backup_dir / backup_name)
 
     def _export_image(self, photo: PhotoInfo, dest: str) -> None:
-        """Exporte l'image traitée pleine résolution vers dest."""
+        """Exports the processed full-resolution image to dest."""
         QApplication.setOverrideCursor(Qt.WaitCursor)
         try:
             from PIL import Image, ImageOps
@@ -2813,9 +2813,9 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
                 img = ImageOps.exif_transpose(img)
                 orig_w, orig_h = img.size
                 if edit.is_modified():
-                    # Cadre exclu ici : les annotations sont en coordonnées
-                    # normalisées de la PHOTO, elles doivent être composées avant
-                    # que le cadre n'agrandisse l'image autour (cf. apply_all).
+                    # Frame excluded here: the annotations are in normalised
+                    # coordinates of the PHOTO, they must be composited before
+                    # the frame enlarges the image around it (cf. apply_all).
                     img = ImageAdjuster.apply_all(img, edit, with_frame=False)
                 if self._annotations_globally_visible and edit.annotations:
                     img = composite_annotations_pil(img, edit.annotations)
@@ -2831,18 +2831,18 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
                         img = img.convert("RGB")
                     img.save(dest, format="JPEG", quality=95, subsampling=0)
 
-            # Restaurer les dates du fichier original (atime, mtime et date de création)
+            # Restore the dates of the original file (atime, mtime and creation date)
             preserve_file_dates(orig_stat, dest)
 
             if os.path.normpath(dest) == os.path.normpath(photo.path):
-                # Les retouches sont maintenant baked dans le fichier : supprimer l'edit
-                # et rafraîchir l'UI pour éviter une double application au prochain chargement
+                # The edits are now baked into the file: delete the edit
+                # and refresh the UI to avoid a double application at the next loading
                 self._edit_db.delete(photo.path)
                 self._thumb_cache.invalidate(photo.path)
                 self._remap_face_bboxes_after_save(photo.path, edit, orig_w, orig_h)
-                # Le fichier sur disque a changé : l'image de base en cache du
-                # viewer ne correspond plus (elle montrerait la version sans
-                # retouche alors qu'elles sont désormais baked dans le fichier).
+                # The file on disk has changed: the base image cached by the
+                # viewer no longer matches it (it would show the version without
+                # the edits while they are now baked into the file).
                 self._viewer.invalidate_base_cache(photo.path)
                 self._viewer.update_edit(EditInfo())
                 self._edit_panel.set_photo(photo)
@@ -2861,12 +2861,12 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
     def _remap_face_bboxes_after_save(
         self, photo_path: str, edit: EditInfo, orig_w: int, orig_h: int,
     ) -> None:
-        """Après un enregistrement qui écrase le fichier d'origine : le crop et
-        la rotation/redressement éventuels sont désormais bakés dans les pixels,
-        donc les bboxes de visages stockées (calculées sur l'image d'origine)
-        ne pointent plus au bon endroit — les recaler dans le nouveau repère
-        (cf. GeometryProcessor.transform_bboxes) ou les purger si tombées hors
-        cadre (recadrage qui exclut le visage)."""
+        """After a save overwriting the original file: the crop and
+        the possible rotation/straightening are now baked into the pixels,
+        so the stored face bboxes (computed on the original image)
+        no longer point at the right place - realign them in the new frame
+        (cf. GeometryProcessor.transform_bboxes) or purge them if they have fallen out of
+        frame (a crop excluding the face)."""
         if not (edit.rotation or edit.straighten or edit.flip_h or edit.flip_v or edit.crop):
             return
         from src.processing.geometry import GeometryProcessor
@@ -2901,11 +2901,11 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
 
     @Slot()
     def _on_export_clicked(self) -> None:
-        if self._stack.currentIndex() == 1:   # mode visionneuse
+        if self._stack.currentIndex() == 1:   # viewer mode
             if not self._viewer._photo:
                 return
             photos = [self._viewer._photo]
-        else:                                  # mode grille
+        else:                                  # grid mode
             photos = self._grid.get_selected()
             if not photos:
                 QMessageBox.information(
@@ -2928,7 +2928,7 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
         max_pixels: int | None,
         quality: int,
     ) -> None:
-        """Exporte photos vers export_dir avec redimensionnement et qualité donnés."""
+        """Exports photos to export_dir with the given resizing and quality."""
         from PIL import Image, ImageOps
         from src.processing.adjustments import ImageAdjuster
         from src.ui.annotation_renderer import composite_annotations_pil
@@ -2956,9 +2956,9 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
                     with Image.open(photo.path) as img:
                         img = ImageOps.exif_transpose(img)
                         if edit.is_modified():
-                            # Cadre posé après les annotations, cf. _export_image.
+                            # Frame laid down after the annotations, cf. _export_image.
                             img = ImageAdjuster.apply_all(img, edit, with_frame=False)
-                        # Redimensionnement si nécessaire
+                        # Resizing if needed
                         if max_pixels is not None:
                             w, h = img.size
                             if w * h > max_pixels:
@@ -2976,7 +2976,7 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
                             img = img.convert("RGB")
                         if img.mode == "RGBA":
                             img = img.convert("RGB")
-                        # Résolution du nom de fichier de destination (toujours en JPG)
+                        # Resolution of the destination file name (always in JPG)
                         dest = (export_dir / Path(photo.path).name).with_suffix(".jpg")
                         if dest.exists():
                             stem = dest.stem
@@ -2989,15 +2989,15 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
                                  quality=quality, subsampling=0)
                         preserve_file_dates(orig_stat, str(dest))
                 except Exception as e:
-                    errors.append(f"{photo.filename} : {e}")  # message système, non traduit
+                    errors.append(f"{photo.filename} : {e}")  # system message, not translated
                     logger.error("Export %s : %s", photo.path, e, exc_info=True)
         finally:
             QApplication.restoreOverrideCursor()
 
         self._lbl_action.setText("")
         if errors:
-            # Le 4e argument de translate() doit être un simple nom de variable,
-            # sinon lupdate retire le message du catalogue (cf. CLAUDE.md).
+            # The 4th argument of translate() must be a plain variable name,
+            # otherwise lupdate removes the message from the catalog (cf. CLAUDE.md).
             n_errors = len(errors)
             QMessageBox.warning(
                 self, translate("MainWindow", "Export errors"),
@@ -3010,11 +3010,11 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
                    + f"  →  {export_dir}")
             self._lbl_action.setText(msg)
             QTimer.singleShot(5000, lambda: self._lbl_action.setText(""))
-            # PPM_SUPPRESS_EXPLORER=1 (posé par tools/test_env/launch_isolated.py) :
-            # ouvrir l'Explorateur ici passerait devant la fenêtre de l'appli et
-            # resterait ouvert après la fin du test (processus explorer.exe non
-            # rattaché à l'appli, jamais fermé par terminate()), perturbant les
-            # scénarios e2e suivants qui pilotent la fenêtre via UIA.
+            # PPM_SUPPRESS_EXPLORER=1 (set by tools/test_env/launch_isolated.py):
+            # opening the Explorer here would come in front of the window of the application and
+            # would stay open after the end of the test (an explorer.exe process not
+            # attached to the application, never closed by terminate()), disturbing the
+            # following e2e scenarios which drive the window through UIA.
             if os.environ.get("PPM_SUPPRESS_EXPLORER") != "1":
                 os.startfile(str(export_dir))
 
@@ -3041,13 +3041,13 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
             self._sidebar.set_pending_person_id(int(saved_person_id))
 
     def _context_label(self, ctx: str) -> str:
-        """Libellé affiché pour un contexte de grille.
+        """Displayed label for a grid context.
 
-        `_current_context` est une **clé interne** : elle est comparée un peu
-        partout par == / startswith (cf. `_encode_view_state`) et doit donc
-        rester en français quelle que soit la langue de l'interface. La
-        traduction se fait ici, au seul endroit où la valeur est montrée à
-        l'utilisateur (`_update_status`)."""
+        `_current_context` is an **internal key**: it is compared a little
+        everywhere by == / startswith (cf. `_encode_view_state`) and must therefore
+        stay in French whatever the language of the interface. The
+        translation happens here, at the only place where the value is shown to
+        the user (`_update_status`)."""
         exact = {
             "Toutes les photos": translate("MainWindow", "All photos"),
             "Favoris":           translate("MainWindow", "Favourites"),
@@ -3080,7 +3080,7 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
         if ctx == "Par notes":
             return {"type": "rated"}
         if ctx.startswith(f"{_PERSON_CTX_PREFIX}cluster_"):
-            return {"type": "all"}   # vue transitoire, pas de restauration
+            return {"type": "all"}   # transient view, no restoration
         if ctx.startswith(_PERSON_CTX_PREFIX):
             try:
                 return {"type": "person", "value": int(ctx[len(_PERSON_CTX_PREFIX):])}
@@ -3090,7 +3090,7 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
             ctx.startswith("Fichiers : ") or ctx.startswith("Mot-clé : ")
             or ctx.startswith("Par notes : ") or ctx == "Recherche avancée"
         ):
-            return {"type": "all"}   # filtre éphémère
+            return {"type": "all"}   # ephemeral filter
         if ctx and os.path.isdir(ctx):
             return {"type": "folder", "value": ctx}
         if ctx:
@@ -3118,9 +3118,9 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
             "ui.splitters.sidebar_panels",
             self._sidebar.save_splitter_state(),
         )
-        # Confirmation AVANT tout signal d'arrêt : si l'utilisateur annule la
-        # fermeture (ci-dessous), aucun thread d'arrière-plan ne doit avoir
-        # été interrompu entre-temps.
+        # Confirmation BEFORE any stop signal: if the user cancels the
+        # closing (below), no background thread must have
+        # been interrupted in the meantime.
         if self._cluster_thread and self._cluster_thread.isRunning():
             elapsed = int(time.monotonic() - self._cluster_start_time) if self._cluster_start_time else 0
             m, s = divmod(elapsed, 60)
@@ -3157,26 +3157,26 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
 
         self._folder_watcher.set_folders([])
 
-        # Signale l'arrêt à tous les threads d'arrière-plan avant d'attendre
-        # quoi que ce soit : ils s'arrêtent ainsi en parallèle plutôt que
-        # l'un après l'autre — l'ancienne attente séquentielle pouvait
-        # cumuler plusieurs secondes par thread, jusqu'à une bonne minute
-        # avec FaceIndexThread, qui pouvait rester bloqué jusqu'à
-        # _DETECT_TIMEOUT/_WARMUP_TIMEOUT dans un appel bloquant sur son
-        # subprocess avant même de remarquer la demande d'arrêt (corrigé
-        # séparément : FaceIndexThread.stop() tue maintenant l'executor
-        # tout de suite).
+        # Signals the stop to every background thread before waiting for
+        # anything: they thus stop in parallel rather than
+        # one after the other - the old sequential wait could
+        # pile up several seconds per thread, up to a good minute
+        # with FaceIndexThread, which could stay blocked up to
+        # _DETECT_TIMEOUT/_WARMUP_TIMEOUT in a blocking call on its
+        # subprocess before even noticing the stop request (fixed
+        # separately: FaceIndexThread.stop() now kills the executor
+        # straight away).
         self._scanner.request_stop()
         if self._face_indexer and self._face_indexer.isRunning():
             self._face_indexer.stop()
         if self._duplicate_thread and self._duplicate_thread.isRunning():
             self._duplicate_thread.cancel()
 
-        # Masquer la fenêtre tout de suite : tout l'état utile est déjà
-        # sauvegardé ci-dessus, donc rien n'empêche de rendre la fermeture
-        # instantanée à l'écran pendant que les wait() ci-dessous (jusqu'à
-        # ~10 s cumulés si un scan/détection est en cours) tournent en
-        # arrière-plan, invisibles pour l'utilisateur.
+        # Hide the window straight away: all the useful state is already
+        # saved above, so nothing prevents making the closing
+        # instantaneous on screen while the wait() calls below (up to
+        # ~10 s in total if a scan/detection is in progress) run in the
+        # background, invisible to the user.
         self.hide()
 
         self._scanner.wait_stopped(3000)
@@ -3187,16 +3187,16 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
         if self._duplicate_thread and self._duplicate_thread.isRunning():
             self._duplicate_thread.wait(3000)
             if self._duplicate_thread.isRunning():
-                # Un thread ORB peut rester bloqué au-delà du délai ci-dessus
-                # (un seul appel cv2 en cours, ex. gros fichier sur un volume
-                # réseau lent) malgré cancel() — un thread Python ne peut pas
-                # être tué proprement de l'extérieur, et `sys.exit()`
-                # attendrait quand même sa fin (atexit de ThreadPoolExecutor).
-                # Sur demande explicite de l'utilisateur (l'appli mettait trop
-                # de temps à se fermer) : on préfère tuer le process
-                # immédiatement plutôt que de laisser l'appli traîner en
-                # arrière-plan. Tout l'état utile (config, géométrie, dernière
-                # vue) est déjà sauvegardé plus haut dans cette méthode.
+                # An ORB thread may stay blocked beyond the delay above
+                # (a single cv2 call in progress, e.g. a large file on a slow
+                # network volume) despite cancel() - a Python thread cannot
+                # be killed cleanly from the outside, and `sys.exit()`
+                # would wait for its end anyway (atexit of ThreadPoolExecutor).
+                # On an explicit request from the user (the application took too
+                # long to close): we prefer to kill the process
+                # immediately rather than letting the application linger in the
+                # background. All the useful state (config, geometry, last
+                # view) is already saved higher up in this method.
                 logger.warning(
                     "Détection de doublons : arrêt forcé du process, le "
                     "thread ne s'est pas arrêté à temps à la fermeture."
@@ -3209,11 +3209,11 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
         if self._dup_migration_thread and self._dup_migration_thread.isRunning():
             self._dup_migration_thread.wait(2000)
         if self._delete_thread and self._delete_thread.isRunning():
-            # Laisser la purge DB en lot se terminer : l'interrompre laisserait
-            # des fichiers supprimés du disque mais encore présents au catalogue.
+            # Let the batch DB purge finish: interrupting it would leave
+            # files deleted from the disk but still present in the catalog.
             self._delete_thread.wait(5000)
-        # Fermer les connexions SQLite du thread UI (checkpoint du WAL) ;
-        # celles des threads morts sont fermées par le GC.
+        # Close the SQLite connections of the UI thread (WAL checkpoint);
+        # those of the dead threads are closed by the GC.
         try:
             self._catalog.close()
             self._face_db.close()
@@ -3234,8 +3234,8 @@ class MainWindow(QMainWindow, FacesController, DuplicatesController):
             elif self._stack.currentWidget() is self._person_cluster_view:
                 self._person_cluster_view.select_all()
         elif in_viewer and key == Qt.Key_Right and not self._viewer._canvas._crop_mode:
-            self._navigate_photo(-1)   # plus récente
+            self._navigate_photo(-1)   # newer
         elif in_viewer and key == Qt.Key_Left and not self._viewer._canvas._crop_mode:
-            self._navigate_photo(1)    # plus ancienne
+            self._navigate_photo(1)    # older
         else:
             super().keyPressEvent(event)
