@@ -1,11 +1,11 @@
 # Copyright 2026 Christian Guyot
 # SPDX-License-Identifier: Apache-2.0
-"""Teste le badge « copie de DVD » (icône disque) posé par Sidebar sur les
-nœuds de l'arbre des dossiers dont le chemin contient un sous-dossier
-VIDEO_TS (Sidebar._mark_if_dvd_copy, appelé depuis refresh_folders et
-_populate_subfolders). Restreint aux dossiers sans photo cataloguée (count
-vide/nul) — cf. commentaire de _mark_if_dvd_copy sur le coût d'un scandir
-supplémentaire par dossier affiché."""
+"""Tests the "DVD copy" badge (a disc icon) put by Sidebar on the
+nodes of the folder tree whose path contains a VIDEO_TS subfolder
+(Sidebar._mark_if_dvd_copy, called from refresh_folders and
+_populate_subfolders). Restricted to folders with no catalogued photo (an
+empty/zero count) -- cf. the comment of _mark_if_dvd_copy on the cost of one
+extra scandir per displayed folder."""
 import os
 
 from PySide6.QtWidgets import QTreeWidgetItem
@@ -39,8 +39,8 @@ class TestDvdBadgeRoots:
         assert root.icon(0).isNull()
 
     def test_dvd_folder_with_photos_gets_no_icon(self, qtbot, tmp_path):
-        """count > 0 : le dossier n'a pas l'air vide, on ne paie pas le
-        scandir supplémentaire — cas limite volontairement hors périmètre."""
+        """count > 0: the folder does not look empty, so the extra scandir is
+        not paid for -- an edge case deliberately out of scope."""
         (tmp_path / "VIDEO_TS").mkdir()
         sb = _make_sidebar(qtbot)
         sb.set_folder_count_provider(lambda folders: {os.path.normpath(f): 3 for f in folders})

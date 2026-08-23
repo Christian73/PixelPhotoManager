@@ -1,8 +1,8 @@
 # Copyright 2026 Christian Guyot
 # SPDX-License-Identifier: Apache-2.0
-"""Tests de src/core/thread_journal.py (_ThreadJournal) : journal JSONL pur
-Python, y compris la rotation (jamais exercée jusqu'ici). `_JOURNAL_PATH` est
-monkeypatché vers tmp_path avant instanciation."""
+"""Tests of src/core/thread_journal.py (_ThreadJournal): a pure Python JSONL
+journal, rotation included (never exercised until now). `_JOURNAL_PATH` is
+monkeypatched towards tmp_path before instantiation."""
 import src.core.thread_journal as thread_journal_module
 from src.core.thread_journal import _ThreadJournal, rss_mb
 

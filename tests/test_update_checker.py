@@ -1,9 +1,9 @@
 # Copyright 2026 Christian Guyot
 # SPDX-License-Identifier: Apache-2.0
-"""Tests de src/core/update_checker.py : _parse_version (pur) et
-UpdateCheckThread.run() (urllib.request.urlopen et get_app_version mockés,
-run() appelé directement sans .start() ni QApplication, comme
-tests/test_duplicate_detector.py pour d'autres QThread)."""
+"""Tests of src/core/update_checker.py: _parse_version (pure) and
+UpdateCheckThread.run() (urllib.request.urlopen and get_app_version mocked,
+run() called directly without .start() nor QApplication, like
+tests/test_duplicate_detector.py for other QThreads)."""
 import json
 from urllib.error import URLError
 

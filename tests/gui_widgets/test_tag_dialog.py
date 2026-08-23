@@ -1,9 +1,9 @@
 # Copyright 2026 Christian Guyot
 # SPDX-License-Identifier: Apache-2.0
-"""Tests de widget Qt isolés (Layer 2, pytest-qt) pour tag_dialog — TagEditDialog
-n'est jamais exec() : on pilote ses méthodes directement (comme _AssignDialog,
-cf. test_people_panel.py). TagsPrepLoader est exécuté en synchrone via run()
-(pattern QThread standard du projet, cf. CLAUDE.md)."""
+"""Isolated Qt widget tests (Layer 2, pytest-qt) for tag_dialog -- TagEditDialog
+is never exec()ed: its methods are driven directly (like _AssignDialog,
+cf. test_people_panel.py). TagsPrepLoader is run synchronously through run()
+(the standard QThread pattern of the project, cf. CLAUDE.md)."""
 from PySide6.QtCore import Qt
 
 from src.core.models import PhotoInfo
@@ -180,6 +180,6 @@ class TestTagsPrepLoader:
         loader = TagsPrepLoader(catalog)
         received = []
         loader.ready.connect(lambda tags: received.append(tags))
-        loader.run()  # synchrone, cf. CLAUDE.md piège coverage/QThread
+        loader.run()  # synchronous, cf. the coverage/QThread trap of CLAUDE.md
 
         assert received == [["plage", "vacances"]]

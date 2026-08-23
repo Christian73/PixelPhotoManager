@@ -1,14 +1,14 @@
 # Copyright 2026 Christian Guyot
 # SPDX-License-Identifier: Apache-2.0
-"""Tests de widget Qt isolés (Layer 2, pytest-qt) pour treatment_dialogs.py.
+"""Isolated Qt widget tests (Layer 2, pytest-qt) for treatment_dialogs.py.
 
-Non-régression : lors de l'extraction de ce module depuis edit_panel.py
-(découpage N4), l'import de `ImageAdjuster` (utilisé par
-`GammaCurveWidget.paintEvent`) avait été omis, provoquant un
-`NameError: name 'ImageAdjuster' is not defined` à chaque affichage de la
-courbe (dialogue Couleurs). `grab()` déclenche paintEvent de façon
-synchrone ; pytest-qt fait remonter les exceptions levées dans les
-callbacks/événements Qt jusqu'au test."""
+Non-regression: when this module was extracted from edit_panel.py
+(split N4), the import of `ImageAdjuster` (used by
+`GammaCurveWidget.paintEvent`) had been left out, causing a
+`NameError: name 'ImageAdjuster' is not defined` on every display of the
+curve (the Colours dialog). `grab()` triggers paintEvent
+synchronously; pytest-qt propagates the exceptions raised inside Qt
+callbacks/events up to the test."""
 from src.ui.treatment_dialogs import GammaCurveWidget
 
 
@@ -16,7 +16,7 @@ def test_gamma_curve_widget_paints_without_error(qtbot):
     w = GammaCurveWidget(points=[(0.0, 0.0), (0.5, 0.5), (1.0, 1.0)])
     qtbot.addWidget(w)
     w.resize(260, 260)
-    img = w.grab()  # déclenche paintEvent
+    img = w.grab()  # triggers paintEvent
     assert not img.isNull()
 
 

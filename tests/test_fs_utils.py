@@ -1,9 +1,9 @@
 # Copyright 2026 Christian Guyot
 # SPDX-License-Identifier: Apache-2.0
-"""Teste `src/library/fs_utils.py` : is_hidden_path (déjà couvert indirectement
-via test_scanner.py::TestIsHidden, alias _is_hidden) et find_dvd_video_ts,
-utilisé pour détecter les copies de DVD (VIDEO_TS/AUDIO_TS) qui apparaissent
-sinon comme des dossiers vides (aucune extension .vob/.ifo/.bup cataloguée)."""
+"""Tests `src/library/fs_utils.py`: is_hidden_path (already covered indirectly
+through test_scanner.py::TestIsHidden, aliased _is_hidden) and find_dvd_video_ts,
+used to detect the DVD copies (VIDEO_TS/AUDIO_TS) that would otherwise appear
+as empty folders (no .vob/.ifo/.bup extension catalogued)."""
 import os
 
 from src.library.fs_utils import find_dvd_video_ts
@@ -31,7 +31,7 @@ class TestFindDvdVideoTs:
         assert find_dvd_video_ts(str(tmp_path)) is None
 
     def test_nested_video_ts_not_detected(self, tmp_path):
-        """VIDEO_TS doit être un enfant direct — un niveau plus profond ne
-        qualifie pas folder lui-même comme copie de DVD."""
+        """VIDEO_TS must be a direct child -- one level deeper does not
+        qualify folder itself as a DVD copy."""
         (tmp_path / "sub" / "VIDEO_TS").mkdir(parents=True)
         assert find_dvd_video_ts(str(tmp_path)) is None

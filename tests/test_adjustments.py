@@ -1,7 +1,7 @@
 # Copyright 2026 Christian Guyot
 # SPDX-License-Identifier: Apache-2.0
-"""Tests de src/processing/adjustments.py (ImageAdjuster) : pur PIL/numpy,
-aucune dépendance Qt. Images synthétiques via PIL.Image.new()."""
+"""Tests of src/processing/adjustments.py (ImageAdjuster): pure PIL/numpy,
+no Qt dependency at all. Synthetic images through PIL.Image.new()."""
 from PIL import Image, ImageStat
 
 from src.core.models import EditInfo
@@ -65,7 +65,7 @@ class TestApplyGamma:
 
     def test_gamma_zero_or_negative_does_not_crash(self):
         img = _gray_img(level=128)
-        ImageAdjuster.apply_gamma(img, 0.0)  # clampé à 0.01 en interne
+        ImageAdjuster.apply_gamma(img, 0.0)  # clamped to 0.01 internally
 
 
 class TestApplyGammaCurve:

@@ -1,10 +1,10 @@
 # Copyright 2026 Christian Guyot
 # SPDX-License-Identifier: Apache-2.0
-"""Tests de l'affichage du nombre de photos/vidéos par dossier dans la sidebar
-(Sidebar.set_folder_count_provider) : racines (refresh_folders) et
-sous-dossiers chargés à la demande (_populate_subfolders). Sidebar ne dépend
-pas de Catalog directement — le fournisseur est une simple fonction injectée,
-ici un stub, pour ne pas dépendre d'une vraie base dans ces tests."""
+"""Tests the display of the number of photos/videos per folder in the sidebar
+(Sidebar.set_folder_count_provider): roots (refresh_folders) and
+subfolders loaded on demand (_populate_subfolders). Sidebar does not depend
+on Catalog directly -- the provider is a plain injected function,
+here a stub, so as not to depend on a real database in these tests."""
 import os
 
 from PySide6.QtWidgets import QTreeWidgetItem
@@ -64,4 +64,4 @@ class TestFolderCountsSubfolders:
 
         labels = sorted(parent_item.child(i).text(0) for i in range(parent_item.childCount()))
         assert labels == ["sub1 (5)", "sub2 (5)"]
-        assert len(requested) == 2  # un seul appel groupé, pas un par sous-dossier
+        assert len(requested) == 2  # a single grouped call, not one per subfolder
