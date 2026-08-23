@@ -1,8 +1,8 @@
 # Copyright 2026 Christian Guyot
 # SPDX-License-Identifier: Apache-2.0
-"""Tests de src/core/event_bus.py — le seul canal de communication autorisé
-entre composants (cf. CLAUDE.md). EventBus ne dépend d'aucun singleton et
-s'instancie librement : chaque test crée sa propre instance isolée.
+"""Tests of src/core/event_bus.py -- the only communication channel allowed
+between components (cf. CLAUDE.md). EventBus depends on no singleton and can be
+instantiated freely: every test creates its own isolated instance.
 """
 from src.core.event_bus import EventBus
 
@@ -25,7 +25,7 @@ class TestOnEmit:
 
     def test_emit_unknown_event_does_nothing(self):
         bus = EventBus()
-        bus.emit("nobody.listens")  # ne doit pas lever
+        bus.emit("nobody.listens")  # must not raise
 
 
 class TestOff:
@@ -67,8 +67,8 @@ class TestOnce:
         bus = EventBus()
         bus.once("evt", lambda: None)
         bus.emit("evt")
-        # emit() dépile via pop(event, []) : la clé disparaît complètement,
-        # elle n'est pas juste vidée.
+        # emit() pops through pop(event, []): the key disappears completely,
+        # it is not just emptied.
         assert "evt" not in bus._once_handlers
 
     def test_once_and_on_both_fire_on_same_emit(self):
@@ -90,7 +90,7 @@ class TestHandlerExceptionIsolation:
 
         bus.on("evt", bad_handler)
         bus.on("evt", lambda: calls.append("ok"))
-        bus.emit("evt")  # ne doit pas propager l'exception
+        bus.emit("evt")  # must not propagate the exception
         assert calls == ["ok"]
 
     def test_exception_in_once_handler_does_not_block_next_once_handler(self):

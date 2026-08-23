@@ -1,13 +1,13 @@
 # Copyright 2026 Christian Guyot
 # SPDX-License-Identifier: Apache-2.0
-"""Tests de src/core/config.py.
+"""Tests of src/core/config.py.
 
-Attention : Config est un singleton de classe (`Config._instance`). Sans
-reset explicite, le premier test qui instancie Config() "gagne" pour toute
-la session pytest et pollue silencieusement les tests suivants. Chaque test
-ici réinitialise `Config._instance = None` ET redirige `_CONFIG_FILE` vers un
-fichier isolé dans tmp_path, pour ne dépendre ni d'un état de classe partagé
-ni d'un fichier config.json partagé entre tests.
+Careful: Config is a class singleton (`Config._instance`). Without an
+explicit reset, the first test that instantiates Config() "wins" for the whole
+pytest session and silently pollutes the following tests. Every test here
+resets `Config._instance = None` AND redirects `_CONFIG_FILE` to an isolated
+file in tmp_path, so as to depend neither on a shared class state nor on a
+config.json file shared between tests.
 """
 import json
 
@@ -81,7 +81,7 @@ class TestMerge(BaseConfigTest):
         monkeypatch.setattr(config_module, "APP_DATA_DIR", tmp_path)
         cfg = Config()
         assert cfg.get("thumbnail_size") == 999
-        # les autres défauts restent présents
+        # the other defaults stay present
         assert cfg.get("sort_by") == "date_taken"
 
     def test_load_merges_nested_dict_recursively(self, tmp_path, monkeypatch):
@@ -92,9 +92,9 @@ class TestMerge(BaseConfigTest):
         monkeypatch.setattr(config_module, "_CONFIG_FILE", config_file)
         monkeypatch.setattr(config_module, "APP_DATA_DIR", tmp_path)
         cfg = Config()
-        # valeur sauvegardée gagne...
+        # the saved value wins...
         assert cfg.get("ui.theme") == "light"
-        # ...mais les autres clés par défaut du même sous-dict survivent
+        # ...but the other default keys of the same sub-dict survive
         assert cfg.get("ui.sidebar_width") == 240
 
     def test_load_with_corrupt_json_falls_back_to_defaults(self, tmp_path, monkeypatch):

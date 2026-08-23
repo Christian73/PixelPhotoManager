@@ -1,9 +1,9 @@
 # Copyright 2026 Christian Guyot
 # SPDX-License-Identifier: Apache-2.0
-"""Teste `src/ui/thread_journal_dialog.py` : fonctions pures
-(_face_index_step_stats, _generate_problems_report), panneaux/tableaux peuplés
-avec des entrées synthétiques, et le dialogue principal branché sur le vrai
-journal global (redirigé en temp par conftest)."""
+"""Tests `src/ui/thread_journal_dialog.py`: pure functions
+(_face_index_step_stats, _generate_problems_report), panels/tables populated
+with synthetic entries, and the main dialog wired onto the real global journal
+(redirected to temp by conftest)."""
 import pytest
 from PySide6.QtWidgets import QFileDialog, QMessageBox
 
@@ -42,7 +42,7 @@ _FACE_BLOCKED_ENTRIES = [
 ]
 
 
-# ------------------------------------------------------------------ fonctions pures
+# ------------------------------------------------------------------ pure functions
 
 
 class TestFaceIndexStepStats:
@@ -98,7 +98,7 @@ class TestGenerateProblemsReport:
         assert "CRITIQUE — erreur(s) ET durée excessive" in report
 
     def test_face_index_normal_progress_not_flagged(self):
-        """Durée totale énorme mais temps/photo normal → thread OK."""
+        """Enormous total duration but a normal time per photo -> thread OK."""
         report = tjd._generate_problems_report(_FACE_OK_ENTRIES)
         assert "FaceIndexThread" in report
         assert "progression normale" in report
@@ -110,7 +110,7 @@ class TestGenerateProblemsReport:
         assert "Temps/photo élevé" in report
 
 
-# ------------------------------------------------------------------ panneaux
+# ------------------------------------------------------------------ panels
 
 
 class TestCompteRenduPanel:
@@ -190,7 +190,7 @@ class TestEventTable:
         assert table.rowCount() == 0
 
 
-# ------------------------------------------------------------------ dialogues
+# ------------------------------------------------------------------ dialogs
 
 
 class TestProblemsReportDialog:
@@ -200,7 +200,7 @@ class TestProblemsReportDialog:
         assert "LENTEUR" in dlg._edit.toPlainText()
         monkeypatch.setattr(QMessageBox, "information", lambda *a, **k: None)
 
-        # faux presse-papiers : le vrai peut être verrouillé par une autre appli
+        # fake clipboard: the real one can be locked by another application
         class _FakeClipboard:
             def __init__(self):
                 self.content = ""
@@ -306,7 +306,7 @@ class TestThreadJournalDialog:
         monkeypatch.setattr(
             QFileDialog, "getSaveFileName", lambda *a, **k: ("", "")
         )
-        dlg._export_csv()   # ne doit pas lever
+        dlg._export_csv()   # must not raise
 
     def test_open_problems_report(self, qtbot, monkeypatch):
         dlg = tjd.ThreadJournalDialog()

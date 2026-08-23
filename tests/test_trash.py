@@ -1,8 +1,8 @@
 # Copyright 2026 Christian Guyot
 # SPDX-License-Identifier: Apache-2.0
-"""Tests de src/library/trash.py — point unique de mise à la corbeille.
-send2trash est monkeypatché : un vrai appel enverrait les fichiers de test
-dans la corbeille Windows de l'utilisateur."""
+"""Tests of src/library/trash.py -- the single point for moving to the recycle
+bin. send2trash is monkeypatched: a real call would send the test files into the
+user's Windows recycle bin."""
 import os
 
 import pytest
@@ -18,7 +18,7 @@ class TestMoveToTrash:
         import send2trash as s2t_module
         monkeypatch.setattr(s2t_module, "send2trash", calls.append)
 
-        trash.move_to_trash(str(tmp_path) + "/photo.jpg")   # séparateur mixte
+        trash.move_to_trash(str(tmp_path) + "/photo.jpg")   # mixed separator
 
         assert calls == [os.path.normpath(str(f))]
 
@@ -27,7 +27,7 @@ class TestMoveToTrash:
             trash.move_to_trash(str(tmp_path / "absent.jpg"))
 
     def test_send2trash_error_propagates(self, tmp_path, monkeypatch):
-        """Jamais de repli unlink : l'erreur corbeille remonte à l'appelant."""
+        """Never an unlink fallback: the recycle bin error propagates to the caller."""
         f = tmp_path / "photo.jpg"
         f.write_bytes(b"x")
         import send2trash as s2t_module
@@ -39,7 +39,7 @@ class TestMoveToTrash:
 
         with pytest.raises(OSError):
             trash.move_to_trash(str(f))
-        assert f.exists()   # fichier intact
+        assert f.exists()   # file intact
 
     def test_is_trash_available(self):
         assert trash.is_trash_available() is True

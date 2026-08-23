@@ -1,13 +1,13 @@
 # Copyright 2026 Christian Guyot
 # SPDX-License-Identifier: Apache-2.0
-"""Teste `src/library/dedup_cache.py` (DedupCache) en isolation : le round-trip
-des tables compared_tier1/compared_tier2 (complétude des comparaisons par
-paires, cf. duplicate_detector.py — vraie incrémentalité de la phase de
-comparaison), purge_missing sur ces deux tables, la purge complète sur
-bump de _CACHE_VERSION, et la persistance de la liste des fichiers corrompus
-(table corrupted_files, cf. duplicate_detector.py::_detect qui la remplace
-intégralement en fin de passage, et main_window.py qui l'utilise pour que
-« État des doublons… » survive à un redémarrage de l'application)."""
+"""Tests `src/library/dedup_cache.py` (DedupCache) in isolation: the round trip
+of the compared_tier1/compared_tier2 tables (completeness of the pairwise
+comparisons, cf. duplicate_detector.py -- the real incrementality of the
+comparison phase), purge_missing on those two tables, the full purge on a
+_CACHE_VERSION bump, and the persistence of the list of corrupted files
+(the corrupted_files table, cf. duplicate_detector.py::_detect which replaces it
+entirely at the end of a pass, and main_window.py which uses it so that
+"Duplicate status…" survives an application restart)."""
 import src.library.dedup_cache as dedup_cache_mod
 from src.library.dedup_cache import DedupCache
 
@@ -93,10 +93,10 @@ class TestPurgeMissingCoversComparedTables:
             cache.close()
 
     def test_purge_missing_removes_stale_corrupted_entries(self, tmp_path):
-        """Un fichier corrompu n'a jamais de fingerprint/orb_features (seule
-        source normale de `cached_paths` dans purge_missing) : sans l'ajout
-        explicite de corrupted_files à cette collecte, un fichier corrompu
-        supprimé de la bibliothèque ne serait jamais purgé de cette table."""
+        """A corrupted file never has a fingerprint/orb_features (the only normal
+        source of `cached_paths` in purge_missing): without explicitly adding
+        corrupted_files to that collection, a corrupted file removed from the
+        library would never be purged from that table."""
         cache = DedupCache(tmp_path / "dedup_cache.db")
         cache.open()
         try:
@@ -121,8 +121,8 @@ class TestCacheVersionBumpPurgesComparedTables:
             cache1.close()
 
         monkeypatch.setattr(dedup_cache_mod, "_CACHE_VERSION", "unit-test-bumped-version")
-        # __init__ appelle _init_db(), qui compare la version stockée à
-        # _CACHE_VERSION et purge tout si elles diffèrent.
+        # __init__ calls _init_db(), which compares the stored version with
+        # _CACHE_VERSION and purges everything if they differ.
         cache2 = DedupCache(db_path)
         cache2.open()
         try:
@@ -169,10 +169,10 @@ class TestCorruptedFilesPersistence:
             cache.close()
 
     def test_replace_fully_overwrites_previous_set(self, tmp_path):
-        """Reflète l'usage réel (duplicate_detector.py::_detect, finally) :
-        self._corrupted est l'état complet et à jour à chaque passage, donc un
-        fichier absent du nouvel appel (réparé/supprimé) doit disparaître,
-        sans logique de réconciliation supplémentaire."""
+        """Reflects the real use (duplicate_detector.py::_detect, finally):
+        self._corrupted is the complete and up-to-date state on every pass, so a
+        file absent from the new call (repaired/deleted) must disappear,
+        with no extra reconciliation logic."""
         cache = DedupCache(tmp_path / "dedup_cache.db")
         cache.open()
         try:

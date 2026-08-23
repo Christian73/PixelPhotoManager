@@ -63,16 +63,16 @@ class TestEditDatabaseAnnotationsPersistence:
 
     def test_save_without_annotations_stores_null(self, tmp_path):
         db = self._make_db(tmp_path)
-        # is_modified() doit rester True via un autre champ pour que la ligne
-        # soit conservée (sinon save() la supprime).
+        # is_modified() must stay True through another field for the row to be
+        # kept (otherwise save() deletes it).
         edit = EditInfo(brightness=0.2, annotations=[])
         db.save("C:/photos/test2.jpg", edit)
         loaded = db.load("C:/photos/test2.jpg")
         assert loaded.annotations == []
 
     def test_annotations_only_edit_survives_delete_of_other_fields(self, tmp_path):
-        """Une photo avec seulement des annotations (aucune autre retouche) doit
-        être conservée en base, pas supprimée par le chemin 'not is_modified()'."""
+        """A photo with annotations only (no other edit) must be kept in the
+        database, not deleted by the 'not is_modified()' path."""
         db = self._make_db(tmp_path)
         edit = EditInfo(annotations=[dict(_SAMPLE_ANNOTATIONS[0])])
         db.save("C:/photos/test3.jpg", edit)
@@ -80,13 +80,13 @@ class TestEditDatabaseAnnotationsPersistence:
         assert len(loaded.annotations) == 1
 
     def test_init_db_is_idempotent(self, tmp_path):
-        """_init_db() (migrations ALTER TABLE incluses) doit pouvoir être
-        appelé plusieurs fois sans erreur — c'est le pattern utilisé pour
-        toutes les migrations automatiques au démarrage de l'appli."""
+        """_init_db() (ALTER TABLE migrations included) must be callable
+        several times without an error -- that is the pattern used for every
+        automatic migration at application startup."""
         db_path = tmp_path / "edits.db"
         db1 = EditDatabase(db_path=db_path)
         db1.save("C:/photos/test.jpg", EditInfo(annotations=[dict(_SAMPLE_ANNOTATIONS[0])]))
 
-        db2 = EditDatabase(db_path=db_path)  # ré-appelle _init_db() sur la même DB
+        db2 = EditDatabase(db_path=db_path)  # calls _init_db() again on the same DB
         loaded = db2.load("C:/photos/test.jpg")
         assert len(loaded.annotations) == 1
