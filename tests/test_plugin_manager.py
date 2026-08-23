@@ -1,8 +1,8 @@
 # Copyright 2026 Christian Guyot
 # SPDX-License-Identifier: Apache-2.0
-"""Tests de src/core/plugin_manager.py (PluginManager) : découverte/activation
-de plugins via importlib, sans dépendance Qt. `PLUGIN_DIRS` est monkeypatché
-vers un dossier temporaire contenant un faux plugin (plugin.json + plugin.py)."""
+"""Tests of src/core/plugin_manager.py (PluginManager): discovery/activation
+of plugins through importlib, with no Qt dependency. `PLUGIN_DIRS` is monkeypatched
+towards a temporary folder containing a fake plugin (plugin.json + plugin.py)."""
 import json
 
 import src.core.plugin_manager as plugin_manager_module

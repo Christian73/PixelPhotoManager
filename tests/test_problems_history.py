@@ -1,8 +1,8 @@
 # Copyright 2026 Christian Guyot
 # SPDX-License-Identifier: Apache-2.0
-"""Tests de src/core/problems_history.py (_ProblemsHistory) : journal JSONL
-pur Python. `_HISTORY_PATH` est monkeypatché vers tmp_path avant instanciation
-(même pattern que l'isolation de `_CONFIG_FILE` pour Config)."""
+"""Tests of src/core/problems_history.py (_ProblemsHistory): a pure Python
+JSONL journal. `_HISTORY_PATH` is monkeypatched towards tmp_path before
+instantiation (the same pattern as the isolation of `_CONFIG_FILE` for Config)."""
 import src.core.problems_history as problems_history_module
 from src.core.problems_history import _ProblemsHistory
 

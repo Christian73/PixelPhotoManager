@@ -1,9 +1,9 @@
 # Copyright 2026 Christian Guyot
 # SPDX-License-Identifier: Apache-2.0
-"""Teste MainWindow._on_viewer_closed : au retour de la visionneuse vers la
-grille, la dernière photo affichée doit redevenir visible et sélectionnée
-dans la grille (cf. ThumbnailGrid.scroll_to_photo / select_photo). Méthode
-non liée contre un objet minimal, même style que test_main_window_tags.py."""
+"""Tests MainWindow._on_viewer_closed: on the way back from the viewer to the
+grid, the last displayed photo must become visible and selected again
+in the grid (cf. ThumbnailGrid.scroll_to_photo / select_photo). An unbound
+method against a minimal object, the same style as test_main_window_tags.py."""
 from PySide6.QtWidgets import QWidget
 
 from src.core.models import PhotoInfo

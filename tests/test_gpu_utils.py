@@ -1,12 +1,12 @@
 # Copyright 2026 Christian Guyot
 # SPDX-License-Identifier: Apache-2.0
-"""Tests de src/faces/gpu_utils.py : détection GPU pour TensorFlow, en pur
-Python. `tensorflow` est mocké via sys.modules (import local à chaque
-fonction) et `subprocess.run` (nvidia-smi) via monkeypatch — pas de dépendance
-réelle à un GPU ou à TensorFlow pour que les tests soient déterministes.
+"""Tests of src/faces/gpu_utils.py: GPU detection for TensorFlow, in pure
+Python. `tensorflow` is mocked through sys.modules (a local import in every
+function) and `subprocess.run` (nvidia-smi) through monkeypatch -- no real
+dependency on a GPU or on TensorFlow, so that the tests stay deterministic.
 
-`configure()` mémoïse son résultat dans les globals `_configured`/
-`_device_label` : chaque test les réinitialise avant appel."""
+`configure()` memoises its result in the `_configured`/`_device_label`
+globals: every test resets them before calling it."""
 import subprocess
 import sys
 import types
@@ -59,7 +59,7 @@ def _raise_file_not_found(*args, **kwargs):
 class TestConfigureNoTensorflow:
     def test_returns_cpu_label_when_tensorflow_not_installed(self, monkeypatch):
         _reset(monkeypatch)
-        monkeypatch.setitem(sys.modules, "tensorflow", None)  # force ImportError
+        monkeypatch.setitem(sys.modules, "tensorflow", None)  # forces ImportError
 
         assert gpu_utils_module.configure() == "CPU (TensorFlow not available)"
 

@@ -1,8 +1,8 @@
 # Copyright 2026 Christian Guyot
 # SPDX-License-Identifier: Apache-2.0
-"""Tests de src/core/deleted_corrupted_files.py (_DeletedCorruptedFiles) :
-journal JSONL pur Python, même pattern que test_problems_history.py.
-`_REGISTRY_PATH` est monkeypatché vers tmp_path avant instanciation."""
+"""Tests of src/core/deleted_corrupted_files.py (_DeletedCorruptedFiles):
+a pure Python JSONL journal, the same pattern as test_problems_history.py.
+`_REGISTRY_PATH` is monkeypatched towards tmp_path before instantiation."""
 import src.core.deleted_corrupted_files as deleted_corrupted_files_module
 from src.core.deleted_corrupted_files import _DeletedCorruptedFiles
 

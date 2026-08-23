@@ -1,10 +1,10 @@
 # Copyright 2026 Christian Guyot
 # SPDX-License-Identifier: Apache-2.0
-"""Tests de src/core/app_version.py : calcul de version (mode figé vs. dev),
-en pur Python (subprocess et sys.frozen monkeypatchés, pas de PyInstaller réel).
+"""Tests of src/core/app_version.py: computing the version (frozen mode vs. dev),
+in pure Python (subprocess and sys.frozen monkeypatched, no real PyInstaller).
 
-`get_app_version()` mémoïse son résultat dans le global `_cached_version` :
-chaque test le réinitialise à None pour ne pas dépendre de l'ordre d'exécution."""
+`get_app_version()` memoises its result in the `_cached_version` global:
+every test resets it to None so as not to depend on the execution order."""
 import subprocess
 
 import src.core.app_version as app_version_module

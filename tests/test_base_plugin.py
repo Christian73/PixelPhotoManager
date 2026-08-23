@@ -1,8 +1,8 @@
 # Copyright 2026 Christian Guyot
 # SPDX-License-Identifier: Apache-2.0
-"""Tests de src/core/base_plugin.py (BasePlugin) et
-src/core/processor_plugin.py (ProcessorPlugin) : valeurs par défaut des
-méthodes non abstraites, via de petites sous-classes concrètes minimales."""
+"""Tests of src/core/base_plugin.py (BasePlugin) and
+src/core/processor_plugin.py (ProcessorPlugin): the default values of the
+non-abstract methods, through small minimal concrete subclasses."""
 from PIL import Image
 
 from src.core.base_plugin import BasePlugin
