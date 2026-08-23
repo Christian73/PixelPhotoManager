@@ -559,6 +559,16 @@ class CouleursTreatmentDialog(QDialog):
 
 
 
+# Intensité appliquée à l'ouverture de l'outil quand la photo n'a pas encore de
+# vignette (`vignette_strength` == 0) : à 0, l'outil s'ouvrait sur un effet
+# strictement invisible et il fallait bouger le curseur pour voir quoi que ce
+# soit. La valeur par défaut de `EditInfo.vignette_strength` reste 0 — une photo
+# sans vignette enregistrée doit s'afficher sans vignette ; c'est bien
+# l'ouverture de l'outil qui pose ce point de départ, cf.
+# `edit_panel._open_vignette_treatment` (annulation → retour à 0).
+VIGNETTE_DEFAULT_STRENGTH = 0.5
+
+
 class VignetteTreatmentDialog(QDialog):
     preview = Signal(object)   # EditInfo en temps réel
 

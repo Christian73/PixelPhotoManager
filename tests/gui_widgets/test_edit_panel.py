@@ -9,7 +9,7 @@ que ces tests n'écrivent jamais dans le vrai profil utilisateur."""
 from PySide6.QtWidgets import QMessageBox
 
 from src.core.models import PhotoInfo
-from src.ui.edit_panel import EditPanel, EditSlider
+from src.ui.edit_panel import VIGNETTE_DEFAULT_STRENGTH, EditPanel, EditSlider
 
 
 def _photo(path: str) -> PhotoInfo:
@@ -348,4 +348,54 @@ class TestEditPanelResetRestore:
 
         assert not panel._btn_restore.isEnabled(), (
             "une nouvelle retouche après reset_all() doit invalider l'instantané de restauration"
+        )
+
+
+class TestVignetteDefaultStrength:
+    """L'outil Vignette s'ouvre sur une intensité visible (50 %) quand la photo
+    n'en a pas encore : à 0, l'ouverture ne changeait rien à l'image et il
+    fallait bouger le curseur pour voir l'effet. La valeur par défaut d'`EditInfo`
+    reste 0 — c'est bien l'ouverture de l'outil qui pose ce point de départ."""
+
+    def _panel_with_photo(self, qtbot, tmp_path) -> EditPanel:
+        panel = EditPanel()
+        qtbot.addWidget(panel)
+        panel.set_photo(_photo(str(tmp_path / "photo1.jpg")))
+        return panel
+
+    def test_opening_the_tool_sets_strength_to_the_default(self, qtbot, tmp_path):
+        panel = self._panel_with_photo(qtbot, tmp_path)
+        assert panel._edit.vignette_strength == 0.0
+
+        panel._open_vignette_treatment()
+        dlg = panel._active_vignette_dlg
+        qtbot.addWidget(dlg)
+
+        assert panel._edit.vignette_strength == VIGNETTE_DEFAULT_STRENGTH
+        assert dlg._sl_strength.get_value() == VIGNETTE_DEFAULT_STRENGTH
+        dlg.reject()
+
+    def test_an_existing_vignette_is_not_overwritten(self, qtbot, tmp_path):
+        panel = self._panel_with_photo(qtbot, tmp_path)
+        panel._edit.vignette_strength = 0.2
+
+        panel._open_vignette_treatment()
+        dlg = panel._active_vignette_dlg
+        qtbot.addWidget(dlg)
+
+        assert panel._edit.vignette_strength == 0.2
+        assert dlg._sl_strength.get_value() == 0.2
+        dlg.reject()
+
+    def test_cancelling_restores_the_absence_of_vignette(self, qtbot, tmp_path):
+        panel = self._panel_with_photo(qtbot, tmp_path)
+
+        panel._open_vignette_treatment()
+        dlg = panel._active_vignette_dlg
+        qtbot.addWidget(dlg)
+        dlg.reject()
+
+        assert panel._edit.vignette_strength == 0.0, (
+            "annuler l'outil doit revenir à l'état d'avant ouverture, pas laisser "
+            "le point de départ de 50 %"
         )

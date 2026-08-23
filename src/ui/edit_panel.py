@@ -130,7 +130,8 @@ from src.ui.edit_icons import (  # noqa: E402,F401
 from src.ui.edit_sliders import EditSlider, MarkedSlider, _Ruler  # noqa: E402,F401
 from src.ui.treatment_dialogs import (  # noqa: E402,F401
     _ACTIVE_TOOL_STYLE, _TREATMENTS, CouleursTreatmentDialog, GammaCurveWidget,
-    LuminositeTreatmentDialog, TreatmentDialog, VignetteTreatmentDialog,
+    LuminositeTreatmentDialog, TreatmentDialog, VIGNETTE_DEFAULT_STRENGTH,
+    VignetteTreatmentDialog,
 )
 
 
@@ -867,6 +868,12 @@ class EditPanel(QWidget):
             return
 
         original = copy.copy(self._edit)
+        # Point de départ visible : sans vignette enregistrée, l'outil s'ouvrait
+        # sur une intensité nulle, donc sur une image inchangée. `original` est
+        # déjà capturé, l'annulation revient donc bien à 0.
+        if self._edit.vignette_strength <= 0.0:
+            self._edit.vignette_strength = VIGNETTE_DEFAULT_STRENGTH
+            self.edits_changed.emit(copy.copy(self._edit))
         dlg = VignetteTreatmentDialog(self._edit, parent=self)
         dlg.preview.connect(self._on_vignette_preview)
         dlg._panel = self
