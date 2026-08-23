@@ -1,38 +1,39 @@
 # Copyright 2026 Christian Guyot
 # SPDX-License-Identifier: Apache-2.0
-"""Scénario bout-en-bout : actions UI sur les doublons, en complément de
-test_duplicate_detection.py (qui ne vérifie que la détection elle-même, côté
-base de données). Un seul lancement d'application, sur la même bibliothèque
-synthétique (paires exacte/redimensionnée/recadrée) :
+"""End-to-end scenario: UI actions on the duplicates, complementing
+test_duplicate_detection.py (which only checks the detection itself, on the
+database side). A single application launch, on the same synthetic library
+(exact/resized/cropped pairs):
 
-1. Grille des doublons (`DuplicateGrid`, badge "Duplicates" de la sidebar) :
-   double-clic sur la carte du groupe exact -> comparaison rapide dans la
-   visionneuse ("1:1" comme marqueur d'ouverture) -> fermeture -> retour
-   automatique à la grille des doublons (`_viewer_back_target`).
-2. Bouton ✗ d'une carte (groupe redimensionné) -> dissolution persistante
-   (`Catalog.ignore_duplicate_group`) -> vérifie que SEUL ce groupe est
-   dissous, le groupe exact restant intact (même contrat que
+1. Duplicates grid (`DuplicateGrid`, the "Duplicates" badge of the sidebar):
+   double-click on the card of the exact group -> quick comparison in the
+   viewer ("1:1" as the marker that it opened) -> closing -> automatic return
+   to the duplicates grid (`_viewer_back_target`).
+2. The cross button of a card (resized group) -> persistent dissolution
+   (`Catalog.ignore_duplicate_group`) -> checks that ONLY that group is
+   dissolved, the exact group staying intact (the same contract as
    tests/test_catalog.py::test_ignore_duplicate_group_dissolves_only_that_group,
-   ici prouvé de bout en bout depuis le clic UI).
-3. Popup de doublons (`_DuplicatesPopup`) ouverte depuis le vrai bouton
-   "⧉ Duplicates" de la VISIONNEUSE (QPushButton réel, cf. photo_viewer.py:349)
-   plutôt que le badge peint à la main de la grille (`ThumbnailCell.
-   paintEvent`, non automatisable sans clic en coordonnées pixel brutes) :
-   navigation vers un autre exemplaire du groupe recadré sans fermer la
-   popup, puis fermeture explicite via "Close".
-4. Suppression d'un exemplaire du groupe recadré -> effet de bord vérifié :
-   l'exemplaire restant repasse à `duplicate_group_id=NULL` (moins de 2
-   membres restants, cf. main_window.py::_on_delete_finished).
-5. Dialogue "Outils › État des doublons…" testé directement (pas seulement
-   comme repli de `wait_for_duplicate_detection`) : "View the groups"
-   navigue vers la grille des doublons, "Check now" relance une
-   passe sans planter l'application, le bouton de fermeture standard
-   ("Close") ferme le dialogue sans action.
+   proven here end to end from the UI click).
+3. Duplicates popup (`_DuplicatesPopup`) opened from the real
+   "⧉ Duplicates" button of the VIEWER (a real QPushButton, cf. photo_viewer.py:349)
+   rather than the hand-painted badge of the grid (`ThumbnailCell.
+   paintEvent`, not automatable without a click in raw pixel coordinates):
+   navigation to another copy of the cropped group without closing the
+   popup, then an explicit close through "Close".
+4. Deleting one copy of the cropped group -> a checked side effect:
+   the remaining copy goes back to `duplicate_group_id=NULL` (fewer than 2
+   members left, cf. main_window.py::_on_delete_finished).
+5. The "Tools › Duplicate status…" dialog tested directly (not only
+   as a fallback of `wait_for_duplicate_detection`): "View the groups"
+   navigates to the duplicates grid, "Check now" starts another
+   pass without crashing the application, and the standard closing button
+   ("Close") closes the dialog without an action.
 
-Les cartes (`_DuplicateCard`) et leurs boutons ✗ portent un nom accessible
-dédié (`dupgroup::<id>` / `dupgroup_ignore::<id>`, ajouté à duplicate_grid.py
-pour ce chantier e2e, même convention que ThumbnailCell) car elles n'ont
-sinon aucun texte UIA unique (tooltips identiques pour toutes les cartes)."""
+The cards (`_DuplicateCard`) and their cross buttons carry a dedicated
+accessible name (`dupgroup::<id>` / `dupgroup_ignore::<id>`, added to
+duplicate_grid.py for this e2e work, the same convention as ThumbnailCell)
+because they otherwise have no unique UIA text (identical tooltips for every
+card)."""
 from pathlib import Path
 
 import pytest
@@ -84,18 +85,18 @@ def test_duplicates_ui(isolated_app):
     group_crop = _group_id(catalog_db, manifest.crop_duplicate_pair[0])
     assert group_exact is not None and group_resized is not None and group_crop is not None
 
-    # ---- 1. Grille des doublons : double-clic sur la carte du groupe exact ----
+    # ---- 1. Duplicates grid: double-click on the card of the exact group ----
     find_dialog_button(window, ["Duplicates"], exact=True, timeout=15.0).click_input()
-    find_dialog_button(window, ["← Photos"], exact=True, timeout=10.0)  # marqueur : grille doublons active
+    find_dialog_button(window, ["← Photos"], exact=True, timeout=10.0)  # marker: duplicates grid active
 
     card_exact = find_by_accessible_name(window, f"dupgroup::{group_exact}", timeout=15.0)
     double_click_element(card_exact)
-    find_dialog_button(window, ["1:1"], exact=True, timeout=15.0)  # marqueur : visionneuse ouverte
+    find_dialog_button(window, ["1:1"], exact=True, timeout=15.0)  # marker: viewer open
     find_dialog_button(window, ["✕"], exact=True, timeout=10.0).click_input()
-    # Retour automatique à la grille des doublons (_viewer_back_target).
+    # Automatic return to the duplicates grid (_viewer_back_target).
     find_dialog_button(window, ["← Photos"], exact=True, timeout=10.0)
 
-    # ---- 2. Bouton ✗ : dissolution isolée au groupe redimensionné ----
+    # ---- 2. The cross button: dissolution isolated to the resized group ----
     find_by_accessible_name(window, f"dupgroup_ignore::{group_resized}", timeout=15.0).click_input()
     wait_for_condition(
         lambda: all(_group_id(catalog_db, p) is None for p in manifest.resized_duplicate_pair),
@@ -106,7 +107,7 @@ def test_duplicates_ui(isolated_app):
 
     find_dialog_button(window, ["← Photos"], exact=True, timeout=10.0).click_input()
 
-    # ---- 3. Popup de doublons depuis le vrai bouton de la visionneuse ----
+    # ---- 3. Duplicates popup from the real button of the viewer ----
     open_photo_in_viewer(window, manifest.crop_duplicate_pair[0])
     find_dialog_button(window, ["⧉ Duplicates"], exact=True, timeout=10.0).click_input()
     other_name = Path(manifest.crop_duplicate_pair[1]).name
@@ -122,7 +123,7 @@ def test_duplicates_ui(isolated_app):
     find_dialog_button(window, ["Close"], exact=True, timeout=10.0).click_input()
     find_dialog_button(window, ["✕"], exact=True, timeout=10.0).click_input()
 
-    # ---- 4. Suppression d'un exemplaire du groupe recadré : effet de bord ----
+    # ---- 4. Deleting one copy of the cropped group: side effect ----
     thumb = find_thumbnail(window, manifest.crop_duplicate_pair[0], timeout=15.0)
     right_click_element(thumb)
     click_context_menu_item(window, "Delete the file…\tDel", exact=True, timeout=10.0)
@@ -140,7 +141,7 @@ def test_duplicates_ui(isolated_app):
         message="le groupe recadré n'a pas été dissous après la suppression d'un exemplaire",
     )
 
-    # ---- 5. Dialogue "Duplicate status…" testé directement ----
+    # ---- 5. The "Duplicate status…" dialog tested directly ----
     click_menu_item(window, "Tools", "Duplicate status…")
     find_dialog_button(window, ["View the groups"], exact=True, timeout=10.0).click_input()
     find_dialog_button(window, ["← Photos"], exact=True, timeout=10.0).click_input()

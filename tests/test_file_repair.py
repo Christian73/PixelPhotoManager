@@ -1,13 +1,13 @@
 # Copyright 2026 Christian Guyot
 # SPDX-License-Identifier: Apache-2.0
-"""Tests de src/library/file_repair.py : réparation de JPEG corrompus.
+"""Tests of src/library/file_repair.py: repairing corrupted JPEGs.
 
-Deux scénarios de corruption synthétique :
-- EOI manquant (transfert interrompu en toute fin de fichier) → doit être
-  récupéré par le niveau 1 (_decode_strict_with_eoi_fix), sans perte.
-- Troncature en plein milieu (comme _make_corrupted_jpeg de
-  tools/test_env/generate_library.py) → le niveau 1 échoue, le niveau 2
-  (meilleur des décodeurs tolérants) doit quand même produire un résultat.
+Two synthetic corruption scenarios:
+- missing EOI (transfer interrupted right at the end of the file) -> must be
+  recovered by level 1 (_decode_strict_with_eoi_fix), without loss.
+- truncation right in the middle (like _make_corrupted_jpeg in
+  tools/test_env/generate_library.py) -> level 1 fails, level 2
+  (best of the tolerant decoders) must still produce a result.
 """
 import io
 
@@ -47,11 +47,11 @@ class TestDecodeStrictWithEoiFix:
         assert file_repair._decode_strict_with_eoi_fix(str(path)) is None
 
     def test_mid_file_truncation_is_not_recovered_losslessly(self, tmp_path):
-        """libjpeg peut « réussir » un décodage strict même sur un fichier
-        tronqué en plein milieu une fois l'EOI ajouté (fin de flux entropique
-        traitée comme récupérable) — dans ce cas le résultat doit comporter
-        des lignes de filler détectables, donc ne pas être traité comme
-        sans perte par _try_repair_file (cf. test_try_repair_file.py)."""
+        """libjpeg may "succeed" at a strict decoding even on a file truncated
+        right in the middle once the EOI has been added (the end of the entropy
+        stream being treated as recoverable) -- in that case the result must
+        contain detectable filler lines, hence must not be treated as lossless
+        by _try_repair_file (cf. test_try_repair_file.py)."""
         data = _make_valid_jpeg_bytes()
         path = tmp_path / "truncated.jpg"
         path.write_bytes(data[: max(64, len(data) // 4)])
@@ -77,7 +77,7 @@ class TestUsableHeight:
     def test_flat_bottom_rows_reduce_score(self):
         rng = np.random.default_rng(2)
         arr = rng.integers(0, 256, size=(40, 20, 3), dtype=np.uint8)
-        arr[25:] = 128  # moitié basse remplie d'une couleur unie (filler du décodeur tolérant)
+        arr[25:] = 128  # lower half filled with a solid colour (filler of the tolerant decoder)
         img = Image.fromarray(arr, mode="RGB")
 
         assert file_repair._usable_height(img) == 25
@@ -103,7 +103,7 @@ class TestTryRepairFile:
                 np.asarray(repaired.convert("RGB")).astype(int)
                 - np.asarray(original.convert("RGB")).astype(int)
             )
-            assert diff.mean() < 6.0  # ré-encodage JPEG qualité 95, quasi-identique
+            assert diff.mean() < 6.0  # JPEG re-encoding at quality 95, nearly identical
 
         backups = list((tmp_path / ".tmp_originals").glob("photo_*.jpg"))
         assert len(backups) == 1
@@ -119,10 +119,10 @@ class TestTryRepairFile:
             assert repaired.size[0] > 0 and repaired.size[1] > 0
 
     def test_mid_file_truncation_does_not_take_the_lossless_fast_path(self, tmp_path, monkeypatch):
-        """Un décodage strict-après-EOI qui « réussit » avec des lignes de
-        filler ne doit pas court-circuiter la comparaison du niveau 2 :
-        _save_repaired ne doit être appelé qu'une seule fois, avec le
-        meilleur candidat, jamais avec le résultat du niveau 1 seul."""
+        """A strict-after-EOI decoding that "succeeds" with filler lines must not
+        short-circuit the comparison of level 2: _save_repaired must be called
+        only once, with the best candidate, never with the result of level 1
+        alone."""
         data = _make_valid_jpeg_bytes(size=(200, 200))
         path = tmp_path / "photo.jpg"
         path.write_bytes(data[: max(64, len(data) // 4)])
@@ -146,7 +146,7 @@ class TestTryRepairFile:
         assert file_repair._try_repair_file(str(path)) is False
 
     def test_missing_file_returns_false_instead_of_raising(self, tmp_path):
-        path = tmp_path / "gone.jpg"  # jamais créé
+        path = tmp_path / "gone.jpg"  # never created
 
         assert file_repair._try_repair_file(str(path)) is False
 
@@ -177,13 +177,13 @@ class TestTryRepairFile:
 
 class TestFileRepairThread:
     def test_unexpected_exception_on_one_file_does_not_abort_the_batch(self, tmp_path, monkeypatch, qtbot):
-        """Régression : un fichier disparu entre la détection et la
-        réparation (ou toute autre erreur imprévue) levait une exception non
-        rattrapée dans run(), qui interrompait le thread avant d'émettre
-        `finished` — la boîte de progression restait bloquée indéfiniment."""
+        """Regression: a file gone between the detection and the repair (or any
+        other unforeseen error) raised an exception that was not caught in
+        run(), which interrupted the thread before it emitted `finished` -- the
+        progress box stayed stuck indefinitely."""
         good_path = tmp_path / "good.jpg"
         good_path.write_bytes(_make_valid_jpeg_bytes()[: -len(file_repair._JPEG_EOI)])
-        missing_path = str(tmp_path / "missing.jpg")  # jamais créé
+        missing_path = str(tmp_path / "missing.jpg")  # never created
 
         thread = file_repair.FileRepairThread([missing_path, str(good_path)])
         with qtbot.waitSignal(thread.finished, timeout=5000) as blocker:

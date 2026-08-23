@@ -1,12 +1,12 @@
 # Copyright 2026 Christian Guyot
 # SPDX-License-Identifier: Apache-2.0
-"""Teste `src/faces/detector.py` sans exécuter InsightFace : le singleton
-FaceAnalysis est remplacé par un faux dont `.get()` renvoie des visages
-fabriqués. Couvre les règles de filtrage documentées dans CLAUDE.md
-(det_score < 0.5, embedding None, w/h < 20 px — à ne jamais modifier), la
-remise à l'échelle des bbox pour les grandes images, les context managers
-_exif_corrected / _resized_for_detection, la résolution du root insightface
-(dev vs figé) et la stratégie de rotation de detect_and_embed_auto."""
+"""Tests `src/faces/detector.py` without running InsightFace: the
+FaceAnalysis singleton is replaced by a fake whose `.get()` returns fabricated
+faces. Covers the filtering rules documented in CLAUDE.md (det_score < 0.5,
+embedding None, w/h < 20 px -- never to be changed), the rescaling of the
+bboxes for large images, the _exif_corrected / _resized_for_detection context
+managers, the resolution of the insightface root (dev vs frozen) and the
+rotation strategy of detect_and_embed_auto."""
 import os
 import sys
 
@@ -48,13 +48,13 @@ def _make_jpg(path, size=(200, 150), orientation=None):
 
 @pytest.fixture
 def fake_app(monkeypatch):
-    """Installe un faux FaceAnalysis ; retourne un setter pour les visages."""
+    """Installs a fake FaceAnalysis; returns a setter for the faces."""
     holder = _FakeApp([])
     monkeypatch.setattr(detector, "_get_insight_app", lambda: holder)
     return holder
 
 
-# ------------------------------------------------------------------ root & dispo
+# ------------------------------------------------------------------ root & availability
 
 
 class TestInsightfaceRoot:
@@ -98,9 +98,9 @@ class TestExifCorrected:
         with detector._exif_corrected(p, extra_rotation=90) as out:
             assert out != p
             with Image.open(out) as img:
-                assert img.size == (150, 200)   # dimensions permutées
+                assert img.size == (150, 200)   # dimensions swapped
             temp_used = out
-        assert not os.path.exists(temp_used)   # temp nettoyé
+        assert not os.path.exists(temp_used)   # temp cleaned up
 
     def test_exif_orientation_corrected(self, tmp_path):
         p = _make_jpg(tmp_path / "ori6.jpg", size=(200, 150), orientation=6)
@@ -113,7 +113,7 @@ class TestExifCorrected:
         p = _make_jpg(tmp_path / "été.jpg")
         with detector._exif_corrected(p) as out:
             assert out != p
-            out.encode("ascii")   # ne doit pas lever
+            out.encode("ascii")   # must not raise
 
     def test_non_ascii_corrupt_file_raw_copy(self, tmp_path):
         p = tmp_path / "cassé.jpg"
@@ -192,7 +192,7 @@ class TestDetectAndEmbed:
 
     def test_tiny_face_filtered(self, tmp_path, fake_app):
         p = _make_jpg(tmp_path / "a.jpg")
-        # 19×50 px : w < 20 → exclu ; 50×19 : h < 20 → exclu
+        # 19x50 px: w < 20 -> excluded; 50x19: h < 20 -> excluded
         fake_app._faces = [
             _FakeFace((0, 0, 19, 50)),
             _FakeFace((0, 0, 50, 19)),
@@ -209,7 +209,7 @@ class TestDetectAndEmbed:
         assert detector.detect_and_embed(p) == []
 
     def test_bbox_rescaled_for_large_image(self, tmp_path, fake_app):
-        # 3840×1920 → détection sur 1920×960 (scale 0.5) → bbox ×2 au retour
+        # 3840x1920 -> detection on 1920x960 (scale 0.5) -> bbox x2 on return
         p = _make_jpg(tmp_path / "large.jpg", size=(3840, 1920))
         fake_app._faces = [_FakeFace((100, 50, 200, 150))]
         result = detector.detect_and_embed(p)
@@ -245,7 +245,7 @@ class TestDetectAndEmbedAuto:
         result, rotation = detector.detect_and_embed_auto("photo.jpg")
         assert rotation == 0
         assert len(result) == 1
-        assert calls == [0]   # jamais 90/180/270 si 0° trouve
+        assert calls == [0]   # never 90/180/270 if 0 degrees finds something
 
     def test_tries_rotations_when_zero_fails(self, tmp_path, monkeypatch):
         def _detect(path, rotation=0):
@@ -272,7 +272,7 @@ class TestDetectAndEmbedAuto:
 
 class TestWarmup:
     def test_warmup_worker_with_fake_app(self, fake_app):
-        detector.warmup_worker()   # models vide → backend CPU, pas d'exception
+        detector.warmup_worker()   # empty models -> CPU backend, no exception
 
     def test_warmup_worker_raises_on_failure(self, monkeypatch):
         def _boom():

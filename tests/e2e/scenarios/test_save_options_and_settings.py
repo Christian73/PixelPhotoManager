@@ -1,51 +1,51 @@
 # Copyright 2026 Christian Guyot
 # SPDX-License-Identifier: Apache-2.0
-"""Scénario bout-en-bout : options de sauvegarde, confirmation de suppression
-« ne plus demander », applications externes et paramètres (lecteur vidéo),
-aide/à propos. Un seul lancement d'application, étapes séquentielles :
+"""End-to-end scenario: save options, the "do not ask again" deletion
+confirmation, external applications and settings (video player), help/about.
+A single application launch, sequential steps:
 
-1. « Enregistrer l'image traitée sur le disque » (menu contextuel de la
-   grille — même code que l'entrée équivalente de la visionneuse,
-   `save_requested.emit(photo)` dans les deux cas, photo_viewer.py:717 et
-   thumbnail_grid.py:1227 — inutile de répéter le test pour les deux entrées)
-   -> `_SaveOptionsDialog`, option par défaut « Écraser le fichier original »
-   avec sauvegarde cochée par défaut -> vérifie la copie dans
-   `.tmp_originals` (nommage `{stem}_{horodatage}{suffixe}`,
-   cf. main_window.py::_backup_original) ET l'écrasement effectif du fichier.
-   L'option « Enregistrer à un autre emplacement… » ouvre un `QFileDialog`
-   natif sans repli éditable (contrairement au chemin du lecteur vidéo
-   personnalisé, cf. §3 plus bas) — écart documenté, non automatisé ici,
-   même esprit que l'exclusion des gestes de glissé du plan.
+1. "Save the edited image to disk" (context menu of the grid -- the same code
+   as the equivalent entry of the viewer, `save_requested.emit(photo)` in both
+   cases, photo_viewer.py:717 and thumbnail_grid.py:1227 -- no need to repeat
+   the test for both entries)
+   -> `_SaveOptionsDialog`, default option "Overwrite the original file"
+   with the backup checked by default -> checks the copy in
+   `.tmp_originals` (naming `{stem}_{timestamp}{suffix}`,
+   cf. main_window.py::_backup_original) AND that the file is really
+   overwritten. The "Save to another location…" option opens a native
+   `QFileDialog` with no editable fallback (unlike the path of the custom
+   video player, cf. §3 below) -- a documented gap, not automated here,
+   in the same spirit as the exclusion of the drag gestures from the plan.
 
-2. Case « Ne plus demander de confirmation » de la boîte de suppression
-   (main_window.py:1822-1841, persiste `ui.delete_no_confirm`) : suppression
-   de 3 photos témoin successives — la 1re confirmée sans cocher la case (la
-   boîte apparaît), la 2e confirmée en cochant la case, la 3e ne doit
-   provoquer AUCUNE boîte de confirmation.
+2. The "Do not ask again" box of the deletion dialog
+   (main_window.py:1822-1841, persists `ui.delete_no_confirm`): deletion
+   of 3 successive witness photos -- the 1st confirmed without ticking the box
+   (the dialog appears), the 2nd confirmed with the box ticked, the 3rd must
+   trigger NO confirmation dialog at all.
 
-3. « Outils › Applications externes… » : une entrée est pré-injectée dans la
-   config au lancement (paramétrage indirect de `isolated_app`, seul moyen
-   d'obtenir un chemin d'exécutable réel sans passer par le sélecteur natif
-   de `_add()`, qui n'a pas de repli éditable) -> vérifie que son icône
-   apparaît dans la barre de la visionneuse (nom accessible dédié,
-   `extapp::<nom>`, ajouté à photo_viewer.py pour ce chantier e2e) ->
-   suppression via le bouton « Supprimer » du dialogue -> l'icône disparaît.
+3. "Tools › External applications…": an entry is pre-injected into the
+   config at launch (an indirect way of configuring `isolated_app`, the only
+   way to get a real executable path without going through the native selector
+   of `_add()`, which has no editable fallback) -> checks that its icon
+   appears in the viewer bar (a dedicated accessible name,
+   `extapp::<name>`, added to photo_viewer.py for this e2e work) ->
+   removal through the "Remove" button of the dialog -> the icon disappears.
 
-4. « Outils › Paramètres › Lecteur vidéo » : sélection du lecteur
-   personnalisé et saisie d'un chemin factice dans le `QLineEdit` dédié
-   (repéré par proximité verticale avec le `QRadioButton` « Lecteur
-   personnalisé : », PAS par nom accessible : un `QLineEdit` implémente
-   généralement le pattern UIA Text, qui prime sur le nom accessible dans
-   `window_text()` — cf. pywinauto `base_wrapper.window_text`, même
-   ambiguïté qui a motivé l'identification par élimination de
-   `type_into_sidebar_filter`) -> vérifie le round-trip dans `config.json`
-   (`video.player_path`), sans tenter de lancer réellement le lecteur
-   (repli documenté par le plan si le lancement du sous-processus n'est pas
-   fiablement vérifiable).
+4. "Tools › Settings › Video player": selecting the custom player and
+   typing a dummy path into the dedicated `QLineEdit`
+   (located by vertical proximity with the "Custom player:" `QRadioButton`,
+   NOT by accessible name: a `QLineEdit` generally implements the UIA Text
+   pattern, which takes precedence over the accessible name in
+   `window_text()` -- cf. pywinauto `base_wrapper.window_text`, the same
+   ambiguity that motivated the identification by elimination in
+   `type_into_sidebar_filter`) -> checks the round trip in `config.json`
+   (`video.player_path`), without trying to really launch the player
+   (a fallback documented by the plan if launching the subprocess cannot be
+   checked reliably).
 
-5. Aide (F1 -> menu « Aide… ») et « À propos » : les deux ouvrent
-   `HelpDialog` (help_dialog.py) sans erreur ; fermeture via le bouton
-   standard « Fermer »."""
+5. Help (F1 -> the "Help…" menu) and "About": both open
+   `HelpDialog` (help_dialog.py) without an error; closed through the
+   standard "Close" button."""
 from __future__ import annotations
 
 import json
@@ -76,12 +76,12 @@ _EXTAPP_PATH = r"C:\Windows\System32\notepad.exe"
 
 
 def _click_radio(window, text: str, *, timeout: float = 10.0) -> None:
-    """Coche le `QRadioButton` portant ce texte — nécessaire avant de saisir
-    du texte dans le `QLineEdit` du chemin personnalisé : celui-ci est
-    désactivé (`setEnabled(False)`) tant que le radio « Lecteur personnalisé »
-    n'est pas coché (settings_dialog.py:210, `_on_radio_changed`), donc
-    `set_edit_text` échoue avec `ElementNotEnabled` si on ne clique pas
-    d'abord le radio."""
+    """Ticks the `QRadioButton` carrying this text -- needed before typing
+    text into the `QLineEdit` of the custom path: it is disabled
+    (`setEnabled(False)`) as long as the "Custom player" radio button
+    is not ticked (settings_dialog.py:210, `_on_radio_changed`), so
+    `set_edit_text` fails with `ElementNotEnabled` if the radio button is not
+    clicked first."""
     deadline = time.monotonic() + timeout
     last_exc: Exception | None = None
     while time.monotonic() < deadline:
@@ -97,9 +97,9 @@ def _click_radio(window, text: str, *, timeout: float = 10.0) -> None:
 
 
 def _find_edit_near_radio(window, radio_text: str, *, timeout: float = 10.0):
-    """Repère le QLineEdit du chemin du lecteur vidéo personnalisé par
-    proximité verticale avec son QRadioButton voisin — voir le docstring du
-    module pour la raison (window_text() peu fiable pour un QLineEdit)."""
+    """Locates the QLineEdit of the custom video player path by vertical
+    proximity with its neighbouring QRadioButton -- see the docstring of the
+    module for the reason (window_text() is unreliable for a QLineEdit)."""
     deadline = time.monotonic() + timeout
     last_exc: Exception | None = None
     while time.monotonic() < deadline:
@@ -150,7 +150,7 @@ def test_save_options_and_settings(isolated_app):
         timeout=60.0, message="le scan initial n'a pas terminé",
     )
 
-    # ---- 1. Enregistrer l'image traitée : écraser + sauvegarde .tmp_originals ----
+    # ---- 1. Save the edited image: overwrite + backup in .tmp_originals ----
     save_photo = manifest.burst_pair[0]
     save_path = Path(save_photo)
     backup_dir = save_path.parent / ".tmp_originals"
@@ -167,7 +167,7 @@ def test_save_options_and_settings(isolated_app):
         timeout=20.0, message="aucune sauvegarde n'a été créée dans .tmp_originals",
     )
 
-    # ---- 2. Confirmation de suppression + case « Ne plus demander » ----
+    # ---- 2. Deletion confirmation + the "Do not ask again" box ----
     photo1, photo2, photo3 = manifest.control_photos[0], manifest.control_photos[1], manifest.control_photos[2]
 
     thumb1 = find_thumbnail(window, str(photo1), timeout=30.0)
@@ -204,7 +204,7 @@ def test_save_options_and_settings(isolated_app):
         timeout=20.0, message="photo3 non supprimée automatiquement (ui.delete_no_confirm actif)",
     )
 
-    # ---- 3. Applications externes : icône visionneuse + suppression ----
+    # ---- 3. External applications: viewer icon + removal ----
     ext_photo = manifest.exact_duplicate_pair[0]
     open_photo_in_viewer(window, ext_photo)
     find_by_accessible_name(window, f"extapp::{_EXTAPP_NAME}", timeout=10.0)
@@ -220,7 +220,7 @@ def test_save_options_and_settings(isolated_app):
         find_by_accessible_name(window, f"extapp::{_EXTAPP_NAME}", timeout=3.0)
     find_dialog_button(window, ["✕"], exact=True, timeout=10.0).click_input()
 
-    # ---- 4. Paramètres : lecteur vidéo personnalisé (round-trip config.json) ----
+    # ---- 4. Settings: custom video player (config.json round trip) ----
     click_menu_item(window, "Tools", "Settings")
     click_list_item(window, "Video player", exact=True, timeout=10.0)
     _click_radio(window, "Custom player:", timeout=10.0)
@@ -232,7 +232,7 @@ def test_save_options_and_settings(isolated_app):
         timeout=10.0, message="video.player_path n'a pas été persisté",
     )
 
-    # ---- 5. Aide / À propos ----
+    # ---- 5. Help / About ----
     click_menu_item(window, "Help", "Help…")
     find_dialog_button(window, ["Close"], exact=True, timeout=10.0).click_input()
 

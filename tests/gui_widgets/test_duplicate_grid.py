@@ -1,9 +1,9 @@
 # Copyright 2026 Christian Guyot
 # SPDX-License-Identifier: Apache-2.0
-"""Teste `src/ui/duplicate_grid.py` : cartes de groupe (compteur, signaux ✗ et
-double-clic, vignette), grille (peuplement via _on_groups_ready, signature de
-contenu anti-clignotement, retrait de groupe, états vide/analyse) et le thread
-de chargement exécuté en synchrone sur un vrai catalogue."""
+"""Tests `src/ui/duplicate_grid.py`: group cards (counter, the cross and
+double-click signals, thumbnail), grid (populating through _on_groups_ready,
+anti-flicker content signature, group removal, empty/analysis states) and the
+loading thread run synchronously on a real catalog."""
 import os
 
 import pytest
@@ -23,7 +23,7 @@ def _photo(path) -> PhotoInfo:
 
 
 def _groups(tmp_path, spec: dict[int, int]) -> dict:
-    """spec = {group_id: nb_photos} → {group_id: [PhotoInfo, ...]}"""
+    """spec = {group_id: nb_photos} -> {group_id: [PhotoInfo, ...]}"""
     out = {}
     for gid, n in spec.items():
         photos = []
@@ -59,7 +59,7 @@ class TestLoadThread:
         thread = _DuplicateGroupLoadThread(catalog)
         results: list = []
         thread.groups_ready.connect(results.append)
-        thread.run()   # synchrone
+        thread.run()   # synchronous
 
         assert len(results) == 1
         groups = results[0]
@@ -162,7 +162,7 @@ class TestDuplicateGrid:
         groups = _groups(tmp_path, {1: 2})
         grid._on_groups_ready(groups)
         cards_before = dict(grid._cards)
-        grid._on_groups_ready(groups)   # snapshot identique → pas de reconstruction
+        grid._on_groups_ready(groups)   # identical snapshot -> no rebuild
         assert grid._cards == cards_before
 
     def test_changed_signature_rebuilds(self, grid, tmp_path):
@@ -180,7 +180,7 @@ class TestDuplicateGrid:
         grid.remove_group(2)
         assert grid._lbl_title.text() == ""
         assert grid._empty_panel.isVisibleTo(grid)
-        grid.remove_group(99)   # inexistant : sans effet ni exception
+        grid.remove_group(99)   # non-existent: no effect and no exception
 
     def test_card_signals_forwarded(self, grid, tmp_path):
         grid._on_groups_ready(_groups(tmp_path, {4: 2}))
@@ -207,10 +207,10 @@ class TestDuplicateGrid:
         calls: list = []
         monkeypatch.setattr(grid, "refresh", lambda: calls.append(True))
         grid.ensure_loaded()
-        assert calls == [True]      # 1er affichage → recharge
+        assert calls == [True]      # 1st display -> reloads
         grid._loaded = True
         grid.ensure_loaded()
-        assert calls == [True]      # déjà chargé → rien
+        assert calls == [True]      # already loaded -> nothing
         grid.invalidate()
         grid.ensure_loaded()
         assert calls == [True, True]
@@ -235,13 +235,12 @@ class TestDuplicateGrid:
 
 class TestNoGhostWindows:
     def test_rapid_ignores_leave_no_toplevel_cards(self, qtbot, tmp_path):
-        """Régression du bug 2026-07-19 : ✗ sur plusieurs groupes d'affilée
-        faisait apparaître les cartes retirées comme de petites fenêtres
-        flottantes au-dessus de l'application — setParent(None) sur un widget
-        encore visible conserve son état « à montrer » et la carte détachée
-        (top-level) s'affichait avant que deleteLater ne s'exécute. Le
-        correctif : hide() systématique avant le détachement. Nécessite une
-        grille réellement affichée pour se manifester."""
+        """Regression of the 2026-07-19 bug: the cross on several groups in a row
+        made the removed cards appear as small floating windows above the
+        application -- setParent(None) on a still visible widget keeps its "to
+        be shown" state and the detached (top-level) card was displayed before
+        deleteLater ran. The fix: a systematic hide() before the detachment.
+        Needs a really displayed grid to show up."""
         from PySide6.QtWidgets import QApplication
         from src.ui.duplicate_grid import _DuplicateCard
 
@@ -255,17 +254,17 @@ class TestNoGhostWindows:
         qtbot.waitExposed(grid)
 
         grid._on_groups_ready(_groups(tmp_path, {i: 2 for i in range(1, 6)}))
-        qtbot.wait(150)   # laisse _force_reflow (singleShot) afficher les cartes
+        qtbot.wait(150)   # let _force_reflow (singleShot) display the cards
 
-        # ✗ sur 4 cartes coup sur coup, sans retour à l'event loop entre deux
+        # the cross on 4 cards in a row, with no return to the event loop in between
         for gid in (1, 2, 3, 4):
             grid._cards[gid].findChild(QPushButton).click()
 
-        # processEvents (et non qtbot.wait) : dans l'application réelle le
-        # deleteLater posé pendant le traitement du clic n'est exécuté qu'au
-        # retour à la boucle externe — c'est dans cet intervalle que les cartes
-        # détachées s'affichaient. qtbot.wait entre dans un exec() qui traite
-        # les DeferredDelete immédiatement et masquerait la régression.
+        # processEvents (and not qtbot.wait): in the real application the
+        # deleteLater posted while the click is being processed is only executed on
+        # returning to the outer loop -- it is in that interval that the detached
+        # cards were displayed. qtbot.wait enters an exec() that processes the
+        # DeferredDelete immediately and would hide the regression.
         import time
         deadline = time.monotonic() + 0.3
         while time.monotonic() < deadline:
@@ -277,5 +276,5 @@ class TestNoGhostWindows:
         ]
         assert ghosts == []
         assert set(grid._cards.keys()) == {5}
-        qtbot.wait(50)   # laisse les DeferredDelete s'exécuter avant la fermeture
+        qtbot.wait(50)   # let the DeferredDelete run before closing
         grid.close()

@@ -1,14 +1,14 @@
 # Copyright 2026 Christian Guyot
 # SPDX-License-Identifier: Apache-2.0
-"""Tests de l'absorption des changements auto-infligés par FolderWatcher
-(notify_self_deletions / notify_self_additions) : quand l'application
-supprime ou déplace elle-même des fichiers, l'événement watcher qui suit ne
-doit pas déclencher files_changed (donc pas de rescan redondant), mais un
-changement externe dans le même dossier doit toujours émettre.
+"""Tests of the absorption of the self-inflicted changes by FolderWatcher
+(notify_self_deletions / notify_self_additions): when the application itself
+deletes or moves files, the watcher event that follows must not trigger
+files_changed (hence no redundant rescan), but an external change in the same
+folder must still emit.
 
-Les tests pilotent _take_snapshot/_process directement (pas d'événements
-QFileSystemWatcher réels ni de debounce) : c'est la logique de décision qui
-est testée, pas la plomberie Qt."""
+The tests drive _take_snapshot/_process directly (no real QFileSystemWatcher
+events and no debounce): what is tested is the decision logic, not the Qt
+plumbing."""
 import os
 
 from src.library.folder_watcher import FolderWatcher
@@ -20,8 +20,8 @@ def _make_files(directory, names):
 
 
 def _make_watcher(qtbot, tmp_path, names):
-    """Watcher avec un snapshot initial de tmp_path contenant names.
-    Retourne (watcher, liste des chemins émis par files_changed)."""
+    """Watcher with an initial snapshot of tmp_path containing names.
+    Returns (watcher, the list of paths emitted by files_changed)."""
     _make_files(tmp_path, names)
     watcher = FolderWatcher()
     watcher._take_snapshot(str(tmp_path))
@@ -40,14 +40,14 @@ class TestSelfDeletionSuppression:
         watcher._process(str(tmp_path))
 
         assert emitted == []
-        # Les noms consommés ne restent pas en table
+        # The consumed names do not stay in the table
         assert watcher._self_deleted == {}
 
     def test_external_deletion_in_same_dir_still_emits(self, qtbot, tmp_path):
         watcher, emitted = _make_watcher(qtbot, tmp_path, ["a.jpg", "ext.jpg"])
         watcher.notify_self_deletions([str(tmp_path / "a.jpg")])
         os.remove(tmp_path / "a.jpg")
-        os.remove(tmp_path / "ext.jpg")   # suppression externe non annoncée
+        os.remove(tmp_path / "ext.jpg")   # unannounced external deletion
 
         watcher._process(str(tmp_path))
 
@@ -57,7 +57,7 @@ class TestSelfDeletionSuppression:
         watcher, emitted = _make_watcher(qtbot, tmp_path, ["a.jpg"])
         watcher.notify_self_deletions([str(tmp_path / "a.jpg")])
         os.remove(tmp_path / "a.jpg")
-        _make_files(tmp_path, ["new.jpg"])   # ajout externe simultané
+        _make_files(tmp_path, ["new.jpg"])   # simultaneous external addition
 
         watcher._process(str(tmp_path))
 
@@ -65,14 +65,14 @@ class TestSelfDeletionSuppression:
 
     def test_expired_ttl_restores_emission(self, qtbot, tmp_path):
         watcher, emitted = _make_watcher(qtbot, tmp_path, ["a.jpg"])
-        # Deadline déjà passée : la déclaration ne doit plus rien absorber
+        # Deadline already passed: the declaration must no longer absorb anything
         watcher.notify_self_deletions([str(tmp_path / "a.jpg")], ttl_s=-1.0)
         os.remove(tmp_path / "a.jpg")
 
         watcher._process(str(tmp_path))
 
         assert emitted == [str(tmp_path)]
-        assert watcher._self_deleted == {}   # entrée expirée purgée
+        assert watcher._self_deleted == {}   # expired entry purged
 
     def test_unrelated_dir_unaffected(self, qtbot, tmp_path):
         sub = tmp_path / "sub"
@@ -80,7 +80,7 @@ class TestSelfDeletionSuppression:
         _make_files(sub, ["s.jpg"])
         watcher, emitted = _make_watcher(qtbot, tmp_path, ["a.jpg"])
         watcher._take_snapshot(str(sub))
-        # Déclaration pour tmp_path, suppression réelle dans sub
+        # Declaration for tmp_path, real deletion in sub
         watcher.notify_self_deletions([str(tmp_path / "a.jpg")])
         os.remove(sub / "s.jpg")
 
