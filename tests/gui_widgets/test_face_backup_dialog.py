@@ -1,9 +1,9 @@
 # Copyright 2026 Christian Guyot
 # SPDX-License-Identifier: Apache-2.0
-"""Tests (Layer 2) pour face_backup_dialog — sauvegarde/restauration ZIP de la
-reconnaissance faciale sur des FaceDatabase/Catalog réels en tmp_path, threads
-exécutés en run() synchrone, dialogues QMessageBox monkeypatchés (jamais de
-vraie popup en test)."""
+"""Tests (Layer 2) for face_backup_dialog -- ZIP backup/restore of the face
+recognition data on real FaceDatabase/Catalog instances in tmp_path, threads
+run through a synchronous run(), QMessageBox dialogs monkeypatched (never a
+real popup in a test)."""
 import sqlite3
 import zipfile
 from pathlib import Path
@@ -49,7 +49,7 @@ class TestHelpers:
         d = _backup_dir(tmp_path)
         (d / "visages_20260101_000000.zip").write_bytes(b"a")
         (d / "visages_20260301_000000.zip").write_bytes(b"b")
-        (d / "autre.zip").write_bytes(b"c")   # ignoré (pas le préfixe)
+        (d / "autre.zip").write_bytes(b"c")   # ignored (not the prefix)
 
         names = [p.name for p in list_backups(tmp_path)]
 
@@ -75,7 +75,7 @@ class TestCreateRestore:
             assert set(zf.namelist()) == {"faces.db", "persons.json"}
             persons = __import__("json").loads(zf.read("persons.json"))
         assert sorted(p["name"] for p in persons) == ["Alice", "Boris"]
-        # Pas de fichier temporaire résiduel
+        # No leftover temporary file
         assert not list(_backup_dir(tmp_path).glob("_tmp_*.db"))
 
     def test_restore_backup_roundtrip(self, tmp_path):
@@ -91,7 +91,7 @@ class TestCreateRestore:
 
         zip_path = create_backup(faces_db, catalog_db, tmp_path)
 
-        # État postérieur : personne supprimée, visage effacé
+        # State afterwards: person deleted, face erased
         catalog.delete_person(alice.id)
         conn = sqlite3.connect(faces_db)
         conn.execute("DELETE FROM faces")
@@ -107,7 +107,7 @@ class TestCreateRestore:
         finally:
             conn.close()
         assert n == 1
-        # Dossier temporaire nettoyé
+        # Temporary folder cleaned up
         assert not (_backup_dir(tmp_path) / "_restore_tmp").exists()
 
     def test_restore_without_faces_db_raises(self, tmp_path):
@@ -122,7 +122,7 @@ class TestCreateRestore:
 
 
 # ---------------------------------------------------------------------------
-# threads (run() synchrone)
+# threads (synchronous run())
 
 class TestThreads:
     def test_backup_thread_success(self, qtbot, tmp_path):
@@ -138,7 +138,7 @@ class TestThreads:
         assert errors == []
 
     def test_backup_thread_failure(self, qtbot, tmp_path):
-        # Dossier de sauvegarde impossible à créer (un FICHIER porte son nom)
+        # Backup folder impossible to create (a FILE carries its name)
         bad_root = tmp_path / "root"
         bad_root.mkdir()
         (bad_root / "faces_backups").write_text("bloque")
@@ -170,7 +170,7 @@ class TestThreads:
 
 
 # ---------------------------------------------------------------------------
-# dialogue
+# dialog
 
 def _rows(dlg) -> list:
     return [
@@ -204,7 +204,7 @@ class TestFaceBackupDialog:
         rows = _rows(dlg)
         assert len(rows) == 2
         dates = [r.findChildren(QLabel)[0].text() for r in rows]
-        assert dates[0] == "1 févr. 2026 à 00:00"   # plus récent en premier
+        assert dates[0] == "1 févr. 2026 à 00:00"   # most recent first
 
     def test_set_busy_disables_buttons(self, qtbot, tmp_path):
         d = _backup_dir(tmp_path)
@@ -249,7 +249,7 @@ class TestFaceBackupDialog:
         dlg._on_delete(zip_file, row)
 
         assert not zip_file.exists()
-        # La liste retombe sur le placeholder "Aucune sauvegarde"
+        # The list falls back on the "No backup" placeholder
         qtbot.waitUntil(
             lambda: any(
                 isinstance(w, QLabel) and "Aucune sauvegarde" in w.text()
@@ -305,7 +305,7 @@ class TestFaceBackupDialog:
         with qtbot.waitSignal(dlg.restore_completed, timeout=5000):
             dlg._on_restore(zip_path)
 
-        assert dlg.result() == 1   # accept() appelé après restauration
+        assert dlg.result() == 1   # accept() called after restoring
 
     def test_on_op_error_reenables_ui(self, qtbot, tmp_path, monkeypatch):
         dlg, *_ = self._make_dialog(qtbot, tmp_path)

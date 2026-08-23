@@ -1,44 +1,43 @@
 # Copyright 2026 Christian Guyot
 # SPDX-License-Identifier: Apache-2.0
-"""Scénario bout-en-bout : les trois chemins de création d'album et le seul
-chemin de suppression. Un seul lancement d'application, étapes séquentielles
-(ordre imposé par le plan : création -> peuplement -> suppression) :
+"""End-to-end scenario: the three album creation paths and the single
+deletion path. A single application launch, sequential steps (the order is
+imposed by the plan: creation -> populating -> deletion):
 
-1. « + » de la sidebar (`Sidebar._create_album`, `sidebar.py:810`) ->
+1. The sidebar "+" (`Sidebar._create_album`, `sidebar.py:810`) ->
    `QInputDialog.getText(..., "New album", "Album name:")` ->
    `bus.emit("album.create_requested", ...)` -> `MainWindow._on_album_create`
-   (main_window.py:1592) -> `Catalog.create_album` seul, sans photo -> une
-   ligne `albums` créée, 0 ligne `album_photos` associée.
+   (main_window.py:1592) -> `Catalog.create_album` alone, with no photo -> one
+   `albums` row created, 0 associated `album_photos` row.
 
-2. Grille, sélection multiple (clic + Ctrl+clic sur 2 photos témoin) -> menu
-   contextuel « Create a new album with the 2 selected photos… »
-   (`thumbnail_grid.py:1234`, libellé dynamique donc recherche par
-   sous-chaîne) -> `_on_create_album_with` (main_window.py:1650) ->
+2. Grid, multiple selection (click + Ctrl+click on 2 witness photos) -> context
+   menu "Create a new album with the 2 selected photos…"
+   (`thumbnail_grid.py:1234`, a dynamic label hence a substring search) ->
+   `_on_create_album_with` (main_window.py:1650) ->
    `QInputDialog.getText(..., "New album", f"Name of the new album ({n}
-   photo(s) selected):")` -> nouvel album + `add_photos_to_album` ->
-   vérifie que les 2 `album_photos` attendues existent.
+   photo(s) selected):")` -> new album + `add_photos_to_album` -> checks that
+   the 2 expected `album_photos` rows exist.
 
-3. Grille, sélection simple d'une 3e photo témoin (pas encore dans un album)
-   -> menu contextuel « Ajouter cette photo à un album… »
-   (`thumbnail_grid.py:1232`) -> `_on_add_to_album` (main_window.py:1615) :
-   `QDialog` avec `QListWidget` des albums existants (libellé
-   `f"{album.name}  ({album.photo_count} photo(s))"`, ligne 0 pré-sélectionnée
-   par défaut) -> sélectionne l'album de l'étape 2 par sous-chaîne sur son nom
-   (le compte de photos affiché varie, seul le nom est stable) -> OK -> vérifie
-   qu'une 3e ligne `album_photos` apparaît pour cet album SANS perturber les 2
-   lignes de l'étape 2. Le cas « aucun album existant » (QMessageBox
-   d'information, main_window.py:1618) n'est pas atteignable dans ce
-   scénario puisqu'un album existe déjà depuis l'étape 1 — écart documenté,
-   même esprit que les gaps déjà notés dans les autres scénarios de ce
-   dossier.
+3. Grid, single selection of a 3rd witness photo (not in an album yet)
+   -> context menu "Add this photo to an album…"
+   (`thumbnail_grid.py:1232`) -> `_on_add_to_album` (main_window.py:1615):
+   a `QDialog` with a `QListWidget` of the existing albums (label
+   `f"{album.name}  ({album.photo_count} photo(s))"`, row 0 pre-selected
+   by default) -> selects the album of step 2 by a substring of its name
+   (the displayed photo count varies, only the name is stable) -> OK -> checks
+   that a 3rd `album_photos` row appears for that album WITHOUT disturbing the 2
+   rows of step 2. The "no existing album" case (an information QMessageBox,
+   main_window.py:1618) is not reachable in this scenario since an album
+   already exists since step 1 -- a documented gap, in the same spirit as the
+   gaps already noted in the other scenarios of this folder.
 
-4. Menu contextuel de la liste Albums de la sidebar (clic droit sur l'item de
-   l'album de l'étape 2) -> « Supprimer l'album… » (`sidebar.py:701`) ->
-   confirmation standard `QMessageBox.Yes/No` (PAS retexturée, contrairement à
-   « Effacer le dossier… » de test_folder_management.py) -> `click_yes`
-   suffit -> vérifie que les lignes `albums`/`album_photos` de cet album
-   disparaissent, mais que les photos elles-mêmes (`photos` + fichiers sur
-   disque) restent intactes."""
+4. Context menu of the sidebar Albums list (right click on the item of the
+   album of step 2) -> "Delete the album…" (`sidebar.py:701`) ->
+   a standard `QMessageBox.Yes/No` confirmation (NOT retextured, unlike
+   "Delete the folder…" in test_folder_management.py) -> `click_yes`
+   is enough -> checks that the `albums`/`album_photos` rows of that album
+   disappear, but that the photos themselves (`photos` + the files on disk)
+   stay intact."""
 from __future__ import annotations
 
 import time
@@ -63,10 +62,10 @@ _POPULATED_ALBUM_NAME = "Album Peuplé E2E"
 
 
 def _find_edit_near_text(window, text_substring: str, *, timeout: float = 10.0):
-    """Repère le `QLineEdit` d'un `QInputDialog` par proximité verticale avec
-    son libellé — même helper que test_folder_management.py (dupliqué ici
-    plutôt que factorisé dans conftest.py : chaque scénario garde ses petits
-    utilitaires locaux dans ce dossier, cf. convention déjà établie pour
+    """Locates the `QLineEdit` of a `QInputDialog` by vertical proximity with
+    its label -- the same helper as test_folder_management.py (duplicated here
+    rather than factored into conftest.py: each scenario keeps its own small
+    local utilities in this folder, cf. the convention already established for
     `_find_edit_near_radio`/`_find_edit_near_text`)."""
     deadline = time.monotonic() + timeout
     last_exc: Exception | None = None
@@ -89,10 +88,10 @@ def _find_edit_near_text(window, text_substring: str, *, timeout: float = 10.0):
 
 
 def _find_list_item(window, text_substring: str, *, timeout: float = 10.0):
-    """Repère l'élément UIA (`ListItem`) d'un item de `QListWidget` par
-    sous-chaîne, sans cliquer dessus — nécessaire pour un clic droit
-    (`right_click_element`), contrairement à `click_list_item` de conftest.py
-    qui clique directement en gauche."""
+    """Locates the UIA element (`ListItem`) of a `QListWidget` item by
+    substring, without clicking on it -- needed for a right click
+    (`right_click_element`), unlike `click_list_item` in conftest.py which
+    left-clicks directly."""
     deadline = time.monotonic() + timeout
     last_exc: Exception | None = None
     while time.monotonic() < deadline:
@@ -107,14 +106,14 @@ def _find_list_item(window, text_substring: str, *, timeout: float = 10.0):
 
 
 def _reveal_sidebar_albums_tail(window) -> None:
-    """La liste Albums de la sidebar (`Sidebar._albums_list`, un `QListWidget`)
-    n'expose via UIA que les `ListItem` actuellement dans son viewport visible
-    (même piège de virtualisation que la grille de vignettes, cf. le docstring
-    de `find_thumbnail`) — un album ajouté après les 4 entrées spéciales
-    (Chronologie/Favoris/Vidéos/Par nom de fichier) peut donc rester invisible
-    à `_find_list_item` tant que la liste n'a pas été scrollée. On focus la
-    liste via un item toujours présent puis on envoie {END} pour amener la fin
-    de la liste dans le viewport."""
+    """The sidebar Albums list (`Sidebar._albums_list`, a `QListWidget`) only
+    exposes through UIA the `ListItem`s currently inside its visible viewport
+    (the same virtualisation trap as the thumbnail grid, cf. the docstring of
+    `find_thumbnail`) -- an album added after the 4 special entries
+    (Timeline/Favorites/Videos/By filename) may therefore stay invisible to
+    `_find_list_item` as long as the list has not been scrolled. We focus the
+    list through an always present item then send {END} to bring the end of the
+    list into the viewport."""
     for item in window.descendants(control_type="ListItem"):
         if "Chronologie" in item.window_text():
             item.click_input()
@@ -135,7 +134,7 @@ def test_albums(isolated_app):
         timeout=60.0, message="le scan initial n'a pas terminé",
     )
 
-    # ---- 1. « + » sidebar : album vide ----
+    # ---- 1. sidebar "+": empty album ----
     find_dialog_button(window, ["+"], exact=True, timeout=10.0).click_input()
     edit_new = _find_edit_near_text(window, "Nom de l'album", timeout=10.0)
     edit_new.set_edit_text(_EMPTY_ALBUM_NAME)
@@ -150,7 +149,7 @@ def test_albums(isolated_app):
         catalog_db, "SELECT COUNT(*) FROM album_photos WHERE album_id=?", (empty_album_id,)
     ) == 0, "l'album créé sans photo ne devrait avoir aucune ligne album_photos"
 
-    # ---- 2. Sélection multiple grille -> "Créer un nouvel album avec…" ----
+    # ---- 2. Multiple selection in the grid -> "Create a new album with…" ----
     find_thumbnail(window, str(photo_a), timeout=30.0).click_input()
     thumb_b = find_thumbnail(window, str(photo_b), timeout=15.0)
     thumb_b.click_input(pressed="control")
@@ -179,9 +178,9 @@ def test_albums(isolated_app):
             (populated_album_id, pid),
         ) == 1, f"photo {pid} absente de l'album peuplé"
 
-    # ---- 3. Sélection simple d'une 3e photo -> "Ajouter … à un album…" ----
+    # ---- 3. Single selection of a 3rd photo -> "Add … to an album…" ----
     thumb_c = find_thumbnail(window, str(photo_c), timeout=15.0)
-    thumb_c.click_input()  # clic seul : désélectionne a/b
+    thumb_c.click_input()  # a plain click: deselects a/b
     right_click_element(thumb_c)
     click_context_menu_item(window, "to an album", exact=False, timeout=10.0)
     _find_list_item(window, _POPULATED_ALBUM_NAME, timeout=10.0).click_input()
@@ -199,7 +198,7 @@ def test_albums(isolated_app):
         catalog_db, "SELECT COUNT(*) FROM album_photos WHERE album_id=?", (populated_album_id,)
     ) == 3, "les 2 photos précédentes de l'album ont été perturbées par le 3e ajout"
 
-    # ---- 4. Suppression de l'album peuplé (confirmation standard Oui/Non) ----
+    # ---- 4. Deleting the populated album (standard Yes/No confirmation) ----
     _reveal_sidebar_albums_tail(window)
     right_click_element(_find_list_item(window, _POPULATED_ALBUM_NAME, timeout=10.0))
     click_context_menu_item(window, "Delete the album…", exact=True, timeout=10.0)
@@ -218,6 +217,6 @@ def test_albums(isolated_app):
         )
         assert Path(path).exists(), f"le fichier {path} a été supprimé alors que seul l'album l'était"
 
-    # l'album vide de l'étape 1 doit rester intact, non affecté par la suppression du 2e album
+    # the empty album of step 1 must stay intact, unaffected by the deletion of the 2nd album
     assert query_one(catalog_db, "SELECT id FROM albums WHERE name=?", (_EMPTY_ALBUM_NAME,)) == empty_album_id
     assert window.exists()

@@ -1,9 +1,9 @@
 # Copyright 2026 Christian Guyot
 # SPDX-License-Identifier: Apache-2.0
-"""Tests (Layer 2) pour PersonClusterView — sections confirmée / en attente,
-sélection, acceptation/rejet de suggestions, réassignation. FaceDatabase et
-Catalog réels semés en process ; loaders exécutés en run() synchrone ou
-attendus via waitSignal (plomberie réelle), menus jamais exec()."""
+"""Tests (Layer 2) for PersonClusterView -- confirmed / pending sections,
+selection, accepting/rejecting suggestions, reassignment. Real FaceDatabase and
+Catalog seeded in process; loaders run through a synchronous run() or awaited
+through waitSignal (real plumbing), menus never exec()ed."""
 import sqlite3
 
 import pytest
@@ -65,8 +65,9 @@ def env(tmp_path):
 
 
 def _wait_loaders(qtbot, view) -> None:
-    """Attend la fin des _FlatFaceLoader réels démarrés par la vue (polling :
-    waitSignal(finished) raterait une émission entre le check et le branchement)."""
+    """Waits for the real _FlatFaceLoader threads started by the view to finish
+    (polling: waitSignal(finished) would miss an emission between the check and
+    the connection)."""
     for attr in ("_flat_loader", "_pending_flat_loader"):
         loader = getattr(view, attr, None)
         if loader is not None:
@@ -74,7 +75,7 @@ def _wait_loaders(qtbot, view) -> None:
                 try:
                     return not ld.isRunning()
                 except RuntimeError:
-                    return True   # deleteLater déjà passé
+                    return True   # deleteLater already processed
             qtbot.waitUntil(_done, timeout=3000)
 
 
@@ -118,7 +119,7 @@ class TestThreads:
         assert done == [1]
         face = face_db.get_face_by_id(fid)
         assert face.person_id is None
-        assert face.cluster_id < 0   # isolé dans un cluster négatif dédié
+        assert face.cluster_id < 0   # isolated in a dedicated negative cluster
 
     def test_unassign_thread_error_still_emits_done(self, qtbot):
         t = _UnassignThread(None, [1], None)
@@ -139,7 +140,7 @@ class TestThreads:
 
 
 # ---------------------------------------------------------------------------
-# vignette individuelle
+# individual thumbnail
 
 class TestFaceThumb:
     def test_set_image_and_selection_styles(self, qtbot, tmp_path):
@@ -199,7 +200,7 @@ class TestFaceThumb:
 
 
 # ---------------------------------------------------------------------------
-# vue principale
+# main view
 
 class TestPersonClusterView:
     def _seed_confirmed(self, face_db, catalog, tmp_path, n=3):
@@ -245,7 +246,7 @@ class TestPersonClusterView:
         _wait_loaders(qtbot, view)
 
         assert view._pending_section.isVisibleTo(view)
-        assert len(view._pending_flat_cards) == 1        # 1 vignette par groupe
+        assert len(view._pending_flat_cards) == 1        # 1 thumbnail per group
         assert set(view._pending_thumb_clusters.values()) == {5}
 
     def test_pending_accept_reject_by_face(self, qtbot, env, tmp_path):
@@ -333,8 +334,8 @@ class TestPersonClusterView:
 
         assert fid in view._flat_cards
         assert view._pending_flat_cards == {}
-        # laisser le loader démarré par accept_pending_cluster se terminer
-        # (thread enfant vivant au teardown → fail-fast 0xC0000409)
+        # let the loader started by accept_pending_cluster finish
+        # (a child thread alive at teardown -> fail-fast 0xC0000409)
         from PySide6.QtCore import QThread as _QThread
         qtbot.waitUntil(
             lambda: all(not t.isRunning() for t in view.findChildren(_QThread)),
@@ -351,14 +352,14 @@ class TestPersonClusterView:
         view._on_thumb_clicked(f0, False, False)
         assert view._selection == {f0}
 
-        view._on_thumb_clicked(f2, True, False)     # Ctrl : ajout
+        view._on_thumb_clicked(f2, True, False)     # Ctrl: add
         assert view._selection == {f0, f2}
 
-        view._on_thumb_clicked(f2, True, False)     # Ctrl : retrait
+        view._on_thumb_clicked(f2, True, False)     # Ctrl: remove
         assert view._selection == {f0}
 
         view._on_thumb_clicked(f0, False, False)
-        view._on_thumb_clicked(f3, False, True)     # Shift : plage f0→f3
+        view._on_thumb_clicked(f3, False, True)     # Shift: range f0->f3
         assert view._selection == {f0, f1, f2, f3}
 
     def test_select_all_selects_every_confirmed_face(self, qtbot, env, tmp_path):
@@ -380,7 +381,7 @@ class TestPersonClusterView:
         alice = catalog.create_person("Alice")
         view.set_person(PersonInfo(name="Alice", id=alice.id))
 
-        view.select_all()   # ne doit pas lever malgré _flat_order vide
+        view.select_all()   # must not raise despite an empty _flat_order
 
         assert view._selection == set()
 
@@ -449,4 +450,4 @@ class TestPersonClusterView:
         view.set_person(PersonInfo(name="Alice Renommée", id=alice.id))
 
         assert view._lbl_title.text() == "Faces of Alice Renommée"
-        assert view._flat_cards == cards_before   # pas de rebuild
+        assert view._flat_cards == cards_before   # no rebuild

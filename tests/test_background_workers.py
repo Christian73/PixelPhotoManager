@@ -1,11 +1,11 @@
 # Copyright 2026 Christian Guyot
 # SPDX-License-Identifier: Apache-2.0
-"""Teste `src/ui/background_workers.py::_ResetWorkerThread` : régression sur
-le bug 2026-07 où un reset (RESET_CLUSTERING ou RESET_FULL) suivi d'un
-regroupement HDBSCAN avec le même nombre de visages non identifiés que le
-dernier regroupement réussi sautait silencieusement le reclustering (cache
-`clusterer._last_clustered_n` jamais invalidé), laissant les visages bloqués
-avec `cluster_id=NULL` indéfiniment — découvert via `test_faces_reset_full`
+"""Tests `src/ui/background_workers.py::_ResetWorkerThread`: regression on the
+2026-07 bug where a reset (RESET_CLUSTERING or RESET_FULL) followed by an
+HDBSCAN grouping with the same number of unidentified faces as the last
+successful grouping silently skipped the reclustering (the
+`clusterer._last_clustered_n` cache was never invalidated), leaving the faces
+stuck with `cluster_id=NULL` indefinitely -- found through `test_faces_reset_full`
 (e2e)."""
 import sqlite3
 
@@ -42,16 +42,16 @@ def test_reset_worker_invalidates_clustering_cache(choice, tmp_path):
     for i in range(3):
         _insert_emb_face(db, f"a{i}.jpg", [1.0, 0.0, 0.0, i * 0.01])
         _insert_emb_face(db, f"b{i}.jpg", [0.0, 1.0, 0.0, i * 0.01])
-    clusterer._last_clustered_n = 6  # simule un clustering réussi précédent (N=6)
+    clusterer._last_clustered_n = 6  # simulates a previous successful clustering (N=6)
 
     worker = _ResetWorkerThread(db, choice, threads_to_wait=[])
-    worker.run()  # synchrone, cf. règle de test QThread de CLAUDE.md
+    worker.run()  # synchronous, cf. the QThread testing rule of CLAUDE.md
 
     assert clusterer._last_clustered_n == -1
 
 
 # ---------------------------------------------------------------------------
-# Threads restants de background_workers.py — run() synchrone (règle CLAUDE.md)
+# Remaining threads of background_workers.py -- synchronous run() (CLAUDE.md rule)
 
 from src.core.models import PhotoInfo
 from src.library.catalog import Catalog
@@ -100,7 +100,7 @@ class TestCatalogLoadThread:
 
         def _first_batch(b):
             batches.append(b)
-            t.stop()   # connexion directe : le break intervient avant le lot 2
+            t.stop()   # direct connection: the break happens before batch 2
 
         t.batch_ready.connect(_first_batch)
         t.run()
@@ -149,7 +149,7 @@ class TestPhotoQueryThread:
 
 
 class _FakeDedupCache:
-    """Remplace DedupCache (qui pointe sinon vers le cache réel de l'utilisateur)."""
+    """Replaces DedupCache (which otherwise points at the user's real cache)."""
     instances = []
 
     def __init__(self):
@@ -205,14 +205,14 @@ class TestDupMigrationThread:
 
         t.run()
 
-        assert catalog.ignored == [1]           # seul le groupe conflictuel
+        assert catalog.ignored == [1]           # only the conflicting group
         cache = _FakeDedupCache.instances[0]
         assert cache.opened and cache.closed
         import os
         assert sorted(cache.removed) == [
             os.path.normpath("C:/g1_a.jpg"), os.path.normpath("C:/g1_b.jpg")
         ]
-        assert counts == [1]                    # badge : 1 groupe restant
+        assert counts == [1]                    # badge: 1 group left
 
     def test_no_group_short_circuits(self, monkeypatch):
         _FakeDedupCache.instances = []
@@ -225,7 +225,7 @@ class TestDupMigrationThread:
         t.run()
 
         assert counts == [0]
-        assert _FakeDedupCache.instances == []   # jamais instancié
+        assert _FakeDedupCache.instances == []   # never instantiated
 
     def test_migration_error_still_emits_count(self):
         class _Broken:
@@ -273,4 +273,4 @@ class TestResuggestThread:
         _insert_emb_face(db, "C:/c1.jpg", [1.0, 0.0], cluster_id=1)
 
         t = _ResuggestThread(db, [1], exclude_pid=None)
-        t.run()   # sans personne connue : aucune suggestion, mais pas d'erreur
+        t.run()   # with no known person: no suggestion, but no error either

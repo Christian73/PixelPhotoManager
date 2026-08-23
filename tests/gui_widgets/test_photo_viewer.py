@@ -1,7 +1,7 @@
 # Copyright 2026 Christian Guyot
 # SPDX-License-Identifier: Apache-2.0
-"""Tests de widget Qt isolés (Layer 2, pytest-qt) pour PhotoViewer — pas de
-catalogue réel : PhotoInfo est synthétique, instancié en process."""
+"""Isolated Qt widget tests (Layer 2, pytest-qt) for PhotoViewer -- no real
+catalog: PhotoInfo is synthetic, instantiated in process."""
 import pytest
 
 from PySide6.QtCore import Qt
@@ -28,11 +28,11 @@ def viewer(qtbot):
 
 class TestFavoriteToggle:
     def test_toggle_favorite_emits_with_flipped_state(self, viewer, qtbot):
-        """Régression : _toggle_favorite ne faisait que muter l'état en
-        mémoire (photo.is_favorite + texte du bouton) sans jamais persister
-        ni notifier MainWindow — le favori revenait à son état d'origine à
-        la moindre relecture de la photo depuis le catalogue. Ce test aurait
-        échoué avant le correctif puisqu'aucun signal n'était émis."""
+        """Regression: _toggle_favorite only mutated the in-memory state
+        (photo.is_favorite + the button text) without ever persisting it or
+        notifying MainWindow -- the favourite went back to its original state as
+        soon as the photo was re-read from the catalog. This test would have
+        failed before the fix, since no signal was emitted."""
         photo = _photo("C:/lib/fav.jpg", is_favorite=False)
         viewer._photo = photo
 
@@ -104,8 +104,8 @@ class TestRatingViaKeyboard:
         assert photo.rating == 0
 
     def test_rating_shortcut_ignored_in_crop_mode(self, viewer, qtbot):
-        """Les touches 0-5 ne doivent pas noter une photo pendant un recadrage
-        (le canvas peut avoir sa propre interprétation de ces touches)."""
+        """The 0-5 keys must not rate a photo during a crop (the canvas may have
+        its own interpretation of those keys)."""
         photo = _photo("C:/lib/a.jpg")
         viewer._photo = photo
         viewer._canvas._crop_mode = True
@@ -142,11 +142,11 @@ class _FakeConfig:
 
 
 class TestExternalAppsMediaScope:
-    """Régression : l'icône VLC apparaissait dans la barre de la visionneuse
-    même en visionnant une photo fixe (signalé par l'utilisateur). Chaque
-    application externe porte désormais une portée média ("image"/"video"/
-    "both", absente = "both" pour les configs pré-existantes) comparée au
-    media_type de la photo affichée dans refresh_external_apps()."""
+    """Regression: the VLC icon appeared in the viewer bar even while viewing
+    a still photo (reported by the user). Every external application now
+    carries a media scope ("image"/"video"/"both", absent = "both" for
+    pre-existing configs) compared with the media_type of the displayed photo
+    in refresh_external_apps()."""
 
     def _app(self, tmp_path, name="App", media=None):
         exe = tmp_path / f"{name}.exe"
@@ -193,8 +193,8 @@ class TestExternalAppsMediaScope:
         assert viewer._ext_apps_container.isVisible() is False
 
     def test_legacy_app_without_media_key_shown_for_both(self, viewer, tmp_path):
-        """Rétrocompatibilité : une entrée de config antérieure à cette
-        fonctionnalité n'a pas de clé "media" -> traitée comme "both"."""
+        """Backward compatibility: a config entry predating this feature has no
+        "media" key -> treated as "both"."""
         app = self._app(tmp_path, "Ancien")
         viewer._config = _FakeConfig([app])
 
@@ -208,7 +208,7 @@ class TestExternalAppsMediaScope:
 
 
 class _FakeThumbCache:
-    """Simule ThumbnailCache.get_ram : retourne toujours le même pixmap."""
+    """Simulates ThumbnailCache.get_ram: always returns the same pixmap."""
 
     def __init__(self, pixmap):
         self._px = pixmap
@@ -218,9 +218,9 @@ class _FakeThumbCache:
 
 
 class TestBaseImageCache:
-    """Cache LRU des images de base + placeholder vignette (réactivité perçue) :
-    la navigation prev/next affiche instantanément une photo préchargée, et une
-    photo froide montre la vignette de la grille plutôt qu'un écran noir."""
+    """LRU cache of the base images + thumbnail placeholder (perceived
+    responsiveness): prev/next navigation instantly displays a preloaded photo,
+    and a cold photo shows the grid thumbnail rather than a black screen."""
 
     def _make_jpg(self, tmp_path, name):
         from PIL import Image
@@ -236,8 +236,8 @@ class TestBaseImageCache:
         v = PhotoViewer(thumb_cache=_FakeThumbCache(px))
         qtbot.addWidget(v)
 
-        # Chemin inexistant : le chargement de base échouera (résultat None) —
-        # seule la vignette placeholder s'affiche, et ce dès le retour de set_photo.
+        # Non-existent path: loading the base image will fail (result None) --
+        # only the placeholder thumbnail is displayed, and that as soon as set_photo returns.
         v.set_photo(_photo("C:/nulle/part/photo.jpg", width=640, height=480))
 
         assert v._canvas._pixmap is not None
@@ -264,7 +264,7 @@ class TestBaseImageCache:
             lambda: p1 in v._base_lru and p2 in v._base_lru, timeout=3000
         )
 
-        # Cache chaud : l'affichage est synchrone (aucun thread, pas d'attente)
+        # Warm cache: the display is synchronous (no thread, no wait)
         v.set_photo(_photo(p2))
         assert v._canvas._pixmap is not None
         assert not v._canvas._pixmap.isNull()

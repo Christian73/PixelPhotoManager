@@ -1,13 +1,13 @@
 # Copyright 2026 Christian Guyot
 # SPDX-License-Identifier: Apache-2.0
-"""Tests de _DeleteWorkerThread (main_window.py) : run() est appelé en
-synchrone (pas de start(), pas de boucle d'événements) contre un Catalog,
-un ThumbnailCache et une FaceDatabase temporaires — c'est la logique de purge
-en lot qui est testée, pas le threading Qt.
+"""Tests of _DeleteWorkerThread (main_window.py): run() is called
+synchronously (no start(), no event loop) against a temporary Catalog,
+ThumbnailCache and FaceDatabase -- what is tested is the batch purge logic, not
+the Qt threading.
 
-La mise à la corbeille (src/library/trash.py) est simulée par une fixture
-autouse : un vrai send2trash enverrait les fichiers de tmp_path dans la
-corbeille Windows de l'utilisateur à chaque run de tests."""
+Moving to the recycle bin (src/library/trash.py) is simulated by an autouse
+fixture: a real send2trash would send the files of tmp_path into the user's
+Windows recycle bin on every test run."""
 import os
 
 import pytest
@@ -22,8 +22,8 @@ from src.ui.main_window import _DeleteWorkerThread
 
 @pytest.fixture(autouse=True)
 def fake_trash(monkeypatch):
-    """Remplace move_to_trash par une suppression directe traçée (mêmes
-    sémantiques d'erreur : FileNotFoundError si absent)."""
+    """Replaces move_to_trash with a traced direct deletion (same error
+    semantics: FileNotFoundError if absent)."""
     calls: list[str] = []
 
     def _fake(path: str) -> None:
@@ -42,7 +42,7 @@ def fake_trash(monkeypatch):
 
 
 def _make_env(tmp_path, names):
-    """Crée des fichiers réels + un catalogue les référençant."""
+    """Creates real files + a catalog referencing them."""
     catalog = Catalog(db_path=tmp_path / "catalog.db")
     thumb_cache = ThumbnailCache(db_path=tmp_path / "thumbs.db")
     face_db = FaceDatabase(db_path=tmp_path / "faces.db")
@@ -64,7 +64,7 @@ class TestDeleteWorker:
         results = []
         worker.finished_delete.connect(lambda d, e: results.append((d, e)))
 
-        worker.run()   # synchrone
+        worker.run()   # synchronous
 
         deleted, errors = results[0]
         assert deleted == paths[:2]
@@ -82,7 +82,7 @@ class TestDeleteWorker:
         worker = _DeleteWorkerThread([paths[0]], catalog, thumb_cache, face_db)
         worker.run()
 
-        # Le groupe réduit à 1 exemplaire est dissous par delete_photos
+        # The group reduced to 1 copy is dissolved by delete_photos
         assert catalog.count_duplicate_groups() == 0
 
     def test_purges_face_data(self, qtbot, tmp_path):
@@ -90,7 +90,7 @@ class TestDeleteWorker:
 
         catalog, thumb_cache, face_db, paths = _make_env(tmp_path, ["a.jpg"])
         norm = os.path.normpath(paths[0])
-        face_db.save_faces(norm, [])   # marque la photo comme indexée
+        face_db.save_faces(norm, [])   # marks the photo as indexed
 
         def _indexed() -> bool:
             conn = sqlite3.connect(face_db._db_path)
@@ -110,9 +110,9 @@ class TestDeleteWorker:
         assert not _indexed()
 
     def test_missing_file_is_not_an_error(self, qtbot, tmp_path):
-        """Un fichier déjà disparu du disque (FileNotFoundError de la
-        corbeille) est quand même purgé du catalogue, sans erreur remontée —
-        équivalent de l'ancien unlink(missing_ok=True)."""
+        """A file already gone from the disk (FileNotFoundError from the recycle
+        bin) is purged from the catalog all the same, with no error reported --
+        the equivalent of the former unlink(missing_ok=True)."""
         catalog, thumb_cache, face_db, paths = _make_env(tmp_path, ["a.jpg"])
         os.remove(paths[0])
 
@@ -136,10 +136,10 @@ class TestDeleteWorker:
         assert ticks == [(1, 2), (2, 2)]
 
     def test_trash_failure_keeps_file_and_catalog(self, qtbot, tmp_path, monkeypatch):
-        """Régression corbeille : si la mise à la corbeille échoue (lecteur
-        réseau, volume sans corbeille), le fichier reste INTACT sur le disque,
-        le chemin part dans errors et le catalogue n'est PAS purgé — jamais de
-        repli unlink silencieux."""
+        """Recycle bin regression: if moving to the recycle bin fails (network
+        drive, volume without a recycle bin), the file stays INTACT on the disk,
+        the path goes into errors and the catalog is NOT purged -- never a
+        silent unlink fallback."""
         catalog, thumb_cache, face_db, paths = _make_env(tmp_path, ["a.jpg", "b.jpg"])
 
         real_exists = os.path.exists
@@ -162,12 +162,12 @@ class TestDeleteWorker:
         assert deleted == [paths[1]]
         assert len(errors) == 1
         assert "n'a PAS été supprimé" in errors[0]
-        assert os.path.exists(paths[0])                       # fichier intact
-        assert catalog.get_photo_by_path(paths[0]) is not None  # catalogue intact
+        assert os.path.exists(paths[0])                       # file intact
+        assert catalog.get_photo_by_path(paths[0]) is not None  # catalog intact
         assert catalog.get_photo_by_path(paths[1]) is None
 
     def test_worker_goes_through_trash_module(self, qtbot, tmp_path, fake_trash):
-        """Le worker passe bien par src.library.trash (point unique corbeille)."""
+        """The worker really goes through src.library.trash (the single recycle bin point)."""
         catalog, thumb_cache, face_db, paths = _make_env(tmp_path, ["a.jpg"])
 
         worker = _DeleteWorkerThread(paths, catalog, thumb_cache, face_db)
