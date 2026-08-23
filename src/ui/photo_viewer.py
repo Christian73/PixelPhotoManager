@@ -29,12 +29,12 @@ from src.ui.ui_utils import install_menu_width_fix
 
 logger = logging.getLogger(__name__)
 
-# Résolution maximale pour l'affichage à l'écran.
-# Les retouches (rotation, recadrage, etc.) s'appliquent sur cette copie réduite.
-# L'image originale pleine résolution n'est utilisée que pour l'export final.
-# ------------------------------------------------------------------ modules extraits
-# (2026-07) Pipeline pixmap et canvas déplacés dans leurs modules ; noms
-# ré-exportés (le diaporama importe _build_pixmap depuis photo_viewer).
+# Maximum resolution for the on-screen display.
+# The edits (rotation, crop, etc.) are applied to this reduced copy.
+# The full-resolution original is only used for the final export.
+# ------------------------------------------------------------------ extracted modules
+# (2026-07) The pixmap pipeline and the canvas moved into their own modules;
+# names re-exported (the slideshow imports _build_pixmap from photo_viewer).
 from src.ui.viewer_pixmaps import (  # noqa: E402,F401
     _PREVIEW_MAX_PX, _apply_edit_to_base, _build_base_image, _build_pixmap,
     _build_video_base_image, _build_video_pixmap, _to_rgb,
@@ -68,7 +68,7 @@ QToolButton:hover:!checked {
 
 
 def _fmt_icon(ratio: float | None, iw: int = 24, ih: int = 18) -> QPixmap:
-    """Icône représentant le ratio w/h par un rectangle aux bonnes proportions."""
+    """Icon representing the w/h ratio through a rectangle with the right proportions."""
     px = QPixmap(iw, ih)
     px.fill(Qt.transparent)
     p = QPainter(px)
@@ -95,12 +95,12 @@ def _fmt_icon(ratio: float | None, iw: int = 24, ih: int = 18) -> QPixmap:
     p.end()
     return px
 
-# 4 poignées de coin : TL(0), TR(1), BR(2), BL(3)
+# 4 corner handles: TL(0), TR(1), BR(2), BL(3)
 
 
 class _RatingStars(QWidget):
-    """5 étoiles cliquables (barre d'outils de la visionneuse). Re-cliquer sur
-    la note déjà affichée la retire (rating → 0)."""
+    """5 clickable stars (viewer toolbar). Clicking the rating already shown
+    removes it (rating → 0)."""
 
     rating_clicked = Signal(int)   # 0-5
 
@@ -145,16 +145,16 @@ class _RatingStars(QWidget):
 
 
 class _TagDropdown(QComboBox):
-    """Liste déroulante toujours présente des mots-clés du catalogue (barre
-    d'outils de la visionneuse) — pas seulement ceux de la photo courante.
-    Les mots-clés actifs sur la photo affichée sont triés en tête de liste,
-    en jaune (#ffd200) sur fond bleu (#2a5a8a, couleur du bouton Exporter).
-    Sélectionner une entrée bascule ce mot-clé sur la photo courante (ajout
-    si absent, retrait si déjà présent) ; la case reprend systématiquement
-    son texte de substitution après sélection (elle liste tous les
-    mots-clés, elle n'en "contient" pas un seul comme une combo classique)."""
+    """Always-present drop-down list of the catalog keywords (viewer
+    toolbar) — not only those of the current photo.
+    The keywords active on the displayed photo are sorted at the top of the
+    list, in yellow (#ffd200) on a blue background (#2a5a8a, the colour of the
+    Export button). Selecting an entry toggles that keyword on the current
+    photo (added if absent, removed if already present); the box systematically
+    goes back to its placeholder text after a selection (it lists every
+    keyword, it does not "contain" a single one like a classic combo)."""
 
-    tag_toggled = Signal(str, bool)  # (tag, added) — True = ajouté, False = retiré
+    tag_toggled = Signal(str, bool)  # (tag, added) — True = added, False = removed
 
     _ACTIVE_FG = "#ffd200"
     _ACTIVE_BG = "#2a5a8a"
@@ -164,16 +164,16 @@ class _TagDropdown(QComboBox):
         self.setEditable(False)
         self.setToolTip(translate("TagDropdown", "No keyword"))
         self.setFixedWidth(150)
-        # Le triangle CSS habituel (::down-arrow avec des bordures en biseau)
-        # ne se dessine pas ici : ce sous-contrôle bascule en mode "image
-        # personnalisée" dès qu'on le stylise, et sans image valide fournie
-        # il retombe sur un pictogramme d'image cassée (rectangle gris plein)
-        # plutôt qu'une vraie flèche, quel que soit le style Qt actif. Plus
-        # simple et fiable : la flèche est un label superposé au bord droit
-        # (positionné dans resizeEvent) et le sous-contrôle natif est réduit
-        # à zéro. WA_TransparentForMouseEvents laisse les clics traverser
-        # jusqu'au QComboBox en dessous (sinon la flèche capterait le clic
-        # et empêcherait l'ouverture de la liste).
+        # The usual CSS triangle (::down-arrow with bevelled borders) does not
+        # draw here: this sub-control switches to "custom image" mode as soon as
+        # it is styled, and without a valid image supplied it falls back on a
+        # broken-image pictogram (a solid grey rectangle) rather than a real
+        # arrow, whatever the active Qt style. Simpler and more reliable: the
+        # arrow is a label overlaid on the right edge (positioned in resizeEvent)
+        # and the native sub-control is reduced to zero.
+        # WA_TransparentForMouseEvents lets the clicks pass through to the
+        # QComboBox underneath (otherwise the arrow would catch the click and
+        # prevent the list from opening).
         self._arrow_label = QLabel("▾", self)
         self._arrow_label.setStyleSheet("color: #ccc; background: transparent; font-size: 11px;")
         self._arrow_label.setAttribute(Qt.WA_TransparentForMouseEvents)
@@ -183,12 +183,11 @@ class _TagDropdown(QComboBox):
         self.activated.connect(self._on_activated)
 
     def _apply_style(self) -> None:
-        # Vu au travers de setPlaceholderText (currentIndex reste -1 en
-        # permanence, cf. docstring de classe) : le "color" du QSS ci-dessous
-        # colore bien le texte de substitution, pas seulement un texte
-        # sélectionné classique — d'où la nécessité de regénérer toute la
-        # feuille de style pour changer sa couleur (une simple règle
-        # QComboBox[prop] n'était pas plus simple ici).
+        # Seen through setPlaceholderText (currentIndex stays -1 permanently,
+        # cf. the class docstring): the "color" of the QSS below does colour the
+        # placeholder text, not only a classic selected text — hence the need to
+        # regenerate the whole stylesheet to change its colour (a plain
+        # QComboBox[prop] rule was no simpler here).
         color = self._ACTIVE_FG if len(self._active) == 1 else "#ccc"
         self.setStyleSheet(
             f"QComboBox {{ color: {color}; background: rgba(255,255,255,25);"
@@ -243,17 +242,17 @@ class _TagDropdown(QComboBox):
             self.tag_toggled.emit(tag, tag not in self._active)
 
 
-# Nombre d'images de base (JPEG 1024 px, ~300 Ko pièce) conservées en mémoire :
-# la photo courante + les voisines préchargées → navigation instantanée dans
-# les deux sens sans relire le fichier original.
+# Number of base images (1024 px JPEG, ~300 kB each) kept in memory:
+# the current photo + the prefetched neighbours → instant navigation in
+# both directions without reading the original file again.
 _BASE_LRU_MAX = 8
 
 
 class _BaseLoader(QThread):
-    """Charge _build_base_image dans un thread secondaire, pour une ou plusieurs
-    photos (photo courante, ou préchargement des voisines pour la navigation).
-    Nécessaire pour les vidéos : cv2.VideoCapture peut marshaler des appels COM
-    sur le thread UI (STA Windows) et provoquer des freezes si appelé directement."""
+    """Loads _build_base_image in a secondary thread, for one or several photos
+    (the current photo, or the prefetch of the neighbours for navigation).
+    Needed for videos: cv2.VideoCapture may marshal COM calls on the UI thread
+    (Windows STA) and cause freezes if called directly."""
 
     base_ready = Signal(str, object)   # (photo_path, tuple[bytes,int,int] | None)
 
@@ -277,68 +276,68 @@ class PhotoViewer(QWidget):
     closed               = Signal()
     navigate             = Signal(int)
     zoom_changed         = Signal(float)
-    crop_ready           = Signal(object)  # tuple 8 coords relatives (x0,y0,…,x3,y3)
-    crop_mode_ended      = Signal()        # mode recadrage terminé (validé ou annulé)
+    crop_ready           = Signal(object)  # tuple of 8 relative coords (x0,y0,…,x3,y3)
+    crop_mode_ended      = Signal()        # crop mode finished (validated or cancelled)
     save_requested       = Signal(object)  # PhotoInfo
     rename_requested     = Signal(object)  # PhotoInfo
     move_requested       = Signal(object)  # PhotoInfo
     delete_requested            = Signal(list)    # list[PhotoInfo]
-    remove_from_album_requested = Signal(list)    # list[PhotoInfo] — retrait d'album (non destructif)
-    dup_badge_clicked    = Signal(object)  # PhotoInfo — badge de doublon cliqué
+    remove_from_album_requested = Signal(list)    # list[PhotoInfo] — removal from an album (non-destructive)
+    dup_badge_clicked    = Signal(object)  # PhotoInfo — duplicate badge clicked
     red_eye_point_added         = Signal(float, float)  # cx_norm, cy_norm (0-1)
-    pixel_sampled               = Signal(int, int, int)  # R, G, B — pipette balance des blancs
-    face_context_menu_requested = Signal(object, object)  # (FaceInfo, QPoint global)
-    vignette_changed            = Signal(object)  # EditInfo (géométrie après drag)
+    pixel_sampled               = Signal(int, int, int)  # R, G, B — white balance eyedropper
+    face_context_menu_requested = Signal(object, object)  # (FaceInfo, global QPoint)
+    vignette_changed            = Signal(object)  # EditInfo (geometry after a drag)
     face_bbox_ready             = Signal(object)  # tuple (bbox_x,bbox_y,bbox_w,bbox_h) int
-    face_add_mode_ended         = Signal()  # mode ajout de visage terminé (validé ou annulé)
-    force_redetect_requested    = Signal(object)  # PhotoInfo — menu contextuel
-    folder_grid_requested       = Signal(object)  # PhotoInfo — menu contextuel : grille du dossier
-    favorite_toggle_requested   = Signal(object)  # PhotoInfo — bascule favori demandée
-    rating_change_requested     = Signal(list, int)  # list[PhotoInfo], note 0-5 — changement de note demandé
-    edit_tags_requested         = Signal(list)    # list[PhotoInfo] — édition des mots-clés demandée
-    tag_toggle_requested        = Signal(object, str, bool)  # (PhotoInfo, tag, added) — entrée cliquée dans la liste déroulante de la barre d'outils
-    annotation_added             = Signal(object)  # dict annotation ajoutée
-    annotation_deleted           = Signal(str)     # id de l'annotation supprimée
-    annotation_deleted_multi     = Signal(object)  # list[str] ids supprimés (suppression groupée)
-    annotation_selection_changed = Signal(object)  # list[str] ids sélectionnés (peut être vide)
-    annotation_moved              = Signal(str, object)  # (id, dict annotation à jour)
-    annotation_moved_multi        = Signal(object)  # dict[id, annotation à jour] (déplacement groupé)
-    annotation_resized            = Signal(str, object)  # (id, dict annotation à jour)
-    annotation_grouped            = Signal(object)  # dict[id, annotation à jour] (groupe/dégroupe)
+    face_add_mode_ended         = Signal()  # face add mode finished (validated or cancelled)
+    force_redetect_requested    = Signal(object)  # PhotoInfo — context menu
+    folder_grid_requested       = Signal(object)  # PhotoInfo — context menu: grid of the folder
+    favorite_toggle_requested   = Signal(object)  # PhotoInfo — favourite toggle requested
+    rating_change_requested     = Signal(list, int)  # list[PhotoInfo], rating 0-5 — rating change requested
+    edit_tags_requested         = Signal(list)    # list[PhotoInfo] — keyword editing requested
+    tag_toggle_requested        = Signal(object, str, bool)  # (PhotoInfo, tag, added) — entry clicked in the toolbar drop-down list
+    annotation_added             = Signal(object)  # annotation dict added
+    annotation_deleted           = Signal(str)     # id of the deleted annotation
+    annotation_deleted_multi     = Signal(object)  # list[str] of deleted ids (batch deletion)
+    annotation_selection_changed = Signal(object)  # list[str] of selected ids (may be empty)
+    annotation_moved              = Signal(str, object)  # (id, up-to-date annotation dict)
+    annotation_moved_multi        = Signal(object)  # dict[id, up-to-date annotation] (batch move)
+    annotation_resized            = Signal(str, object)  # (id, up-to-date annotation dict)
+    annotation_grouped            = Signal(object)  # dict[id, up-to-date annotation] (group/ungroup)
 
     def __init__(self, config=None, thumb_cache=None, parent=None):
         super().__init__(parent)
         self._config = config
-        # Cache de vignettes de la grille (optionnel) : sert de placeholder
-        # immédiat pendant le chargement de l'image de base — l'utilisateur voit
-        # tout de suite la photo (floue) au lieu d'un écran noir.
+        # Thumbnail cache of the grid (optional): serves as an immediate
+        # placeholder while the base image loads — the user sees the photo
+        # (blurry) straight away instead of a black screen.
         self._thumb_cache = thumb_cache
         self._photo: PhotoInfo | None = None
         self._edit: EditInfo | None = None
         self._db = EditDatabase()
-        # Liste complète des mots-clés du catalogue (pas seulement ceux de la
-        # photo courante) — alimente _tag_dropdown, cf. set_available_tags().
+        # Complete list of the catalog keywords (not only those of the current
+        # photo) — feeds _tag_dropdown, cf. set_available_tags().
         self._all_tags: list[str] = []
-        # Cache LRU des images de base (1024px, sans retouche), clé = chemin.
-        # Photo courante + voisines préchargées : évite de relire le fichier
-        # complet à chaque preview de slider ET à chaque navigation prev/next.
+        # LRU cache of the base images (1024px, without edits), key = path.
+        # Current photo + prefetched neighbours: avoids reading the whole file
+        # again at every slider preview AND at every prev/next navigation.
         from collections import OrderedDict
         self._base_lru: "OrderedDict[str, tuple[bytes, int, int]]" = OrderedDict()
-        # Chemins dont l'image de base est en cours de chargement (courante ou
-        # préchargée) — évite les chargements en double.
+        # Paths whose base image is being loaded (current or prefetched) —
+        # avoids duplicate loads.
         self._loading_paths: set[str] = set()
-        # Threads de chargement actifs (images et vidéos). Le chargement est
-        # asynchrone pour éviter de bloquer le thread UI, particulièrement
-        # critique pour les vidéos (cv2.VideoCapture + COM). Les résultats des
-        # chargements « dépassés » par la navigation alimentent quand même le LRU.
+        # Active loading threads (images and videos). The loading is asynchronous
+        # so as not to block the UI thread, which is particularly critical for
+        # videos (cv2.VideoCapture + COM). The results of the loads "overtaken" by
+        # the navigation still feed the LRU.
         self._base_loaders: "list[_BaseLoader]" = []
-        # Album affiché lorsque la visionneuse a été ouverte depuis sa grille
-        # (ou None) : détermine si le menu contextuel propose "Retirer de
-        # l'album" et si la touche Del retire de l'album plutôt que d'effacer
-        # le fichier — cf. ThumbnailGrid.set_album_context.
+        # Album displayed when the viewer was opened from its grid (or None):
+        # determines whether the context menu offers "Remove from the album" and
+        # whether the Del key removes from the album rather than erasing the file
+        # — cf. ThumbnailGrid.set_album_context.
         self._album_id: int | None = None
-        # Debounce pour les previews de retouche : on ne recharge que 60 ms
-        # après le dernier événement slider (évite les surcharges mémoire).
+        # Debounce for the edit previews: reload only 60 ms after the last slider
+        # event (avoids memory overloads).
         self._preview_timer = QTimer(self)
         self._preview_timer.setSingleShot(True)
         self._preview_timer.setInterval(60)
@@ -352,7 +351,7 @@ class PhotoViewer(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
 
-        # ---- Toolbar permanente ----
+        # ---- Permanent toolbar ----
         self._toolbar = QWidget()
         self._toolbar.setStyleSheet("background: rgba(0,0,0,200);")
         tb_layout = QHBoxLayout(self._toolbar)
@@ -392,7 +391,7 @@ class PhotoViewer(QWidget):
         self._tag_dropdown.tag_toggled.connect(self._on_tag_dropdown_toggled)
         tb_layout.addWidget(self._tag_dropdown)
 
-        # Conteneur des boutons d'applications externes (reconstruit par refresh_external_apps)
+        # Container of the external application buttons (rebuilt by refresh_external_apps)
         self._ext_apps_container = QWidget()
         self._ext_apps_container.setStyleSheet("background: transparent;")
         self._ext_apps_layout = QHBoxLayout(self._ext_apps_container)
@@ -442,7 +441,7 @@ class PhotoViewer(QWidget):
         self._canvas.annotation_grouped.connect(self.annotation_grouped)
         layout.addWidget(self._canvas, stretch=1)
 
-        # ---- Pied de page ----
+        # ---- Footer ----
         self._navbar = QWidget()
         self._navbar.setStyleSheet("background: rgba(0,0,0,200);")
         self._navbar.setFixedHeight(52)
@@ -460,7 +459,7 @@ class PhotoViewer(QWidget):
         self._nav_position_label.setStyleSheet("color: white; font-size: 13px;")
         nav_layout.addWidget(self._nav_position_label)
 
-        # Boutons de format de recadrage (masqués hors mode crop)
+        # Crop format buttons (hidden outside crop mode)
         self._btn_play_video = QPushButton(translate("PhotoViewer", "▶  Open the video"))
         self._btn_play_video.setToolTip(translate("PhotoViewer", "Open in the default video "
                                                                  "player"))
@@ -495,7 +494,7 @@ class PhotoViewer(QWidget):
             fmt_layout.addWidget(btn)
             self._crop_format_group.addButton(btn, i)
             self._crop_format_btns.append(btn)
-        self._crop_format_btns[0].setChecked(True)  # "Libre" par défaut
+        self._crop_format_btns[0].setChecked(True)  # "Free" by default
         self._crop_format_group.idClicked.connect(self._on_crop_format_changed)
         self._crop_format_widget.hide()
         nav_layout.addWidget(self._crop_format_widget)
@@ -543,7 +542,7 @@ class PhotoViewer(QWidget):
 
         layout.addWidget(self._navbar)
 
-        # ---- Badge doublons (flottant sur le canvas) ----
+        # ---- Duplicates badge (floating over the canvas) ----
         self._dup_badge = QPushButton(translate("PhotoViewer", "⧉ Duplicates"), self)
         self._dup_badge.setToolTip(translate("PhotoViewer", "This photo has duplicates — click "
                                                             "to see them"))
@@ -568,33 +567,33 @@ class PhotoViewer(QWidget):
         return self._photo
 
     def refresh_tags(self) -> None:
-        """Redessine la liste déroulante de mots-clés depuis `self._photo.tags`
-        (sans changer la liste complète des mots-clés du catalogue) — à
-        appeler après une mutation externe de `photo.tags` qui ne repasse pas
-        par `set_photo()`. Si la liste complète a pu changer (ex. nouveau
-        mot-clé créé), préférer `set_available_tags()`."""
+        """Redraws the keyword drop-down list from `self._photo.tags` (without
+        changing the complete list of the catalog keywords) — to be called
+        after an external mutation of `photo.tags` that does not go through
+        `set_photo()`. If the complete list may have changed (e.g. a new
+        keyword created), prefer `set_available_tags()`."""
         if self._photo is not None:
             self._tag_dropdown.set_tags(self._all_tags, self._photo.tags)
 
     def set_available_tags(self, all_tags: list[str]) -> None:
-        """Liste complète des mots-clés définis dans le catalogue — à
-        réappeler chaque fois qu'elle change (nouveau mot-clé créé, dernier
-        photo d'un mot-clé supprimée…). Restyle aussitôt _tag_dropdown avec
-        les mots-clés actifs de la photo courante."""
+        """Complete list of the keywords defined in the catalog — to be called
+        again every time it changes (a new keyword created, the last photo of a
+        keyword deleted…). Immediately restyles _tag_dropdown with the active
+        keywords of the current photo."""
         self._all_tags = list(all_tags)
         self.refresh_tags()
 
     def set_album_context(self, album_id: int | None) -> None:
-        """Indique si la photo affichée provient d'un album (et lequel), pour
-        proposer "Retirer de l'album" et faire pointer la touche Del dessus
-        plutôt que sur l'effacement définitif du fichier."""
+        """States whether the displayed photo comes from an album (and which one),
+        so as to offer "Remove from the album" and to point the Del key at it
+        rather than at erasing the file permanently."""
         self._album_id = album_id
 
     def set_photo(self, photo: PhotoInfo, edit: EditInfo | None = None) -> None:
         self._preview_timer.stop()
-        # Les chargements en vol ne sont pas annulés : leurs résultats alimentent
-        # le LRU (utile si l'utilisateur revient en arrière) ; _on_base_ready
-        # n'affiche que le résultat correspondant à la photo courante.
+        # The loads in flight are not cancelled: their results feed the LRU
+        # (useful if the user goes back); _on_base_ready only displays the result
+        # matching the current photo.
         self._photo = photo
         is_video = photo.media_type == "video"
         self._edit = None if is_video else (edit or self._db.load(photo.path))
@@ -613,10 +612,10 @@ class PhotoViewer(QWidget):
             self._dup_badge.show()
             self._dup_badge.raise_()
             self._reposition_dup_badge()
-            # La géométrie du viewer peut ne pas être définitive à cet instant
-            # (ex. bascule depuis la grille : le stack/splitter ne se redimensionne
-            # qu'après cet appel) — un repositionnement différé rattrape le calcul
-            # une fois la géométrie finale connue, pour éviter le badge mal placé.
+            # The geometry of the viewer may not be final at this moment (e.g. a
+            # switch from the grid: the stack/splitter is only resized after this
+            # call) — a deferred repositioning catches the computation up once the
+            # final geometry is known, to avoid a badly placed badge.
             QTimer.singleShot(0, self._reposition_dup_badge)
         else:
             self._dup_badge.hide()
@@ -642,11 +641,11 @@ class PhotoViewer(QWidget):
             QTimer.singleShot(0, self._reposition_dup_badge)
 
     def highlight_face(self, face) -> None:
-        """Encadre un visage unique sur la photo (appelé depuis main_window)."""
+        """Frames a single face on the photo (called from main_window)."""
         self._canvas.set_highlighted_face(face)
 
     def set_all_highlighted_faces(self, faces: list) -> None:
-        """Encadre tous les visages (mode 'Tous' du FacePanel)."""
+        """Frames every face (the 'All' mode of the FacePanel)."""
         self._canvas.set_highlighted_faces(faces)
 
     def _reload_pixmap(self) -> None:
@@ -657,7 +656,7 @@ class PhotoViewer(QWidget):
 
         cached = self._base_lru.get(self._photo.path)
         if cached is not None:
-            # Cache chaud : appliquer les retouches et afficher immédiatement
+            # Warm cache: apply the edits and display immediately
             self._base_lru.move_to_end(self._photo.path)
             base_bytes, orig_w, orig_h = cached
             pixmap = _apply_edit_to_base(base_bytes, self._edit)
@@ -665,9 +664,9 @@ class PhotoViewer(QWidget):
             self._canvas.set_pixmap(pixmap)
             return
 
-        # Cache froid : afficher immédiatement la vignette de la grille en
-        # placeholder (floue mais instantanée — retour visuel sans écran noir),
-        # puis lancer le chargement de l'image de base en arrière-plan.
+        # Cold cache: immediately display the grid thumbnail as a placeholder
+        # (blurry but instant — visual feedback without a black screen), then
+        # start loading the base image in the background.
         placeholder = (
             self._thumb_cache.get_ram(self._photo.path)
             if self._thumb_cache is not None else None
@@ -681,10 +680,10 @@ class PhotoViewer(QWidget):
         self._start_base_loader([self._photo])
 
     def prefetch(self, photos: "list[PhotoInfo]") -> None:
-        """Précharge en arrière-plan l'image de base des photos données (les
-        voisines de la photo affichée, fournies par main_window après chaque
-        navigation) : le passage à la photo suivante/précédente devient
-        instantané. Ignore ce qui est déjà en cache ou en cours de chargement."""
+        """Prefetches the base image of the given photos in the background (the
+        neighbours of the displayed photo, supplied by main_window after every
+        navigation): moving to the next/previous photo becomes instant. Skips
+        what is already in cache or being loaded."""
         self._start_base_loader(photos)
 
     def _start_base_loader(self, photos: "list[PhotoInfo]") -> None:
@@ -713,12 +712,12 @@ class PhotoViewer(QWidget):
                 if t.isRunning():
                     alive.append(t)
             except RuntimeError:
-                pass  # objet C++ déjà détruit par deleteLater
+                pass  # C++ object already destroyed by deleteLater
         self._base_loaders = alive
 
     @Slot(str, object)
     def _on_base_ready(self, path: str, result: object) -> None:
-        """Reçoit le résultat du chargement de base image/vidéo depuis _BaseLoader."""
+        """Receives the result of the image/video base loading from _BaseLoader."""
         self._loading_paths.discard(path)
         if result is not None:
             self._base_lru[path] = result
@@ -726,7 +725,7 @@ class PhotoViewer(QWidget):
             while len(self._base_lru) > _BASE_LRU_MAX:
                 self._base_lru.popitem(last=False)
         if self._photo is None or self._photo.path != path:
-            return  # préchargement d'une voisine, ou navigation entre-temps
+            return  # prefetch of a neighbour, or navigation in the meantime
         if result is None:
             return
         base_bytes, orig_w, orig_h = result
@@ -736,8 +735,8 @@ class PhotoViewer(QWidget):
         self._canvas.set_pixmap(pixmap)
 
     def invalidate_base_cache(self, path: "str | None" = None) -> None:
-        """Oublie l'image de base en cache pour un chemin (fichier modifié sur
-        disque), ou tout le cache si path est None."""
+        """Forgets the cached base image for a path (a file modified on disk), or
+        the whole cache if path is None."""
         if path is None:
             self._base_lru.clear()
         else:
@@ -749,11 +748,11 @@ class PhotoViewer(QWidget):
 
     def update_edit(self, edit: EditInfo) -> None:
         self._edit = edit
-        # Les annotations sont des données vectorielles légères, rendues en
-        # calque séparé — pas besoin d'attendre le debounce du pixmap raster.
+        # The annotations are lightweight vector data, rendered in a separate
+        # layer — no need to wait for the debounce of the raster pixmap.
         self._canvas.set_annotations(edit.annotations)
-        # Debounce : reporte le rendu de 60 ms pour absorber les rafales de
-        # sliders. Évite d'accumuler des images PIL de 72 Mo en mémoire.
+        # Debounce: defers the render by 60 ms to absorb slider bursts.
+        # Avoids piling up 72 MB PIL images in memory.
         self._preview_timer.stop()
         self._preview_timer.start()
 
@@ -779,8 +778,8 @@ class PhotoViewer(QWidget):
 
     def enter_crop_mode(self) -> None:
         existing = self._edit.crop if self._edit else None
-        # Si un crop est déjà appliqué, afficher l'image sans ce crop pour que
-        # l'utilisateur puisse repositionner la zone sur l'image complète.
+        # If a crop is already applied, show the image without it so that the
+        # user can reposition the area on the complete image.
         cached = self._base_lru.get(self._photo.path) if self._photo else None
         if existing and self._photo and self._edit and cached:
             edit_no_crop = EditInfo.from_dict({**self._edit.to_dict(), 'crop': None})
@@ -802,7 +801,7 @@ class PhotoViewer(QWidget):
         self._canvas.set_aspect_ratio(_CROP_FORMAT_DATA[idx][2])
 
     def confirm_crop(self) -> None:
-        self._canvas.confirm_crop()    # émet crop_confirmed → _on_crop_confirmed
+        self._canvas.confirm_crop()    # emits crop_confirmed → _on_crop_confirmed
 
     def update_nav_arrows(self, has_prev: bool, has_next: bool) -> None:
         self._btn_prev.setVisible(has_prev)
@@ -819,7 +818,7 @@ class PhotoViewer(QWidget):
         self._btn_prev.show()
         self._btn_next.show()
         self._nav_position_label.show()
-        # Restaurer l'image avec le crop appliqué (on avait affiché l'image sans crop)
+        # Restore the image with the crop applied (it was displayed without the crop)
         self._reload_pixmap()
         self.crop_mode_ended.emit()
 
@@ -833,7 +832,7 @@ class PhotoViewer(QWidget):
         self.crop_ready.emit(quad)
         self.crop_mode_ended.emit()
 
-    # ------------------------------------------------------------------ ajout manuel de visage
+    # ------------------------------------------------------------------ manual face addition
 
     def enter_face_add_mode(self) -> None:
         self._canvas.enter_face_add_mode()
@@ -844,7 +843,7 @@ class PhotoViewer(QWidget):
         self._btn_face_cancel.show()
 
     def confirm_face_add(self) -> None:
-        self._canvas.confirm_face_add()   # émet face_add_confirmed → _on_face_add_confirmed si valide
+        self._canvas.confirm_face_add()   # emits face_add_confirmed → _on_face_add_confirmed if valid
         self._btn_face_confirm.hide()
         self._btn_face_cancel.hide()
         self._btn_prev.show()
@@ -875,7 +874,7 @@ class PhotoViewer(QWidget):
     def set_red_eye_radius(self, radius: float) -> None:
         self._canvas.set_red_eye_radius(radius)
 
-    # ------------------------------------------------------------------ vignette interactive
+    # ------------------------------------------------------------------ interactive vignette
 
     def enter_vignette_mode(self, edit) -> None:
         self._canvas.enter_vignette_mode(edit)
@@ -886,16 +885,16 @@ class PhotoViewer(QWidget):
     def update_vignette(self, edit) -> None:
         self._canvas.update_vignette(edit)
 
-    # ------------------------------------------------------------------ pipette couleur (balance des blancs)
+    # ------------------------------------------------------------------ colour eyedropper (white balance)
 
     def start_color_pick(self) -> None:
-        """Active le mode pipette : prochain clic gauche sur l'image → pixel_sampled(r, g, b)."""
+        """Enables the eyedropper mode: the next left click on the image → pixel_sampled(r, g, b)."""
         self._canvas.start_color_pick()
 
     def stop_color_pick(self) -> None:
         self._canvas.stop_color_pick()
 
-    # ------------------------------------------------------------------ annotations (dessin/texte)
+    # ------------------------------------------------------------------ annotations (drawing/text)
 
     def enter_annotation_mode(self, tool: str = "pen") -> None:
         self._canvas.enter_annotation_mode(tool)
@@ -931,13 +930,13 @@ class PhotoViewer(QWidget):
     # ------------------------------------------------------------------ misc
 
     def refresh_external_apps(self) -> None:
-        """Reconstruit les boutons d'applications externes dans la toolbar depuis la
-        config, filtrés par la portée média de chaque application ("image" / "video"
-        / "both", absente = "both" pour rétrocompatibilité) comparée au media_type de
-        la photo actuellement affichée — une application taguée "vidéo" (ex. VLC)
-        n'apparaît que sur une vidéo, une taguée "photo" que sur une image. Sans
-        photo affichée (ex. au tout premier appel, dans __init__), aucun filtrage
-        n'est appliqué."""
+        """Rebuilds the external application buttons of the toolbar from the
+        config, filtered by the media scope of each application ("image" /
+        "video" / "both", absent = "both" for backward compatibility) compared
+        with the media_type of the photo currently displayed — an application
+        tagged "video" (e.g. VLC) only appears on a video, one tagged "image"
+        only on a still. With no photo displayed (e.g. on the very first call,
+        in __init__), no filtering is applied."""
         while self._ext_apps_layout.count():
             item = self._ext_apps_layout.takeAt(0)
             if item.widget():
@@ -961,9 +960,9 @@ class PhotoViewer(QWidget):
             shown += 1
             btn = QToolButton()
             btn.setToolTip(translate("PhotoViewer", "Open with {app}").format(app=name))
-            # Nom accessible pour l'automatisation pywinauto (e2e) — même
-            # convention que ThumbnailCell/_DuplicateCard : ce bouton n'a pas
-            # de texte propre (icône seule), donc pas de window_text() unique.
+            # Accessible name for the pywinauto automation (e2e) — the same
+            # convention as ThumbnailCell/_DuplicateCard: this button has no text of
+            # its own (icon only), hence no unique window_text().
             btn.setAccessibleName(f"extapp::{name}")
             btn.setFixedSize(32, 32)
             btn.setIcon(_icon_provider.icon(QFileInfo(path)))
@@ -1117,11 +1116,11 @@ class PhotoViewer(QWidget):
         elif key in (Qt.Key_Right, Qt.Key_Up):
             if not self._canvas._crop_mode and not self._canvas._red_eye_mode \
                     and not self._canvas._face_add_mode and not self._canvas._annotation_mode:
-                self.navigate.emit(-1)   # plus récente (droite/haut = vers le haut de la liste)
+                self.navigate.emit(-1)   # newer (right/up = towards the top of the list)
         elif key in (Qt.Key_Left, Qt.Key_Down):
             if not self._canvas._crop_mode and not self._canvas._red_eye_mode \
                     and not self._canvas._face_add_mode and not self._canvas._annotation_mode:
-                self.navigate.emit(1)    # plus ancienne (gauche/bas = vers le bas de la liste)
+                self.navigate.emit(1)    # older (left/down = towards the bottom of the list)
         elif key == Qt.Key_Delete:
             if self._canvas._annotation_mode:
                 self.delete_selected_annotation()

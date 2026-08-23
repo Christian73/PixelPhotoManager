@@ -1,6 +1,6 @@
 # Copyright 2026 Christian Guyot
 # SPDX-License-Identifier: Apache-2.0
-"""Contrôleur visages & personnes (extrait de MainWindow)."""
+"""Faces & people controller (extracted from MainWindow)."""
 import ctypes
 import logging
 import os
@@ -53,8 +53,8 @@ from src.ui.face_backup_dialog import FaceBackupDialog
 logger = logging.getLogger(__name__)
 
 
-# Classes extraites de ce fichier (2026-07) — importées sous leurs noms
-# historiques : elles restent des détails d'implémentation de MainWindow.
+# Classes extracted from this file (2026-07) — imported under their
+# historical names: they stay implementation details of MainWindow.
 from src.ui.ui_utils import fmt_size as _fmt_size  # noqa: E402
 from src.ui.background_workers import (  # noqa: E402
     _CatalogLoadThread, _DeleteWorkerThread, _DupMigrationThread,
@@ -70,15 +70,15 @@ from src.core.i18n import translate
 
 
 
-# Sentinelle de contexte « vue personne » (préfixe des context_keys de grille)
+# "Person view" context sentinel (the prefix of the grid context_keys)
 _PERSON_CTX_PREFIX = "__person__"
 
 
 class FacesController:
-    """Contrôleur visages & personnes (extrait de MainWindow).
+    """Faces & people controller (extracted from MainWindow).
 
-    Mixin de MainWindow — aucune instanciation autonome : les attributs
-    (self._catalog, self._sidebar, …) sont créés par MainWindow.__init__."""
+    A mixin of MainWindow — never instantiated on its own: the attributes
+    (self._catalog, self._sidebar, …) are created by MainWindow.__init__."""
 
     def _open_index_errors_dialog(self) -> None:
         if self._index_errors_dialog is not None:
@@ -102,7 +102,7 @@ class FacesController:
         self._on_retry_face_index_requested(photo)
 
     def _maybe_prompt_picasa_for_new_folder(self, folder: str) -> None:
-        """Propose l'import Picasa scopé si le nouveau dossier contient des .picasa.ini."""
+        """Offers the scoped Picasa import if the new folder contains .picasa.ini files."""
         from src.faces.picasa_importer import scan, PicasaImportThread
 
         n_contacts, n_photos, n_edits = scan([folder])
@@ -150,8 +150,8 @@ class FacesController:
         parts = [
             translate("FacesController", "%n person(s) created",
                       None, n_persons),
-            # Deux comptes dans une même phrase : `%n` n'en accorde qu'un, le
-            # second passe donc par sa propre chaîne plurielle imbriquée.
+            # Two counts in the same sentence: `%n` only agrees with one, the
+            # second therefore goes through its own nested plural string.
             translate("FacesController", "%n face annotation(s) in {photos}",
                       None, n_faces).format(
                 photos=translate("FacesController", "%n photo(s)",
@@ -172,7 +172,7 @@ class FacesController:
             return
         choice = dlg.choice
 
-        # ── Arrêter proprement les threads en cours ──────────────────────────
+        # ── Stop the running threads cleanly ─────────────────────────────────
         threads_to_wait: list[QThread] = []
 
         if self._face_indexer and self._face_indexer.isRunning():
@@ -186,13 +186,13 @@ class FacesController:
         if self._cluster_thread and self._cluster_thread.isRunning():
             threads_to_wait.append(self._cluster_thread)
 
-        # ── Mise à jour UI immédiate ─────────────────────────────────────────
+        # ── Immediate UI update ──────────────────────────────────────────────
         msg = (translate("FacesController", "Stopping the running analyses…")
                if threads_to_wait
                else translate("FacesController", "Resetting…"))
         self._lbl_action.setText(msg)
 
-        # ── Worker hors UI : attend les threads + reset DB ───────────────────
+        # ── Worker off the UI: waits for the threads + DB reset ──────────────
         self._reset_worker = _ResetWorkerThread(
             self._face_db, choice, threads_to_wait, self
         )
@@ -206,9 +206,9 @@ class FacesController:
         self._lbl_action.setText("")
 
         if choice != _ResetFacesDialog.RESET_CLUSTERING:
-            # reset_index() a aussi vidé face_index_errors : les erreurs
-            # de timeout/crash n'ont plus lieu d'être tant que le nouveau
-            # passage d'indexation n'a pas eu lieu.
+            # reset_index() has also emptied face_index_errors: the timeout/crash
+            # errors no longer have any reason to exist as long as the new
+            # indexing pass has not taken place.
             self._grid.set_index_error_paths([])
 
         if choice == _ResetFacesDialog.RESET_CLUSTERING:
@@ -230,23 +230,23 @@ class FacesController:
             self._start_face_indexing()
 
     def _schedule_similarity_search(self) -> None:
-        """Programme une recherche de similarité après une identification.
+        """Schedules a similarity search after an identification.
 
-        Nommer ou assigner une personne déplace son centroïde : des groupes
-        jusque-là sous le seuil de suggestion peuvent le franchir. C'est le seul
-        événement, hors nouvelles photos, qui change le résultat de la recherche
-        — sans ce déclencheur, une bibliothèque entièrement indexée ne produisait
-        plus jamais de « visage en attente de vérification ».
+        Naming or assigning a person moves its centroid: groups that were below
+        the suggestion threshold until then may cross it. That is the only
+        event, apart from new photos, that changes the result of the search —
+        without this trigger, a fully indexed library never produced a "face
+        awaiting verification" again.
 
-        Le timer est à un coup et relancé à chaque appel : une série
-        d'identifications ne provoque qu'un seul passage, 30 s après la dernière.
+        The timer is single-shot and restarted at every call: a series of
+        identifications only causes a single pass, 30 s after the last one.
         """
         self._similarity_debounce.start()
 
     def _start_similarity_search_manually(self) -> None:
-        """Entrée Visages › Rechercher des visages similaires… — même traitement,
-        mais avec un retour explicite si un passage est déjà en cours (l'appelant
-        est ici l'utilisateur, pas un enchaînement automatique)."""
+        """The Faces › Search for similar faces… entry — the same processing, but
+        with an explicit answer if a pass is already running (the caller here is
+        the user, not an automatic chaining)."""
         self._similarity_debounce.stop()
         if hasattr(self, "_similarity_thread") and self._similarity_thread.isRunning():
             QMessageBox.information(
@@ -259,13 +259,12 @@ class FacesController:
         self._start_similarity_search()
 
     def _start_similarity_search(self) -> None:
-        """Compare les centroïdes des groupes non identifiés aux personnes nommées.
+        """Compares the centroids of the unidentified groups with the named people.
 
-        Déclenché automatiquement à la fin de chaque regroupement, à la fin d'une
-        passe d'indexation qui n'a rien trouvé de nouveau (sinon le regroupement
-        s'en charge), et après une identification (cf.
-        _schedule_similarity_search) — aucune interaction utilisateur, juste un
-        message dans la barre de statut à la fin.
+        Triggered automatically at the end of every grouping, at the end of an
+        indexing pass that found nothing new (otherwise the grouping takes care
+        of it), and after an identification (cf. _schedule_similarity_search) —
+        no user interaction, just a message in the status bar at the end.
         """
         if hasattr(self, "_similarity_thread") and self._similarity_thread.isRunning():
             return
@@ -301,12 +300,12 @@ class FacesController:
 
     def _start_face_indexing(self) -> None:
         if self._face_indexer and self._face_indexer.isRunning():
-            # Un scan (ex. re-scan forcé) vient d'ajouter/modifier des photos
-            # pendant qu'une indexation précédente tourne encore : sans cette
-            # garde, la demande est perdue silencieusement — aucun mécanisme
-            # ne relance l'indexation pour les nouvelles photos, contrairement
-            # au cas symétrique du warmup TF (_on_scan_finished/_on_warmup_done).
-            # _on_face_indexing_finished relance dès que le run en cours se termine.
+            # A scan (e.g. a forced re-scan) has just added/modified photos while a
+            # previous indexing is still running: without this guard, the request is
+            # silently lost — no mechanism restarts the indexing for the new photos,
+            # unlike the symmetrical case of the TF warmup
+            # (_on_scan_finished/_on_warmup_done). _on_face_indexing_finished restarts
+            # it as soon as the run in progress ends.
             self._face_index_pending = True
             return
         if self._face_indexer is not None:
@@ -356,7 +355,7 @@ class FacesController:
         self._act_picasa.setEnabled(not self._config.get("picasa.import_done", False))
 
     def _backup_faces(self) -> None:
-        """Crée immédiatement une sauvegarde et affiche le résultat."""
+        """Creates a backup immediately and shows the result."""
         from src.ui.face_backup_dialog import _BackupThread
         from src.core.app_dirs import APP_DATA_DIR
         from pathlib import Path
@@ -392,7 +391,7 @@ class FacesController:
         self._face_backup_thread.start()
 
     def _manage_face_backups(self) -> None:
-        """Ouvre le dialogue de gestion des sauvegardes de reconnaissance."""
+        """Opens the recognition backup management dialog."""
         from src.core.app_dirs import APP_DATA_DIR
         from pathlib import Path
         dlg = FaceBackupDialog(
@@ -406,7 +405,7 @@ class FacesController:
 
     @Slot()
     def _on_face_restore_completed(self) -> None:
-        """Rafraîchit toute l'UI de reconnaissance après une restauration."""
+        """Refreshes the whole recognition UI after a restore."""
         self._refresh_persons()
         if self._face_panel.isVisible():
             self._face_panel.refresh()
@@ -433,27 +432,26 @@ class FacesController:
     def _on_face_indexing_finished(self, indexed: int, faces: int) -> None:
         self._lbl_action.setText("")
         if faces > 0:
-            self._run_clustering()          # enchaîne lui-même sur la similarité
+            self._run_clustering()          # chains onto the similarity search itself
         else:
-            # Rien de nouveau à regrouper, mais les personnes nommées depuis le
-            # dernier passage ont pu rendre des groupes existants proposables :
-            # sur une bibliothèque déjà entièrement indexée, c'est le seul point
-            # d'entrée automatique qui reste.
+            # Nothing new to group, but the people named since the last pass may have
+            # made existing groups proposable: on an already fully indexed library,
+            # this is the only automatic entry point left.
             self._schedule_similarity_search()
         if self._face_index_pending:
             self._face_index_pending = False
             self._start_face_indexing()
 
     def _on_face_index_error(self, path: str, msg: str) -> None:
-        """Timeout/crash pendant l'analyse automatique : la photo est déjà
-        enregistrée dans face_index_errors (FaceIndexThread.mark_index_error)."""
+        """Timeout/crash during the automatic analysis: the photo is already
+        recorded in face_index_errors (FaceIndexThread.mark_index_error)."""
         logger.warning("Visage non indexé %s: %s", path, msg)
         self._grid.set_index_error_paths(self._face_db.get_error_paths())
         if self._index_errors_dialog is not None:
             self._index_errors_dialog.refresh()
 
     def _start_clustering_with_confirm(self) -> None:
-        """Affiche une explication du clustering, puis le lance si l'utilisateur confirme."""
+        """Shows an explanation of the clustering, then starts it if the user confirms."""
         if self._cluster_thread and self._cluster_thread.isRunning():
             QMessageBox.information(
                 self,
@@ -494,9 +492,9 @@ class FacesController:
         self._run_clustering()
 
     def _run_clustering(self) -> None:
-        """Lance le clustering dans un thread séparé pour ne pas bloquer l'UI."""
+        """Starts the clustering in a separate thread so as not to block the UI."""
         if self._cluster_thread and self._cluster_thread.isRunning():
-            return   # un clustering est déjà en cours
+            return   # a clustering is already running
         if self._cluster_thread is not None:
             self._cluster_thread.deleteLater()
         self._cluster_thread = ClusterThread(self._face_db, self)
@@ -520,10 +518,10 @@ class FacesController:
         if self._face_panel.isVisible():
             self._face_panel_refresh_timer.start()
         self._lbl_action.setText("")
-        # Systématique, y compris quand n_clusters == 0 : le regroupement rend la
-        # main sans rien faire dès que le nombre de visages non identifiés n'a pas
-        # bougé (clusterer._run_clustering), alors que les groupes déjà formés,
-        # eux, restent à comparer aux personnes nommées entre-temps.
+        # Systematic, including when n_clusters == 0: the grouping returns without
+        # doing anything as soon as the number of unidentified faces has not moved
+        # (clusterer._run_clustering), whereas the groups already formed still have
+        # to be compared with the people named in the meantime.
         self._start_similarity_search()
 
     @Slot()
@@ -568,7 +566,7 @@ class FacesController:
         person = self._catalog.create_person(name)
         for cid in cluster_ids:
             self._face_db.assign_person_to_cluster(cid, person.id)
-        self._refresh_persons()  # nouvelle personne créée → rebuild complet
+        self._refresh_persons()  # a new person was created → full rebuild
         self._face_cluster_grid.remove_clusters(cluster_ids)
         self._refresh_face_panel_if_visible()
         self._schedule_similarity_search()
@@ -596,7 +594,7 @@ class FacesController:
 
     @Slot(int, str)
     def _on_cluster_photos_requested(self, cluster_id: int, label: str) -> None:
-        """Clic simple sur un groupe : afficher ses photos dans la grille."""
+        """Single click on a group: show its photos in the grid."""
         self._grid.set_ribbon_mode(False)
         self._grid.set_date_overlay_visible(False)
         self._start_photo_query(
@@ -611,8 +609,8 @@ class FacesController:
 
     @Slot(object)
     def _on_person_merge_requested(self, source: PersonInfo) -> None:
-        # enrich_persons lance une CTE sur toutes les faces nommées — peut durer
-        # plusieurs secondes sur une grande base. On la déporte dans un thread.
+        # enrich_persons runs a CTE over every named face — it can take several
+        # seconds on a large database. So it goes into a thread.
         t = _PersonsRefreshThread(self._catalog, self._face_db, self)
         t.result_ready.connect(lambda persons, _: self._show_merge_dialog(source, persons))
         t.finished.connect(t.deleteLater)
@@ -649,7 +647,7 @@ class FacesController:
 
     @Slot(object)
     def _on_person_clear_requested(self, person: PersonInfo) -> None:
-        """Supprime le nom d'une personne : désassocie toutes ses faces et efface l'entrée."""
+        """Removes the name of a person: unlinks all its faces and clears the entry."""
         reply = QMessageBox.question(
             self,
             translate("FacesController", "Clear the name"),
@@ -679,7 +677,7 @@ class FacesController:
         self._sidebar.update_person_icon(person_id, face)
 
     def _refresh_persons(self) -> None:
-        """Rebuild complet de la liste (personnes ajoutées/supprimées/renommées)."""
+        """Full rebuild of the list (people added/removed/renamed)."""
         if self._persons_refresh_thread and self._persons_refresh_thread.isRunning():
             return
         if self._persons_refresh_thread is not None:
@@ -689,7 +687,7 @@ class FacesController:
         self._persons_refresh_thread.start()
 
     def _update_persons_counts(self) -> None:
-        """Mise à jour légère : seuls les compteurs/couvertures modifiés sont rafraîchis."""
+        """Light update: only the modified counters/covers are refreshed."""
         if self._persons_refresh_thread and self._persons_refresh_thread.isRunning():
             return
         if self._persons_refresh_thread is not None:
@@ -727,8 +725,8 @@ class FacesController:
 
     @Slot(bool)
     def _on_add_face_mode_requested(self, enter: bool) -> None:
-        """Bouton 'Ajouter une personne' du FacePanel — bascule le mode dessin
-        de bboxe dans la visionneuse."""
+        """The 'Add a person' button of the FacePanel — toggles the bbox drawing
+        mode in the viewer."""
         if enter:
             self._viewer.enter_face_add_mode()
         else:
@@ -736,7 +734,7 @@ class FacesController:
 
     @Slot(bool)
     def _on_face_panel_person_cluster_requested(self, person_id: int) -> None:
-        """Double-clic sur un visage nommé dans le panneau → vue clusters de la personne."""
+        """Double-click on a named face in the panel → cluster view of the person."""
         person = self._catalog.get_person(person_id)
         if person is None:
             return
@@ -760,7 +758,7 @@ class FacesController:
         self._lbl_action.setText("")
 
     def show_person_clusters(self, person: PersonInfo) -> None:
-        """Affiche les groupes de visages d'une personne au lieu de ses photos."""
+        """Shows the face groups of a person instead of their photos."""
         self._person_cluster_view.set_person(person)
         self._stack.setCurrentIndex(3)
         self._left_stack.setCurrentIndex(0)
@@ -777,16 +775,16 @@ class FacesController:
         self._lbl_action.setText("")
 
     def _on_person_cluster_photos_requested(self, cluster_id: int, label: str) -> None:
-        """Double-clic sur une carte de groupe depuis PersonClusterView."""
+        """Double-click on a group card from PersonClusterView."""
         self._from_person_cluster_view = True
         self._on_cluster_photos_requested(cluster_id, label)
 
     def _on_person_cluster_photo_requested(self, path: str) -> None:
-        """Double-clic sur une vignette en mode dégroupé → ouvrir la photo dans la visionneuse."""
+        """Double-click on a thumbnail in ungrouped mode → open the photo in the viewer."""
         photo = self._catalog.get_photo_by_path(path)
         if photo is None:
             return
-        # Charger toutes les photos de la personne pour permettre la navigation prev/next
+        # Load every photo of the person to allow prev/next navigation
         person = self._person_cluster_view.current_person
         if person:
             all_paths = self._face_db.get_photos_for_person(person.id)
@@ -802,19 +800,19 @@ class FacesController:
         self.show_viewer(photo)
 
     def _on_person_cluster_back(self) -> None:
-        """Bouton ← Retour dans PersonClusterView → retour à la grille principale."""
+        """The ← Back button in PersonClusterView → back to the main grid."""
         self._grid_nav_bar.hide()
         self.show_grid()
 
     @Slot(int)
     def _on_pcv_cluster_unassigned(self, _cluster_id: int) -> None:
-        """Groupe dé-associé depuis PersonClusterView (DB déjà à jour) → rafraîchir la sidebar."""
+        """Group unlinked from PersonClusterView (the DB is already up to date) → refresh the sidebar."""
         self._update_persons_counts()
         self._refresh_face_panel_if_visible()
 
     @Slot(int)
     def _on_suggestion_accepted(self, cluster_id: int) -> None:
-        """Suggestion confirmée : déplace les vignettes sans recharger toute la grille."""
+        """Suggestion confirmed: moves the thumbnails without reloading the whole grid."""
         self._face_db.accept_cluster_suggestion(cluster_id)
         self._update_persons_counts()
         self._refresh_face_panel_if_visible()
@@ -822,19 +820,19 @@ class FacesController:
 
     @Slot(int)
     def _on_suggestion_rejected(self, cluster_id: int) -> None:
-        """Suggestion refusée : retire la vignette et recalcule la suggestion suivante."""
+        """Suggestion rejected: removes the thumbnail and recomputes the next suggestion."""
         person = self._person_cluster_view.current_person
         exclude_pid = person.id if person else None
-        # UI immédiat
+        # immediate UI
         self._person_cluster_view.remove_pending_cluster(cluster_id)
-        # Vide la suggestion et recalcule la meilleure personne restante en arrière-plan
+        # Clears the suggestion and recomputes the best remaining person in the background
         t = _ResuggestThread(self._face_db, [cluster_id], exclude_pid, self)
         t.finished.connect(t.deleteLater)
         t.start()
 
     @Slot(list)
     def _on_all_suggestions_accepted(self, cluster_ids: list) -> None:
-        """Toutes les suggestions confirmées d'un coup."""
+        """Every suggestion confirmed at once."""
         for cid in cluster_ids:
             self._face_db.accept_cluster_suggestion(cid)
         self._update_persons_counts()
@@ -844,12 +842,12 @@ class FacesController:
 
     @Slot(list)
     def _on_all_suggestions_rejected(self, cluster_ids: list) -> None:
-        """Toutes les suggestions refusées d'un coup."""
+        """Every suggestion rejected at once."""
         person = self._person_cluster_view.current_person
         exclude_pid = person.id if person else None
-        # UI immédiat
+        # immediate UI
         self._person_cluster_view.clear_all_pending()
-        # Recalcule les suggestions pour toutes les autres personnes en arrière-plan
+        # Recomputes the suggestions for every other person in the background
         t = _ResuggestThread(self._face_db, list(cluster_ids), exclude_pid, self)
         t.finished.connect(t.deleteLater)
         t.start()
@@ -860,8 +858,8 @@ class FacesController:
         self._drain_pending_reindex()
 
     def _on_retry_face_index_requested(self, photo: PhotoInfo) -> None:
-        """Menu contextuel "Retenter l'identification des visages" sur un fichier
-        précédemment en erreur (timeout/crash)."""
+        """The "Retry the face identification" context menu on a file previously
+        in error (timeout/crash)."""
         if self._retry_face_thread and self._retry_face_thread.isRunning():
             QMessageBox.information(
                 self, translate("FacesController", "Attempt running"),
@@ -933,10 +931,10 @@ class FacesController:
             self._index_errors_dialog.refresh()
 
     def _on_force_redetect_requested(self, photo: PhotoInfo) -> None:
-        """Menu contextuel de la visionneuse "Forcer une nouvelle détection sans
-        limite de taille" : re-détecte les visages de la photo affichée sans le
-        filtrage souple par taille (aucune face ne ressort ignored=1), en
-        conservant les identifications déjà faites sur cette photo."""
+        """The viewer context menu "Force a new detection with no size limit":
+        re-detects the faces of the displayed photo without the soft filtering
+        by size (no face comes out as ignored=1), keeping the identifications
+        already made on that photo."""
         from src.faces.detector import is_available
         if not is_available():
             return
