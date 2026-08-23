@@ -1,9 +1,9 @@
 # Copyright 2026 Christian Guyot
 # SPDX-License-Identifier: Apache-2.0
-"""Tests de widget Qt isolés (Layer 2, pytest-qt) pour advanced_search_dialog —
-AdvancedSearchDialog n'est jamais exec() : on pilote ses widgets directement
-(comme TagEditDialog, cf. test_tag_dialog.py). AdvancedSearchPrepLoader est
-exécuté en synchrone via run() (pattern QThread standard du projet)."""
+"""Isolated Qt widget tests (Layer 2, pytest-qt) for advanced_search_dialog --
+AdvancedSearchDialog is never exec()ed: its widgets are driven directly
+(like TagEditDialog, cf. test_tag_dialog.py). AdvancedSearchPrepLoader is
+run synchronously through run() (the standard QThread pattern of the project)."""
 from src.core.models import PersonInfo
 from src.library.catalog import Catalog
 from src.ui.advanced_search_dialog import AdvancedSearchDialog, AdvancedSearchPrepLoader
@@ -88,7 +88,7 @@ class TestAdvancedSearchDialogCriteria:
 
         assert "media_type" not in dlg.get_criteria()
 
-        dlg._media_combo.setCurrentIndex(2)  # Vidéos
+        dlg._media_combo.setCurrentIndex(2)  # Videos
         assert dlg.get_criteria()["media_type"] == "video"
 
     def test_person_selection_returned_by_get_person_id(self, qtbot):
@@ -115,7 +115,7 @@ class TestAdvancedSearchPrepLoader:
         loader = AdvancedSearchPrepLoader(catalog)
         received = []
         loader.ready.connect(lambda cams, persons, tags: received.append((cams, persons, tags)))
-        loader.run()  # synchrone, cf. CLAUDE.md piège coverage/QThread
+        loader.run()  # synchronous, cf. the coverage/QThread trap of CLAUDE.md
 
         assert len(received) == 1
         cameras, persons, tags = received[0]

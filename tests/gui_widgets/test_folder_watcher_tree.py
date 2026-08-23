@@ -1,10 +1,10 @@
 # Copyright 2026 Christian Guyot
 # SPDX-License-Identifier: Apache-2.0
-"""Complément de test_folder_watcher_suppression.py : la plomberie
-d'arborescence de FolderWatcher — _TreeScanThread (vrai QThread),
-set_folders/_apply_scan (génération périmée incluse), _add_tree/_remove_tree,
-apparition/disparition de sous-dossiers dans _process, debounce réel via
-QFileSystemWatcher, et helpers _is_hidden."""
+"""Complement to test_folder_watcher_suppression.py: the tree plumbing of
+FolderWatcher -- _TreeScanThread (a real QThread),
+set_folders/_apply_scan (stale generation included), _add_tree/_remove_tree,
+subfolders appearing/disappearing in _process, real debounce through
+QFileSystemWatcher, and the _is_hidden helpers."""
 import os
 import shutil
 
@@ -160,7 +160,7 @@ class TestProcessSubfolders:
 
 class TestRealWatcherPlumbing:
     def test_file_creation_triggers_files_changed(self, qtbot, tmp_path):
-        """Chemin complet : QFileSystemWatcher réel → debounce → files_changed."""
+        """The complete path: a real QFileSystemWatcher -> debounce -> files_changed."""
         (tmp_path / "existant.jpg").write_bytes(b"x")
         watcher = FolderWatcher()
         watcher.set_folders([str(tmp_path)])
@@ -172,7 +172,7 @@ class TestRealWatcherPlumbing:
         assert blocker.args == [str(tmp_path)]
 
     def test_debounce_coalesces_events(self, qtbot, tmp_path):
-        """Plusieurs événements rapprochés sur le même dossier → une seule émission."""
+        """Several close events on the same folder -> a single emission."""
         watcher = FolderWatcher()
         watcher._take_snapshot(str(tmp_path))
         emitted: list[str] = []

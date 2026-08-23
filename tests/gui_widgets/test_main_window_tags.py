@@ -1,11 +1,11 @@
 # Copyright 2026 Christian Guyot
 # SPDX-License-Identifier: Apache-2.0
-"""Teste MainWindow._on_edit_tags_requested / _continue_edit_tags (édition des
-mots-clés depuis le menu contextuel de la grille ou de la visionneuse), en
-méthode non liée contre un objet minimal — comme test_main_window_dvd_folder.py.
-TagEditDialog est remplacé par un double de test (jamais de vrai exec()
-bloquant) ; TagsPrepLoader (vrai QThread, parenté à un QWidget vivant le temps
-du test) est laissé réel pour couvrir la plomberie cross-thread."""
+"""Tests MainWindow._on_edit_tags_requested / _continue_edit_tags (editing the
+keywords from the context menu of the grid or of the viewer), as an unbound
+method against a minimal object -- like test_main_window_dvd_folder.py.
+TagEditDialog is replaced by a test double (never a real blocking exec());
+TagsPrepLoader (a real QThread, parented to a QWidget alive for the duration
+of the test) is left real to cover the cross-thread plumbing."""
 import pytest
 from PySide6.QtWidgets import QDialog, QMessageBox, QWidget
 
@@ -61,8 +61,8 @@ class _FakeSidebar:
 
 
 class _FakeTagDialog:
-    """Double de test pour TagEditDialog : pas de vrai exec() bloquant, résultat
-    piloté via l'attribut de classe _next_result (exec_result, to_add, to_remove)."""
+    """Test double for TagEditDialog: no real blocking exec(), the result is
+    driven through the _next_result class attribute (exec_result, to_add, to_remove)."""
 
     _next_result = (QDialog.Accepted, [], [])
 
@@ -132,8 +132,8 @@ class TestContinueEditTags:
         catalog = Catalog(db_path=tmp_path / "catalog.db")
         saved = catalog.add_or_update_photo(_photo("C:/photos/a.jpg"))
         photo = catalog.get_photo_by_path(saved.path)
-        # instance distincte, même chemin : grille et visionneuse ne partagent
-        # pas forcément le même objet PhotoInfo pour un chemin donné.
+        # a distinct instance, the same path: the grid and the viewer do not
+        # necessarily share the same PhotoInfo object for a given path.
         current = _photo(photo.path)
         _FakeTagDialog._next_result = (QDialog.Accepted, ["été"], [])
 
@@ -177,7 +177,7 @@ class TestOnEditTagsRequested:
         fake = _FakeMainWindow(catalog)
         qtbot.addWidget(fake)
 
-        fake._on_edit_tags_requested([])  # ne doit pas lever, ne démarre aucun thread
+        fake._on_edit_tags_requested([])  # must not raise, starts no thread
 
     def test_starts_prep_thread_then_applies_dialog_result(self, qtbot, tmp_path):
         catalog = Catalog(db_path=tmp_path / "catalog.db")

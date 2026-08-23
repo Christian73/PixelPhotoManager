@@ -1,18 +1,18 @@
 # Copyright 2026 Christian Guyot
 # SPDX-License-Identifier: Apache-2.0
-"""Régression du bug de production découvert en 2026-07 (voir
-bugfix_signal_dict_int_keys_2026-07.md) : PySide6 mappe `Signal(dict)` sur
-`QVariantMap`, qui exige des clés `str` côté C++. Avec des clés `int`
-(exactement la forme utilisée par `DuplicateDetectorThread.finished`,
-`{group_id: [path, ...]}`), la conversion cross-thread échoue silencieusement
-(pas d'exception Python, juste un log Shiboken en stderr) et le slot reçoit un
-dict vide — la détection de doublons rapportait alors toujours "aucun
-doublon" malgré des groupes bien trouvés.
+"""Regression of the production bug found in 2026-07 (see
+bugfix_signal_dict_int_keys_2026-07.md): PySide6 maps `Signal(dict)` onto
+`QVariantMap`, which requires `str` keys on the C++ side. With `int` keys
+(exactly the form used by `DuplicateDetectorThread.finished`,
+`{group_id: [path, ...]}`), the cross-thread conversion fails silently
+(no Python exception, just a Shiboken log on stderr) and the slot receives an
+empty dict -- duplicate detection then always reported "no
+duplicate" despite groups being properly found.
 
-Appeler `_detect()` en synchrone (cf. test_duplicate_detector.py) ne peut PAS
-détecter ce bug : il ne passe jamais par le marshalling Qt d'une connexion
-cross-thread réelle. Seul un vrai `QThread.start()` + `Signal(object)` le
-révèle — c'est tout l'objet de ce test."""
+Calling `_detect()` synchronously (cf. test_duplicate_detector.py) CANNOT
+detect this bug: it never goes through the Qt marshalling of a real
+cross-thread connection. Only a real `QThread.start()` + `Signal(object)`
+reveals it -- that is the whole point of this test."""
 from PySide6.QtCore import QThread, Signal
 
 
@@ -20,7 +20,7 @@ class _Worker(QThread):
     done_object = Signal(object)
 
     def run(self) -> None:
-        # Clés int : forme exacte qui cassait silencieusement Signal(dict).
+        # Int keys: the exact form that silently broke Signal(dict).
         self.done_object.emit({1: ["a"], 2: ["b"]})
 
 
@@ -37,9 +37,9 @@ def test_signal_object_int_keyed_dict_survives_thread_boundary(qtbot):
 
 
 class _PartialResultsWorker(QThread):
-    """Même forme que DuplicateDetectorThread.partial_results :
-    Signal(object, object), clés int côté dict — la 2e émission de la même
-    forme que `finished`, susceptible du même bug."""
+    """The same form as DuplicateDetectorThread.partial_results:
+    Signal(object, object), int keys on the dict side -- the 2nd emission of the
+    same form as `finished`, liable to the same bug."""
     partial = Signal(object, object)
 
     def run(self) -> None:

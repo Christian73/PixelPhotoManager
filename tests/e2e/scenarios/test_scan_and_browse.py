@@ -1,9 +1,9 @@
 # Copyright 2026 Christian Guyot
 # SPDX-License-Identifier: Apache-2.0
-"""Scénario bout-en-bout : lancement, scan automatique de la bibliothèque
-synthétique (pas d'onboarding, `config.json` pré-rempli par
-`launch_isolated.prepare_app_data_dir`), et vérification directe du
-catalogue — cf. tests/e2e/README.md pour les prérequis (pywinauto)."""
+"""End-to-end scenario: launch, automatic scan of the synthetic library
+(no onboarding, `config.json` pre-filled by
+`launch_isolated.prepare_app_data_dir`), and a direct check of the
+catalog -- cf. tests/e2e/README.md for the prerequisites (pywinauto)."""
 import pytest
 
 from tests.e2e.conftest import query_one, wait_for_condition
@@ -44,9 +44,9 @@ def test_scan_populates_catalog_with_all_synthetic_photos(isolated_app):
 
 
 def test_scan_reports_corrupted_file_as_repairable_or_skipped(isolated_app):
-    """Le fichier JPEG tronqué ne doit pas faire planter le scan — qu'il soit
-    cataloguée (puis proposé à la réparation) ou simplement ignorée, le reste
-    de la bibliothèque doit malgré tout être scanné intégralement."""
+    """The truncated JPEG file must not crash the scan -- whether it is
+    catalogued (then offered for repair) or simply ignored, the rest of the
+    library must be scanned in full all the same."""
     manifest = isolated_app.manifest
 
     wait_for_condition(
@@ -58,6 +58,6 @@ def test_scan_reports_corrupted_file_as_repairable_or_skipped(isolated_app):
         timeout=60.0,
         message="le scan n'a pas terminé (photo témoin absente du catalogue)",
     )
-    # Pas d'assertion sur le fichier corrompu lui-même : son sort exact
-    # (catalogué avec erreur vs. ignoré) dépend de file_repair.py et n'est
-    # pas encore fixé par ce scénario — point à enrichir.
+    # No assertion on the corrupted file itself: its exact fate
+    # (catalogued with an error vs. ignored) depends on file_repair.py and is
+    # not fixed by this scenario yet -- a point to enrich.

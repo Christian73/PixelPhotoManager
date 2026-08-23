@@ -1,20 +1,19 @@
 # Copyright 2026 Christian Guyot
 # SPDX-License-Identifier: Apache-2.0
-"""Régression : _start_face_indexing/_on_face_indexing_finished
-(main_window_faces.py::FacesController) relancent l'indexation des visages
-quand une nouvelle demande arrive alors qu'un FaceIndexThread tourne déjà, au
-lieu de l'abandonner silencieusement.
+"""Regression: _start_face_indexing/_on_face_indexing_finished
+(main_window_faces.py::FacesController) restart the face indexing when a new
+request arrives while a FaceIndexThread is already running, instead of
+dropping it silently.
 
-Découvert via test_folder_management.py (e2e) : un re-scan forcé qui termine
-pendant que l'indexation de visages du scan précédent tourne encore ne
-déclenche jamais d'indexation pour les nouvelles photos — contrairement au cas
-symétrique déjà géré (TFWarmUpThread encore actif, _face_index_pending
-consommé par _on_warmup_done), _start_face_indexing() ne posait aucune trace
-de la demande manquée : la photo restait indéfiniment non indexée tant
-qu'aucun scan ultérieur ne retombait sur une fenêtre où l'indexeur était
-inactif. Comme test_delete_queueing.py, les méthodes réelles de MainWindow
-sont appelées en non lié contre un objet minimal ne portant que les attributs
-lus par le chemin testé."""
+Found through test_folder_management.py (e2e): a forced rescan that finishes
+while the face indexing of the previous scan is still running never triggers
+any indexing for the new photos -- unlike the symmetric case already handled
+(TFWarmUpThread still active, _face_index_pending consumed by
+_on_warmup_done), _start_face_indexing() left no trace of the missed request:
+the photo stayed unindexed indefinitely as long as no later scan happened to
+fall into a window where the indexer was idle. Like test_delete_queueing.py,
+the real methods of MainWindow are called unbound against a minimal object
+carrying only the attributes read by the tested path."""
 from src.ui.main_window import MainWindow
 
 
@@ -30,7 +29,7 @@ class _FakeThread:
 
 
 class _FakeFaceIndexer(_FakeThread):
-    """Trace les connexions/démarrage effectués par _start_face_indexing."""
+    """Traces the connections/start performed by _start_face_indexing."""
 
     def __init__(self):
         super().__init__(running=False)
@@ -75,7 +74,7 @@ class _FakeLabel:
 
 
 class _FakeMainWindow:
-    """Porte uniquement les attributs lus/écrits par _start_face_indexing et
+    """Carries only the attributes read/written by _start_face_indexing and
     _on_face_indexing_finished."""
 
     def __init__(self, face_indexer=None):
@@ -141,8 +140,8 @@ class TestFaceIndexingRequeue:
 
         MainWindow._start_face_indexing(fake)
 
-        # Avant le correctif : retour silencieux, _face_index_pending jamais
-        # posé -> la nouvelle photo ne serait plus jamais indexée.
+        # Before the fix: a silent return, _face_index_pending never
+        # set -> the new photo would never be indexed again.
         assert fake._face_index_pending is True
 
     def test_finished_requeues_when_pending(self, monkeypatch):

@@ -1,9 +1,9 @@
 # Copyright 2026 Christian Guyot
 # SPDX-License-Identifier: Apache-2.0
-"""Tests (Layer 2) pour les petits dialogues extraits de main_window /
-face_cluster_grid : export, enregistrement, reset visages, popup de doublons,
-fusion de groupes — plus le helper fmt_size. Aucun exec() : widgets pilotés
-directement."""
+"""Tests (Layer 2) for the small dialogs extracted from main_window /
+face_cluster_grid: export, saving, face reset, duplicates popup,
+group merging -- plus the fmt_size helper. No exec() at all: the widgets are
+driven directly."""
 import sqlite3
 from pathlib import Path
 
@@ -22,13 +22,13 @@ from src.ui.ui_utils import fmt_size
 
 @pytest.fixture
 def en_catalogue(qapp):
-    """Installe ppm_en.qm le temps d'un test.
+    """Installs ppm_en.qm for the duration of one test.
 
-    Sans catalogue installé, un message `%n` retombe sur sa source neutre
-    (« Export 1 photo(s) ») : c'est un artefact de test, jamais ce que voit
-    l'utilisateur — `main()` installe toujours un catalogue au démarrage, et
-    ppm_en.qm n'existe que pour porter les deux formes plurielles réelles
-    (cf. src/core/i18n.py et tools/update_translations.py)."""
+    Without a catalog installed, a `%n` message falls back on its neutral
+    source ("Export 1 photo(s)"): that is a test artefact, never what the user
+    sees -- `main()` always installs a catalog at startup, and
+    ppm_en.qm exists only to carry the two real plural forms
+    (cf. src/core/i18n.py and tools/update_translations.py)."""
     qm = Path(__file__).resolve().parents[2] / "translations" / "ppm_en.qm"
     tr = QTranslator()
     assert tr.load(str(qm)), f"{qm} absent — lancer tools/update_translations.py"
@@ -67,7 +67,7 @@ class TestExportDialog:
         dlg = _ExportDialog(2)
         qtbot.addWidget(dlg)
 
-        dlg._size_radios[2][0].setChecked(True)   # Moyenne (~2 Mpx)
+        dlg._size_radios[2][0].setChecked(True)   # Medium (~2 Mpx)
 
         assert dlg.size_preset == (2_000_000, 94)
 
@@ -150,7 +150,7 @@ class TestDuplicatesPopup:
         original = PhotoInfo(path="C:/lib/orig.jpg", file_size=2 * 1024 * 1024)
         others = [
             PhotoInfo(path="C:/lib/copie1.jpg", file_size=512 * 1024),
-            PhotoInfo(path="C:/lib/copie2.jpg", file_size=0),   # taille inconnue
+            PhotoInfo(path="C:/lib/copie2.jpg", file_size=0),   # unknown size
         ]
         return original, others
 
@@ -234,9 +234,9 @@ class TestMergePickerDialog:
         return db
 
     def _settle(self, qtbot, dlg):
-        # _start_loader est différé (QTimer.singleShot(0)) : laisser l'event
-        # loop le déclencher, puis attendre la fin du vrai _AvatarLoader
-        # (polling — waitSignal(finished) raterait une émission déjà passée).
+        # _start_loader is deferred (QTimer.singleShot(0)): let the event
+        # loop trigger it, then wait for the real _AvatarLoader to finish
+        # (polling -- waitSignal(finished) would miss an emission already gone by).
         qtbot.wait(50)
         loader = dlg._loader
         if loader is not None:

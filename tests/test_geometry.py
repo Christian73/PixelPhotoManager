@@ -1,7 +1,7 @@
 # Copyright 2026 Christian Guyot
 # SPDX-License-Identifier: Apache-2.0
-"""Tests de src/processing/geometry.py (GeometryProcessor) : pur PIL/math,
-aucune dépendance Qt. Images synthétiques via PIL.Image.new()."""
+"""Tests of src/processing/geometry.py (GeometryProcessor): pure PIL/maths,
+no Qt dependency at all. Synthetic images through PIL.Image.new()."""
 from PIL import Image
 
 from src.processing.geometry import GeometryProcessor
@@ -101,12 +101,12 @@ class TestApplyCropRectangle:
 class TestApplyCropQuadrilateral:
     def test_quad_crop_produces_rectangular_output(self):
         img = _img(100, 100)
-        # Quadrilatère = rectangle complet, coords normalisées TL,TR,BR,BL.
+        # Quadrilateral = the complete rectangle, normalised coords TL,TR,BR,BL.
         quad = (0.0, 0.0, 1.0, 0.0, 1.0, 1.0, 0.0, 1.0)
         result = GeometryProcessor.apply_crop(img, quad)
         w, h = result.size
         assert w > 0 and h > 0
-        # Le résultat doit rester proche des dimensions d'origine pour un quad
-        # non déformé.
+        # The result must stay close to the original dimensions for an
+        # undistorted quad.
         assert abs(w - 100) <= 1
         assert abs(h - 100) <= 1

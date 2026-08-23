@@ -1,10 +1,10 @@
 # Copyright 2026 Christian Guyot
 # SPDX-License-Identifier: Apache-2.0
-"""Tests de src/library/image_loader.py — point de décodage image unique
-(RAW + HEIC + formats standards). rawpy est monkeypatché pour les scénarios
-RAW (dispatch JPEG embarqué / bitmap embarqué / repli postprocess) plutôt que
-de dépendre d'un vrai fichier .cr2 ; HEIC est testé avec un vrai fichier
-généré via pillow_heif (aller-retour réel), gated par importorskip."""
+"""Tests of src/library/image_loader.py -- the single image decoding point
+(RAW + HEIC + standard formats). rawpy is monkeypatched for the RAW scenarios
+(dispatch on embedded JPEG / embedded bitmap / postprocess fallback) rather
+than depending on a real .cr2 file; HEIC is tested with a real file generated
+through pillow_heif (a real round trip), gated by importorskip."""
 import io
 import sys
 
@@ -49,10 +49,10 @@ class TestOpenImageStandardFormats:
             assert img.size == (10, 5)
 
     def test_raw_extension_without_rawpy_falls_back_to_pil(self, tmp_path, monkeypatch):
-        """is_raw_available() False (rawpy absent) : open_image doit se rabattre
-        sur Image.open standard plutôt que de lever — même si le contenu réel
-        n'est pas un vrai CR2 (fichier JPEG renommé ici pour l'isoler du
-        décodage RAW proprement dit, testé séparément ci-dessous)."""
+        """is_raw_available() False (rawpy absent): open_image must fall back on
+        the standard Image.open rather than raise -- even though the real
+        content is not a genuine CR2 (a JPEG file renamed here to isolate it
+        from RAW decoding proper, tested separately below)."""
         monkeypatch.setitem(sys.modules, "rawpy", None)
         assert is_raw_available() is False
 
@@ -91,7 +91,7 @@ class _FakeRaw:
 
 
 class TestOpenImageRaw:
-    """rawpy monkeypatché : dispatch selon le format d'aperçu embarqué."""
+    """rawpy monkeypatched: dispatch according to the embedded preview format."""
 
     def test_jpeg_thumbnail_is_used_when_available(self, tmp_path, monkeypatch):
         import rawpy

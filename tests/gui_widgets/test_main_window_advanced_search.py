@@ -1,12 +1,12 @@
 # Copyright 2026 Christian Guyot
 # SPDX-License-Identifier: Apache-2.0
-"""Teste MainWindow._open_advanced_search / _continue_advanced_search /
-_run_advanced_search (menu Fichier › Recherche avancée…, Ctrl+F, ou bouton
-loupe de la sidebar), en méthode non liée contre un objet minimal — comme
-test_main_window_tags.py. AdvancedSearchDialog est remplacé par un double de
-test (jamais de vrai exec() bloquant) ; AdvancedSearchPrepLoader (vrai
-QThread, parenté à un QWidget vivant le temps du test) est laissé réel pour
-couvrir la plomberie cross-thread."""
+"""Tests MainWindow._open_advanced_search / _continue_advanced_search /
+_run_advanced_search (the File › Advanced search… menu, Ctrl+F, or the
+magnifier button of the sidebar), as an unbound method against a minimal
+object -- like test_main_window_tags.py. AdvancedSearchDialog is replaced by a
+test double (never a real blocking exec()); AdvancedSearchPrepLoader (a real
+QThread, parented to a QWidget alive for the duration of the test) is left
+real to cover the cross-thread plumbing."""
 import pytest
 from PySide6.QtWidgets import QDialog, QWidget
 
@@ -57,8 +57,8 @@ class _FakeGrid:
 
 
 class _FakeAdvancedSearchDialog:
-    """Double de test pour AdvancedSearchDialog : pas de vrai exec() bloquant,
-    résultat piloté via l'attribut de classe _next_result
+    """Test double for AdvancedSearchDialog: no real blocking exec(),
+    the result is driven through the _next_result class attribute
     (exec_result, criteria, person_id)."""
 
     _next_result = (QDialog.Accepted, {}, None)
@@ -153,7 +153,7 @@ class TestContinueAdvancedSearch:
         assert len(fake.queries) == 1
         fn, context_key = fake.queries[0]
         assert context_key == "Recherche avancée"
-        assert fn() == []  # aucune photo en base, mais la fonction s'exécute sans lever
+        assert fn() == []  # no photo in the database, but the function runs without raising
 
     def test_cancelled_dialog_does_not_start_query(self, qtbot, tmp_path):
         catalog = Catalog(db_path=tmp_path / "catalog.db")
