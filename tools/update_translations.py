@@ -1,22 +1,22 @@
 # Copyright 2026 Christian Guyot
 # SPDX-License-Identifier: Apache-2.0
-"""Met a jour les catalogues de traduction (translations/*.ts puis *.qm).
+"""Updates the translation catalogs (translations/*.ts then *.qm).
 
     .venv\\Scripts\\python.exe tools\\update_translations.py            # .ts + .qm
-    .venv\\Scripts\\python.exe tools\\update_translations.py --release  # .qm seuls
+    .venv\\Scripts\\python.exe tools\\update_translations.py --release  # .qm only
 
-Etape 1 (lupdate) : re-extrait les chaines marquees translate() de tout le code
-source vers translations/ppm_<code>.ts, en conservant les traductions deja
-saisies et en marquant "vanished" celles dont la source a disparu.
-Etape 2 (pluriels) : cf. `restore_numerus` ci-dessous.
-Etape 3 (lrelease) : compile chaque .ts en .qm binaire, seul format lu a
-l'execution (cf. src/core/i18n.py).
+Step 1 (lupdate): re-extracts the strings marked translate() from all the source
+code into translations/ppm_<code>.ts, keeping the translations already
+entered and marking "vanished" those whose source has disappeared.
+Step 2 (plurals): cf. `restore_numerus` below.
+Step 3 (lrelease): compiles each .ts into a binary .qm, the only format read at
+runtime (cf. src/core/i18n.py).
 
-La langue SOURCE est l'anglais : les chaines sont ecrites en anglais dans le
-code et toute chaine non traduite y retombe. L'anglais a lui aussi un
-catalogue, mais pour les seuls pluriels : les chaines %n sont ecrites au neutre
-dans le code (« %n face(s) ») et c'est ppm_en.ts qui porte « %n face » /
-« %n faces ». Le reste y est vide et retombe sur la source.
+The SOURCE language is English: the strings are written in English in the
+code and any untranslated string falls back to it. English has a catalog
+too, but for the plurals only: the %n strings are written neutrally
+in the code ("%n face(s)") and it is ppm_en.ts that carries "%n face" /
+"%n faces". The rest of it is empty and falls back to the source.
 """
 
 import re
@@ -28,13 +28,13 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 TS_DIR = ROOT / "translations"
 
-# Codes ISO -> locale complete ecrite dans l'en-tete du .ts (Qt Linguist
-# l'utilise pour les regles de pluriel, qui different d'une locale a l'autre).
+# ISO codes -> full locale written into the header of the .ts (Qt Linguist
+# uses it for the plural rules, which differ from one locale to another).
 TARGETS = {"fr": "fr_FR", "en": "en_US", "de": "de_DE"}
 SOURCE_LOCALE = "en_US"
 
-#: Nombre de formes plurielles par langue cible. fr/en/de en ont deux
-#: (le decoupage differe : le francais met 0 au singulier, pas l'anglais).
+#: Number of plural forms per target language. fr/en/de have two
+#: (the split differs: French puts 0 in the singular, English does not).
 PLURAL_FORMS = {"fr": 2, "en": 2, "de": 2}
 
 
@@ -58,11 +58,11 @@ def run(tool: str, args: list[str]) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Pluriels
+# Plurals
 # ---------------------------------------------------------------------------
 
 def harvest_numerus(ts: Path) -> dict:
-    """Releve les formes plurielles deja saisies : {(contexte, source): [formes]}."""
+    """Harvests the plural forms already entered: {(context, source): [forms]}."""
     if not ts.is_file():
         return {}
     root = ET.parse(ts).getroot()
@@ -81,19 +81,19 @@ def harvest_numerus(ts: Path) -> dict:
 
 
 def restore_numerus(ts: Path, saved: dict, n_forms: int) -> int:
-    """Remet en forme plurielle tout message dont la source contient `%n`.
+    """Puts back into plural form every message whose source contains `%n`.
 
-    pyside6-lupdate ne marque `numerus="yes"` que si le 4e argument de
-    translate() est un litteral entier -- ce qu'il n'est jamais dans du vrai
-    code, ou le compte est une variable. Pire : si c'est une expression
-    (len(x), obj.attr), lupdate SUPPRIME le message du catalogue, sans un mot
-    (d'ou la regle : hisser le compte dans une variable locale, cf.
-    tests/test_i18n.py). Et sur une passe suivante, lupdate re-aplatit un
-    message pluriel deja traduit en n'en gardant que la 1re forme.
+    pyside6-lupdate only marks `numerus="yes"` if the 4th argument of
+    translate() is an integer literal -- which it never is in real
+    code, where the count is a variable. Worse: if it is an expression
+    (len(x), obj.attr), lupdate REMOVES the message from the catalog, without a word
+    (hence the rule: hoist the count into a local variable, cf.
+    tests/test_i18n.py). And on a following pass, lupdate re-flattens an
+    already translated plural message keeping only its 1st form.
 
-    On restaure donc ici, apres chaque lupdate, la structure plurielle et les
-    formes relevees avant (harvest_numerus) -- ce fichier est le seul endroit
-    qui sait qu'un `%n` vaut pluriel.
+    So we restore here, after every lupdate, the plural structure and the
+    forms harvested before (harvest_numerus) -- this file is the only place
+    that knows a `%n` means plural.
     """
     if not ts.is_file():
         return 0
@@ -112,17 +112,17 @@ def restore_numerus(ts: Path, saved: dict, n_forms: int) -> int:
             if tr is None:
                 tr = ET.SubElement(msg, "translation")
             if forms is None:
-                # Rien de connu : recuperer ce que lupdate a laisse (texte plat
-                # d'une passe precedente) plutot que de le perdre.
+                # Nothing known: recover what lupdate left (flat text
+                # of a previous pass) rather than losing it.
                 flat = [f.text or "" for f in tr.findall("numerusform")]
                 if not flat:
                     flat = [tr.text or ""]
                 forms = flat
             forms = list(forms[:n_forms]) + [""] * max(0, n_forms - len(forms))
 
-            # "vanished"/"obsolete" : source disparue du code, lupdate garde la
-            # traduction en reserve. Ne pas ecraser ce statut par "unfinished",
-            # qui la ferait ressortir comme un travail a faire.
+            # "vanished"/"obsolete": source gone from the code, lupdate keeps the
+            # translation in reserve. Do not overwrite that status with "unfinished",
+            # which would make it show up again as work to be done.
             kept = tr.get("type") if tr.get("type") in ("vanished", "obsolete") else None
             msg.set("numerus", "yes")
             tr.clear()
@@ -130,10 +130,10 @@ def restore_numerus(ts: Path, saved: dict, n_forms: int) -> int:
             if kept:
                 tr.set("type", kept)
             elif not all(f.strip() for f in forms):
-                # UNE seule forme vide suffit a marquer le message inacheve :
-                # lrelease compte « finished » des qu'il y a une <translation>,
-                # et une forme vide rend une chaine VIDE a l'execution, pour le
-                # seul `n` concerne. Quatre messages sont passes par ce trou.
+                # ONE single empty form is enough to mark the message unfinished:
+                # lrelease counts "finished" as soon as there is a <translation>,
+                # and an empty form renders an EMPTY string at runtime, for the
+                # only `n` concerned. Four messages went through that hole.
                 tr.set("type", "unfinished")
             for f in forms:
                 node = ET.SubElement(tr, "numerusform")
@@ -141,8 +141,8 @@ def restore_numerus(ts: Path, saved: dict, n_forms: int) -> int:
             fixed += 1
 
     tree.write(ts, encoding="utf-8", xml_declaration=True)
-    # ElementTree ne reecrit pas la DOCTYPE ; lrelease et Linguist s'en passent,
-    # mais le fichier reste plus proche de l'original avec elle.
+    # ElementTree does not rewrite the DOCTYPE; lrelease and Linguist do without it,
+    # but the file stays closer to the original with it.
     text = ts.read_text(encoding="utf-8")
     if "<!DOCTYPE TS>" not in text:
         text = re.sub(r"(<\?xml[^>]*\?>\s*)", r"\1<!DOCTYPE TS>\n", text, count=1)

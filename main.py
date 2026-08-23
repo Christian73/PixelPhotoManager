@@ -1,6 +1,6 @@
 ﻿# Copyright 2026 Christian Guyot
 # SPDX-License-Identifier: Apache-2.0
-from __future__ import annotations  # annotations lazy → QDialog etc. non évalués dans le subprocess
+from __future__ import annotations  # lazy annotations -> QDialog etc. not evaluated in the subprocess
 
 import logging
 import os
@@ -9,25 +9,25 @@ import traceback
 from pathlib import Path
 import multiprocessing
 
-# En exe "windowed" (console=False), sys.stdout/sys.stderr valent None : toute
-# bibliothèque qui y écrit (ex. tqdm, utilisé par insightface pendant le
-# téléchargement du pack de modèles buffalo_l) plante avec
-# AttributeError: 'NoneType' object has no attribute 'write'. Ce crash
-# interrompait le téléchargement avant l'écriture du modèle sur le disque,
-# donc le modèle n'était jamais mis en cache et chaque photo retentait un
-# téléchargement complet. Étend aussi aux sous-processus workers (spawn).
+# In a "windowed" exe (console=False), sys.stdout/sys.stderr are None: any
+# library writing to them (e.g. tqdm, used by insightface during the
+# download of the buffalo_l model pack) crashes with
+# AttributeError: 'NoneType' object has no attribute 'write'. That crash
+# interrupted the download before the model was written to disk,
+# so the model was never cached and every photo attempted a full
+# download again. Extends to the worker subprocesses (spawn) as well.
 if sys.stdout is None:
     sys.stdout = open(os.devnull, "w")
 if sys.stderr is None:
     sys.stderr = open(os.devnull, "w")
 
-# ProcessPoolExecutor sur Windows utilise spawn : le sous-processus worker importe
-# ce module AVANT d'exécuter la tâche.  On limite au strict minimum ce qui s'exécute
-# dans le sous-processus pour éviter les effets de bord (logging doublon, Qt DLLs…).
+# ProcessPoolExecutor on Windows uses spawn: the worker subprocess imports
+# this module BEFORE running the task.  We keep to a strict minimum what runs
+# in the subprocess to avoid side effects (duplicate logging, Qt DLLs...).
 if multiprocessing.current_process().name == 'MainProcess':
     import threading
 
-    # En mode EXE (PyInstaller), stocker les logs dans %LOCALAPPDATA%
+    # In EXE mode (PyInstaller), store the logs in %LOCALAPPDATA%
     if getattr(sys, "frozen", False):
         _LOG_PATH = (
             Path(os.environ.get("LOCALAPPDATA", Path.home()))
@@ -55,7 +55,7 @@ if multiprocessing.current_process().name == 'MainProcess':
     warnings.filterwarnings("ignore", category=_PilImage.DecompressionBombWarning)
 
     def _show_error_dialog(exc_type, exc_value, exc_tb) -> None:
-        """Affiche un dialogue avec le traceback complet, sélectionnable et copiable."""
+        """Displays a dialog with the full traceback, selectable and copyable."""
         try:
             app = QApplication.instance()
             if app is None:
@@ -117,9 +117,9 @@ logger = logging.getLogger(__name__)
 
 
 def _build_splash() -> QSplashScreen:
-    """Construit le splash screen : fond noir, icône centrée, zone de statut en bas."""
+    """Builds the splash screen: black background, centred icon, status area at the bottom."""
     W, H = 480, 320
-    STATUS_H = 48          # hauteur réservée à la ligne de statut
+    STATUS_H = 48          # height reserved for the status line
 
     base = QPixmap(W, H)
     base.fill(QColor("#000000"))
@@ -128,7 +128,7 @@ def _build_splash() -> QSplashScreen:
     p.setRenderHint(QPainter.RenderHint.Antialiasing)
     p.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
 
-    # Icône
+    # Icon
     icon_path = Path(__file__).resolve().parent / "assets" / "cubic.png"
     if icon_path.exists():
         icon_px = QPixmap(str(icon_path)).scaled(
@@ -140,14 +140,14 @@ def _build_splash() -> QSplashScreen:
         iy = 36
         p.drawPixmap(ix, iy, icon_px)
 
-    # Nom de l'application
+    # Application name
     font_title = QFont("Segoe UI", 17, QFont.Weight.Bold)
     p.setFont(font_title)
     p.setPen(QColor("#ffffff"))
     p.drawText(0, 170, W, 36, Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter,
                "PixelPhotoManager")
 
-    # Séparateur au-dessus de la zone statut
+    # Separator above the status area
     sep_y = H - STATUS_H - 1
     grad = QLinearGradient(0, sep_y, W, sep_y)
     grad.setColorAt(0.0,  QColor(0, 0, 0, 0))
@@ -166,7 +166,7 @@ def _build_splash() -> QSplashScreen:
 
 
 def _splash_status(splash: QSplashScreen, app: QApplication, msg: str) -> None:
-    """Met à jour le message de statut et force le repaint."""
+    """Updates the status message and forces the repaint."""
     splash.showMessage(
         msg,
         Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignBottom,
@@ -192,7 +192,7 @@ def _build_onboarding(config) -> QDialog:
     title.setAlignment(Qt.AlignCenter)
     layout.addWidget(title)
 
-    # --- Dossiers ---
+    # --- Folders ---
     layout.addWidget(QLabel(translate(
         "Main", "Where are your photos? Choose at least one folder to watch.")))
 
@@ -218,13 +218,13 @@ def _build_onboarding(config) -> QDialog:
     btn_row.addStretch()
     layout.addLayout(btn_row)
 
-    # --- Séparateur ---
+    # --- Separator ---
     sep = QFrame()
     sep.setFrameShape(QFrame.HLine)
     sep.setStyleSheet("color: #444;")
     layout.addWidget(sep)
 
-    # --- Reconnaissance faciale ---
+    # --- Face recognition ---
     lbl_faces = QLabel(translate("Main", "People recognition"))
     font2 = QFont()
     font2.setBold(True)
@@ -246,7 +246,7 @@ def _build_onboarding(config) -> QDialog:
     lbl_note.setStyleSheet("color: #888; font-size: 11px;")
     layout.addWidget(lbl_note)
 
-    # --- Bouton démarrer ---
+    # --- Start button ---
     btn_start = QPushButton(translate("Main", "Get started →"))
     btn_start.setDefault(True)
 
@@ -268,15 +268,15 @@ def main() -> None:
     app.setApplicationName("PixelPhotoManager")
     app.setOrganizationName("PixelPhotoManager")
 
-    # Langue — AVANT la construction du moindre widget (y compris le splash) :
-    # les libellés sont traduits à la construction, pas réévalués ensuite.
-    # Avant aussi les imports de src.ui plus bas, dont les constantes de module
-    # (libellés de traitements, de cadres…) sont traduites à l'import.
+    # Language - BEFORE the construction of the least widget (including the splash):
+    # the labels are translated at construction time, not re-evaluated afterwards.
+    # Before the src.ui imports further down too, whose module constants
+    # (treatment labels, frame labels...) are translated at import time.
     from src.core import i18n
     from src.core.config import Config
     i18n.install(app, i18n.current_language(Config()))
 
-    # Génère l'icône coche pour le style global des QCheckBox
+    # Generates the check icon for the global style of the QCheckBox
     import tempfile
     _chk_px = QPixmap(13, 13)
     _chk_px.fill(QColor(0, 0, 0, 0))
@@ -289,8 +289,8 @@ def main() -> None:
     _check_icon = os.path.join(tempfile.gettempdir(), "ppm_check.png").replace("\\", "/")
     _chk_px.save(_check_icon, "PNG")
 
-    # Thème sombre : dans src/ui/theme.py plutôt qu'ici, pour être vérifiable
-    # sans importer ce point d'entrée (qui reconfigure le logging à l'import).
+    # Dark theme: in src/ui/theme.py rather than here, so as to be verifiable
+    # without importing this entry point (which reconfigures the logging at import).
     from src.ui.theme import app_stylesheet
     app.setStyleSheet(app_stylesheet(_check_icon))
 
@@ -310,9 +310,9 @@ def main() -> None:
     from src.ui.main_window import MainWindow
     from src.core.app_version import warm_app_version_async
 
-    # Précalcule get_app_version() en tâche de fond (git describe en mode dev,
-    # jusqu'à 2s) pendant les initialisations suivantes, pour que le résultat
-    # soit déjà en cache quand l'UI en a besoin (démarrage, aide).
+    # Precomputes get_app_version() in the background (git describe in dev mode,
+    # up to 2s) during the following initialisations, so that the result
+    # is already cached when the UI needs it (startup, help).
     warm_app_version_async()
 
     logger.debug("Initialisation Config")
@@ -349,7 +349,7 @@ def main() -> None:
         dlg = _build_onboarding(config)
         if dlg.exec() == QDialog.Rejected and not config.get_scan_folders():
             logger.info("Onboarding annulé sans dossier — fermeture")
-            return  # propre, sans sys.exit()
+            return  # clean, without sys.exit()
         splash.show()
         app.processEvents()
 
@@ -360,7 +360,7 @@ def main() -> None:
     window.show()
     splash.finish(window)
 
-    # Proposer l'import Picasa après le premier affichage de la fenêtre
+    # Offer the Picasa import after the first display of the window
     def _check_picasa():
         from src.ui.picasa_import_dialog import check_and_prompt
 
@@ -378,15 +378,15 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    # CRITIQUE : doit être le premier appel dans __main__ pour les EXE PyInstaller.
-    # Sans cela, chaque sous-processus worker re-lance l'application entière sur Windows
-    # (spawn), provoquant une boucle infinie qui sature le CPU.
+    # CRITICAL: must be the first call in __main__ for the PyInstaller EXEs.
+    # Without it, every worker subprocess relaunches the whole application on Windows
+    # (spawn), causing an infinite loop that saturates the CPU.
     multiprocessing.freeze_support()
     try:
         logger.info("Démarrage de PixelPhotoManager")
         main()
     except SystemExit:
-        pass  # sortie normale de app.exec()
+        pass  # normal exit of app.exec()
     except BaseException:
         logger.critical("Crash au démarrage", exc_info=True)
         _show_error_dialog(*sys.exc_info())

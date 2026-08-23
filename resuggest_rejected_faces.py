@@ -2,14 +2,14 @@
 # SPDX-License-Identifier: Apache-2.0
 #!/usr/bin/env python3
 """
-Recalcule les suggestions pour les faces isolées (pinned=1) dont la suggestion
-a été rejetée ou n'a jamais abouti (suggestion_person_id IS NULL).
+Recomputes the suggestions for the isolated faces (pinned=1) whose suggestion
+was rejected or never succeeded (suggestion_person_id IS NULL).
 
-Ces faces sont invisibles dans l'application car elles ne peuvent plus apparaître
-dans les clusters non-nommés (filtre pinned=0) ni dans les suggestions.
+Those faces are invisible in the application because they can no longer appear
+in the unnamed clusters (pinned=0 filter) nor in the suggestions.
 
-Ce script recalcule la meilleure personne pour chacun de ces clusters via
-un produit matriciel numpy en une seule passe.
+This script recomputes the best person for each of those clusters through
+a numpy matrix product in a single pass.
 """
 import os
 import sys
@@ -33,7 +33,7 @@ def main() -> None:
     conn = sqlite3.connect(DB_PATH)
     conn.execute("PRAGMA journal_mode=WAL")
 
-    # 1. Faces isolées sans suggestion (rejetées ou sans correspondance)
+    # 1. Isolated faces with no suggestion (rejected or with no match)
     print("Lecture des faces isolées sans suggestion…")
     rows = conn.execute(
         "SELECT cluster_id, embedding FROM faces"
@@ -49,14 +49,14 @@ def main() -> None:
         conn.close()
         return
 
-    # Regrouper les embeddings par cluster
+    # Group the embeddings by cluster
     cid_to_embs: dict[int, list] = {}
     for cid, blob in rows:
         cid_to_embs.setdefault(cid, []).append(_dec(blob))
 
     print(f"{sum(len(v) for v in cid_to_embs.values())} face(s) dans {len(cid_to_embs)} cluster(s).")
 
-    # 2. Charger tous les embeddings des personnes connues
+    # 2. Load every embedding of the known people
     print("Chargement des embeddings des personnes connues…")
     pers_rows = conn.execute(
         "SELECT person_id, embedding FROM faces"
@@ -75,7 +75,7 @@ def main() -> None:
         conn.close()
         return
 
-    # 3. Calcul des centroids et produit matriciel numpy
+    # 3. Computation of the centroids and numpy matrix product
     try:
         import numpy as np
 
@@ -139,7 +139,7 @@ def main() -> None:
 
     print(f"{len(suggestions)} suggestion(s) calculée(s).")
 
-    # 4. Écrire les suggestions
+    # 4. Write the suggestions
     if suggestions:
         conn.execute("BEGIN")
         for cid, (pid, score) in suggestions.items():

@@ -1,17 +1,17 @@
 # Copyright 2026 Christian Guyot
 # SPDX-License-Identifier: Apache-2.0
-"""Genere les PDF de livraison a partir des Markdown a la racine du depot.
+"""Generates the delivery PDFs from the Markdown files at the root of the repository.
 
-    .venv\\Scripts\\python.exe tools\\make_pdf.py                 # tous les documents
-    .venv\\Scripts\\python.exe tools\\make_pdf.py DeliveryNote.md # un seul
+    .venv\\Scripts\\python.exe tools\\make_pdf.py                 # every document
+    .venv\\Scripts\\python.exe tools\\make_pdf.py DeliveryNote.md # a single one
 
-Sortie : <nom du Markdown>_v<VERSION>.pdf a la racine (les .pdf sont ignores
-par git, ce sont des livrables reconstructibles).
+Output: <name of the Markdown>_v<VERSION>.pdf at the root (the .pdf files are ignored
+by git, they are rebuildable deliverables).
 
-Chaine : Markdown -> HTML + feuille de style d'impression -> Chrome headless
-`--print-to-pdf`. Chrome plutot qu'une bibliotheque Python (weasyprint, xhtml2pdf)
-parce que c'est ce qui a produit le PDF de la v1.0.0 (moteur Skia/PDF) et que
-la mise en page reste donc comparable d'une version a l'autre.
+Chain: Markdown -> HTML + print stylesheet -> headless Chrome
+`--print-to-pdf`. Chrome rather than a Python library (weasyprint, xhtml2pdf)
+because that is what produced the PDF of v1.0.0 (Skia/PDF engine) and so
+the layout stays comparable from one version to the next.
 """
 
 import re
@@ -27,7 +27,7 @@ ROOT = Path(__file__).resolve().parent.parent
 VERSION = (ROOT / "VERSION").read_text(encoding="utf-8").strip()
 DOCUMENTS = ["Guide_Utilisateur.md", "DeliveryNote.md"]
 
-# Chrome (ou Edge, meme moteur) : le premier chemin existant est utilise.
+# Chrome (or Edge, same engine): the first existing path is used.
 _BROWSERS = [
     r"C:\Program Files\Google\Chrome\Application\chrome.exe",
     r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
@@ -140,13 +140,13 @@ _LIST_ITEM = re.compile(r"^\s{0,3}([-*+]|\d{1,9}[.)])\s+")
 
 
 def loosen_lists(md_text: str) -> str:
-    """Insere la ligne vide qu'exige Python-Markdown avant une liste.
+    """Inserts the blank line Python-Markdown requires before a list.
 
-    GitHub (CommonMark) accepte qu'une liste interrompe un paragraphe :
-    "Definir la zone :" suivi directement de "- ..." s'y affiche bien en liste.
-    Python-Markdown, lui, avale les puces dans le paragraphe precedent (14
-    occurrences dans le guide). Correction faite ici, a la conversion, plutot
-    que dans le .md — la source est valide et se lit correctement sur GitHub.
+    GitHub (CommonMark) accepts a list interrupting a paragraph:
+    "Define the area:" followed directly by "- ..." displays there as a list.
+    Python-Markdown, for its part, swallows the bullets into the previous paragraph (14
+    occurrences in the guide). Fixed here, at conversion time, rather
+    than in the .md - the source is valid and reads correctly on GitHub.
     """
     out: list[str] = []
     in_fence = False
@@ -159,9 +159,9 @@ def loosen_lists(md_text: str) -> str:
             if not line.strip():
                 in_list = False
             elif _LIST_ITEM.match(line):
-                # Une liste deja engagee ne doit pas etre desserree : une ligne
-                # vide entre deux puces la rendrait "loose" (Markdown enrobe
-                # alors chaque item d'un <p>, ce qui aere le rendu).
+                # A list already started must not be loosened: a blank
+                # line between two bullets would make it "loose" (Markdown then
+                # wraps each item in a <p>, which airs out the rendering).
                 if not in_list and out and out[-1].strip():
                     out.append("")
                 in_list = True
@@ -179,12 +179,12 @@ def build_html(src: Path) -> str:
     stamp = (f'<p class="version">Version {VERSION} — '
              f"{today.day} {_MOIS[today.month - 1]} {today.year}</p>")
     body = body.replace("</h1>", f"</h1>\n{stamp}", 1)
-    # Table des matieres sur sa propre page (guide utilisateur uniquement — les
-    # documents courts comme la note de livraison n'en ont pas).
+    # Table of contents on its own page (user guide only - the
+    # short documents such as the delivery note do not have one).
     toc = body.find("Table des matières")
     if toc != -1:
-        # Le saut va avant le titre qui SUIT la table des matieres — celle-ci
-        # est elle-meme un <h2>, couper avant l'enverrait en page 2.
+        # The break goes before the title that FOLLOWS the table of contents - the table
+        # is itself an <h2>, cutting before it would send it to page 2.
         after = re.search(r"<h2[ >]", body[toc:])
         if after:
             i = toc + after.start()

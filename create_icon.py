@@ -1,9 +1,9 @@
 ﻿# Copyright 2026 Christian Guyot
 # SPDX-License-Identifier: Apache-2.0
 """
-Genere assets/app_icon.ico depuis l'image source PNG.
-- Separation fond/sujet par GrabCut (OpenCV)
-- Produit un .ico multi-resolution : 16, 32, 48, 64, 128, 256 px (PNG embarques)
+Generates assets/app_icon.ico from the source PNG image.
+- Background/subject separation through GrabCut (OpenCV)
+- Produces a multi-resolution .ico: 16, 32, 48, 64, 128, 256 px (embedded PNGs)
 """
 
 import sys
@@ -18,19 +18,19 @@ SRC = Path("assets/ChatGPT Image Jun 6, 2026, 04_29_56 PM.png")
 DST = Path("assets/app_icon.ico")
 SIZES = [256, 128, 64, 48, 32, 16]
 
-# Travaille sur une image reduite pour la vitesse
+# Works on a reduced image for speed
 WORK_SIZE = 640
 
 
 def grabcut_extract(src_path: Path) -> Image.Image:
     """
-    Extrait le sujet (cube) via GrabCut, retourne une image RGBA.
+    Extracts the subject (cube) through GrabCut, returns an RGBA image.
     """
-    # Charger en BGR (OpenCV)
+    # Load in BGR (OpenCV)
     img_bgr = cv2.imread(str(src_path))
     orig_h, orig_w = img_bgr.shape[:2]
 
-    # Reduire pour la vitesse
+    # Reduce for speed
     scale = WORK_SIZE / max(orig_h, orig_w)
     w = int(orig_w * scale)
     h = int(orig_h * scale)
@@ -38,7 +38,7 @@ def grabcut_extract(src_path: Path) -> Image.Image:
 
     print(f"  Resolution de travail : {w}x{h}")
 
-    # Rectangle d'initialisation : on exclut 5 % de marge tout autour
+    # Initialisation rectangle: we exclude a 5 % margin all around
     margin_x = int(w * 0.05)
     margin_y = int(h * 0.05)
     rect = (margin_x, margin_y, w - 2 * margin_x, h - 2 * margin_y)
@@ -50,14 +50,14 @@ def grabcut_extract(src_path: Path) -> Image.Image:
     print("  GrabCut en cours (5 iterations) ...")
     cv2.grabCut(small, mask, rect, bgd_model, fgd_model, 5, cv2.GC_INIT_WITH_RECT)
 
-    # Affiner : les coins sont du fond pur, le centre est premier plan
-    # Marquer manuellement les coins comme fond definitif
+    # Refine: the corners are pure background, the centre is foreground
+    # Mark the corners manually as definite background
     corner = 20
     mask[:corner, :corner] = cv2.GC_BGD
     mask[:corner, -corner:] = cv2.GC_BGD
     mask[-corner:, :corner] = cv2.GC_BGD
     mask[-corner:, -corner:] = cv2.GC_BGD
-    # Le centre de l'image est premier plan definitif
+    # The centre of the image is definite foreground
     cx, cy = w // 2, h // 2
     center_r = int(min(w, h) * 0.25)
     mask[cy - center_r:cy + center_r, cx - center_r:cx + center_r] = cv2.GC_FGD
@@ -65,28 +65,28 @@ def grabcut_extract(src_path: Path) -> Image.Image:
     print("  GrabCut affinement (3 iterations) ...")
     cv2.grabCut(small, mask, rect, bgd_model, fgd_model, 3, cv2.GC_INIT_WITH_MASK)
 
-    # mask : 0=BGD, 1=FGD, 2=PR_BGD, 3=PR_FGD
+    # mask: 0=BGD, 1=FGD, 2=PR_BGD, 3=PR_FGD
     fg_mask_small = np.where((mask == cv2.GC_FGD) | (mask == cv2.GC_PR_FGD), 255, 0).astype(np.uint8)
 
-    # Affiner le masque : fermeture morphologique pour boucher les trous
+    # Refine the mask: morphological closing to plug the holes
     kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
     fg_mask_small = cv2.morphologyEx(fg_mask_small, cv2.MORPH_CLOSE, kernel, iterations=2)
     fg_mask_small = cv2.morphologyEx(fg_mask_small, cv2.MORPH_OPEN, kernel, iterations=1)
 
-    # Flouter legerement les bords (anti-aliasing)
+    # Blur the edges slightly (anti-aliasing)
     fg_mask_small = cv2.GaussianBlur(fg_mask_small, (5, 5), 1.5)
 
-    # Remonter au format original
+    # Scale back up to the original format
     fg_mask = cv2.resize(fg_mask_small, (orig_w, orig_h), interpolation=cv2.INTER_LINEAR)
 
-    # Construire l'image RGBA
+    # Build the RGBA image
     img_rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
     rgba = np.dstack([img_rgb, fg_mask])
     return Image.fromarray(rgba.astype(np.uint8), "RGBA")
 
 
 def crop_to_content(img: Image.Image, padding: int = 12) -> Image.Image:
-    """Recadre sur le contenu non-transparent (carre centre)."""
+    """Crops to the non-transparent content (centred square)."""
     bbox = img.getbbox()
     if bbox is None:
         return img
@@ -108,7 +108,7 @@ def crop_to_content(img: Image.Image, padding: int = 12) -> Image.Image:
 
 
 def build_ico(images: list, path: Path) -> None:
-    """Construit un .ico multi-taille (format Vista+, PNG embarques, RGBA)."""
+    """Builds a multi-size .ico (Vista+ format, embedded PNGs, RGBA)."""
     count = len(images)
     png_chunks = []
     for img in images:

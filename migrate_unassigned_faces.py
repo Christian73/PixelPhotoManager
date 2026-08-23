@@ -2,11 +2,11 @@
 # SPDX-License-Identifier: Apache-2.0
 #!/usr/bin/env python3
 """
-Migration : isole les visages dé-associés (person_id=NULL, pinned=0, cluster_id>0)
-dans des clusters négatifs individuels et calcule des suggestions pour d'autres
-personnes en une seule passe (une lecture des embeddings, un produit matriciel).
+Migration: isolates the unassigned faces (person_id=NULL, pinned=0, cluster_id>0)
+into individual negative clusters and computes suggestions for other
+people in a single pass (one read of the embeddings, one matrix product).
 
-Version optimisée : O(1) lecture DB au lieu de O(N clusters).
+Optimised version: O(1) DB read instead of O(N clusters).
 """
 import os
 import sys
@@ -30,7 +30,7 @@ def main() -> None:
     conn = sqlite3.connect(DB_PATH)
     conn.execute("PRAGMA journal_mode=WAL")
 
-    # 1. Visages dé-associés non encore isolés
+    # 1. Unassigned faces not isolated yet
     print("Lecture des visages dé-associés…")
     rows = conn.execute(
         "SELECT id, cluster_id, embedding FROM faces"
@@ -51,7 +51,7 @@ def main() -> None:
 
     print(f"{len(rows)} visage(s) à traiter.")
 
-    # Regrouper par cluster d'origine pour déterminer la personne dominante
+    # Group by original cluster to determine the dominant person
     by_cluster: dict[int, list[int]] = {}
     face_embs: dict[int, list[float]] = {}
     for face_id, cluster_id, blob in rows:
@@ -60,7 +60,7 @@ def main() -> None:
 
     print(f"Répartis dans {len(by_cluster)} cluster(s) d'origine.")
 
-    # 2. Personne dominante par cluster d'origine (pour l'exclusion)
+    # 2. Dominant person per original cluster (for the exclusion)
     dominant: dict[int, int | None] = {}
     for cluster_id in by_cluster:
         dom = conn.execute(
@@ -71,7 +71,7 @@ def main() -> None:
         ).fetchone()
         dominant[cluster_id] = dom[0] if dom else None
 
-    # 3. Charger TOUS les embeddings des personnes connues en une seule requête
+    # 3. Load ALL the embeddings of the known people in a single query
     print("Chargement des embeddings des personnes connues…")
     pers_rows = conn.execute(
         "SELECT person_id, embedding FROM faces"
@@ -90,7 +90,7 @@ def main() -> None:
         conn.close()
         return
 
-    # 4. Calculer les centroids des personnes (numpy si dispo, sinon pur Python)
+    # 4. Compute the centroids of the people (numpy if available, otherwise pure Python)
     try:
         import numpy as np
 
@@ -111,15 +111,15 @@ def main() -> None:
             return [sum(e[d] for e in embs) / n for d in range(dim)]
         person_centroids = {pid: centroid(by_person[pid]) for pid in person_ids}
 
-    # 5. Isoler tous les visages en une seule transaction
+    # 5. Isolate every face in a single transaction
     print("Isolation des visages…")
     row = conn.execute(
         "SELECT MIN(cluster_id) FROM faces WHERE pinned=1"
     ).fetchone()
     next_cid = (min(row[0], 0) - 1) if row and row[0] is not None else -1
 
-    face_to_cid: dict[int, int] = {}   # face_id → nouveau cluster_id négatif
-    face_to_excl: dict[int, int | None] = {}  # face_id → person_id à exclure
+    face_to_cid: dict[int, int] = {}   # face_id -> new negative cluster_id
+    face_to_excl: dict[int, int | None] = {}  # face_id -> person_id to exclude
 
     conn.execute("BEGIN")
     for cluster_id, face_ids in by_cluster.items():
@@ -137,20 +137,20 @@ def main() -> None:
     conn.execute("COMMIT")
     print(f"{len(face_to_cid)} visage(s) isolé(s).")
 
-    # 6. Calcul des suggestions en une seule passe matricielle
+    # 6. Computation of the suggestions in a single matrix pass
     print("Calcul des suggestions…")
-    suggestions: dict[int, tuple[int, float]] = {}  # new_cid → (person_id, score)
+    suggestions: dict[int, tuple[int, float]] = {}  # new_cid -> (person_id, score)
 
     if USE_NUMPY:
-        # Regrouper les visages par personne exclue pour faire un produit matriciel par groupe
-        # (on exclut la personne dominante du cluster d'origine)
+        # Group the faces by excluded person so as to do one matrix product per group
+        # (we exclude the dominant person of the original cluster)
         by_excl: dict[int | None, list[tuple[int, int]]] = {}
         for face_id, cid in face_to_cid.items():
             excl = face_to_excl[face_id]
             by_excl.setdefault(excl, []).append((face_id, cid))
 
         for excl_pid, group in by_excl.items():
-            # Indices des personnes à conserver
+            # Indices of the people to keep
             valid_idx = [
                 i for i, pid in enumerate(person_ids) if pid != excl_pid
             ]
@@ -198,7 +198,7 @@ def main() -> None:
 
     print(f"{len(suggestions)} suggestion(s) calculée(s).")
 
-    # 7. Écrire toutes les suggestions en une seule transaction
+    # 7. Write every suggestion in a single transaction
     if suggestions:
         conn.execute("BEGIN")
         for cid, (pid, score) in suggestions.items():
