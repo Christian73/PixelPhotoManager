@@ -1,10 +1,10 @@
 # Copyright 2026 Christian Guyot
 # SPDX-License-Identifier: Apache-2.0
-"""Teste `src/library/scanner.py` avec de vrais `ScanThread.start()` (qtbot) sur
-des arborescences temporaires : découverte des fichiers supportés, exclusions
-(cachés, Originals, *_assets, thumbnails), scan incrémental par mtime, re-scan
-forcé, purge des entrées fantômes, fichiers vidéo/corrompus, helpers
-`_is_hidden` et cycle de vie `LibraryScanner`."""
+"""Tests `src/library/scanner.py` with real `ScanThread.start()` calls (qtbot)
+on temporary trees: discovery of the supported files, exclusions (hidden,
+Originals, *_assets, thumbnails), incremental scan by mtime, forced rescan,
+purge of the ghost entries, video/corrupted files, the `_is_hidden` helper and
+the `LibraryScanner` life cycle."""
 import os
 import subprocess
 
@@ -31,10 +31,10 @@ def env(tmp_path):
 
 
 def _run_scan(qtbot, catalog, cache, folders, force=False):
-    """Exécute un ScanThread en synchrone (run() direct : les signaux sont émis
-    en connexion directe, et coverage trace le code — un vrai .start() dans un
-    thread natif Qt échappe à sys.settrace). Le chemin cross-thread réel est
-    couvert par TestLibraryScanner.test_scan_lifecycle."""
+    """Runs a ScanThread synchronously (direct run(): the signals are emitted
+    through direct connections, and coverage traces the code -- a real .start()
+    in a native Qt thread escapes sys.settrace). The real cross-thread path is
+    covered by TestLibraryScanner.test_scan_lifecycle."""
     thread = ScanThread(folders, catalog, cache, force=force)
     batches: list[list] = []
     removed: list[list] = []
@@ -100,11 +100,11 @@ class TestScanDiscovery:
         assert all("visible.jpg" in p for p in paths)
 
     def test_dvd_copy_vob_cataloged_as_video(self, qtbot, env):
-        """Une copie de DVD (VIDEO_TS/AUDIO_TS) est parcourue comme n'importe
-        quel autre dossier : les .VOB sont de vraies vidéos (VIDEO_EXT),
-        cataloguées avec media_type="video" ; .IFO/.BUP (métadonnées de
-        navigation, pas du média) restent ignorés faute d'extension supportée,
-        sans exclusion de dossier dédiée."""
+        """A DVD copy (VIDEO_TS/AUDIO_TS) is walked like any other folder: the
+        .VOB files are real videos (VIDEO_EXT), catalogued with
+        media_type="video"; .IFO/.BUP (navigation metadata, not media) stay
+        ignored for lack of a supported extension, with no dedicated folder
+        exclusion."""
         catalog, cache, photos = env
         _make_jpg(photos / "visible.jpg")
         dvd = photos / "MonDVD"
@@ -131,15 +131,15 @@ class TestScanDiscovery:
 
     def test_video_file_gets_video_media_type(self, qtbot, env):
         catalog, cache, photos = env
-        # contenu invalide : VideoMetadataReader doit retomber sur width=0 et
-        # date=mtime sans planter, et le scanner doit typer "video"
+        # invalid content: VideoMetadataReader must fall back on width=0 and
+        # date=mtime without crashing, and the scanner must type it as "video"
         (photos / "clip.mp4").write_bytes(b"pas une vraie video")
         batches, removed, total = _run_scan(qtbot, catalog, cache, [str(photos)])
         assert total == 1
         video = batches[0][0]
         assert video.media_type == "video"
         assert video.duration == 0.0
-        assert video.date_taken is not None  # mtime du fichier
+        assert video.date_taken is not None  # mtime of the file
 
     def test_corrupt_image_still_indexed(self, qtbot, env):
         catalog, cache, photos = env
@@ -171,7 +171,7 @@ class TestScanDiscovery:
         assert batches == []
 
     def test_batching_over_batch_size(self, qtbot, env):
-        """55 fichiers → 2 émissions photos_batch (50 + 5)."""
+        """55 files -> 2 photos_batch emissions (50 + 5)."""
         catalog, cache, photos = env
         for i in range(55):
             _make_jpg(photos / f"p{i:03d}.jpg", size=(4, 4))
@@ -232,12 +232,12 @@ class TestIncrementalScan:
 
 class TestStopFlag:
     def test_stopped_thread_does_no_removal(self, env):
-        """run() synchrone avec stop_flag déjà levé : découverte interrompue,
-        aucune purge d'entrées fantômes (un scan partiel ne doit pas supprimer
-        des entrées valides)."""
+        """Synchronous run() with stop_flag already raised: discovery
+        interrupted, no purge of the ghost entries (a partial scan must not
+        delete valid entries)."""
         catalog, cache, photos = env
         _make_jpg(photos / "a.jpg")
-        # photo connue du catalogue mais absente du scan (simule un scan partiel)
+        # photo known to the catalog but absent from the scan (simulates a partial scan)
         from src.core.models import PhotoInfo
         ghost = os.path.normpath(str(photos / "ghost.jpg"))
         catalog.add_or_update_photo(PhotoInfo(path=ghost, file_size=1, file_mtime=1.0))
@@ -248,11 +248,11 @@ class TestStopFlag:
         thread.photos_removed.connect(removed.append)
         thread.finished.connect(totals.append)
         thread.stop()
-        thread.run()  # exécution synchrone dans ce thread
+        thread.run()  # synchronous execution in this thread
 
         assert totals == [0]
         assert removed == []
-        # l'entrée fantôme n'a pas été purgée
+        # the ghost entry has not been purged
         assert ghost in catalog.get_all_paths_under(str(photos))
 
 
@@ -269,7 +269,7 @@ class TestLibraryScanner:
     def test_stop_idempotent_without_thread(self, env):
         catalog, cache, photos = env
         scanner = LibraryScanner(catalog, cache)
-        scanner.stop()          # aucun thread : ne doit pas lever
+        scanner.stop()          # no thread: must not raise
         scanner.request_stop()
         scanner.wait_stopped()
         assert scanner.is_scanning is False

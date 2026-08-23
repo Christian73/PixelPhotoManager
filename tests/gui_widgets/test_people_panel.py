@@ -1,9 +1,9 @@
 # Copyright 2026 Christian Guyot
 # SPDX-License-Identifier: Apache-2.0
-"""Tests de widget Qt isolés (Layer 2, pytest-qt) pour people_panel — helpers
-de vignettes de visage, dialogues d'assignation/fusion, lignes de groupe et
-PeopleDialog sur des FaceDatabase/Catalog réels semés en process. Les dialogues
-ne sont jamais exec() : on pilote leurs méthodes directement."""
+"""Isolated Qt widget tests (Layer 2, pytest-qt) for people_panel -- face
+thumbnail helpers, assignment/merge dialogs, group rows and PeopleDialog on
+real FaceDatabase/Catalog instances seeded in process. The dialogs are never
+exec()ed: their methods are driven directly."""
 import math
 import sqlite3
 
@@ -69,7 +69,7 @@ def _tilted_embedding(angle_rad: float, dim: int = 8) -> list[float]:
 
 
 # ---------------------------------------------------------------------------
-# helpers purs
+# pure helpers
 
 class TestCosineSim:
     def test_identical_vectors(self):
@@ -105,7 +105,7 @@ class TestLoadEditRotations:
 
         rots = _load_edit_rotations(["C:/a.jpg", "C:/b.jpg", "C:/c.jpg"])
 
-        # rotation nulle filtrée : seule une rotation effective est retournée
+        # zero rotation filtered out: only an effective rotation is returned
         assert rots == {"C:/a.jpg": 90, "C:/c.jpg": 270}
 
 
@@ -132,7 +132,7 @@ class TestFaceBytes:
     def test_degenerate_bbox_returns_empty(self, tmp_path):
         photo = _make_photo(tmp_path / "p.jpg", w=50, h=50)
 
-        # bbox entièrement hors image → crop vide
+        # bbox entirely outside the image -> empty crop
         assert _face_bytes(_face(photo, x=500, y=500), size=48) == b""
 
     def test_missing_file_returns_empty(self):
@@ -167,13 +167,13 @@ class TestAvatarLoader:
         results = []
         loader.avatar_ready.connect(lambda cid, data: results.append(cid))
 
-        loader.run()   # synchrone : tracé par coverage
+        loader.run()   # synchronous: traced by coverage
 
-        assert results == [1]   # le visage illisible n'émet rien
+        assert results == [1]   # the unreadable face emits nothing
 
 
 # ---------------------------------------------------------------------------
-# dialogue d'assignation
+# assignment dialog
 
 class TestAssignDialog:
     def _persons(self):
@@ -216,7 +216,7 @@ class TestAssignDialog:
         qtbot.addWidget(dlg)
         assert dlg._btn_group.checkedButton() is dlg._rb_new
 
-        dlg._on_accept()                       # nom vide → refus silencieux
+        dlg._on_accept()                       # empty name -> silent refusal
         assert dlg.result() != QDialog.Accepted
 
         dlg._name_input.setText("Zoé")
@@ -252,7 +252,7 @@ class TestAssignDialog:
 
 
 # ---------------------------------------------------------------------------
-# dialogue de fusion
+# merge dialog
 
 class TestMergePersonsDialog:
     def test_lists_others_and_accepts_target(self, qtbot):
@@ -262,7 +262,7 @@ class TestMergePersonsDialog:
         qtbot.addWidget(dlg)
 
         names = [name for _, name in dlg._person_rbs]
-        assert names == ["Boris", "Chloé"]           # source exclue
+        assert names == ["Boris", "Chloé"]           # source excluded
         assert dlg._btn_group.checkedButton() is not None
 
         dlg._on_accept()
@@ -288,7 +288,7 @@ class TestMergePersonsDialog:
 
 
 # ---------------------------------------------------------------------------
-# ligne de groupe
+# group row
 
 class TestClusterRow:
     def test_strong_suggestion_label(self, qtbot):
@@ -372,8 +372,8 @@ class TestClusterRow:
 # PeopleDialog
 
 def _wait_avatar_loader(qtbot, dlg) -> None:
-    # Polling plutôt que waitSignal(finished) : le thread peut se terminer entre
-    # le test isRunning() et le branchement du signal (émission ratée → timeout).
+    # Polling rather than waitSignal(finished): the thread may terminate between
+    # the isRunning() test and the connection of the signal (missed emission -> timeout).
     loader = getattr(dlg, "_avatar_loader", None)
     if loader is None:
         return
@@ -382,7 +382,7 @@ def _wait_avatar_loader(qtbot, dlg) -> None:
         try:
             return not loader.isRunning()
         except RuntimeError:
-            return True   # deleteLater déjà passé
+            return True   # deleteLater already processed
 
     qtbot.waitUntil(_done, timeout=3000)
 
@@ -412,10 +412,10 @@ class TestPeopleDialog:
             photo = _make_photo(tmp_path / "p.jpg")
             photo_holder["p"] = photo
             alice = catalog.create_person("Alice")
-            # Visage identifié d'Alice (cluster 99) — source du centroïde
+            # Identified face of Alice (cluster 99) -- source of the centroid
             _raw_insert_face(face_db, photo, cluster_id=99, person_id=alice.id,
                              embedding=_tilted_embedding(0.0))
-            # Groupe anonyme 1, similarité ~0.60 avec Alice → suggestion
+            # Anonymous group 1, similarity ~0.60 with Alice -> suggestion
             _raw_insert_face(face_db, photo, cluster_id=1,
                              embedding=_tilted_embedding(math.acos(0.60)))
             _raw_insert_face(face_db, photo, cluster_id=1,

@@ -1,12 +1,12 @@
 # Copyright 2026 Christian Guyot
 # SPDX-License-Identifier: Apache-2.0
-"""Tests de GeometryProcessor.transform_bboxes : vérifie que le recalage des
-bboxes de visages (après enregistrement d'une photo retouchée, cf.
-MainWindow._remap_face_bboxes_after_save) suit fidèlement la même géométrie
-que les transformations réelles de pixels (apply_rotation/apply_flip/
-apply_crop/apply_straighten_with_crop), en comparant à un marqueur peint dans
-une image de synthèse et retrouvé par pixel-scanning après la transformation
-réelle."""
+"""Tests of GeometryProcessor.transform_bboxes: checks that the realignment
+of the face bboxes (after saving an edited photo, cf.
+MainWindow._remap_face_bboxes_after_save) faithfully follows the same geometry
+as the real pixel transformations (apply_rotation/apply_flip/apply_crop/
+apply_straighten_with_crop), by comparing with a marker painted into a
+synthetic image and found again by pixel scanning after the real
+transformation."""
 import numpy as np
 from PIL import Image, ImageDraw
 
@@ -34,10 +34,10 @@ def _marker_bbox(img, color=(0, 255, 0)):
 
 
 class TestFinalSizeMatchesRealPipeline:
-    """La taille finale calculée par transform_bboxes doit correspondre à la
-    taille réelle obtenue en appliquant la même séquence de transformations
-    à une vraie image (rotation, redressement, flip, crop, dans cet ordre —
-    même ordre que ImageAdjuster.apply_all)."""
+    """The final size computed by transform_bboxes must match the real size
+    obtained by applying the same sequence of transformations to a real image
+    (rotation, straightening, flip, crop, in that order -- the same order as
+    ImageAdjuster.apply_all)."""
 
     def _real_final_size(self, w, h, rotation, straighten, flip_h, flip_v, crop):
         img = _canvas(w, h)
@@ -73,8 +73,8 @@ class TestFinalSizeMatchesRealPipeline:
 
 class TestPureCropExact:
     def test_bbox_recomputed_exactly(self):
-        # Image 100x100, bbox de visage (30,40,10,8), crop = (0.2,0.2,0.5,0.5)
-        # → fenêtre de crop en pixels (20,20)-(70,70).
+        # 100x100 image, face bbox (30,40,10,8), crop = (0.2,0.2,0.5,0.5)
+        # -> crop window in pixels (20,20)-(70,70).
         results, size = GeometryProcessor.transform_bboxes(
             [(30, 40, 10, 8)], (100, 100), crop=(0.2, 0.2, 0.5, 0.5))
         assert size == (50, 50)
@@ -86,7 +86,7 @@ class TestPureCropExact:
         assert results[0] is None
 
     def test_bbox_partially_inside_crop_clamped(self):
-        # bbox chevauche le bord du crop : doit être clampée, pas droppée.
+        # the bbox overlaps the edge of the crop: it must be clamped, not dropped.
         results, size = GeometryProcessor.transform_bboxes(
             [(15, 15, 20, 20)], (100, 100), crop=(0.2, 0.2, 0.5, 0.5))
         assert size == (50, 50)
@@ -96,9 +96,9 @@ class TestPureCropExact:
 
 
 class Test90DegreeRotationExact:
-    """apply_rotation utilise resample=NEAREST (par défaut) — pas de flou aux
-    bords, donc le marqueur peint doit se retrouver pixel-exact dans l'image
-    tournée."""
+    """apply_rotation uses resample=NEAREST (the default) -- no blur at the
+    edges, so the painted marker must be found pixel-exact in the rotated
+    image."""
 
     def test_marker_bbox_matches_after_90(self):
         bbox = (20, 10, 15, 8)
@@ -158,9 +158,9 @@ class TestFlipExact:
 
 
 class TestStraightenApprox:
-    """apply_straighten_with_crop utilise BICUBIC (flou aux bords du marqueur) :
-    on ne peut pas exiger un match pixel-exact, mais le centre et la taille du
-    marqueur retrouvé doivent rester proches (quelques px) de la prédiction."""
+    """apply_straighten_with_crop uses BICUBIC (blur at the edges of the
+    marker): a pixel-exact match cannot be required, but the centre and the size
+    of the marker found again must stay close (a few px) to the prediction."""
 
     def test_marker_bbox_close_after_straighten(self):
         bbox = (30, 20, 20, 15)
@@ -175,7 +175,7 @@ class TestStraightenApprox:
         pred = results[0]
         assert pred is not None
 
-        # Comparaison tolérante (flou d'interpolation BICUBIC aux bords).
+        # Tolerant comparison (BICUBIC interpolation blur at the edges).
         pred_cx, pred_cy = pred[0] + pred[2] / 2.0, pred[1] + pred[3] / 2.0
         real_cx, real_cy = real_bbox[0] + real_bbox[2] / 2.0, real_bbox[1] + real_bbox[3] / 2.0
         assert abs(pred_cx - real_cx) <= 2.0
@@ -185,21 +185,21 @@ class TestStraightenApprox:
 
 
 class TestPreRotationRoundTrip:
-    """pre_rotation (detected_rotation) doit ramener une bbox exprimée dans le
-    repère tourné vers le repère de base — sans aucune autre retouche, on doit
-    exactement retrouver la bbox d'origine."""
+    """pre_rotation (detected_rotation) must bring a bbox expressed in the
+    rotated reference back to the base reference -- with no other edit, the
+    original bbox must be found back exactly."""
 
     def test_undo_90_recovers_original_bbox(self):
         orig_size = (100, 60)
         orig_bbox = (20, 10, 15, 8)
-        # Simule le repère de détection : image tournée de 90° CW.
+        # Simulates the detection reference: image rotated by 90 degrees CW.
         rotated_size = GeometryProcessor.apply_rotation(
             _canvas(*orig_size), 90.0).size
         detected_bbox_results, _ = GeometryProcessor.transform_bboxes(
             [orig_bbox], orig_size, rotation=90.0)
         detected_bbox = detected_bbox_results[0]
 
-        # Repartir de detected_bbox dans rotated_size, annuler pre_rotation=90.
+        # Start again from detected_bbox in rotated_size, undo pre_rotation=90.
         results, size = GeometryProcessor.transform_bboxes(
             [detected_bbox], rotated_size, pre_rotation=90.0)
         assert size == orig_size

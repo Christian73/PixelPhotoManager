@@ -1,32 +1,32 @@
 # Copyright 2026 Christian Guyot
 # SPDX-License-Identifier: Apache-2.0
-"""Régression : les boutons radio étaient invisibles (noir sur noir) sur les
-pages de SettingsDialog.
+"""Regression: the radio buttons were invisible (black on black) on the
+pages of SettingsDialog.
 
-Cause : dès qu'une feuille de style applicative existe, Qt bascule sur
-QStyleSheetStyle et cesse de dessiner nativement les sous-contrôles. Le thème
-sombre définissait `QCheckBox::indicator` mais pas `QRadioButton::indicator` :
-la pastille était rendue en gris quasi noir sur le fond #1e1e1e — et une fois
-cochée, en une seule teinte identique au fond, donc littéralement invisible. Les
-dialogues antérieurs contournaient le problème un par un (quatre copies locales
-de `_RADIO_STYLE`) ; la règle est désormais dans le thème global.
+Cause: as soon as an application style sheet exists, Qt switches to
+QStyleSheetStyle and stops drawing the sub-controls natively. The dark theme
+defined `QCheckBox::indicator` but not `QRadioButton::indicator`: the dot was
+rendered in a near-black grey on the #1e1e1e background -- and once checked, in
+a single tint identical to the background, hence literally invisible. The
+earlier dialogs worked around the problem one by one (four local copies of
+`_RADIO_STYLE`); the rule now lives in the global theme.
 
-Le rendu est mesuré réellement (grab() → contraste de luminance) plutôt que par
-une présence de chaîne : c'est le seul moyen de constater qu'un indicateur *se
-voit*, et le test « sans les règles » ci-dessous confirme que ce sont bien elles
-qui font la différence."""
+The rendering is really measured (grab() -> luminance contrast) rather than
+through the presence of a string: that is the only way to observe that an
+indicator *is seen*, and the "without the rules" test below confirms that they
+are indeed what makes the difference."""
 import pytest
 from PySide6.QtWidgets import QRadioButton
 
 from src.ui.theme import app_stylesheet
 
-_BACKGROUND = 0xFF1E1E1E      # QWidget { background-color: #1e1e1e } du thème
-# Mesures observées : 18 / 0 avant correctif (décoché / coché), 89 / 132 après.
-_VISIBLE = 50                 # au-delà, l'indicateur se détache franchement
-_INVISIBLE = 25               # en deçà, il se confond avec le fond
+_BACKGROUND = 0xFF1E1E1E      # QWidget { background-color: #1e1e1e } of the theme
+# Measurements observed: 18 / 0 before the fix (unchecked / checked), 89 / 132 after.
+_VISIBLE = 50                 # beyond that, the indicator stands out clearly
+_INVISIBLE = 25               # below that, it merges into the background
 
-# Feuille minimale reproduisant la cause : un fond sombre posé par feuille de
-# style, sans aucune règle sur l'indicateur du bouton radio.
+# Minimal sheet reproducing the cause: a dark background laid down by a
+# style sheet, with no rule at all on the radio button indicator.
 _LEGACY = "QMainWindow, QDialog, QWidget { background-color: #1e1e1e; color: #ddd; }"
 
 
@@ -36,9 +36,9 @@ def _luminance(argb: int) -> float:
 
 
 def _indicator_contrast(checked: bool, stylesheet: str) -> float:
-    """Écart de luminance maximal entre le rendu d'un bouton radio *sans
-    libellé* et le fond du thème : tout pixel non-fond provient de l'indicateur,
-    donc cet écart mesure exactement sa visibilité."""
+    """Maximum luminance difference between the rendering of a radio button
+    *without a label* and the theme background: every non-background pixel comes
+    from the indicator, so this difference measures its visibility exactly."""
     rb = QRadioButton("")
     rb.setStyleSheet(stylesheet)
     rb.setChecked(checked)
@@ -55,7 +55,7 @@ def _indicator_contrast(checked: bool, stylesheet: str) -> float:
 
 @pytest.fixture
 def theme():
-    # Le chemin de la coche ne concerne que les QCheckBox ; un nom bidon suffit.
+    # The check path only concerns QCheckBox; a dummy name is enough.
     return app_stylesheet("ppm_check.png")
 
 
@@ -65,14 +65,14 @@ class TestRadioIndicatorVisibility:
         assert _indicator_contrast(checked, theme) >= _VISIBLE
 
     def test_checked_stands_out_more_than_unchecked(self, qtbot, theme):
-        """Le symptôme rapporté : impossible de voir quelle option est cochée."""
+        """The reported symptom: impossible to see which option is checked."""
         assert (_indicator_contrast(True, theme)
                 > _indicator_contrast(False, theme))
 
     @pytest.mark.parametrize("checked", [False, True])
     def test_without_the_radio_rules_the_indicator_disappears(self, qtbot, checked):
-        """Caractérise le bug d'origine. Si ce test venait à échouer, c'est que
-        le diagnostic n'est plus valable et que le correctif est à revoir."""
+        """Characterises the original bug. If this test were to fail, it would
+        mean the diagnosis no longer holds and the fix has to be reconsidered."""
         assert _indicator_contrast(checked, _LEGACY) < _INVISIBLE
 
 
@@ -82,7 +82,7 @@ class TestAppStylesheet:
 
     @pytest.mark.parametrize("widget", ["QCheckBox", "QRadioButton"])
     def test_every_indicator_control_defines_its_states(self, widget, theme):
-        """Tout contrôle dont l'indicateur est dessiné par le style doit couvrir
-        ses états, sous peine de reproduire le bug sur un autre contrôle."""
+        """Every control whose indicator is drawn by the style must cover its
+        states, on pain of reproducing the bug on another control."""
         for state in ("::indicator {", "::indicator:checked", "::indicator:unchecked"):
             assert f"{widget}{state}" in theme

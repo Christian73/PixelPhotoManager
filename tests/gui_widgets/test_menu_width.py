@@ -1,19 +1,19 @@
 # Copyright 2026 Christian Guyot
 # SPDX-License-Identifier: Apache-2.0
-"""Régression : dans les menus de la barre principale, un libellé long finissait
-sous le texte de son raccourci.
+"""Regression: in the menus of the main bar, a long label ended up
+underneath the text of its shortcut.
 
-Cause : la largeur d'un popup est calculée par le style. Le style natif Windows
-(windows11) réserve la colonne du raccourci au plus juste — quelques pixels de
-séparation seulement — si bien qu'« Exporter la sélection vers un dossier… » et
-« Ctrl+Shift+E » se chevauchaient. `install_menu_width_fix()` recalcule la
-largeur nécessaire à l'ouverture du menu et pose un `minimumWidth`.
+Cause: the width of a popup is computed by the style. The native Windows style
+(windows11) reserves the shortcut column as tightly as possible -- only a few
+pixels of separation -- so that "Export the selection to a folder…" and
+"Ctrl+Shift+E" overlapped. `install_menu_width_fix()` recomputes the required
+width when the menu opens and sets a `minimumWidth`.
 
-Deux invariants sont vérifiés ici :
-- le popup ouvert est toujours au moins aussi large que libellé + séparation +
-  raccourci (sinon, chevauchement) ;
-- un menu **sans** raccourci n'est pas élargi pour rien (le calcul maison doit
-  rester calé sur celui du style, pas gonfler tous les menus)."""
+Two invariants are checked here:
+- the open popup is always at least as wide as label + separation + shortcut
+  (otherwise, overlap);
+- a menu **without** a shortcut is not widened for nothing (the home-made
+  computation must stay aligned with the style's own, not inflate every menu)."""
 import gc
 
 import pytest
@@ -32,11 +32,13 @@ _SHORTCUT = "Ctrl+Shift+E"
 
 
 def _tight_style(widget) -> None:
-    """Applique au widget le style qui sous-dimensionne les popups, s'il existe.
+    """Applies to the widget the style that under-sizes the popups, if it
+    exists.
 
-    Style posé sur le widget et non sur l'application : un `QApplication.setStyle`
-    fuiterait sur toute la session de test. La référence est gardée sur le widget,
-    Qt ne prenant pas possession de l'objet style."""
+    The style is set on the widget and not on the application: a
+    `QApplication.setStyle` would leak over the whole test session. The
+    reference is kept on the widget, Qt not taking ownership of the style
+    object."""
     style = QStyleFactory.create("windows11") or QStyleFactory.create("windowsvista")
     if style is not None:
         widget._ppm_test_style = style
@@ -53,7 +55,7 @@ def _menu_with_shortcut(parent) -> QMenu:
 
 
 def _overlap_free(menu: QMenu, label: str, shortcut: str) -> bool:
-    """Le popup laisse-t-il de la place entre la fin du libellé et le raccourci ?"""
+    """Does the popup leave room between the end of the label and the shortcut?"""
     fm = menu.fontMetrics()
     return menu.width() >= fm.horizontalAdvance(label) + fm.horizontalAdvance(shortcut)
 
@@ -68,7 +70,7 @@ class TestMenuRequiredWidth:
         assert menu_required_width(menu) > needed
 
     def test_shortcut_written_with_a_tab_counts_too(self, qtbot):
-        """Convention des menus contextuels : « Libellé\\tTouche »."""
+        """Convention of the context menus: "Label\\tKey"."""
         w = QWidget()
         qtbot.addWidget(w)
         menu = QMenu(w)
@@ -79,11 +81,11 @@ class TestMenuRequiredWidth:
         assert menu_required_width(menu) > needed
 
     def test_shortcut_column_is_aired(self, qtbot):
-        """Demande utilisateur : le raccourci ne doit pas être collé au libellé.
+        """User request: the shortcut must not be stuck to the label.
 
-        Le raccourci est aligné à droite du popup, donc la séparation se mesure
-        sur ce que le raccourci ajoute à la largeur exigée — tout le reste (chrome,
-        cadre) est identique entre les deux menus comparés."""
+        The shortcut is right-aligned in the popup, so the separation is
+        measured on what the shortcut adds to the required width -- everything
+        else (chrome, frame) is identical between the two menus compared."""
         w = QWidget()
         qtbot.addWidget(w)
         with_shortcut = _menu_with_shortcut(w)
@@ -98,8 +100,8 @@ class TestMenuRequiredWidth:
                          + fm.horizontalAdvance("M" * _SHORTCUT_GAP_EM))
 
     def test_menu_without_shortcut_is_not_widened(self, qtbot):
-        """Le calcul maison reste calé sur celui du style : sans raccourci, il ne
-        doit pas dépasser le `sizeHint` que Qt aurait choisi."""
+        """The home-made computation stays aligned with the style's own: without a
+        shortcut, it must not exceed the `sizeHint` Qt would have chosen."""
         w = QWidget()
         qtbot.addWidget(w)
         menu = QMenu(w)
@@ -125,7 +127,7 @@ class TestInstallMenuWidthFix:
         qtbot.addWidget(w)
         menu = _menu_with_shortcut(w)
         install_menu_width_fix(menu)
-        assert menu.minimumWidth() == 0        # rien tant qu'il n'est pas ouvert
+        assert menu.minimumWidth() == 0        # nothing as long as it is not open
         menu.popup(QPoint(0, 0))
         try:
             assert menu.minimumWidth() == menu_required_width(menu)
@@ -154,8 +156,8 @@ class TestInstallMenuWidthFix:
                 menu.hide()
 
     def test_submenu_is_wired_when_the_parent_opens(self, qtbot):
-        """Les sous-menus (Noter, applications externes…) sont branchés à
-        l'ouverture du parent, y compris s'ils ont été construits après coup."""
+        """The submenus (Rate, external applications…) are wired when the parent
+        opens, including when they were built afterwards."""
         w = QWidget()
         qtbot.addWidget(w)
         menu = QMenu(w)
@@ -188,17 +190,17 @@ class TestInstallMenuWidthFix:
 
 
 def test_submenus_never_uses_qaction_menu(qtbot):
-    """Garde-fou PySide6 6.11 : `QAction.menu()` détruit le QMenu C++ quand le
-    wrapper Python renvoyé est collecté. Énumérer les sous-menus par ce biais
-    viderait les menus de l'application au premier survol — d'où `findChildren`
-    dans `_submenus()`."""
+    """PySide6 6.11 safety net: `QAction.menu()` destroys the C++ QMenu when
+    the returned Python wrapper is collected. Enumerating the submenus that way
+    would empty the menus of the application on the first hover -- hence
+    `findChildren` in `_submenus()`."""
     w = QWidget()
     qtbot.addWidget(w)
     menu = QMenu(w)
     sub = menu.addMenu("Sous-menu")
     sub.addAction("Truc")
 
-    # Le piège lui-même, pour documenter qu'il est bien réel sur cette version.
+    # The trap itself, to document that it is indeed real on this version.
     doomed = QMenu(w)
     doomed_sub = doomed.addMenu("Sous-menu")
     for action in doomed.actions():

@@ -1,9 +1,8 @@
 # Copyright 2026 Christian Guyot
 # SPDX-License-Identifier: Apache-2.0
-"""Tests (Layer 2) pour SettingsDialog — pages Reconnaissance de visages,
-Lecteur vidéo et Performances. Config est un singleton de classe : chaque test le
-réinitialise et redirige _CONFIG_FILE vers tmp_path (même convention que
-test_config.py)."""
+"""Tests (Layer 2) for SettingsDialog -- the Face recognition, Video player
+and Performance pages. Config is a class singleton: every test resets it and
+redirects _CONFIG_FILE to tmp_path (same convention as test_config.py)."""
 import pytest
 from PySide6.QtWidgets import QFileDialog
 
@@ -26,9 +25,9 @@ def config(tmp_path, monkeypatch):
 
 @pytest.fixture(autouse=True)
 def _restore_cpu_ratio():
-    """_PerformancePage.apply() écrit la globale `_ratio` de cpu_throttle
-    (application immédiate aux threads déjà lancés) — la restaurer pour ne pas
-    contaminer les autres tests de la suite."""
+    """_PerformancePage.apply() writes the `_ratio` global of cpu_throttle
+    (applied immediately to the threads already started) -- restore it so as not
+    to contaminate the other tests of the suite."""
     saved = cpu_throttle._ratio
     yield
     cpu_throttle._ratio = saved
@@ -44,7 +43,7 @@ class TestFaceRecognitionPage:
         assert "very broad" in page._lbl_value.text()
 
     def test_saved_threshold_restored_and_clamped(self, qtbot, config):
-        config.set("faces.cluster_threshold", 0.9)   # hors plage → clampé à 70
+        config.set("faces.cluster_threshold", 0.9)   # out of range -> clamped to 70
         page = _FaceRecognitionPage(config)
         qtbot.addWidget(page)
 
@@ -68,12 +67,12 @@ class TestFaceRecognitionPage:
         page = _FaceRecognitionPage(config)
         qtbot.addWidget(page)
 
-        assert page.apply() is False           # valeur inchangée
+        assert page.apply() is False           # value unchanged
 
         page._slider.setValue(45)
         assert page.apply() is True
         assert config.get("faces.cluster_threshold") == pytest.approx(0.45)
-        assert page.apply() is False           # plus de changement après apply
+        assert page.apply() is False           # no more change after apply
 
 
 class TestVideoPlayerPage:
@@ -142,9 +141,9 @@ class TestVideoPlayerPage:
 
 class TestPerformancePage:
     def test_default_level_is_the_economical_one(self, qtbot, config):
-        """Sans réglage explicite, l'application privilégie la réactivité :
-        les analyses de fond sont permanentes et sans échéance, la lenteur de
-        l'interface se remarque tout de suite."""
+        """Without an explicit setting, the application favours responsiveness:
+        the background analyses are permanent and have no deadline, whereas a
+        sluggish interface is noticed straight away."""
         page = _PerformancePage(config)
         qtbot.addWidget(page)
 
@@ -152,8 +151,8 @@ class TestPerformancePage:
         assert page.selected_level() == "low"
 
     def test_recommended_label_marks_the_default_choice(self, qtbot, config):
-        """Le libellé « (recommandé) » doit désigner le niveau réellement
-        appliqué par défaut — sinon les paramètres contredisent le comportement."""
+        """The "(recommended)" label must designate the level actually applied by
+        default -- otherwise the settings contradict the behaviour."""
         page = _PerformancePage(config)
         qtbot.addWidget(page)
 
@@ -168,8 +167,8 @@ class TestPerformancePage:
         assert page.selected_level() == "max"
 
     def test_unknown_saved_level_falls_back_to_default(self, qtbot, config):
-        """Valeur écrite à la main dans config.json, ou clé d'une version
-        ultérieure : ne doit ni planter ni laisser la page sans sélection."""
+        """A value written by hand into config.json, or a key from a later
+        version: must neither crash nor leave the page without a selection."""
         config.set("performance.background_cpu", "turbo")
         page = _PerformancePage(config)
         qtbot.addWidget(page)
@@ -185,11 +184,11 @@ class TestPerformancePage:
         assert keys == set(cpu_throttle.BACKGROUND_CPU_LEVELS)
 
     def test_apply_persists_and_takes_effect_immediately(self, qtbot, config):
-        """Les threads de fond relisent le ratio à chaque throttle_tick() : le
-        changement doit s'appliquer sans les redémarrer."""
+        """The background threads re-read the ratio on every throttle_tick(): the
+        change must apply without restarting them."""
         page = _PerformancePage(config)
         qtbot.addWidget(page)
-        page._grp.button(1).setChecked(True)      # "medium" (≠ défaut)
+        page._grp.button(1).setChecked(True)      # "medium" (!= default)
 
         page.apply()
 
@@ -230,7 +229,7 @@ class TestSettingsDialog:
     def test_accept_applies_performance_level(self, qtbot, config):
         dlg = SettingsDialog(config)
         qtbot.addWidget(dlg)
-        dlg._page_perf._grp.button(2).setChecked(True)    # "max" (≠ défaut)
+        dlg._page_perf._grp.button(2).setChecked(True)    # "max" (!= default)
 
         dlg._on_accept()
 
