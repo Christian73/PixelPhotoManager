@@ -1,11 +1,11 @@
 # Copyright 2026 Christian Guyot
 # SPDX-License-Identifier: Apache-2.0
 #
-# Wrapper fin autour de launch_isolated.py, pour l'usage manuel interactif :
-#   .\tools\test_env\launch_isolated.ps1 -ScanFolder "C:\chemin\vers\photos"
+# A thin wrapper around launch_isolated.py, for interactive manual use:
+#   .\tools\test_env\launch_isolated.ps1 -ScanFolder "C:\path\to\photos"
 #
-# Lance PixelPhotoManager avec un profil %LOCALAPPDATA% isolé et jetable,
-# sans jamais toucher au vrai %LOCALAPPDATA%\PixelPhotoManager de l'utilisateur.
+# Launches PixelPhotoManager with an isolated, disposable %LOCALAPPDATA% profile,
+# without ever touching the user's real %LOCALAPPDATA%\PixelPhotoManager.
 
 param(
     [string[]]$ScanFolder = @(),

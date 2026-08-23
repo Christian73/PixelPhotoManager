@@ -3,30 +3,30 @@
 # SPDX-License-Identifier: Apache-2.0
 <#
 .SYNOPSIS
-    Construit le MSI Pixel Photo Manager avec WiX Toolset v3.
+    Builds the Pixel Photo Manager MSI with WiX Toolset v3.
 .DESCRIPTION
-    1. Verifie / installe WiX Toolset v3.
-    2. Genere les bitmaps de l'installeur (banner.bmp, dialog.bmp).
-    3. Lance heat.exe pour inventorier dist\PixelPhotoManager\.
-    4. Compile avec candle.exe et lie avec light.exe.
-    5. Produit : installer\PixelPhotoManager-<version>-x64.msi
+    1. Checks / installs WiX Toolset v3.
+    2. Generates the installer bitmaps (banner.bmp, dialog.bmp).
+    3. Runs heat.exe to inventory dist\PixelPhotoManager\.
+    4. Compiles with candle.exe and links with light.exe.
+    5. Produces: installer\PixelPhotoManager-<version>-x64.msi
 
-    Lancer depuis le repertoire du projet ou depuis installer\ :
+    Run from the project directory or from installer\ :
         powershell -ExecutionPolicy Bypass -File installer\build_msi.ps1
 #>
 $ErrorActionPreference = "Stop"
 
-# ── Chemins ──────────────────────────────────────────────────────────────────
+# ── Paths ────────────────────────────────────────────────────────────────────
 $InstallerDir = $PSScriptRoot
 $ProjectRoot  = Split-Path -Parent $InstallerDir
 $DistDir      = Join-Path $ProjectRoot "dist\PixelPhotoManager"
 $ObjDir       = Join-Path $InstallerDir "obj"
 $VersionFile  = Join-Path $ProjectRoot "VERSION"
 
-# ── Numero de version (source unique : VERSION a la racine du depot) ─────────
-# Ecrit par build.ps1 avant le build EXE ; si ce script est lance seul (hors
-# build.ps1), on le demande ici pour ne pas publier un MSI avec une version
-# perimee ou absente.
+# ── Version number (single source: VERSION at the root of the repository) ────
+# Written by build.ps1 before the EXE build; if this script is run on its own
+# (outside build.ps1), it is asked for here so as not to publish an MSI with a
+# stale or missing version.
 if (-not (Test-Path $VersionFile)) {
     $ProductVersion = Read-Host "Numero de version du MSI (ex: 1.1.0)"
     if ($ProductVersion -notmatch '^\d+\.\d+\.\d+$') {
@@ -38,10 +38,10 @@ if (-not (Test-Path $VersionFile)) {
 }
 Write-Host "Version MSI : $ProductVersion"
 
-# Nom de sortie versionne (ex: PixelPhotoManager-1.0.1-x64.msi)
+# Versioned output name (e.g. PixelPhotoManager-1.0.1-x64.msi)
 $OutputMsi = Join-Path $InstallerDir "PixelPhotoManager-$ProductVersion-x64.msi"
 
-# ── Localiser WiX v3 ─────────────────────────────────────────────────────────
+# ── Locate WiX v3 ────────────────────────────────────────────────────────────
 function Find-Wix3 {
     if ($env:WIX) {
         $bin = Join-Path $env:WIX.TrimEnd('\') "bin"
@@ -76,7 +76,7 @@ $Light    = Join-Path $WixBin "light.exe"
 $WixUIExt = Join-Path $WixBin "WixUIExtension.dll"
 Write-Host "WiX v3 : $WixBin"
 
-# ── Verifications prereqs ─────────────────────────────────────────────────────
+# ── Prerequisite checks ───────────────────────────────────────────────────────
 if (-not (Test-Path "$DistDir\PixelPhotoManager.exe")) {
     throw "PixelPhotoManager.exe introuvable dans $DistDir.`nLancez d'abord le build PyInstaller : .\build.ps1 -ExeOnly"
 }
@@ -84,7 +84,7 @@ if (-not (Test-Path (Join-Path $ProjectRoot "assets\app_icon.ico"))) {
     throw "assets\app_icon.ico introuvable."
 }
 
-# ── Bitmaps de l'installeur ───────────────────────────────────────────────────
+# ── Installer bitmaps ─────────────────────────────────────────────────────────
 $BannerBmp = Join-Path $InstallerDir "banner.bmp"
 $DialogBmp = Join-Path $InstallerDir "dialog.bmp"
 
@@ -101,7 +101,7 @@ if (Test-Path $ObjDir) { Remove-Item -Recurse -Force $ObjDir }
 New-Item -ItemType Directory -Force -Path $ObjDir | Out-Null
 Get-ChildItem -Path $InstallerDir -Filter "harvested_*.wxs" | Remove-Item -Force
 
-# ── Harvest : application ─────────────────────────────────────────────────────
+# ── Harvest: application ──────────────────────────────────────────────────────
 Write-Host ""
 Write-Host "Inventaire de dist\PixelPhotoManager\ ..."
 & $Heat dir $DistDir `
@@ -130,7 +130,7 @@ $candleDefs = @(
 & $Candle -arch x64 -out "$ObjDir\" -nologo -ext $WixUIExt @candleDefs @wxsSources
 if ($LASTEXITCODE -ne 0) { throw "candle.exe a echoue" }
 
-# ── Linkage (light.exe) ───────────────────────────────────────────────────────
+# ── Linking (light.exe) ───────────────────────────────────────────────────────
 Write-Host "Linkage ..."
 
 $wixobjs = Get-ChildItem -Path $ObjDir -Filter "*.wixobj" |
@@ -145,10 +145,10 @@ $wixobjs = Get-ChildItem -Path $ObjDir -Filter "*.wixobj" |
     -nologo
 if ($LASTEXITCODE -ne 0) { throw "light.exe a echoue" }
 
-# ── Script compagnon : installation avec journal detaille ────────────────────
-# msiexec ne journalise rien par defaut au double-clic sur le MSI. Ce .cmd,
-# genere a cote du MSI, lance l'installation avec /L*v (log verbeux complet) —
-# a utiliser a la place du MSI quand une installation echoue silencieusement.
+# ── Companion script: installation with a detailed log ───────────────────────
+# msiexec logs nothing by default when the MSI is double-clicked. This .cmd,
+# generated next to the MSI, starts the installation with /L*v (a complete verbose
+# log) — to be used instead of the MSI when an installation fails silently.
 $MsiFileName = Split-Path -Leaf $OutputMsi
 $LogScript   = Join-Path $InstallerDir "Installer-avec-log.cmd"
 $logScriptContent = @"
@@ -165,7 +165,7 @@ pause
 "@
 Set-Content -Path $LogScript -Value $logScriptContent -Encoding ASCII
 
-# ── Resultat ──────────────────────────────────────────────────────────────────
+# ── Result ────────────────────────────────────────────────────────────────────
 $size = (Get-Item $OutputMsi).Length / 1MB
 Write-Host ""
 Write-Host "============================================================"

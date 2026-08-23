@@ -1,15 +1,15 @@
 # Copyright 2026 Christian Guyot
 # SPDX-License-Identifier: Apache-2.0
 """
-Genere les bitmaps visuels requis par WiX pour l'installeur MSI.
-  banner.bmp  : 493 x 58  px — bande superieure des ecrans interieurs
-  dialog.bmp  : 493 x 312 px — fond de l'ecran de bienvenue
+Generates the visual bitmaps required by WiX for the MSI installer.
+  banner.bmp  : 493 x 58  px — top band of the inner screens
+  dialog.bmp  : 493 x 312 px — background of the welcome screen
 
-Layout de dialog.bmp :
-  Gauche [0..SPLIT[   : panneau sombre avec icone + titre
-  Droite [SPLIT..493] : fond blanc — le texte WiX (noir, transparent) y est lisible
-  WiX WelcomeDlg place son texte a partir de X=135 DLU / 370 DLU total
-  => 135/370 * 493 ~ 180 px => SPLIT = 170 px laisse une marge confortable.
+Layout of dialog.bmp:
+  Left  [0..SPLIT[    : dark panel with the icon + title
+  Right [SPLIT..493]  : white background — the WiX text (black, transparent) is readable there
+  WiX WelcomeDlg places its text from X=135 DLU / 370 DLU total
+  => 135/370 * 493 ~ 180 px => SPLIT = 170 px leaves a comfortable margin.
 """
 from pathlib import Path
 from PIL import Image, ImageDraw, ImageFont
@@ -18,16 +18,16 @@ OUT  = Path(__file__).parent
 ROOT = OUT.parent
 
 # Palette
-BG      = (30, 40, 60)       # bleu ardoise fonce
-ACCENT  = (80, 130, 200)     # bleu clair
+BG      = (30, 40, 60)       # dark slate blue
+ACCENT  = (80, 130, 200)     # light blue
 WHITE   = (255, 255, 255)
 LIGHT   = (200, 220, 245)
 DIM     = (140, 165, 200)
-RIGHT   = (248, 249, 252)    # blanc casse pour la zone de texte WiX
+RIGHT   = (248, 249, 252)    # off-white for the WiX text area
 
-SPLIT   = 170                # limite gauche / droite en pixels
+SPLIT   = 170                # left / right boundary in pixels
 
-# ── Polices ──────────────────────────────────────────────────────────────────
+# ── Fonts ────────────────────────────────────────────────────────────────────
 def _load_fonts():
     fonts_dir = Path("C:/Windows/Fonts")
     try:
@@ -44,7 +44,7 @@ def _load_fonts():
 
 def _gradient_h(img: Image.Image, left: tuple, right: tuple,
                 x0: int = 0, x1: int | None = None) -> None:
-    """Degrade horizontal sur la plage [x0, x1[."""
+    """Horizontal gradient over the range [x0, x1[."""
     w, h = img.size
     if x1 is None:
         x1 = w
@@ -61,19 +61,19 @@ def _gradient_h(img: Image.Image, left: tuple, right: tuple,
 f_big, f_med, f_sub, f_ban, f_ban_sub = _load_fonts()
 
 # ── banner.bmp (493 x 58) ────────────────────────────────────────────────────
-# Contrainte WiX (WelcomeDlg / LicenseAgreementDlg / InstallDirDlg…) :
-#   - Titre dialogue  : X=15..286 px (bitmap), Y=8..28 px  → texte noir
-#   - Description     : X=33..406 px (bitmap), Y=30..50 px → texte noir
-# Solution : dégradé clair à gauche (texte WiX noir lisible) → sombre à droite
-#   (notre texte blanc + icône, hors zone WiX : X>286, Y<30)
-BANNER_LEFT  = (185, 210, 240)   # bleu très clair  – texte WiX noir lisible
-BANNER_RIGHT = (22, 42, 90)      # bleu nuit        – texte blanc + icône
+# WiX constraint (WelcomeDlg / LicenseAgreementDlg / InstallDirDlg…):
+#   - Dialog title    : X=15..286 px (bitmap), Y=8..28 px  → black text
+#   - Description     : X=33..406 px (bitmap), Y=30..50 px → black text
+# Solution: light gradient on the left (black WiX text readable) → dark on the right
+#   (our white text + icon, outside the WiX area: X>286, Y<30)
+BANNER_LEFT  = (185, 210, 240)   # very light blue – black WiX text readable
+BANNER_RIGHT = (22, 42, 90)      # midnight blue   – white text + icon
 
 banner = Image.new("RGB", (493, 58))
 _gradient_h(banner, BANNER_LEFT, BANNER_RIGHT)
 draw = ImageDraw.Draw(banner)
 
-# Icône application – coin droit, Y=7 px, 44×44 px
+# Application icon – right corner, Y=7 px, 44×44 px
 _banner_icon_y = 7
 _banner_icon_x = 441
 if (ROOT / "assets" / "app_icon.ico").exists():
@@ -84,30 +84,30 @@ if (ROOT / "assets" / "app_icon.ico").exists():
     except Exception as _e:
         print(f"  Avertissement icone banner : {_e}")
 
-# "Pixel Photo Manager" – juste à gauche de l'icône, hors zone titre WiX (X>286)
-# Y=14 : au-dessus de la zone description WiX (Y=30+), texte ~14 px de haut
+# "Pixel Photo Manager" – just left of the icon, outside the WiX title area (X>286)
+# Y=14: above the WiX description area (Y=30+), text ~14 px high
 try:
     f_name = ImageFont.truetype("C:/Windows/Fonts/segoeui.ttf", 13)
 except OSError:
     f_name = ImageFont.load_default()
 draw.text((297, 18), "Pixel Photo Manager", font=f_name, fill=WHITE)
 
-# Ligne d'accent en bas
+# Accent line at the bottom
 draw.line([(0, 56), (493, 56)], fill=(80, 130, 200), width=2)
 banner.save(OUT / "banner.bmp")
 print("banner.bmp cree")
 
 # ── dialog.bmp (493 x 312) ───────────────────────────────────────────────────
-dialog = Image.new("RGB", (493, 312), RIGHT)       # fond blanc pour la zone WiX
+dialog = Image.new("RGB", (493, 312), RIGHT)       # white background for the WiX area
 
-# Panneau gauche : degrade sombre
+# Left panel: dark gradient
 _gradient_h(dialog, BG, (20, 30, 55), x0=0, x1=SPLIT)
 
-# Ligne de separation
+# Separating line
 draw = ImageDraw.Draw(dialog)
 draw.line([(SPLIT, 0), (SPLIT, 312)], fill=ACCENT, width=2)
 
-# ── Icone de l'application ──────────────────────────────────────────────────
+# ── Application icon ─────────────────────────────────────────────────────────
 icon_path = ROOT / "assets" / "app_icon.ico"
 icon_bottom_y = 20
 if icon_path.exists():
@@ -122,7 +122,7 @@ if icon_path.exists():
         print(f"  Avertissement icone : {exc}")
         icon_bottom_y = 30
 
-# ── Texte de presentation (panneau gauche) ───────────────────────────────────
+# ── Presentation text (left panel) ───────────────────────────────────────────
 ty = icon_bottom_y
 draw.text((12, ty),      "Pixel Photo", font=f_big, fill=WHITE)
 draw.text((12, ty + 32), "Manager",     font=f_big, fill=LIGHT)

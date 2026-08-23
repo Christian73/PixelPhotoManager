@@ -41,7 +41,7 @@ with):
    press Enter) -> checks that only control_2.jpg (the pattern "control_2",
    unique among the 3 witnesses) appears. A UIA trap confirmed empirically
    (a `descendants()` dump right after the click: the status label stayed
-   stuck on "Vidéos — 1 photo", proof that the click never reached
+   stuck on "Videos — 1 photo", proof that the click never reached
    `_on_album_selected`): this entry is the 4th of the sidebar Albums
    QListWidget, which only shows a limited number of items without scrolling --
    the same clipping/virtualisation trap as `_reveal_sidebar_albums_tail` in

@@ -1,27 +1,27 @@
-# Configuration coverage.py — partagée entre les tests unitaires/GUI
-# (pytest --cov=src) et les scénarios e2e (PPM_E2E_COVERAGE=1, cf.
-# tools/test_env/launch_isolated.py : l'application est alors lancée via
-# `coverage run` et écrit un fichier .coverage.* par processus, à fusionner
-# avec `coverage combine`).
+# coverage.py configuration — shared between the unit/GUI tests
+# (pytest --cov=src) and the e2e scenarios (PPM_E2E_COVERAGE=1, cf.
+# tools/test_env/launch_isolated.py: the application is then launched through
+# `coverage run` and writes one .coverage.* file per process, to be merged
+# with `coverage combine`).
 
 [run]
 source = src
-# Un fichier de données par processus (suffixe hôte/pid) : indispensable pour
-# que les données du sous-processus e2e ne écrasent pas celles de pytest-cov.
+# One data file per process (host/pid suffix): indispensable so that
+# the data of the e2e subprocess does not overwrite that of pytest-cov.
 parallel = true
 
 [report]
-# Cliquet de non-régression : échoue si la couverture repasse sous ce seuil.
-# À RELEVER à chaque campagne de tests (jamais baisser). Historique :
-#   2026-07-19  29 % → 36 % (phases 1+2) → 45,8 % (phases 3+4, seuil 45)
-#   2026-07-20  45,8 % → 48,84 % (refactor modularisation N1-N5, seuil 48)
-#   2026-07-21  48,84 % → 49,23 % (correctif file d'attente suppressions, seuil 49)
-#   2026-07-23  49,23 % → 51,41 % (optimisations réactivité perçue + tests, seuil 51)
-#   2026-07-23  51,41 % → 59,84 % (campagne 80 % phase 1 : dialogues + workers, seuil 59)
-#   2026-07-23  59,84 % → 67,63 % (campagne 80 % phase 2 : vues visages + sidebar, seuil 67)
-#   2026-07-24  67,63 % → 78,90 % (RAW/HEIC, recherche avancée, tags + tests associés, seuil 78)
-#   2026-07-25  78,90 % → 80,06 % (fix clipping EditPanel + fiabilisation e2e click_input, seuil 79)
-#   2026-08-02  80,06 % → 80,42 % (cadres décoratifs : frames.py 96 %, frame_dialog.py 75 %,
-#               ferronnerie + largeur des menus, seuil 80 — marge volontairement étroite)
+# Non-regression ratchet: fails if the coverage falls back under this threshold.
+# TO BE RAISED after each test campaign (never lowered). History:
+#   2026-07-19  29 % → 36 % (phases 1+2) → 45.8 % (phases 3+4, threshold 45)
+#   2026-07-20  45.8 % → 48.84 % (modularisation refactor N1-N5, threshold 48)
+#   2026-07-21  48.84 % → 49.23 % (deletion queue fix, threshold 49)
+#   2026-07-23  49.23 % → 51.41 % (perceived responsiveness optimisations + tests, threshold 51)
+#   2026-07-23  51.41 % → 59.84 % (80 % campaign phase 1: dialogs + workers, threshold 59)
+#   2026-07-23  59.84 % → 67.63 % (80 % campaign phase 2: face views + sidebar, threshold 67)
+#   2026-07-24  67.63 % → 78.90 % (RAW/HEIC, advanced search, tags + the matching tests, threshold 78)
+#   2026-07-25  78.90 % → 80.06 % (EditPanel clipping fix + e2e click_input hardening, threshold 79)
+#   2026-08-02  80.06 % → 80.42 % (decorative frames: frames.py 96 %, frame_dialog.py 75 %,
+#               ironwork + menu widths, threshold 80 — a deliberately narrow margin)
 fail_under = 80
 precision = 0

@@ -3,16 +3,16 @@
 # SPDX-License-Identifier: Apache-2.0
 <#
 .SYNOPSIS
-    Packaging complet de PixelPhotoManager : EXE PyInstaller puis MSI WiX.
+    Complete packaging of PixelPhotoManager: PyInstaller EXE then WiX MSI.
 .DESCRIPTION
-    Etape 1 — PyInstaller : produit dist\PixelPhotoManager\ (one-dir)
-    Etape 2 — WiX v3     : produit installer\PixelPhotoManager-<version>-x64.msi
+    Step 1 — PyInstaller: produces dist\PixelPhotoManager\ (one-dir)
+    Step 2 — WiX v3     : produces installer\PixelPhotoManager-<version>-x64.msi
 
-    Usage :
-        .\build.ps1                    # EXE + MSI (demande le numero de version)
-        .\build.ps1 -Version 1.1.0     # EXE + MSI, version fournie directement
-        .\build.ps1 -ExeOnly           # EXE uniquement
-        .\build.ps1 -MsiOnly           # MSI uniquement (EXE deja construit, VERSION deja a jour)
+    Usage:
+        .\build.ps1                    # EXE + MSI (asks for the version number)
+        .\build.ps1 -Version 1.1.0     # EXE + MSI, version supplied directly
+        .\build.ps1 -ExeOnly           # EXE only
+        .\build.ps1 -MsiOnly           # MSI only (EXE already built, VERSION already up to date)
 #>
 param(
     [switch]$ExeOnly,
@@ -30,18 +30,18 @@ $VersionFile = ".\VERSION"
 
 Write-Host "=== PixelPhotoManager — Build ===" -ForegroundColor Cyan
 
-# ── Numero de version ──────────────────────────────────────────────────────────
-# Source unique de verite pour ce build : le fichier VERSION a la racine du
-# depot, lu a la fois par pixelphotomanager.spec (embarque dans l'exe, lu par
-# get_app_version() en mode fige) et par installer\build_msi.ps1 (Product/@Version
-# du MSI). Sans -MsiOnly, on redemande toujours le numero (le dernier tag git
-# est propose par defaut) pour eviter d'oublier de le mettre a jour et de
-# publier un exe qui se croit encore en version N-1.
+# ── Version number ────────────────────────────────────────────────────────────
+# The single source of truth for this build: the VERSION file at the root of the
+# repository, read both by pixelphotomanager.spec (embedded in the exe, read by
+# get_app_version() in frozen mode) and by installer\build_msi.ps1 (Product/@Version
+# of the MSI). Without -MsiOnly, the number is always asked for again (the latest
+# git tag is offered by default) so as to avoid forgetting to update it and
+# publishing an exe that still believes it is version N-1.
 if (-not $MsiOnly) {
     if (-not $Version) {
-        # Le dernier tag du depot (pas forcement un ancetre de HEAD : "git describe"
-        # echouerait ici si le tag n'est pas atteignable depuis la branche courante,
-        # ex. tag pose sur main alors qu'on builde depuis develop).
+        # The latest tag of the repository (not necessarily an ancestor of HEAD: "git describe"
+        # would fail here if the tag is not reachable from the current branch,
+        # e.g. a tag put on main while building from develop).
         $gitTag = git tag --sort=-v:refname 2>$null | Select-Object -First 1
         $suggested = if ($gitTag) {
             $gitTag.TrimStart("v", "V")
@@ -64,7 +64,7 @@ if (-not $MsiOnly) {
     Write-Error "$VersionFile introuvable. Lancez d'abord un build EXE (sans -MsiOnly) pour le generer."
 }
 
-# ── Etape 1 : PyInstaller ─────────────────────────────────────────────────────
+# ── Step 1: PyInstaller ───────────────────────────────────────────────────────
 if (-not $MsiOnly) {
     Write-Host "`n[1/2] Build PyInstaller..." -ForegroundColor Yellow
 
@@ -85,7 +85,7 @@ if (-not $MsiOnly) {
     Write-Host "  EXE : $DIST  ($([math]::Round($size / 1MB, 0)) Mo)" -ForegroundColor Green
 }
 
-# ── Etape 2 : MSI ─────────────────────────────────────────────────────────────
+# ── Step 2: MSI ───────────────────────────────────────────────────────────────
 if (-not $ExeOnly) {
     Write-Host "`n[2/2] Build MSI..." -ForegroundColor Yellow
     & powershell -ExecutionPolicy Bypass -File ".\installer\build_msi.ps1"

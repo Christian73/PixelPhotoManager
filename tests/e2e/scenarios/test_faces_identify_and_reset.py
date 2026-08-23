@@ -100,8 +100,8 @@ def _wait_faces_ready(faces_db: Path, photo_paths: list[str], *, timeout: float 
 
 
 def _find_name_input(window):
-    """Locates the "Nom de la personne…" `QLineEdit` of `_AssignDialog` by
-    vertical proximity with the "Créer une nouvelle personne" radio button --
+    """Locates the "Person name…" `QLineEdit` of `_AssignDialog` by
+    vertical proximity with the "Create a new person:" radio button --
     same principle as `_find_edit_near_text` in test_folder_management.py
     (adapted to a `QRadioButton` rather than a `QLabel`): an empty `QLineEdit`
     does not reliably expose its placeholder text through UIA, and other

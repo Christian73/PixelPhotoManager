@@ -21,11 +21,11 @@
 
     <MediaTemplate EmbedCab="yes" CompressionLevel="high" />
 
-    <!-- Icone : chemin absolu fourni par candle via -dAssetsDir -->
+    <!-- Icon: absolute path supplied by candle through -dAssetsDir -->
     <Icon Id="AppIcon" SourceFile="$(var.AssetsDir)\app_icon.ico" />
     <Property Id="ARPPRODUCTICON" Value="AppIcon" />
 
-    <!-- Interface d'installation -->
+    <!-- Installation interface -->
     <Property Id="WIXUI_INSTALLDIR" Value="INSTALLFOLDER" />
     <UIRef Id="WixUI_InstallDir" />
     <WixVariable Id="WixUILicenseRtf" Value="installer\License.rtf" />
@@ -33,11 +33,11 @@
     <WixVariable Id="WixUIDialogBmp"  Value="installer\dialog.bmp" />
 
     <!-- ========================================================
-         Structure des repertoires
+         Directory structure
          ======================================================== -->
     <Directory Id="TARGETDIR" Name="SourceDir">
 
-      <!-- Associations de fichiers images : "Ouvrir avec Pixel Photo Manager" -->
+      <!-- Image file associations: "Open with Pixel Photo Manager" -->
       <Component Id="FileAssocComp" Guid="B82D4537-99BB-4696-9D0B-9E495C16954E">
         <RegistryValue Root="HKLM"
                        Key="SOFTWARE\Classes\Applications\PixelPhotoManager.exe\shell\open\command"
@@ -84,7 +84,7 @@
         </Directory>
       </Directory>
 
-      <!-- Bureau (utilisateur courant) -->
+      <!-- Desktop (current user) -->
       <Directory Id="DesktopFolder">
         <Component Id="DesktopShortcutComp" Guid="C93E5648-AA10-7B07-D2C1-E4F5A6789012">
           <Shortcut Id="DesktopShortcut"
@@ -104,7 +104,7 @@
         </Component>
       </Directory>
 
-      <!-- Menu Demarrer (utilisateur courant) -->
+      <!-- Start menu (current user) -->
       <Directory Id="ProgramMenuFolder">
         <Directory Id="StartMenuDir" Name="Pixel Photo Manager">
           <Component Id="StartMenuShortcutComp" Guid="D04F6759-BB21-8C18-E3D2-F5A6B7890123">
@@ -135,7 +135,7 @@
     </Directory>
 
     <!-- ========================================================
-         Feature principale
+         Main feature
          ======================================================== -->
     <Feature Id="ProductFeature" Title="Pixel Photo Manager" Level="1">
       <ComponentGroupRef Id="AppFiles" />

@@ -598,7 +598,7 @@ class TestThreadLocalConnection:
             try:
                 for i in range(50):
                     catalog.add_or_update_photo(_make_photo(f"C:/photos/w{i}.jpg"))
-            except Exception as e:   # pragma: no cover - échec attendu du test
+            except Exception as e:   # pragma: no cover - the test failure is expected
                 errors.append(e)
 
         def reader():

@@ -68,7 +68,7 @@ def test_luminosity_edit_applies_persists_and_undoes(isolated_app):
     )
 
     # Undo (the undo button of the EditPanel). A DYNAMIC label since the
-    # UI evolved: "Undo  <operation>" (e.g. "Undo  Luminosité"),
+    # UI evolved: "Undo  <operation>" (e.g. "Undo  Brightness"),
     # hence the non-exact search -- the "Cancel" of the treatment dialog
     # is closed by that point, so there is no ambiguity.
     find_dialog_button(window, ["Undo"], exact=False, timeout=10.0).click_input()
