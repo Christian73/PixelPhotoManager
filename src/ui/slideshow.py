@@ -1,6 +1,6 @@
 ﻿# Copyright 2026 Christian Guyot
 # SPDX-License-Identifier: Apache-2.0
-"""Diaporama plein écran des photos de l'album courant."""
+"""Full-screen slideshow of the photos of the current album."""
 
 import logging
 import random
@@ -18,15 +18,15 @@ from src.core.i18n import translate
 
 logger = logging.getLogger(__name__)
 
-_INTERVAL_MS      = 5_000   # durée par défaut entre deux photos (5 s)
+_INTERVAL_MS      = 5_000   # default delay between two photos (5 s)
 _INTERVAL_MIN_MS  = 1_000   # minimum 1 s
 _INTERVAL_MAX_MS  = 60_000  # maximum 60 s
-_INTERVAL_STEP_MS = 1_000   # pas d'ajustement : 1 s
-_OVERLAY_TTL_MS   = 5_000   # délai avant masquage automatique de la barre
+_INTERVAL_STEP_MS = 1_000   # adjustment step: 1 s
+_OVERLAY_TTL_MS   = 5_000   # delay before the bar is hidden automatically
 
-_KB_FPS  = 30     # fréquence de l'animation Ken Burns (images/s)
-_KB_ZOOM = 0.08   # amplitude max du zoom (8 %)
-_KB_PAN  = 0.55   # fraction de la marge disponible utilisée pour le pan
+_KB_FPS  = 30     # frame rate of the Ken Burns animation (frames/s)
+_KB_ZOOM = 0.08   # max zoom amplitude (8 %)
+_KB_PAN  = 0.55   # fraction of the available margin used for the pan
 
 _BTN_STYLE = (
     "QPushButton { background: rgba(255,255,255,15); color: white; "
@@ -42,7 +42,7 @@ _BTN_SMALL = (
 
 
 class _KenBurnsWidget(QWidget):
-    """Widget plein-écran avec effet Ken Burns (zoom + pan lent)."""
+    """Full-screen widget with a Ken Burns effect (slow zoom + pan)."""
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
@@ -79,9 +79,9 @@ class _KenBurnsWidget(QWidget):
         z_b = 1.0 + random.uniform(0.0, _KB_ZOOM)
         z_max = max(z_a, z_b)
 
-        # Marge de pan = fraction du pixmap non visible à zoom max.
-        # Composante verticale réduite à 35 % pour favoriser
-        # les mouvements horizontaux et diagonaux.
+        # Pan margin = the fraction of the pixmap not visible at max zoom.
+        # Vertical component reduced to 35 % to favour
+        # horizontal and diagonal movements.
         pan = 1.0 - 1.0 / z_max
         mx  = pan * _KB_PAN
         my  = pan * _KB_PAN * 0.35
@@ -119,7 +119,7 @@ class _KenBurnsWidget(QWidget):
         return QRectF(sx, sy, sw, sh)
 
     def _dst_rect(self) -> QRectF:
-        """Rect destination centré dans le widget (letterbox / pillarbox)."""
+        """Destination rect centred in the widget (letterbox / pillarbox)."""
         if not self._pixmap:
             return QRectF(self.rect())
         pw, ph = self._pixmap.width(), self._pixmap.height()
@@ -141,9 +141,9 @@ class _KenBurnsWidget(QWidget):
 
 
 class _LoadThread(QThread):
-    """Charge une photo (avec retouches) dans un thread secondaire."""
+    """Loads a photo (with its edits) in a secondary thread."""
 
-    ready = Signal(int, object)   # (index_demandé, QPixmap)
+    ready = Signal(int, object)   # (requested_index, QPixmap)
 
     def __init__(
         self,
@@ -175,25 +175,25 @@ class _LoadThread(QThread):
 
 class SlideshowWindow(QWidget):
     """
-    Fenêtre plein écran de diaporama.
+    Full-screen slideshow window.
 
-    Paramètres
+    Parameters
     ----------
-    photos      : liste ordonnée de PhotoInfo (index 0 = plus récente)
-    start_index : index de la photo de départ dans la liste
-    edit_db     : EditDatabase — pour appliquer les retouches non destructives
+    photos      : ordered list of PhotoInfo (index 0 = the newest)
+    start_index : index of the starting photo in the list
+    edit_db     : EditDatabase — to apply the non-destructive edits
 
     Navigation
     ----------
-    ▶ / → : photo plus récente (index - 1)
-    ◀ / ← : photo plus ancienne (index + 1)
+    ▶ / → : newer photo (index - 1)
+    ◀ / ← : older photo (index + 1)
 
-    Contrôles overlay (apparaissent au mouvement souris, masqués après 5 s)
+    Overlay controls (appear on mouse movement, hidden after 5 s)
     -----------------------------------------------------------------------
-    ◀  plus ancienne  |  [−][Xs][+]  |  ⏸/▶  |  ▶  plus récente  |  ✕
+    ◀  older  |  [−][Xs][+]  |  ⏸/▶  |  ▶  newer  |  ✕
 
-    Tant que la fenêtre est ouverte, l'économiseur d'écran et la veille de
-    l'écran sont inhibés (cf. `src/core/screensaver_guard.py`).
+    As long as the window is open, the screen saver and the display sleep are
+    inhibited (cf. `src/core/screensaver_guard.py`).
     """
 
     def __init__(
@@ -210,16 +210,16 @@ class SlideshowWindow(QWidget):
         self._playing   = True
         self._interval  = _INTERVAL_MS
 
-        # Thread courant + cache de préchargement {index: QPixmap}
+        # Current thread + prefetch cache {index: QPixmap}
         self._load_thread:    _LoadThread | None = None
         self._preload_thread: _LoadThread | None = None
         self._preload_cache:  dict[int, QPixmap] = {}
 
-        # Regarder un diaporama sans toucher au clavier ni à la souris est de
-        # l'inactivité pour Windows : sans ce garde, l'économiseur d'écran (ou
-        # l'extinction du moniteur) finit par recouvrir les photos. Maintenu
-        # pour toute la durée de la fenêtre, pause comprise — une photo laissée
-        # affichée volontairement doit rester visible.
+        # Watching a slideshow without touching the keyboard or the mouse is
+        # inactivity as far as Windows is concerned: without this guard, the screen
+        # saver (or the monitor turning off) ends up covering the photos. Held for
+        # the whole life of the window, pause included — a photo deliberately left
+        # on screen must stay visible.
         self._screensaver = ScreensaverGuard()
         self._screensaver.inhibit()
 
@@ -230,7 +230,7 @@ class SlideshowWindow(QWidget):
 
         self._setup_ui()
         self._setup_timers()
-        # Connexions dépendant des deux : _hide_timer créé dans _setup_timers
+        # Connections depending on both: _hide_timer is created in _setup_timers
         for _btn in self._overlay_btns:
             _btn.clicked.connect(self._hide_timer.start)
         self.showFullScreen()
@@ -238,15 +238,15 @@ class SlideshowWindow(QWidget):
 
     # ------------------------------------------------------------------ UI
 
-    _OVERLAY_H = 90   # hauteur totale de la bande overlay (gradient inclus)
+    _OVERLAY_H = 90   # total height of the overlay strip (gradient included)
 
     def _setup_ui(self) -> None:
-        # Widget Ken Burns couvre toute la fenêtre — pas de layout racine
+        # The Ken Burns widget covers the whole window — no root layout
         self._kb_widget = _KenBurnsWidget(self)
         self._kb_widget.setStyleSheet("background: black;")
 
-        # Overlay flottant positionné en bas via resizeEvent
-        # Gradient : transparent en haut → sombre en bas pour lisibilité
+        # Floating overlay positioned at the bottom through resizeEvent
+        # Gradient: transparent at the top → dark at the bottom, for legibility
         self._overlay = QWidget(self)
         self._overlay.setStyleSheet(
             "background: qlineargradient("
@@ -258,17 +258,17 @@ class SlideshowWindow(QWidget):
         self._overlay.setMouseTracking(True)
 
         ol = QHBoxLayout(self._overlay)
-        ol.setContentsMargins(24, 36, 24, 14)   # marges hautes généreuses pour le gradient
+        ol.setContentsMargins(24, 36, 24, 14)   # generous top margins for the gradient
         ol.setSpacing(8)
 
-        # Compteur position
+        # Position counter
         self._lbl_count = QLabel()
         self._lbl_count.setStyleSheet("color: #999; font-size: 12px; min-width: 56px;")
         ol.addWidget(self._lbl_count)
 
         ol.addStretch()
 
-        # ◀ Plus ancienne
+        # ◀ Older
         self._btn_prev = QPushButton(translate("SlideshowWindow", "◀  Previous"))
         self._btn_prev.setToolTip(translate("SlideshowWindow", "Older photo  (←)"))
         self._btn_prev.setStyleSheet(_BTN_STYLE)
@@ -277,7 +277,7 @@ class SlideshowWindow(QWidget):
 
         ol.addSpacing(16)
 
-        # Contrôle du temps d'affichage : [−] [Xs] [+]
+        # Display time control: [−] [Xs] [+]
         btn_minus = QPushButton("−")
         btn_minus.setToolTip(translate("SlideshowWindow", "Shorten the display time"))
         btn_minus.setStyleSheet(_BTN_SMALL)
@@ -310,7 +310,7 @@ class SlideshowWindow(QWidget):
 
         ol.addSpacing(16)
 
-        # ▶ Plus récente
+        # ▶ Newer
         self._btn_next = QPushButton(translate("SlideshowWindow", "Next  ▶"))
         self._btn_next.setToolTip(translate("SlideshowWindow", "Newer photo  (→)"))
         self._btn_next.setStyleSheet(_BTN_STYLE)
@@ -319,7 +319,7 @@ class SlideshowWindow(QWidget):
 
         ol.addStretch()
 
-        # ✕ Fermer
+        # ✕ Close
         btn_close = QPushButton("✕")
         btn_close.setToolTip(translate("SlideshowWindow", "Leave the slideshow  (Esc)"))
         btn_close.setStyleSheet(_BTN_SMALL)
@@ -327,7 +327,7 @@ class SlideshowWindow(QWidget):
         btn_close.clicked.connect(self.close)
         ol.addWidget(btn_close)
 
-        # Sauvegarde des boutons pour connexion dans __init__ (après _setup_timers)
+        # Buttons kept for connection in __init__ (after _setup_timers)
         self._overlay_btns = (
             self._btn_prev, btn_minus, btn_plus,
             self._btn_playpause, self._btn_next, btn_close,
@@ -351,7 +351,7 @@ class SlideshowWindow(QWidget):
         self._kb_widget.setGeometry(0, 0, w, h)
         self._overlay.setGeometry(0, h - self._OVERLAY_H, w, self._OVERLAY_H)
 
-    # ------------------------------------------------------------------ chargement
+    # ------------------------------------------------------------------ loading
 
     def _screen_size(self) -> QSize:
         return self._kb_widget.size() or self.size()
@@ -363,19 +363,19 @@ class SlideshowWindow(QWidget):
         n = len(self._photos)
 
         self._lbl_count.setText(f"{n - self._index} / {n}")
-        # ◀ (plus ancienne) actif s'il reste des photos plus anciennes
+        # ◀ (older) enabled if there are older photos left
         self._btn_prev.setEnabled(self._index < n - 1)
-        # ▶ (plus récente) actif s'il reste des photos plus récentes
+        # ▶ (newer) enabled if there are newer photos left
         self._btn_next.setEnabled(self._index > 0)
 
-        # Si la photo est déjà préchargée, affichage immédiat
+        # If the photo is already prefetched, display it immediately
         if self._index in self._preload_cache:
             pixmap = self._preload_cache.pop(self._index)
             self._kb_widget.set_pixmap(pixmap, self._interval)
             self._start_preload()
             return
 
-        # La photo précédente continue d'animer pendant le chargement
+        # The previous photo keeps animating during the load
         self._cancel_load(self._load_thread)
         t = _LoadThread(self._index, photo, self._screen_size(), self._edit_db)
         t.ready.connect(self._on_pixmap_ready)
@@ -384,7 +384,7 @@ class SlideshowWindow(QWidget):
         self._load_thread = t
 
     def _cancel_load(self, thread: "_LoadThread | None") -> None:
-        """Déconnecte le signal ready d'un thread en cours (résultat sera ignoré)."""
+        """Disconnects the ready signal of a running thread (its result will be ignored)."""
         if thread is None:
             return
         try:
@@ -394,10 +394,10 @@ class SlideshowWindow(QWidget):
                 except RuntimeError:
                     pass
         except RuntimeError:
-            pass  # C++ object déjà détruit — rien à faire
+            pass  # C++ object already destroyed — nothing to do
 
     def _clear_thread(self, kind: str, thread: "_LoadThread") -> None:
-        """Appelé sur finished : efface la référence Python puis planifie la destruction Qt."""
+        """Called on finished: clears the Python reference then schedules the Qt destruction."""
         if kind == 'load' and self._load_thread is thread:
             self._load_thread = None
         elif kind == 'preload' and self._preload_thread is thread:
@@ -408,8 +408,8 @@ class SlideshowWindow(QWidget):
             pass
 
     def _start_preload(self) -> None:
-        """Précharge la photo suivante dans la direction de l'avance automatique."""
-        next_idx = self._index - 1   # avance automatique = vers le plus récent
+        """Prefetches the next photo in the direction of the automatic advance."""
+        next_idx = self._index - 1   # automatic advance = towards the newest
         if not (0 <= next_idx < len(self._photos)):
             next_idx = self._index + 1
         if not (0 <= next_idx < len(self._photos)):
@@ -426,7 +426,7 @@ class SlideshowWindow(QWidget):
 
     def _on_pixmap_ready(self, index: int, pixmap: QPixmap) -> None:
         if index != self._index:
-            return   # navigation entre-temps, ignorer
+            return   # navigation in the meantime, ignore
         self._kb_widget.set_pixmap(pixmap, self._interval)
         self._start_preload()
 
@@ -436,7 +436,7 @@ class SlideshowWindow(QWidget):
     # ------------------------------------------------------------------ navigation
 
     def _advance(self) -> None:
-        """Avance automatique vers la photo plus récente ; pause à la dernière."""
+        """Automatic advance towards the newer photo; pauses on the last one."""
         if self._index > 0:
             self._index -= 1
             self._load_current()
@@ -444,7 +444,7 @@ class SlideshowWindow(QWidget):
             self._set_playing(False)
 
     def _go_older(self) -> None:
-        """◀ / ← : aller vers la photo plus ancienne (index + 1)."""
+        """◀ / ← : go to the older photo (index + 1)."""
         if self._index < len(self._photos) - 1:
             self._index += 1
             self._load_current()
@@ -452,14 +452,14 @@ class SlideshowWindow(QWidget):
                 self._advance_timer.start()
 
     def _go_newer(self) -> None:
-        """▶ / → : aller vers la photo plus récente (index - 1)."""
+        """▶ / → : go to the newer photo (index - 1)."""
         if self._index > 0:
             self._index -= 1
             self._load_current()
             if self._playing:
                 self._advance_timer.start()
 
-    # ------------------------------------------------------------------ intervalle
+    # ------------------------------------------------------------------ interval
 
     def _fmt_interval(self) -> str:
         s = self._interval // 1000
@@ -506,9 +506,9 @@ class SlideshowWindow(QWidget):
         super().mouseMoveEvent(event)
 
     def nativeEvent(self, event_type, message):
-        """Refuse la demande de lancement de l'économiseur d'écran adressée à
-        la fenêtre au premier plan — second verrou, complémentaire de
-        `ScreensaverGuard` (cf. `src/core/screensaver_guard.py`)."""
+        """Refuses the screen saver launch request addressed to the foreground
+        window — a second lock, complementary to `ScreensaverGuard`
+        (cf. `src/core/screensaver_guard.py`)."""
         if is_screensaver_command(event_type, message):
             return True, 0
         return super().nativeEvent(event_type, message)
@@ -534,10 +534,10 @@ class SlideshowWindow(QWidget):
         self._advance_timer.stop()
         self._hide_timer.stop()
         self._kb_widget.stop()
-        # Déconnecter les signaux pour ignorer tout résultat en cours
+        # Disconnect the signals so as to ignore any result in progress
         self._cancel_load(self._load_thread)
         self._cancel_load(self._preload_thread)
-        # Attendre la fin des threads (max 2 s chacun) avant que Qt détruise le widget
+        # Wait for the threads to finish (2 s each at most) before Qt destroys the widget
         for t in (self._load_thread, self._preload_thread):
             if t is not None:
                 try:

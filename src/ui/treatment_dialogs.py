@@ -1,8 +1,8 @@
 # Copyright 2026 Christian Guyot
 # SPDX-License-Identifier: Apache-2.0
-"""Dialogues de traitement du panneau de retouche (extraits de
-edit_panel.py) : TreatmentDialog générique, GammaCurveWidget et les dialogues
-Luminosité / Couleurs / Vignette."""
+"""Treatment dialogs of the editing panel (extracted from
+edit_panel.py): the generic TreatmentDialog, GammaCurveWidget and the
+Brightness / Colours / Vignette dialogs."""
 import copy
 import logging
 import math
@@ -31,7 +31,7 @@ from src.ui.edit_icons import (  # noqa: E402
 from src.core.i18n import translate
 
 class TreatmentDialog(QDialog):
-    preview = Signal(object)  # EditInfo en temps réel
+    preview = Signal(object)  # live EditInfo
 
     def __init__(self, title: str, sliders_def: list, edit: EditInfo, parent=None):
         """
@@ -42,7 +42,7 @@ class TreatmentDialog(QDialog):
         self.setMinimumWidth(720)
         self._edit = copy.copy(edit)
         self._sliders: dict[str, EditSlider] = {}
-        self._panel = None   # référence vers EditPanel, positionné dans showEvent
+        self._panel = None   # reference to EditPanel, set in showEvent
 
         layout = QVBoxLayout(self)
         layout.setSpacing(8)
@@ -64,9 +64,9 @@ class TreatmentDialog(QDialog):
     def showEvent(self, event) -> None:
         super().showEvent(event)
         if self._panel is not None:
-            # Dimensions réelles disponibles ici.
-            # QTimer.singleShot(0) diffère le move() APRÈS que Windows ait fini
-            # tout repositionnement asynchrone (adjustPosition, WM_WINDOWPOSCHANGED…).
+            # The real dimensions are available here.
+            # QTimer.singleShot(0) defers the move() until AFTER Windows has finished
+            # any asynchronous repositioning (adjustPosition, WM_WINDOWPOSCHANGED…).
             pos = self._panel._compute_dialog_pos(self.width(), self.height())
             QTimer.singleShot(0, lambda: self.move(pos))
 
@@ -78,11 +78,11 @@ class TreatmentDialog(QDialog):
         return self._edit
 
 
-# ------------------------------------------------------------------ courbe gamma
+# ------------------------------------------------------------------ gamma curve
 
 
 def _compute_luminosity_histogram(photo_path: str) -> list[float]:
-    """Retourne 256 valeurs normalisées (log) de l'histogramme de luminosité."""
+    """Returns 256 normalised (log) values of the brightness histogram."""
     try:
         from PIL import Image
         img = Image.open(photo_path)
@@ -154,7 +154,7 @@ class GammaCurveWidget(QWidget):
         p.fillRect(self.rect(), QColor(22, 22, 32))
         p.fillRect(x0, y0, w, h, QColor(14, 14, 22))
 
-        # histogramme de luminosité (silhouette semi-transparente)
+        # brightness histogram (a semi-transparent silhouette)
         if self._histogram:
             hist_path = QPainterPath()
             hist_path.moveTo(x0, y0 + h)
@@ -168,17 +168,17 @@ class GammaCurveWidget(QWidget):
             p.setBrush(QColor(210, 210, 210, 38))
             p.drawPath(hist_path)
 
-        # grille
+        # grid
         p.setPen(QPen(QColor(55, 55, 75), 1))
         for i in range(1, 4):
             p.drawLine(x0 + i * w // 4, y0, x0 + i * w // 4, y0 + h)
             p.drawLine(x0, y0 + i * h // 4, x0 + w, y0 + i * h // 4)
 
-        # diagonale identité
+        # identity diagonal
         p.setPen(QPen(QColor(75, 75, 100), 1, Qt.DashLine))
         p.drawLine(x0, y0 + h, x0 + w, y0)
 
-        # courbe interpolée
+        # interpolated curve
         lut = ImageAdjuster._curve_lut(self._points)
         p.setPen(QPen(QColor(140, 140, 255), 2))
         prev = None
@@ -188,11 +188,11 @@ class GammaCurveWidget(QWidget):
                 p.drawLine(prev[0], prev[1], wx, wy)
             prev = (wx, wy)
 
-        # bordure
+        # border
         p.setPen(QPen(QColor(75, 75, 100), 1))
         p.drawRect(x0, y0, w, h)
 
-        # points de contrôle
+        # control points
         for i, (cx, cy) in enumerate(self._points):
             wx, wy = self._to_widget(cx, cy)
             r = 7 if (i == self._drag_idx or i == self._hover_idx) else 5
@@ -221,7 +221,7 @@ class GammaCurveWidget(QWidget):
             cx, cy = self._to_curve(px, py)
             x0, y0, w, h = self._chart()
             if x0 <= px <= x0 + w and y0 <= py <= y0 + h:
-                # éviter les x trop proches des points existants
+                # avoid x values too close to the existing points
                 if not any(abs(cx - p[0]) < 0.02 for p in self._points):
                     self._points.append((cx, cy))
                     self._points.sort(key=lambda pt: pt[0])
@@ -237,7 +237,7 @@ class GammaCurveWidget(QWidget):
             cx, cy = self._to_curve(px, py)
             idx = self._drag_idx
             pts = self._points
-            # les extrémités restent fixées en x
+            # the endpoints stay fixed in x
             if idx == 0:
                 cx = 0.0
             elif idx == len(pts) - 1:
@@ -259,7 +259,7 @@ class GammaCurveWidget(QWidget):
     def mouseReleaseEvent(self, event):
         self._drag_idx = -1
 
-    # -- API publique
+    # -- public API
 
     def set_from_gamma(self, gamma: float) -> None:
         self._points = _gamma_to_curve_points(gamma)
@@ -274,7 +274,7 @@ class GammaCurveWidget(QWidget):
         self.update()
 
 
-# ------------------------------------------------------------------ dialogue luminosité (+ gamma avancé)
+# ------------------------------------------------------------------ brightness dialog (+ advanced gamma)
 
 class LuminositeTreatmentDialog(QDialog):
     preview = Signal(object)
@@ -290,20 +290,20 @@ class LuminositeTreatmentDialog(QDialog):
         layout.setSpacing(8)
         layout.setContentsMargins(12, 12, 12, 12)
 
-        # Slider luminosité principal
+        # Main brightness slider
         self._sl_lum = EditSlider(translate("LuminositeTreatmentDialog", "Brightness"),
                                   -1.0, 1.0, edit.brightness, 2)
         self._sl_lum.value_changed.connect(lambda v: self._on_changed("brightness", v))
         layout.addWidget(self._sl_lum)
 
-        # Checkbox "Fonctions avancées…" (gamma)
+        # "Advanced functions…" checkbox (gamma)
         self._chk = QCheckBox(translate("LuminositeTreatmentDialog", "Advanced options…"))
         has_gamma = edit.gamma != 1.0 or edit.gamma_use_curve
         self._chk.setChecked(has_gamma)
         self._chk.toggled.connect(self._on_advanced_toggled)
         layout.addWidget(self._chk)
 
-        # Section gamma (masquée si pas d'édition gamma)
+        # Gamma section (hidden if there is no gamma editing)
         self._adv = QWidget()
         adv_layout = QVBoxLayout(self._adv)
         adv_layout.setContentsMargins(0, 4, 0, 0)
@@ -318,7 +318,7 @@ class LuminositeTreatmentDialog(QDialog):
         self._chk_curve.toggled.connect(self._on_curve_toggled)
         adv_layout.addWidget(self._chk_curve)
 
-        # Section courbe (masquée par défaut)
+        # Curve section (hidden by default)
         self._curve_section = QWidget()
         cs_layout = QVBoxLayout(self._curve_section)
         cs_layout.setContentsMargins(0, 0, 0, 0)
@@ -339,7 +339,7 @@ class LuminositeTreatmentDialog(QDialog):
         cs_layout.addWidget(self._curve)
         adv_layout.addWidget(self._curve_section)
 
-        # Visibilité initiale
+        # Initial visibility
         self._gamma_slider.setVisible(not edit.gamma_use_curve)
         self._curve_section.setVisible(edit.gamma_use_curve)
         self._edit.gamma_curve_points = init_pts
@@ -396,12 +396,12 @@ class LuminositeTreatmentDialog(QDialog):
         return self._edit
 
 
-# ------------------------------------------------------------------ dialogue couleurs
+# ------------------------------------------------------------------ colours dialog
 
 
 class CouleursTreatmentDialog(QDialog):
     preview          = Signal(object)  # EditInfo
-    wb_pick_requested = Signal(bool)   # True = démarrer la pipette, False = annuler
+    wb_pick_requested = Signal(bool)   # True = start the eyedropper, False = cancel
 
     def __init__(self, edit: EditInfo, parent=None):
         super().__init__(parent)
@@ -414,19 +414,19 @@ class CouleursTreatmentDialog(QDialog):
         layout.setSpacing(8)
         layout.setContentsMargins(12, 12, 12, 12)
 
-        # Curseur saturation globale
+        # Global saturation slider
         self._sl_sat = EditSlider(translate("CouleursTreatmentDialog", "Saturation"),
                                   -1.0, 1.0, edit.saturation, 2)
         self._sl_sat.value_changed.connect(lambda v: self._on_changed("saturation", v))
         layout.addWidget(self._sl_sat)
 
-        # Checkbox avancé
+        # Advanced checkbox
         self._chk = QCheckBox(translate("CouleursTreatmentDialog", "Advanced options…"))
         has_channel_edits = any(v != 0.0 for v in (edit.color_red, edit.color_green, edit.color_blue))
         self._chk.setChecked(has_channel_edits)
         layout.addWidget(self._chk)
 
-        # Section RVB (masquée par défaut)
+        # RGB section (hidden by default)
         self._adv = QWidget()
         adv_layout = QVBoxLayout(self._adv)
         adv_layout.setContentsMargins(0, 4, 0, 0)
@@ -436,7 +436,7 @@ class CouleursTreatmentDialog(QDialog):
         lbl.setStyleSheet("color: #999; font-size: 10px;")
         adv_layout.addWidget(lbl)
 
-        # --- Pipette balance des blancs ---
+        # --- White balance eyedropper ---
         pip_row = QHBoxLayout()
         pip_row.setContentsMargins(0, 4, 0, 0)
         self._btn_pip = QPushButton(translate("CouleursTreatmentDialog", "⌖  White balance "
@@ -456,7 +456,7 @@ class CouleursTreatmentDialog(QDialog):
         pip_row.addWidget(self._lbl_pip_hint, stretch=1)
         adv_layout.addLayout(pip_row)
 
-        # Swatch de feedback (couleur prélevée)
+        # Feedback swatch (the picked colour)
         swatch_row = QHBoxLayout()
         self._wb_swatch_lbl = QLabel(translate("CouleursTreatmentDialog", "Sampled colour:"))
         self._wb_swatch_lbl.setStyleSheet("color: #888; font-size: 10px;")
@@ -472,7 +472,7 @@ class CouleursTreatmentDialog(QDialog):
 
         self._btn_pip.toggled.connect(self._on_pip_toggled)
 
-        # Sliders RVB
+        # RGB sliders
         self._sl_r = EditSlider(translate("CouleursTreatmentDialog", "Red"),
                                 -1.0, 1.0, edit.color_red,   2)
         self._sl_g = EditSlider(translate("CouleursTreatmentDialog", "Green"),
@@ -504,7 +504,7 @@ class CouleursTreatmentDialog(QDialog):
         self.wb_pick_requested.emit(checked)
 
     def apply_wb_pixel(self, r: int, g: int, b: int) -> None:
-        """Applique la correction balance des blancs depuis le pixel prélevé sur la visionneuse."""
+        """Applies the white balance correction from the pixel picked in the viewer."""
         if r == 0 and g == 0 and b == 0:
             return
         mean = (r + g + b) / 3.0
@@ -518,19 +518,19 @@ class CouleursTreatmentDialog(QDialog):
         self._edit.color_green = cg
         self._edit.color_blue  = cb
         self.preview.emit(copy.copy(self._edit))
-        # Désactiver le bouton pipette (sans réémettre le signal)
+        # Disable the eyedropper button (without re-emitting the signal)
         self._btn_pip.blockSignals(True)
         self._btn_pip.setChecked(False)
         self._btn_pip.blockSignals(False)
         self._lbl_pip_hint.hide()
-        # Feedback : swatch de la couleur prélevée
+        # Feedback: swatch of the picked colour
         self._wb_swatch.setStyleSheet(f"background: rgb({r},{g},{b}); border: 1px solid #666;")
         self._wb_swatch.setToolTip(
             translate("CouleursTreatmentDialog", "Sampled pixel — R: {r}  G: {g}  B: {b}"
                       ).format(r=r, g=g, b=b))
         self._wb_swatch_lbl.show()
         self._wb_swatch.show()
-        # Activer la section avancée si elle est masquée
+        # Show the advanced section if it is hidden
         if not self._adv.isVisible():
             self._chk.setChecked(True)
 
@@ -559,18 +559,18 @@ class CouleursTreatmentDialog(QDialog):
 
 
 
-# Intensité appliquée à l'ouverture de l'outil quand la photo n'a pas encore de
-# vignette (`vignette_strength` == 0) : à 0, l'outil s'ouvrait sur un effet
-# strictement invisible et il fallait bouger le curseur pour voir quoi que ce
-# soit. La valeur par défaut de `EditInfo.vignette_strength` reste 0 — une photo
-# sans vignette enregistrée doit s'afficher sans vignette ; c'est bien
-# l'ouverture de l'outil qui pose ce point de départ, cf.
-# `edit_panel._open_vignette_treatment` (annulation → retour à 0).
+# Strength applied when the tool is opened on a photo that has no vignette
+# yet (`vignette_strength` == 0): at 0, the tool opened on a strictly
+# invisible effect and the slider had to be moved to see anything at all.
+# The default value of `EditInfo.vignette_strength` stays 0 — a photo with no
+# saved vignette must be displayed without one; it really is opening the tool
+# that sets this starting point, cf. `edit_panel._open_vignette_treatment`
+# (cancelling → back to 0).
 VIGNETTE_DEFAULT_STRENGTH = 0.5
 
 
 class VignetteTreatmentDialog(QDialog):
-    preview = Signal(object)   # EditInfo en temps réel
+    preview = Signal(object)   # live EditInfo
 
     def __init__(self, edit: EditInfo, parent=None) -> None:
         super().__init__(parent)
@@ -586,13 +586,13 @@ class VignetteTreatmentDialog(QDialog):
         layout.setSpacing(10)
         layout.setContentsMargins(14, 14, 14, 10)
 
-        # ---- Intensité ----
+        # ---- Strength ----
         self._sl_strength = EditSlider(translate("VignetteTreatmentDialog", "Strength"),
                                        0.0, 1.0, self._edit.vignette_strength, 2)
         self._sl_strength.value_changed.connect(lambda v: self._on_changed("vignette_strength", v))
         layout.addWidget(self._sl_strength)
 
-        # ---- Couleur ----
+        # ---- Colour ----
         color_grp = QGroupBox(translate("VignetteTreatmentDialog", "Colour"))
         color_row = QHBoxLayout(color_grp)
         color_row.setSpacing(6)
@@ -623,7 +623,7 @@ class VignetteTreatmentDialog(QDialog):
         hint.setWordWrap(True)
         layout.addWidget(hint)
 
-        # ---- Boutons OK / Annuler ----
+        # ---- OK / Cancel buttons ----
         btn_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         btn_box.button(QDialogButtonBox.Ok).setText(translate("VignetteTreatmentDialog", "Apply"))
         btn_box.button(QDialogButtonBox.Cancel).setText(translate("VignetteTreatmentDialog", "Cancel"))
@@ -657,14 +657,14 @@ class VignetteTreatmentDialog(QDialog):
         return self._edit
 
 
-# ------------------------------------------------------------------ panneau principal
+# ------------------------------------------------------------------ main panel
 
-# (nom interne, icône_fn, sliders_def)
-# Le 1er élément est une CLÉ, pas un libellé : il sert d'identifiant de l'outil
-# (dictionnaire des boutons, aiguillage de _open_treatment, nom d'opération
-# persisté dans edits.db). Il reste donc en français quelle que soit la langue —
-# l'affichage passe par edit_panel._tool_label(). Les libellés de curseurs, eux,
-# ne sont que de l'affichage et sont traduits ici.
+# (internal name, icon_fn, sliders_def)
+# The 1st element is a KEY, not a label: it identifies the tool (the button
+# dictionary, the dispatch of _open_treatment, the operation name persisted in
+# edits.db). It therefore stays in French whatever the language — the display
+# goes through edit_panel._tool_label(). The slider labels, by contrast, are
+# nothing but display and are translated here.
 _TREATMENTS: list[tuple] = [
     ("Luminosité", _icon_brightness,
      [(translate("EditPanel", "Brightness"), "brightness", -1.0, 1.0, 2)]),
@@ -672,12 +672,12 @@ _TREATMENTS: list[tuple] = [
      [(translate("EditPanel", "Contrast"),  "contrast",   -1.0, 1.0, 2)]),
     ("Couleurs",   _icon_saturation,
      [(translate("EditPanel", "Saturation"), "saturation", -1.0, 1.0, 2)]),
-    ("Vignette",   _icon_vignette,   []),   # dialogue dédié — sliders_def ignoré
-    ("Cadre",      _icon_frame,      []),   # dialogue dédié — cf. frame_dialog.py
+    ("Vignette",   _icon_vignette,   []),   # dedicated dialog — sliders_def ignored
+    ("Cadre",      _icon_frame,      []),   # dedicated dialog — cf. frame_dialog.py
 ]
 
-# Même surbrillance que le bouton Annotations : visible autour de l'icône tant
-# que l'outil est actif (mode canvas interactif ou dialogue de réglage ouvert).
+# The same highlight as the Annotations button: visible around the icon as
+# long as the tool is active (interactive canvas mode or settings dialog open).
 _ACTIVE_TOOL_STYLE = (
     "QToolButton { background: #1a2a3a; border: 1px solid #2080a0; border-radius: 4px; }"
 )

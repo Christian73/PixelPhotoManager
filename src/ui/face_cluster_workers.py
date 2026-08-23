@@ -1,8 +1,8 @@
 ﻿# Copyright 2026 Christian Guyot
 # SPDX-License-Identifier: Apache-2.0
-"""Calculs et threads d'arrière-plan de la grille de groupes de visages
-(extraits de face_cluster_grid.py) : requêtes groupes/suggestions et
-chargeurs QThread."""
+"""Background computations and threads of the face group grid
+(extracted from face_cluster_grid.py): group/suggestion queries and QThread
+loaders."""
 """
 FaceClusterGrid — grille des groupes de visages non identifiés.
 
@@ -37,19 +37,19 @@ logger = logging.getLogger(__name__)
 
 
 class _AnalysisCancelled(Exception):
-    """Levée depuis uf_progress() pour interrompre le Union-Find en cours de bloc."""
+    """Raised from uf_progress() to interrupt the Union-Find in mid-block."""
 
 
 _CARD_IMG     = 130
 _CARD_W       = 148
 _CARD_SPACING  = 10
 _COLS_MIN      = 2
-_SIM_GROUP     = 0.72   # seuil pour regrouper deux clusters "même personne probable"
-_BUILD_BATCH   = 10     # cartes créées par tick de l'event loop (évite de bloquer l'UI)
-_PAGE_SIZE     = 200    # nombre de cartes rendues par page (pagination)
-_UF_CHUNK      = 500    # lignes par bloc dans le produit matriciel de l'Union-Find
-                        # RAM pic ≈ _UF_CHUNK × n × 4 octets  (500 × 50k × 4 = 100 Mo)
-UNION_FIND_MAX = 80_000 # skip UF au-delà (temps > 2 min même en mode blocs)
+_SIM_GROUP     = 0.72   # threshold to group two "probably the same person" clusters
+_BUILD_BATCH   = 10     # cards created per event loop tick (avoids blocking the UI)
+_PAGE_SIZE     = 200    # number of cards rendered per page (pagination)
+_UF_CHUNK      = 500    # rows per block in the matrix product of the Union-Find
+                        # peak RAM ≈ _UF_CHUNK × n × 4 bytes  (500 × 50k × 4 = 100 MB)
+UNION_FIND_MAX = 80_000 # skip the UF beyond that (> 2 min even in block mode)
 
 
 def _compute_cluster_groups_bg(
@@ -57,17 +57,16 @@ def _compute_cluster_groups_bg(
     embeddings: dict[int, list[float]],
     progress_cb=None,
 ) -> dict[int, list[int]]:
-    """Union-Find par blocs : regroupe les clusters dont sim(centroïde) ≥ _SIM_GROUP.
+    """Union-Find by blocks: groups the clusters whose sim(centroid) ≥ _SIM_GROUP.
 
-    Calcul en blocs de _UF_CHUNK lignes : à chaque itération on multiplie un bloc
-    de lignes par toutes les lignes suivantes (triangle supérieur) via BLAS.
-    RAM pic ≈ _UF_CHUNK × n × 4 octets au lieu de n² × 4 — scalable jusqu'à ~80k.
-    progress_cb(chunk_start) est appelé au début de chaque bloc ; s'il lève
-    _AnalysisCancelled (annulation utilisateur, cf. FaceClusterGrid), la boucle
-    s'arrête à ce point — les fusions déjà trouvées dans les blocs précédents
-    sont conservées et renvoyées telles quelles (résultat partiel mais valide :
-    aucune fusion n'est jamais défaite, seules celles pas encore découvertes
-    manquent)."""
+    Computed in blocks of _UF_CHUNK rows: at each iteration a block of rows is
+    multiplied by every following row (upper triangle) through BLAS.
+    Peak RAM ≈ _UF_CHUNK × n × 4 bytes instead of n² × 4 — scalable up to ~80k.
+    progress_cb(chunk_start) is called at the beginning of each block; if it
+    raises _AnalysisCancelled (a user cancellation, cf. FaceClusterGrid), the
+    loop stops at that point — the merges already found in the previous blocks
+    are kept and returned as they are (a partial but valid result: no merge is
+    ever undone, only those not yet discovered are missing)."""
     parent = {cid: cid for cid in cluster_ids}
 
     def find(x: int) -> int:
@@ -99,7 +98,7 @@ def _compute_cluster_groups_bg(
                     if chunk_start + 1 >= m:
                         break
                     chunk_end = min(chunk_start + _UF_CHUNK, m)
-                    # Bloc courant vs toutes les lignes suivantes (triangle supérieur)
+                    # Current block vs every following row (upper triangle)
                     chunk = mat[chunk_start:chunk_end]     # (_UF_CHUNK, dim)
                     rest  = mat[chunk_start + 1:]          # (m - chunk_start - 1, dim)
                     sims  = chunk @ rest.T                 # (_UF_CHUNK, m - chunk_start - 1)
@@ -107,7 +106,7 @@ def _compute_cluster_groups_bg(
                     for r, c in zip(rows.tolist(), cols.tolist()):
                         i_abs = chunk_start + int(r)
                         j_abs = chunk_start + 1 + int(c)
-                        if j_abs > i_abs:                  # triangle supérieur uniquement
+                        if j_abs > i_abs:                  # upper triangle only
                             union(ids_arr[i_abs], ids_arr[j_abs])
         except ImportError:
             ids = list(cluster_ids)
@@ -122,7 +121,7 @@ def _compute_cluster_groups_bg(
                     if ej and _cosine_sim(ei, ej) >= _SIM_GROUP:
                         union(ci, cj)
     except _AnalysisCancelled:
-        pass   # arrêt anticipé : on garde les fusions déjà trouvées
+        pass   # early stop: the merges already found are kept
 
     groups: dict[int, list[int]] = {}
     for cid in cluster_ids:
@@ -137,7 +136,7 @@ def _compute_suggestion_bg(
     persons: list,
     person_cluster_embeddings: dict[int, dict[int, list[float]]],
 ) -> "tuple[int | None, str, str]":
-    """Calcule la meilleure suggestion de personne pour un cluster (fallback scalaire)."""
+    """Computes the best person suggestion for a cluster (scalar fallback)."""
     if not person_cluster_embeddings:
         return None, "", ""
     c_emb = cluster_embeddings.get(cluster_id)
@@ -166,18 +165,18 @@ def _compute_all_suggestions_bg(
     persons: list,
     person_cluster_embeddings: dict[int, dict[int, list[float]]],
 ) -> "dict[int, tuple[int | None, str, str, float]]":
-    """Calcule les suggestions pour tous les clusters en un seul produit matriciel.
+    """Computes the suggestions for every cluster in a single matrix product.
 
-    Retourne {cluster_id: (person_id | None, label, color, score)}.
-    Construit (n_clusters, dim) × (n_person_emb, dim)^T → matrice de similarité
-    complète, puis sélectionne le maximum par ligne. Remplace la boucle Python
-    de N appels _compute_suggestion_bg."""
+    Returns {cluster_id: (person_id | None, label, color, score)}.
+    Builds (n_clusters, dim) × (n_person_emb, dim)^T → the complete similarity
+    matrix, then selects the maximum per row. Replaces the Python loop of N
+    _compute_suggestion_bg calls."""
     result: dict = {cid: (None, "", "", 0.0) for cid in cluster_ids}
 
     if not persons or not person_cluster_embeddings:
         return result
 
-    # Liste plate (person, embedding) pour toutes les personnes connues
+    # Flat list of (person, embedding) for every known person
     person_emb_pairs: list = []
     for p in persons:
         for p_emb in person_cluster_embeddings.get(p.id, {}).values():
@@ -236,21 +235,21 @@ def _compute_all_suggestions_bg(
 
 class _ClusterRefreshThread(QThread):
     """
-    Chargement en deux phases pour un affichage progressif.
+    Loading in two phases for a progressive display.
 
-    Phase 1 — initial_ready (rapide, < 1 s) :
-        2 requêtes SQL (face counts + faces représentatives).
-        Émet une structure plate (1 groupe = 1 cluster) sans suggestions.
-        Les cartes peuvent être affichées immédiatement.
+    Phase 1 — initial_ready (fast, < 1 s):
+        2 SQL queries (face counts + representative faces).
+        Emits a flat structure (1 group = 1 cluster) without suggestions.
+        The cards can be displayed immediately.
 
-    Phase 2 — data_ready (lent, O(n²)) :
+    Phase 2 — data_ready (slow, O(n²)):
         Embeddings, Union-Find, suggestions.
-        Émet la structure complète groupée avec suggestions.
+        Emits the complete grouped structure with suggestions.
     """
 
-    initial_ready = Signal(object)         # dict — affiché immédiatement
-    data_ready    = Signal(object)         # dict | None — affiché après calcul lourd
-    progress      = Signal(int, int, str)  # étape courante, total, message
+    initial_ready = Signal(object)         # dict — displayed immediately
+    data_ready    = Signal(object)         # dict | None — displayed after a heavy computation
+    progress      = Signal(int, int, str)  # current step, total, message
 
     def __init__(self, face_db: "FaceDatabase", catalog, parent=None) -> None:
         super().__init__(parent)
@@ -259,16 +258,16 @@ class _ClusterRefreshThread(QThread):
         self._cancelled = False
 
     def cancel(self) -> None:
-        """Demande l'arrêt (bouton Annuler de la popup). Drapeau simple, pas
-        QThread.requestInterruption() : isInterruptionRequested() ne renvoie
-        True que si le thread a été démarré via start() (d->running côté Qt),
-        ce qui casserait les tests qui appellent run() en synchrone (cf.
-        CLAUDE.md, piège coverage/QThread)."""
+        """Requests the stop (the Cancel button of the popup). A plain flag, not
+        QThread.requestInterruption(): isInterruptionRequested() only returns
+        True if the thread was started through start() (d->running on the Qt
+        side), which would break the tests that call run() synchronously (cf.
+        CLAUDE.md, the coverage/QThread trap)."""
         self._cancelled = True
 
     def run(self) -> None:
         try:
-            # ── Récupération initiale (rapide) — N encore inconnu ──────────
+            # ── Initial retrieval (fast) — N still unknown ─────────────────
             self.progress.emit(0, 0, translate(
                 "FaceClusterWorkers", "Fetching the face groups…"))
             clusters = self._face_db.get_unnamed_clusters()
@@ -289,19 +288,19 @@ class _ClusterRefreshThread(QThread):
             face_counts = {cid: fc for cid, fc in clusters}
             n  = len(cluster_ids)
 
-            # Total d'étapes = 5 fixes + ≤100 mises à jour Union-Find + 1 suggestions.
-            # Les suggestions sont vectorisées (1 opération matricielle) donc 1 seule étape.
+            # Total number of steps = 5 fixed + ≤100 Union-Find updates + 1 suggestions.
+            # The suggestions are vectorised (1 matrix operation), hence a single step.
             n_uf_steps = min(n, 100)
             N          = 5 + n_uf_steps + 1
             step       = 0
 
-            # ── Phase 1 : structure plate, sans suggestion ─────────────────
+            # ── Phase 1: flat structure, without suggestions ───────────────
             step += 1
             self.progress.emit(step, N, translate(
                 "FaceClusterWorkers",
                 "Loading representative faces (%n group(s))…", None, n))
             representative_faces = self._face_db.get_all_representative_faces(cluster_ids)
-            flat_groups = [[cid] for cid in cluster_ids]   # déjà trié DESC par face_count
+            flat_groups = [[cid] for cid in cluster_ids]   # already sorted DESC by face_count
 
             self.initial_ready.emit({
                 "face_counts":               face_counts,
@@ -317,10 +316,10 @@ class _ClusterRefreshThread(QThread):
             if self._cancelled:
                 return
 
-            # ── Phase 2 : embeddings (groupes non-isolés seulement pour UF) ─
-            # L'Union-Find est lancé uniquement sur les clusters à face_count > 1
-            # (les visages isolés restent des singletons). Cela réduit la taille
-            # de la matrice de ~68k à ~32k — temps divisé par ~4.
+            # ── Phase 2: embeddings (non-isolated groups only, for the UF) ──
+            # The Union-Find only runs on the clusters with face_count > 1 (the
+            # isolated faces stay singletons). That reduces the size of the matrix
+            # from ~68k to ~32k — the time divided by ~4.
             non_solo_ids = [cid for cid in cluster_ids if face_counts.get(cid, 0) > 1]
             n_ns = len(non_solo_ids)
 
@@ -331,18 +330,18 @@ class _ClusterRefreshThread(QThread):
                 None, n_ns))
             cluster_embeddings = self._face_db.get_all_cluster_centroids(cluster_ids)
 
-            # Affiner N maintenant qu'on connaît les embeddings disponibles
+            # Refine N now that the available embeddings are known
             non_solo_embeddings = {cid: cluster_embeddings[cid]
                                    for cid in non_solo_ids if cid in cluster_embeddings}
             m_emb      = len(non_solo_embeddings)
-            # UF en blocs : nombre de blocs ≤ 100 pour la barre de progression
+            # UF in blocks: number of blocks ≤ 100 for the progress bar
             n_uf_steps = min(max(m_emb // _UF_CHUNK, 1), 100) if m_emb else 0
             N          = step + 3 + n_uf_steps + 1
 
             if self._cancelled:
                 return
 
-            # ── Phase 2 : personnes connues ───────────────────────────────
+            # ── Phase 2: known people ─────────────────────────────────────
             step += 1
             self.progress.emit(step, N, translate(
                 "FaceClusterWorkers", "Fetching the known people…"))
@@ -361,7 +360,7 @@ class _ClusterRefreshThread(QThread):
                 "FaceClusterWorkers", "Vector representations of the people…"))
             person_cluster_embeddings = self._face_db.get_all_person_cluster_centroids(person_ids)
 
-            # ── Phase 2 : Union-Find par blocs, progression au % près ─────
+            # ── Phase 2: Union-Find by blocks, progress to the % ──────────
             _last_uf_pct = -1
             _n_blocks    = max(m_emb // _UF_CHUNK, 1) if m_emb else 1
 
@@ -385,20 +384,20 @@ class _ClusterRefreshThread(QThread):
                     )
 
             if n_ns > UNION_FIND_MAX:
-                # Trop grand même en mode blocs : skip UF
+                # Too large even in block mode: skip the UF
                 self.progress.emit(step + 1, step + 1, translate(
                     "FaceClusterWorkers",
                     "{groups} groups — grouping disabled (limit: {limit})"
                     ).format(groups=n_ns, limit=UNION_FIND_MAX))
                 raw_groups: dict[int, list[int]] = {cid: [cid] for cid in cluster_ids}
             else:
-                # _compute_cluster_groups_bg absorbe elle-même _AnalysisCancelled
-                # et renvoie les fusions déjà trouvées : pas de try/except ici,
-                # on continue toujours avec un résultat (complet ou partiel).
+                # _compute_cluster_groups_bg absorbs _AnalysisCancelled itself and
+                # returns the merges already found: no try/except here, we always
+                # continue with a result (complete or partial).
                 raw_groups = _compute_cluster_groups_bg(
                     non_solo_ids, non_solo_embeddings, uf_progress
                 )
-                # Ajouter les visages isolés comme singletons
+                # Add the isolated faces as singletons
                 for cid in cluster_ids:
                     if face_counts.get(cid, 0) == 1:
                         raw_groups[cid] = [cid]
@@ -408,19 +407,19 @@ class _ClusterRefreshThread(QThread):
                 key=lambda g: (-len(g), -sum(face_counts.get(c, 0) for c in g)),
             )
 
-            # Pas de `if self._cancelled: return` ici : au-delà de ce point, la
-            # suite (étiquettes + suggestions) est rapide (vectorisée, pas de
-            # boucle O(n²)) — autant la finir et livrer un résultat (complet ou
-            # partiel si l'annulation a interrompu l'Union-Find ci-dessus)
-            # plutôt que de tout jeter silencieusement.
+            # No `if self._cancelled: return` here: beyond this point, what follows
+            # (labels + suggestions) is fast (vectorised, no O(n²) loop) — better to
+            # finish it and deliver a result (complete, or partial if the cancellation
+            # interrupted the Union-Find above) than to throw everything away
+            # silently.
 
-            # ── Phase 2 : étiquettes des groupes multi-clusters (vectorisé) ─
+            # ── Phase 2: labels of the multi-cluster groups (vectorised) ────
             step += 1
             n_multi = sum(1 for g in groups_sorted if len(g) > 1)
             self.progress.emit(step, N, translate(
                 "FaceClusterWorkers", "Computing the group labels (%n group(s))…",
                 None, n_multi))
-            N += 1   # on ajoute une étape au total pour cette phase
+            N += 1   # one step is added to the total for this phase
 
             try:
                 import numpy as _np
@@ -472,7 +471,7 @@ class _ClusterRefreshThread(QThread):
                 else:
                     group_labels[root] = ("", "")
 
-            # ── Phase 2 : suggestions vectorisées (1 produit matriciel) ────
+            # ── Phase 2: vectorised suggestions (1 matrix product) ─────────
             step += 1
             self.progress.emit(
                 step, N,
@@ -485,11 +484,11 @@ class _ClusterRefreshThread(QThread):
                 cluster_ids, cluster_embeddings, persons, person_cluster_embeddings
             )
 
-            # Auto-promotion : les clusters dont le score atteint _SIM_SUGGEST (seuil
-            # "en attente de vérification", pas le seuil d'affichage _SIM_STRONG qui
-            # gouverne uniquement la couleur du libellé) passent en attente de
-            # vérification (ou sont alloués directement au-delà de _SIM_AUTO_ASSIGN,
-            # cf. set_cluster_suggestions) et disparaissent de la liste à identifier.
+            # Auto-promotion: the clusters whose score reaches _SIM_SUGGEST (the
+            # "awaiting verification" threshold, not the display threshold _SIM_STRONG
+            # which only governs the colour of the label) move to awaiting
+            # verification (or are assigned directly beyond _SIM_AUTO_ASSIGN, cf.
+            # set_cluster_suggestions) and disappear from the list to identify.
             strong = {
                 cid: (pid, score)
                 for cid, (pid, _label, _color, score) in suggestions.items()
@@ -497,7 +496,7 @@ class _ClusterRefreshThread(QThread):
             }
             if strong:
                 self._face_db.set_cluster_suggestions(strong)
-                # Filtrer les clusters promus des structures de données
+                # Filter the promoted clusters out of the data structures
                 promoted_set = set(strong)
                 face_counts  = {c: v for c, v in face_counts.items()  if c not in promoted_set}
                 suggestions  = {c: v for c, v in suggestions.items()  if c not in promoted_set}
@@ -509,9 +508,9 @@ class _ClusterRefreshThread(QThread):
                     for g in groups_sorted
                 ]
                 groups_sorted = [ng for ng, _old_root in _filtered_groups if ng]
-                # Réindexer les étiquettes sur le nouveau premier élément de chaque
-                # groupe : l'ancien root (clé de group_labels) a pu être promu et
-                # retiré du groupe, sans quoi le groupe restant perd son en-tête.
+                # Reindex the labels on the new first element of each group: the old
+                # root (the key of group_labels) may have been promoted and removed
+                # from the group, without which the remaining group loses its header.
                 group_labels  = {
                     ng[0]: group_labels.get(old_root, ("", ""))
                     for ng, old_root in _filtered_groups
@@ -537,10 +536,11 @@ class _ClusterRefreshThread(QThread):
 
 
 class _PersonsLoader(QThread):
-    """Charge get_persons + enrich_persons hors du thread UI avant d'ouvrir un dialogue.
+    """Loads get_persons + enrich_persons off the UI thread before opening a dialog.
 
-    Pour la sélection multi-groupe, calcule aussi la suggestion de personne en
-    comparant les centroïdes des clusters aux centroïdes connus des personnes.
+    For a multi-group selection, also computes the person suggestion by
+    comparing the centroids of the clusters with the known centroids of the
+    people.
     """
 
     ready = Signal(list, object)   # (persons: list[PersonInfo], suggested_person_id | None)
@@ -564,8 +564,8 @@ class _PersonsLoader(QThread):
             self._face_db.enrich_persons(persons)
             suggested_id = None
             if self._cluster_ids:
-                # Une seule requête batch pour tous les clusters sélectionnés,
-                # au lieu de N appels get_representative_embedding (N connexions SQLite).
+                # A single batch query for every selected cluster, instead of N
+                # get_representative_embedding calls (N SQLite connections).
                 cluster_centroids = self._face_db.get_all_cluster_centroids(self._cluster_ids)
                 best_sim = 0.0
                 for cid in self._cluster_ids:

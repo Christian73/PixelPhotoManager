@@ -1,27 +1,28 @@
 # Copyright 2026 Christian Guyot
 # SPDX-License-Identifier: Apache-2.0
-"""Dialogue « Cadre » du panneau de retouche.
+""""Frame" dialog of the editing panel.
 
-Présente une galerie d'aperçus de LA photo en cours, un par motif de cadre, de
-façon à choisir sur pièce plutôt que sur un nom. Les aperçus sont rendus dans un
-QThread (règle « l'UI ne bloque jamais ») : la photo est décodée et réduite une
-seule fois, puis chaque vignette n'est plus qu'un rendu de cadre (~10 ms).
+Presents a gallery of previews of THE photo in progress, one per frame pattern,
+so as to choose on the real thing rather than on a name. The previews are
+rendered in a QThread (the "the UI never blocks" rule): the photo is decoded and
+reduced only once, then each thumbnail is nothing more than a frame render
+(~10 ms).
 
-L'épaisseur se règle pour TOUS les motifs : un cadre sculpté n'existe qu'à partir
-d'une certaine largeur (sous ~8 % du petit côté, la frise tient dans quelques
-pixels). Choisir un motif décoratif relève donc la largeur à
-``frames.DECOR_MIN_WIDTH`` — visiblement, dans le curseur, et la galerie rend ses
-aperçus avec la même règle : la vignette montre exactement ce qu'on obtient en
-cliquant dessus. Les couleurs et le style de remplissage, eux, restent propres
-aux cadres paramétriques (entourage uni, simple, double).
+The thickness is adjustable for EVERY pattern: a carved frame only exists from a
+certain width on (below ~8 % of the short side, the frieze fits in a few pixels).
+Choosing a decorative pattern therefore raises the width to
+``frames.DECOR_MIN_WIDTH`` — visibly, in the slider, and the gallery renders its
+previews with the same rule: the thumbnail shows exactly what clicking on it
+produces. The colours and the fill style, by contrast, stay specific to the
+parametric frames (plain surround, simple, double).
 
-Les vignettes concernées sont re-rendues à chaque modification, en différé pour
-ne pas lancer un rendu par pas de curseur.
+The thumbnails concerned are re-rendered at every change, deferred so as not to
+start one render per slider step.
 
-L'entourage uni propose un second cadre facultatif, peint par-dessus la photo
-(case à cocher) : c'est le seul RÉGLAGE du dialogue qui recouvre une partie de
-l'image, d'où l'activation explicite. (Les trois cadres végétaux débordent eux
-aussi sur la photo, mais sans réglage : cela fait partie du motif, cf.
+The plain surround offers an optional second frame, painted on top of the photo
+(a checkbox): it is the only SETTING of the dialog that covers part of the image,
+hence the explicit activation. (The three foliage frames spill over the photo
+too, but with no setting: that is part of the pattern, cf.
 ``frames.SPILL_FRAMES``.)
 """
 import copy
@@ -47,9 +48,10 @@ from src.core.i18n import translate
 
 logger = logging.getLogger(__name__)
 
-# Côté de l'aperçu photo (le cadre s'ajoute autour). Assez grand pour qu'une
-# frise sculptée reste lisible dans la galerie — sous ~150 px, les acanthes et
-# les oves se réduisent à une texture indistincte et le choix se fait à l'aveugle.
+# Side of the photo preview (the frame is added around it). Large enough for a
+# carved frieze to stay legible in the gallery — below ~150 px, the acanthus
+# leaves and the egg-and-dart shrink to an indistinct texture and the choice is
+# made blind.
 _TILE_PX = 150
 _TILE_COLS = 4
 _PREVIEW_DEBOUNCE_MS = 180
@@ -61,24 +63,24 @@ _TILE_STYLE = "QToolButton { border: 1px solid #3a3a3a; border-radius: 4px; }"
 
 
 def _pil_to_qimage(img) -> QImage:
-    """Conversion PIL → QImage utilisable hors du thread UI (copie détachée)."""
+    """PIL → QImage conversion usable outside the UI thread (a detached copy)."""
     if img.mode != "RGB":
         img = img.convert("RGB")
     data = img.tobytes("raw", "RGB")
-    # .copy() : QImage ne prend pas possession du buffer Python, qui serait
-    # libéré dès le retour de cette fonction.
+    # .copy(): QImage does not take ownership of the Python buffer, which would
+    # be freed as soon as this function returns.
     return QImage(data, img.width, img.height, img.width * 3, QImage.Format_RGB888).copy()
 
 
 class _TileLoader(QThread):
-    """Rend les vignettes encadrées, hors thread UI.
+    """Renders the framed thumbnails, off the UI thread.
 
-    ``base`` (image PIL déjà réduite et retouchée, sans cadre) est réutilisée
-    d'un lancement à l'autre : seul le premier rendu paie le décodage du
-    fichier."""
+    ``base`` (a PIL image already reduced and edited, without a frame) is reused
+    from one launch to the next: only the first render pays for decoding the
+    file."""
 
-    tile_ready = Signal(str, QImage)   # (identifiant du motif, aperçu)
-    base_ready = Signal(object)        # image PIL de base, pour les rendus suivants
+    tile_ready = Signal(str, QImage)   # (pattern id, preview)
+    base_ready = Signal(object)        # base PIL image, for the following renders
 
     def __init__(self, photo_path: str, edit: EditInfo, kinds: list,
                  base=None, parent=None) -> None:
@@ -128,8 +130,8 @@ class _TileLoader(QThread):
                 else:
                     e = copy.copy(self._edit)
                     e.frame_type = kind
-                    # Même relèvement de largeur qu'à la sélection : l'aperçu
-                    # doit montrer ce qu'on obtient en cliquant dessus.
+                    # The same width raise as on selection: the preview must show
+                    # what clicking on it produces.
                     e.frame_width = suggested_width(kind, e.frame_width)
                     img = apply_frame(base, e)
                 self.tile_ready.emit(kind, _pil_to_qimage(img))
@@ -138,7 +140,7 @@ class _TileLoader(QThread):
 
 
 class _ColorButton(QPushButton):
-    """Pastille de couleur cliquable (ouvre le sélecteur de couleurs)."""
+    """Clickable colour swatch (opens the colour picker)."""
 
     color_changed = Signal(str)
 
@@ -172,15 +174,15 @@ class _ColorButton(QPushButton):
 
 
 class FrameDialog(QDialog):
-    """Choix d'un cadre décoratif et de ses réglages, avec aperçus en direct."""
+    """Choice of a decorative frame and its settings, with live previews."""
 
-    preview = Signal(object)   # EditInfo en temps réel
+    preview = Signal(object)   # live EditInfo
 
     def __init__(self, edit: EditInfo, photo_path: str | None = None, parent=None) -> None:
         super().__init__(parent)
         self._edit = copy.copy(edit)
         self._photo_path = photo_path
-        self._panel = None            # EditPanel — positionnement, cf. showEvent
+        self._panel = None            # EditPanel — positioning, cf. showEvent
         self._tiles: dict[str, QToolButton] = {}
         self._loader: _TileLoader | None = None
         self._base_image = None
@@ -191,7 +193,7 @@ class FrameDialog(QDialog):
         self.setWindowFlags(Qt.Tool | Qt.WindowStaysOnTopHint)
         self.setMinimumWidth(700)
 
-        # Un seul rendu après une rafale de mouvements de curseur.
+        # A single render after a burst of slider movements.
         self._refresh_timer = QTimer(self)
         self._refresh_timer.setSingleShot(True)
         self._refresh_timer.setInterval(_PREVIEW_DEBOUNCE_MS)
@@ -215,7 +217,7 @@ class FrameDialog(QDialog):
         hint.setWordWrap(True)
         layout.addWidget(hint)
 
-        # ---- Galerie ----
+        # ---- Gallery ----
         self._group = QButtonGroup(self)
         self._group.setExclusive(True)
         grid_host = QWidget()
@@ -240,14 +242,14 @@ class FrameDialog(QDialog):
         scroll.setMinimumHeight(_TILE_PX + 76)
         layout.addWidget(scroll, stretch=1)
 
-        # ---- Réglages des cadres paramétriques ----
+        # ---- Settings of the parametric frames ----
         self._params = QGroupBox(translate("FrameDialog", "Frame settings"))
         pl = QVBoxLayout(self._params)
         pl.setContentsMargins(8, 10, 8, 8)
         pl.setSpacing(6)
 
-        # Couleurs et style de remplissage : réservés aux cadres paramétriques
-        # (un cadre sculpté a le matériau de son motif — or, noyer, laque…).
+        # Colours and fill style: reserved for the parametric frames
+        # (a carved frame has the material of its pattern — gold, walnut, lacquer…).
         self._style_row_host = QWidget()
         style_row = QHBoxLayout(self._style_row_host)
         style_row.setContentsMargins(0, 0, 0, 0)
@@ -274,8 +276,8 @@ class FrameDialog(QDialog):
         self._btn_color2.color_changed.connect(
             lambda c: self._set_attr("frame_color2", c, reload_tiles=True))
         style_row.addWidget(self._btn_color2)
-        # Raccourcis noir / blanc : les deux entourages les plus courants, sans
-        # passer par le sélecteur de couleurs.
+        # Black / white shortcuts: the two most common surrounds, without going
+        # through the colour picker.
         for hex_value, label in QUICK_COLORS:
             btn = QPushButton(label)
             btn.setStyleSheet(_TOGGLE_BTN_STYLE)
@@ -287,9 +289,9 @@ class FrameDialog(QDialog):
         style_row.addStretch()
         pl.addWidget(self._style_row_host)
 
-        # Les largeurs sont des fractions du petit côté de la photo, exposées en
-        # pourcentage (0,1 % de précision — 2 décimales sur une fraction ne
-        # donneraient qu'un pas de 1 %, bien trop grossier).
+        # The widths are fractions of the short side of the photo, exposed as a
+        # percentage (0.1 % of precision — 2 decimals on a fraction would only give
+        # a step of 1 %, far too coarse).
         self._sl_width = EditSlider(translate("FrameDialog", "Outer frame"), 0.5, 25.0,
                                     self._edit.frame_width * 100.0, 1)
         self._sl_width.value_changed.connect(
@@ -297,8 +299,8 @@ class FrameDialog(QDialog):
                                      tiles=[k for k, _ in FRAME_TYPES]))
         pl.addWidget(self._sl_width)
 
-        # Second cadre de l'entourage uni : facultatif (il empiète sur la photo,
-        # ce n'est pas un défaut acceptable sans un geste explicite).
+        # Second frame of the plain surround: optional (it encroaches on the photo,
+        # which is not an acceptable default without an explicit gesture).
         self._chk_inner = QCheckBox(translate("FrameDialog", "Second frame over the photo"))
         self._chk_inner.setToolTip(
             translate("FrameDialog", "Adds an inner frame painted onto the image; a strip of "
@@ -308,8 +310,8 @@ class FrameDialog(QDialog):
         self._chk_inner.toggled.connect(self._set_inner_enabled)
         pl.addWidget(self._chk_inner)
 
-        # Intervalle + épaisseur : partagés par le cadre double et le second
-        # cadre de l'entourage uni (mêmes réglages, libellés adaptés).
+        # Gap + thickness: shared by the double frame and the second frame of the
+        # plain surround (the same settings, with adapted labels).
         self._inner_rows = QWidget()
         dl = QVBoxLayout(self._inner_rows)
         dl.setContentsMargins(0, 0, 0, 0)
@@ -327,8 +329,8 @@ class FrameDialog(QDialog):
             lambda v: self._set_attr("frame_inner_width", v / 100.0, reload_tiles=True))
         dl.addWidget(self._sl_inner)
 
-        # Ferronnerie du second cadre : motif, rendu (relief / aplat) et taille
-        # des ornements. Réglages propres à l'entourage uni.
+        # Ironwork of the second frame: motif, rendering (relief / flat fill) and
+        # size of the ornaments. Settings specific to the plain surround.
         self._inner_motif_rows = QWidget()
         il = QVBoxLayout(self._inner_motif_rows)
         il.setContentsMargins(0, 0, 0, 0)
@@ -350,9 +352,9 @@ class FrameDialog(QDialog):
         motif_row.addStretch()
         il.addLayout(motif_row)
 
-        # Relief ou aplat : réglage de ferronnerie, sans effet sur la ligne
-        # simple (rendue en aplat strict, cf. frames._draw_inner_overlay) — la
-        # rangée est donc masquée avec le curseur d'ornements.
+        # Relief or flat fill: an ironwork setting, with no effect on the simple
+        # line (rendered as a strict flat fill, cf. frames._draw_inner_overlay) —
+        # the row is therefore hidden along with the ornaments slider.
         self._relief_row = QWidget()
         relief_row = QHBoxLayout(self._relief_row)
         relief_row.setContentsMargins(0, 0, 0, 0)
@@ -371,8 +373,8 @@ class FrameDialog(QDialog):
         relief_row.addStretch()
         il.addWidget(self._relief_row)
 
-        # Échelle des ornements, en pourcentage (l'échelle interne d'EditSlider
-        # est figée à 100 : un facteur 0,4-2,5 se règle donc de 40 à 250 %).
+        # Scale of the ornaments, as a percentage (the internal scale of EditSlider
+        # is hard-wired to 100: a factor of 0.4-2.5 is therefore set from 40 to 250 %).
         self._sl_ornament = EditSlider(translate("FrameDialog", "Ornaments"),
                                        INNER_ORNAMENT_MIN * 100.0,
                                        INNER_ORNAMENT_MAX * 100.0,
@@ -381,7 +383,7 @@ class FrameDialog(QDialog):
             lambda v: self._set_attr("frame_inner_ornament", v / 100.0, reload_tiles=True))
         il.addWidget(self._sl_ornament)
 
-        self._double_rows = QWidget()          # couleurs propres au cadre double
+        self._double_rows = QWidget()          # colours specific to the double frame
         dcl = QVBoxLayout(self._double_rows)
         dcl.setContentsMargins(0, 0, 0, 0)
         dcl.setSpacing(6)
@@ -427,15 +429,15 @@ class FrameDialog(QDialog):
         for kind, btn in self._tiles.items():
             btn.setStyleSheet(_SELECTED_TILE_STYLE if kind == selected else _TILE_STYLE)
 
-    # ------------------------------------------------------------------ aperçus
+    # ------------------------------------------------------------------ previews
 
     def _start_gallery(self, kinds: list | None = None) -> None:
-        """Lance (ou relance) le rendu des vignettes demandées."""
+        """Starts (or restarts) the render of the requested thumbnails."""
         if not self._photo_path:
             return
         if self._loader is not None and self._loader.isRunning():
-            # Une demande plus récente prime : la précédente s'arrête entre deux
-            # vignettes, et c'est sa fin qui déclenchera celle-ci.
+            # A more recent request wins: the previous one stops between two
+            # thumbnails, and its end is what triggers this one.
             self._pending_kinds = kinds or [k for k, _ in FRAME_TYPES]
             self._loader.cancel()
             return
@@ -463,12 +465,12 @@ class FrameDialog(QDialog):
             return
         pix = QPixmap.fromImage(image)
         btn.setIcon(QIcon(pix))
-        # L'icône garde ses proportions : la vignette encadrée est plus grande
-        # que la photo seule, on dimensionne donc d'après ce qui a été rendu.
+        # The icon keeps its proportions: the framed thumbnail is larger than the
+        # photo alone, so it is sized from what has been rendered.
         btn.setIconSize(pix.size())
 
     def _refresh_parametric_tiles(self) -> None:
-        """Consomme les vignettes marquées à re-rendre depuis le dernier réglage."""
+        """Consumes the thumbnails marked to be re-rendered since the last setting."""
         kinds, self._dirty_kinds = sorted(self._dirty_kinds), set()
         if kinds:
             self._start_gallery(kinds)
@@ -477,14 +479,14 @@ class FrameDialog(QDialog):
         self._dirty_kinds |= set(kinds)
         self._refresh_timer.start()
 
-    # ------------------------------------------------------------------ réglages
+    # ------------------------------------------------------------------ settings
 
     def _select_kind(self, kind: str) -> None:
         self._edit.frame_type = kind
         width = suggested_width(kind, self._edit.frame_width)
         if width != self._edit.frame_width:
-            # Le curseur suit : le réglage reste celui affiché, jamais un
-            # ajustement muet appliqué au moment du rendu.
+            # The slider follows: the setting stays the one displayed, never a silent
+            # adjustment applied at render time.
             self._edit.frame_width = width
             self._sl_width.set_value(width * 100.0)
             self._mark_dirty(PARAMETRIC_FRAMES)
@@ -514,7 +516,7 @@ class FrameDialog(QDialog):
         self._refresh_timer.start()
 
     def _set_main_color(self, hex_value: str) -> None:
-        """Couleur principale imposée (raccourcis noir / blanc)."""
+        """Main colour imposed (black / white shortcuts)."""
         self._btn_color.set_color(hex_value)
         self._set_attr("frame_color", hex_value, reload_tiles=True)
 
@@ -529,36 +531,36 @@ class FrameDialog(QDialog):
         setattr(self._edit, attr, value)
         self.preview.emit(copy.copy(self._edit))
         if reload_tiles:
-            # Par défaut seuls les cadres réglables changent d'aspect ; la
-            # largeur, elle, s'applique à tous les motifs.
+            # By default only the adjustable frames change appearance; the width,
+            # by contrast, applies to every pattern.
             self._mark_dirty(PARAMETRIC_FRAMES if tiles is None else tiles)
 
     def _update_params_visibility(self) -> None:
         kind = self._edit.frame_type
         parametric = kind in PARAMETRIC_FRAMES
-        # L'épaisseur se règle pour tous les motifs (un cadre sculpté trop mince
-        # perd son décor) ; seules les couleurs sont propres aux paramétriques.
+        # The thickness is adjustable for every pattern (a carved frame that is too
+        # thin loses its decoration); only the colours are specific to the parametric ones.
         self._params.setVisible(kind != "none")
         self._style_row_host.setVisible(parametric)
         self._double_rows.setVisible(kind == "double")
-        # « Entourage uni » est un aplat d'une seule couleur : ni style de
-        # remplissage, ni seconde couleur.
+        # "Plain surround" is a flat fill of a single colour: neither fill style
+        # nor second colour.
         styled = kind in STYLED_FRAMES
         for btn in self._style_buttons.values():
             btn.setVisible(styled)
         self._btn_color2.setVisible(styled)
         self._sl_width.set_label(translate("FrameDialog", "Outer frame") if styled
                                  else translate("FrameDialog", "Thickness"))
-        # Le second cadre est proposé (et donc réglable) pour le seul entourage uni ;
-        # pour le cadre double, l'intervalle et le cadre intérieur font partie du motif.
+        # The second frame is offered (and therefore adjustable) for the plain surround
+        # only; for the double frame, the gap and the inner frame are part of the pattern.
         plain = kind == "plain"
         inner_on = plain and bool(self._edit.frame_inner_enabled)
         self._chk_inner.setVisible(plain)
         self._inner_rows.setVisible(kind == "double" or inner_on)
         self._sl_inner.set_label(translate("FrameDialog", "Second frame") if plain
                                  else translate("FrameDialog", "Inner frame"))
-        # La ferronnerie n'a de sens que sur le second cadre ; la ligne simple
-        # n'a aucun ornement à dimensionner.
+        # The ironwork only makes sense on the second frame; the simple line has
+        # no ornament to size.
         self._inner_motif_rows.setVisible(inner_on)
         ornamented = inner_on and self._edit.frame_inner_motif in ORNAMENTED_MOTIFS
         self._relief_row.setVisible(ornamented)
@@ -566,7 +568,7 @@ class FrameDialog(QDialog):
         self.adjustSize()
         QTimer.singleShot(0, self._reposition)
 
-    # ------------------------------------------------------------------ divers
+    # ------------------------------------------------------------------ misc
 
     def showEvent(self, event) -> None:
         super().showEvent(event)
@@ -579,8 +581,8 @@ class FrameDialog(QDialog):
             self.move(self._panel._compute_dialog_pos(self.width(), self.height()))
 
     def closeEvent(self, event) -> None:
-        # Ne jamais laisser un QThread tourner après la fermeture du dialogue :
-        # il émettrait vers des widgets détruits.
+        # Never leave a QThread running after the dialog is closed:
+        # it would emit towards destroyed widgets.
         self._refresh_timer.stop()
         if self._loader is not None:
             self._pending_kinds = []

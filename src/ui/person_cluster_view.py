@@ -1,19 +1,19 @@
 ﻿# Copyright 2026 Christian Guyot
 # SPDX-License-Identifier: Apache-2.0
 """
-PersonClusterView — vignettes des visages associés à une personne nommée.
+PersonClusterView — thumbnails of the faces associated with a named person.
 
-Empilée dans MainWindow._stack à l'index 3.
-Double-clic sur une vignette → photo_requested(photo_path).
+Stacked in MainWindow._stack at index 3.
+Double-click on a thumbnail → photo_requested(photo_path).
 
-La vue affiche toujours les visages individuels (dégroupés) :
-  - Section confirmée  : visages déjà associés à la personne
-    Clic : sélection  Ctrl+clic : multi-sélection  Shift+clic : plage
-    Clic-droit : réassigner / dé-associer / définir comme vignette principale
-    Double-clic : ouvrir la photo dans la visionneuse
-  - Section en attente : suggestions non encore vérifiées (une vignette par groupe suggéré)
-    Clic-droit : Accepter / Rejeter la suggestion de ce groupe
-    Boutons « Accepter toutes » / « Rejeter toutes » dans l'en-tête
+The view always shows the individual faces (ungrouped):
+  - Confirmed section : faces already associated with the person
+    Click: selection  Ctrl+click: multi-selection  Shift+click: range
+    Right click: reassign / unlink / set as the main thumbnail
+    Double-click: open the photo in the viewer
+  - Pending section   : suggestions not verified yet (one thumbnail per suggested group)
+    Right click: Accept / Reject the suggestion of that group
+    "Accept all" / "Reject all" buttons in the header
 """
 
 import logging
@@ -39,7 +39,7 @@ _COLS_MIN  = 2
 _THUMB_IMG = 80
 _THUMB_W   = 90
 _THUMB_GAP = 6
-_BTN_OVL   = 22   # diamètre des boutons ✓/✗ overlay
+_BTN_OVL   = 22   # diameter of the ✓/✗ overlay buttons
 
 _BTN_ACCEPT_STYLE = (
     "QPushButton { background: rgba(30,150,50,215); color: white;"
@@ -61,7 +61,7 @@ _MENU_STYLE = (
 
 
 class _PersonsLoaderThread(QThread):
-    """Charge les personnes existantes en arrière-plan avant d'ouvrir le dialogue de réallocation."""
+    """Loads the existing people in the background before opening the reassignment dialog."""
 
     ready = Signal(list)   # list[PersonInfo]
 
@@ -81,7 +81,7 @@ class _PersonsLoaderThread(QThread):
 
 
 class _UnassignThread(QThread):
-    """Isole les visages dé-associés et calcule des suggestions pour d'autres personnes."""
+    """Isolates the unlinked faces and computes suggestions for other people."""
 
     done = Signal()
 
@@ -107,7 +107,7 @@ class _UnassignThread(QThread):
 
 
 class _FlatFaceLoader(QThread):
-    """Charge les crops de visages individuels en arrière-plan."""
+    """Loads the individual face crops in the background."""
 
     face_ready = Signal(int, bytes)   # face_id, PNG bytes
 
@@ -132,13 +132,13 @@ class _FlatFaceLoader(QThread):
 
 
 class _FaceThumb(QFrame):
-    """Vignette compacte d'un visage individuel."""
+    """Compact thumbnail of an individual face."""
 
     clicked                = Signal(int, bool, bool)  # face_id, ctrl_held, shift_held
     double_clicked         = Signal(str)               # photo_path
-    context_menu_requested = Signal(int, object)       # face_id, QPoint global
-    accept_clicked         = Signal(int)               # face_id — bouton ✓ overlay
-    reject_clicked         = Signal(int)               # face_id — bouton ✗ overlay
+    context_menu_requested = Signal(int, object)       # face_id, global QPoint
+    accept_clicked         = Signal(int)               # face_id — ✓ overlay button
+    reject_clicked         = Signal(int)               # face_id — ✗ overlay button
 
     _STYLE_NORMAL = (
         "QFrame { border: 1px solid #3a3a3a; border-radius: 4px; background: #252525; }"
@@ -174,7 +174,7 @@ class _FaceThumb(QFrame):
         self._lbl_img.start_loading()
         layout.addWidget(self._lbl_img, alignment=Qt.AlignCenter)
 
-        # Boutons overlay ✓/✗ pour suggestions en attente (masqués par défaut)
+        # ✓/✗ overlay buttons for the pending suggestions (hidden by default)
         _y = _THUMB_W - _BTN_OVL - 3
         self._btn_accept = QPushButton("✓", self)
         self._btn_accept.setGeometry(_THUMB_W - _BTN_OVL - 3, _y, _BTN_OVL, _BTN_OVL)
@@ -233,24 +233,24 @@ class _FaceThumb(QFrame):
 
 class PersonClusterView(QWidget):
     """
-    Vue des visages associés à une personne nommée.
-    Empilée dans MainWindow._stack à l'index 3.
+    View of the faces associated with a named person.
+    Stacked in MainWindow._stack at index 3.
     """
 
-    photos_requested    = Signal(int, str)   # cluster_id, label (conservé pour compatibilité)
-    photo_requested     = Signal(str)        # photo_path — double-clic sur une vignette
+    photos_requested    = Signal(int, str)   # cluster_id, label (kept for compatibility)
+    photo_requested     = Signal(str)        # photo_path — double-click on a thumbnail
     back_requested      = Signal()
-    cluster_unassigned  = Signal(int)        # cluster_id — groupe dé-associé
+    cluster_unassigned  = Signal(int)        # cluster_id — group unlinked
     cluster_named       = Signal(int, str)   # cluster_id, name
     cluster_assigned    = Signal(int, int)   # cluster_id, person_id
-    faces_reassigned    = Signal()           # visages réassignés
+    faces_reassigned    = Signal()           # faces reassigned
     cover_face_set      = Signal(int, object)  # person_id, FaceInfo
-    suggestion_accepted      = Signal(int)   # cluster_id confirmé
-    suggestion_rejected      = Signal(int)   # cluster_id refusé
-    all_suggestions_accepted = Signal(list)  # tous les cluster_ids confirmés d'un coup
-    all_suggestions_rejected = Signal(list)  # tous les cluster_ids refusés d'un coup
-    add_to_album_requested    = Signal(list)  # list[PhotoInfo] — ajouter à album existant
-    create_album_with_requested = Signal(list)  # list[PhotoInfo] — créer nouvel album
+    suggestion_accepted      = Signal(int)   # cluster_id confirmed
+    suggestion_rejected      = Signal(int)   # cluster_id rejected
+    all_suggestions_accepted = Signal(list)  # every cluster_id confirmed at once
+    all_suggestions_rejected = Signal(list)  # every cluster_id rejected at once
+    add_to_album_requested    = Signal(list)  # list[PhotoInfo] — add to an existing album
+    create_album_with_requested = Signal(list)  # list[PhotoInfo] — create a new album
 
     def __init__(self, face_db: FaceDatabase, catalog, parent=None) -> None:
         super().__init__(parent)
@@ -258,20 +258,20 @@ class PersonClusterView(QWidget):
         self._catalog = catalog
         self._person: PersonInfo | None = None
 
-        # Vignettes confirmées
+        # Confirmed thumbnails
         self._flat_cards: dict[int, _FaceThumb] = {}
         self._flat_loader: _FlatFaceLoader | None = None
         self._selection: set[int] = set()
         self._flat_order: list[int] = []
         self._last_clicked: int | None = None
 
-        # Chargement par lots (évite de bloquer l'UI sur ~5000 widgets)
+        # Batched loading (avoids blocking the UI on ~5000 widgets)
         self._flat_batch_gen: int = 0
         self._flat_pending:  list = []
         self._flat_faces_all: list = []
         self._flat_cols: int = 1
 
-        # Vignettes en attente de vérification (une par groupe suggéré)
+        # Thumbnails awaiting verification (one per suggested group)
         self._pending_flat_cards: dict[int, _FaceThumb] = {}
         self._pending_flat_loader: _FlatFaceLoader | None = None
         self._pending_thumb_clusters: dict[int, int] = {}  # face_id → cluster_id
@@ -295,7 +295,7 @@ class PersonClusterView(QWidget):
             self._person = person
 
     def refresh(self) -> None:
-        """Force un rafraîchissement complet de la vue (même personne)."""
+        """Forces a full refresh of the view (the same person)."""
         self._refresh()
 
     # ------------------------------------------------------------------ UI
@@ -305,7 +305,7 @@ class PersonClusterView(QWidget):
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
 
-        # Barre titre
+        # Title bar
         header = QWidget()
         header.setStyleSheet("background: #1e1e1e; border-bottom: 1px solid #333;")
         header.setFixedHeight(44)
@@ -332,7 +332,7 @@ class PersonClusterView(QWidget):
 
         root.addWidget(header)
 
-        # Zone de scroll
+        # Scroll area
         self._scroll = QScrollArea()
         self._scroll.setWidgetResizable(True)
         self._scroll.setStyleSheet("QScrollArea { border: none; background: #1a1a1a; }")
@@ -344,8 +344,8 @@ class PersonClusterView(QWidget):
         content_vbox.setSpacing(16)
         content_vbox.setAlignment(Qt.AlignTop)
 
-        # Section en attente de vérification (affichée en premier, au-dessus des
-        # visages déjà confirmés : ce sont les suggestions à traiter en priorité)
+        # Section awaiting verification (displayed first, above the faces already
+        # confirmed: these are the suggestions to deal with in priority)
         self._pending_section = QWidget()
         self._pending_section.setStyleSheet("background: transparent;")
         self._pending_section.setVisible(False)
@@ -402,7 +402,7 @@ class PersonClusterView(QWidget):
 
         content_vbox.addWidget(self._pending_section)
 
-        # Section confirmée
+        # Confirmed section
         self._confirmed_area = QWidget()
         self._confirmed_area.setStyleSheet("background: transparent;")
         self._flow = QGridLayout(self._confirmed_area)
@@ -474,7 +474,7 @@ class PersonClusterView(QWidget):
         self._clear_grid()
         self._refresh_flat()
 
-    # Nombre de widgets _FaceThumb créés par tranche de QTimer.
+    # Number of _FaceThumb widgets created per QTimer slice.
     _FLAT_BATCH = 100
 
     def _refresh_flat(self) -> None:
@@ -493,7 +493,7 @@ class PersonClusterView(QWidget):
 
         cols = self._compute_cols(_THUMB_W, _THUMB_GAP)
 
-        # ── Section en attente ─────────────────────────────────────────────
+        # ── Pending section ────────────────────────────────────────────────
         if pending:
             pending_cluster_ids = [cid for cid, _, _ in pending]
             rep_faces = self._face_db.get_all_representative_faces(pending_cluster_ids)
@@ -528,7 +528,7 @@ class PersonClusterView(QWidget):
 
             self._pending_section.setVisible(True)
 
-        # ── Section confirmée (chargement par lots) ────────────────────────
+        # ── Confirmed section (batched loading) ────────────────────────────
         self._flat_order     = [face.id for face in confirmed]
         self._flat_faces_all = list(confirmed)
         self._flat_cols      = cols
@@ -641,10 +641,10 @@ class PersonClusterView(QWidget):
         elif chosen == act_reject:
             self.suggestion_rejected.emit(cluster_id)
 
-    # ------------------------------------------------------------------ suppression rapide de suggestions
+    # ------------------------------------------------------------------ quick removal of suggestions
 
     def remove_pending_cluster(self, cluster_id: int) -> None:
-        """Retire la vignette de suggestion rejetée sans recharger toute la grille."""
+        """Removes the rejected suggestion thumbnail without reloading the whole grid."""
         to_remove = [fid for fid, cid in self._pending_thumb_clusters.items()
                      if cid == cluster_id]
         if not to_remove:
@@ -660,13 +660,13 @@ class PersonClusterView(QWidget):
             self._pending_section.setVisible(False)
             return
 
-        # Re-layouter les vignettes restantes pour combler le trou
+        # Re-lay out the remaining thumbnails to fill the gap
         cols = self._compute_cols(_THUMB_W, _THUMB_GAP)
         for i, thumb in enumerate(self._pending_flat_cards.values()):
             self._pending_grid.addWidget(thumb, i // cols, i % cols)
 
     def clear_all_pending(self) -> None:
-        """Retire toutes les vignettes de suggestions sans recharger la grille."""
+        """Removes every suggestion thumbnail without reloading the grid."""
         for thumb in self._pending_flat_cards.values():
             self._pending_grid.removeWidget(thumb)
             thumb.deleteLater()
@@ -675,12 +675,12 @@ class PersonClusterView(QWidget):
         self._pending_section.setVisible(False)
 
     def accept_pending_cluster(self, cluster_id: int) -> None:
-        """Déplace les visages du cluster accepté de la section en attente vers
-        la section confirmée, sans recharger toute la grille."""
-        # 1. Supprimer la vignette en attente
+        """Moves the faces of the accepted cluster from the pending section to
+        the confirmed one, without reloading the whole grid."""
+        # 1. Remove the pending thumbnail
         self.remove_pending_cluster(cluster_id)
 
-        # 2. Récupérer les visages nouvellement confirmés
+        # 2. Fetch the newly confirmed faces
         new_faces = self._face_db.get_faces_by_cluster(cluster_id)
         if not new_faces:
             return
@@ -688,7 +688,7 @@ class PersonClusterView(QWidget):
         self._lbl_empty.hide()
         self._scroll.show()
 
-        # 3. Appendre les nouvelles vignettes à la grille confirmée
+        # 3. Append the new thumbnails to the confirmed grid
         cols = self._compute_cols(_THUMB_W, _THUMB_GAP)
         start_idx = len(self._flat_cards)
         for i, face in enumerate(new_faces):
@@ -701,16 +701,16 @@ class PersonClusterView(QWidget):
             self._flat_cards[face.id] = thumb
             self._flat_order.append(face.id)
 
-        # 4. Charger les images uniquement pour les nouveaux visages
+        # 4. Load the images only for the new faces
         loader = _FlatFaceLoader(new_faces, _THUMB_IMG, self)
         loader.face_ready.connect(self._on_face_ready)
         loader.finished.connect(loader.deleteLater)
         loader.start()
 
-    # ------------------------------------------------------------------ sélection (visages confirmés)
+    # ------------------------------------------------------------------ selection (confirmed faces)
 
     def select_all(self) -> None:
-        """Sélectionne tous les visages confirmés de la grille (Ctrl+A)."""
+        """Selects every confirmed face of the grid (Ctrl+A)."""
         self._selection = set(self._flat_order)
         self._last_clicked = self._flat_order[-1] if self._flat_order else None
         self._apply_selection_style()
@@ -740,7 +740,7 @@ class PersonClusterView(QWidget):
         for fid, thumb in self._flat_cards.items():
             thumb.set_selected(fid in self._selection)
 
-    # ------------------------------------------------------------------ menu contextuel (visages confirmés)
+    # ------------------------------------------------------------------ context menu (confirmed faces)
 
     @Slot(int, object)
     def _on_thumb_context_menu(self, face_id: int, pos) -> None:
@@ -750,7 +750,7 @@ class PersonClusterView(QWidget):
 
         n = len(self._selection)
 
-        # Photos uniques pour la sélection courante (dédoublonnage par chemin)
+        # Unique photos for the current selection (deduplicated by path)
         selected_paths = {
             self._flat_cards[fid]._photo_path
             for fid in self._selection if fid in self._flat_cards
