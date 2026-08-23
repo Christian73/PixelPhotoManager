@@ -1,9 +1,9 @@
 # Copyright 2026 Christian Guyot
 # SPDX-License-Identifier: Apache-2.0
-"""Tests de widget Qt isolés (Layer 2, pytest-qt) pour ExifPanel — fichiers
-image/vidéo synthétiques créés en process (Pillow/cv2), pas de bibliothèque
-réelle. Les loaders QThread sont appelés en synchrone (méthodes statiques ou
-run()) pour que coverage trace le code (cf. convention CLAUDE.md)."""
+"""Isolated Qt widget tests (Layer 2, pytest-qt) for ExifPanel -- synthetic
+image/video files created in process (Pillow/cv2), no real library. The QThread
+loaders are called synchronously (static methods or run()) so that coverage
+traces the code (cf. the CLAUDE.md convention)."""
 import os
 from datetime import datetime
 
@@ -19,10 +19,10 @@ from src.ui.exif_panel import (
 
 
 # ---------------------------------------------------------------------------
-# fabriques
+# factories
 
 def _make_jpeg_with_exif(path) -> str:
-    """JPEG 80×60 avec un jeu de tags EXIF représentatif (IFD principal + ExifIFD)."""
+    """80x60 JPEG with a representative set of EXIF tags (main IFD + ExifIFD)."""
     img = Image.new("RGB", (80, 60), color=(90, 120, 150))
     exif = Image.Exif()
     exif[0x010F] = "PixelCam"                      # Make
@@ -37,7 +37,7 @@ def _make_jpeg_with_exif(path) -> str:
     ifd[0x829D] = 2.8                              # FNumber
     ifd[0x8827] = 200                              # ISOSpeedRatings
     ifd[0x920A] = 35.0                             # FocalLength
-    ifd[0x9209] = 16                               # Flash (Off, non déclenché)
+    ifd[0x9209] = 16                               # Flash (Off, not fired)
     img.save(path, format="JPEG", exif=exif)
     return str(path)
 
@@ -58,7 +58,7 @@ def _make_avi(path, w=64, h=48, frames=5, fps=10.0) -> str:
 
 
 def _panel_texts(panel: ExifPanel) -> list[str]:
-    """Textes de tous les QLabel du contenu du panneau (sections + lignes)."""
+    """Texts of every QLabel in the panel content (sections + rows)."""
     return [
         lbl.text()
         for lbl in panel._content.findChildren(QLabel)
@@ -67,7 +67,7 @@ def _panel_texts(panel: ExifPanel) -> list[str]:
 
 
 # ---------------------------------------------------------------------------
-# formateurs purs
+# pure formatters
 
 class TestFormatters:
     @pytest.mark.parametrize("val, expected", [
@@ -79,7 +79,7 @@ class TestFormatters:
         assert _fmt_exposure(val) == expected
 
     def test_fmt_apex_converts_to_fnumber(self):
-        # APEX 2 → f/2.0 (sqrt(2^2))
+        # APEX 2 -> f/2.0 (sqrt(2^2))
         assert _fmt_apex(2) == "f/2.0"
         assert _fmt_apex("bad") == "bad"
 
@@ -146,11 +146,11 @@ class TestSetFileDates:
 
         _set_file_dates(str(f), dt)
 
-        # La branche Win32 (SetFileTime) interprète dt comme UTC alors
-        # qu'os.utime l'interprète en heure locale : selon la branche qui a
-        # gagné, le mtime vaut l'une ou l'autre lecture (écart = décalage de
-        # fuseau). Comportement historique de l'application — le test accepte
-        # les deux interprétations.
+        # The Win32 branch (SetFileTime) interprets dt as UTC whereas
+        # os.utime interprets it as local time: depending on which branch won,
+        # the mtime holds one reading or the other (difference = the timezone
+        # offset). Historical behaviour of the application -- the test accepts
+        # both interpretations.
         from datetime import timezone
         local_ts = dt.timestamp()
         utc_ts = dt.replace(tzinfo=timezone.utc).timestamp()
@@ -159,7 +159,7 @@ class TestSetFileDates:
 
 
 # ---------------------------------------------------------------------------
-# lecture EXIF
+# EXIF reading
 
 class TestReadExif:
     def test_reads_main_and_sub_ifd(self, tmp_path):
@@ -179,7 +179,7 @@ class TestReadExif:
 
 
 # ---------------------------------------------------------------------------
-# loader (appel synchrone des méthodes statiques → tracé par coverage)
+# loader (synchronous call of the static methods -> traced by coverage)
 
 class TestExifDataLoader:
     def test_load_image_returns_metadata(self, tmp_path):
@@ -219,7 +219,7 @@ class TestExifDataLoader:
         results = []
         loader.data_ready.connect(lambda p, d: results.append((p, d)))
 
-        loader.run()   # synchrone : tracé par coverage
+        loader.run()   # synchronous: traced by coverage
 
         assert results == [("C:/nulle/part/x.jpg", None)]
 
@@ -235,7 +235,7 @@ class TestExifDataLoader:
 
 
 # ---------------------------------------------------------------------------
-# panneau
+# panel
 
 class TestExifPanelPopulation:
     def test_image_data_populates_sections_and_rows(self, qtbot, tmp_path):
@@ -268,7 +268,7 @@ class TestExifPanelPopulation:
         texts = _panel_texts(panel)
         assert "VIDÉO" in texts
         assert "64 × 48 px" in texts
-        assert any(t.startswith("0:00") for t in texts)   # durée < 1 min
+        assert any(t.startswith("0:00") for t in texts)   # duration < 1 min
 
     def test_video_without_stream_shows_file_section_only(self, qtbot, tmp_path):
         path = tmp_path / "fake.avi"
@@ -296,14 +296,14 @@ class TestExifPanelPopulation:
         path = _make_jpeg_with_exif(tmp_path / "e.jpg")
         panel = ExifPanel()
         qtbot.addWidget(panel)
-        panel._current_path = "C:/autre/photo.jpg"   # navigation entre-temps
+        panel._current_path = "C:/autre/photo.jpg"   # navigation in the meantime
 
         panel._on_data_ready(path, _ExifDataLoader._load_image(path))
 
         assert _panel_texts(panel) == []
 
     def test_set_photo_real_thread_populates(self, qtbot, tmp_path):
-        """Plomberie cross-thread réelle (un vrai .start() par module, cf. CLAUDE.md)."""
+        """Real cross-thread plumbing (one genuine .start() per module, cf. CLAUDE.md)."""
         path = _make_jpeg_with_exif(tmp_path / "e.jpg")
         panel = ExifPanel()
         qtbot.addWidget(panel)
@@ -338,14 +338,14 @@ class TestExifPanelPopulation:
 
         assert panel._current_path == ""
         assert not panel._btn_edit.isEnabled()
-        # Les lignes sont détruites via deleteLater : attendre le passage de
-        # l'event loop (cf. convention : processEvents, pas d'assertion immédiate)
+        # The rows are destroyed through deleteLater: wait for the event loop to
+        # run (cf. the convention: processEvents, no immediate assertion)
         qtbot.waitUntil(lambda: _panel_texts(panel) == [], timeout=2000)
 
 
 class TestExifPanelGps:
     def _gps_ifd(self, extra: dict | None = None):
-        # Clés entières GPSTAGS : 1/2 latitude, 3/4 longitude
+        # Integer GPSTAGS keys: 1/2 latitude, 3/4 longitude
         ifd = {
             1: "N", 2: (48.0, 51.0, 24.0),
             3: "E", 4: (2.0, 17.0, 40.0),
@@ -369,7 +369,7 @@ class TestExifPanelGps:
         panel = ExifPanel()
         qtbot.addWidget(panel)
         ifd = self._gps_ifd({
-            5: 1,                       # GPSAltitudeRef : sous le niveau de la mer
+            5: 1,                       # GPSAltitudeRef: below sea level
             6: 35.5,                    # GPSAltitude
             12: "K", 13: 42.0,          # GPSSpeedRef / GPSSpeed
             16: "M", 17: 123.4,         # GPSImgDirectionRef / GPSImgDirection
@@ -391,13 +391,13 @@ class TestExifPanelGps:
         panel = ExifPanel()
         qtbot.addWidget(panel)
 
-        panel._populate_gps({5: 0, 6: 12.0})   # altitude seule, pas de lat/lon
+        panel._populate_gps({5: 0, 6: 12.0})   # altitude alone, no lat/lon
 
         assert _panel_texts(panel) == []
 
 
 # ---------------------------------------------------------------------------
-# dialogue d'édition
+# edit dialog
 
 class TestExifEditDialog:
     def test_load_values_prefills_fields(self, qtbot, tmp_path):
@@ -426,9 +426,9 @@ class TestExifEditDialog:
         from PySide6.QtCore import QDateTime
         dlg._dt_edit.setDateTime(QDateTime(2021, 3, 4, 5, 6, 7))
         dlg._desc_edit.setText("Nouvelle description")
-        dlg._artist_edit.setText("")             # efface Artist
-        # ASCII uniquement : l'encodeur EXIF de Pillow remplace les caractères
-        # non-ASCII par "?" dans les tags texte de l'IFD principal.
+        dlg._artist_edit.setText("")             # clears Artist
+        # ASCII only: the EXIF encoder of Pillow replaces the non-ASCII
+        # characters with "?" in the text tags of the main IFD.
         dlg._copyright_edit.setText("(c) Test")
         dlg._cb_file_date.setChecked(True)
 
@@ -471,4 +471,4 @@ class TestExifEditDialog:
 
         assert blocker.args == [path]
         with qtbot.waitSignal(panel._loader.data_ready, timeout=3000):
-            pass   # laisse le rechargement réel se terminer avant le teardown
+            pass   # let the real reload finish before the teardown

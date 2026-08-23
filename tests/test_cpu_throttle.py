@@ -1,22 +1,21 @@
 # Copyright 2026 Christian Guyot
 # SPDX-License-Identifier: Apache-2.0
-"""Teste `src/core/cpu_throttle.py` — en particulier le cycle de service, seul
-levier qui plafonne réellement la charge des traitements de fond (la priorité OS
-ne fait que céder le passage : un thread IDLE occupe malgré tout 100 % d'un cœur
-autrement inoccupé).
+"""Tests `src/core/cpu_throttle.py` -- in particular the duty cycle, the only
+lever that really caps the load of the background tasks (the OS priority merely
+gives way: an IDLE thread still occupies 100 % of an otherwise idle core).
 
-Le temps est entièrement simulé : `cpu_throttle.time` est remplacé par une
-horloge factice dont `sleep()` avance le compteur au lieu d'attendre, ce qui rend
-les durées de pause vérifiables exactement et sans ralentir la suite. Les
-globales du module (`_ratio`, `_last_activity`, régulateur thread-local) sont
-restaurées par la fixture — elles survivraient sinon d'un test à l'autre."""
+Time is entirely simulated: `cpu_throttle.time` is replaced by a fake clock
+whose `sleep()` advances the counter instead of waiting, which makes the pause
+durations exactly verifiable without slowing the suite down. The module globals
+(`_ratio`, `_last_activity`, thread-local regulator) are restored by the fixture
+-- they would otherwise survive from one test to the next."""
 import pytest
 
 from src.core import cpu_throttle
 
 
 class _FakeClock:
-    """Horloge monotone contrôlée : `sleep()` n'attend rien, il avance le temps."""
+    """Controlled monotonic clock: `sleep()` waits for nothing, it advances time."""
 
     def __init__(self, start: float = 1000.0) -> None:
         self.now = start
@@ -39,15 +38,15 @@ class _FakeClock:
 
 @pytest.fixture
 def clock(monkeypatch):
-    """Horloge factice + globales du module remises à zéro après le test."""
+    """Fake clock + module globals reset after the test."""
     fake = _FakeClock()
     monkeypatch.setattr(cpu_throttle, "time", fake)
     saved_ratio = cpu_throttle._ratio
     saved_activity = cpu_throttle._last_activity
     saved_local = cpu_throttle._local
     cpu_throttle._local = cpu_throttle.threading.local()
-    # Après l'installation de l'horloge factice, pour que `_last_activity` soit
-    # exprimé dans la même base de temps (sinon user_is_idle() est aléatoire).
+    # After installing the fake clock, so that `_last_activity` is expressed
+    # in the same time base (otherwise user_is_idle() is random).
     cpu_throttle.note_user_activity()
     yield fake
     cpu_throttle._ratio = saved_ratio
@@ -72,8 +71,8 @@ class TestBackgroundCpuLevel:
         )
 
     def test_read_from_config_when_never_set(self, clock, monkeypatch):
-        """Cas des tests et scripts hors application : le ratio est lu une seule
-        fois depuis la configuration, puis mémorisé."""
+        """Case of tests and scripts outside the application: the ratio is read
+        only once from the configuration, then memorised."""
         cpu_throttle._ratio = None
         reads: list = []
 
@@ -89,7 +88,7 @@ class TestBackgroundCpuLevel:
 
         assert cpu_throttle.background_cpu_ratio() == pytest.approx(0.25)
         assert reads == ["performance.background_cpu"]
-        # Deuxième appel : servi par le cache mémoire, pas de relecture.
+        # Second call: served by the memory cache, no re-read.
         assert cpu_throttle.background_cpu_ratio() == pytest.approx(0.25)
         assert reads == ["performance.background_cpu"]
 
@@ -124,7 +123,7 @@ class TestUserActivity:
         assert cpu_throttle.user_is_idle() is False
 
     def test_idle_lifts_the_throttle(self, clock):
-        """Personne ne se sert de l'application : autant finir le travail vite."""
+        """Nobody is using the application: might as well finish the work fast."""
         cpu_throttle.set_background_cpu_level("low")
         assert cpu_throttle.effective_cpu_ratio() == pytest.approx(0.25)
 
@@ -144,7 +143,7 @@ class TestDutyCycle:
         assert clock.slept == []
 
     def test_sleeps_to_honour_the_ratio(self, clock):
-        """r = 0.25 → pour 0,2 s travaillées, 0,6 s de pause (0,2 = 25 % de 0,8)."""
+        """r = 0.25 -> for 0.2 s worked, 0.6 s of pause (0.2 = 25 % of 0.8)."""
         cpu_throttle.set_background_cpu_level("low")
         duty = cpu_throttle.DutyCycle()
 
@@ -161,7 +160,7 @@ class TestDutyCycle:
         clock.advance(0.3)
         duty.tick()
 
-        # r = 0.6 → 0.3 × 0.4 / 0.6 = 0.2 s
+        # r = 0.6 -> 0.3 x 0.4 / 0.6 = 0.2 s
         assert clock.total_slept == pytest.approx(0.2, abs=1e-6)
 
     def test_max_level_never_sleeps(self, clock):
@@ -174,8 +173,8 @@ class TestDutyCycle:
         assert clock.slept == []
 
     def test_cancellation_interrupts_the_sleep(self, clock):
-        """Le sommeil est fractionné précisément pour rester interruptible :
-        une fermeture d'application ne doit pas attendre la fin de la pause."""
+        """The sleep is split up precisely so as to stay interruptible: closing
+        the application must not wait for the end of the pause."""
         cpu_throttle.set_background_cpu_level("low")
         duty = cpu_throttle.DutyCycle()
         cancelled = False
@@ -196,7 +195,7 @@ class TestDutyCycle:
 
         def _is_cancelled() -> bool:
             calls["n"] += 1
-            return calls["n"] > 3      # laisse passer 3 pas de sommeil
+            return calls["n"] > 3      # let 3 sleep steps through
 
         clock.advance(0.2)
         duty.tick(_is_cancelled)
@@ -205,8 +204,8 @@ class TestDutyCycle:
         assert clock.total_slept == pytest.approx(3 * cpu_throttle._SLEEP_STEP)
 
     def test_work_start_resets_after_a_pause(self, clock):
-        """Sans remise à zéro, le temps déjà « payé » serait recompté au tick
-        suivant et la pause enflerait indéfiniment."""
+        """Without a reset, the time already "paid" would be counted again on the
+        next tick and the pause would swell indefinitely."""
         cpu_throttle.set_background_cpu_level("low")
         duty = cpu_throttle.DutyCycle()
 
@@ -233,12 +232,12 @@ class TestDutyCycle:
 
 class TestThrottleTick:
     def test_regulator_is_reused_per_thread(self, clock):
-        """Un régulateur par thread, conservé en thread-local : le temps de
-        travail s'accumule d'un appel à l'autre au lieu de repartir de zéro."""
+        """One regulator per thread, kept in thread-local storage: the work time
+        accumulates from one call to the next instead of starting over."""
         cpu_throttle.set_background_cpu_level("low")
 
         clock.advance(0.2)
-        cpu_throttle.throttle_tick()          # crée le régulateur, pas de pause
+        cpu_throttle.throttle_tick()          # creates the regulator, no pause
         assert clock.slept == []
 
         duty = cpu_throttle._local.duty
@@ -260,9 +259,9 @@ class TestThrottleTick:
 
 class TestProcessInitializer:
     def test_init_background_process_pulls_both_levers(self, monkeypatch):
-        """La priorité seule ne suffit pas : un worker qui décode une photo de
-        24 Mpx déclenche autant de threads OpenCV que de cœurs, à priorité
-        normale puisqu'ils naissent hors de notre contrôle."""
+        """Priority alone is not enough: a worker decoding a 24 Mpx photo starts
+        as many OpenCV threads as there are cores, at normal priority since they
+        are born outside our control."""
         calls: list[str] = []
         monkeypatch.setattr(
             cpu_throttle, "lower_current_process_priority",
@@ -287,10 +286,10 @@ class TestProcessInitializer:
 
     def test_limit_cv2_threads_is_silent_without_opencv(self, monkeypatch):
         monkeypatch.setitem(__import__("sys").modules, "cv2", None)
-        cpu_throttle.limit_cv2_threads(1)   # ne doit pas lever
+        cpu_throttle.limit_cv2_threads(1)   # must not raise
 
     def test_lowering_priority_never_raises(self):
-        """No-op silencieux hors Windows / sans psutil."""
+        """Silent no-op outside Windows / without psutil."""
         cpu_throttle.lower_current_thread_priority()
         cpu_throttle.lower_current_process_priority()
 
@@ -301,4 +300,4 @@ class TestWorkerCount:
 
     def test_roughly_the_configured_fraction(self, monkeypatch):
         monkeypatch.setattr(cpu_throttle.os, "cpu_count", lambda: 16)
-        assert cpu_throttle.throttled_worker_count() == 2   # round(16 × 0.15)
+        assert cpu_throttle.throttled_worker_count() == 2   # round(16 x 0.15)

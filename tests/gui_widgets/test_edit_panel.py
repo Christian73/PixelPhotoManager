@@ -1,11 +1,11 @@
 # Copyright 2026 Christian Guyot
 # SPDX-License-Identifier: Apache-2.0
-"""Tests de widget Qt isolés (Layer 2, pytest-qt) pour EditPanel/EditSlider.
+"""Isolated Qt widget tests (Layer 2, pytest-qt) for EditPanel/EditSlider.
 
-`EditPanel.__init__` instancie `EditDatabase()` avec son chemin par défaut
-(pas de `db_path=` injectable) — la redirection de `%LOCALAPPDATA%` par
-`tests/conftest.py` (chargée avant tout import de test) est ce qui garantit
-que ces tests n'écrivent jamais dans le vrai profil utilisateur."""
+`EditPanel.__init__` instantiates `EditDatabase()` with its default path
+(no injectable `db_path=`) -- the redirection of `%LOCALAPPDATA%` by
+`tests/conftest.py` (loaded before any test import) is what guarantees that
+these tests never write into the real user profile."""
 from PySide6.QtWidgets import QMessageBox
 
 from src.core.models import PhotoInfo
@@ -32,8 +32,8 @@ class TestEditSlider:
         assert slider.get_value() == 0.5
 
     def test_set_value_does_not_emit_signal(self, qtbot):
-        """set_value() bloque les signaux (cf. edit_panel.py) : utilisé pour
-        resynchroniser l'affichage sans redéclencher un cycle d'édition."""
+        """set_value() blocks the signals (cf. edit_panel.py): used to
+        resynchronise the display without retriggering an edit cycle."""
         slider = EditSlider("Luminosité", -1.0, 1.0, 0.0, 2)
         qtbot.addWidget(slider)
 
@@ -91,8 +91,8 @@ class TestEditPanelUndoRedo:
         assert panel._edit.brightness == 0.4
 
     def test_undo_persists_across_new_edit_panel_instance(self, qtbot, tmp_path):
-        """Undo/redo persistant entre sessions : l'historique est rechargé
-        depuis la DB (`EditDatabase`) à l'ouverture d'une photo, cf. CLAUDE.md."""
+        """Undo/redo persistent across sessions: the history is reloaded from the
+        DB (`EditDatabase`) when a photo is opened, cf. CLAUDE.md."""
         photo = _photo(str(tmp_path / "photo1.jpg"))
 
         panel1 = self._make_panel(qtbot)
@@ -108,12 +108,12 @@ class TestEditPanelUndoRedo:
 
 
 class TestRotationStepped:
-    """Régression : `rotation_stepped` resynchronise l'index des visages avec
-    l'orientation réellement affichée. Il n'était émis que par les boutons ↻/↺ —
-    un Ctrl+Z (ou un reset/restore) ramenant la rotation à 0° laissait
-    `indexed_photos.rotation` figé sur l'ancienne valeur, et la re-détection
-    tournait pour toujours dans une orientation périmée (cas réel : 2 visages
-    retrouvés sur 8, même en détection forcée)."""
+    """Regression: `rotation_stepped` resynchronises the face index with the
+    orientation actually displayed. It was only emitted by the rotate buttons --
+    a Ctrl+Z (or a reset/restore) bringing the rotation back to 0 degrees left
+    `indexed_photos.rotation` frozen on the old value, and re-detection ran
+    forever in a stale orientation (real case: 2 faces found out of 8, even in
+    forced detection)."""
 
     def _make_panel(self, qtbot, tmp_path) -> tuple[EditPanel, str]:
         panel = EditPanel()
@@ -127,10 +127,10 @@ class TestRotationStepped:
         received: list = []
         panel.rotation_stepped.connect(lambda p, r: received.append((p, r)))
 
-        panel._rotate_cw()               # 0° → 90° (émis par le bouton)
+        panel._rotate_cw()               # 0 -> 90 degrees (emitted by the button)
         assert received == [(path, 90)]
 
-        panel.undo()                     # 90° → 0° : doit réémettre
+        panel.undo()                     # 90 -> 0 degrees: must re-emit
         assert received == [(path, 90), (path, 0)]
 
     def test_redo_of_rotation_emits_rotation_stepped(self, qtbot, tmp_path):
@@ -140,7 +140,7 @@ class TestRotationStepped:
         received: list = []
         panel.rotation_stepped.connect(lambda p, r: received.append((p, r)))
 
-        panel.redo()                     # 0° → 90°
+        panel.redo()                     # 0 -> 90 degrees
         assert received == [(path, 90)]
 
     def test_reset_and_restore_all_emit_rotation_stepped(self, qtbot, tmp_path):
@@ -149,15 +149,15 @@ class TestRotationStepped:
         received: list = []
         panel.rotation_stepped.connect(lambda p, r: received.append((p, r)))
 
-        panel.reset_all()                # 90° → 0°
+        panel.reset_all()                # 90 -> 0 degrees
         assert received == [(path, 0)]
 
-        panel.restore_all()              # 0° → 90°
+        panel.restore_all()              # 0 -> 90 degrees
         assert received == [(path, 0), (path, 90)]
 
     def test_undo_without_rotation_change_is_silent(self, qtbot, tmp_path):
-        """Un undo qui ne touche pas à la rotation ne doit pas relancer de
-        détection (coûteuse) : pas d'émission."""
+        """An undo that does not touch the rotation must not restart a
+        (costly) detection: no emission."""
         panel, path = self._make_panel(qtbot, tmp_path)
         received: list = []
         panel.rotation_stepped.connect(lambda p, r: received.append((p, r)))
@@ -170,20 +170,19 @@ class TestRotationStepped:
 
 
 class TestEditPanelContentMinWidth:
-    """Régression : la grille de boutons de traitement à 2 colonnes (Contraste,
-    Vignette… en colonne 2) ne doit jamais être coupée par la QScrollArea qui
-    l'héberge. Bug réel observé (pas un artefact de l'automation e2e) :
-    `QScrollArea` ne propage pas le `minimumSizeHint()` de son contenu vers le
-    sien (cf. commentaire sur `scroll.setMinimumWidth` dans
-    `edit_panel.py::_setup_ui`) — sans plancher explicite, un panneau aussi
-    étroit que la sidebar laissait la colonne 2 partiellement hors du viewport
-    visible : invisible et inatteignable au clic pour un utilisateur réel, pas
-    seulement pour un test automatisé. `content_min_width()` est le contrat
-    que `main_window.py::_ensure_left_pane_min_width()` s'appuie dessus pour
-    dimensionner le splitter ; ce test vérifie directement ce contrat, sans
-    dépendre du splitter ni de l'automation OS (contrairement au scénario e2e
-    `test_edit_treatments_extended.py`, qui clique via UIA Invoke — donc
-    aveugle à un défaut de géométrie visuelle)."""
+    """Regression: the 2-column grid of treatment buttons (Contraste,
+    Vignette... in column 2) must never be cut off by the QScrollArea that hosts
+    it. Real observed bug (not an artefact of the e2e automation): `QScrollArea`
+    does not propagate the `minimumSizeHint()` of its content to its own (cf. the
+    comment on `scroll.setMinimumWidth` in `edit_panel.py::_setup_ui`) -- without
+    an explicit floor, a panel as narrow as the sidebar left column 2 partly
+    outside the visible viewport: invisible and unreachable by click for a real
+    user, not only for an automated test. `content_min_width()` is the contract
+    that `main_window.py::_ensure_left_pane_min_width()` relies on to size the
+    splitter; this test checks that contract directly, without depending on the
+    splitter or on OS automation (unlike the e2e scenario
+    `test_edit_treatments_extended.py`, which clicks through UIA Invoke -- hence
+    blind to a visual geometry defect)."""
 
     def _make_panel(self, qtbot) -> EditPanel:
         panel = EditPanel()
@@ -211,9 +210,9 @@ class TestEditPanelContentMinWidth:
         qtbot.wait(50)
 
         viewport_width = panel._scroll.viewport().width()
-        # Colonne 2 de la grille (idx impair dans _TREATMENTS, cf. _setup_ui :
-        # grid.addWidget(btn, idx // 2, idx % 2)) — Contraste/Vignette dans
-        # l'ordre actuel de _TREATMENTS.
+        # Column 2 of the grid (odd idx in _TREATMENTS, cf. _setup_ui:
+        # grid.addWidget(btn, idx // 2, idx % 2)) -- Contraste/Vignette in the
+        # current order of _TREATMENTS.
         for name, btn in panel._treatment_buttons.items():
             right_edge = btn.geometry().right()
             assert right_edge <= viewport_width, (
@@ -229,8 +228,8 @@ class TestEditPanelResetRestore:
         return panel
 
     def test_reset_all_does_not_prompt_for_confirmation(self, qtbot, tmp_path, monkeypatch):
-        """Régression : reset_all() est réversible via restore_all(), donc ne doit
-        plus afficher de popup de confirmation (cf. QMessageBox.question retiré)."""
+        """Regression: reset_all() is reversible through restore_all(), so it must
+        no longer show a confirmation popup (cf. QMessageBox.question removed)."""
         def _fail_if_called(*a, **k):
             raise AssertionError("reset_all() ne doit plus afficher de QMessageBox de confirmation")
         monkeypatch.setattr(QMessageBox, "question", _fail_if_called)
@@ -269,8 +268,8 @@ class TestEditPanelResetRestore:
         assert panel2.get_edit().brightness == 0.4, "la restauration doit être persistée en DB"
 
     def test_reset_all_then_restore_all_keeps_step_by_step_undo(self, qtbot, tmp_path):
-        """Régression : après reset_all() + restore_all(), les retouches doivent
-        pouvoir être défaites une par une (l'historique était perdu)."""
+        """Regression: after reset_all() + restore_all(), the edits must be
+        undoable one by one (the history used to be lost)."""
         panel = self._make_panel(qtbot)
         photo = _photo(str(tmp_path / "photo1.jpg"))
         panel.set_photo(photo)
@@ -291,16 +290,16 @@ class TestEditPanelResetRestore:
         assert panel._btn_undo.isEnabled(), "l'undo doit rester disponible après restauration"
         assert len(panel._undo_stack) == 2
 
-        panel.undo()          # défait le contraste
+        panel.undo()          # undoes the contrast
         assert panel._edit.contrast == 0.0
         assert panel._edit.brightness == 0.4
-        panel.undo()          # défait la luminosité
+        panel.undo()          # undoes the brightness
         assert panel._edit.brightness == 0.0
         assert not panel._btn_undo.isEnabled()
 
     def test_restore_all_repopulates_persistent_history(self, qtbot, tmp_path):
-        """L'historique DB effacé par reset_all() est réinjecté par restore_all()
-        → l'undo pas-à-pas survit à un redémarrage."""
+        """The DB history erased by reset_all() is reinjected by restore_all()
+        -> step-by-step undo survives a restart."""
         panel = self._make_panel(qtbot)
         photo = _photo(str(tmp_path / "photo1.jpg"))
         panel.set_photo(photo)
@@ -314,7 +313,7 @@ class TestEditPanelResetRestore:
         panel.restore_all()
 
         panel2 = self._make_panel(qtbot)
-        panel2.set_photo(photo)          # recharge l'historique depuis la DB
+        panel2.set_photo(photo)          # reloads the history from the DB
         assert panel2.get_edit().brightness == 0.4
         assert panel2._undo_stack, "l'historique doit être rechargeable depuis la DB"
         panel2.undo()
@@ -352,10 +351,10 @@ class TestEditPanelResetRestore:
 
 
 class TestVignetteDefaultStrength:
-    """L'outil Vignette s'ouvre sur une intensité visible (50 %) quand la photo
-    n'en a pas encore : à 0, l'ouverture ne changeait rien à l'image et il
-    fallait bouger le curseur pour voir l'effet. La valeur par défaut d'`EditInfo`
-    reste 0 — c'est bien l'ouverture de l'outil qui pose ce point de départ."""
+    """The Vignette tool opens on a visible intensity (50 %) when the photo has
+    none yet: at 0, opening it changed nothing in the image and the slider had to
+    be moved to see the effect. The default value of `EditInfo` stays 0 -- it is
+    really the opening of the tool that sets this starting point."""
 
     def _panel_with_photo(self, qtbot, tmp_path) -> EditPanel:
         panel = EditPanel()

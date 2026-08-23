@@ -1,11 +1,11 @@
 # Copyright 2026 Christian Guyot
 # SPDX-License-Identifier: Apache-2.0
-"""Teste `src/faces/picasa_importer.py` en pur Python (sans Qt ni InsightFace) :
-décodage rect64, transformation bbox brute → EXIF-corrigée (8 orientations),
-parsing des chaînes de filtres et des picasa.ini (contacts locaux, faces,
-retouches), conversion Picasa → EditInfo par étapes cumulées, découverte des
-fichiers ini (exclusion Originals), scan rapide et import complet `_run_import`
-sur de vraies bases Catalog/FaceDatabase/EditDatabase temporaires."""
+"""Tests `src/faces/picasa_importer.py` in pure Python (no Qt, no InsightFace):
+rect64 decoding, raw bbox -> EXIF-corrected transformation (8 orientations),
+parsing of the filter strings and of the picasa.ini files (local contacts,
+faces, edits), Picasa -> EditInfo conversion by cumulated steps, discovery of
+the ini files (Originals excluded), quick scan and full `_run_import` on real
+temporary Catalog/FaceDatabase/EditDatabase instances."""
 import sqlite3
 
 import pytest
@@ -19,7 +19,7 @@ from src.processing.edit_database import EditDatabase
 
 
 def _enc_rect64(left: float, top: float, right: float, bottom: float) -> str:
-    """Encode 4 fractions [0,1] en hex rect64 (inverse de _decode_rect64)."""
+    """Encodes 4 fractions in [0,1] as rect64 hex (inverse of _decode_rect64)."""
     vals = [round(v * 65535) for v in (left, top, right, bottom)]
     packed = (vals[0] << 48) | (vals[1] << 32) | (vals[2] << 16) | vals[3]
     return f"{packed:016x}"
@@ -55,7 +55,7 @@ class TestDecodeRect64:
         assert b == pytest.approx(0.90, abs=1e-4)
 
     def test_known_quadrants(self):
-        # left=top=0, right=bottom=0.5 → moitié haut-gauche
+        # left=top=0, right=bottom=0.5 -> top-left half
         val = (0 << 48) | (0 << 32) | (0x8000 << 16) | 0x8000
         l, t, r, b = pi._decode_rect64(f"{val:016x}")
         assert l == 0.0 and t == 0.0
@@ -64,8 +64,8 @@ class TestDecodeRect64:
 
 
 class TestBboxRawToExif:
-    """Vérifie chaque orientation EXIF sur une bbox asymétrique dans une image
-    raw 100×60 (donc corrigée 60×100 pour les orientations 5-8)."""
+    """Checks every EXIF orientation on an asymmetric bbox inside a raw
+    100x60 image (hence corrected to 60x100 for orientations 5-8)."""
 
     RAW_W, RAW_H = 100, 60
     BBOX = (10, 20, 30, 15)  # x, y, w, h
@@ -89,7 +89,7 @@ class TestBboxRawToExif:
         assert self._t(4) == (10, 25, 30, 15)
 
     def test_orientation_5_transpose(self):
-        # swap x/y et w/h
+        # swap x/y and w/h
         assert self._t(5) == (20, 10, 15, 30)
 
     def test_orientation_6_rot90cw(self):
@@ -107,8 +107,8 @@ class TestBboxRawToExif:
         assert self._t(9) == self.BBOX
 
     def test_result_stays_in_corrected_frame(self):
-        """Pour chaque orientation, la bbox transformée doit tenir dans les
-        dimensions EXIF-corrigées de l'image."""
+        """For each orientation, the transformed bbox must fit within the
+        EXIF-corrected dimensions of the image."""
         for ori in range(1, 9):
             x, y, w, h = self._t(ori)
             if ori in (5, 6, 7, 8):
@@ -220,7 +220,7 @@ class TestPicasaToEditSteps:
 
     def test_crop_from_filters_needs_corrected_size(self):
         raw = {"filters": {"crop": [1.0, 100.0, 50.0, 300.0, 250.0]}}
-        assert pi._picasa_to_edit_steps(raw) == []  # sans corrected_size
+        assert pi._picasa_to_edit_steps(raw) == []  # without corrected_size
         steps = pi._picasa_to_edit_steps(raw, corrected_size=(400, 500))
         label, edit = steps[0]
         assert label == "picasa_crop"
@@ -250,7 +250,7 @@ class TestPicasaToEditSteps:
 
     def test_tilt_sign_and_scale(self):
         import math
-        # valeur pi/4 → -2.5° dans notre convention
+        # value pi/4 -> -2.5 degrees in our convention
         steps = pi._picasa_to_edit_steps(
             {"filters": {"tilt": [1.0, math.pi / 4.0, 0.0]}}
         )
@@ -321,7 +321,7 @@ class TestPicasaToEditSteps:
         assert steps[0][1].noise_reduction == pytest.approx(0.4)
 
     def test_steps_are_cumulative(self):
-        """Chaque étape doit contenir l'état accumulé, pas l'état isolé."""
+        """Each step must hold the accumulated state, not the isolated state."""
         raw = {"rotate": 1, "filters": {"bw": [1.0], "lumi": [1.0, 0.5]}}
         steps = pi._picasa_to_edit_steps(raw)
         labels = [s[0] for s in steps]
@@ -330,7 +330,7 @@ class TestPicasaToEditSteps:
         assert final.rotation == 90.0
         assert final.bw is True
         assert final.brightness == pytest.approx(0.5)
-        # les étapes intermédiaires ne sont pas mutées rétroactivement
+        # the intermediate steps are not mutated retroactively
         assert steps[0][1].bw is False
         assert steps[1][1].brightness == 0.0
 
@@ -414,7 +414,7 @@ class TestParseIni:
 
     def test_latin1_fallback(self, tmp_path):
         ini = tmp_path / "picasa.ini"
-        # é en latin-1 (0xE9) est invalide en UTF-8 → force le fallback
+        # e-acute in latin-1 (0xE9) is invalid in UTF-8 -> forces the fallback
         ini.write_bytes(b"[Contacts2]\naa01=H\xe9l\xe8ne;;\n")
         contacts, faces, edits = pi._parse_ini(ini)
         assert contacts == {"aa01": "H\xe9l\xe8ne"}
@@ -467,15 +467,15 @@ class TestScan:
         d2 = tmp_path / "d2"
         d2.mkdir()
         (d2 / "picasa.ini").write_text(
-            # ee05 = même nom qu'Alice → dédupliqué par nom
+            # ee05 = same name as Alice -> deduplicated by name
             "[Contacts2]\nh3=Alice;;\n"
             f"[p3.jpg]\nfaces=rect64({hex_face}),ee05\nrotate=2\n",
             encoding="utf-8",
         )
         n_contacts, n_photos, n_edits = pi.scan([str(tmp_path)])
-        assert n_contacts == 2   # Alice dédupliquée par nom
-        assert n_photos == 2     # p1 et p3
-        assert n_edits == 2      # p2 et p3
+        assert n_contacts == 2   # Alice deduplicated by name
+        assert n_photos == 2     # p1 and p3
+        assert n_edits == 2      # p2 and p3
 
     def test_global_contacts_included(self, tmp_path, monkeypatch):
         cx = tmp_path / "contacts.xml"
@@ -493,7 +493,7 @@ class TestScan:
 
 @pytest.fixture
 def import_env(tmp_path, monkeypatch):
-    """Environnement complet : catalog + face_db + edit_db + dossier photos."""
+    """Full environment: catalog + face_db + edit_db + photo folder."""
     monkeypatch.setattr(pi, "find_contacts_xml", lambda: None)
     catalog = Catalog(db_path=tmp_path / "catalog.db")
     face_db = FaceDatabase(db_path=tmp_path / "faces.db")
@@ -543,7 +543,7 @@ class TestRunImport:
         finally:
             conn.close()
         assert len(rows) == 2
-        # bbox d'Alice : left 0.1*200=20, top 0.1*100=10, w 0.4*200=80, h 0.8*100=80
+        # Alice's bbox: left 0.1*200=20, top 0.1*100=10, w 0.4*200=80, h 0.8*100=80
         bboxes = {tuple(r[1:]) for r in rows}
         assert (20, 10, 80, 80) in bboxes
 
@@ -555,7 +555,7 @@ class TestRunImport:
         r1 = pi._run_import(catalog, face_db, [str(photos)])
         r2 = pi._run_import(catalog, face_db, [str(photos)])
 
-        assert r1.persons_created == 2  # Alice + Bob (Contacts2 complet)
+        assert r1.persons_created == 2  # Alice + Bob (full Contacts2)
         assert r2.persons_created == 0
         assert len(catalog.get_persons()) == 2
 
@@ -569,7 +569,7 @@ class TestRunImport:
     def test_tiny_face_skipped(self, import_env):
         catalog, face_db, edit_db, photos = import_env
         _make_image(photos / "p1.jpg", size=(200, 100))
-        # 0.02 × 200 = 4 px de large → < 10 px, ignoré
+        # 0.02 x 200 = 4 px wide -> < 10 px, ignored
         _write_faces_ini(photos, "p1.jpg", [(0.10, 0.10, 0.12, 0.14, "aa01")])
         result = pi._run_import(catalog, face_db, [str(photos)])
         assert result.faces_imported == 0
@@ -582,10 +582,11 @@ class TestRunImport:
         assert result.faces_imported == 0
 
     def test_exif_orientation_6_bbox_transformed(self, import_env):
-        """Photo raw 200×100 avec orientation 6 (90° CW) → repère corrigé 100×200."""
+        """Raw photo 200x100 with orientation 6 (90 degrees CW) -> corrected
+        reference 100x200."""
         catalog, face_db, edit_db, photos = import_env
         _make_image(photos / "p1.jpg", size=(200, 100), orientation=6)
-        # bbox raw : left 0.1*200=20, top 0.2*100=20, w 60, h 40
+        # raw bbox: left 0.1*200=20, top 0.2*100=20, w 60, h 40
         _write_faces_ini(photos, "p1.jpg", [(0.1, 0.2, 0.4, 0.6, "aa01")])
         result = pi._run_import(catalog, face_db, [str(photos)])
         assert result.faces_imported == 1
@@ -596,8 +597,8 @@ class TestRunImport:
             ).fetchone()
         finally:
             conn.close()
-        # orientation 6 : x' = H - y - h = 100-20-40 = 40, y' = x = 20, swap w/h
-        # (±1 px : l'encodage rect64 sur 16 bits + int() tronque)
+        # orientation 6: x' = H - y - h = 100-20-40 = 40, y' = x = 20, swap w/h
+        # (+/-1 px: the 16-bit rect64 encoding + int() truncates)
         assert x == pytest.approx(40, abs=1)
         assert y == pytest.approx(20, abs=1)
         assert w == pytest.approx(40, abs=1)

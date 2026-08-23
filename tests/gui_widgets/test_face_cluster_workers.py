@@ -1,9 +1,9 @@
 # Copyright 2026 Christian Guyot
 # SPDX-License-Identifier: Apache-2.0
-"""Tests (Layer 2) pour face_cluster_workers — Union-Find des clusters
-similaires, suggestions vectorisées et threads de chargement. Les QThread sont
-exécutés via run() synchrone pour que coverage trace le code (cf. CLAUDE.md) ;
-FaceDatabase/Catalog sont réels, semés en process."""
+"""Tests (Layer 2) for face_cluster_workers -- Union-Find of the similar
+clusters, vectorised suggestions and loading threads. The QThreads are run
+through a synchronous run() so that coverage traces the code (cf. CLAUDE.md);
+FaceDatabase/Catalog are real, seeded in process."""
 import math
 import sqlite3
 
@@ -57,7 +57,7 @@ def _person(pid, name) -> PersonInfo:
 
 class TestComputeClusterGroups:
     def test_similar_clusters_are_grouped(self):
-        # 1 et 2 identiques (sim 1.0 ≥ 0.72), 3 orthogonal (sim 0)
+        # 1 and 2 identical (sim 1.0 >= 0.72), 3 orthogonal (sim 0)
         embs = {1: _emb(0.0), 2: _emb(0.0), 3: _emb(math.pi / 2)}
 
         groups = _compute_cluster_groups_bg([1, 2, 3], embs)
@@ -66,7 +66,7 @@ class TestComputeClusterGroups:
         assert sorted(merged) == [[1, 2], [3]]
 
     def test_below_threshold_stays_separate(self):
-        # sim ≈ 0.5 < _SIM_GROUP (0.72)
+        # sim ~ 0.5 < _SIM_GROUP (0.72)
         embs = {1: _emb(0.0), 2: _emb(math.acos(0.5))}
 
         groups = _compute_cluster_groups_bg([1, 2], embs)
@@ -83,16 +83,17 @@ class TestComputeClusterGroups:
         _compute_cluster_groups_bg(
             [1, 2], {1: _emb(0.0), 2: _emb(0.0)}, progress_cb=calls.append
         )
-        assert calls  # au moins un bloc annoncé
+        assert calls  # at least one block announced
 
     def test_empty_input(self):
         assert _compute_cluster_groups_bg([], {}) == {}
 
     def test_cancellation_absorbed_returns_partial_result(self):
-        # uf_progress lève _AnalysisCancelled dès le 1er bloc (annulation utilisateur) —
-        # la fonction l'avale en interne et renvoie les fusions déjà trouvées (ici :
-        # aucune) au lieu de laisser l'exception se propager à l'appelant, pour que
-        # le thread puisse terminer et livrer un résultat partiel (cf. bouton Annuler).
+        # uf_progress raises _AnalysisCancelled on the very first block (user
+        # cancellation) -- the function swallows it internally and returns the merges
+        # already found (here: none) instead of letting the exception propagate to the
+        # caller, so that the thread can finish and deliver a partial result (cf. the
+        # Cancel button).
         def cb(chunk_start):
             raise _AnalysisCancelled()
 
@@ -103,14 +104,14 @@ class TestComputeClusterGroups:
         assert sorted(groups.values()) == [[1], [2]]
 
     def test_partial_unions_preserved_when_cancelled_mid_computation(self):
-        # 500 vecteurs identiques (angle 0) suivis de 100 vecteurs identiques entre
-        # eux mais orthogonaux aux 500 premiers. Le 1er bloc (chunk_start=0) compare
-        # déjà tout i<500 contre tout j>i via BLAS (y compris les 100 suivants) : les
-        # 500 premiers se retrouvent donc tous fusionnés en un seul groupe dès ce
-        # bloc. Les 100 derniers, eux, ne se comparent qu'entre eux au 2e bloc
-        # (chunk_start=500) — si l'annulation survient juste avant ce bloc, ils
-        # doivent rester des singletons : la fusion déjà trouvée pour les 500
-        # premiers n'est jamais défaite par l'arrêt anticipé.
+        # 500 identical vectors (angle 0) followed by 100 vectors identical to each
+        # other but orthogonal to the first 500. The first block (chunk_start=0) already
+        # compares every i<500 against every j>i through BLAS (including the next 100):
+        # the first 500 therefore all end up merged into a single group as of that
+        # block. The last 100, on the other hand, are only compared with each other in
+        # the second block (chunk_start=500) -- if the cancellation happens just before
+        # that block, they must stay singletons: the merge already found for the first
+        # 500 is never undone by the early stop.
         ids = list(range(600))
         embeddings = {cid: _emb(0.0) for cid in range(500)}
         embeddings.update({cid: _emb(math.pi / 2) for cid in range(500, 600)})
@@ -134,12 +135,12 @@ class TestComputeClusterGroups:
 class TestComputeSuggestion:
     def _persons_embs(self, sim_alice: float):
         persons = [_person(1, "Alice"), _person(2, "Boris")]
-        # Boris sur l'axe e2, orthogonal au plan (e0, e1) où vivent Alice et le
-        # cluster : sa similarité avec le cluster est toujours nulle.
+        # Boris on the e2 axis, orthogonal to the (e0, e1) plane where Alice and the
+        # cluster live: his similarity with the cluster is always zero.
         boris = [0.0] * 8
         boris[2] = 1.0
         embs = {
-            1: {99: _emb(0.0)},   # Alice sur e0
+            1: {99: _emb(0.0)},   # Alice on e0
             2: {98: boris},
         }
         cluster_embs = {7: _emb(math.acos(sim_alice))}
@@ -181,9 +182,9 @@ class TestComputeAllSuggestions:
         persons = [_person(1, "Alice")]
         p_embs = {1: {99: _emb(0.0)}}
         c_embs = {
-            10: _emb(math.acos(0.90)),   # fort → ≈ bleu
-            11: _emb(math.acos(0.60)),   # moyen → ~ gris
-            12: _emb(math.pi / 2),       # nul → aucun
+            10: _emb(math.acos(0.90)),   # strong -> ~ blue
+            11: _emb(math.acos(0.60)),   # medium -> ~ grey
+            12: _emb(math.pi / 2),       # zero -> none
         }
 
         res = _compute_all_suggestions_bg([10, 11, 12], c_embs, persons, p_embs)
@@ -207,7 +208,7 @@ class TestComputeAllSuggestions:
 
 
 # ---------------------------------------------------------------------------
-# _ClusterRefreshThread (run() synchrone)
+# _ClusterRefreshThread (synchronous run())
 
 class _Collector:
     def __init__(self, thread):
@@ -237,8 +238,8 @@ class TestClusterRefreshThread:
 
     def test_two_phases_and_union_find_grouping(self, qtbot, tmp_path):
         face_db, catalog = self._dbs(tmp_path)
-        # Clusters 1 et 2 : 2 visages chacun, centroïdes identiques → regroupés.
-        # Cluster 3 : 2 visages, orthogonal → séparé.
+        # Clusters 1 and 2: 2 faces each, identical centroids -> grouped.
+        # Cluster 3: 2 faces, orthogonal -> separate.
         for cid, angle in [(1, 0.0), (2, 0.0), (3, math.pi / 2)]:
             for k in range(2):
                 _raw_insert_face(face_db, f"C:/p{cid}_{k}.jpg",
@@ -248,10 +249,10 @@ class TestClusterRefreshThread:
 
         t.run()
 
-        # Phase 1 : structure plate marquée partielle
+        # Phase 1: flat structure marked as partial
         assert col.initial[0]["is_partial"] is True
         assert sorted(g[0] for g in col.initial[0]["groups_sorted"]) == [1, 2, 3]
-        # Phase 2 : 1 et 2 fusionnés, étiquette "même personne"
+        # Phase 2: 1 and 2 merged, "same person" label
         final = col.final[0]
         assert final["is_partial"] is False
         merged = [sorted(g) for g in final["groups_sorted"]]
@@ -259,14 +260,14 @@ class TestClusterRefreshThread:
         root12 = next(g[0] for g in final["groups_sorted"] if len(g) == 2)
         label, color = final["group_labels"][root12]
         assert "même personne" in label and "2 groupes" in label
-        assert color == "#7aabdb"   # sim 100 % ≥ _SIM_STRONG
+        assert color == "#7aabdb"   # sim 100 % >= _SIM_STRONG
 
     def test_auto_promotion_filters_suggested_cluster(self, qtbot, tmp_path):
         face_db, catalog = self._dbs(tmp_path)
         alice = catalog.create_person("Alice")
         _raw_insert_face(face_db, "C:/ref.jpg", cluster_id=99,
                          person_id=alice.id, embedding=_emb(0.0))
-        # Cluster 1 : sim 0.60 avec Alice — ≥ _SIM_SUGGEST (0.55), < auto-assign
+        # Cluster 1: sim 0.60 with Alice -- >= _SIM_SUGGEST (0.55), < auto-assign
         for k in range(2):
             _raw_insert_face(face_db, f"C:/c1_{k}.jpg", cluster_id=1,
                              embedding=_emb(math.acos(0.60)))
@@ -279,7 +280,7 @@ class TestClusterRefreshThread:
         assert final["n_promoted"] == 1
         assert 1 not in final["face_counts"]
         assert final["groups_sorted"] == []
-        # En base : suggestion persistée, pas d'allocation (score < 0.70)
+        # In the database: suggestion persisted, no assignment (score < 0.70)
         conn = sqlite3.connect(face_db._db_path)
         try:
             rows = conn.execute(
@@ -291,7 +292,7 @@ class TestClusterRefreshThread:
 
     def test_isolated_cluster_stays_singleton(self, qtbot, tmp_path):
         face_db, catalog = self._dbs(tmp_path)
-        # 1 visage seul (face_count == 1) : exclu de l'Union-Find, singleton
+        # 1 face alone (face_count == 1): excluded from the Union-Find, singleton
         _raw_insert_face(face_db, "C:/solo.jpg", cluster_id=5, embedding=_emb(0.0))
         t = _ClusterRefreshThread(face_db, catalog)
         col = _Collector(t)
@@ -302,8 +303,8 @@ class TestClusterRefreshThread:
         assert col.final[0]["group_labels"][5] == ("", "")
 
     def test_cancel_stops_before_data_ready(self, qtbot, tmp_path):
-        """Annuler la popup appelle cancel() : le thread doit s'arrêter sans
-        jamais émettre data_ready (cf. bouton Annuler)."""
+        """Cancelling the popup calls cancel(): the thread must stop without ever
+        emitting data_ready (cf. the Cancel button)."""
         face_db, catalog = self._dbs(tmp_path)
         for cid, angle in [(1, 0.0), (2, 0.0), (3, math.pi / 2)]:
             for k in range(2):
@@ -315,12 +316,12 @@ class TestClusterRefreshThread:
 
         t.run()
 
-        assert col.initial  # phase 1 déjà émise avant le 1er point de contrôle
+        assert col.initial  # phase 1 already emitted before the first checkpoint
         assert col.final == []
 
 
 # ---------------------------------------------------------------------------
-# _PersonsLoader (run() synchrone)
+# _PersonsLoader (synchronous run())
 
 class TestPersonsLoader:
     def test_loads_persons_and_suggests_best_match(self, qtbot, tmp_path):
