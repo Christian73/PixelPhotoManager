@@ -1,13 +1,13 @@
 # Copyright 2026 Christian Guyot
 # SPDX-License-Identifier: Apache-2.0
-"""Tests de src/processing/edit_database.py (EditDatabase) : CRUD, historique,
-et migrations, en pur Python (sqlite3, pas de Qt).
+"""Tests of src/processing/edit_database.py (EditDatabase): CRUD, history,
+and migrations, in pure Python (sqlite3, no Qt).
 
-Attention : EditDatabase est un singleton par chemin de base (`_instances`,
-cf. docstring de la classe). Sans reset explicite entre les tests, deux tests
-utilisant le même tmp_path/"edits.db" partageraient la même instance et donc
-le même état — chaque test ici réinitialise `EditDatabase._instances = {}`
-en setup pour repartir d'un état propre, comme le lot précédent l'a fait pour
+Beware: EditDatabase is a singleton per database path (`_instances`,
+cf. the class docstring). Without an explicit reset between tests, two tests
+using the same tmp_path/"edits.db" would share the same instance and therefore
+the same state -- every test here resets `EditDatabase._instances = {}` in
+setup to start from a clean state, as the previous batch did for
 `Config._instance`."""
 import os
 import sqlite3
@@ -30,10 +30,9 @@ class BaseEditDatabaseTest:
 
 class TestConnectionReuse(BaseEditDatabaseTest):
     def test_same_thread_reuses_single_connection(self, tmp_path):
-        """_connect() met la connexion en cache par thread (pattern
-        ThumbnailCache) : load() est appelé à chaque navigation dans la
-        visionneuse, une connexion neuve par appel coûtait plus cher que la
-        requête elle-même."""
+        """_connect() caches the connection per thread (ThumbnailCache
+        pattern): load() is called on every navigation in the viewer, a fresh
+        connection per call cost more than the query itself."""
         db = self._make_db(tmp_path)
         conn1 = db._connect()
         db.load("C:/photos/a.jpg")
@@ -47,13 +46,12 @@ class TestConnectionReuse(BaseEditDatabaseTest):
 
 
 class TestHasEdits(BaseEditDatabaseTest):
-    """has_edits() normalise son argument (os.path.normpath), comme
-    load()/save()/delete()/etc. — corrigé après avoir constaté que ce n'était
-    pas le cas : un appelant passant un chemin '/' après un save() qui stocke
-    en '\\\\' (Windows) obtenait un faux négatif silencieux. Le seul appelant
-    réel (picasa_importer.py) normalisait déjà lui-même en amont par prudence,
-    donc aucun bug utilisateur n'était déclenché, mais le piège restait ouvert
-    pour tout futur appelant."""
+    """has_edits() normalises its argument (os.path.normpath), like
+    load()/save()/delete()/etc. -- fixed after noticing it did not: a caller
+    passing a '/' path after a save() that stores it as '\\\\' (Windows) got a
+    silent false negative. The only real caller (picasa_importer.py) already
+    normalised it upstream out of caution, so no user-visible bug was
+    triggered, but the trap stayed open for any future caller."""
 
     def test_has_edits_false_when_never_saved(self, tmp_path):
         db = self._make_db(tmp_path)
@@ -65,15 +63,15 @@ class TestHasEdits(BaseEditDatabaseTest):
         assert db.has_edits(os.path.normpath("C:/photos/a.jpg")) is True
 
     def test_has_edits_false_after_unmodified_save(self, tmp_path):
-        """save() supprime la ligne photo_edits si l'état n'est plus modifié."""
+        """save() removes the photo_edits row when the state is no longer modified."""
         db = self._make_db(tmp_path)
         db.save("C:/photos/a.jpg", EditInfo(brightness=0.2))
-        db.save("C:/photos/a.jpg", EditInfo())  # retour à l'état neutre
+        db.save("C:/photos/a.jpg", EditInfo())  # back to the neutral state
         assert db.has_edits(os.path.normpath("C:/photos/a.jpg")) is False
 
     def test_has_edits_normalizes_forward_slashes_like_load_and_save(self, tmp_path):
-        """Un appelant passant un chemin '/' après un save() en '\\\\' (Windows)
-        doit tout de même obtenir True (plus de faux négatif silencieux)."""
+        """A caller passing a '/' path after a save() in '\\\\' (Windows) must
+        still get True (no more silent false negative)."""
         db = self._make_db(tmp_path)
         db.save(r"C:\photos\a.jpg", EditInfo(brightness=0.2))
         assert db.has_edits("C:/photos/a.jpg") is True
@@ -91,14 +89,14 @@ class TestDelete(BaseEditDatabaseTest):
 
     def test_delete_unknown_photo_is_noop(self, tmp_path):
         db = self._make_db(tmp_path)
-        db.delete("C:/photos/never_saved.jpg")  # ne doit pas lever
+        db.delete("C:/photos/never_saved.jpg")  # must not raise
 
 
 class TestAllEdits(BaseEditDatabaseTest):
-    """all_edits() alimente la grille de vignettes (une seule requête pour toute
-    la bibliothèque, plutôt qu'un load() par photo affichée). Son cache mémoire
-    doit être invalidé par toute écriture, sinon la grille continuerait
-    d'afficher l'état d'avant la retouche."""
+    """all_edits() feeds the thumbnail grid (a single query for the whole
+    library, rather than one load() per displayed photo). Its memory cache must
+    be invalidated by every write, otherwise the grid would keep showing the
+    state from before the edit."""
 
     def test_empty_when_nothing_saved(self, tmp_path):
         db = self._make_db(tmp_path)
@@ -118,7 +116,7 @@ class TestAllEdits(BaseEditDatabaseTest):
     def test_save_invalidates_the_cache(self, tmp_path):
         db = self._make_db(tmp_path)
         db.save("C:/photos/a.jpg", EditInfo(rotation=90))
-        db.all_edits()                                    # remplit le cache
+        db.all_edits()                                    # fills the cache
 
         db.save("C:/photos/a.jpg", EditInfo(rotation=180))
 
@@ -143,9 +141,8 @@ class TestAllEdits(BaseEditDatabaseTest):
         assert set(db.all_edits()) == {os.path.normpath("C:/photos/new.jpg")}
 
     def test_caller_cannot_corrupt_the_cache(self, tmp_path):
-        """Le dict retourné est une copie : la grille le remanie (clés
-        normalisées, entrées retirées par refresh_photo) sans que ça affecte
-        l'appel suivant."""
+        """The returned dict is a copy: the grid reworks it (normalised keys,
+        entries removed by refresh_photo) without that affecting the next call."""
         db = self._make_db(tmp_path)
         db.save("C:/photos/a.jpg", EditInfo(rotation=90))
 
@@ -174,7 +171,7 @@ class TestPushHistoryAndGetHistory(BaseEditDatabaseTest):
         db = self._make_db(tmp_path)
         db.push_history("C:/photos/a.jpg", EditInfo(brightness=0.1), operation="pre-crop")
 
-        assert db.has_edits(os.path.normpath("C:/photos/a.jpg")) is False  # photo_edits inchangée
+        assert db.has_edits(os.path.normpath("C:/photos/a.jpg")) is False  # photo_edits unchanged
         history = db.get_history("C:/photos/a.jpg")
         assert len(history) == 1
         edit, operation = history[0]
@@ -246,14 +243,14 @@ class TestSingletonAndReinit(BaseEditDatabaseTest):
         assert db1 is not db2
 
     def test_reinit_on_existing_db_runs_migrations_without_crashing(self, tmp_path):
-        """Simule un redémarrage de l'appli sur une base déjà migrée : les
-        ALTER TABLE des migrations successives doivent tous échouer proprement
-        (colonne déjà présente) sans lever."""
+        """Simulates a restart of the application on an already migrated
+        database: the ALTER TABLEs of the successive migrations must all fail
+        cleanly (column already present) without raising."""
         db_path = tmp_path / "edits.db"
         db1 = EditDatabase(db_path=db_path)
         db1.save("C:/photos/a.jpg", EditInfo(brightness=0.2))
 
-        EditDatabase._instances = {}  # force une nouvelle instance -> _init_db() rejoué
+        EditDatabase._instances = {}  # forces a new instance -> _init_db() replayed
         db2 = EditDatabase(db_path=db_path)
 
         assert db1 is not db2
@@ -261,8 +258,8 @@ class TestSingletonAndReinit(BaseEditDatabaseTest):
 
 
 class TestFramePersistence(BaseEditDatabaseTest):
-    """Les 13 colonnes frame_* sont arrivées par migration : elles doivent
-    survivre à l'aller-retour DB comme à l'ouverture d'une base antérieure."""
+    """The 13 frame_* columns arrived through a migration: they must survive
+    the DB round trip as well as the opening of an older database."""
 
     _FRAME = dict(
         frame_type="double", frame_width=0.07, frame_inner_width=0.02,
@@ -281,8 +278,8 @@ class TestFramePersistence(BaseEditDatabaseTest):
             assert getattr(loaded, attr) == value, attr
 
     def test_frame_is_seen_by_all_edits(self, tmp_path):
-        """all_edits() alimente l'invalidation des vignettes : un cadre doit y
-        apparaître, sinon la grille garderait une vignette sans cadre."""
+        """all_edits() feeds the thumbnail invalidation: a frame must appear
+        there, otherwise the grid would keep a thumbnail with no frame."""
         db = self._make_db(tmp_path)
         db.save("C:/photos/a.jpg", EditInfo(**self._FRAME))
         assert db.all_edits()[os.path.normpath("C:/photos/a.jpg")].frame_style == "glitter"
@@ -294,16 +291,16 @@ class TestFramePersistence(BaseEditDatabaseTest):
         assert history and history[-1][0].frame_type == "double"
 
     def test_pre_migration_database_is_upgraded(self, tmp_path):
-        """Base créée avant la fonctionnalité Cadre : les colonnes manquantes
-        sont ajoutées au démarrage, sans perdre les retouches existantes."""
+        """Database created before the Frame feature: the missing columns are
+        added at startup, without losing the existing edits."""
         from src.processing import edit_database as ed
 
         db_path = tmp_path / "edits.db"
         conn = sqlite3.connect(str(db_path))
         conn.execute(ed._CREATE_EDITS)
         conn.execute(ed._CREATE_HISTORY)
-        # Toutes les migrations SAUF celle des cadres : l'état exact d'une base
-        # de la version précédente.
+        # Every migration EXCEPT the frame one: the exact state of a database
+        # from the previous version.
         for stmt in (ed._MIGRATE_STRAIGHTEN, *ed._MIGRATE_GAMMA_CURVE,
                      *ed._MIGRATE_COLOR_CHANNELS, ed._MIGRATE_RED_EYE,
                      *ed._MIGRATE_VIGNETTE, *ed._MIGRATE_VIGNETTE_V2,
@@ -311,7 +308,7 @@ class TestFramePersistence(BaseEditDatabaseTest):
             try:
                 conn.execute(stmt)
             except sqlite3.OperationalError:
-                pass   # colonne déjà dans _CREATE_EDITS
+                pass   # column already in _CREATE_EDITS
         conn.execute("INSERT INTO photo_edits (photo_path, brightness) VALUES (?, ?)",
                      ("C:\\photos\\a.jpg", 0.4))
         conn.commit()
@@ -319,10 +316,10 @@ class TestFramePersistence(BaseEditDatabaseTest):
 
         db = EditDatabase(db_path=db_path)
         loaded = db.load("C:/photos/a.jpg")
-        assert loaded.brightness == 0.4          # retouche existante préservée
-        assert loaded.frame_type == "none"       # défaut, pas de cadre hérité
-        # Ferronnerie du second cadre : une ligne existante n'a aucune valeur
-        # pour ces colonnes (NULL) — la lecture doit rendre les défauts du modèle.
+        assert loaded.brightness == 0.4          # existing edit preserved
+        assert loaded.frame_type == "none"       # default, no inherited frame
+        # Ironwork of the second frame: an existing row has no value at all
+        # for those columns (NULL) -- reading must return the model defaults.
         assert loaded.frame_inner_motif == "line"
         assert loaded.frame_inner_relief is True
         assert loaded.frame_inner_ornament == 1.0
@@ -341,11 +338,11 @@ class TestLoadExceptionPath:
         db = EditDatabase(db_path=db_path)
         db.save("C:/photos/a.jpg", EditInfo(brightness=0.2))
 
-        # Corrompt le fichier pour forcer une exception à la lecture. La
-        # connexion en cache (par thread) garde le fichier d'origine ouvert et
-        # continuerait de lire via la WAL : on la jette pour que le prochain
-        # _connect() rouvre le fichier corrompu — c'est bien le chemin
-        # d'exception de load() qui est testé ici, pas la corruption à chaud.
+        # Corrupt the file to force an exception on read. The cached connection
+        # (per thread) keeps the original file open and would keep reading through
+        # the WAL: we throw it away so that the next _connect() reopens the
+        # corrupted file -- what is tested here really is the exception path of
+        # load(), not corruption on the fly.
         db_path.write_bytes(b"not a sqlite database")
         db._tls = threading.local()
 

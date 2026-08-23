@@ -1,11 +1,10 @@
 # Copyright 2026 Christian Guyot
 # SPDX-License-Identifier: Apache-2.0
-"""Tests (Layer 2) pour FaceClusterGrid — construction par lots depuis des
-données synthétiques (_on_data_ready appelé directement, l'event loop pompé
-via waitUntil), sélection/barre d'action, éjection de section, pagination,
-suppression et restauration depuis le cache. Un test de plomberie réelle
-(refresh() avec _ClusterRefreshThread) ferme la boucle. Dialogues jamais
-exec()."""
+"""Tests (Layer 2) for FaceClusterGrid -- construction in batches from
+synthetic data (_on_data_ready called directly, the event loop pumped through
+waitUntil), selection/action bar, section ejection, pagination, removal and
+restoration from the cache. One real plumbing test (refresh() with
+_ClusterRefreshThread) closes the loop. Dialogs never exec()ed."""
 import sqlite3
 
 import pytest
@@ -71,11 +70,11 @@ def _build(qtbot, g, data):
     qtbot.waitUntil(
         lambda: g._rendered_count >= len(g._all_combined), timeout=3000
     )
-    qtbot.wait(20)   # laisse passer les singleShot de reflow
+    qtbot.wait(20)   # let the reflow singleShots through
 
 
 # ---------------------------------------------------------------------------
-# popup de progression
+# progress popup
 
 class TestProgressPopup:
     def test_determinate_and_indeterminate(self, qtbot):
@@ -94,7 +93,7 @@ class TestProgressPopup:
         assert popup._bar.minimum() == 0 and popup._bar.maximum() == 0
         assert popup._lbl_pct.text() == ""
 
-        popup.center_on_parent()   # ne doit pas lever
+        popup.center_on_parent()   # must not raise
 
     def test_cancel_button_emits_signal(self, qtbot):
         from PySide6.QtWidgets import QWidget
@@ -111,7 +110,7 @@ class TestProgressPopup:
         assert received == [True]
 
     def test_popup_is_draggable(self, qtbot):
-        """Fenêtre sans cadre : le glisser-déposer doit la déplacer (elle était fixe)."""
+        """Frameless window: dragging must move it (it used to be fixed)."""
         from PySide6.QtCore import QPoint, QPointF, QEvent
         from PySide6.QtGui import QMouseEvent
         from PySide6.QtWidgets import QWidget
@@ -139,7 +138,7 @@ class TestProgressPopup:
         assert popup.pos() == start + QPoint(60, 35)
         assert popup._drag_offset is None
 
-        # Après relâchement, un mouvement seul ne déplace plus la fenêtre.
+        # After release, a movement alone no longer moves the window.
         moved = popup.pos()
         popup.mouseMoveEvent(_evt(QEvent.Type.MouseMove, grab + QPointF(200, 200),
                                   Qt.MouseButton.NoButton, Qt.MouseButton.LeftButton))
@@ -147,7 +146,7 @@ class TestProgressPopup:
 
 
 class TestProgressCancel:
-    """Bouton Annuler de la popup → FaceClusterGrid._on_progress_cancelled()."""
+    """Cancel button of the popup -> FaceClusterGrid._on_progress_cancelled()."""
 
     def test_requests_interruption_and_resets_ui(self, qtbot, grid):
         class _FakeThread:
@@ -175,7 +174,7 @@ class TestProgressCancel:
 
 
 # ---------------------------------------------------------------------------
-# construction depuis les données
+# construction from the data
 
 class TestBuildFromData:
     def test_data_ready_none_shows_error(self, qtbot, grid):
@@ -208,7 +207,7 @@ class TestBuildFromData:
         )
         _build(qtbot, grid, data)
 
-        # 1 section dédiée (ni flat ni solo, qui restent vides)
+        # 1 dedicated section (neither flat nor solo, which stay empty)
         dedicated = [s for s in grid._sections
                      if s is not grid._flat_section and s is not grid._solo_section]
         assert len(dedicated) == 1
@@ -231,8 +230,8 @@ class TestBuildFromData:
                      if s is not grid._flat_section and s is not grid._solo_section]
         assert len(dedicated) == 1
         assert sorted(c for c, _ in dedicated[0]._entries) == [1, 2]
-        # Étiquette recalculée avec le nom et le meilleur score
-        label, color = data["group_labels"][2]   # root = cluster trié par taille (2 d'abord)
+        # Label recomputed with the name and the best score
+        label, color = data["group_labels"][2]   # root = cluster sorted by size (2 first)
         assert "Probablement Alice (80 %)" in label
         assert color == "#7aabdb"
 
@@ -248,7 +247,7 @@ class TestBuildFromData:
 
 
 # ---------------------------------------------------------------------------
-# sélection et barre d'action
+# selection and action bar
 
 class TestSelection:
     def _grid_with_cards(self, qtbot, grid):
@@ -298,7 +297,7 @@ class TestSelection:
 
     def test_range_select_between_anchor_and_target(self, qtbot, grid):
         g = self._grid_with_cards(qtbot, grid)
-        # Ancre sur la carte 1 (ordre visuel : 1, 2 en flat, puis 9 en solo)
+        # Anchor on card 1 (visual order: 1, 2 in flat, then 9 in solo)
         g._cards[1]._is_selected = True
         g._cards[1].set_selected(True)
         g._on_card_selection_toggled(1, True)
@@ -317,7 +316,7 @@ class TestSelection:
 
 
 # ---------------------------------------------------------------------------
-# actions cartes / sections
+# card / section actions
 
 class TestCardActions:
     def test_ignore_card_updates_db_and_emits(self, qtbot, grid, tmp_path):
@@ -422,7 +421,7 @@ class TestCardActions:
 
 
 # ---------------------------------------------------------------------------
-# éjection de section
+# section ejection
 
 class TestEjectFromSection:
     def test_eject_moves_card_to_flat_section(self, qtbot, grid):
@@ -442,7 +441,7 @@ class TestEjectFromSection:
 
         grid._on_card_eject_from_section(1)
 
-        # La carte 1 vit maintenant dans la section plate
+        # Card 1 now lives in the flat section
         assert any(c == 1 for c, _ in grid._flat_section._entries)
         remaining = [s for s in grid._sections
                      if s is not grid._flat_section and s is not grid._solo_section]
@@ -474,8 +473,8 @@ class TestRemoveRestore:
         qtbot.waitUntil(
             lambda: grid._rendered_count >= len(grid._all_combined), timeout=3000
         )
-        # Laisser passer le singleShot(30 ms) de restauration du scroll pendant
-        # que la grille est encore vivante (sinon RuntimeError au test suivant)
+        # Let the scroll restoration singleShot(30 ms) through while the grid is
+        # still alive (otherwise RuntimeError in the next test)
         qtbot.wait(60)
 
         assert sorted(grid._cards.keys()) == [1, 2]
@@ -489,7 +488,7 @@ class TestRemoveRestore:
         grid._on_action_ignore()
 
         assert sorted(grid._cards.keys()) == [2]
-        assert grid._face_db.get_unnamed_clusters() != []   # cluster 2 reste
+        assert grid._face_db.get_unnamed_clusters() != []   # cluster 2 remains
 
 
 # ---------------------------------------------------------------------------
@@ -499,8 +498,8 @@ class TestPagination:
     def test_load_more_renders_next_page(self, qtbot, grid, monkeypatch):
         monkeypatch.setattr(fcg, "_PAGE_SIZE", 3)
         monkeypatch.setattr(fcg, "_BUILD_BATCH", 2)
-        counts = {cid: 2 for cid in range(1, 6)}   # 5 groupes multi-visages
-        # Pas le helper _build : avec la pagination, le rendu s'arrête à _PAGE_SIZE
+        counts = {cid: 2 for cid in range(1, 6)}   # 5 multi-face groups
+        # Not the _build helper: with pagination, the rendering stops at _PAGE_SIZE
         grid._on_data_ready(_data(counts, [[cid] for cid in range(1, 6)]))
         qtbot.waitUntil(lambda: grid._rendered_count >= 3, timeout=3000)
         qtbot.wait(20)
@@ -547,7 +546,7 @@ class TestAvatars:
 
 
 # ---------------------------------------------------------------------------
-# plomberie réelle (un vrai refresh() de bout en bout)
+# real plumbing (a genuine end-to-end refresh())
 
 class TestRealRefresh:
     def test_refresh_builds_cards_from_db(self, qtbot, grid, tmp_path):
@@ -566,9 +565,9 @@ class TestRealRefresh:
             timeout=5000,
         )
         assert grid._progress_popup is None
-        # Le loader d'avatars démarre via singleShot(0) APRÈS le rendu : attendre
-        # qu'aucun QThread enfant ne tourne encore avant le teardown (sinon
-        # destruction du parent avec thread vivant → fail-fast 0xC0000409).
+        # The avatar loader starts through singleShot(0) AFTER the rendering: wait
+        # until no child QThread is still running before the teardown (otherwise the
+        # parent is destroyed with a live thread -> fail-fast 0xC0000409).
         from PySide6.QtCore import QThread as _QThread
 
         def _no_running_child_thread():
@@ -578,7 +577,7 @@ class TestRealRefresh:
                 return True
 
         qtbot.waitUntil(_no_running_child_thread, timeout=5000)
-        qtbot.wait(30)   # laisse le singleShot(0) éventuel démarrer puis re-vérifie
+        qtbot.wait(30)   # let the possible singleShot(0) start, then re-check
         qtbot.waitUntil(_no_running_child_thread, timeout=5000)
 
         assert sorted(grid._cards.keys()) == [1, 2]

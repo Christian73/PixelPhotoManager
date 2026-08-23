@@ -1,12 +1,12 @@
 # Copyright 2026 Christian Guyot
 # SPDX-License-Identifier: Apache-2.0
-"""Teste `src/faces/face_indexer.py` sans InsightFace ni vrais sous-processus :
-un ProcessPoolExecutor factice exécute les soumissions en synchrone dans le
-thread appelant, et le détecteur est remplacé par une fonction injectée. Couvre
-le pipeline FaceIndexThread (succès, timeout → erreur enregistrée + repli CPU,
-indisponibilité InsightFace, exclusion des vidéos), les threads mono-photo
-(SingleFaceReindexThread, ForceRedetectThread, RetryFaceIndexThread) et les
-threads de réévaluation (RevaluateSizeIgnoredThread, SimilaritySearchThread)."""
+"""Tests `src/faces/face_indexer.py` without InsightFace and without real subprocesses:
+a fake ProcessPoolExecutor runs the submissions synchronously in the calling
+thread, and the detector is replaced by an injected function. Covers the
+FaceIndexThread pipeline (success, timeout -> error recorded + CPU fallback,
+InsightFace unavailable, videos excluded), the single-photo threads
+(SingleFaceReindexThread, ForceRedetectThread, RetryFaceIndexThread) and the
+re-evaluation threads (RevaluateSizeIgnoredThread, SimilaritySearchThread)."""
 import concurrent.futures
 import os
 import sqlite3
@@ -32,7 +32,7 @@ class _FakeFuture:
 
 
 class _FakeExecutor:
-    """Exécute les soumissions en synchrone, dans le processus de test."""
+    """Runs the submissions synchronously, in the test process."""
 
     def __init__(self, *args, **kwargs):
         self._processes = {}
@@ -49,8 +49,8 @@ def _detection(bbox=(10, 10, 100, 100), score=0.9):
 
 
 class _FakeEditDb:
-    """Double d'EditDatabase pour ForceRedetectThread (jamais la vraie DB du
-    profil utilisateur)."""
+    """Stand-in for EditDatabase used by ForceRedetectThread (never the real DB of
+    the user profile)."""
 
     def __init__(self, rotation: float = 0.0, raises: bool = False):
         self._rotation = rotation
@@ -64,7 +64,7 @@ class _FakeEditDb:
 
 @pytest.fixture
 def env(tmp_path, monkeypatch):
-    """Catalog + FaceDatabase + executor factice + détecteur neutralisé."""
+    """Catalog + FaceDatabase + fake executor + detector neutralised."""
     monkeypatch.setattr(
         concurrent.futures, "ProcessPoolExecutor", _FakeExecutor
     )
@@ -86,8 +86,8 @@ def _add_photo(catalog, folder, name, size=(200, 200)) -> str:
 
 
 def _run_thread(qtbot, thread, signal, timeout=15000):
-    """Exécute run() en synchrone : signaux émis en connexion directe, et le
-    code du thread est tracé par coverage (un .start() natif Qt échappe à
+    """Runs run() synchronously: signals emitted through direct connections, and
+    the thread code is traced by coverage (a native Qt .start() escapes
     sys.settrace)."""
     thread.run()
 
@@ -209,7 +209,7 @@ class TestFaceIndexThread:
     def test_already_indexed_skipped(self, qtbot, env, monkeypatch):
         catalog, face_db, photos = env
         p1 = _add_photo(catalog, photos, "a.jpg")
-        face_db.save_faces(p1, [_detection()])  # déjà indexée
+        face_db.save_faces(p1, [_detection()])  # already indexed
         monkeypatch.setattr(
             face_indexer, "detect_and_embed_auto",
             lambda path: ([_detection()], 0),
@@ -221,7 +221,7 @@ class TestFaceIndexThread:
         assert results == [(0, 0)]
 
 
-# ------------------------------------------------------------------ threads mono-photo
+# ------------------------------------------------------------------ single-photo threads
 
 
 class TestSingleFaceReindexThread:
@@ -244,7 +244,7 @@ class TestSingleFaceReindexThread:
     def test_video_skipped(self, qtbot, env):
         catalog, face_db, photos = env
         thread = face_indexer.SingleFaceReindexThread(face_db, "clip.mp4")
-        thread.run()  # retour immédiat, sans détection
+        thread.run()  # immediate return, no detection
 
     def test_error_emitted(self, qtbot, env, monkeypatch):
         catalog, face_db, photos = env
@@ -269,14 +269,14 @@ class TestSingleFaceReindexThread:
 
         monkeypatch.setattr(face_indexer, "detect_and_embed", _detect)
         thread = face_indexer.SingleFaceReindexThread(face_db, p)
-        thread.run()  # RuntimeError avalé silencieusement
+        thread.run()  # RuntimeError swallowed silently
 
 
 class TestForceRedetectThread:
     def test_success_no_size_limit(self, qtbot, env, monkeypatch):
         catalog, face_db, photos = env
         p = _add_photo(catalog, photos, "a.jpg")
-        # visage minuscule qui serait normalement auto-ignoré par taille
+        # tiny face that would normally be auto-ignored by size
         monkeypatch.setattr(
             face_indexer, "detect_and_embed",
             lambda path, rotation=0: [_detection(bbox=(0, 0, 24, 24))],
@@ -290,21 +290,21 @@ class TestForceRedetectThread:
         try:
             assert conn.execute(
                 "SELECT ignored FROM faces WHERE photo_path=?", (p,)
-            ).fetchone()[0] == 0   # force_no_limit → jamais ignoré
+            ).fetchone()[0] == 0   # force_no_limit -> never ignored
         finally:
             conn.close()
 
     def test_video_skipped(self, qtbot, env):
         catalog, face_db, photos = env
         thread = face_indexer.ForceRedetectThread(face_db, "clip.avi")
-        thread.run()  # retour immédiat, sans détection
+        thread.run()  # immediate return, no detection
 
     def test_stale_indexed_rotation_no_longer_wins(self, qtbot, env, monkeypatch):
-        """Régression du cas réel : photo indexée à 90° (rotation ensuite annulée
-        par l'utilisateur sans resynchronisation de l'index). La détection forcée
-        réutilisait aveuglément 90° et ne retrouvait que 2 visages sur 8, à chaque
-        appel — impossible à débloquer depuis l'UI. Elle doit maintenant essayer
-        aussi la rotation affichée (0°) et garder la plus fructueuse."""
+        """Regression of the real case: photo indexed at 90 degrees (rotation later
+        cancelled by the user without resynchronising the index). Forced detection
+        blindly reused 90 degrees and only found 2 faces out of 8, on every call --
+        impossible to unblock from the UI. It must now also try the displayed
+        rotation (0 degrees) and keep the most fruitful one."""
         catalog, face_db, photos = env
         p = _add_photo(catalog, photos, "a.jpg")
         face_db.save_faces(p, [_detection()], rotation=90)
@@ -326,10 +326,10 @@ class TestForceRedetectThread:
         assert face_db.get_indexed_rotation(p) == 0
 
     def test_auto_fallback_rotation_is_preserved(self, qtbot, env, monkeypatch):
-        """Cas inverse, légitime et fréquent : detect_and_embed_auto avait basculé
-        sur 270° parce que 0° ne trouvait rien (photo prise de travers). Suivre
-        aveuglément la rotation d'édition (0°) perdrait le visage — la rotation
-        indexée doit rester candidate et l'emporter."""
+        """The opposite case, legitimate and frequent: detect_and_embed_auto had
+        switched to 270 degrees because 0 degrees found nothing (photo taken
+        sideways). Blindly following the edit rotation (0 degrees) would lose the
+        face -- the indexed rotation must stay a candidate and win."""
         catalog, face_db, photos = env
         p = _add_photo(catalog, photos, "a.jpg")
         face_db.save_faces(p, [_detection()], rotation=270)
@@ -350,8 +350,9 @@ class TestForceRedetectThread:
         assert face_db.get_indexed_rotation(p) == 270
 
     def test_tie_prefers_displayed_rotation(self, qtbot, env, monkeypatch):
-        """À égalité de visages trouvés, on garde le repère affiché (0°) : c'est
-        lui qui sert à découper les vignettes de visage (detected_rotation)."""
+        """With an equal number of faces found, the displayed reference (0 degrees)
+        is kept: that is the one used to crop the face thumbnails
+        (detected_rotation)."""
         catalog, face_db, photos = env
         p = _add_photo(catalog, photos, "a.jpg")
         face_db.save_faces(p, [_detection()], rotation=180)
@@ -368,8 +369,8 @@ class TestForceRedetectThread:
         assert face_db.get_indexed_rotation(p) == 0
 
     def test_single_detection_when_rotations_agree(self, qtbot, env, monkeypatch):
-        """Cas nominal (les deux rotations coïncident) : une seule détection, pas
-        de coût doublé."""
+        """Nominal case (both rotations coincide): a single detection, no doubled
+        cost."""
         catalog, face_db, photos = env
         p = _add_photo(catalog, photos, "a.jpg")
         face_db.save_faces(p, [_detection()], rotation=0)
@@ -424,7 +425,7 @@ class TestRetryFaceIndexThread:
         thread.finished.connect(lambda pp, ok, n: results.append((pp, ok, n)))
         _run_thread(qtbot, thread, thread.finished)
         assert results == [(p, True, 1)]
-        assert face_db.get_index_error(p) is None   # succès efface l'erreur
+        assert face_db.get_index_error(p) is None   # success clears the error
 
     def test_new_timeout_keeps_error(self, qtbot, env, monkeypatch):
         catalog, face_db, photos = env
@@ -442,13 +443,13 @@ class TestRetryFaceIndexThread:
         assert face_db.get_index_error(p)["error_type"] == "timeout"
 
 
-# ------------------------------------------------------------------ threads utilitaires
+# ------------------------------------------------------------------ utility threads
 
 
 class TestUtilityThreads:
     def test_tf_warmup_thread_noop(self, qtbot):
         thread = face_indexer.TFWarmUpThread()
-        thread.run()  # no-op de compatibilité
+        thread.run()  # compatibility no-op
 
     def test_revaluate_size_ignored_thread(self, qtbot, env):
         catalog, face_db, photos = env
@@ -480,14 +481,14 @@ class TestUtilityThreads:
         assert results == [(0, 0)]
 
     def test_kill_executor_tolerates_fake(self):
-        face_indexer._kill_executor(_FakeExecutor())  # ne doit pas lever
+        face_indexer._kill_executor(_FakeExecutor())  # must not raise
 
 
-# ------------------------------------------------------------------ bridage CPU
+# ------------------------------------------------------------------ CPU throttling
 
 
 class _CapturingExecutor(_FakeExecutor):
-    """_FakeExecutor qui mémorise les kwargs de construction (initializer)."""
+    """_FakeExecutor that memorises the construction kwargs (initializer)."""
 
     created: list = []
 
@@ -506,9 +507,9 @@ def capturing_executor(monkeypatch):
 
 
 class TestBackgroundCpuThrottling:
-    """L'indexation des visages tourne en continu et sans intervention de
-    l'utilisateur : elle doit se plier au même bridage que la détection de
-    doublons, sous peine de saturer la machine à elle seule."""
+    """Face indexing runs continuously and without any user intervention: it
+    must obey the same throttling as duplicate detection, otherwise it would
+    saturate the machine all on its own."""
 
     def test_throttle_tick_once_per_photo(self, qtbot, env, monkeypatch):
         catalog, face_db, photos = env
@@ -529,8 +530,8 @@ class TestBackgroundCpuThrottling:
         assert len(ticks) == 3
 
     def test_tick_callback_reflects_the_stop_flag(self, qtbot, env, monkeypatch):
-        """La pause doit rendre la main immédiatement à l'arrêt de
-        l'application, sans attendre la fin du sommeil."""
+        """The pause must hand control back immediately when the application
+        stops, without waiting for the end of the sleep."""
         catalog, face_db, photos = env
         _add_photo(catalog, photos, "a.jpg")
         monkeypatch.setattr(
@@ -550,16 +551,16 @@ class TestBackgroundCpuThrottling:
         assert ticks[0]() is True
 
     def test_tick_happens_before_refilling_the_queue(self, qtbot, env, monkeypatch):
-        """La pause est prise *avant* de réalimenter la file : c'est ce qui vide
-        les sous-processus et bride réellement la charge, le travail ayant lieu
-        hors de ce thread."""
+        """The pause is taken *before* refilling the queue: that is what empties
+        the subprocesses and really throttles the load, the work taking place
+        outside this thread."""
         catalog, face_db, photos = env
         _add_photo(catalog, photos, "a.jpg")
         _add_photo(catalog, photos, "b.jpg")
         _add_photo(catalog, photos, "c.jpg")
-        # Un seul worker : la file se vide et se remplit photo par photo, ce qui
-        # rend l'alternance observable (avec _WORKERS > 1, _enqueue soumettrait
-        # plusieurs photos d'un coup et l'ordre ne prouverait plus rien).
+        # A single worker: the queue empties and refills photo by photo, which
+        # makes the alternation observable (with _WORKERS > 1, _enqueue would
+        # submit several photos at once and the order would no longer prove anything).
         monkeypatch.setattr(face_indexer, "_WORKERS", 1)
         order: list = []
         monkeypatch.setattr(
@@ -576,9 +577,9 @@ class TestBackgroundCpuThrottling:
         thread = face_indexer.FaceIndexThread(face_db, catalog)
         _run_thread(qtbot, thread, thread.finished)
 
-        # _FakeExecutor exécute la détection au submit : "submit" marque donc le
-        # moment où la file est réalimentée. Chaque tick doit précéder la
-        # soumission suivante, jamais la suivre.
+        # _FakeExecutor runs the detection at submit time: "submit" therefore marks
+        # the moment the queue is refilled. Each tick must precede the next
+        # submission, never follow it.
         assert order == ["submit", "tick", "submit", "tick", "submit", "tick"]
 
     def test_run_lowers_priority_and_caps_opencv(self, qtbot, env, monkeypatch):
@@ -604,8 +605,8 @@ class TestBackgroundCpuThrottling:
     def test_subprocesses_use_the_background_initializer(
         self, qtbot, env, monkeypatch, capturing_executor,
     ):
-        """Sans limite du pool interne d'OpenCV dans le worker, un seul
-        sous-processus « throttlé » peut occuper tous les cœurs à lui seul."""
+        """Without limiting the internal OpenCV pool inside the worker, a single
+        "throttled" subprocess can occupy every core on its own."""
         catalog, face_db, photos = env
         _add_photo(catalog, photos, "a.jpg")
         monkeypatch.setattr(
@@ -624,8 +625,8 @@ class TestBackgroundCpuThrottling:
     def test_fallback_executors_use_the_background_initializer(
         self, env, capturing_executor,
     ):
-        """Les executors de secours (repli CPU, retour GPU) sont créés sur des
-        chemins distincts — faciles à oublier lors d'un changement d'initializer."""
+        """The fallback executors (CPU fallback, return to GPU) are created on
+        distinct paths -- easy to forget when changing an initializer."""
         face_indexer._fresh_executor_cpu()
         face_indexer._fresh_executor_gpu()
 

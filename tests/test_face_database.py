@@ -1,11 +1,11 @@
 # Copyright 2026 Christian Guyot
 # SPDX-License-Identifier: Apache-2.0
-"""Teste `src/faces/face_database.py` en pur Python (sqlite3, sans InsightFace ni
-Qt) : helpers d'encodage/similarité, régression du bug de fusion de personnes du
-2026-07-04 (`merge_persons` perdait les `picasa_annotations` liées), seuils
-d'auto-ignore proportionnels de `save_faces`, cache des centroïdes personne,
-synchronisation Picasa/ArcFace, CRUD visages/clusters et suggestions par
-similarité cosinus."""
+"""Tests `src/faces/face_database.py` in pure Python (sqlite3, without InsightFace
+and without Qt): encoding/similarity helpers, regression of the person merge bug
+of 2026-07-04 (`merge_persons` lost the linked `picasa_annotations`),
+proportional auto-ignore thresholds of `save_faces`, person centroid cache,
+Picasa/ArcFace synchronisation, faces/clusters CRUD and suggestions by cosine
+similarity."""
 import os
 import sqlite3
 
@@ -20,8 +20,8 @@ def _make_image(path, size) -> None:
 
 
 def _base_vec(index: int, dim: int = 8) -> list[float]:
-    """Vecteur quasi orthogonal aux autres index (0.01 de diaphonie) — permet de
-    contrôler la similarité cosinus attendue entre "personnes" synthétiques."""
+    """Vector nearly orthogonal to the other indices (0.01 of crosstalk) -- lets
+    the expected cosine similarity between synthetic "people" be controlled."""
     v = [0.01] * dim
     v[index % dim] = 1.0
     return v
@@ -88,8 +88,8 @@ def _raw_query_all(db, sql, params=()):
 
 class TestThreadLocalConnection:
     def test_wal_mode_enabled(self, tmp_path):
-        """FaceDatabase tournait sans WAL du tout (rollback-journal par
-        défaut) : chaque écriture de l'indexeur bloquait les lectures UI."""
+        """FaceDatabase ran without WAL at all (rollback-journal by default):
+        every write of the indexer blocked the UI reads."""
         db = FaceDatabase(db_path=tmp_path / "faces.db")
         mode = db._conn().execute("PRAGMA journal_mode").fetchone()[0]
         assert mode == "wal"
@@ -106,16 +106,16 @@ class TestThreadLocalConnection:
         db2 = FaceDatabase(db_path=db_path)
         _raw_insert_face(db1, "a.jpg")
 
-        # db2 (autre connexion) voit l'écriture commitée via db1/_raw
+        # db2 (another connection) sees the write committed through db1/_raw
         rows = db2.get_faces_for_photo("a.jpg")
         assert len(rows) == 1
 
 
 class TestIndexes:
     def test_suggestion_index_exists(self, tmp_path):
-        """idx_faces_suggestion évite un full scan de la table faces dans
-        get_suggested_clusters_for_person / get_persons_pending_count. Créé
-        après la migration qui ajoute la colonne (absente de _CREATE_FACES)."""
+        """idx_faces_suggestion avoids a full scan of the faces table in
+        get_suggested_clusters_for_person / get_persons_pending_count. Created
+        after the migration that adds the column (absent from _CREATE_FACES)."""
         db = FaceDatabase(db_path=tmp_path / "faces.db")
         names = {r[1] for r in _raw_query_all(db, "PRAGMA index_list('faces')")}
         assert "idx_faces_suggestion" in names
@@ -152,10 +152,10 @@ class TestMergePersons:
         assert _raw_query_one(db, "SELECT person_id FROM picasa_annotations WHERE id=?", (ann_id,))[0] == keep_id
 
     def test_merge_then_cleanup_orphan_person_ids_does_not_orphan_annotation(self, tmp_path):
-        """Régression directe du bug 2026-07-04 : sans la réassignation des
-        picasa_annotations dans merge_persons, cleanup_orphan_person_ids (appelé
-        après suppression de remove_id du catalogue) supprimait silencieusement
-        l'annotation restée sur l'ancien person_id."""
+        """Direct regression of the 2026-07-04 bug: without the reassignment of the
+        picasa_annotations in merge_persons, cleanup_orphan_person_ids (called
+        after removing remove_id from the catalog) silently deleted the
+        annotation left on the old person_id."""
         db = FaceDatabase(db_path=tmp_path / "faces.db")
         keep_id, remove_id = 154, 512
         _raw_insert_face(db, "photo.jpg", person_id=remove_id)
@@ -169,9 +169,9 @@ class TestMergePersons:
         assert row[0] == keep_id
 
     def test_merge_dedups_faces_sharing_a_photo(self, tmp_path):
-        """keep_id et remove_id peuvent chacun avoir un visage non-ignoré sur la
-        même photo partagée — après fusion, un seul doit rester non-ignoré (le
-        plus grand, cf. _dedup_in_transaction)."""
+        """keep_id and remove_id can each have a non-ignored face on the same
+        shared photo -- after the merge, only one must stay non-ignored (the
+        biggest one, cf. _dedup_in_transaction)."""
         db = FaceDatabase(db_path=tmp_path / "faces.db")
         keep_id, remove_id = 1, 2
         small = _raw_insert_face(db, "shared.jpg", person_id=keep_id, bbox=(0, 0, 10, 10))
@@ -186,9 +186,9 @@ class TestMergePersons:
 
 class TestSaveFacesAutoIgnore:
     def test_thresholds_with_foreground_face(self, tmp_path):
-        """image 1000x600 : fg_qualify = max(44, 600*20%) = 120, un visage de
-        130px qualifie donc la photo de "premier plan" ; le seuil effectif
-        devient 130*25%=32.5 pour les autres visages de cette photo."""
+        """1000x600 image: fg_qualify = max(44, 600*20%) = 120, so a 130px face
+        qualifies the photo as "foreground"; the effective threshold then becomes
+        130*25%=32.5 for the other faces of that photo."""
         photo = tmp_path / "photo1.jpg"
         _make_image(photo, (1000, 600))
         db = FaceDatabase(db_path=tmp_path / "faces.db")
@@ -219,7 +219,7 @@ class TestSaveFacesAutoIgnore:
         assert row[0] == 1
 
     def test_no_foreground_face_uses_base_threshold(self, tmp_path):
-        """image 300x300 (aucun visage n'atteint fg_qualify) : seuil de base
+        """300x300 image (no face reaches fg_qualify): base threshold
         = max(22, 300*3%) = 22."""
         photo = tmp_path / "photo3.jpg"
         _make_image(photo, (300, 300))
@@ -236,10 +236,10 @@ class TestSaveFacesAutoIgnore:
         assert rows[15] == 1
 
     def test_missing_file_uses_fixed_fallback_threshold(self, tmp_path):
-        """Si le fichier est illisible (ou absent), on retombe sur le seuil fixe
-        _AUTO_IGNORE_MIN_SIDE (121 px), sans planter. Un visage par photo pour
-        éviter qu'un visage au-dessus du seuil ne se qualifie lui-même comme
-        "premier plan" et n'abaisse le seuil effectif pour l'autre."""
+        """If the file is unreadable (or absent), we fall back on the fixed
+        threshold _AUTO_IGNORE_MIN_SIDE (121 px), without crashing. One face per
+        photo, to prevent a face above the threshold from qualifying itself as
+        "foreground" and lowering the effective threshold for the other one."""
         db = FaceDatabase(db_path=tmp_path / "faces.db")
 
         photo_small = str(tmp_path / "missing_small.jpg")
@@ -290,12 +290,11 @@ class TestSaveFacesForceNoLimit:
 
 
 class TestSaveFacesPreservesIdentificationByDefault:
-    """Régression 2026-07 : SingleFaceReindexThread (déclenché après chaque
-    rotation 90° en aperçu, avant tout enregistrement) appelle save_faces avec
-    force_no_limit=False. La réassociation par IoU était auparavant réservée à
-    force_no_limit=True, donc une simple rotation effaçait silencieusement
-    toute identification existante — corrigé en rendant la préservation
-    inconditionnelle."""
+    """Regression 2026-07: SingleFaceReindexThread (triggered after every
+    90-degree rotation in the preview, before any save) calls save_faces with
+    force_no_limit=False. Re-association by IoU used to be reserved for
+    force_no_limit=True, so a simple rotation silently erased every existing
+    identification -- fixed by making the preservation unconditional."""
 
     def test_person_id_survives_reindex_without_force_no_limit(self, tmp_path):
         photo = tmp_path / "photo.jpg"
@@ -308,8 +307,8 @@ class TestSaveFacesPreservesIdentificationByDefault:
         face_id = _raw_query_one(db, "SELECT id FROM faces WHERE photo_path=?", (norm_path,))[0]
         db.assign_person_to_face(face_id, person_id=42)
 
-        # Ré-analyse après rotation (comme SingleFaceReindexThread), bbox
-        # légèrement décalée par la nouvelle détection, force_no_limit par défaut.
+        # Re-analysis after rotation (like SingleFaceReindexThread), bbox
+        # slightly shifted by the new detection, force_no_limit at its default.
         db.save_faces(str(photo), [
             {"bbox": (105, 105, 130, 130), "embedding": _base_vec(0), "det_score": 0.9},
         ])
@@ -324,9 +323,9 @@ class TestSaveFacesPreservesIdentificationByDefault:
         )
 
     def test_manually_pinned_face_survives_reindex(self, tmp_path):
-        """Un visage ajouté manuellement (embedding NULL, pinned=1) n'est
-        jamais retrouvable par une nouvelle détection : il doit rester
-        intact, jamais supprimé par le DELETE de save_faces."""
+        """A manually added face (embedding NULL, pinned=1) can never be found
+        again by a new detection: it must stay intact, never removed by the
+        DELETE of save_faces."""
         photo = tmp_path / "photo.jpg"
         _make_image(photo, (1000, 600))
         db = FaceDatabase(db_path=tmp_path / "faces.db")
@@ -358,9 +357,9 @@ class TestGetAllPersonCentroids:
         assert centroids[2] == pytest.approx([0.0, 5.0])
 
     def test_cache_invalidated_after_reassignment(self, tmp_path):
-        """Le cache est indexé sur un fingerprint (COUNT + SUM(person_id)) — une
-        réassignation qui change la somme sans changer le nombre de lignes
-        (ex. merge_persons) doit tout de même invalider le cache."""
+        """The cache is keyed on a fingerprint (COUNT + SUM(person_id)) -- a
+        reassignment that changes the sum without changing the number of rows
+        (e.g. merge_persons) must still invalidate the cache."""
         db = FaceDatabase(db_path=tmp_path / "faces.db")
         _raw_insert_face(db, "a.jpg", person_id=1, embedding=[1.0, 0.0])
         _raw_insert_face(db, "b.jpg", person_id=2, embedding=[0.0, 4.0])
@@ -376,9 +375,9 @@ class TestGetAllPersonCentroids:
 
 class TestPicasaAnnotationSync:
     def test_apply_annotations_on_next_detection(self, tmp_path):
-        """save_picasa_annotations avant toute détection ArcFace crée un
-        placeholder (embedding NULL) ; une détection ultérieure recouvrant la
-        même zone doit reprendre l'identification sur le vrai visage."""
+        """save_picasa_annotations before any ArcFace detection creates a
+        placeholder (embedding NULL); a later detection covering the same area
+        must take the identification over onto the real face."""
         photo = tmp_path / "photo.jpg"
         _make_image(photo, (1000, 600))
         db = FaceDatabase(db_path=tmp_path / "faces.db")
@@ -411,8 +410,8 @@ class TestPicasaAnnotationSync:
         assert row[0] == 0, "l'annotation reste bloquée à consumed=1, jamais retentée"
 
     def test_consume_matching_annotations_after_manual_assignment(self, tmp_path):
-        """assign_person_to_face doit marquer consumed=1 une annotation Picasa en
-        attente si elle chevauche spatialement le visage nouvellement identifié."""
+        """assign_person_to_face must mark a pending Picasa annotation as
+        consumed=1 if it spatially overlaps the newly identified face."""
         db = FaceDatabase(db_path=tmp_path / "faces.db")
         photo = os.path.normpath(str(tmp_path / "photo.jpg"))
         face_id = _raw_insert_face(db, photo, bbox=(100, 100, 130, 130), embedding=_base_vec(0))
@@ -509,9 +508,9 @@ class TestFaceCrud:
 class TestUpdateClusters:
     def test_assigns_labels_and_propagates_person_id_within_cluster(self, tmp_path):
         db = FaceDatabase(db_path=tmp_path / "faces.db")
-        f1 = _raw_insert_face(db, "a.jpg", person_id=1)    # déjà identifié
-        f2 = _raw_insert_face(db, "b.jpg")                 # à regrouper avec f1
-        f3 = _raw_insert_face(db, "c.jpg")                 # cluster différent, non identifié
+        f1 = _raw_insert_face(db, "a.jpg", person_id=1)    # already identified
+        f2 = _raw_insert_face(db, "b.jpg")                 # to be grouped with f1
+        f3 = _raw_insert_face(db, "c.jpg")                 # different cluster, not identified
 
         db.update_clusters([f1, f2, f3], labels=[0, 0, 1])
 
@@ -675,8 +674,8 @@ class TestClusterGetters:
         assert faces[0].person_id == 5
 
     def test_get_faces_for_photo_returns_suggestion_fields(self, tmp_path):
-        # Non-régression : get_faces_for_photo ignorait suggestion_person_id/score,
-        # empêchant le panel de visages d'afficher les suggestions en attente.
+        # Non-regression: get_faces_for_photo ignored suggestion_person_id/score,
+        # preventing the face panel from showing the pending suggestions.
         db = FaceDatabase(db_path=tmp_path / "faces.db")
         face_id = _raw_insert_face(db, "a.jpg", cluster_id=5)
         conn = sqlite3.connect(db._db_path)
@@ -877,22 +876,21 @@ class TestCleanupFamily:
 
 
 class TestZeroRowCommitDoesNotLeaveOpenTransaction:
-    """Régression : restore_orphaned_ignored_faces / cleanup_stale_placeholder_faces /
-    assign_person_synthetic_clusters / cleanup_orphan_person_ids ne committaient
-    l'UPDATE/DELETE que si rowcount>0 (`if n: conn.commit()`). Un UPDATE/DELETE qui
-    ne touche aucune ligne ouvre quand même une transaction (BEGIN implicite du
-    module sqlite3 dès le premier DML) — sauter le commit laissait la connexion
-    thread-local dans une transaction ouverte indéfiniment. Le verrou Python
-    (_guard()) n'empêche pas ce bug : il protège l'exécution concurrente du code,
-    pas la clôture de la transaction SQLite sous-jacente une fois le verrou relâché.
+    """Regression: restore_orphaned_ignored_faces / cleanup_stale_placeholder_faces /
+    assign_person_synthetic_clusters / cleanup_orphan_person_ids only committed the
+    UPDATE/DELETE when rowcount>0 (`if n: conn.commit()`). An UPDATE/DELETE that
+    touches no row still opens a transaction (implicit BEGIN of the sqlite3 module
+    on the first DML) -- skipping the commit left the thread-local connection inside
+    an open transaction indefinitely. The Python lock (_guard()) does not prevent
+    this bug: it protects the concurrent execution of the code, not the closing of
+    the underlying SQLite transaction once the lock is released.
 
-    Découvert via test_folder_management.py (e2e) : le clustering déclenché après
-    un FaceIndexThread qui ne trouve aucun visage (n_identified=0, donc rowcount=0
-    dans assign_person_synthetic_clusters) laissait la connexion du ClusterThread
-    bloquée en transaction ouverte — le FaceIndexThread suivant (re-scan requeue)
-    plantait alors sur son propre save_faces() avec
-    `sqlite3.OperationalError: database is locked` après expiration du busy_timeout
-    (5 s), cf. CLAUDE.md pattern de connexion."""
+    Found through test_folder_management.py (e2e): the clustering triggered after
+    a FaceIndexThread that finds no face (n_identified=0, hence rowcount=0 in
+    assign_person_synthetic_clusters) left the ClusterThread connection stuck in an
+    open transaction -- the next FaceIndexThread (re-scan requeue) then crashed on
+    its own save_faces() with `sqlite3.OperationalError: database is locked` after
+    the busy_timeout expired (5 s), cf. the connection pattern in CLAUDE.md."""
 
     def test_restore_orphaned_ignored_faces_zero_rows_commits(self, tmp_path):
         db = FaceDatabase(db_path=tmp_path / "faces.db")
@@ -912,7 +910,7 @@ class TestZeroRowCommitDoesNotLeaveOpenTransaction:
 
     def test_assign_person_synthetic_clusters_zero_rows_commits(self, tmp_path):
         db = FaceDatabase(db_path=tmp_path / "faces.db")
-        _raw_insert_face(db, "a.jpg")  # aucun person_id -> rowcount=0
+        _raw_insert_face(db, "a.jpg")  # no person_id -> rowcount=0
 
         n = db.assign_person_synthetic_clusters()
 
@@ -929,9 +927,10 @@ class TestZeroRowCommitDoesNotLeaveOpenTransaction:
         assert db._conn().in_transaction is False
 
     def test_zero_row_commit_does_not_block_a_second_thread_writer(self, tmp_path):
-        """Reproduction directe du scénario e2e : un thread appelle une méthode à
-        rowcount=0, un AUTRE thread (donc une AUTRE connexion sqlite thread-local)
-        doit pouvoir écrire immédiatement après, sans attendre le busy_timeout."""
+        """Direct reproduction of the e2e scenario: one thread calls a method with
+        rowcount=0, and ANOTHER thread (hence ANOTHER thread-local sqlite
+        connection) must be able to write immediately afterwards, without waiting
+        for the busy_timeout."""
         import threading
 
         db = FaceDatabase(db_path=tmp_path / "faces.db")
