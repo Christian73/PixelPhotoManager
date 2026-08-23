@@ -1,24 +1,24 @@
 # Copyright 2026 Christian Guyot
 # SPDX-License-Identifier: Apache-2.0
-"""Scénario bout-en-bout : export d'une photo retouchée depuis la visionneuse.
+"""End-to-end scenario: exporting an edited photo from the viewer.
 
-Chemin exercé : double-clic vignette -> visionneuse -> retouche Luminosité
-(même mécanique que test_edit_nondestructive.py) -> bouton barre d'outils
+The path exercised: double-click on a thumbnail -> viewer -> Brightness edit
+(the same mechanics as test_edit_nondestructive.py) -> toolbar button
 "⬆  Export" (main_window.py:816, ``_on_export_clicked``) -> ``_ExportDialog``
-(modal, ``exec()``) -> le champ ``_dir_edit`` (QLineEdit, texte par défaut =
-``Path.home()/Pictures/PixelPhotoManager/Export`` !) est **explicitement
-écrasé** vers un dossier isolé sous le ``tmp_path`` du test — ne jamais laisser
-ce scénario écrire dans le vrai dossier Images de l'utilisateur, cf. le
-principe d'isolation de tout ce module de tests -> "Export" (bouton OK,
-texte exact, distinct du bouton de la barre d'outils qui porte le glyphe "⬆").
+(modal, ``exec()``) -> the ``_dir_edit`` field (a QLineEdit whose default text
+is ``Path.home()/Pictures/PixelPhotoManager/Export``!) is **explicitly
+overwritten** towards an isolated folder under the ``tmp_path`` of the test --
+never let this scenario write into the real Pictures folder of the user, cf. the
+isolation principle of this whole test module -> "Export" (the OK button,
+exact text, distinct from the toolbar button which carries the "⬆" glyph).
 
-Vérifications sur le fichier `.jpg` produit, pas sur l'UI :
-- il existe ;
-- il est mesurablement plus clair que l'original (delta de luminance moyenne),
-  preuve que la retouche non destructive a bien été incrustée à l'export
-  (``_run_export`` : ``ImageAdjuster.apply_all`` si ``edit.is_modified()``) ;
-- ses dates de fichier (mtime) reprennent celles de l'original
-  (``preserve_file_dates``), pas la date de création de l'export."""
+Checks on the produced `.jpg` file, not on the UI:
+- it exists;
+- it is measurably brighter than the original (delta of the mean luminance),
+  proof that the non-destructive edit really was baked in on export
+  (``_run_export``: ``ImageAdjuster.apply_all`` if ``edit.is_modified()``);
+- its file dates (mtime) are those of the original
+  (``preserve_file_dates``), not the creation date of the export."""
 from __future__ import annotations
 
 import time
@@ -41,12 +41,12 @@ def _mean_luminance(path: Path) -> float:
 
 
 def _set_export_dir(window, path: Path) -> None:
-    """Écrase le champ de destination de `_ExportDialog` (QLineEdit dont le
-    texte par défaut pointe vers le vrai dossier Images de l'utilisateur —
-    voir l'avertissement en tête de fichier). Identifié par son contenu par
-    défaut plutôt que par index, pour ne pas dépendre de l'ordre des
-    QLineEdit dans l'arbre UIA (l'EXIF panel affiche aussi des QLineEdit
-    pendant la visionneuse)."""
+    """Overwrites the destination field of `_ExportDialog` (a QLineEdit whose
+    default text points at the real Pictures folder of the user -- see the
+    warning at the top of the file). Identified by its default content rather
+    than by index, so as not to depend on the order of the QLineEdits in the
+    UIA tree (the EXIF panel also displays QLineEdits while the viewer is
+    open)."""
     deadline = time.monotonic() + 10.0
     last_exc: Exception | None = None
     while time.monotonic() < deadline:
@@ -94,13 +94,13 @@ def test_export_bakes_in_edit_and_preserves_dates(isolated_app):
         timeout=20.0, message="la retouche préalable à l'export n'a pas été persistée",
     )
 
-    # Dossier d'export isolé : catalog_db = tmp_path/app_data/PixelPhotoManager/catalog.db
+    # Isolated export folder: catalog_db = tmp_path/app_data/PixelPhotoManager/catalog.db
     export_dir = catalog_db.parents[2] / "export_out"
 
-    # Bouton de la barre d'outils (glyphe "⬆" + texte) — un seul bouton contient "Exporter" avant l'ouverture du dialogue.
+    # Toolbar button (the "⬆" glyph + text) -- a single button contains "Export" before the dialog opens.
     find_dialog_button(window, ["Export"], exact=False, timeout=10.0).click_input()
     _set_export_dir(window, export_dir)
-    # Bouton OK du dialogue : texte exact "Export" (sans glyphe), distinct du bouton barre d'outils.
+    # OK button of the dialog: the exact text "Export" (no glyph), distinct from the toolbar button.
     find_dialog_button(window, ["Export"], exact=True, timeout=10.0).click_input()
 
     dest = export_dir / (Path(photo).stem + ".jpg")

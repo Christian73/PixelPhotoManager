@@ -1,13 +1,13 @@
 # Copyright 2026 Christian Guyot
 # SPDX-License-Identifier: Apache-2.0
-"""Règle « vue album = jamais d'effacement de fichier » : en mode album
-utilisateur (set_album_context(id)), l'effacement définitif ne doit être
-possible ni par le menu contextuel ni par la touche Suppr, dans la grille
-(mode normal et ruban) comme dans la visionneuse — seule la dé-association
-de l'album est proposée. Hors album, l'effacement redevient disponible.
+"""The "album view = never a file deletion" rule: in user album mode
+(set_album_context(id)), permanent deletion must be possible neither through
+the context menu nor through the Del key, in the grid (normal and filmstrip
+modes) as well as in the viewer -- only removal from the album is offered.
+Outside an album, deletion becomes available again.
 
-Les menus contextuels sont capturés en remplaçant QMenu.exec (pas d'affichage
-réel) ; les signaux delete_requested / remove_from_album_requested font foi."""
+The context menus are captured by replacing QMenu.exec (no real display);
+the delete_requested / remove_from_album_requested signals are what counts."""
 import pytest
 from PIL import Image
 from PySide6.QtCore import Qt
@@ -30,10 +30,10 @@ def _del_key() -> QKeyEvent:
 
 @pytest.fixture
 def captured_menus(monkeypatch):
-    """Remplace QMenu par une sous-classe dont exec() n'affiche rien et
-    enregistre le menu construit. Le remplacement se fait dans l'espace de
-    noms des modules utilisateurs (le setattr direct sur la classe Shiboken
-    n'intercepte pas l'appel natif : « missing signature »)."""
+    """Replaces QMenu with a subclass whose exec() displays nothing and
+    records the menu that was built. The replacement is done in the namespace
+    of the using modules (a direct setattr on the Shiboken class does not
+    intercept the native call: "missing signature")."""
     menus: list[QMenu] = []
 
     class _CapturingMenu(QMenu):
@@ -61,7 +61,7 @@ def _trigger(menu: QMenu, text: str) -> None:
 
 
 class _SignalSpy:
-    """Capture delete_requested / remove_from_album_requested d'un widget."""
+    """Captures the delete_requested / remove_from_album_requested of a widget."""
 
     def __init__(self, widget):
         self.deleted: list[list] = []
@@ -70,7 +70,7 @@ class _SignalSpy:
         widget.remove_from_album_requested.connect(self.removed.append)
 
 
-# ══════════════════════════════════════════════════════════════ grille
+# ══════════════════════════════════════════════════════════════ grid
 
 
 @pytest.fixture
@@ -187,8 +187,8 @@ class TestGridDeleteKey:
         assert spy.deleted == []
 
     def test_ribbon_album_mode_del_center_photo_removes_from_album(self, grid):
-        """Ruban sans sélection : Suppr vise la photo centrale — elle aussi doit
-        être retirée de l'album, jamais effacée."""
+        """Filmstrip with no selection: Del aims at the central photo -- it too
+        must be removed from the album, never deleted."""
         p1, p2 = _photo("C:/lib/a.jpg"), _photo("C:/lib/b.jpg")
         grid.set_photos([p1, p2])
         grid.set_ribbon_mode(True)
@@ -213,14 +213,14 @@ class TestGridDeleteKey:
         assert spy.removed == []
 
 
-# ══════════════════════════════════════════════════════════════ visionneuse
+# ══════════════════════════════════════════════════════════════ viewer
 
 
 @pytest.fixture
 def viewer(qtbot, tmp_path):
     v = PhotoViewer()
     qtbot.addWidget(v)
-    # photo réelle : _show_context_menu lit l'EXIF GPS via PIL
+    # a real photo: _show_context_menu reads the GPS EXIF through PIL
     img_path = tmp_path / "photo.jpg"
     Image.new("RGB", (32, 24)).save(str(img_path))
     v._photo = _photo(img_path)

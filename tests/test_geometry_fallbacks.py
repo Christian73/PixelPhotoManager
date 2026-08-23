@@ -1,8 +1,8 @@
 # Copyright 2026 Christian Guyot
 # SPDX-License-Identifier: Apache-2.0
-"""Complément de test_geometry.py : branches de repli du crop quadrilatère
-(cv2 indisponible → transformation PIL, échec PIL → bounding box) et
-`_perspective_coeffs` (mapping des coins, cas dégénéré)."""
+"""Complement to test_geometry.py: the fallback branches of the quadrilateral
+crop (cv2 unavailable -> PIL transformation, PIL failure -> bounding box) and
+`_perspective_coeffs` (mapping of the corners, degenerate case)."""
 import sys
 
 import pytest
@@ -15,20 +15,20 @@ def _img(w=100, h=100):
     return Image.new("RGB", (w, h), (200, 40, 40))
 
 
-_QUAD = (0.1, 0.1, 0.9, 0.15, 0.85, 0.9, 0.05, 0.85)  # TL,TR,BR,BL non alignés
+_QUAD = (0.1, 0.1, 0.9, 0.15, 0.85, 0.9, 0.05, 0.85)  # TL,TR,BR,BL not aligned
 
 
 class TestQuadCropFallbacks:
     def test_pil_fallback_without_cv2(self, monkeypatch):
-        """cv2 absent → transformation PIL PERSPECTIVE."""
-        monkeypatch.setitem(sys.modules, "cv2", None)  # import cv2 → ImportError
+        """cv2 absent -> PIL PERSPECTIVE transformation."""
+        monkeypatch.setitem(sys.modules, "cv2", None)  # import cv2 -> ImportError
         img = _img()
         result = GeometryProcessor.apply_crop(img, _QUAD)
         w, h = result.size
         assert w > 1 and h > 1
 
     def test_bounding_box_last_resort(self, monkeypatch):
-        """cv2 absent ET échec PIL → bounding box des 4 coins."""
+        """cv2 absent AND PIL failure -> bounding box of the 4 corners."""
         monkeypatch.setitem(sys.modules, "cv2", None)
         monkeypatch.setattr(
             GeometryProcessor,
@@ -37,7 +37,7 @@ class TestQuadCropFallbacks:
         )
         img = _img(100, 100)
         result = GeometryProcessor.apply_crop(img, _QUAD)
-        # bbox : x de 0.05*100=5 à 0.9*100=90, y de 0.1*100=10 à 0.9*100=90
+        # bbox: x from 0.05*100=5 to 0.9*100=90, y from 0.1*100=10 to 0.9*100=90
         assert result.size == (85, 80)
 
     def test_pil_and_cv2_agree_on_size(self, monkeypatch):
@@ -50,8 +50,8 @@ class TestQuadCropFallbacks:
 
 class TestPerspectiveCoeffs:
     def test_axis_aligned_rectangle_maps_corners(self):
-        """Pour un rectangle droit, le mapping doit renvoyer chaque coin de
-        sortie sur le coin d'entrée correspondant."""
+        """For an upright rectangle, the mapping must send each output corner onto
+        the corresponding input corner."""
         tl, tr, br, bl = (10, 20), (90, 20), (90, 80), (10, 80)
         W, H = 80, 60
         a, b, c, d, e, f, g, h = GeometryProcessor._perspective_coeffs(

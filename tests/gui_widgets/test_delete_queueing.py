@@ -1,27 +1,27 @@
 # Copyright 2026 Christian Guyot
 # SPDX-License-Identifier: Apache-2.0
-"""Régression : _on_delete_requested/_start_delete_worker/_on_delete_finished
-(main_window.py) mettent en file une suppression confirmée si un worker de
-suppression est déjà en cours, au lieu de l'abandonner silencieusement.
+"""Regression: _on_delete_requested/_start_delete_worker/_on_delete_finished
+(main_window.py) queue a confirmed deletion if a deletion worker is already
+running, instead of dropping it silently.
 
-Découvert via test_save_options_and_settings.py (e2e) : trois suppressions
-déclenchées coup sur coup peuvent avoir un worker encore `isRunning()` (ex.
-FaceDatabase.delete_for_paths bloqué plusieurs secondes par une contention
-SQLite passagère) au moment où la suppression suivante, déjà confirmée par
-l'utilisateur, est demandée. Avant ce correctif, _on_delete_requested
-retournait silencieusement dans ce cas (seul un message de statut furtif de
-3 s) : la suppression était perdue. Ici, les méthodes réelles de MainWindow
-sont appelées en non lié (`MainWindow._methode(fake, ...)`) contre un objet
-minimal ne portant que les attributs effectivement lus par le chemin testé —
-pas de QMainWindow complet (dépendances trop lourdes : catalog, thumb_cache,
-face_db, sidebar, grid, viewer, folder_watcher...)."""
+Found through test_save_options_and_settings.py (e2e): three deletions
+triggered in a row may have a worker still `isRunning()` (e.g.
+FaceDatabase.delete_for_paths blocked for several seconds by a transient
+SQLite contention) at the moment the next deletion, already confirmed by
+the user, is requested. Before this fix, _on_delete_requested returned
+silently in that case (only a fleeting 3 s status message): the deletion was
+lost. Here, the real methods of MainWindow are called unbound
+(`MainWindow._method(fake, ...)`) against a minimal object carrying only the
+attributes actually read by the tested path -- no complete QMainWindow
+(dependencies too heavy: catalog, thumb_cache, face_db, sidebar, grid,
+viewer, folder_watcher...)."""
 from src.core.models import PhotoInfo
 from src.ui.main_window import MainWindow
 
 
 class _FakeConfig:
     def get(self, key, default=None):
-        return True   # ui.delete_no_confirm : jamais de dialogue à fermer ici
+        return True   # ui.delete_no_confirm: never a dialog to close here
 
 
 class _FakeThread:
@@ -43,15 +43,15 @@ class _FakeLabel:
 
 
 class _FakeMainWindow:
-    """Porte uniquement les attributs lus par _on_delete_requested (chemin
-    file-d'attente) et par la queue de fin dans _on_delete_finished."""
+    """Carries only the attributes read by _on_delete_requested (the queueing
+    path) and by the end-of-run queue in _on_delete_finished."""
 
     def __init__(self, delete_thread=None):
         self._delete_thread = delete_thread
         self._pending_deletes: list = []
         self._config = _FakeConfig()
         self._lbl_action = _FakeLabel()
-        self.started_with: list = []   # historique des appels à _start_delete_worker
+        self.started_with: list = []   # history of the calls to _start_delete_worker
 
     def statusBar(self):
         return _FakeStatusBar()
@@ -76,8 +76,8 @@ class TestDeleteQueueing:
 
         MainWindow._on_delete_requested(fake, photos)
 
-        # Avant le correctif : silencieusement ignoré (started_with resterait
-        # vide ET _pending_deletes resterait vide -> suppression perdue).
+        # Before the fix: silently ignored (started_with would stay
+        # empty AND _pending_deletes would stay empty -> deletion lost).
         assert fake.started_with == []
         assert fake._pending_deletes == [photos]
 
@@ -114,7 +114,7 @@ class TestDeleteQueueing:
             first_deleted_idx=None, affected_groups=set(),
         )
 
-        # Un seul worker démarré par épilogue ; le second reste en file.
+        # A single worker started per epilogue; the second stays queued.
         assert fake.started_with == [first]
         assert fake._pending_deletes == [second]
 

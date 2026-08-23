@@ -1,11 +1,11 @@
 # Copyright 2026 Christian Guyot
 # SPDX-License-Identifier: Apache-2.0
-"""Réglages de ferronnerie du second cadre dans FrameDialog.
+"""Ironwork settings of the second frame in FrameDialog.
 
-Le dialogue est construit sans chemin de photo : la galerie d'aperçus
-(`_TileLoader`, un QThread) n'est jamais lancée, seuls les contrôles sont testés.
-Les visibilités sont interrogées avec `isVisibleTo()` — le dialogue lui-même
-n'est pas affiché, `isVisible()` serait faux partout.
+The dialog is built with no photo path: the gallery of previews
+(`_TileLoader`, a QThread) is never started, only the controls are tested.
+The visibilities are queried with `isVisibleTo()` -- the dialog itself is not
+displayed, so `isVisible()` would be false everywhere.
 """
 import pytest
 
@@ -23,7 +23,7 @@ def dialog(qtbot):
 
 class TestIronworkVisibility:
     def test_hidden_for_other_frame_types(self, dialog):
-        """La ferronnerie n'existe que sur le second cadre de l'entourage uni."""
+        """The ironwork only exists on the second frame of the plain surround."""
         dialog._select_kind("double")
         assert not dialog._inner_motif_rows.isVisibleTo(dialog)
 
@@ -35,8 +35,8 @@ class TestIronworkVisibility:
         assert dialog._inner_motif_rows.isVisibleTo(dialog)
 
     def test_relief_and_ornaments_are_reserved_to_ornamented_motifs(self, dialog):
-        """La ligne simple est rendue en aplat strict et n'a aucun ornement à
-        dimensionner : ses deux réglages resteraient sans effet."""
+        """The simple line is rendered as a strict flat fill and has no ornament
+        to size: its two settings would stay without effect."""
         dialog._set_inner_motif("line")
         assert not dialog._relief_row.isVisibleTo(dialog)
         assert not dialog._sl_ornament.isVisibleTo(dialog)
@@ -52,8 +52,9 @@ class TestIronworkControls:
 
     @pytest.mark.parametrize("motif", sorted(frames.ORNAMENTED_MOTIFS))
     def test_clicking_a_motif_selects_it_alone(self, dialog, qtbot, motif):
-        """Vrai clic : `clicked` émet un bool qui écraserait un défaut de lambda
-        positionnel mal écrit (piège vécu ailleurs dans le projet)."""
+        """A real click: `clicked` emits a bool that would clobber the default of
+        a badly written positional lambda (a trap experienced elsewhere in the
+        project)."""
         with qtbot.waitSignal(dialog.preview, timeout=500) as blocker:
             dialog._motif_buttons[motif].click()
         assert dialog._edit.frame_inner_motif == motif
@@ -74,17 +75,17 @@ class TestIronworkControls:
         assert dialog._relief_buttons[False].isChecked() is False
 
     def test_ornament_slider_is_a_percentage_of_the_scale_factor(self, dialog):
-        """L'échelle interne d'EditSlider est figée à 100 : le curseur expose
-        donc 40-250 % pour un facteur 0,4-2,5."""
+        """The internal scale of EditSlider is hard-wired to 100: the slider
+        therefore exposes 40-250 % for a 0.4-2.5 factor."""
         raw = dialog._sl_ornament._slider
         assert raw.minimum() / 100.0 == pytest.approx(frames.INNER_ORNAMENT_MIN * 100.0)
         assert raw.maximum() / 100.0 == pytest.approx(frames.INNER_ORNAMENT_MAX * 100.0)
-        assert dialog._sl_ornament.get_value() == pytest.approx(100.0)   # facteur 1
+        assert dialog._sl_ornament.get_value() == pytest.approx(100.0)   # factor 1
         raw.setValue(17000)
         assert dialog._edit.frame_inner_ornament == pytest.approx(1.7)
 
     def test_settings_survive_validation(self, dialog):
-        """`get_edit()` rend l'EditInfo appliqué par le panneau de retouche."""
+        """`get_edit()` returns the EditInfo applied by the edit panel."""
         dialog._set_inner_motif("studs")
         dialog._set_inner_relief(False)
         dialog._sl_ornament._slider.setValue(6000)

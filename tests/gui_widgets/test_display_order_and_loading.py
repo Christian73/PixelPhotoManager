@@ -1,8 +1,8 @@
 # Copyright 2026 Christian Guyot
 # SPDX-License-Identifier: Apache-2.0
-"""Teste `src/ui/display_order_dialog.py` (sections de tri indépendantes,
-sauvegarde en config) et `src/ui/loading_label.py` (spinner partagé,
-cycle start/stop, peinture)."""
+"""Tests `src/ui/display_order_dialog.py` (independent sorting sections,
+saving to the config) and `src/ui/loading_label.py` (shared spinner,
+start/stop cycle, painting)."""
 import pytest
 from PySide6.QtGui import QPixmap
 
@@ -33,15 +33,15 @@ class TestOrderSection:
         assert s.direction() == "desc"
 
     def test_mode_and_direction_are_independent(self, qtbot):
-        """Deux QButtonGroup distincts : cocher une direction ne doit pas
-        décocher le mode (piège du groupement automatique par parent)."""
+        """Two distinct QButtonGroups: ticking a direction must not untick the
+        mode (the trap of automatic grouping by parent)."""
         s = _OrderSection("Test", "alpha", "asc")
         qtbot.addWidget(s)
         s._rb_desc.setChecked(True)
-        assert s.mode() == "alpha"        # inchangé
+        assert s.mode() == "alpha"        # unchanged
         assert s.direction() == "desc"
         s._rb_chrono.setChecked(True)
-        assert s.direction() == "desc"    # inchangé
+        assert s.direction() == "desc"    # unchanged
 
     def test_chrono_album_section(self, qtbot):
         s = _ChronoAlbumSection("asc")
@@ -119,7 +119,7 @@ class TestLoadingLabel:
         l1.start_loading()
         l2.start_loading()
         l1._stop()
-        assert LoadingLabel._timer.isActive()   # l2 encore actif
+        assert LoadingLabel._timer.isActive()   # l2 still active
         l2._stop()
         assert not LoadingLabel._timer.isActive()
 
@@ -137,8 +137,8 @@ class TestLoadingLabel:
         qtbot.addWidget(lbl)
         lbl.setFixedSize(60, 60)
         lbl.start_loading()
-        img = lbl.grab().toImage()   # déclenche paintEvent en mode spinner
-        # au moins un pixel gris clair (un des 8 points)
+        img = lbl.grab().toImage()   # triggers paintEvent in spinner mode
+        # at least one light grey pixel (one of the 8 dots)
         found = any(
             img.pixelColor(x, y).red() > 100
             for x in range(0, 60, 2) for y in range(0, 60, 2)
