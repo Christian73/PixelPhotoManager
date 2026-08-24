@@ -84,7 +84,7 @@ def create_backup(
     zip_path = bdir / f"visages_{ts}.zip"
     tmp_faces = bdir / f"_tmp_{ts}.db"
     try:
-        # Hot-backup de faces.db via l'API de copie SQLite (thread-safe)
+        # Hot backup of faces.db through the SQLite copy API (thread-safe)
         src = sqlite3.connect(str(faces_db_path), check_same_thread=False)
         dst = sqlite3.connect(str(tmp_faces))
         src.backup(dst)

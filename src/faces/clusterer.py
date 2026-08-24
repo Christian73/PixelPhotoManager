@@ -12,7 +12,7 @@ from src.faces.face_database import FaceDatabase
 
 logger = logging.getLogger(__name__)
 
-_PCA_DIMS        = 32    # ball_tree efficace sous ~30 dims ; 32 conserve >90 % variance ArcFace
+_PCA_DIMS        = 32    # ball_tree is efficient below ~30 dims; 32 keeps >90 % of the ArcFace variance
 _CLUSTER_TIMEOUT = 1800  # seconds max (30 min) before giving up
 
 # Sentinel: N of unidentified faces at the last successful clustering.

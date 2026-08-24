@@ -256,7 +256,7 @@ def _icon_vignette(size: int = _ICON_SIZE) -> QPixmap:
     p.setBrush(grad)
     p.drawRect(pad, pad, bw, bh)
 
-    # Reflet clair au centre
+    # Light highlight in the centre
     grad2 = QRadialGradient(c, c, size // 7)
     grad2.setColorAt(0.0, QColor(220, 220, 220, 120))
     grad2.setColorAt(1.0, QColor(220, 220, 220, 0))
@@ -367,7 +367,7 @@ def _icon_ann_select(size: int = _ICON_SIZE) -> QPixmap:
     return px
 
 
-# ------------------------------------------------------------------ dialogue vignette
+# ------------------------------------------------------------------ vignette dialog
 
 _TOGGLE_BTN_STYLE = """
     QPushButton {{
