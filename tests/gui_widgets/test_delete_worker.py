@@ -161,7 +161,7 @@ class TestDeleteWorker:
         deleted, errors = results[0]
         assert deleted == [paths[1]]
         assert len(errors) == 1
-        assert "n'a PAS été supprimé" in errors[0]
+        assert "the file was NOT deleted" in errors[0]
         assert os.path.exists(paths[0])                       # file intact
         assert catalog.get_photo_by_path(paths[0]) is not None  # catalog intact
         assert catalog.get_photo_by_path(paths[1]) is None

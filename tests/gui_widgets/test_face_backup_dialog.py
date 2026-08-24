@@ -36,7 +36,7 @@ class TestHelpers:
         assert d.is_dir() and d.name == "faces_backups"
 
     def test_parse_ts_valid(self):
-        assert _parse_ts(Path("visages_20260627_143210.zip")) == "27 juin 2026 à 14:32"
+        assert _parse_ts(Path("visages_20260627_143210.zip")) == "Jun 27, 2026 at 14:32"
 
     def test_parse_ts_invalid_falls_back_to_stem(self):
         assert _parse_ts(Path("visages_nimporte.zip")) == "visages_nimporte"
@@ -192,7 +192,7 @@ class TestFaceBackupDialog:
 
         rows = _rows(dlg)
         assert len(rows) == 1
-        assert "Aucune sauvegarde" in rows[0].text()
+        assert "No backup available" in rows[0].text()
 
     def test_rows_built_for_existing_backups(self, qtbot, tmp_path):
         d = _backup_dir(tmp_path)
@@ -204,7 +204,7 @@ class TestFaceBackupDialog:
         rows = _rows(dlg)
         assert len(rows) == 2
         dates = [r.findChildren(QLabel)[0].text() for r in rows]
-        assert dates[0] == "1 févr. 2026 à 00:00"   # most recent first
+        assert dates[0] == "Feb 1, 2026 at 00:00"   # most recent first
 
     def test_set_busy_disables_buttons(self, qtbot, tmp_path):
         d = _backup_dir(tmp_path)
@@ -252,7 +252,7 @@ class TestFaceBackupDialog:
         # The list falls back on the "No backup" placeholder
         qtbot.waitUntil(
             lambda: any(
-                isinstance(w, QLabel) and "Aucune sauvegarde" in w.text()
+                isinstance(w, QLabel) and "No backup available" in w.text()
                 for w in _rows(dlg)
             ),
             timeout=2000,

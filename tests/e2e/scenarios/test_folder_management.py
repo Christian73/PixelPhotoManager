@@ -20,10 +20,12 @@ remove). A single application launch, sequential steps:
      only on the catalog side -- that is the highest-value case of the folder
      manager, cf. the plan.
    - "Delete the folder…": the ONLY deletion confirmation of the application
-     whose "Yes" button is relabelled "Remove"
-     (`sidebar.py:799`, `box.button(QMessageBox.Yes).setText("Remove")`) --
-     `click_yes()` would not find it, hence `find_dialog_button(...,
-     ["Remove"], exact=True)` used directly here.
+     whose "Yes" button is relabelled "Delete"
+     (`sidebar.py:1005`, `box.button(QMessageBox.Yes).setText(translate(
+     "Sidebar", "Delete"))`) -- `click_yes()` would not find it, hence
+     `find_dialog_button(..., ["Delete"], exact=True)` used directly here.
+     Not to be confused with the "Remove" of `FolderManagerDialog` in step 3,
+     which is the opposite contract (the files stay on disk).
    - "Move to…" is NOT automated: a native
      `QFileDialog.getExistingDirectory` (the Windows Shell picker, not a
      `QDialog` of the application), the same gap already documented for
@@ -139,7 +141,7 @@ def test_folder_management(isolated_app):
         lambda: _find_tree_item(window, root_name, timeout=15.0),
         window, "Create a subfolder…", exact=True,
     )
-    edit_new = _find_edit_near_text(window, "Nom du sous-dossier", timeout=10.0)
+    edit_new = _find_edit_near_text(window, "Name of the subfolder", timeout=10.0)
     edit_new.set_edit_text(_SUBFOLDER_NAME)
     find_dialog_button(window, ["OK"], exact=True, timeout=10.0).click_input()
 
@@ -184,7 +186,7 @@ def test_folder_management(isolated_app):
         lambda: _find_tree_item(window, _SUBFOLDER_NAME, timeout=15.0),
         window, "Rename…", exact=True,
     )
-    edit_rename = _find_edit_near_text(window, "Nouveau nom", timeout=10.0)
+    edit_rename = _find_edit_near_text(window, "New name", timeout=10.0)
     edit_rename.set_edit_text(_RENAMED_NAME)
     find_dialog_button(window, ["OK"], exact=True, timeout=10.0).click_input()
 
@@ -215,12 +217,12 @@ def test_folder_management(isolated_app):
         faces_db, "SELECT COUNT(*) FROM indexed_photos WHERE photo_path=?", (str(extra_photo),)
     ) == 0, "l'ancien chemin est toujours présent dans indexed_photos après renommage"
 
-    # ---- 2c. Delete the folder (destructive, "Remove" button) ----
+    # ---- 2c. Delete the folder (destructive, "Delete" button) ----
     right_click_and_click_context_menu_item(
         lambda: _find_tree_item(window, _RENAMED_NAME, timeout=15.0),
         window, "Delete the folder…", exact=True,
     )
-    find_dialog_button(window, ["Remove"], exact=True, timeout=10.0).click_input()
+    find_dialog_button(window, ["Delete"], exact=True, timeout=10.0).click_input()
 
     wait_for_condition(
         lambda: not renamed_folder.exists(), timeout=15.0,

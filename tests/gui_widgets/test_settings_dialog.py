@@ -156,7 +156,7 @@ class TestPerformancePage:
         page = _PerformancePage(config)
         qtbot.addWidget(page)
 
-        recommended = [key for key, label, _ in page._CHOICES if "recommandé" in label]
+        recommended = [key for key, label, _ in page._CHOICES if "recommended" in label]
         assert recommended == [cpu_throttle.DEFAULT_BACKGROUND_CPU]
 
     def test_saved_level_restored(self, qtbot, config):
@@ -218,12 +218,17 @@ class TestSettingsDialog:
     def test_category_list_switches_pages(self, qtbot, config):
         dlg = SettingsDialog(config)
         qtbot.addWidget(dlg)
-        assert dlg._stack.currentWidget() is dlg._page_faces
+        # Row 0 is the Language page, the setting a user must be able to reach
+        # without being able to read the interface (cf. CLAUDE.md).
+        assert dlg._stack.currentWidget() is dlg._page_lang
 
         dlg._category_list.setCurrentRow(1)
-        assert dlg._stack.currentWidget() is dlg._page_video
+        assert dlg._stack.currentWidget() is dlg._page_faces
 
         dlg._category_list.setCurrentRow(2)
+        assert dlg._stack.currentWidget() is dlg._page_video
+
+        dlg._category_list.setCurrentRow(3)
         assert dlg._stack.currentWidget() is dlg._page_perf
 
     def test_accept_applies_performance_level(self, qtbot, config):

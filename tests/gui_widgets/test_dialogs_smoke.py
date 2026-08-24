@@ -92,10 +92,10 @@ class TestHelpDialog:
         dlg = hd.HelpDialog()
         qtbot.addWidget(dlg)
         for status, needle in [
-            (hd.STATUS_UPDATE_AVAILABLE, "nouvelle version"),
-            (hd.STATUS_UP_TO_DATE, "dernière version"),
-            (hd.STATUS_VERSION_UNKNOWN, "développement"),
-            ("erreur_reseau", "Impossible de vérifier"),
+            (hd.STATUS_UPDATE_AVAILABLE, "A new version is available"),
+            (hd.STATUS_UP_TO_DATE, "latest version"),
+            (hd.STATUS_VERSION_UNKNOWN, "development mode"),
+            ("erreur_reseau", "Could not check"),
         ]:
             dlg._on_version_checked(status, "9.9.9", "https://exemple/rel")
             assert needle in dlg._about_browser.toHtml()
@@ -159,8 +159,8 @@ class TestFaceCountersDialog:
         dlg = FaceCountersDialog(face_db, catalog)
         qtbot.addWidget(dlg)
         texts = [lbl.text() for lbl in dlg.findChildren(QLabel)]
-        assert any("Personnes identifiées : 1" in t for t in texts)
-        assert any("Visages détectés : 0" in t for t in texts)
+        assert any("Identified people : 1" in t for t in texts)
+        assert any("Detected faces : 0" in t for t in texts)
 
 
 # ------------------------------------------------------------------ ProblemsHistoryDialog
@@ -214,7 +214,7 @@ class TestIndexErrorsDialog:
         dlg = IndexErrorsDialog(face_db, cache)
         qtbot.addWidget(dlg)
         texts = [lbl.text() for lbl in dlg.findChildren(QLabel)]
-        assert any("Aucune erreur" in t for t in texts)
+        assert any("No identification error" in t for t in texts)
 
     def test_rows_and_retry_signal(self, qtbot, tmp_path):
         from src.ui.index_errors_dialog import IndexErrorsDialog, _ErrorRow
@@ -252,9 +252,9 @@ class TestFolderManagerDialog:
     def test_empty_state(self, qtbot, tmp_path, config):
         dlg = self._dlg(qtbot, tmp_path, config, [])
         texts = [lbl.text() for lbl in dlg.findChildren(QLabel)]
-        assert any("Aucun dossier configuré" in t for t in texts)
+        assert any("No folder configured" in t for t in texts)
 
-    def test_rows_with_status_and_subdirs(self, qtbot, tmp_path, config):
+    def test_rows_with_status_and_subdirs(self, qtbot, tmp_path, config, en_catalogue):
         from src.ui.folder_manager_dialog import _FolderRow
         good = tmp_path / "bibli"
         (good / "Originals").mkdir(parents=True)
@@ -268,8 +268,8 @@ class TestFolderManagerDialog:
 
         row_good = next(r for r in rows if r._folder == str(good))
         assert row_good._toggle_btn is not None
-        assert "3 sous-dossiers" in row_good._toggle_btn.text()
-        assert "2 exclus" in row_good._toggle_btn.text()
+        assert "3 subfolders" in row_good._toggle_btn.text()
+        assert "(2 excluded)" in row_good._toggle_btn.text()
         row_good._toggle_subdirs()
         # window not shown: we check the logical state (not hidden + arrow),
         # not isVisible(), which requires a visible parent
@@ -278,7 +278,7 @@ class TestFolderManagerDialog:
 
         row_missing = next(r for r in rows if r._folder == missing)
         texts = [lbl.text() for lbl in row_missing.findChildren(QLabel)]
-        assert any("introuvable" in t for t in texts)
+        assert any("cannot be found on the disk" in t for t in texts)
 
     def test_rescan_signal(self, qtbot, tmp_path, config, monkeypatch):
         good = tmp_path / "bibli"
@@ -334,7 +334,7 @@ class TestPicasaImportDialog:
         )
         return photos
 
-    def test_stats_displayed(self, qtbot, tmp_path, config, monkeypatch):
+    def test_stats_displayed(self, qtbot, tmp_path, config, monkeypatch, en_catalogue):
         from src.faces import picasa_importer as pi
         monkeypatch.setattr(pi, "find_contacts_xml", lambda: None)
         from src.ui.picasa_import_dialog import PicasaImportDialog
@@ -346,8 +346,8 @@ class TestPicasaImportDialog:
         dlg = PicasaImportDialog(config, catalog, face_db)
         qtbot.addWidget(dlg)
         texts = [lbl.text() for lbl in dlg.findChildren(QLabel)]
-        assert any("1 personne(s)" in t for t in texts)
-        assert any("1 photo(s) avec des visages" in t for t in texts)
+        assert any("1 person in the Picasa database" in t for t in texts)
+        assert any("1 photo with identified faces" in t for t in texts)
         assert dlg._btn_import.isEnabled()
 
     def test_full_import_flow(self, qtbot, tmp_path, config, monkeypatch):

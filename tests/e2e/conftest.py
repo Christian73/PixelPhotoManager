@@ -447,6 +447,36 @@ def click_popup_list_item(class_name: str, text: str, *, exact: bool = False, ti
         f"Élément de liste {text!r} introuvable dans la fenêtre {class_name!r} après {timeout}s ({last_exc})"
     )
 
+def click_popup_button(class_name: str, text: str, *, exact: bool = True,
+                       timeout: float = 10.0) -> None:
+    """Clicks a `QPushButton` hosted in a top-level window separate from the
+    main window (e.g. the "Close" button of `_DuplicatesPopup`, a `Qt.Popup`
+    widget) — same trap as `click_popup_list_item` above: such a button is
+    never among `window.descendants(control_type="Button")` of the main
+    window, only reachable through the Desktop."""
+    from pywinauto import Desktop
+
+    deadline = time.monotonic() + timeout
+    last_exc: Exception | None = None
+    last_labels: list[str] = []
+    while time.monotonic() < deadline:
+        try:
+            last_labels = []
+            for w in Desktop(backend="uia").windows(class_name=class_name):
+                for button in w.descendants(control_type="Button"):
+                    label = button.window_text()
+                    last_labels.append(label)
+                    if (label == text) if exact else (text.lower() in label.lower()):
+                        button.click_input()
+                        return
+        except Exception as exc:
+            last_exc = exc
+        time.sleep(0.3)
+    raise LookupError(
+        f"Bouton {text!r} introuvable dans la fenêtre {class_name!r} après "
+        f"{timeout}s ({last_exc}) — boutons vus : {last_labels!r}"
+    )
+
 
 def right_click_element(element) -> None:
     """Opens a real Qt context menu by right click (SendInput) - unlike

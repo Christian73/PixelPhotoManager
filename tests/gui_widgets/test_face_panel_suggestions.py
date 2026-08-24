@@ -223,4 +223,4 @@ class TestProbableMatchInformativeLabel:
         _load_and_settle(qtbot, panel, photo)
 
         item = panel._items[face_id]
-        assert "Groupe 77" in item._name_label.text()
+        assert "Group 77" in item._name_label.text()

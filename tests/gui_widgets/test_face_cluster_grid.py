@@ -203,7 +203,7 @@ class TestBuildFromData:
         data = _data(
             face_counts={1: 4, 2: 2},
             groups=[[1, 2]],
-            labels={1: ("≈ Probablement la même personne — 2 groupes", "#7aabdb")},
+            labels={1: ("≈ Probably the same person  —  2 groups", "#7aabdb")},
         )
         _build(qtbot, grid, data)
 
@@ -232,7 +232,7 @@ class TestBuildFromData:
         assert sorted(c for c, _ in dedicated[0]._entries) == [1, 2]
         # Label recomputed with the name and the best score
         label, color = data["group_labels"][2]   # root = cluster sorted by size (2 first)
-        assert "Probablement Alice (80 %)" in label
+        assert "Probably Alice (80 %)" in label
         assert color == "#7aabdb"
 
     def test_promoted_suggestions_emit_persons_updated(self, qtbot, grid):
@@ -351,7 +351,7 @@ class TestCardActions:
 
         assert blocker.args == [[1], 42]
 
-    def test_view_requested_solo_and_group(self, qtbot, grid):
+    def test_view_requested_solo_and_group(self, qtbot, grid, en_catalogue):
         _raw_insert_face(grid._face_db, "C:/p.jpg", cluster_id=2)
         _raw_insert_face(grid._face_db, "C:/p2.jpg", cluster_id=2)
         _build(qtbot, grid, _data({2: 2, 9: 1}, [[2], [9]]))
@@ -362,7 +362,7 @@ class TestCardActions:
 
         with qtbot.waitSignal(grid.photos_requested, timeout=1000) as blocker:
             grid._on_card_view_requested(2)
-        assert blocker.args == [2, "Groupe 2 — 2 visages"]
+        assert blocker.args == [2, "Group 2 — 2 faces"]
 
     def _patch_dialog(self, monkeypatch, *, ignored=False, new_person=False,
                       new_name="", person_id=None):
@@ -506,7 +506,7 @@ class TestPagination:
 
         assert grid._rendered_count == 3
         assert grid._load_more_btn is not None
-        assert "2 restants" in grid._load_more_btn.text()
+        assert "(2 left)" in grid._load_more_btn.text()
 
         grid._load_more_btn.click()
         qtbot.waitUntil(lambda: grid._rendered_count >= 5, timeout=3000)

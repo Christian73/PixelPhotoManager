@@ -210,7 +210,7 @@ def test_edit_treatments_extended(isolated_app):
 
     # ---- Reset every edit: without confirmation (reversible), row deleted ----
     # Label on 2 lines (edit_panel.py): UIA returns the literal \n in window_text().
-    invoke_button(window, ["Réinitialiser\ntoutes les retouches"], exact=True, timeout=10.0, wait_gone=False)
+    invoke_button(window, ["Reset\nevery edit"], exact=True, timeout=10.0, wait_gone=False)
     wait_for_condition(
         lambda: not _row_exists(edits_db, photo),
         timeout=20.0, message="la réinitialisation n'a pas supprimé la ligne photo_edits",

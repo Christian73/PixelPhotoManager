@@ -107,7 +107,7 @@ def _find_name_input(window):
     does not reliably expose its placeholder text through UIA, and other
     `Edit` controls (sidebar filter, people search) coexist in the tree while
     the dialog is open."""
-    anchor = find_radio_button(window, "Créer une nouvelle personne")
+    anchor = find_radio_button(window, "Create a new person")
     a_rect = anchor.rectangle()
     a_mid = (a_rect.top + a_rect.bottom) / 2
     edits = window.descendants(control_type="Edit")

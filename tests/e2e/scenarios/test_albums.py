@@ -115,7 +115,7 @@ def _reveal_sidebar_albums_tail(window) -> None:
     list through an always present item then send {END} to bring the end of the
     list into the viewport."""
     for item in window.descendants(control_type="ListItem"):
-        if "Chronologie" in item.window_text():
+        if "Timeline" in item.window_text():
             item.click_input()
             break
     import pywinauto.keyboard as kb
@@ -136,7 +136,7 @@ def test_albums(isolated_app):
 
     # ---- 1. sidebar "+": empty album ----
     find_dialog_button(window, ["+"], exact=True, timeout=10.0).click_input()
-    edit_new = _find_edit_near_text(window, "Nom de l'album", timeout=10.0)
+    edit_new = _find_edit_near_text(window, "Album name", timeout=10.0)
     edit_new.set_edit_text(_EMPTY_ALBUM_NAME)
     find_dialog_button(window, ["OK"], exact=True, timeout=10.0).click_input()
 
@@ -155,7 +155,7 @@ def test_albums(isolated_app):
     thumb_b.click_input(pressed="control")
     right_click_element(thumb_b)
     click_context_menu_item(window, "Create a new album with", exact=False, timeout=10.0)
-    edit_populated = _find_edit_near_text(window, "Nom du nouvel album", timeout=10.0)
+    edit_populated = _find_edit_near_text(window, "Name of the new album", timeout=10.0)
     edit_populated.set_edit_text(_POPULATED_ALBUM_NAME)
     find_dialog_button(window, ["OK"], exact=True, timeout=10.0).click_input()
 

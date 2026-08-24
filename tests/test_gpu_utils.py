@@ -83,7 +83,7 @@ class TestConfigureListPhysicalDevicesRaises:
 
         label = gpu_utils_module.configure()
 
-        assert label == "CPU (erreur détection GPU : driver absent)"
+        assert label == "CPU (GPU detection error: driver absent)"
 
 
 class TestConfigureGpuFound:
@@ -98,7 +98,7 @@ class TestConfigureGpuFound:
 
         label = gpu_utils_module.configure()
 
-        assert label == "GPU : /physical_device:GPU:0  [DirectML]"
+        assert label == "GPU: /physical_device:GPU:0  [DirectML]"
 
     def test_multiple_gpus_are_joined_with_comma(self, monkeypatch):
         _reset(monkeypatch)
@@ -111,7 +111,7 @@ class TestConfigureGpuFound:
 
         label = gpu_utils_module.configure()
 
-        assert label == "GPU : /physical_device:GPU:0, /physical_device:GPU:1  [DirectML]"
+        assert label == "GPU: /physical_device:GPU:0, /physical_device:GPU:1  [DirectML]"
 
     def test_memory_growth_runtime_error_is_swallowed(self, monkeypatch):
         _reset(monkeypatch)
@@ -125,7 +125,7 @@ class TestConfigureGpuFound:
 
         label = gpu_utils_module.configure()
 
-        assert label == "GPU : /physical_device:GPU:0  [DirectML]"
+        assert label == "GPU: /physical_device:GPU:0  [DirectML]"
 
     def test_gpu_detail_enriched_with_vram_from_nvidia_smi(self, monkeypatch):
         _reset(monkeypatch)
@@ -144,7 +144,7 @@ class TestConfigureGpuFound:
 
         label = gpu_utils_module.configure()
 
-        assert label == "GPU : NVIDIA GeForce RTX 3070 (8 Go)  [DirectML]"
+        assert label == "GPU: NVIDIA GeForce RTX 3070 (8 GB)  [DirectML]"
 
 
 class TestConfigureNoGpuButHardwarePresent:
@@ -164,8 +164,8 @@ class TestConfigureNoGpuButHardwarePresent:
         label = gpu_utils_module.configure()
 
         assert label == (
-            "CPU  (GPU détecté : NVIDIA GeForce RTX 3070 (8 Go) — "
-            "accélération GPU non disponible sur Windows natif avec TF ≥ 2.11)"
+            "CPU  (GPU found: NVIDIA GeForce RTX 3070 (8 GB) — "
+            "GPU acceleration is not available on native Windows with TF ≥ 2.11)"
         )
 
     def test_non_windows_message_when_hardware_present_but_unusable(self, monkeypatch):
@@ -184,8 +184,8 @@ class TestConfigureNoGpuButHardwarePresent:
         label = gpu_utils_module.configure()
 
         assert label == (
-            "CPU  (GPU détecté : NVIDIA GeForce RTX 3070 (8 Go) — "
-            "CUDA/cuDNN requis pour l'utiliser)"
+            "CPU  (GPU found: NVIDIA GeForce RTX 3070 (8 GB) — "
+            "CUDA/cuDNN required to use it)"
         )
 
 
@@ -236,7 +236,7 @@ class TestHardwareGpuName:
 
         monkeypatch.setattr(subprocess, "run", fake_run)
 
-        assert gpu_utils_module._hardware_gpu_name() == "NVIDIA GeForce RTX 3070 (8 Go)"
+        assert gpu_utils_module._hardware_gpu_name() == "NVIDIA GeForce RTX 3070 (8 GB)"
 
     def test_returns_empty_string_when_nvidia_smi_missing(self, monkeypatch):
         monkeypatch.setattr(subprocess, "run", _raise_file_not_found)
@@ -264,7 +264,7 @@ class TestGpuDetail:
 
         monkeypatch.setattr(subprocess, "run", fake_run)
 
-        assert gpu_utils_module._gpu_detail("/physical_device:GPU:1") == "NVIDIA GeForce RTX 4090 (24 Go)"
+        assert gpu_utils_module._gpu_detail("/physical_device:GPU:1") == "NVIDIA GeForce RTX 4090 (24 GB)"
 
     def test_missing_index_in_name_defaults_to_zero(self, monkeypatch):
         def fake_run(*args, **kwargs):
@@ -274,7 +274,7 @@ class TestGpuDetail:
 
         monkeypatch.setattr(subprocess, "run", fake_run)
 
-        assert gpu_utils_module._gpu_detail("no-index-here") == "NVIDIA GeForce RTX 3070 (8 Go)"
+        assert gpu_utils_module._gpu_detail("no-index-here") == "NVIDIA GeForce RTX 3070 (8 GB)"
 
     def test_returns_raw_tf_name_when_nvidia_smi_fails(self, monkeypatch):
         monkeypatch.setattr(subprocess, "run", _raise_file_not_found)

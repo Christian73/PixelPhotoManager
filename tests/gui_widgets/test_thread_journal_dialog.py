@@ -128,14 +128,14 @@ class TestCompteRenduPanel:
         panel = tjd._CompteRenduPanel()
         qtbot.addWidget(panel)
         panel.populate(_OK_ENTRIES)
-        assert "Tout fonctionne normalement" in panel._banner.text()
+        assert "Everything is running normally" in panel._banner.text()
         assert any("OK" in t for t in self._texts(panel))
 
     def test_critical_banner(self, qtbot):
         panel = tjd._CompteRenduPanel()
         qtbot.addWidget(panel)
         panel.populate(_CRITICAL_ENTRIES + _ERROR_ENTRIES)
-        assert "en erreur ou trop lent" in panel._banner.text()
+        assert "in error or too slow" in panel._banner.text()
 
     def test_slow_banner(self, qtbot):
         panel = tjd._CompteRenduPanel()
@@ -147,7 +147,7 @@ class TestCompteRenduPanel:
         panel = tjd._CompteRenduPanel()
         qtbot.addWidget(panel)
         panel.populate(_FACE_OK_ENTRIES)
-        assert any("PROGRESSE" in t for t in self._texts(panel))
+        assert any("PROGRESSING" in t for t in self._texts(panel))
 
 
 class TestSummaryTable:
@@ -168,7 +168,7 @@ class TestSummaryTable:
         table = tjd._SummaryTable()
         qtbot.addWidget(table)
         table.populate(_FACE_OK_ENTRIES)
-        assert "Progresse" in table.item(0, table.columnCount() - 1).text()
+        assert "Progressing" in table.item(0, table.columnCount() - 1).text()
 
 
 class TestEventTable:

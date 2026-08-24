@@ -230,7 +230,7 @@ class TestPersonClusterView:
         _wait_loaders(qtbot, view)
 
         assert sorted(view._flat_cards.keys()) == sorted(fids)
-        assert view._lbl_title.text() == "Visages de Alice"
+        assert view._lbl_title.text() == "Faces of Alice"
         assert not view._pending_section.isVisibleTo(view)
 
     def test_pending_suggestions_build_pending_section(self, qtbot, env, tmp_path):

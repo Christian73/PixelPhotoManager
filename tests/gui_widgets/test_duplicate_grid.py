@@ -82,13 +82,13 @@ class TestLoadThread:
 
 
 class TestDuplicateCard:
-    def test_count_label(self, qtbot, tmp_path):
+    def test_count_label(self, qtbot, tmp_path, en_catalogue):
         photos = _groups(tmp_path, {1: 3})[1]
         card = _DuplicateCard(1, photos)
         qtbot.addWidget(card)
         from PySide6.QtWidgets import QLabel
         texts = [lbl.text() for lbl in card.findChildren(QLabel)]
-        assert any("3 exemplaires" in t for t in texts)
+        assert any("3 copies" in t for t in texts)
 
     def test_ignore_button_emits(self, qtbot, tmp_path):
         photos = _groups(tmp_path, {5: 2})[5]
@@ -146,10 +146,10 @@ class TestDuplicateGrid:
         assert not grid._card_area.isVisibleTo(grid)
         assert grid._lbl_title.text() == ""
 
-    def test_cards_created(self, grid, tmp_path):
+    def test_cards_created(self, grid, tmp_path, en_catalogue):
         grid._on_groups_ready(_groups(tmp_path, {1: 2, 2: 3}))
         assert len(grid._cards) == 2
-        assert "2 groupes de doublons" in grid._lbl_title.text()
+        assert "2 duplicate groups" in grid._lbl_title.text()
         assert grid._card_area.isVisibleTo(grid)
 
     def test_empty_photo_lists_skipped(self, grid, tmp_path):
@@ -172,11 +172,11 @@ class TestDuplicateGrid:
         assert len(grid._cards) == 2
         assert grid._cards[1] is not first
 
-    def test_remove_group(self, grid, tmp_path):
+    def test_remove_group(self, grid, tmp_path, en_catalogue):
         grid._on_groups_ready(_groups(tmp_path, {1: 2, 2: 2}))
         grid.remove_group(1)
         assert set(grid._cards.keys()) == {2}
-        assert "1 groupe de doublons" in grid._lbl_title.text()
+        assert "1 duplicate group" in grid._lbl_title.text()
         grid.remove_group(2)
         assert grid._lbl_title.text() == ""
         assert grid._empty_panel.isVisibleTo(grid)

@@ -717,6 +717,6 @@ class TestSplitterAndFolderOps:
         sidebar._delete_folder(str(doomed))
         qtbot.waitUntil(lambda: len(errors) == 1, timeout=3000)
 
-        assert "n'a PAS été supprimé" in errors[0]
+        assert "The folder was NOT deleted" in errors[0]
         assert fired == []
         assert doomed.exists()

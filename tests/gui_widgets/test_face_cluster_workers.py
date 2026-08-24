@@ -234,9 +234,9 @@ class TestClusterRefreshThread:
 
         assert col.initial[0]["groups_sorted"] == []
         assert col.final[0]["groups_sorted"] == []
-        assert any("Aucun groupe" in m for m in col.progress)
+        assert any("No group to analyse" in m for m in col.progress)
 
-    def test_two_phases_and_union_find_grouping(self, qtbot, tmp_path):
+    def test_two_phases_and_union_find_grouping(self, qtbot, tmp_path, en_catalogue):
         face_db, catalog = self._dbs(tmp_path)
         # Clusters 1 and 2: 2 faces each, identical centroids -> grouped.
         # Cluster 3: 2 faces, orthogonal -> separate.
@@ -259,7 +259,7 @@ class TestClusterRefreshThread:
         assert [1, 2] in merged and [3] in merged
         root12 = next(g[0] for g in final["groups_sorted"] if len(g) == 2)
         label, color = final["group_labels"][root12]
-        assert "même personne" in label and "2 groupes" in label
+        assert "the same person" in label and "2 groups" in label
         assert color == "#7aabdb"   # sim 100 % >= _SIM_STRONG
 
     def test_auto_promotion_filters_suggested_cluster(self, qtbot, tmp_path):

@@ -132,7 +132,7 @@ def test_export_extended(isolated_app):
     find_thumbnail(window, str(photo_c), timeout=15.0).click_input()  # a plain click: deselects a/b
 
     find_dialog_button(window, ["Export"], exact=False, timeout=10.0).click_input()
-    _click_size_radio(window, "Average", timeout=10.0)
+    _click_size_radio(window, "Medium", timeout=10.0)
     _set_export_dir(window, export_dir)
     find_dialog_button(window, ["Export"], exact=True, timeout=10.0).click_input()
 

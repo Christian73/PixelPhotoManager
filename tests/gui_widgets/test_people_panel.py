@@ -179,7 +179,7 @@ class TestAssignDialog:
     def _persons(self):
         return [_person(1, "Alice", 5), _person(2, "Boris", 1), _person(3, "Chloé")]
 
-    def test_suggestion_preselected_and_accept(self, qtbot):
+    def test_suggestion_preselected_and_accept(self, qtbot, en_catalogue):
         dlg = _AssignDialog(7, self._persons(), suggested_person_id=2)
         qtbot.addWidget(dlg)
 
@@ -296,14 +296,14 @@ class TestClusterRow:
         qtbot.addWidget(row)
 
         labels = [lbl.text() for lbl in row.findChildren(QLabel)]
-        assert any("Probablement Alice (62 %)" in t for t in labels)
+        assert any("Probably Alice (62 %)" in t for t in labels)
 
     def test_weak_suggestion_label(self, qtbot):
         row = _ClusterRow(5, 1, None, [], suggestion=("Boris", 2, 0.46))
         qtbot.addWidget(row)
 
         labels = [lbl.text() for lbl in row.findChildren(QLabel)]
-        assert any("Peut-être Boris (46 %)" in t for t in labels)
+        assert any("Maybe Boris (46 %)" in t for t in labels)
         assert any("Isolated" in t for t in labels)   # face_count == 1
 
     def test_set_avatar(self, qtbot, tmp_path):
@@ -402,10 +402,10 @@ class TestPeopleDialog:
         dlg, _, _ = self._make(qtbot, tmp_path)
 
         labels = [lbl.text() for lbl in dlg._content.findChildren(QLabel)]
-        assert any("Tous les groupes ont été nommés" in t for t in labels)
+        assert any("Every group has been named" in t for t in labels)
         assert dlg._rows == {}
 
-    def test_unnamed_clusters_build_rows_with_suggestion(self, qtbot, tmp_path):
+    def test_unnamed_clusters_build_rows_with_suggestion(self, qtbot, tmp_path, en_catalogue):
         photo_holder = {}
 
         def seed(face_db, catalog):
@@ -425,8 +425,8 @@ class TestPeopleDialog:
 
         assert list(dlg._rows.keys()) == [1]
         labels = [lbl.text() for lbl in dlg._rows[1].findChildren(QLabel)]
-        assert any("Probablement Alice" in t for t in labels)
-        assert any("2 visages" in t for t in labels)
+        assert any("Probably Alice" in t for t in labels)
+        assert any("2 faces" in t for t in labels)
 
     def test_on_named_emits_and_refreshes(self, qtbot, tmp_path):
         def seed(face_db, catalog):

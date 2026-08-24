@@ -41,6 +41,7 @@ import pytest
 from tests.e2e.conftest import (
     click_context_menu_item,
     click_menu_item,
+    click_popup_button,
     click_popup_list_item,
     click_yes,
     double_click_element,
@@ -120,7 +121,10 @@ def test_duplicates_ui(isolated_app):
         timeout=10.0,
         message="la navigation depuis la popup de doublons n'a pas changé la photo affichée",
     )
-    find_dialog_button(window, ["Close"], exact=True, timeout=10.0).click_input()
+    # The "Close" button of the popup lives in the _DuplicatesPopup top-level
+    # window (Qt.Popup), never among the descendants of the main window — same
+    # trap as its list items just above.
+    click_popup_button("_DuplicatesPopup", "Close", timeout=10.0)
     find_dialog_button(window, ["✕"], exact=True, timeout=10.0).click_input()
 
     # ---- 4. Deleting one copy of the cropped group: side effect ----

@@ -248,10 +248,10 @@ class TestExifPanelPopulation:
         panel._on_data_ready(path, data)
 
         texts = _panel_texts(panel)
-        assert "FICHIER" in texts
-        assert "APPAREIL PHOTO" in texts
+        assert "FILE" in texts
+        assert "CAMERA" in texts
         assert "PixelCam" in texts
-        assert "PRISE DE VUE" in texts
+        assert "CAPTURE" in texts
         assert "06/15/2024  10:30:00" in texts
         assert "f/2.8" in texts
         assert "80 × 60 px" in texts
@@ -266,7 +266,7 @@ class TestExifPanelPopulation:
         panel._on_data_ready(path, data)
 
         texts = _panel_texts(panel)
-        assert "VIDÉO" in texts
+        assert "VIDEO" in texts
         assert "64 × 48 px" in texts
         assert any(t.startswith("0:00") for t in texts)   # duration < 1 min
 
@@ -280,8 +280,8 @@ class TestExifPanelPopulation:
         panel._on_data_ready(str(path), _ExifDataLoader._load_video(str(path)))
 
         texts = _panel_texts(panel)
-        assert "FICHIER" in texts
-        assert "VIDÉO" not in texts
+        assert "FILE" in texts
+        assert "VIDEO" not in texts
 
     def test_none_data_shows_error_row(self, qtbot):
         panel = ExifPanel()
@@ -383,7 +383,7 @@ class TestExifPanelGps:
         texts = _panel_texts(panel)
         assert "-35.5 m" in texts
         assert "42.0 km/h" in texts
-        assert any("magnétique" in t for t in texts)
+        assert any("magnetic" in t for t in texts)
         assert "2024:06:15  10:30:15.5 UTC" in texts
         assert "±4.2 m" in texts
 
