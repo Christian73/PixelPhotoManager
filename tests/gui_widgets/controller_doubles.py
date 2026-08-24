@@ -119,8 +119,10 @@ def make_message_box():
         Ok = QMessageBox.StandardButton.Ok
         Cancel = QMessageBox.StandardButton.Cancel
         Warning = QMessageBox.Icon.Warning
+        Information = QMessageBox.Icon.Information
         DestructiveRole = QMessageBox.ButtonRole.DestructiveRole
         ActionRole = QMessageBox.ButtonRole.ActionRole
+        AcceptRole = QMessageBox.ButtonRole.AcceptRole
         RejectRole = QMessageBox.ButtonRole.RejectRole
 
         answer = QMessageBox.StandardButton.Yes   # question() / exec()
@@ -130,9 +132,13 @@ def make_message_box():
         warnings: list = []
         instances: list = []
 
-        def __init__(self, parent=None):
+        def __init__(self, *args):
+            """QMessageBox(parent) as well as the full positional form
+            QMessageBox(icon, title, text, buttons, parent) -- both are used."""
             self.buttons = []
-            self.texts = []
+            self.texts = [a for a in args if isinstance(a, str)][1:]  # [icon] title text
+            self.title = next((a for a in args if isinstance(a, str)), "")
+            self.checkbox = None
             _Box.instances.append(self)
 
         # -- instance API used by the controllers --------------------------
@@ -151,13 +157,17 @@ def make_message_box():
         def setStandardButtons(self, *a):
             pass
 
+        def setCheckBox(self, checkbox):
+            self.checkbox = checkbox
+
         def setDefaultButton(self, *a):
             pass
 
         def button(self, *a):
             return Recorder()
 
-        def addButton(self, text, role):
+        def addButton(self, text, role=None):
+            """addButton(text, role) as well as addButton(StandardButton)."""
             marker = SimpleNamespace(text=text, role=role)
             self.buttons.append(marker)
             return marker
@@ -185,6 +195,8 @@ def make_message_box():
         @staticmethod
         def warning(parent, title, body="", *a, **k):
             _Box.warnings.append((title, body))
+            # warning() called with buttons answers like question()
+            return _Box.answer
 
     _Box.infos = []
     _Box.criticals = []
