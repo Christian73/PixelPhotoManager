@@ -3,21 +3,38 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 <Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
 
+  <!-- Multilingual installer (English, French, German).
+
+       Every displayed string goes through !(loc.*), resolved by light.exe from
+       installer\loc\<culture>.wxl. build_msi.ps1 links the SAME wixobjs once per
+       culture, turns the French and German MSIs into language transforms
+       (torch -t language) and embeds them into the English MSI as substorages
+       named after their LCID (1036, 1031), then lists the three LCIDs in the
+       Languages summary property.
+
+       Windows Installer then picks the transform matching the user's language on
+       its own, with no bootstrapper and no TRANSFORMS property: an LCID that is
+       not listed simply gets the base package, i.e. English. English is therefore
+       both the source language and the fallback, as in the application itself
+       (src/core/i18n.py). -->
+
   <Product Id="*"
-           Name="Pixel Photo Manager"
-           Language="1036"
+           Name="!(loc.ProductName)"
+           Language="!(loc.Lang)"
            Version="$(var.ProductVersion)"
            Manufacturer="Christian Guyot"
            UpgradeCode="2A4213D1-6095-4DA5-AD2C-8A5960AFCAE7">
 
-    <Package Description="Pixel Photo Manager — Gestionnaire de photos desktop Windows"
+    <Package Description="!(loc.PackageDescription)"
              Manufacturer="Christian Guyot"
+             Languages="!(loc.Lang)"
+             SummaryCodepage="1252"
              InstallerVersion="500"
              Compressed="yes"
              InstallScope="perMachine"
              Platform="x64" />
 
-    <MajorUpgrade DowngradeErrorMessage="Une version plus recente de Pixel Photo Manager est deja installee. Desinstallez-la d'abord." />
+    <MajorUpgrade DowngradeErrorMessage="!(loc.DowngradeError)" />
 
     <MediaTemplate EmbedCab="yes" CompressionLevel="high" />
 
@@ -28,14 +45,84 @@
     <!-- Installation interface -->
     <Property Id="WIXUI_INSTALLDIR" Value="INSTALLFOLDER" />
     <UIRef Id="WixUI_InstallDir" />
-    <WixVariable Id="WixUILicenseRtf" Value="installer\License.rtf" />
+    <!-- The licence is NOT declared here: its path changes with the culture, and a
+         !(loc.*) inside a WixVariable used as a file path is not resolved in time
+         (LGHT0103 on the literal string). build_msi.ps1 therefore defines the
+         variable on the light command line, one value per pass. -->
     <WixVariable Id="WixUIBannerBmp"  Value="installer\banner.bmp" />
     <WixVariable Id="WixUIDialogBmp"  Value="installer\dialog.bmp" />
+
+    <!-- Offer to start the application when the installer is closed.
+
+         The checkbox is the one of the standard WixUI ExitDialog: it only
+         appears when WIXUI_EXITDIALOGOPTIONALCHECKBOXTEXT is set, and only on a
+         fresh install (its own "AND NOT Installed" condition), never when
+         repairing or uninstalling. Its label is a !(loc.*) like every other
+         string, so it is carried by the language transforms; it is ticked by
+         default (WIXUI_EXITDIALOGOPTIONALCHECKBOX = 1).
+
+         The launch goes through WixShellExec (WixUtilExtension), called from
+         the ExitDialog, i.e. in the CLIENT process: with Impersonate="yes" the
+         application therefore starts as the user who ran the installer and NOT
+         with the elevated token of the perMachine installation - started as
+         administrator it would write its %LOCALAPPDATA% (catalog.db,
+         config.json, thumbnails.db) into the administrator profile instead of
+         the user's, and the first real start would find an empty library.
+
+         Return="ignore" and not "asyncNoWait": ShellExecute returns as soon as
+         the process is spawned (it does not wait for the application to come
+         up), so the synchronous form costs nothing, while an asynchronous one
+         races the end of the UI sequence - the Finish button also closes the
+         installer. "ignore" additionally swallows a launch failure, which must
+         never turn a successful installation into an error dialog.
+
+         WixShellExecTarget keeps its [INSTALLFOLDER] reference UNRESOLVED on
+         purpose: WixShellExec formats it when it runs, i.e. after the user has
+         had the chance to change the installation folder on the InstallDir
+         screen. Resolving it earlier (a SetProperty after CostFinalize, the
+         usual way to silence the CNDL1077 warning candle emits here) would
+         freeze the DEFAULT folder and launch nothing when the user picks
+         another one. The warning is therefore suppressed in build_msi.ps1
+         (-sw1077), not worked around. -->
+    <Property Id="WIXUI_EXITDIALOGOPTIONALCHECKBOXTEXT" Value="!(loc.LaunchApplication)" />
+    <Property Id="WIXUI_EXITDIALOGOPTIONALCHECKBOX" Value="1" />
+    <Property Id="WixShellExecTarget" Value="[INSTALLFOLDER]PixelPhotoManager.exe" />
+    <CustomAction Id="LaunchApplication"
+                  BinaryKey="WixCA_x64"
+                  DllEntry="WixShellExec"
+                  Impersonate="yes"
+                  Return="ignore" />
+    <UI>
+      <Publish Dialog="ExitDialog" Control="Finish" Event="DoAction" Value="LaunchApplication">WIXUI_EXITDIALOGOPTIONALCHECKBOX = 1 and NOT Installed</Publish>
+    </UI>
 
     <!-- ========================================================
          Directory structure
          ======================================================== -->
     <Directory Id="TARGETDIR" Name="SourceDir">
+
+      <!-- Language pre-positioned for the application.
+
+           The installer knows which language it displayed (it is the one Windows
+           picked from the embedded transforms); the application would otherwise
+           start in English on a French machine until the user found the setting.
+           The value is a localized string, so it is carried by the very same
+           transforms as every other label - no custom action, nothing to compute
+           at install time.
+
+           HKLM and not the user configuration: the package is perMachine, so it
+           is installed once for every account of the machine, whereas config.json
+           lives in each user's %LOCALAPPDATA%. src/core/config.py reads this value
+           only when it has no configuration yet, so an existing installation keeps
+           the language its user chose. -->
+      <Component Id="AppLanguageComp" Guid="150615EB-AE39-46DB-A1E6-D9DB8EC4AC73">
+        <RegistryValue Root="HKLM"
+                       Key="SOFTWARE\PixelPhotoManager"
+                       Name="InstallLanguage"
+                       Type="string"
+                       Value="!(loc.AppLanguageCode)"
+                       KeyPath="yes" />
+      </Component>
 
       <!-- Image file associations: "Open with Pixel Photo Manager" -->
       <Component Id="FileAssocComp" Guid="B82D4537-99BB-4696-9D0B-9E495C16954E">
@@ -89,8 +176,8 @@
         <Component Id="DesktopShortcutComp" Guid="C93E5648-AA10-7B07-D2C1-E4F5A6789012">
           <Shortcut Id="DesktopShortcut"
                     Advertise="no"
-                    Name="Pixel Photo Manager"
-                    Description="Gestionnaire de photos desktop Windows"
+                    Name="!(loc.ProductName)"
+                    Description="!(loc.ShortcutDescription)"
                     Target="[INSTALLFOLDER]PixelPhotoManager.exe"
                     WorkingDirectory="INSTALLFOLDER"
                     Icon="AppIcon"
@@ -110,15 +197,15 @@
           <Component Id="StartMenuShortcutComp" Guid="D04F6759-BB21-8C18-E3D2-F5A6B7890123">
             <Shortcut Id="StartMenuShortcut"
                       Advertise="no"
-                      Name="Pixel Photo Manager"
-                      Description="Gestionnaire de photos desktop Windows"
+                      Name="!(loc.ProductName)"
+                      Description="!(loc.ShortcutDescription)"
                       Target="[INSTALLFOLDER]PixelPhotoManager.exe"
                       WorkingDirectory="INSTALLFOLDER"
                       Icon="AppIcon"
                       IconIndex="0" />
             <Shortcut Id="UninstallShortcut"
                       Advertise="no"
-                      Name="Desinstaller Pixel Photo Manager"
+                      Name="!(loc.UninstallShortcutName)"
                       Target="[System64Folder]msiexec.exe"
                       Arguments="/x [ProductCode]" />
             <RemoveFolder Id="CleanStartMenuDir" On="uninstall" />
@@ -137,11 +224,12 @@
     <!-- ========================================================
          Main feature
          ======================================================== -->
-    <Feature Id="ProductFeature" Title="Pixel Photo Manager" Level="1">
+    <Feature Id="ProductFeature" Title="!(loc.FeatureTitle)" Level="1">
       <ComponentGroupRef Id="AppFiles" />
       <ComponentRef Id="DesktopShortcutComp" />
       <ComponentRef Id="StartMenuShortcutComp" />
       <ComponentRef Id="FileAssocComp" />
+      <ComponentRef Id="AppLanguageComp" />
     </Feature>
 
   </Product>

@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Copyright 2026 Christian Guyot -->
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<WixLocalization Culture="fr-fr" Codepage="1252"
+                 xmlns="http://schemas.microsoft.com/wix/2006/localization">
+  <String Id="Lang">1036</String>
+  <!-- Code of the language pre-positioned in the application configuration
+       (src/core/i18n.py: "en" | "fr" | "de"), not a displayed string. -->
+  <String Id="AppLanguageCode">fr</String>
+  <!-- Label of the "start the application" checkbox on the final screen. -->
+  <String Id="LaunchApplication">Démarrer Pixel Photo Manager</String>
+  <String Id="ProductName">Pixel Photo Manager</String>
+  <String Id="PackageDescription">Pixel Photo Manager - Gestionnaire de photos desktop Windows</String>
+  <String Id="DowngradeError">Une version plus récente de Pixel Photo Manager est déjà installée. Désinstallez-la d'abord.</String>
+  <String Id="FeatureTitle">Pixel Photo Manager</String>
+  <String Id="ShortcutDescription">Gestionnaire de photos desktop Windows</String>
+  <String Id="UninstallShortcutName">Désinstaller Pixel Photo Manager</String>
+</WixLocalization>

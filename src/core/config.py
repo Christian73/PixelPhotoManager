@@ -26,7 +26,9 @@ _DEFAULTS = {
         # starts in the language of the source strings, the only one where no message
         # can be missing. This only concerns configs without the key — `save()` writes
         # the complete merged dictionary, so an already installed machine carries its
-        # explicit choice and is not switched over.
+        # explicit choice and is not switched over. On a machine installed through
+        # the MSI, `_adopt_installer_language()` replaces this default at the very
+        # first start with the language the installer itself displayed.
         "language": "en",
         "splitters": {
             "viewer": "",
@@ -63,6 +65,38 @@ class Config:
             except Exception as e:
                 logger.error(f"Erreur lecture config: {e}")
         self._data = json.loads(json.dumps(_DEFAULTS))
+        self._adopt_installer_language()
+
+    def _adopt_installer_language(self) -> None:
+        """First start: adopt the language the installer displayed.
+
+        Only reached when there is no readable `config.json` — an installation
+        that already has one keeps the language its user chose, which is the
+        whole point of not letting the installer write into `%LOCALAPPDATA%`
+        directly (cf. the comment on `AppLanguageComp` in
+        `installer/product.wxs`).
+
+        Nothing is written to disk here: `load()` must stay free of side
+        effects. The value takes effect straight away for this start, and the
+        first `save()` freezes it like any other setting.
+        """
+        # Local import: `i18n` pulls in PySide6, which `config` must not require
+        # merely to be imported (it is loaded very early, and by the tests).
+        from .i18n import CONFIG_KEY, installer_language
+
+        code = installer_language()
+        if code:
+            self.set_in_memory(CONFIG_KEY, code)
+
+    def set_in_memory(self, key: str, value) -> None:
+        """`set()` without writing to disk (cf. `_adopt_installer_language`)."""
+        keys = key.split(".")
+        d = self._data
+        for k in keys[:-1]:
+            if k not in d or not isinstance(d[k], dict):
+                d[k] = {}
+            d = d[k]
+        d[keys[-1]] = value
 
     def save(self) -> None:
         try:
@@ -91,13 +125,7 @@ class Config:
         return val
 
     def set(self, key: str, value) -> None:
-        keys = key.split(".")
-        d = self._data
-        for k in keys[:-1]:
-            if k not in d or not isinstance(d[k], dict):
-                d[k] = {}
-            d = d[k]
-        d[keys[-1]] = value
+        self.set_in_memory(key, value)
         self.save()
 
     def get_scan_folders(self) -> list[str]:

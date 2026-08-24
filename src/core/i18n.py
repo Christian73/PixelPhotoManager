@@ -134,6 +134,44 @@ def system_language() -> str:
     return DEFAULT_LANGUAGE
 
 
+#: Registry value written by the MSI installer (cf. `installer/product.wxs`):
+#: the code of the language it displayed itself, therefore the one Windows
+#: selected from the machine language.
+_INSTALL_KEY = r"SOFTWARE\PixelPhotoManager"
+_INSTALL_VALUE = "InstallLanguage"
+
+
+def installer_language() -> str | None:
+    """Language pre-positioned by the installer, `None` if there is none.
+
+    The installer is the only piece that knows, at that point, which language
+    the machine speaks: Windows picks one of the embedded transforms on its own
+    and the installer writes the corresponding code down. Without that, an
+    application installed in French would still start in English until its user
+    found the setting.
+
+    `None` rather than `DEFAULT_LANGUAGE` when the value is absent or
+    unsupported, so that "no installer" (a run from the sources, a portable
+    copy, another OS) stays distinguishable from "installer in English" —
+    only the caller decides what to do with it (cf. `src/core/config.py`, which
+    consults it solely when it has no configuration yet).
+    """
+    if sys.platform != "win32":
+        return None
+    try:
+        import winreg
+
+        with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, _INSTALL_KEY) as key:
+            value, _ = winreg.QueryValueEx(key, _INSTALL_VALUE)
+    except OSError:
+        return None
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.debug(f"Lecture InstallLanguage impossible : {exc}")
+        return None
+    code = _bare_code(value)
+    return code if code in LANGUAGES else None
+
+
 def current_language(config) -> str:
     """Language chosen by the user, English failing that (cf. above)."""
     return normalize(config.get(CONFIG_KEY))

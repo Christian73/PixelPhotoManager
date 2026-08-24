@@ -687,6 +687,97 @@ the SQL DDL, and the body of the diagnostic report of `thread_journal_dialog.py`
 report, it stays in French whatever the interface. Only the chrome of that dialog is
 translated.
 
+### The MSI installer — the same three languages, picked by Windows itself
+
+The installer speaks the same three languages as the application, and picks one
+**without a bootstrapper and without a `TRANSFORMS` property**: `build_msi.ps1` links
+the *same* wixobjs once per culture (`-cultures:<c> -loc installer\loc\<c>.wxl`),
+turns the French and German MSIs into language transforms (`torch -p -t language`),
+then embeds each transform into the English MSI as an MSI **substorage named exactly
+by its LCID** (`1036`, `1031`) and lists the three LCIDs in the `Languages` summary
+property (`SummaryInfo.Template` = `"x64;1033,1036,1031"`). Windows Installer looks
+that list up on its own against the machine language; an LCID that is not listed
+simply gets the base package. English is therefore the source language **and** the
+fallback, exactly as in `src/core/i18n.py`.
+
+Five things that break silently if changed:
+- **The substorage name carries no extension.** `1036`, not `1036.mst` — msiexec
+  looks up the bare LCID (`Looking for storage transform: 1036` in a `/L*v` log) and
+  fails with error 1624 otherwise.
+- **The `Languages` summary property is what triggers the selection**, not the
+  presence of the substorages. It is written after the link, since each `light` pass
+  only knows its own language.
+- **`Product Id="*"` draws a new ProductCode at every link**, so the three passes
+  come out with three different ones and `torch` would put that difference into the
+  transform: the same build would install under another ProductCode on a French
+  machine. The GUID must stay generated (a fixed one would break the `MajorUpgrade`
+  of later versions), so the script realigns the language MSIs on the base
+  ProductCode just before the comparison.
+- **The licence is a file, not a string**: a `!(loc.*)` inside a `WixVariable` used
+  as a file path is not resolved in time (`LGHT0103` on the literal `!(loc.…)`).
+  `WixUILicenseRtf` is therefore defined per pass on the `light` command line
+  (`-dWixUILicenseRtf=installer\license\<culture>.rtf`), not in the `.wxl`.
+- **`-cc`/`-reusecab` shares one cabinet between the three passes** — the payload is
+  identical, so compressing ~600 MB three times would be pure waste; `-sval` skips
+  the ICE validation of the two intermediates, only the base package is validated.
+
+Adding a language = one `installer/loc/<culture>.wxl`, one
+`installer/license/<culture>.rtf`, one entry in `$LangTransforms` — nothing else. The
+script ends on a self-check that fails the build if a substorage or an LCID of the
+summary is missing (invisible otherwise until an installation comes out in English on
+a French machine).
+
+**The installer pre-positions the language of the application.** Windows picks the
+transform matching the machine, so the installer is the only piece that knows, at that
+moment, which language to start in — without it the application would come up in
+English on a French machine until its user found the setting. `AppLanguageComp`
+(`product.wxs`) writes `HKLM\SOFTWARE\PixelPhotoManager\InstallLanguage` = `en`/`fr`/`de`;
+the value is the **localized string** `!(loc.AppLanguageCode)`, so it is carried by the
+very same transforms as every label — no custom action, nothing computed at install
+time. `i18n.installer_language()` reads it back (`None`, never `DEFAULT_LANGUAGE`, when
+absent or unsupported: "no installer" must stay distinguishable from "installer in
+English") and `Config._adopt_installer_language()` applies it **only when there is no
+readable `config.json`**. Two consequences to keep:
+- HKLM and not `%LOCALAPPDATA%\…\config.json`: the package is perMachine, installed
+  once for every account of the machine, whereas the configuration is per user. A
+  custom action writing the config would only serve the installing account, and would
+  overwrite the choice of a user who already had one on update.
+- `load()` writes nothing to disk — the language takes effect for that start and the
+  first `save()` freezes it like any other setting. Tests:
+  `tests/test_config.py::TestInstallerLanguage`,
+  `tests/test_i18n.py::TestInstallerLanguage`.
+
+**The final screen offers to start the application.** The tick box is the optional one
+of the standard WixUI `ExitDialog` (`WIXUI_EXITDIALOGOPTIONALCHECKBOXTEXT` +
+`WIXUI_EXITDIALOGOPTIONALCHECKBOX`, ticked by default), shown only on a fresh install
+(its own `AND NOT Installed` condition) and labelled through `!(loc.LaunchApplication)`,
+so the language transforms carry it like every other string. The launch itself is a
+`WixShellExec` custom action (`WixUtilExtension`, `BinaryKey="WixCA_x64"` for an x64
+package) published on the `Finish` button. Three points that are wrong by default:
+- **`Impersonate="yes"`** — the action runs in the *client* process, so the application
+  starts as the user, not with the elevated token of the perMachine installation. Started
+  as administrator it would create its `%LOCALAPPDATA%` (`catalog.db`, `config.json`,
+  `thumbnails.db`) in the administrator's profile, and the first real start would find an
+  empty library.
+- **`Return="ignore"`, not `asyncNoWait`** — `ShellExecute` returns as soon as the process
+  is spawned, so the synchronous form costs nothing, while the asynchronous one races the
+  end of the UI sequence (the same button closes the installer). `ignore` also keeps a
+  failed launch from turning a successful installation into an error dialog.
+- **`WixShellExecTarget` keeps an unresolved `[INSTALLFOLDER]` reference** — it is
+  formatted when the action runs, i.e. after the user may have changed the folder on the
+  InstallDir screen. Resolving it earlier (a `SetProperty` after `CostFinalize`, the usual
+  way to silence candle's `CNDL1077`) would freeze the *default* folder; the warning is
+  suppressed instead (`candle -sw1077`).
+
+**The version displayed by the installer is painted into `dialog.bmp`.** The welcome
+screen shows it in the left panel, in pixels — `installer/create_bitmaps.py` used to
+draw the literal `"v 1.0"`, and `build_msi.ps1` only regenerated the bitmaps **when
+they were missing**, so that constant survived every version bump and the 1.1.0
+installer displayed 1.0. The script now regenerates them at **every** build and passes
+`$ProductVersion` to `create_bitmaps.py` (which falls back to the `VERSION` file at the
+root, the same single source as the MSI's `ProductVersion` and the exe). Everything
+else the installer displays comes from `VERSION` through `candle -dProductVersion`.
+
 ---
 
 ## Plugin system

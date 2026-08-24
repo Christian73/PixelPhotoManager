@@ -16,7 +16,8 @@ from pathlib import Path
 import pytest
 
 from src.core.i18n import (DEFAULT_LANGUAGE, LANGUAGES, current_language,
-                           normalize, set_language, translate)
+                           installer_language, normalize, set_language,
+                           translate)
 
 ROOT = Path(__file__).resolve().parent.parent
 TS_DIR = ROOT / "translations"
@@ -397,6 +398,71 @@ class TestLanguagePreference:
         config = _FakeConfig()
         set_language(config, "it")
         assert current_language(config) == DEFAULT_LANGUAGE
+
+
+class TestInstallerLanguage:
+    """Reading the language written in HKLM by the MSI installer.
+
+    The value is produced by a localized string of `installer/product.wxs`, so
+    it is carried by the same language transforms as the rest of the installer:
+    what is read back here is the code of the language the installer really
+    displayed.
+    """
+
+    @staticmethod
+    def _registry(monkeypatch, value, *, key_exists=True):
+        import winreg
+
+        class _Key:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *exc):
+                return False
+
+        def open_key(root, path):
+            assert root == winreg.HKEY_LOCAL_MACHINE
+            if not key_exists:
+                raise OSError(2, "not found")
+            return _Key()
+
+        monkeypatch.setattr(winreg, "OpenKey", open_key)
+        monkeypatch.setattr(
+            winreg, "QueryValueEx", lambda key, name: (value, winreg.REG_SZ)
+        )
+
+    def test_absent_key_gives_none(self, monkeypatch):
+        """`None`, not `DEFAULT_LANGUAGE`.
+
+        "No installer" (sources, portable copy) must stay distinguishable from
+        "installer in English", otherwise the caller could not tell an absence
+        from a deliberate choice.
+        """
+        self._registry(monkeypatch, None, key_exists=False)
+        assert installer_language() is None
+
+    @pytest.mark.parametrize("value,expected", [
+        ("fr", "fr"), ("de", "de"), ("en", "en"),
+        ("fr-FR", "fr"), ("de_DE", "de"), ("  EN  ", "en"),
+    ])
+    def test_supported_values(self, monkeypatch, value, expected):
+        self._registry(monkeypatch, value)
+        assert installer_language() == expected
+
+    @pytest.mark.parametrize("value", ["", "it", "zz", None, 42])
+    def test_unsupported_value_gives_none(self, monkeypatch, value):
+        self._registry(monkeypatch, value)
+        assert installer_language() is None
+
+    def test_a_broken_registry_never_raises(self, monkeypatch):
+        """A read failure must not stop the application from starting."""
+        import winreg
+
+        def boom(root, path):
+            raise OSError(5, "access denied")
+
+        monkeypatch.setattr(winreg, "OpenKey", boom)
+        assert installer_language() is None
 
 
 class TestRuntimePlurals:

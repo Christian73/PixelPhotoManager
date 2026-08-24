@@ -11,11 +11,34 @@ Layout of dialog.bmp:
   WiX WelcomeDlg places its text from X=135 DLU / 370 DLU total
   => 135/370 * 493 ~ 180 px => SPLIT = 170 px leaves a comfortable margin.
 """
+import sys
 from pathlib import Path
 from PIL import Image, ImageDraw, ImageFont
 
 OUT  = Path(__file__).parent
 ROOT = OUT.parent
+
+
+def _version() -> str:
+    """Version painted into dialog.bmp.
+
+    It used to be the literal "v 1.0", which the installer kept displaying long
+    after the product had moved on — build_msi.ps1 only regenerated the bitmaps
+    when they were missing, so the constant survived every version bump. It is
+    now taken from the build (argv) or, failing that, from VERSION at the root of
+    the repository, the single source shared with the MSI itself.
+    """
+    if len(sys.argv) > 1 and sys.argv[1].strip():
+        return sys.argv[1].strip()
+    version_file = ROOT / "VERSION"
+    if version_file.exists():
+        text = version_file.read_text(encoding="utf-8").strip()
+        if text:
+            return text
+    return "dev"
+
+
+VERSION = _version()
 
 # Palette
 BG      = (30, 40, 60)       # dark slate blue
@@ -126,8 +149,8 @@ if icon_path.exists():
 ty = icon_bottom_y
 draw.text((12, ty),      "Pixel Photo", font=f_big, fill=WHITE)
 draw.text((12, ty + 32), "Manager",     font=f_big, fill=LIGHT)
-draw.text((12, ty + 66), "v 1.0",       font=f_sub, fill=DIM)
+draw.text((12, ty + 66), f"v {VERSION}", font=f_sub, fill=DIM)
 draw.line([(10, 270), (SPLIT - 14, 270)], fill=ACCENT, width=2)
 
 dialog.save(OUT / "dialog.bmp")
-print("dialog.bmp cree")
+print(f"dialog.bmp cree (version affichee : {VERSION})")

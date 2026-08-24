@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Copyright 2026 Christian Guyot -->
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Source language of the installer: the base MSI is built from this file,
+     the other cultures are applied on top of it as language transforms. -->
+<WixLocalization Culture="en-us" Codepage="1252"
+                 xmlns="http://schemas.microsoft.com/wix/2006/localization">
+  <String Id="Lang">1033</String>
+  <!-- Code of the language pre-positioned in the application configuration
+       (src/core/i18n.py: "en" | "fr" | "de"), not a displayed string. -->
+  <String Id="AppLanguageCode">en</String>
+  <!-- Label of the "start the application" checkbox on the final screen. -->
+  <String Id="LaunchApplication">Launch Pixel Photo Manager</String>
+  <String Id="ProductName">Pixel Photo Manager</String>
+  <String Id="PackageDescription">Pixel Photo Manager - Windows desktop photo manager</String>
+  <String Id="DowngradeError">A newer version of Pixel Photo Manager is already installed. Uninstall it first.</String>
+  <String Id="FeatureTitle">Pixel Photo Manager</String>
+  <String Id="ShortcutDescription">Windows desktop photo manager</String>
+  <String Id="UninstallShortcutName">Uninstall Pixel Photo Manager</String>
+</WixLocalization>

@@ -11,7 +11,10 @@ config.json file shared between tests.
 """
 import json
 
+import pytest
+
 import src.core.config as config_module
+import src.core.i18n as i18n_module
 from src.core.config import Config
 
 
@@ -22,10 +25,17 @@ class BaseConfigTest:
     def teardown_method(self):
         Config._instance = None
 
-    def _make_config(self, tmp_path, monkeypatch):
+    def _make_config(self, tmp_path, monkeypatch, installer_language=None):
         config_file = tmp_path / "config.json"
         monkeypatch.setattr(config_module, "_CONFIG_FILE", config_file)
         monkeypatch.setattr(config_module, "APP_DATA_DIR", tmp_path)
+        # Without a config.json, Config consults the language written by the MSI
+        # installer in HKLM. Left alone, the tests would therefore depend on
+        # whether the machine running them has the application installed, and in
+        # which language: neutralised by default, forced by the tests below.
+        monkeypatch.setattr(
+            i18n_module, "installer_language", lambda: installer_language
+        )
         return Config()
 
 
@@ -162,3 +172,51 @@ class TestSaveLoadRoundTrip(BaseConfigTest):
         cfg2 = Config()
         assert cfg2.get("ui.theme") == "light"
         assert cfg2.get_scan_folders() == ["C:\\photos"]
+
+
+class TestInstallerLanguage(BaseConfigTest):
+    """The language pre-positioned by the MSI installer.
+
+    The installer is the only piece that knows the language of the machine at
+    install time (Windows picks one of the transforms embedded in the MSI); it
+    writes the code down in HKLM, and the application adopts it at its very
+    first start so as not to come up in English on a French machine.
+    """
+
+    def test_adopted_when_there_is_no_configuration_yet(self, tmp_path, monkeypatch):
+        cfg = self._make_config(tmp_path, monkeypatch, installer_language="de")
+        assert cfg.get("ui.language") == "de"
+
+    def test_default_stays_english_without_an_installer(self, tmp_path, monkeypatch):
+        cfg = self._make_config(tmp_path, monkeypatch, installer_language=None)
+        assert cfg.get("ui.language") == "en"
+
+    def test_an_existing_configuration_is_never_overridden(self, tmp_path, monkeypatch):
+        """The user's choice wins over the installer, whatever the machine.
+
+        Regression guard on the reason the installer writes to HKLM instead of
+        writing config.json itself: an update must not switch back the language
+        of somebody who had chosen it.
+        """
+        config_file = tmp_path / "config.json"
+        config_file.write_text(
+            json.dumps({"ui": {"language": "en"}}), encoding="utf-8"
+        )
+        cfg = self._make_config(tmp_path, monkeypatch, installer_language="fr")
+        assert cfg.get("ui.language") == "en"
+
+    def test_loading_writes_nothing_to_disk(self, tmp_path, monkeypatch):
+        """`load()` stays free of side effects.
+
+        The adopted language must take effect for this start without creating a
+        config.json on its own: writing it here would freeze the language of a
+        run that has not otherwise changed a single setting.
+        """
+        cfg = self._make_config(tmp_path, monkeypatch, installer_language="fr")
+        assert not (tmp_path / "config.json").exists()
+        assert cfg.get("ui.language") == "fr"
+
+    @pytest.mark.parametrize("code", ["fr", "de", "en"])
+    def test_every_supported_language(self, tmp_path, monkeypatch, code):
+        cfg = self._make_config(tmp_path, monkeypatch, installer_language=code)
+        assert cfg.get("ui.language") == code
