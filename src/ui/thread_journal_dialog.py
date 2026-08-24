@@ -846,9 +846,9 @@ class ThreadJournalDialog(QDialog):
         try:
             from src.core.thread_journal import _JOURNAL_PATH
             sz = _JOURNAL_PATH.stat().st_size
-            return (
-                f"{sz / 1024:.0f} Ko" if sz < 1024 * 1024
-                else f"{sz / (1024 * 1024):.1f} Mo"
-            )
+            if sz < 1024 * 1024:
+                return translate("Units", "{n} kB").format(n=f"{sz / 1024:.0f}")
+            return translate("Units", "{n} MB").format(
+                n=f"{sz / (1024 * 1024):.1f}")
         except Exception:
             return "?"

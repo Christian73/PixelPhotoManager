@@ -62,6 +62,19 @@ _OP_LABELS: dict[str, str] = {
     "picasa_anisotropic": translate("EditPanel", "Sharpness"),
     "picasa_sharpen":     translate("EditPanel", "Sharpness"),
     "picasa_softfocus":   translate("EditPanel", "Softening"),
+    # The operations of the toolbar push their label as it is written in
+    # edits.db, i.e. in French (it is a key, cf. _TOOL_LABELS below and the
+    # "a string that also serves as a key" rule in CLAUDE.md). Without these
+    # entries _op_label() falls back to the key itself and "Undo  Miroir H"
+    # shows up in the middle of an English or German interface.
+    "Miroir H":                  translate("EditPanel", "Mirror H"),
+    "Miroir V":                  translate("EditPanel", "Mirror V"),
+    "Recadrage":                 translate("EditPanel", "Cropping"),
+    "Yeux rouges":               translate("EditPanel", "Red eyes"),
+    "Effacer yeux rouges":       translate("EditPanel", "Clear red eyes"),
+    "Annotation":                translate("EditPanel", "Annotation"),
+    "Effacer annotations":       translate("EditPanel", "Clear annotations"),
+    "Redimensionner annotation": translate("EditPanel", "Resize annotation"),
 }
 
 
@@ -555,8 +568,13 @@ class EditPanel(QWidget):
         row_flip = QHBoxLayout()
         row_flip.setSpacing(4)
         for icon_fn, label, tip, slot in [
-            (_icon_flip_h, "Miroir H", "Miroir horizontal", self._flip_h),
-            (_icon_flip_v, "Miroir V", "Miroir vertical",   self._flip_v),
+            # The label goes through _op_label() rather than through a literal: it is
+            # the same displayed name as in the undo stack, and the key stays the
+            # French one persisted in edits.db (cf. _OP_LABELS).
+            (_icon_flip_h, _op_label("Miroir H"),
+             translate("EditPanel", "Horizontal mirror"), self._flip_h),
+            (_icon_flip_v, _op_label("Miroir V"),
+             translate("EditPanel", "Vertical mirror"), self._flip_v),
         ]:
             btn = QToolButton()
             btn.setText(label)

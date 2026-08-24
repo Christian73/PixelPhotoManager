@@ -116,7 +116,8 @@ def _hardware_gpu_name() -> str:
             line = r.stdout.strip().splitlines()[0]
             name, vram_mb = line.split(",", 1)
             vram_go = int(vram_mb.strip()) // 1024
-            return f"{name.strip()} ({vram_go} Go)"
+            return translate("GpuUtils", "{name} ({vram} GB)").format(
+                name=name.strip(), vram=vram_go)
     except Exception:
         pass
     return ""
@@ -139,7 +140,8 @@ def _gpu_detail(tf_name: str) -> str:
             if idx < len(lines):
                 name, vram_mb = lines[idx].split(",", 1)
                 vram_go = int(vram_mb.strip()) // 1024
-                return f"{name.strip()} ({vram_go} Go)"
+                return translate("GpuUtils", "{name} ({vram} GB)").format(
+                    name=name.strip(), vram=vram_go)
     except Exception:
         pass
     return tf_name
