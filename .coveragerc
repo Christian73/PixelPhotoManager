@@ -12,7 +12,21 @@ parallel = true
 
 [report]
 # Non-regression ratchet: fails if the coverage falls back under this threshold.
-# TO BE RAISED after each test campaign (never lowered). History:
+# TO BE RAISED after each test campaign (never lowered).
+#
+# TWO DISTINCT FIGURES — do not confuse them:
+#   * BASE     = `pytest tests/ --cov=src` alone. This is the ONLY one the
+#                ratchet below actually gates, since fail_under applies to
+#                every --cov run.
+#   * COMBINED = coverage_base.dat + coverage_e2e.dat merged (cf. CLAUDE.md).
+#                Always higher: the e2e scenarios drive the code the unit
+#                tests never reach (main_window.py 19 % base → 74 % combined).
+# The history entries up to 2026-08-02 record COMBINED figures, while the
+# threshold has always been checked against the BASE run — hence the ratchet
+# was in fact unsatisfiable on its own until 2026-08-24 (base 71.97 % < 80).
+# From now on, log both.
+#
+# History:
 #   2026-07-19  29 % → 36 % (phases 1+2) → 45.8 % (phases 3+4, threshold 45)
 #   2026-07-20  45.8 % → 48.84 % (modularisation refactor N1-N5, threshold 48)
 #   2026-07-21  48.84 % → 49.23 % (deletion queue fix, threshold 49)
@@ -23,5 +37,12 @@ parallel = true
 #   2026-07-25  78.90 % → 80.06 % (EditPanel clipping fix + e2e click_input hardening, threshold 79)
 #   2026-08-02  80.06 % → 80.42 % (decorative frames: frames.py 96 %, frame_dialog.py 75 %,
 #               ironwork + menu widths, threshold 80 — a deliberately narrow margin)
+#               [the figures above are COMBINED]
+#   2026-08-24  BASE 71.97 % → 80.70 % / COMBINED 80.42 % → 88.09 %, threshold kept
+#               at 80 (controller mixins + viewer canvas campaign, +404 tests:
+#               main_window_duplicates.py and main_window_faces.py 0 % → 100 %,
+#               viewer_pixmaps.py 97 %, viewer_canvas.py 93 %). The threshold is
+#               NOT raised despite the jump: the base run only clears it by
+#               0.70 point, and that is the figure fail_under really measures.
 fail_under = 80
 precision = 0
