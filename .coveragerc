@@ -44,5 +44,11 @@ parallel = true
 #               viewer_pixmaps.py 97 %, viewer_canvas.py 93 %). The threshold is
 #               NOT raised despite the jump: the base run only clears it by
 #               0.70 point, and that is the figure fail_under really measures.
-fail_under = 80
+#   2026-08-24  BASE 80.70 % → 85.37 % / COMBINED 88.09 % → 90.00 %, threshold
+#               raised to 85 (main_window.py slots without instantiating the
+#               window, +385 tests: main_window.py 19 % → 75 % base, and 100 %
+#               combined — the e2e scenarios cover exactly the construction
+#               methods left out of the unit tests). A 0.37 point margin on the
+#               base run, which is the figure fail_under really measures.
+fail_under = 85
 precision = 0
