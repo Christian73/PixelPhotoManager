@@ -108,6 +108,24 @@ class _FakeMainWindow:
     def _on_face_indexing_finished(self, *a, **k):
         pass
 
+    def _restart_face_indexing_when_idle(self):
+        MainWindow._restart_face_indexing_when_idle(self)
+
+
+class _FakeTimer:
+    """Records the deferred calls instead of needing a real event loop."""
+
+    def __init__(self):
+        self.pending: list = []
+
+    def singleShot(self, ms, callback):
+        self.pending.append((ms, callback))
+
+    def fire_all(self):
+        due, self.pending = self.pending, []
+        for _ms, callback in due:
+            callback()
+
 
 def _patch_face_index_thread(monkeypatch, factory):
     monkeypatch.setattr("src.ui.main_window_faces.FaceIndexThread", factory)
@@ -171,3 +189,39 @@ class TestFaceIndexingRequeue:
         MainWindow._on_face_indexing_finished(fake, indexed=14, faces=0)
 
         assert fake._face_index_pending is False
+
+    def test_finished_requeues_even_before_the_thread_has_terminated(self, monkeypatch):
+        """Regression (found by test_folder_management.py, e2e): the
+        `finished` of FaceIndexThread is its own Signal(int, int), emitted at
+        the end of run() while the QThread is STILL running -- restarting
+        synchronously there hits the isRunning() guard of
+        _start_face_indexing(), which just re-arms _face_index_pending. As
+        nothing else consumes that flag, the photos added by the rescan stayed
+        unindexed for good."""
+        created: list = []
+
+        def factory(face_db, catalog, parent):
+            t = _FakeFaceIndexThread()
+            created.append(t)
+            return t
+
+        _patch_face_index_thread(monkeypatch, factory)
+        timer = _FakeTimer()
+        monkeypatch.setattr("src.ui.main_window_faces.QTimer", timer)
+        still_running = _FakeThread(running=True)
+        fake = _FakeMainWindow(face_indexer=still_running)
+        fake._face_index_pending = True
+
+        MainWindow._on_face_indexing_finished(fake, indexed=14, faces=0)
+
+        assert created == [], "deux indexations ne doivent jamais tourner de front"
+        assert len(timer.pending) == 1, "la relance doit être différée, pas abandonnée"
+
+        # The thread really leaves run(): the next check restarts the indexing.
+        still_running._running = False
+        timer.fire_all()
+
+        assert len(created) == 1, "la demande en attente a été perdue"
+        assert created[0]._running is True
+        assert fake._face_index_pending is False
+

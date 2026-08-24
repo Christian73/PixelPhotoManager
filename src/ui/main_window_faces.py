@@ -52,6 +52,10 @@ from src.ui.face_backup_dialog import FaceBackupDialog
 
 logger = logging.getLogger(__name__)
 
+# Delay between two checks of "has the previous FaceIndexThread really
+# terminated?" (cf. _restart_face_indexing_when_idle).
+_FACE_INDEX_RESTART_POLL_MS = 50
+
 
 # Classes extracted from this file (2026-07) — imported under their
 # historical names: they stay implementation details of MainWindow.
@@ -440,7 +444,26 @@ class FacesController:
             self._schedule_similarity_search()
         if self._face_index_pending:
             self._face_index_pending = False
-            self._start_face_indexing()
+            # `finished` here is the thread's OWN Signal(int, int), emitted at the
+            # very end of run(): the QThread has NOT left run() yet at that
+            # instant, and the queued delivery to the UI thread may well win the
+            # race against its termination (observed in e2e once the background
+            # threads were given the lowest OS priority). Calling
+            # _start_face_indexing() straight away would then hit its isRunning()
+            # guard, re-arm _face_index_pending and lose the request for good --
+            # nothing else consumes that flag. Hence the retry below.
+            self._restart_face_indexing_when_idle()
+
+    def _restart_face_indexing_when_idle(self) -> None:
+        """Restarts the indexing as soon as the previous QThread has really
+        terminated (cf. _on_face_indexing_finished). Polls rather than binding
+        to QThread.finished(): that built-in signal is shadowed by the
+        homonymous Signal(int, int) of FaceIndexThread."""
+        if self._face_indexer is not None and self._face_indexer.isRunning():
+            QTimer.singleShot(_FACE_INDEX_RESTART_POLL_MS,
+                              self._restart_face_indexing_when_idle)
+            return
+        self._start_face_indexing()
 
     def _on_face_index_error(self, path: str, msg: str) -> None:
         """Timeout/crash during the automatic analysis: the photo is already
