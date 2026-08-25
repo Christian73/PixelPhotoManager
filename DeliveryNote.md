@@ -4,11 +4,129 @@ Cumulative history since the project was created, most recent version first.
 
 | Version | Date | Commits | Installer |
 |---------|------|---------|-----------|
+| 1.2.0 | 25 August 2026 | 43 | `PixelPhotoManager-1.2.0-x64.msi` |
 | 1.1.0 | 6 August 2026 | 109 | `PixelPhotoManager-1.1.0-x64.msi` |
 | 1.0.0 | 6 July 2026 | 113 (creation → 1.0.0) | `PixelPhotoManager-1.0.0-x64.msi` |
 
 Versions 1.0.1 and 1.0.2 were never shipped (internal bumps); their contents are
 included in 1.1.0.
+
+---
+
+## Version 1.2.0 — 25 August 2026
+
+Previous version: **1.1.0** (6 August 2026). 43 commits.
+
+A version with no new schema and almost no new screen: it makes the whole
+product — application, built-in help and installer — speak **English, French
+and German**, and hardens the test suite around what was until now the least
+covered code.
+
+### What's new
+
+**Languages**
+- The interface, the built-in help and the installer are available in
+  **English, French and German**.
+- **English is now the source language.** A string that has escaped
+  translation therefore falls back to correct English rather than to French,
+  which was unreadable for most users. About 1,235 strings are marked across
+  53 modules.
+- The language is a setting (**Settings › Language**), applied on restart.
+- **Flag button** at the far right of the top bar: the language is the one
+  setting a user must be able to reach *without being able to read the
+  interface*, hence the deliberate duplication with the Settings entry. The
+  flags are drawn, not emoji — no font shipped with Windows carries the
+  regional-indicator flags.
+- The standard Qt dialogs are translated too: without that, a German
+  interface kept its "OK / Cancel" buttons in English.
+- Built-in help translated page by page (9 pages per language), with a
+  fallback to English per page: a page not yet translated no longer costs the
+  whole help of that language.
+- Units and date formats follow the language (`B/kB/MB` vs `o/Ko/Mo`, date
+  order), instead of being fixed constants.
+- A fresh installation starts **in the language the installer displayed**; an
+  existing installation keeps the language its user chose.
+
+**Installer**
+- The MSI speaks the same three languages and **Windows picks the right one
+  by itself**, with no bootstrapper and no option to tick: the French and
+  German packages are embedded in the English one as language transforms, and
+  Windows Installer matches them against the machine language. An unlisted
+  language gets the English package.
+- The licence is shown in the language of the installation.
+- The **final screen offers to start the application** (ticked by default, on
+  a fresh installation only). It starts as the user, never with the elevated
+  token of the installation — otherwise the application would create its data
+  folder in the administrator's profile and the first real start would find an
+  empty library.
+
+**Editing**
+- The **Vignette** tool now opens at 50% intensity on a photo that has none.
+  It used to open at zero, so on a strictly unchanged image: you had to move
+  the slider to see the slightest effect. Cancelling still returns to no
+  vignette, and an already adjusted vignette is not overwritten.
+
+### Fixes
+
+- **A re-indexing request could be lost for good.** After a forced rescan, the
+  new photos stayed unindexed indefinitely if a face indexing pass was already
+  running: the request was flagged as pending, and nothing consumed that flag
+  afterwards. Found by an end-to-end scenario.
+- The installer displayed **version 1.0** since 1.0: the number is painted into
+  the welcome bitmap, which was only regenerated when it was missing. It is now
+  rebuilt at every build from the real version.
+- Four strings had escaped the whole translation campaign and stayed French,
+  invisibly: the sidebar "Identify…" button, the folder-deletion confirmation
+  button, the title of the duplicates report, and the "Del" key concatenated
+  into the grid context menus.
+- The "Mirror H / V" buttons were hard-coded, and the undo stack showed
+  "Undo Miroir H" in the middle of an English or German interface.
+- Graphics card memory ("8 Go") and thread journal sizes ("Ko / Mo") stayed
+  French whatever the interface.
+- The Editing help page described an **Apply** button that no longer exists and
+  an export that has since been split into two distinct paths; the Duplicates
+  page still presented detection as manual.
+- The label and tooltip of "Deleted corrupted files…" announced a permanent
+  deletion, when those files go to the Windows recycle bin like every other
+  one.
+
+### Installer and packaging
+
+- Installer payload inventory regenerated: the CUDA libraries of
+  `onnxruntime-gpu` (`cudart64_12`, `cublas64_12`, `cublasLt64_12`,
+  `cufft64_11`) are gone, the HEIC (`libheif`, `libde265`) and RAW (`raw_r`)
+  libraries added, and the OpenCV video library moved from 4.13 to 5.00.
+- The packaging spec picks up the compiled catalogs and the help folders
+  through globs: adding a language needs no change there.
+
+### Automatic migrations on first start
+
+**None.** No database schema changed in this version — `catalog.db`,
+`faces.db`, `edits.db` and `thumbnails.db` are read exactly as 1.1.0 left them,
+and going back to 1.1.0 requires nothing. The only new setting, the interface
+language, is written to `config.json` at the first save.
+
+### Quality
+
+Two coverage campaigns on the least covered code: the MainWindow controllers
+and the viewer canvas first (`main_window_duplicates.py` and
+`main_window_faces.py` from 0 to 100%, `viewer_canvas.py` 28 → 93%,
+`viewer_pixmaps.py` 40 → 97%), then the MainWindow slots themselves, tested
+without ever instantiating the window (`main_window.py` 19 → 75% on the unit
+run, 100% once the end-to-end runs are merged in). **Base coverage 85.4%**
+(gating threshold raised from 80 to 85), **combined coverage 90.0%**, across
+2,351 unit and interface test functions and 14 end-to-end scenarios.
+
+Two lessons recorded in the process: the coverage history had until then been
+logging *combined* figures against a threshold that only ever measured the
+*base* run — the two are now logged separately — and three real traps of the
+end-to-end harness were fixed, unrelated to the labels (a popup button living
+in its own top-level window, a focus taken through a renamed list item, and a
+"Delete" confirmation not to be confused with the "Remove" of the next step).
+
+Comments and docstrings across the whole codebase were translated to English
+at the same time as the strings, so that a French literal in `src/` is now, by
+construction, a detectable defect.
 
 ---
 

@@ -29,6 +29,18 @@
 
 ## 1. Premiers pas
 
+### Installation
+
+L'application s'installe depuis le fichier `PixelPhotoManager-<version>-x64.msi`.
+L'installateur **choisit sa langue tout seul** d'après celle de Windows (français,
+allemand, anglais pour tout le reste) et **pré-positionne la langue de
+l'application** en conséquence : au premier démarrage, l'interface est déjà dans
+la langue de votre machine, sans réglage à faire. Une installation existante
+conserve toujours la langue que son utilisateur a choisie.
+
+Le dernier écran propose une case **Démarrer PixelPhotoManager**, cochée par
+défaut, qui lance l'application à la fermeture de l'installateur.
+
 ### Premier lancement
 
 Au premier démarrage, une fenêtre d'accueil vous invite à choisir au moins un **dossier de photos** à surveiller.
@@ -53,7 +65,7 @@ Menu **Fichier › Quitter** (**Ctrl + Q**).
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│  [Fichier][Affichage][Outils][Visages][Aide]  [Export]  │
+│ [Fichier][Affichage][Outils][Visages][Aide] [Export] [⚑]│
 ├──────────────────┬──────────────────────────────────────┤
 │                  │                                      │
 │   SIDEBAR        │   ZONE PRINCIPALE                    │
@@ -70,6 +82,7 @@ Menu **Fichier › Quitter** (**Ctrl + Q**).
 |---|---|
 | **Barre de menus** | Fichier, Affichage, Outils, Visages, Aide — voir sections dédiées |
 | **Bouton ⬆ Exporter** | Exporte la photo affichée (visionneuse) ou la sélection (grille) |
+| **Bouton drapeau** | Change la langue de l'interface — voir [Langue de l'interface](#langue-de-linterface) |
 | **Sidebar** | Filtrage, navigation dans les dossiers et albums |
 | **Zone principale** | Grille de vignettes, vue chronologie (ruban), vue Personnes, vue Doublons ou visionneuse plein écran |
 | **Barre de statut** | Informations sur la sélection, progression du scan, curseur de taille des vignettes |
@@ -96,6 +109,25 @@ La sidebar peut aussi être redimensionnée en faisant glisser le séparateur ve
 ### Ordre d'affichage
 
 **Affichage › Ordre d'affichage…** ouvre une fenêtre à deux blocs indépendants : **Dossiers** (sidebar) et **Grille de photos**. Pour chacun, choisissez le mode de tri — **Alphabétique** ou **Chronologique** — et le sens — **Croissant** ou **Décroissant**. Les deux blocs sont réglés séparément : par exemple trier les dossiers par ordre alphabétique tout en gardant la grille en ordre chronologique décroissant (photos les plus récentes en premier). Le réglage est mémorisé d'une session à l'autre.
+
+### Langue de l'interface
+
+L'interface et l'aide intégrée sont disponibles en **français**, **anglais** et
+**allemand**. Deux chemins mènent au même réglage :
+
+- le **bouton drapeau**, à l'extrémité droite de la barre supérieure : un clic
+  déroule la liste des langues, chacune écrite dans sa propre langue (English,
+  Français, Deutsch) ;
+- **Outils › Paramètres › Langue**.
+
+Cette duplication est voulue : la langue est le seul réglage qu'il faut pouvoir
+atteindre **sans savoir lire l'interface**. Si l'application démarre dans une
+langue que vous ne comprenez pas, le drapeau reste identifiable là où un menu
+nommé « Paramètres » ne l'est pas.
+
+Le changement s'applique **au prochain démarrage** de l'application ; un message
+vous le rappelle. Les documents PDF (guide utilisateur, note de livraison)
+restent en français.
 
 ### Vérification des mises à jour
 
@@ -391,6 +423,26 @@ Le traitement **Couleurs** convertit la photo en noir et blanc avec contrôle de
 4. Cliquez **Valider**.
 
 > Un rouge à +1,00 avec bleu à −1,00 donne un résultat dramatique avec un ciel foncé et des peaux claires — l'équivalent d'un filtre rouge argentique.
+
+---
+
+### Vignette
+
+Le bouton **Vignette** assombrit (ou éclaircit) les bords de la photo pour
+concentrer le regard sur le sujet. Un dialogue s'ouvre et des poignées
+apparaissent sur l'image.
+
+- **Intensité** (0,00 à 1,00) : force de l'effet. Sur une photo qui n'a pas
+  encore de vignette, l'outil s'ouvre à **0,50** : l'effet est donc visible dès
+  l'ouverture, sans avoir à chercher le curseur. Ramener l'intensité à 0 rend la
+  photo intacte, et **Annuler** revient à l'état précédent.
+- **Couleur** : **Noir** (assombrit) ou **Blanc** (éclaircit, effet « halo »).
+- **Poignées sur l'image** :
+  - **cercle intérieur** (pointillé) : où le dégradé commence ;
+  - **cercle extérieur** : où le dégradé se termine ;
+  - **poignée ronde en haut** : fait pivoter l'ellipse ;
+  - **croix au centre** : déplace la vignette.
+- **Appliquer** valide le réglage, **Annuler** restaure l'état précédent.
 
 ---
 
@@ -903,10 +955,17 @@ Un clic sur l'icône correspondante dans la visionneuse ouvre l'application avec
 
 ### Paramètres (Outils › Paramètres)
 
-Dialogue à deux catégories :
+Dialogue à quatre catégories :
 
+- **Langue** : langue de l'interface et de l'aide intégrée (English, Français,
+  Deutsch), appliquée au prochain démarrage. Même réglage que le bouton drapeau
+  de la barre supérieure, voir [Langue de l'interface](#langue-de-linterface).
 - **Reconnaissance de visages** : curseur **« Tolérance de similarité »** (25 % à 70 %) — contrôle à quel point deux visages doivent se ressembler pour être placés dans le même groupe. Un indicateur textuel accompagne le curseur (groupes très stricts → très larges). Modifier ce réglage relance automatiquement le regroupement des visages à la fermeture du dialogue.
 - **Lecteur vidéo** : choix entre **« Lecteur par défaut du système »** (application Windows associée aux fichiers vidéo) ou **« Lecteur personnalisé »** (chemin vers un exécutable, ex. VLC ou MPC-HC, via **Parcourir…**). Ce choix détermine ce qu'ouvre le bouton **▶ Ouvrir la vidéo** de la visionneuse.
+- **Performance** : **charge CPU des traitements en arrière-plan** (détection de
+  doublons, indexation des visages) — **Frugal** (recommandé), **Équilibré** ou
+  **Maximum**. La limite est relâchée automatiquement quand la fenêtre n'est pas
+  au premier plan.
 
 ---
 
