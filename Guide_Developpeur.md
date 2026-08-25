@@ -37,7 +37,7 @@ PixelPhotoManager/
 ├── requirements.txt               # Dépendances Python (cœur applicatif)
 ├── requirements-test-e2e.txt      # Dépendances des tests bout-en-bout (pywinauto, Windows-only, optionnel)
 ├── pytest.ini                     # Config pytest : markers e2e/gui, addopts -m "not e2e"
-├── Guide_Utilisateur.md
+├── UserGuide.md
 ├── Guide_Developpeur.md
 │
 ├── assets/

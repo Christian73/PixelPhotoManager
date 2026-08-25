@@ -25,7 +25,7 @@ import markdown
 
 ROOT = Path(__file__).resolve().parent.parent
 VERSION = (ROOT / "VERSION").read_text(encoding="utf-8").strip()
-DOCUMENTS = ["Guide_Utilisateur.md", "DeliveryNote.md"]
+DOCUMENTS = ["UserGuide.md", "DeliveryNote.md"]
 
 # Chrome (or Edge, same engine): the first existing path is used.
 _BROWSERS = [
@@ -34,8 +34,8 @@ _BROWSERS = [
     r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
 ]
 
-_MOIS = ["janvier", "février", "mars", "avril", "mai", "juin", "juillet",
-         "août", "septembre", "octobre", "novembre", "décembre"]
+_MONTHS = ["January", "February", "March", "April", "May", "June", "July",
+           "August", "September", "October", "November", "December"]
 
 CSS = """
 @page { size: A4; margin: 18mm 16mm 16mm 16mm; }
@@ -177,11 +177,11 @@ def build_html(src: Path) -> str:
     )
     today = date.today()
     stamp = (f'<p class="version">Version {VERSION} — '
-             f"{today.day} {_MOIS[today.month - 1]} {today.year}</p>")
+             f"{today.day} {_MONTHS[today.month - 1]} {today.year}</p>")
     body = body.replace("</h1>", f"</h1>\n{stamp}", 1)
     # Table of contents on its own page (user guide only - the
     # short documents such as the delivery note do not have one).
-    toc = body.find("Table des matières")
+    toc = body.find("Table of contents")
     if toc != -1:
         # The break goes before the title that FOLLOWS the table of contents - the table
         # is itself an <h2>, cutting before it would send it to page 2.
@@ -191,7 +191,7 @@ def build_html(src: Path) -> str:
             body = body[:i] + '<div class="toc-break"></div>' + body[i:]
     title = f"{src.stem.replace('_', ' ')} — PixelPhotoManager {VERSION}"
     return (
-        '<!DOCTYPE html>\n<html lang="fr"><head><meta charset="utf-8">'
+        '<!DOCTYPE html>\n<html lang="en"><head><meta charset="utf-8">'
         f"<title>{title}</title><style>{CSS}</style></head>"
         f"<body>\n{body}\n</body></html>"
     )

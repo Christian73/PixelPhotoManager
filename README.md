@@ -131,7 +131,7 @@ Application data is stored in `%LOCALAPPDATA%\PixelPhotoManager\`:
 
 ## Documentation
 
-- [User guide](Guide_Utilisateur.md) — full user guide
+- [User guide](UserGuide.md) — full user guide
 - [Developer guide](Guide_Developpeur.md) — architecture, database schemas, threading model, packaging
 - [Design document](DocumentDeConception.md) — functional and technical specification
 - [Plugin interface](InterfacePlugin.md) — plugin API reference
