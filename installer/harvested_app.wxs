@@ -544,35 +544,89 @@
             <Component Id="cmpE75A51580E3764DA07A99A0DAE0845EA" Directory="dir5BFFDA793418F7E56A48CEC8B970CF1F" Guid="*">
                 <File Id="fil46F76C781DFD215C931FA273E44DD40D" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\hdbscan\_prediction_utils.cp311-win_amd64.pyd" />
             </Component>
-            <Component Id="cmp0FF0A211ADE162E2BA53DDBBC821AD69" Directory="dirA7D67199B6F3411BA88A827D9EEBD175" Guid="*">
-                <File Id="fil784FE974859E2B6DD20CCCB8787A411E" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\help_content\a_propos.html" />
+            <Component Id="cmpABE0863ABE471C2C5C6B1D02BC88C9BC" Directory="dir5546C229A54A6F4E60F5AB0A25A7608C" Guid="*">
+                <File Id="fil2D9F4F0F2E320CFF381206E5C82B37BD" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\help_content\de\a_propos.html" />
             </Component>
-            <Component Id="cmp6FF6487B81B4F0DD6C6A3C079916CDB6" Directory="dirA7D67199B6F3411BA88A827D9EEBD175" Guid="*">
-                <File Id="filB74FF50141420E4FA91AA135AA366A2E" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\help_content\diaporama.html" />
+            <Component Id="cmp25DBD8F9A748864A130FCB3695ABC095" Directory="dir5546C229A54A6F4E60F5AB0A25A7608C" Guid="*">
+                <File Id="fil67E8C15C7264FBA10FCB0767A88B9CFF" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\help_content\de\diaporama.html" />
             </Component>
-            <Component Id="cmpC28DF52755421F828B08A2D90436CC29" Directory="dirA7D67199B6F3411BA88A827D9EEBD175" Guid="*">
-                <File Id="fil6E773D0F25BECA43388A5CC7F89C31C3" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\help_content\doublons.html" />
+            <Component Id="cmp3FDEA50122CF5B2BBA4645F4F9DDE669" Directory="dir5546C229A54A6F4E60F5AB0A25A7608C" Guid="*">
+                <File Id="fil4ED78A8C65CA56B800CE129FA1E2637D" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\help_content\de\doublons.html" />
             </Component>
-            <Component Id="cmpF8BFA7962DDFF7F0C6F79FA9C0C105BE" Directory="dirA7D67199B6F3411BA88A827D9EEBD175" Guid="*">
-                <File Id="fil1E1AFEEFB7DB78385DDF2BF57D0E1F12" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\help_content\navigation.html" />
+            <Component Id="cmp6C4424EA96ADF1EFE8C8E85D910E9BA5" Directory="dir5546C229A54A6F4E60F5AB0A25A7608C" Guid="*">
+                <File Id="fil2F95689D59C816BF00F8A62161E91A4F" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\help_content\de\navigation.html" />
             </Component>
-            <Component Id="cmpE51F5613752369AEA1406058DE7DF2B6" Directory="dirA7D67199B6F3411BA88A827D9EEBD175" Guid="*">
-                <File Id="fil68B3BFFC2057DB06AC3AA86BB488BF38" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\help_content\parametres.html" />
+            <Component Id="cmpF6CA0A87B4F6182DA68CE9071B7C8B18" Directory="dir5546C229A54A6F4E60F5AB0A25A7608C" Guid="*">
+                <File Id="fil8960F18176A2B36DE77C57E0ED5A2E84" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\help_content\de\parametres.html" />
             </Component>
-            <Component Id="cmp7CACE6F6A4D222410B9E21BB71A11EA3" Directory="dirA7D67199B6F3411BA88A827D9EEBD175" Guid="*">
-                <File Id="filA23D70F7D1EE1C7634B8E793CB4C1EC1" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\help_content\raccourcis.html" />
+            <Component Id="cmpB468F7A17ACD8C14AB7DBD97A92FBED9" Directory="dir5546C229A54A6F4E60F5AB0A25A7608C" Guid="*">
+                <File Id="fil17B912755B87439B4F9DDCFE5FC9E0B6" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\help_content\de\raccourcis.html" />
             </Component>
-            <Component Id="cmp3DD993D5B9E1C818BC95F5C0091719DB" Directory="dirA7D67199B6F3411BA88A827D9EEBD175" Guid="*">
-                <File Id="fil4CCCE26FEC6CF1F6C155F8B49D7FB2AA" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\help_content\retouches.html" />
+            <Component Id="cmp688698CC7C71103A91201D9E76DB0911" Directory="dir5546C229A54A6F4E60F5AB0A25A7608C" Guid="*">
+                <File Id="filDA12541567AB6015F96E88798A0422B7" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\help_content\de\retouches.html" />
             </Component>
-            <Component Id="cmpC77C5B59405478460DD632D5E98682B4" Directory="dirA7D67199B6F3411BA88A827D9EEBD175" Guid="*">
-                <File Id="fil685F7C50905C73E49E36DB261A5B116C" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\help_content\visages.html" />
+            <Component Id="cmp9D6417CF1D8909A6CB34B3BE9A22F2AB" Directory="dir5546C229A54A6F4E60F5AB0A25A7608C" Guid="*">
+                <File Id="fil6421FDE06995B1645732D6D673EA6B29" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\help_content\de\visages.html" />
             </Component>
-            <Component Id="cmpD41001F4F15E9186A0364FACA0C54A5C" Directory="dirA7D67199B6F3411BA88A827D9EEBD175" Guid="*">
-                <File Id="fil1CFD6ED6AB1B1A82F15877986D9C2FD7" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\help_content\vue_densemble.html" />
+            <Component Id="cmpB91517D8864344F8E4DE20EA88B9E8C7" Directory="dir5546C229A54A6F4E60F5AB0A25A7608C" Guid="*">
+                <File Id="fil67F92D5358EB701CD76E85D7D85D98AB" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\help_content\de\vue_densemble.html" />
             </Component>
-            <Component Id="cmp32DFF8755B211EC3F4DEF7C1BD8CA33E" Directory="dirA7D67199B6F3411BA88A827D9EEBD175" Guid="*">
-                <File Id="fil39F2ABE5AE887115C2F884E53270D9D9" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\help_content\_style.html" />
+            <Component Id="cmp340B5E0479499798775CA4814CE7E9C8" Directory="dirB93DA699AA6674D0B410F51A09BACB4D" Guid="*">
+                <File Id="fil172CB7E09CE4039885E73B057F781F1B" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\help_content\en\a_propos.html" />
+            </Component>
+            <Component Id="cmp0E898560DDA7976BA9C39D684C9908EB" Directory="dirB93DA699AA6674D0B410F51A09BACB4D" Guid="*">
+                <File Id="fil13801FC7967E9FD3CAE40EB83E0A2307" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\help_content\en\diaporama.html" />
+            </Component>
+            <Component Id="cmp28D0A7DE8E2937168E13AE4B187CF997" Directory="dirB93DA699AA6674D0B410F51A09BACB4D" Guid="*">
+                <File Id="filC4C6C95D89D19734D469DC102F8F60F5" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\help_content\en\doublons.html" />
+            </Component>
+            <Component Id="cmp62CB63E03F58CE7AD960797A444D459B" Directory="dirB93DA699AA6674D0B410F51A09BACB4D" Guid="*">
+                <File Id="fil3487525194F4B2B425BAD865A39C03C2" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\help_content\en\navigation.html" />
+            </Component>
+            <Component Id="cmpC0D1B6DD1BD15D0028D2D20B866D30B7" Directory="dirB93DA699AA6674D0B410F51A09BACB4D" Guid="*">
+                <File Id="fil742160FB4592FAB8195D022FD36CD09A" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\help_content\en\parametres.html" />
+            </Component>
+            <Component Id="cmp149AC3DB5F97DF88561C07795446886E" Directory="dirB93DA699AA6674D0B410F51A09BACB4D" Guid="*">
+                <File Id="filCF3AE7D2ADCED321B6C9589486616CC7" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\help_content\en\raccourcis.html" />
+            </Component>
+            <Component Id="cmp40D6A87905CE09D82DD9E8137025389B" Directory="dirB93DA699AA6674D0B410F51A09BACB4D" Guid="*">
+                <File Id="fil7EF4AAAC637E124A09114E198DD3160F" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\help_content\en\retouches.html" />
+            </Component>
+            <Component Id="cmp4D1F52BD63973C04E268C73D2DC1EA0D" Directory="dirB93DA699AA6674D0B410F51A09BACB4D" Guid="*">
+                <File Id="fil7A21E957152CF225B17BF26A2946431C" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\help_content\en\visages.html" />
+            </Component>
+            <Component Id="cmp666DD1D053D75B45D5F6B3301BC66473" Directory="dirB93DA699AA6674D0B410F51A09BACB4D" Guid="*">
+                <File Id="fil29833B6EE0DF742DCA4ECDEF908009C5" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\help_content\en\vue_densemble.html" />
+            </Component>
+            <Component Id="cmpBFAC1C1FD9B4260692D345F95B116268" Directory="dirB93DA699AA6674D0B410F51A09BACB4D" Guid="*">
+                <File Id="fil13264127D3CB74654F1BA283E5C6FB27" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\help_content\en\_style.html" />
+            </Component>
+            <Component Id="cmpD4CF2F580FD0703BB46B9AE0C51E74E4" Directory="dir7C0C964732A1C95FD8CF04079E47F55C" Guid="*">
+                <File Id="fil9B123C711468A6C3F5A57BBC2F147D6B" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\help_content\fr\a_propos.html" />
+            </Component>
+            <Component Id="cmp7DBFE2F0BE61C4C44045EE1A4492F50C" Directory="dir7C0C964732A1C95FD8CF04079E47F55C" Guid="*">
+                <File Id="filE663DC15A6C41EA62B56A217FE0646BE" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\help_content\fr\diaporama.html" />
+            </Component>
+            <Component Id="cmpA37354F79DC39D8FB990BBDA7570DAE5" Directory="dir7C0C964732A1C95FD8CF04079E47F55C" Guid="*">
+                <File Id="filB0384040ACF4AB0DC29D609C3E0DA825" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\help_content\fr\doublons.html" />
+            </Component>
+            <Component Id="cmpA007967B1E5A59B6538E530D509A268A" Directory="dir7C0C964732A1C95FD8CF04079E47F55C" Guid="*">
+                <File Id="fil3ECE079C4A88CE0F310262FC60A2808C" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\help_content\fr\navigation.html" />
+            </Component>
+            <Component Id="cmpF3F238327A06E4BC7B0438DFADD85305" Directory="dir7C0C964732A1C95FD8CF04079E47F55C" Guid="*">
+                <File Id="fil091E02B114893417F17E210D55A5D5AF" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\help_content\fr\parametres.html" />
+            </Component>
+            <Component Id="cmp567A78D4F1B8190B48D38D36C76FEED3" Directory="dir7C0C964732A1C95FD8CF04079E47F55C" Guid="*">
+                <File Id="fil3CBA86E598C39FBE51F9AD7D66BBE08C" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\help_content\fr\raccourcis.html" />
+            </Component>
+            <Component Id="cmpBC64102A37C8794A615B4AA36ECE580B" Directory="dir7C0C964732A1C95FD8CF04079E47F55C" Guid="*">
+                <File Id="fil1726D3C18E5BD53C94BAF997AA638114" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\help_content\fr\retouches.html" />
+            </Component>
+            <Component Id="cmpCB338D7E2CB88332646208B2E28DFD58" Directory="dir7C0C964732A1C95FD8CF04079E47F55C" Guid="*">
+                <File Id="fil152578E17600249F5AA60BB04FEB1807" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\help_content\fr\visages.html" />
+            </Component>
+            <Component Id="cmp1E85AD87AE5453807131028D5F3C8F12" Directory="dir7C0C964732A1C95FD8CF04079E47F55C" Guid="*">
+                <File Id="fil75289CC8674931D6ED09595AF63186A8" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\help_content\fr\vue_densemble.html" />
             </Component>
             <Component Id="cmp6B1E5851F5529FD48BCDCB2EFDD03FFC" Directory="dirBF570795F4EDABDC0C35C54392FDCA43" Guid="*">
                 <File Id="filD0A7C18C490F0B88B12DD37178FABC30" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\insightface\__init__.py" />
@@ -4435,6 +4489,24 @@
             <Component Id="cmp963CA50E2FA2CBD1BBB4DD6194C7931E" Directory="dir8F861C7A49138069CC902611066CB459" Guid="*">
                 <File Id="filCFF93DC6E28EE3CA28FF856CEA7156D9" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\tqdm-4.69.1.dist-info\licenses\LICENCE" />
             </Component>
+            <Component Id="cmpFE8BA1C91F0262C66C5440667CF74CE5" Directory="dir4CAC15F53E7670869E1A178866EBABC9" Guid="*">
+                <File Id="filF3EF6821A13C19DA1ECE74D5571E3DD1" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\translations\ppm_de.qm" />
+            </Component>
+            <Component Id="cmp8E27543309FE9B32DD7EEBA2BCA4B8E4" Directory="dir4CAC15F53E7670869E1A178866EBABC9" Guid="*">
+                <File Id="filF1C918448958247897EB158D4B5A8BDC" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\translations\ppm_en.qm" />
+            </Component>
+            <Component Id="cmp5356ECC62006249D1B6F42092D1F21F0" Directory="dir4CAC15F53E7670869E1A178866EBABC9" Guid="*">
+                <File Id="filFDB55CEFD7EEA98D85100CB92A382E13" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\translations\ppm_fr.qm" />
+            </Component>
+            <Component Id="cmp7AE5AE8A08284946112EFC811FA81DAE" Directory="dir4CAC15F53E7670869E1A178866EBABC9" Guid="*">
+                <File Id="filF918E2028C29AA98FCAC2349AD9F0A9F" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\translations\qtbase_de.qm" />
+            </Component>
+            <Component Id="cmpA596CFCA98BBB15A482B6582A2FBED58" Directory="dir4CAC15F53E7670869E1A178866EBABC9" Guid="*">
+                <File Id="filBCD63F1199130932BED8ED0DEBA64E9C" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\translations\qtbase_en.qm" />
+            </Component>
+            <Component Id="cmp53A95CAD92AD9DB741E499ECCFDAD225" Directory="dir4CAC15F53E7670869E1A178866EBABC9" Guid="*">
+                <File Id="fil7586EE7B65DA0C867A6CEDAB8630457D" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\translations\qtbase_fr.qm" />
+            </Component>
             <Component Id="cmpF469D48343E18F65E9BE0812F44DE4A3" Directory="dir7B1D1F6BD6D755B3B6EE8AD8AA0917D5" Guid="*">
                 <File Id="fil1498C873389BB09E3E35EAA317AB83EF" KeyPath="yes" Source="$(var.AppSourceDir)\_internal\typing_extensions-4.16.0.dist-info\INSTALLER" />
             </Component>
@@ -4835,6 +4907,11 @@
         </DirectoryRef>
     </Fragment>
     <Fragment>
+        <DirectoryRef Id="dirB262A3C1EC64B1E8AB54055F45CD67B0">
+            <Directory Id="dir4CAC15F53E7670869E1A178866EBABC9" Name="translations" />
+        </DirectoryRef>
+    </Fragment>
+    <Fragment>
         <DirectoryRef Id="dir6F7C4EFB930BDC4D12FD4BAEA2BA33EA">
             <Directory Id="dir4FC65524603A9C4D017763C5D8D49584" Name="morphable_model" />
         </DirectoryRef>
@@ -4877,6 +4954,11 @@
     <Fragment>
         <DirectoryRef Id="dir9C44F7B5B1AE1AFCA170EC058D41F73B">
             <Directory Id="dir54E378801A0B98A8E5CFA0518EBD9F1D" Name="pages" />
+        </DirectoryRef>
+    </Fragment>
+    <Fragment>
+        <DirectoryRef Id="dirA7D67199B6F3411BA88A827D9EEBD175">
+            <Directory Id="dir5546C229A54A6F4E60F5AB0A25A7608C" Name="de" />
         </DirectoryRef>
     </Fragment>
     <Fragment>
@@ -5067,6 +5149,11 @@
     <Fragment>
         <DirectoryRef Id="dirB262A3C1EC64B1E8AB54055F45CD67B0">
             <Directory Id="dir7B1D1F6BD6D755B3B6EE8AD8AA0917D5" Name="typing_extensions-4.16.0.dist-info" />
+        </DirectoryRef>
+    </Fragment>
+    <Fragment>
+        <DirectoryRef Id="dirA7D67199B6F3411BA88A827D9EEBD175">
+            <Directory Id="dir7C0C964732A1C95FD8CF04079E47F55C" Name="fr" />
         </DirectoryRef>
     </Fragment>
     <Fragment>
@@ -5382,6 +5469,11 @@
     <Fragment>
         <DirectoryRef Id="dirB262A3C1EC64B1E8AB54055F45CD67B0">
             <Directory Id="dirB8F9A988E78BD9D92EE60D52EB8F02D3" Name="shiboken6" />
+        </DirectoryRef>
+    </Fragment>
+    <Fragment>
+        <DirectoryRef Id="dirA7D67199B6F3411BA88A827D9EEBD175">
+            <Directory Id="dirB93DA699AA6674D0B410F51A09BACB4D" Name="en" />
         </DirectoryRef>
     </Fragment>
     <Fragment>
