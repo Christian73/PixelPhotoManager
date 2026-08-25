@@ -5913,7 +5913,7 @@ automatically during the ArcFace analysis, even a later one.</source>
     <message>
         <location filename="../src/ui/settings_dialog.py" line="67" />
         <source>Language of the interface and of the built-in help. The PDF documents
-(user guide, release note) stay in French.</source>
+(user guide, release note) are in English.</source>
         <translation type="unfinished" />
     </message>
     <message>

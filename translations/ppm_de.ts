@@ -6006,9 +6006,9 @@ ArcFace-Analyse automatisch zugeordnet, auch später noch.</translation>
     <message>
         <location filename="../src/ui/settings_dialog.py" line="67" />
         <source>Language of the interface and of the built-in help. The PDF documents
-(user guide, release note) stay in French.</source>
+(user guide, release note) are in English.</source>
         <translation>Sprache der Oberfläche und der integrierten Hilfe. Die PDF-Dokumente
-(Benutzerhandbuch, Lieferhinweis) bleiben auf Französisch.</translation>
+(Benutzerhandbuch, Lieferhinweis) sind auf Englisch.</translation>
     </message>
     <message>
         <location filename="../src/ui/settings_dialog.py" line="93" />

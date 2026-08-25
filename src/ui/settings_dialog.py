@@ -66,7 +66,7 @@ class _LanguagePage(QWidget):
 
         lbl_desc = QLabel(translate("SettingsDialog",
             "Language of the interface and of the built-in help. The PDF documents\n(user "
-            "guide, release note) stay in French."
+            "guide, release note) are in English."
         ))
         lbl_desc.setStyleSheet("color: #aaa; font-size: 11px;")
         lbl_desc.setWordWrap(True)
