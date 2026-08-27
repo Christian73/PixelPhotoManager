@@ -508,9 +508,13 @@ class TestClusterIdentification:
         host._on_clusters_ignored([1, 2])
         assert host._face_cluster_grid.last("remove_clusters") == ([1, 2],)
 
-    def test_a_merge_of_groups_rebuilds_the_whole_grid(self, host):
+    def test_a_merge_of_groups_does_not_reload_the_grid(self, host, threads):
+        """The grid has already updated its display (FaceClusterGrid.apply_merge):
+        a refresh() here would restart the whole group analysis."""
         host._on_cluster_merged(1, 2)
-        assert host._face_cluster_grid.called("refresh")
+        assert host._face_cluster_grid.called("refresh") == []
+        # only the sidebar badge (groups left to identify) follows
+        assert len(threads["_PersonsRefreshThread"]) == 1
 
     def test_the_face_panel_follows_only_when_visible(self, host, threads):
         host._on_cluster_assigned(1, 2)

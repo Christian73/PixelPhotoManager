@@ -357,7 +357,7 @@ class TestGetAllPersonCentroids:
         assert centroids[2] == pytest.approx([0.0, 5.0])
 
     def test_cache_invalidated_after_reassignment(self, tmp_path):
-        """The cache is keyed on a fingerprint (COUNT + SUM(person_id)) -- a
+        """The cache is keyed on a per-person fingerprint (COUNT + SUM(id)) -- a
         reassignment that changes the sum without changing the number of rows
         (e.g. merge_persons) must still invalidate the cache."""
         db = FaceDatabase(db_path=tmp_path / "faces.db")
@@ -371,6 +371,41 @@ class TestGetAllPersonCentroids:
 
         second = db.get_all_person_centroids([1])
         assert second[1] == pytest.approx([0.5, 2.0])
+
+
+    def test_only_the_person_that_moved_is_recomputed(self, tmp_path):
+        """Identifying a face must not re-decode the embeddings of the whole
+        library: the fingerprint is per person, so the centroids that have not
+        moved are handed back as is (the very same list object).
+
+        A single global fingerprint made every identification cost a full
+        rebuild -- several seconds on a real library, paid on the spot since the
+        faces panel reloads right after."""
+        db = FaceDatabase(db_path=tmp_path / "faces.db")
+        _raw_insert_face(db, "a.jpg", person_id=1, embedding=[1.0, 0.0])
+        _raw_insert_face(db, "b.jpg", person_id=2, embedding=[0.0, 2.0])
+
+        first = db.get_all_person_centroids([1, 2])
+        untouched = first[1]
+
+        _raw_insert_face(db, "c.jpg", person_id=2, embedding=[0.0, 4.0])
+        second = db.get_all_person_centroids([1, 2])
+
+        assert second[1] is untouched, "le centroïde d'une personne intacte a été recalculé"
+        assert second[2] == pytest.approx([0.0, 3.0])
+
+    def test_a_person_losing_all_its_faces_leaves_the_cache(self, tmp_path):
+        """Nothing is stale (no fingerprint changed for a surviving person), but
+        the number of people did change -- the cache must not keep a ghost."""
+        db = FaceDatabase(db_path=tmp_path / "faces.db")
+        _raw_insert_face(db, "a.jpg", person_id=1, embedding=[1.0, 0.0])
+        fid = _raw_insert_face(db, "b.jpg", person_id=2, embedding=[0.0, 2.0])
+
+        assert 2 in db.get_all_person_centroids([1, 2])
+
+        db.unassign_face(fid)
+
+        assert 2 not in db.get_all_person_centroids([1, 2])
 
 
 class TestPicasaAnnotationSync:

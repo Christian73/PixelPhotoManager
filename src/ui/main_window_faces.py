@@ -613,7 +613,12 @@ class FacesController:
 
     @Slot(int, int)
     def _on_cluster_merged(self, _source: int, _target: int) -> None:
-        self._face_cluster_grid.refresh()
+        # The grid has already updated its own display (FaceClusterGrid.apply_merge):
+        # refreshing it here would restart the whole group analysis (Union-Find +
+        # suggestions, several seconds behind a modal popup) to redisplay a merge the
+        # user has just made by hand. Only the sidebar badge, which counts the groups
+        # left to identify, has to follow.
+        self._update_persons_counts()
 
     @Slot(int, str)
     def _on_cluster_photos_requested(self, cluster_id: int, label: str) -> None:

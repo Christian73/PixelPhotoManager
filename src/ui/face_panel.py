@@ -261,7 +261,8 @@ class _FaceItem(QFrame):
     clicked                     = Signal(int)           # face_id  (left click)
     double_clicked              = Signal(int)           # face_id  (left double-click)
     context_menu_requested      = Signal(int, object)   # (face_id, global QPoint)
-    ignore_requested            = Signal(int)           # face_id  (✕ button, bottom right)
+    ignore_requested            = Signal(int)           # face_id  (✕ button, bottom
+                                                        # right, absent when confirmed)
     suggestion_accept_requested = Signal(int)           # face_id  (✓ suggestion button)
     suggestion_reject_requested = Signal(int)           # face_id  (✕ suggestion button)
 
@@ -298,6 +299,7 @@ class _FaceItem(QFrame):
     def __init__(
         self, face: FaceInfo, name: str, parent=None,
         *, suggestion: bool = False, name_color: "str | None" = None,
+        confirmed: bool = False,
     ) -> None:
         super().__init__(parent)
         self._face    = face
@@ -322,18 +324,24 @@ class _FaceItem(QFrame):
         self._lbl_img.setStyleSheet("border-radius: 4px; border: none;")
         self._lbl_img.start_loading()
 
-        self._btn_ignore = QPushButton("✕", img_container)
-        self._btn_ignore.setGeometry(
-            _THUMB - _BTN_IGNORE_SZ - 2,
-            _THUMB - _BTN_IGNORE_SZ - 2,
-            _BTN_IGNORE_SZ,
-            _BTN_IGNORE_SZ,
-        )
-        self._btn_ignore.setStyleSheet(self._BTN_STYLE)
-        self._btn_ignore.setCursor(Qt.PointingHandCursor)
-        self._btn_ignore.setToolTip(translate("FaceItem", "Ignore this face"))
-        self._btn_ignore.clicked.connect(lambda: self.ignore_requested.emit(self._face_id))
-        self._btn_ignore.raise_()
+        # The quick-ignore cross is a shortcut for triaging what is NOT settled yet
+        # (anonymous face, group, suggestion awaiting verification). On a confirmed
+        # identification it offers nothing but the risk of a misclick on a face the
+        # user has just validated: ignoring it stays available through the context
+        # menu ("Ignore this face"), which is deliberate and unconditional there.
+        if not confirmed:
+            self._btn_ignore = QPushButton("✕", img_container)
+            self._btn_ignore.setGeometry(
+                _THUMB - _BTN_IGNORE_SZ - 2,
+                _THUMB - _BTN_IGNORE_SZ - 2,
+                _BTN_IGNORE_SZ,
+                _BTN_IGNORE_SZ,
+            )
+            self._btn_ignore.setStyleSheet(self._BTN_STYLE)
+            self._btn_ignore.setCursor(Qt.PointingHandCursor)
+            self._btn_ignore.setToolTip(translate("FaceItem", "Ignore this face"))
+            self._btn_ignore.clicked.connect(lambda: self.ignore_requested.emit(self._face_id))
+            self._btn_ignore.raise_()
 
         if suggestion:
             self._btn_accept = QPushButton("✓", img_container)
@@ -643,14 +651,23 @@ class FacePanel(QWidget):
         reuses the thumbnails already decoded (cf. _thumb_cache): only the new
         faces (a manual addition) do not have an unchanged bbox in cache yet
         and are therefore the only ones to go through _FacePanelLoader again."""
-        if photo_path != self._current_photo:
+        same_photo = photo_path == self._current_photo
+        if not same_photo:
             self._undo_stack.clear()
             self.undo_stack_changed.emit(False)
             self._thumb_cache.clear()
         self._current_photo = photo_path
         self._btn_add_face.setEnabled(bool(photo_path))
         self._stop_loader()
-        self._clear()
+        if not same_photo:
+            # Emptying right now is only correct when navigating: the faces on
+            # screen are those of ANOTHER photo. On a refresh of the SAME photo
+            # (confirmed suggestion, ignore, unassign, undo...) they are still the
+            # right ones, and _on_faces_data_ready clears and rebuilds in a single
+            # slot -- so the swap costs no repaint. Clearing here instead left the
+            # panel blank for the whole duration of _FacesDataLoader: every face
+            # vanishing then coming back, for no reason the user can see.
+            self._clear()
 
         # Keep the old loader before replacing it, so that reassigning
         # self._data_loader does not drop the Python refcount to 0 while the C++
@@ -708,6 +725,13 @@ class FacePanel(QWidget):
         if photo_path != self._current_photo:
             return  # navigation in the meantime
 
+        # _clear() FIRST: it empties self._cluster_persons in place, so assigning
+        # the new dict before it wiped that very dict — and the local variable
+        # with it, since it is the same object. A face whose person comes from its
+        # cluster (re-indexed after the assignment) then fell through to the
+        # "Group {id}" branch instead of showing the name.
+        self._clear()
+
         # Rebuild the dicts with explicit int keys — avoids the coercion of the
         # keys to str by PySide6 during the cross-thread transmission via Signal.
         person_names: dict[int, str] = {int(k): v for k, v in person_names_items}
@@ -716,8 +740,6 @@ class FacePanel(QWidget):
         self._cluster_persons = cluster_persons
         self._person_names = person_names
         self._last_edit_rotation = edit_rotation
-
-        self._clear()
 
         # Update the "Ignored faces" button (the count is computed in the
         # loading thread — no DB query on the UI thread here)
@@ -749,9 +771,11 @@ class FacePanel(QWidget):
         loader_items = []
         for face in faces_sorted:
             suggestion = False
+            confirmed  = False   # identification settled: no quick-ignore cross
             name_color = None
             if face.person_id and face.person_id in person_names:
                 name = person_names[face.person_id]
+                confirmed = True
             elif face.cluster_id is not None and face.cluster_id in cluster_persons:
                 # Face re-indexed after an assignment: the cluster has a person,
                 # but this individual face does not have its person_id updated yet.
@@ -759,6 +783,7 @@ class FacePanel(QWidget):
                 name = person_names.get(
                     pid,
                     translate("FacePanel", "Group {id}").format(id=face.cluster_id))
+                confirmed = pid in person_names
             elif face.pinned:
                 name = translate("FacePanel", "Separated")
             elif (
@@ -793,7 +818,8 @@ class FacePanel(QWidget):
                 name = "Inconnu"
 
             item = _FaceItem(
-                face, name, self._content, suggestion=suggestion, name_color=name_color
+                face, name, self._content, suggestion=suggestion, name_color=name_color,
+                confirmed=confirmed,
             )
             item.clicked.connect(self._on_item_clicked)
             item.double_clicked.connect(self._on_item_double_clicked)

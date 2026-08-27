@@ -161,7 +161,9 @@ class FaceDatabase:
         # idx_faces_person index, a few ms) than the full recomputation, which has to
         # decode every embedding (~60k on a large library, >5 s).
         self._person_centroid_cache: "dict[int, list[float]] | None" = None
-        self._person_centroid_cache_fp = None
+        # {person_id: (face_count, sum_of_face_ids)} — one fingerprint per person,
+        # so that an identification only invalidates the person it concerns.
+        self._person_centroid_cache_fp: "dict[int, tuple] | None" = None
 
     def _conn(self) -> sqlite3.Connection:
         """SQLite connection of the current thread, created once per thread
@@ -1090,48 +1092,73 @@ class FaceDatabase:
     ) -> dict[int, list[float]]:
         """Returns {person_id: centroid} for every requested person.
 
-        The full result (all the people together) is cached in memory and reused
-        as long as the fingerprint (COUNT + SUM of the assigned person_id, an
-        indexed read taking a few ms) has not changed — avoids re-decoding ~60k
-        embeddings (several seconds) on every call, which made the face
-        identification popup very slow to open."""
+        The result is cached in memory and refreshed **person by person**: one
+        fingerprint per person (COUNT + SUM of the face ids, a grouped read on
+        idx_faces_person taking a few ms) tells which people really moved, and
+        only those get their embeddings decoded again.
+
+        A single global fingerprint (the earlier scheme) was changed by any
+        identification whatsoever, so confirming one suggestion re-decoded the
+        ~60k embeddings of the whole library — several seconds — to recompute
+        centroids that had not moved. That cost was paid on the spot, in front of
+        the user: the faces panel reloads right after an identification, and its
+        loading thread calls this method."""
         if not person_ids:
             return {}
-        # The lock is only held during the SQL reads: the decoding of the ~60k
-        # embeddings (several seconds when the cache is rebuilt) happens outside
-        # the lock so as not to block the other threads (e.g. the face queries of
-        # the UI thread). If two threads rebuild at the same time, the result is
-        # identical — the last write wins.
+        # The lock is only held during the SQL reads: the decoding of the
+        # embeddings happens outside the lock so as not to block the other threads
+        # (e.g. the face queries of the UI thread). If two threads rebuild at the
+        # same time, the result is identical — the last write wins.
         rows = None
         with self._guard() as conn:
-            fp = conn.execute(
-                "SELECT COUNT(*), IFNULL(SUM(person_id), 0) FROM faces"
-                " WHERE person_id IS NOT NULL"
-            ).fetchone()
-            if self._person_centroid_cache is not None and fp == self._person_centroid_cache_fp:
-                cache = self._person_centroid_cache
-            else:
+            fps: dict[int, tuple] = {
+                pid: (count, id_sum)
+                for pid, count, id_sum in conn.execute(
+                    "SELECT person_id, COUNT(*), IFNULL(SUM(id), 0) FROM faces"
+                    " WHERE person_id IS NOT NULL GROUP BY person_id"
+                ).fetchall()
+            }
+            cached     = self._person_centroid_cache or {}
+            cached_fps = self._person_centroid_cache_fp or {}
+            # SUM(id) and not SUM(person_id): a face moving from one person to
+            # another (merge_persons, reassignment) changes the count of neither
+            # of them, but does change the sum of their face ids on both sides.
+            stale = [pid for pid, fp in fps.items() if cached_fps.get(pid) != fp]
+            if stale:
                 rows = conn.execute(
                     "SELECT person_id, embedding FROM faces"
                     " WHERE person_id IS NOT NULL AND embedding IS NOT NULL"
+                    "   AND person_id IN (%s)" % ",".join("?" * len(stale)),
+                    stale,
                 ).fetchall()
-        if rows is not None:
-            sums: dict[int, "np.ndarray"] = {}
-            counts: dict[int, int] = {}
-            import numpy as np
-            for pid, blob in rows:
-                vec = np.frombuffer(blob, dtype=np.float32)
-                if pid in sums:
-                    sums[pid] += vec
-                    counts[pid] += 1
-                else:
-                    sums[pid] = vec.copy()
-                    counts[pid] = 1
+
+        if stale or len(cached_fps) != len(fps):
+            # A new dict, never a mutation of the shared one: another thread may
+            # be reading it. The untouched people keep their centroid as is — the
+            # whole point of the per-person fingerprint.
             cache = {
-                pid: (sums[pid] / counts[pid]).tolist() for pid in sums
+                pid: emb for pid, emb in cached.items()
+                if pid in fps and pid not in stale
             }
-            self._person_centroid_cache = cache
-            self._person_centroid_cache_fp = fp
+            if rows:
+                import numpy as np
+                sums: dict[int, "np.ndarray"] = {}
+                counts: dict[int, int] = {}
+                for pid, blob in rows:
+                    vec = np.frombuffer(blob, dtype=np.float32)
+                    if pid in sums:
+                        sums[pid] += vec
+                        counts[pid] += 1
+                    else:
+                        sums[pid] = vec.copy()
+                        counts[pid] = 1
+                for pid in sums:
+                    cache[pid] = (sums[pid] / counts[pid]).tolist()
+            self._person_centroid_cache    = cache
+            self._person_centroid_cache_fp = fps
+        else:
+            cache = cached
+
         wanted = set(person_ids)
         return {pid: emb for pid, emb in cache.items() if pid in wanted}
 

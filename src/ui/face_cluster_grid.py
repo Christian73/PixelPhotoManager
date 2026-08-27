@@ -190,7 +190,8 @@ class FaceClusterGrid(QWidget):
     clusters_assigned(cluster_ids, pid)       - assign N groups to a person
     cluster_ignored(cluster_id)               - ignore a group
     clusters_ignored(cluster_ids)             - ignore N selected groups/faces
-    cluster_merged(source_id, target_id)      - merge two groups
+    cluster_merged(source_id, target_id)      - groups merged (the grid has
+                                                already updated its display)
     back_requested()                          - go back to the photo grid
     photos_requested(cluster_id, label)       - display the photos of a group
     """
@@ -471,10 +472,7 @@ class FaceClusterGrid(QWidget):
                 section.reflow(self._current_cols)
                 sections_to_keep.append(section)
             else:
-                idx = self._content_vbox.indexOf(section)
-                if idx >= 0:
-                    self._content_vbox.takeAt(idx)
-                section.deleteLater()
+                self._retire_section(section)
         self._sections = sections_to_keep
 
         # Cache: remove the clusters from the dicts and rebuild groups_sorted / group_labels
@@ -519,6 +517,175 @@ class FaceClusterGrid(QWidget):
         # Action bar
         if removed_from_sel:
             self._update_action_bar()
+
+    # ------------------------------------------------------------------ local updates (no reload)
+
+    def _connect_card(self, card: _ClusterCard) -> None:
+        """Wires the signals of a card - the same wherever it is created."""
+        card.selection_toggled.connect(self._on_card_selection_toggled)
+        card.range_select_requested.connect(self._on_range_select)
+        card.view_requested.connect(self._on_card_view_requested)
+        card.name_requested.connect(self._on_card_name_requested)
+        card.quick_accept_requested.connect(self._on_card_quick_accept)
+        card.merge_requested.connect(self._on_card_merge_requested)
+        card.associate_requested.connect(self._on_card_associate_requested)
+        card.ignore_requested.connect(self._on_card_ignore_requested)
+        card.ignore_selection_requested.connect(self._on_card_ignore_selection_requested)
+        card.eject_from_section_requested.connect(self._on_card_eject_from_section)
+
+    def _retire_section(self, section: "_SectionWidget") -> None:
+        """Takes an emptied section out of the layout.
+
+        The flat section and the isolated-faces one are only hidden, never
+        deleted: the pagination keeps a reference to both and may refill them
+        later (cf. _ensure_section_in_layout) - deleting them would leave a
+        dangling C++ object behind.
+        """
+        idx = self._content_vbox.indexOf(section)
+        if idx >= 0:
+            self._content_vbox.takeAt(idx)
+        if section is self._flat_section or section is self._solo_section:
+            section.hide()
+        else:
+            section.deleteLater()
+
+    def _layout_insert_index(self, section: "_SectionWidget") -> int:
+        """Position at which to (re)insert a section: the flat section stays above
+        the isolated faces, both stay above the "Load more" button and the final
+        stretch."""
+        refs: list = []
+        if section is not self._solo_section:
+            refs.append(self._solo_section)
+        refs.append(self._load_more_btn)
+        for ref in refs:
+            if ref is not None:
+                idx = self._content_vbox.indexOf(ref)
+                if idx >= 0:
+                    return idx
+        count = self._content_vbox.count()
+        last  = self._content_vbox.itemAt(count - 1) if count else None
+        if last is not None and last.spacerItem() is not None:
+            return count - 1
+        return count
+
+    def _ensure_section_in_layout(self, section: "_SectionWidget | None") -> None:
+        """Puts a section emptied earlier back on screen once a card is added to it."""
+        if section is None or not section._entries:
+            return
+        if self._content_vbox.indexOf(section) < 0:
+            section.show()
+            self._content_vbox.insertWidget(self._layout_insert_index(section), section)
+        if section not in self._sections:
+            self._sections.append(section)
+
+    def _ensure_flat_section(self) -> "_SectionWidget":
+        """The section of the isolated groups, created and put in the layout if needed."""
+        flat = self._flat_section
+        if flat is None:
+            flat = _SectionWidget("", "", self._content)
+            self._flat_section = flat
+        if self._content_vbox.indexOf(flat) < 0:
+            flat.show()
+            self._content_vbox.insertWidget(self._layout_insert_index(flat), flat)
+        if flat not in self._sections:
+            self._sections.append(flat)
+        return flat
+
+    def _detach_card(self, cluster_id: int) -> None:
+        """Removes the card of a cluster from the display (widget + section) without
+        touching _cached_data nor the avatar cache - the cluster still exists."""
+        card = self._cards.pop(cluster_id, None)
+        if card is not None:
+            card.deleteLater()
+        self._selected_ids.discard(cluster_id)
+        if self._anchor_id == cluster_id:
+            self._anchor_id = None
+
+        sections_to_keep = []
+        for section in self._sections:
+            if not any(c == cluster_id for c, _ in section._entries):
+                sections_to_keep.append(section)
+                continue
+            section._entries = [(c, w) for c, w in section._entries if c != cluster_id]
+            if section._entries:
+                section.reflow(self._current_cols)
+                sections_to_keep.append(section)
+            else:
+                self._retire_section(section)
+        self._sections = sections_to_keep
+
+    def _promote_solo_card(self, cluster_id: int, face_count: int) -> None:
+        """Rebuilds the card of an isolated face as a group card in the flat section.
+
+        A solo card displays no counter and carries the tooltips of a single face:
+        once it has absorbed other groups it has to be replaced, not updated.
+        """
+        self._detach_card(cluster_id)
+        flat = self._ensure_flat_section()
+        data = self._cached_data or {}
+        sugg_id, sugg_label, sugg_color, _ = data.get("suggestions", {}).get(
+            cluster_id, (None, "", "", 0.0)
+        )
+        card = _ClusterCard(
+            cluster_id, face_count, sugg_id, sugg_label, sugg_color,
+            selected_ids_ref=self._selected_ids,
+            parent=flat._card_area,
+        )
+        self._connect_card(card)
+        flat.add_card(cluster_id, card)
+        self._cards[cluster_id] = card
+        avatar = self._avatar_cache.get(cluster_id)
+        if avatar is not None:
+            card.set_avatar(avatar)
+        else:
+            rep = data.get("representative_faces", {}).get(cluster_id)
+            if rep:
+                QTimer.singleShot(
+                    0, lambda r=rep, cid=cluster_id: self._start_cluster_loader([(cid, r)])
+                )
+        flat.reflow(self._current_cols)
+
+    def apply_merge(self, source_ids: list[int], target_id: int) -> None:
+        """Reflects a merge of groups on screen without restarting the analysis.
+
+        The faces of the sources have moved into the target: their cards go away
+        and the target's counter grows - nothing else changes. Calling refresh()
+        here (what happened until now) restarted the Union-Find and the whole
+        suggestion computation, several seconds behind a modal progress popup,
+        only to redisplay what the user has just done by hand.
+
+        Falls back on refresh() when the cache is not usable (Phase 2 not
+        finished), exactly like remove_clusters().
+        """
+        if (self._refresh_thread and self._refresh_thread.isRunning()) or self._cached_data is None:
+            self.refresh()
+            return
+
+        sources = [cid for cid in source_ids if cid != target_id]
+        counts  = self._cached_data.get("face_counts", {})
+        total   = counts.get(target_id, 0) + sum(counts.get(cid, 0) for cid in sources)
+
+        if sources:
+            self.remove_clusters(sources)
+
+        for data in (self._cached_data, self._pending_build_data):
+            if data is not None:
+                data.setdefault("face_counts", {})[target_id] = total
+
+        card = self._cards.get(target_id)
+        if card is not None and not card._is_solo:
+            card.set_face_count(total)
+            return
+
+        # An isolated face that has absorbed other groups is no longer isolated:
+        # it must leave the "Isolated faces" section - including when its card is
+        # not rendered yet (pagination), hence the rewriting of _all_combined.
+        self._all_combined = [
+            ("group" if group == [target_id] else kind, group)
+            for kind, group in self._all_combined
+        ]
+        if card is not None:
+            self._promote_solo_card(target_id, total)
 
     def restore(self) -> None:
         """Restores the grid from the cache without restarting the heavy computations.
@@ -796,16 +963,7 @@ class FaceClusterGrid(QWidget):
                 selected_ids_ref=self._selected_ids,
                 parent=target._card_area,
             )
-            card.selection_toggled.connect(self._on_card_selection_toggled)
-            card.range_select_requested.connect(self._on_range_select)
-            card.view_requested.connect(self._on_card_view_requested)
-            card.name_requested.connect(self._on_card_name_requested)
-            card.quick_accept_requested.connect(self._on_card_quick_accept)
-            card.merge_requested.connect(self._on_card_merge_requested)
-            card.associate_requested.connect(self._on_card_associate_requested)
-            card.ignore_requested.connect(self._on_card_ignore_requested)
-            card.ignore_selection_requested.connect(self._on_card_ignore_selection_requested)
-            card.eject_from_section_requested.connect(self._on_card_eject_from_section)
+            self._connect_card(card)
             target.add_card(cluster_id, card)
             self._cards[cluster_id] = card
             if cluster_id in self._avatar_cache:
@@ -1006,10 +1164,7 @@ class FaceClusterGrid(QWidget):
                     section.reflow(self._current_cols)
                     sections_to_keep.append(section)
                 else:
-                    idx = self._content_vbox.indexOf(section)
-                    if idx >= 0:
-                        self._content_vbox.takeAt(idx)
-                    section.deleteLater()
+                    self._retire_section(section)
             else:
                 sections_to_keep.append(section)
         self._sections = sections_to_keep
@@ -1044,10 +1199,11 @@ class FaceClusterGrid(QWidget):
         ]
         self._all_combined = [(k, g) for k, g in self._all_combined if g]
 
-        # Create the new card in flat_section
-        flat = self._flat_section
+        # Create the new card in flat_section (created and put back in the layout
+        # by _ensure_flat_section if it had been emptied earlier)
         data = self._pending_build_data
-        if flat is not None and data is not None:
+        if data is not None:
+            flat = self._ensure_flat_section()
             fc = data["face_counts"].get(cluster_id, 0)
             rep = data["representative_faces"].get(cluster_id)
             new_card = _ClusterCard(
@@ -1055,35 +1211,13 @@ class FaceClusterGrid(QWidget):
                 selected_ids_ref=self._selected_ids,
                 parent=flat._card_area,
             )
-            new_card.selection_toggled.connect(self._on_card_selection_toggled)
-            new_card.range_select_requested.connect(self._on_range_select)
-            new_card.view_requested.connect(self._on_card_view_requested)
-            new_card.name_requested.connect(self._on_card_name_requested)
-            new_card.quick_accept_requested.connect(self._on_card_quick_accept)
-            new_card.merge_requested.connect(self._on_card_merge_requested)
-            new_card.associate_requested.connect(self._on_card_associate_requested)
-            new_card.ignore_requested.connect(self._on_card_ignore_requested)
-            new_card.ignore_selection_requested.connect(self._on_card_ignore_selection_requested)
+            self._connect_card(new_card)
             flat.add_card(cluster_id, new_card)
             self._cards[cluster_id] = new_card
             if rep:
                 QTimer.singleShot(
                     0, lambda r=rep, cid=cluster_id: self._start_cluster_loader([(cid, r)])
                 )
-            # Make sure flat_section is in the layout
-            if self._content_vbox.indexOf(flat) < 0:
-                ref = None
-                if self._solo_section and self._content_vbox.indexOf(self._solo_section) >= 0:
-                    ref = self._solo_section
-                elif self._load_more_btn:
-                    ref = self._load_more_btn
-                idx_ref = self._content_vbox.indexOf(ref) if ref else -1
-                if idx_ref >= 0:
-                    self._content_vbox.insertWidget(idx_ref, flat)
-                else:
-                    self._content_vbox.addWidget(flat)
-                if flat not in self._sections:
-                    self._sections.append(flat)
             flat.reflow(self._current_cols)
 
         self._update_action_bar()
@@ -1095,6 +1229,7 @@ class FaceClusterGrid(QWidget):
         target_id = dlg.selected_cluster_id()
         if target_id is not None:
             self._face_db.merge_clusters(cluster_id, target_id)
+            self.apply_merge([cluster_id], target_id)
             self.cluster_merged.emit(cluster_id, target_id)
 
     def _on_card_associate_requested(self) -> None:
@@ -1110,6 +1245,7 @@ class FaceClusterGrid(QWidget):
             if cid != target_id:
                 self._face_db.merge_clusters(cid, target_id)
         self._clear_selection()
+        self.apply_merge(cluster_ids, target_id)
         self.cluster_merged.emit(cluster_ids[0], target_id)
 
     def _on_card_name_requested(self, cluster_id: int) -> None:
@@ -1236,16 +1372,7 @@ class FaceClusterGrid(QWidget):
                 selected_ids_ref=self._selected_ids,
                 parent=target._card_area,
             )
-            card.selection_toggled.connect(self._on_card_selection_toggled)
-            card.range_select_requested.connect(self._on_range_select)
-            card.view_requested.connect(self._on_card_view_requested)
-            card.name_requested.connect(self._on_card_name_requested)
-            card.quick_accept_requested.connect(self._on_card_quick_accept)
-            card.merge_requested.connect(self._on_card_merge_requested)
-            card.associate_requested.connect(self._on_card_associate_requested)
-            card.ignore_requested.connect(self._on_card_ignore_requested)
-            card.ignore_selection_requested.connect(self._on_card_ignore_selection_requested)
-            card.eject_from_section_requested.connect(self._on_card_eject_from_section)
+            self._connect_card(card)
             target.add_card(cluster_id, card)
             self._cards[cluster_id] = card
             if cluster_id in self._avatar_cache:
@@ -1259,8 +1386,10 @@ class FaceClusterGrid(QWidget):
             if gen != self._build_generation:
                 return
             if flat_section and flat_section._entries:
+                self._ensure_section_in_layout(flat_section)
                 flat_section.reflow(self._current_cols)
             if solo_section and solo_section._entries:
+                self._ensure_section_in_layout(solo_section)
                 solo_section.reflow(self._current_cols)
             remaining = len(self._all_combined) - rendered_total
             if remaining > 0:

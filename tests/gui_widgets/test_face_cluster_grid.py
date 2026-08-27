@@ -492,6 +492,75 @@ class TestRemoveRestore:
 
 
 # ---------------------------------------------------------------------------
+# merge / associate -- regression: no reload of the analysis
+
+
+class TestApplyMerge:
+    """Associating groups must not restart the group analysis.
+
+    Until now every merge went through refresh(), i.e. the Union-Find and the
+    suggestions over the whole library behind a modal popup, just to redisplay
+    what the user had done by hand.
+    """
+
+    def test_merging_groups_only_updates_the_counter(self, qtbot, grid, monkeypatch):
+        _build(qtbot, grid, _data({1: 3, 2: 2}, [[1], [2]]))
+        reloads = []
+        monkeypatch.setattr(grid, "refresh", lambda: reloads.append(True))
+
+        grid.apply_merge([2], 1)
+
+        assert reloads == []
+        assert sorted(grid._cards.keys()) == [1]
+        assert grid._cached_data["face_counts"][1] == 5
+        assert grid._cards[1]._lbl_count.text().startswith("5")
+
+    def test_merging_isolated_faces_promotes_the_card(self, qtbot, grid, monkeypatch):
+        """A solo card displays no counter: it has to be rebuilt as a group card."""
+        _build(qtbot, grid, _data({1: 2, 8: 1, 9: 1}, [[1], [8], [9]]))
+        assert grid._cards[8]._is_solo
+        monkeypatch.setattr(grid, "refresh", lambda: pytest.fail("reloaded"))
+
+        grid.apply_merge([9], 8)
+
+        card = grid._cards[8]
+        assert not card._is_solo
+        assert card._lbl_count.text().startswith("2")
+        assert any(c == 8 for c, _ in grid._flat_section._entries)
+        assert 9 not in grid._cards
+        assert ("group", [8]) in grid._all_combined
+
+    def test_associate_merges_in_db_and_keeps_the_grid(self, qtbot, grid, monkeypatch):
+        for cid, n in ((1, 2), (2, 1)):
+            for i in range(n):
+                _raw_insert_face(grid._face_db, f"C:/p{cid}_{i}.jpg", cluster_id=cid)
+        _build(qtbot, grid, _data({1: 2, 2: 1}, [[1], [2]]))
+        monkeypatch.setattr(grid, "refresh", lambda: pytest.fail("reloaded"))
+        merged = []
+        grid.cluster_merged.connect(lambda s, t: merged.append((s, t)))
+        grid._on_card_selection_toggled(1, True)
+        grid._on_card_selection_toggled(2, True)
+
+        grid._on_card_associate_requested()
+
+        # the biggest group absorbs the other, in the database and on screen
+        assert dict(grid._face_db.get_unnamed_clusters()) == {1: 3}
+        assert sorted(grid._cards.keys()) == [1]
+        assert grid._cards[1]._lbl_count.text().startswith("3")
+        assert merged and merged[0][1] == 1
+        assert grid._selected_ids == set()
+
+    def test_without_usable_cache_it_falls_back_on_refresh(self, qtbot, grid, monkeypatch):
+        reloads = []
+        monkeypatch.setattr(grid, "refresh", lambda: reloads.append(True))
+        grid._cached_data = None
+
+        grid.apply_merge([2], 1)
+
+        assert reloads == [True]
+
+
+# ---------------------------------------------------------------------------
 # pagination
 
 class TestPagination:

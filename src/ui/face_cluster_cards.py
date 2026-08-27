@@ -150,11 +150,13 @@ class _ClusterCard(QFrame):
         self._lbl_img.start_loading()
         col.addWidget(self._lbl_img, alignment=Qt.AlignHCenter)
 
+        self._lbl_count: "QLabel | None" = None
         if not is_solo:
             lbl_count = QLabel(translate("ClusterCard", "%n face(s)", None, face_count))
             lbl_count.setAlignment(Qt.AlignCenter)
             lbl_count.setStyleSheet("border: none; font-size: 11px; color: #aaa;")
             col.addWidget(lbl_count)
+            self._lbl_count = lbl_count
 
         if suggestion_label:
             lbl_sugg = QLabel(suggestion_label)
@@ -199,6 +201,16 @@ class _ClusterCard(QFrame):
                 lambda: self.eject_from_section_requested.emit(self._cluster_id)
             )
             col.addWidget(btn_eject)
+
+    def set_face_count(self, face_count: int) -> None:
+        """Updates the counter of the card (a group that has absorbed another one).
+
+        Does nothing on an isolated face, which displays no counter — such a card
+        has to be rebuilt as a group card (cf. FaceClusterGrid._promote_solo_card).
+        """
+        if self._lbl_count is not None:
+            self._lbl_count.setText(
+                translate("ClusterCard", "%n face(s)", None, face_count))
 
     def set_avatar(self, data: bytes) -> None:
         pix = QPixmap()

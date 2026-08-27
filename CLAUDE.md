@@ -506,11 +506,63 @@ that have not reached `_SIM_SUGGEST` yet — do not confuse it with the threshol
 with `_SIM_GROUP` (0.72, the auto-grouping threshold between *unidentified* clusters,
 unrelated to matching a known person).
 
+The overlaid buttons of `_FaceItem` (`src/ui/face_panel.py`, the faces panel of the
+viewer) follow that same "what is not settled yet" logic: the ✓/✕ pair of a suggestion
+(`suggestion=True`) and the quick-ignore ✕ at the bottom right (`confirmed=False`) are
+triage shortcuts. A **confirmed** identification — the face carries a known
+`person_id`, or its cluster is mapped to a named person — gets **no cross**: it would
+only offer a misclick on a face the user has just validated. Ignoring it stays
+available through the context menu (`show_face_context_menu`), where the entry is
+deliberately unconditional. Tests:
+`tests/gui_widgets/test_face_panel_flows.py::TestQuickIgnoreCross`.
+
 ### Faces — person centroid cache (name assignment popup)
 
-`src/faces/face_database.py::get_all_person_centroids()` decodes the embeddings (512D float32) of every identified face to compute each person's centroid — up to ~60k faces on a large library, several seconds in pure Python. The full result is cached in memory (`self._person_centroid_cache`) and reused as long as a cheap fingerprint (`SELECT COUNT(*), SUM(person_id) FROM faces WHERE person_id IS NOT NULL`, a few ms through `idx_faces_person`) has not changed — the `SUM` is needed on top of the `COUNT` to catch the reassignments (`merge_persons`) that do not change the number of rows. The decoding itself is vectorised through `numpy.frombuffer` rather than `struct.unpack` (a factor of ~10). `enrich_persons()` (photo_count + cover_path/cover_bbox + pending_count) is expensive too (~1 s, dominated by a CTE with a window function for the cover photo); `enrich_persons_photo_count()` is a lighter variant (photo_count only) to be used everywhere the cover is not displayed, e.g. the assignment popup.
+`src/faces/face_database.py::get_all_person_centroids()` decodes the embeddings (512D float32) of every identified face to compute each person's centroid — up to ~60k faces on a large library, several seconds in pure Python. The result is cached in memory (`self._person_centroid_cache`) and refreshed **person by person**: the fingerprint is a `SELECT person_id, COUNT(*), SUM(id) … GROUP BY person_id` (a few ms through `idx_faces_person`, which covers it since `id` is the rowid), and only the people whose fingerprint moved get their embeddings decoded again — the others keep the very same list object. `SUM(id)` (the face ids) and not `SUM(person_id)`: a face moving from one person to another (`merge_persons`, a reassignment) changes the count of neither side, but does change the sum of their face ids on both. `len(fps)` is compared too, to evict a person who has lost all their faces while nothing else moved. A **single global** fingerprint (the scheme up to 2026-08) was invalidated by any identification whatsoever, so confirming one suggestion re-decoded the whole library to recompute centroids that had not moved — and that cost was paid in front of the user, since the faces panel reloads right after an identification and its loading thread calls this method. The decoding itself is vectorised through `numpy.frombuffer` rather than `struct.unpack` (a factor of ~10). `enrich_persons()` (photo_count + cover_path/cover_bbox + pending_count) is expensive too (~1 s, dominated by a CTE with a window function for the cover photo); `enrich_persons_photo_count()` is a lighter variant (photo_count only) to be used everywhere the cover is not displayed, e.g. the assignment popup.
+
+`FacePanel.set_photo()` only empties the panel (`_clear()`) when the photo really
+changes. A refresh of the **same** photo — confirmed suggestion, ignore, unassign,
+undo — keeps the faces on screen until `_on_faces_data_ready` clears and rebuilds them
+in a single slot, so the swap costs no repaint. Clearing on the spot instead left the
+panel blank for the whole duration of `_FacesDataLoader`: every face vanishing then
+coming back, with nothing on screen to explain it. Test:
+`tests/gui_widgets/test_face_panel_flows.py::TestRefreshWithoutBlanking`.
+
+`_on_faces_data_ready` calls `_clear()` **before** assigning `self._cluster_persons`,
+and the order is load-bearing: `_clear()` empties that dict **in place**, so assigning
+first wiped the freshly built dict — and the local variable with it, being the same
+object. Every face whose person comes from its cluster (re-indexed after the
+assignment, `person_id` not yet propagated) then fell through to the "Group {id}"
+branch: the name was lost, and with it the "confirmed identification" status. Test:
+`TestQuickIgnoreCross::test_the_group_name_is_displayed_not_the_group_number`.
 
 In `src/ui/face_panel.py`, the name assignment popup (`_AssignDialog`) is prepared by `_AssignPrepLoader(QThread)` (get_persons + enrich_persons_photo_count + person suggestion by cosine similarity) before being opened, to honour the "the UI never blocks" rule below — `face_cluster_grid.py::_PersonsLoader` follows the same principle for the group grid view.
+
+### Faces — the identification grid updates itself, it never reloads
+
+`src/ui/face_cluster_grid.py::FaceClusterGrid.refresh()` restarts
+`_ClusterRefreshThread`: Union-Find over every unidentified cluster + suggestions,
+i.e. several seconds behind a modal progress popup on a real library. It is the entry
+point for *new data* (end of clustering, reset), **never** the way to reflect an action
+the user has just performed — the display is already known at that point. Three local
+paths do that instead, and any new action must follow one of them:
+
+- `remove_clusters(ids)` — the groups disappear (identified, ignored).
+- `apply_merge(source_ids, target_id)` — groups merged ("Associate", merge dialog): the
+  source cards go away, the target's counter grows (`_ClusterCard.set_face_count`). An
+  isolated face that absorbs other groups is no longer isolated: its card carries no
+  counter, so it is **rebuilt** in the flat section (`_promote_solo_card`) and its entry
+  in `_all_combined` switches from `"solo"` to `"group"` for the not-yet-rendered case
+  (pagination).
+- `restore()` — coming back from another view, straight from `_cached_data`.
+
+All three fall back on `refresh()` under the same condition — Phase 2 still running or
+no `_cached_data` — since there is nothing to patch locally then.
+
+Corollary in the controller: `main_window_faces.py::_on_cluster_merged()` must **not**
+refresh the grid (the grid did it), only the sidebar badge. An emptied `_flat_section`
+/ `_solo_section` is hidden, never deleted (`_retire_section`): the pagination keeps a
+reference to both and may refill them (`_ensure_section_in_layout`).
 
 ### Albums
 

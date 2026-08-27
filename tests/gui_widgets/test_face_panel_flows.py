@@ -8,11 +8,13 @@ import sqlite3
 
 import pytest
 from PIL import Image
-from PySide6.QtWidgets import QDialog
+from PySide6.QtCore import QPoint
+from PySide6.QtWidgets import QDialog, QMenu
 
 from src.core.models import FaceInfo
 from src.faces.face_database import FaceDatabase, _enc
 from src.library.catalog import Catalog
+from src.ui import face_panel as face_panel_mod
 from src.ui.face_panel import (
     FacePanel, _AssignPrepLoader, _FacePanelLoader, _FacesDataLoader,
     _IgnoredFacesDialog,
@@ -278,6 +280,147 @@ class TestIgnoredFacesDialog:
 
 # ---------------------------------------------------------------------------
 # FacePanel -- interactions
+
+class TestRefreshWithoutBlanking:
+    """A refresh of the same photo must not empty the panel while it loads.
+
+    Confirming a suggestion ends on set_photo(current): clearing the items right
+    away left the panel blank for the whole duration of _FacesDataLoader -- every
+    face vanishing then coming back, with nothing on screen to explain it.
+    """
+
+    def test_the_faces_stay_on_screen_during_a_refresh(self, qtbot, env, tmp_path):
+        face_db, _ = env
+        photo = _make_photo(tmp_path)
+        f1 = _raw_insert_face(face_db, photo, cluster_id=1)
+        f2 = _raw_insert_face(face_db, photo, cluster_id=2)
+        panel = _make_panel(qtbot, env)
+        _load(qtbot, panel, photo)
+        assert set(panel._items) == {f1, f2}
+
+        panel.set_photo(photo)          # same photo: the loader has not answered yet
+        assert set(panel._items) == {f1, f2}, "le panneau a été vidé pendant le chargement"
+
+        _wait_refresh(qtbot, panel)
+        assert set(panel._items) == {f1, f2}
+
+    def test_navigating_to_another_photo_clears_at_once(self, qtbot, env, tmp_path):
+        """The counterpart: those faces belong to ANOTHER photo, keeping them on
+        screen would be showing something false."""
+        face_db, _ = env
+        photo = _make_photo(tmp_path)
+        other = _make_photo(tmp_path, "other.jpg")
+        _raw_insert_face(face_db, photo, cluster_id=1)
+        panel = _make_panel(qtbot, env)
+        _load(qtbot, panel, photo)
+        assert panel._items
+
+        panel.set_photo(other)
+        assert panel._items == {}
+
+        _wait_refresh(qtbot, panel)
+
+
+class TestQuickIgnoreCross:
+    """The quick-ignore cross is reserved for what is not settled yet.
+
+    On a confirmed identification it brings nothing but the risk of a misclick
+    on a face the user has just validated -- ignoring it stays reachable through
+    the context menu.
+    """
+
+    def test_absent_on_a_confirmed_identification(self, qtbot, env, tmp_path):
+        face_db, catalog = env
+        photo = _make_photo(tmp_path)
+        alice = catalog.create_person("Alice")
+        fid = _raw_insert_face(face_db, photo, cluster_id=1, person_id=alice.id)
+        panel = _make_panel(qtbot, env)
+        _load(qtbot, panel, photo)
+
+        assert not hasattr(panel._items[fid], "_btn_ignore")
+
+    def test_absent_when_the_group_carries_the_person(self, qtbot, env, tmp_path):
+        """The face has no person_id of its own yet (re-indexed after an
+        assignment), but its cluster is named: the identification is settled."""
+        face_db, catalog = env
+        photo = _make_photo(tmp_path)
+        other = _make_photo(tmp_path, "other.jpg")
+        alice = catalog.create_person("Alice")
+        _raw_insert_face(face_db, other, cluster_id=7, person_id=alice.id)
+        fid = _raw_insert_face(face_db, photo, cluster_id=7)
+        panel = _make_panel(qtbot, env)
+        _load(qtbot, panel, photo)
+
+        assert not hasattr(panel._items[fid], "_btn_ignore")
+
+    def test_present_on_an_unidentified_face(self, qtbot, env, tmp_path):
+        face_db, _ = env
+        photo = _make_photo(tmp_path)
+        fid = _raw_insert_face(face_db, photo, cluster_id=1)
+        panel = _make_panel(qtbot, env)
+        _load(qtbot, panel, photo)
+
+        assert hasattr(panel._items[fid], "_btn_ignore")
+
+    def test_present_on_a_suggestion_awaiting_verification(self, qtbot, env, tmp_path):
+        """A suggestion is precisely what is not confirmed: the triage crosses stay."""
+        face_db, catalog = env
+        photo = _make_photo(tmp_path)
+        alice = catalog.create_person("Alice")
+        fid = _raw_insert_face(
+            face_db, photo, cluster_id=1,
+            suggestion_person_id=alice.id, suggestion_score=0.61,
+        )
+        panel = _make_panel(qtbot, env)
+        _load(qtbot, panel, photo)
+
+        assert hasattr(panel._items[fid], "_btn_ignore")
+
+    def test_the_group_name_is_displayed_not_the_group_number(self, qtbot, env, tmp_path):
+        """Same setup: the name of the person carried by the cluster must be the
+        one displayed.
+
+        _on_faces_data_ready assigned self._cluster_persons then called _clear(),
+        which empties that dict IN PLACE -- so the local variable, the same object,
+        came out empty too and every such face fell through to the "Group {id}"
+        branch.
+        """
+        face_db, catalog = env
+        photo = _make_photo(tmp_path)
+        other = _make_photo(tmp_path, "other.jpg")
+        alice = catalog.create_person("Alice")
+        _raw_insert_face(face_db, other, cluster_id=7, person_id=alice.id)
+        fid = _raw_insert_face(face_db, photo, cluster_id=7)
+        panel = _make_panel(qtbot, env)
+        _load(qtbot, panel, photo)
+
+        assert panel._items[fid]._name_label.text() == "Alice"
+        assert panel._cluster_persons == {7: alice.id}
+
+    def test_the_context_menu_still_offers_it(self, qtbot, env, tmp_path, monkeypatch):
+        face_db, catalog = env
+        photo = _make_photo(tmp_path)
+        alice = catalog.create_person("Alice")
+        fid = _raw_insert_face(face_db, photo, cluster_id=1, person_id=alice.id)
+        panel = _make_panel(qtbot, env)
+        _load(qtbot, panel, photo)
+
+        labels: list[str] = []
+
+        # A QMenu subclass substituted in the module namespace, not a setattr on
+        # the Shiboken class: a direct setattr does not intercept the native call
+        # and the real menu opens on the desktop, blocking the run
+        # (cf. the captured_menus fixture of test_album_mode_no_delete.py).
+        class _CapturingMenu(QMenu):
+            def exec(self, *a, **k):
+                labels.extend(act.text() for act in self.actions())
+                return None
+
+        monkeypatch.setattr(face_panel_mod, "QMenu", _CapturingMenu)
+        panel.show_face_context_menu(face_db.get_face_by_id(fid), QPoint(0, 0))
+
+        assert any("Ignore this face" in label for label in labels)
+
 
 class TestFacePanelInteractions:
     def test_undo_stack_push_and_undo(self, qtbot, env):
