@@ -506,6 +506,20 @@ that have not reached `_SIM_SUGGEST` yet — do not confuse it with the threshol
 with `_SIM_GROUP` (0.72, the auto-grouping threshold between *unidentified* clusters,
 unrelated to matching a known person).
 
+**The badge and the panel it points to must filter the same rows.** The orange
+"awaiting verification" badge of the sidebar (`_PendingBadgeDelegate`, fed by
+`get_persons_pending_count()`) and the pending section of `PersonClusterView`
+(fed by `get_suggested_clusters_for_person()`) are two separate queries over
+`faces`: any difference between their `WHERE` clauses surfaces as a badge
+counting a suggestion the panel does not display — the user has no way to make
+it go away. Both therefore filter `person_id IS NULL AND ignored=0`. In the same
+spirit, `ignore_face()`/`ignore_cluster()` **clear the suggestion** while raising
+`ignored`: ignoring is the very decision the suggestion was waiting for, and a
+suggestion left behind blocks the face for good, since every producer filters on
+`suggestion_person_id IS NULL` (it would never be suggested nor regrouped again,
+even after being un-ignored). A migration in `_init_db` purges the rows already
+in that state, next to the one purging the suggestions left on identified faces.
+
 The overlaid buttons of `_FaceItem` (`src/ui/face_panel.py`, the faces panel of the
 viewer) follow that same "what is not settled yet" logic: the ✓/✕ pair of a suggestion
 (`suggestion=True`) and the quick-ignore ✕ at the bottom right (`confirmed=False`) are

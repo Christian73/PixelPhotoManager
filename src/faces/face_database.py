@@ -292,6 +292,22 @@ class FaceDatabase:
                     "sur des visages déjà identifiés",
                     cur.rowcount,
                 )
+            # Migration: purge the residual suggestions carried by ignored faces.
+            # Same failure mode as above, other cause: ignore_face/ignore_cluster
+            # used to set ignored=1 without clearing the suggestion (fixed). The
+            # face was then counted by the badge of get_persons_pending_count()
+            # while get_suggested_clusters_for_person() (ignored=0) showed nothing,
+            # and it stayed blocked for every producer of suggestions.
+            cur = conn.execute(
+                "UPDATE faces SET suggestion_person_id=NULL, suggestion_score=NULL"
+                " WHERE suggestion_person_id IS NOT NULL AND ignored=1"
+            )
+            if cur.rowcount:
+                logger.info(
+                    "Migration: %d suggestion(s) résiduelle(s) purgée(s) "
+                    "sur des visages ignorés",
+                    cur.rowcount,
+                )
             # Migration: catch up the Picasa annotations left at consumed=0 although
             # the person was in fact identified afterwards (an accepted suggestion, a
             # manual identification…) on a face overlapping the annotation — paths
@@ -756,10 +772,16 @@ class FaceDatabase:
         return [(r[0], r[1]) for r in rows]
 
     def ignore_cluster(self, cluster_id: int) -> None:
-        """Mark all faces of a cluster as ignored so they won't appear for naming."""
+        """Mark all faces of a cluster as ignored so they won't appear for naming.
+
+        Drops any pending suggestion at the same time (see ignore_face).
+        """
         with self._guard() as conn:
             conn.execute(
-                "UPDATE faces SET ignored=1 WHERE cluster_id=?", (cluster_id,)
+                "UPDATE faces"
+                " SET ignored=1, suggestion_person_id=NULL, suggestion_score=NULL"
+                " WHERE cluster_id=?",
+                (cluster_id,),
             )
             conn.commit()
 
@@ -949,12 +971,21 @@ class FaceDatabase:
         return [(r[0], r[1], r[2] or 0.0) for r in rows]
 
     def get_persons_pending_count(self) -> "dict[int, int]":
-        """Returns {person_id: pending_cluster_count} for all persons with suggestions."""
+        """Returns {person_id: pending_cluster_count} for all persons with suggestions.
+
+        Filters strictly the same rows as get_suggested_clusters_for_person(),
+        which feeds the panel the badge sends the user to (`ignored=0`
+        included): a divergence between the two shows up as a badge counting a
+        suggestion the panel does not display, with no way for the user to make
+        it go away.
+        """
         with self._guard() as conn:
             rows = conn.execute(
                 "SELECT suggestion_person_id, COUNT(DISTINCT cluster_id)"
                 " FROM faces"
-                " WHERE suggestion_person_id IS NOT NULL AND person_id IS NULL"
+                " WHERE suggestion_person_id IS NOT NULL"
+                "   AND person_id IS NULL"
+                "   AND ignored=0"
                 " GROUP BY suggestion_person_id"
             ).fetchall()
         return {r[0]: r[1] for r in rows}
@@ -1792,10 +1823,21 @@ class FaceDatabase:
         return suggestions
 
     def ignore_face(self, face_id: int) -> None:
-        """Mark a single face as ignored."""
+        """Mark a single face as ignored, dropping any pending suggestion.
+
+        Ignoring IS the decision the suggestion was waiting for, so the
+        suggestion must not survive it: it would keep feeding the "awaiting
+        verification" badge of a person whose panel (filtered on `ignored=0`)
+        shows nothing, and it would block the face for good — every producer of
+        suggestions filters on `suggestion_person_id IS NULL`, so the face would
+        never be suggested nor regrouped again, even after being un-ignored.
+        """
         with self._guard() as conn:
             conn.execute(
-                "UPDATE faces SET ignored=1 WHERE id=?", (face_id,)
+                "UPDATE faces"
+                " SET ignored=1, suggestion_person_id=NULL, suggestion_score=NULL"
+                " WHERE id=?",
+                (face_id,),
             )
             conn.commit()
 

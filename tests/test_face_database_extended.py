@@ -280,6 +280,77 @@ class TestClusterSuggestions:
                    (legit,))[0] == 9
 
 
+class TestIgnoredFacesAndSuggestions:
+    """Badge "awaiting verification" vs content of the person panel.
+
+    Real case reported by a user: an orange (1) on a person whose panel showed
+    no suggestion at all. Cause: get_persons_pending_count() counted every
+    suggestion whereas get_suggested_clusters_for_person() (which fills the
+    panel) filters on ignored=0, and ignore_face/ignore_cluster used to raise
+    ignored without dropping the suggestion."""
+
+    def _suggested_cluster(self, db):
+        """cluster 1 (2 faces) awaiting verification for person 9."""
+        f1 = _insert_face(db, "c1.jpg", cluster_id=1,
+                          embedding=_similar_vec(_base_vec(0), seed=1))
+        f2 = _insert_face(db, "c2.jpg", cluster_id=1,
+                          embedding=_similar_vec(_base_vec(0), seed=2))
+        _insert_face(db, "p1.jpg", person_id=9, cluster_id=100,
+                     embedding=_base_vec(0))
+        db.set_cluster_suggestions({1: (9, 0.65)})
+        return f1, f2
+
+    def test_badge_matches_the_panel_after_ignoring_the_cluster(self, db):
+        self._suggested_cluster(db)
+        db.ignore_cluster(1)
+        assert db.get_suggested_clusters_for_person(9) == []
+        assert db.get_persons_pending_count() == {}
+
+    def test_badge_matches_the_panel_after_ignoring_every_face(self, db):
+        f1, f2 = self._suggested_cluster(db)
+        db.ignore_face(f1)
+        db.ignore_face(f2)
+        assert db.get_suggested_clusters_for_person(9) == []
+        assert db.get_persons_pending_count() == {}
+
+    def test_one_face_left_keeps_badge_and_panel_in_step(self, db):
+        f1, _f2 = self._suggested_cluster(db)
+        db.ignore_face(f1)
+        assert db.get_suggested_clusters_for_person(9) == [(1, 1, 0.65)]
+        assert db.get_persons_pending_count() == {9: 1}
+
+    def test_ignoring_drops_the_suggestion_of_the_face(self, db):
+        f1, _f2 = self._suggested_cluster(db)
+        db.ignore_face(f1)
+        assert _q1(db, "SELECT suggestion_person_id, suggestion_score"
+                       " FROM faces WHERE id=?", (f1,)) == (None, None)
+
+    def test_un_ignoring_makes_the_cluster_a_candidate_again(self, db):
+        """The suggestion must not survive the ignore: every producer filters on
+        `suggestion_person_id IS NULL`, so a suggestion left behind would block
+        the face for good, even once restored."""
+        self._suggested_cluster(db)
+        db.ignore_cluster(1)
+        db.unignore_cluster(1)
+        assert (1, 2) in db.get_unnamed_clusters()
+
+    def test_startup_purges_suggestions_left_on_ignored_faces(self, tmp_path):
+        """The rows already in that state (an ignore predating the fix) are purged
+        at opening - otherwise the phantom badge outlives the correction."""
+        db = FaceDatabase(db_path=tmp_path / "faces.db")
+        stale = _insert_face(db, "i.jpg", cluster_id=1, ignored=1,
+                             suggestion_person_id=9)
+        legit = _insert_face(db, "f.jpg", cluster_id=2, suggestion_person_id=9)
+
+        reopened = FaceDatabase(db_path=tmp_path / "faces.db")
+
+        assert _q1(reopened, "SELECT suggestion_person_id FROM faces WHERE id=?",
+                   (stale,))[0] is None
+        assert _q1(reopened, "SELECT suggestion_person_id FROM faces WHERE id=?",
+                   (legit,))[0] == 9
+        assert reopened.get_persons_pending_count() == {9: 1}
+
+
 class TestBestPersonPerCluster:
     """The vectorised core of find_similar_to_persons: it is what decides which
     groups become "awaiting verification". Tested without a database - the
