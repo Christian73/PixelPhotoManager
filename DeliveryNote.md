@@ -4,12 +4,82 @@ Cumulative history since the project was created, most recent version first.
 
 | Version | Date | Commits | Installer |
 |---------|------|---------|-----------|
+| 1.2.1 | 19 September 2026 | 3 | `PixelPhotoManager-1.2.1-x64.msi` |
 | 1.2.0 | 25 August 2026 | 43 | `PixelPhotoManager-1.2.0-x64.msi` |
 | 1.1.0 | 6 August 2026 | 109 | `PixelPhotoManager-1.1.0-x64.msi` |
 | 1.0.0 | 6 July 2026 | 113 (creation → 1.0.0) | `PixelPhotoManager-1.0.0-x64.msi` |
 
 Versions 1.0.1 and 1.0.2 were never shipped (internal bumps); their contents are
 included in 1.1.0.
+
+---
+
+## Version 1.2.1 — 19 September 2026
+
+Previous version: **1.2.0** (25 August 2026). 3 commits.
+
+A maintenance version entirely devoted to the faces: it removes an orange badge
+that nothing could make go away, stops the identification grid from re-running
+a full analysis after every association, and stops the viewer panel from
+blanking out at each confirmation.
+
+### Fixes
+
+- **An "awaiting verification" badge that could not be cleared.** A person
+  showed an orange (1) while their panel displayed no suggestion at all. The
+  badge and the panel it points to were two queries that did not filter the same
+  rows: the count included every suggestion, while the panel only lists those
+  carried by a face that is not ignored. An ignored face that had kept its
+  suggestion was therefore counted without ever being displayed. Both now filter
+  identically, and ignoring a face clears its suggestion at the same time —
+  ignoring *is* the decision the suggestion was waiting for, and a leftover
+  suggestion blocked that face for good, even after being un-ignored.
+- **The faces panel no longer blinks.** Accepting a suggestion made every face
+  disappear and come back, with nothing on screen to explain it: the panel was
+  emptied on the spot and stayed blank for the whole reload. It now keeps the
+  faces on display and swaps them in a single step.
+- **A confirmed face displayed "Group 7" instead of the person's name**, when
+  the identification came from its group rather than from the face itself.
+- **No more "ignore" cross on a confirmed identification** (a known person,
+  directly or through the group): it only offered a misclick on a face just
+  validated. The entry stays available in the context menu.
+- The label under **Settings › Language** still claimed the PDF documents
+  remained in French, which 1.2.0 had already stopped being true.
+
+### Responsiveness
+
+- **Associating groups no longer re-runs the whole analysis.** The
+  identification grid used to restart a Union-Find pass over every unidentified
+  cluster — several seconds behind a modal popup — to display a result it
+  already knew. It now updates the affected cards in place. The grid reloads
+  only for genuinely new data (end of clustering, reset).
+- **Confirming one identification no longer re-decodes the whole library.** The
+  person centroids were invalidated as a whole by any identification whatsoever,
+  so a single confirmation re-decoded up to ~60,000 embeddings — and that cost
+  was paid in front of the user, the faces panel reloading right after. The
+  cache is now refreshed person by person, through a fingerprint that only moves
+  for the people actually concerned.
+
+### Automatic migrations on first start
+
+**One, on `faces.db`.** The faces that were ignored while keeping a suggestion
+are purged of that suggestion, so a badge inherited from 1.2.0 disappears
+without any action from the user. No schema change: `catalog.db`, `edits.db` and
+`thumbnails.db` are read exactly as 1.2.0 left them, and going back to 1.2.0
+requires nothing.
+
+### Quality
+
+21 regression tests added over the three fixes (the ignored-face/suggestion
+invariant, the grid's local update, the panel refreshing without blanking, and
+the group name displayed instead of the group number). **Base coverage 85.5%**,
+**combined coverage 90.0%**, across 2,624 unit and interface test functions and
+14 end-to-end scenarios.
+
+Two invariants recorded in `CLAUDE.md` in the process: the badge and the panel
+it points to must filter the same rows, and the identification grid updates
+itself locally — `refresh()` is the entry point for new data, never the way to
+reflect an action the user has just performed.
 
 ---
 
