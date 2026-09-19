@@ -830,8 +830,13 @@ of the standard WixUI `ExitDialog` (`WIXUI_EXITDIALOGOPTIONALCHECKBOXTEXT` +
 `WIXUI_EXITDIALOGOPTIONALCHECKBOX`, ticked by default), shown only on a fresh install
 (its own `AND NOT Installed` condition) and labelled through `!(loc.LaunchApplication)`,
 so the language transforms carry it like every other string. The launch itself is a
-`WixShellExec` custom action (`WixUtilExtension`, `BinaryKey="WixCA_x64"` for an x64
-package) published on the `Finish` button. Three points that are wrong by default:
+`WixShellExec` custom action (`WixUtilExtension`) published on the `Finish` button. Four
+points that are wrong by default:
+- **`BinaryKey="WixCA"` (32-bit), not `WixCA_x64`**, even in this x64 package. The UI
+  sequence's custom-action host cannot load the 64-bit DLL. With `WixCA_x64` the action
+  failed with error 1154 (`ERROR_INVALID_DLL`) and `Return="ignore"` hid it, so ticking
+  the box silently did nothing through 1.2.1. The failure only shows in a `/L*v` log
+  ("returned actual error code 1154"). Locked down by `tests/test_installer.py`.
 - **`Impersonate="yes"`** — the action runs in the *client* process, so the application
   starts as the user, not with the elevated token of the perMachine installation. Started
   as administrator it would create its `%LOCALAPPDATA%` (`catalog.db`, `config.json`,
@@ -846,6 +851,17 @@ package) published on the `Finish` button. Three points that are wrong by defaul
   InstallDir screen. Resolving it earlier (a `SetProperty` after `CostFinalize`, the usual
   way to silence candle's `CNDL1077`) would freeze the *default* folder; the warning is
   suppressed instead (`candle -sw1077`).
+
+**A running instance is closed before installing.** `util:CloseApplication`
+(`product.wxs`) sends WM_CLOSE to `PixelPhotoManager.exe`, so the application goes
+through its normal `closeEvent` (state saved, threads stopped) — never a
+`TerminateProcess`. Waits up to 30 s, then shows a Retry/Cancel prompt
+(`!(loc.CloseApplicationPrompt)`) if the app is still open, for example when the
+"grouping in progress" confirmation is up. `RebootPrompt="no"`. The trap: WiX schedules
+`WixCloseApplications` before `InstallFiles` by default, but `MajorUpgrade` runs
+`RemoveExistingProducts` right after `InstallValidate`, so the old version would be
+uninstalled while its exe is still running. It is therefore rescheduled
+`Before="InstallValidate"`.
 
 **The version displayed by the installer is painted into `dialog.bmp`.** The welcome
 screen shows it in the left panel, in pixels — `installer/create_bitmaps.py` used to

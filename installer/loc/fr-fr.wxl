@@ -9,6 +9,7 @@
   <String Id="AppLanguageCode">fr</String>
   <!-- Label of the "start the application" checkbox on the final screen. -->
   <String Id="LaunchApplication">Démarrer Pixel Photo Manager</String>
+  <String Id="CloseApplicationPrompt">Pixel Photo Manager est toujours ouvert. Fermez-le, puis cliquez sur Réessayer pour poursuivre l'installation.</String>
   <String Id="ProductName">Pixel Photo Manager</String>
   <String Id="PackageDescription">Pixel Photo Manager - Gestionnaire de photos desktop Windows</String>
   <String Id="DowngradeError">Une version plus récente de Pixel Photo Manager est déjà installée. Désinstallez-la d'abord.</String>

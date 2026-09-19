@@ -11,6 +11,8 @@
   <String Id="AppLanguageCode">en</String>
   <!-- Label of the "start the application" checkbox on the final screen. -->
   <String Id="LaunchApplication">Launch Pixel Photo Manager</String>
+  <!-- Shown when the running application did not close on its own (util:CloseApplication in product.wxs). -->
+  <String Id="CloseApplicationPrompt">Pixel Photo Manager is still running. Close it, then click Retry to continue the installation.</String>
   <String Id="ProductName">Pixel Photo Manager</String>
   <String Id="PackageDescription">Pixel Photo Manager - Windows desktop photo manager</String>
   <String Id="DowngradeError">A newer version of Pixel Photo Manager is already installed. Uninstall it first.</String>
