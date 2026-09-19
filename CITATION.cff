@@ -11,8 +11,8 @@ authors:
   - family-names: Guyot
     given-names: Christian
     email: guyot.christian@gmail.com
-version: "1.0.0"
-date-released: "2026-06-30"
+version: "1.2.1"
+date-released: "2026-09-19"
 license: Apache-2.0
 repository-code: "https://github.com/Christian73/PixelPhotoManager"
 keywords:
