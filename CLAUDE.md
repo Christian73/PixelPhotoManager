@@ -61,6 +61,18 @@ Remove-Item Env:\COVERAGE_FILE
 - **Every bugfix comes with its regression test** (see `test_signal_object_cross_thread.py`, `test_duplicate_detector.py::test_tiff_never_reaches_cv2_imread` for the expected style).
 - **coverage/QThread trap**: coverage.py does not trace code executed inside a real `QThread.start()` (a native Qt thread, outside `sys.settrace` in Python 3.11). In tests, call `thread.run()` synchronously (signals are emitted through direct connections and the code is traced); keep one or two real `.start()` + `qtbot.waitSignal` per module for the cross-thread plumbing.
 - **Disposable-QThread trap**: a real `QThread` with no parent self-destructing through `deleteLater` while its OS thread is terminating triggers a Qt fail-fast (0xC0000409) as soon as pytest-qt's event loop processes the destruction — use a non-QThread stub (see `_InertUpdateThread` in `test_dialogs_smoke.py`).
+- **The same fail-fast also appears as an intermittent crash of the whole run**, with no
+  failing test and no traceback: pytest dies on the spot, exit code `-1073740791`
+  (`0xC0000409`), the last line of output being the dots of the file in progress. Seen on
+  2026-09-19 while validating 1.2.1, at ~40% of `pytest tests/ --cov=src`, on the 21st of
+  the 24 tests of `tests/gui_widgets/test_person_cluster_view.py` — i.e.
+  `test_flat_unassign_runs_thread_and_emits`, which starts a real `_UnassignThread`, the
+  very profile the trap above describes. **It does not reproduce in isolation**: that file
+  alone (24 passed), `tests/gui_widgets` without coverage and with `--cov` (1,563 passed
+  both times) and a second full run (2,630 passed, 85.49%) all came out green, in the same
+  collection order. So a crash of this shape is not, on its own, a regression: re-run the
+  full suite before investigating. It only becomes a real defect if it lands **twice at the
+  same place** — and the fix is then the non-QThread stub, not a retry.
 - The `fail_under` ratchet (`.coveragerc`) applies to every `--cov` run: raise it after each campaign that durably increases coverage.
 
 ---

@@ -72,9 +72,10 @@ requires nothing.
 
 21 regression tests added over the three fixes (the ignored-face/suggestion
 invariant, the grid's local update, the panel refreshing without blanking, and
-the group name displayed instead of the group number). **Base coverage 85.5%**,
-**combined coverage 90.0%**, across 2,624 unit and interface test functions and
-14 end-to-end scenarios.
+the group name displayed instead of the group number). **Base coverage 85.49%**,
+**combined coverage 90.29%**, across 2,631 unit and interface test functions
+(2,630 run, 1 skipped) and 14 end-to-end scenarios, all green on the tagged
+build.
 
 Two invariants recorded in `CLAUDE.md` in the process: the badge and the panel
 it points to must filter the same rows, and the identification grid updates
