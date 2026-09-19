@@ -4,6 +4,7 @@ Cumulative history since the project was created, most recent version first.
 
 | Version | Date | Commits | Installer |
 |---------|------|---------|-----------|
+| 1.2.2 | 19 September 2026 | 3 | `PixelPhotoManager-1.2.2-x64.msi` |
 | 1.2.1 | 19 September 2026 | 3 | `PixelPhotoManager-1.2.1-x64.msi` |
 | 1.2.0 | 25 August 2026 | 43 | `PixelPhotoManager-1.2.0-x64.msi` |
 | 1.1.0 | 6 August 2026 | 109 | `PixelPhotoManager-1.1.0-x64.msi` |
@@ -11,6 +12,56 @@ Cumulative history since the project was created, most recent version first.
 
 Versions 1.0.1 and 1.0.2 were never shipped (internal bumps); their contents are
 included in 1.1.0.
+
+---
+
+## Version 1.2.2 — 19 September 2026
+
+Previous version: **1.2.1** (19 September 2026). 3 commits.
+
+An installer-only version: the application itself is unchanged from 1.2.1.
+It fixes the two rough edges of an upgrade — an application left running while
+its files were being replaced, and a "start the application" box that started
+nothing.
+
+### Fixes
+
+- **The "Launch Pixel Photo Manager" box on the final screen did nothing.**
+  Ticked or not, the application never started. The launch action was bound to
+  the 64-bit helper library of the WiX toolset, which the installer's user
+  interface process cannot load: the failure (Windows error 1154) was silently
+  swallowed, by design, so as not to turn a successful installation into an
+  error. It now uses the 32-bit helper, and the application starts as the user
+  — never with the elevated rights of the installation.
+- **A running application is closed before the upgrade.** Installing over an
+  open Pixel Photo Manager used to leave its files locked while the previous
+  version was being removed. The installer now asks the running application to
+  close — the application saves its state as on a normal exit — and, if it is
+  still open after 30 seconds, shows a message (in the language of the
+  installation) asking the user to close it and click **Retry**. The request is
+  made before the previous version is removed, not merely before the new files
+  are copied, which would have been too late for an upgrade.
+
+### Installer and packaging
+
+- The application executable is rebuilt with the 1.2.2 version number (shown in
+  **Help › About** and used by the update check); its content is identical to
+  1.2.1.
+
+### Automatic migrations on first start
+
+**None.** `catalog.db`, `faces.db`, `edits.db` and `thumbnails.db` are read
+exactly as 1.2.1 left them, and going back to 1.2.1 requires nothing.
+
+### Quality
+
+A new static test module, `tests/test_installer.py`, locks down the installer
+definition: the launch action must use the 32-bit helper, be published on the
+**Finish** button and run as the user, and the running application must be
+closed before the previous version is removed. The validation of 1.2.1 also
+documented an intermittent crash of the whole test run (Qt fail-fast
+`0xC0000409`, not reproducible in isolation), with the rule to tell it apart
+from a real regression.
 
 ---
 
