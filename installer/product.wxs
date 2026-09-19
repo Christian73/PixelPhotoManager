@@ -1,7 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!-- Copyright 2026 Christian Guyot -->
 <!-- SPDX-License-Identifier: Apache-2.0 -->
-<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi"
+     xmlns:util="http://schemas.microsoft.com/wix/UtilExtension">
 
   <!-- Multilingual installer (English, French, German).
 
@@ -83,18 +84,67 @@
          usual way to silence the CNDL1077 warning candle emits here) would
          freeze the DEFAULT folder and launch nothing when the user picks
          another one. The warning is therefore suppressed in build_msi.ps1
-         (-sw1077), not worked around. -->
+         (-sw1077), not worked around.
+
+         BinaryKey="WixCA" (the 32-bit DLL) and NOT "WixCA_x64", although the
+         package is x64: this action runs from the UI sequence, whose custom
+         action host cannot load the 64-bit DLL - the action failed with error
+         1154 (ERROR_INVALID_DLL) before WixShellExec even started, and
+         Return="ignore" swallowed it, so ticking the box started nothing,
+         silently (only visible in a /L*v log: "returned actual error code 1154
+         but will be translated to success"). Verified on a test package: same
+         action, WixCA_x64 -> 1154 and no process, WixCA -> the application
+         starts and outlives msiexec. Locked down by
+         tests/test_installer.py. -->
     <Property Id="WIXUI_EXITDIALOGOPTIONALCHECKBOXTEXT" Value="!(loc.LaunchApplication)" />
     <Property Id="WIXUI_EXITDIALOGOPTIONALCHECKBOX" Value="1" />
     <Property Id="WixShellExecTarget" Value="[INSTALLFOLDER]PixelPhotoManager.exe" />
     <CustomAction Id="LaunchApplication"
-                  BinaryKey="WixCA_x64"
+                  BinaryKey="WixCA"
                   DllEntry="WixShellExec"
                   Impersonate="yes"
                   Return="ignore" />
     <UI>
       <Publish Dialog="ExitDialog" Control="Finish" Event="DoAction" Value="LaunchApplication">WIXUI_EXITDIALOGOPTIONALCHECKBOX = 1 and NOT Installed</Publish>
     </UI>
+
+    <!-- Close a running instance before touching its files.
+
+         CloseMessage="yes" sends WM_CLOSE to the windows of every running
+         PixelPhotoManager.exe: the application then goes through its normal
+         MainWindow.closeEvent (configuration, geometry and last view saved,
+         background threads stopped, SQLite connections closed) exactly as if
+         the user had closed it - never a TerminateProcess, which would skip all
+         of that. The message is sent by the IMMEDIATE action, i.e. as the user
+         and in the user's session, so it reaches the user's windows.
+
+         Timeout (seconds) covers the worst case of closeEvent, whose successive
+         wait() calls on the background threads add up to ~20 s.
+
+         If the application is still running after that - closeEvent asks for a
+         confirmation while a face grouping is in progress, or a modal dialog was
+         open and swallowed the close - PromptToContinue shows the Description
+         text (Retry / Cancel) instead of carrying on. RebootPrompt="no": without
+         it, WiX would silently schedule a reboot to replace the files in use,
+         the very outcome this element exists to avoid.
+
+         WixCloseApplications is rescheduled BEFORE InstallValidate. WiX places
+         it before InstallFiles by default, which is too late here: MajorUpgrade
+         runs RemoveExistingProducts right after InstallValidate, so the previous
+         version would be uninstalled while its executable is still running (a
+         files-in-use dialog, then a reboot to finish). Before InstallValidate,
+         the Restart Manager check of InstallValidate itself also finds nothing
+         left to report. -->
+    <util:CloseApplication Id="CloseRunningApp"
+                           Target="PixelPhotoManager.exe"
+                           Description="!(loc.CloseApplicationPrompt)"
+                           CloseMessage="yes"
+                           PromptToContinue="yes"
+                           RebootPrompt="no"
+                           Timeout="30" />
+    <InstallExecuteSequence>
+      <Custom Action="WixCloseApplications" Before="InstallValidate" />
+    </InstallExecuteSequence>
 
     <!-- ========================================================
          Directory structure
